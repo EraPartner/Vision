@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   getManualPortfolioOverlaps: vi.fn(),
   lockImportReadinessHistory: vi.fn(),
 }));
-vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => mocks);
+vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => mocks);
 
 import {
   assertPortfolioImportReadiness,

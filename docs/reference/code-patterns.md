@@ -446,7 +446,7 @@ intentional; compact axes use the two-digit year.
 
 ## Backend Repository Pattern
 
-**Source:** [[apps/node-backend/src/repositories/transactionRepository.js|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.js|categoryRepository.js]]
+**Source:** [[apps/node-backend/src/repositories/transactionRepository.ts|transactionRepository.js]], [[apps/node-backend/src/repositories/categoryRepository.ts|categoryRepository.js]]
 
 ### Accepted repository API shapes
 
@@ -1668,7 +1668,7 @@ The branch set is unchanged from the earlier shape, which ORed `t.recipient_id` 
 
 ## Aggregation Query Optimization Pattern (Phase 12 Bugfix Sweep)
 
-**Source:** [[apps/node-backend/src/repositories/infoRepositoryBanks.js|infoRepositoryBanks.js]]
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryBanks.ts|infoRepositoryBanks.js]]
 
 For aggregation queries that combine per-account and total monthly data, avoid nested `.find()` loops over account arrays (O(n²) or worse). Instead, build a single-pass `Map` to accumulate totals:
 
@@ -1904,7 +1904,7 @@ The `meta.source` field indicates whether the response was served from a materia
 ```js
 // Service: computeMonthlySummary (calculation module)
 import { buildEnvelope } from "./_envelope.js";
-import { getMonthlyFinancialSummary } from "../../repositories/infoRepository.js";
+import { getMonthlyFinancialSummary } from "../../repositories/infoRepository.ts";
 
 export async function computeMonthlySummary({
   targetCurrency,
@@ -2119,7 +2119,7 @@ const outstanding = await query(
 
 ## Materialized View Availability & Caching Pattern (Bug-Hunt 2026-05-08)
 
-**Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|infoRepositoryHelpers.js]]
+**Source:** [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|infoRepositoryHelpers.js]]
 
 When querying PostgreSQL materialized views that may not exist or may be empty (e.g., during post-listen creation or after migrations), use the `mvAvailable(viewName)` helper with allowlist validation and a short cache for both outcomes.
 
@@ -2130,7 +2130,7 @@ Without caching, checking view existence on every request produces N+1 round-tri
 ### Solution
 
 ```js
-import { mvAvailable } from "../repositories/infoRepositoryHelpers.js";
+import { mvAvailable } from "../repositories/infoRepositoryHelpers.ts";
 
 // Always use the helper, never raw SELECT without it
 const isCategoryTotalsAvailable = await mvAvailable("mv_category_totals");
@@ -2828,7 +2828,7 @@ test("createSseWriter tracks client close", (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
+**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.ts|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
 For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
 

@@ -8,7 +8,7 @@
 import { query } from "../database/connection.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
-export { default } from "../repositories/categoryRepository.js";
+export { default } from "../repositories/categoryRepository.ts";
 export {
   listCategoryNodes,
   getCategoryNode,
@@ -16,7 +16,7 @@ export {
   updateCategoryNode,
   deleteCategoryNode,
   mergeCategoryNodes,
-} from "../repositories/categoryHierarchyRepository.js";
+} from "../repositories/categoryHierarchyRepository.ts";
 
 /**
  * Resolve a 'General:Detail' category name to its id.

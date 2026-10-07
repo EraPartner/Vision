@@ -11,9 +11,9 @@ import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
 // The route imports its repository through services/categoryService.js, which
 // re-exports the default from this module (`export { default } from
-// '../repositories/categoryRepository.js'`) — mocking the repository here
+// '../repositories/categoryRepository.ts'`) — mocking the repository here
 // intercepts that same binding.
-vi.mock("../../src/repositories/categoryRepository.js", () => ({
+vi.mock("../../src/repositories/categoryRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getCount: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import categoryRepository from "../../src/repositories/categoryRepository.js";
+import categoryRepository from "../../src/repositories/categoryRepository.ts";
 
 const { default: categoriesRouter } =
   await import("../../src/routes/categories.js");

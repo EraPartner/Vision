@@ -1528,7 +1528,7 @@
             "x": 1320,
             "y": 944,
             "desc": "Default desktop endpoint is local. OLLAMA_URL can explicitly point to another host.",
-            "path": "apps/node-backend/src/integrations/ollama/client.js"
+            "path": "apps/node-backend/src/integrations/ollama/client.ts"
           },
           {
             "id": "build.electron",
@@ -1792,7 +1792,7 @@
             "kind": "service",
             "x": 220,
             "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/experimentalSession.js",
+            "path": "apps/node-backend/src/integrations/codex/experimentalSession.ts",
             "desc": "ADR-159: a ten-minute admin-only session accepts no user prompt, checks ChatGPT account and limits, and sends one fixed fictional question."
           },
           {
@@ -1802,7 +1802,7 @@
             "kind": "service",
             "x": 400,
             "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/appServerTransport.js",
+            "path": "apps/node-backend/src/integrations/codex/appServerTransport.ts",
             "desc": "App Server runs in a disposable root with ephemeral auth and a restrictive macOS Seatbelt profile. Effective configuration is checked before use."
           },
           {
@@ -1812,7 +1812,7 @@
             "kind": "service",
             "x": 580,
             "y": 1160,
-            "path": "apps/node-backend/src/integrations/codex/connectProxy.js",
+            "path": "apps/node-backend/src/integrations/codex/connectProxy.ts",
             "desc": "A local-only CONNECT proxy permits exact provider hosts and port 443, bounds transfer bytes, and does not decrypt TLS."
           },
           {
@@ -2045,7 +2045,7 @@
                 "from": "sv.transactiondomains",
                 "to": "be.repos",
                 "payload": "transactionRepository.create({... account_id ...})",
-                "annotation": "apps/node-backend/src/repositories/transactionRepository.js",
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.ts",
                 "title": "Create the canonical row"
               },
               {
@@ -2770,7 +2770,7 @@
                 "title": "Generate text or tool requests",
                 "note": "The endpoint can be local or explicitly remote.",
                 "payload": "settings.ollama.url /api/chat",
-                "annotation": "apps/node-backend/src/integrations/ollama/client.js; apps/node-backend/src/config/config.ts"
+                "annotation": "apps/node-backend/src/integrations/ollama/client.ts; apps/node-backend/src/config/config.ts"
               },
               {
                 "from": "sv.aichat",
@@ -3881,7 +3881,7 @@
                 "from": "be.routes",
                 "to": "be.repos",
                 "payload": "customParserConfigRepository.create({ name, config })",
-                "annotation": "repositories/customParserConfigRepository.js maps config -> config_json JSONB and calls INSERT."
+                "annotation": "repositories/customParserConfigRepository.ts maps config -> config_json JSONB and calls INSERT."
               },
               {
                 "from": "be.repos",
@@ -4003,7 +4003,7 @@
                 "from": "sv.portfolioreference",
                 "to": "be.repos",
                 "payload": "literal primary precedence; staging corrections; selected terminal IBKR managed review clone",
-                "annotation": "apps/node-backend/src/services/portfolioImportReferenceService.js requires resolved asset, quantity, date, native currency/basis and wallet context. apps/node-backend/src/repositories/portfolioImportReferenceRepository.js changes staging/configuration only. Explicit terminal IBKR selection with complete retained source creates a review clone; original canonical rows remain unchanged."
+                "annotation": "apps/node-backend/src/services/portfolioImportReferenceService.js requires resolved asset, quantity, date, native currency/basis and wallet context. apps/node-backend/src/repositories/portfolioImportReferenceRepository.ts changes staging/configuration only. Explicit terminal IBKR selection with complete retained source creates a review clone; original canonical rows remain unchanged."
               },
               {
                 "from": "sv.portfolioreference",
@@ -4021,7 +4021,7 @@
                 "from": "sv.portfolioreconciliation",
                 "to": "be.repos",
                 "payload": "current history + canonical fingerprints; adopt / insert / duplicate / explicit repair_duplicate",
-                "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.js reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
+                "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
               },
               {
                 "from": "sv.portfolioreconciliation",
@@ -4045,7 +4045,7 @@
                 "from": "sv.portfolioadjustment",
                 "to": "pkg.shared-utils",
                 "payload": "all-method original lot allocations; native basis + original purchase FX; no sale/cash",
-                "annotation": "packages/shared-utils/src/portfolioCustody.ts consumes only remaining eligible lots under FIFO/LIFO/weighted average. apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js retains acquisition allocation receipts and restrictive links to original yield staging, including older batches."
+                "annotation": "packages/shared-utils/src/portfolioCustody.ts consumes only remaining eligible lots under FIFO/LIFO/weighted average. apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts retains acquisition allocation receipts and restrictive links to original yield staging, including older batches."
               },
               {
                 "from": "fe.apiclient",
@@ -4868,25 +4868,25 @@
                 "from": "be.routes",
                 "to": "sv.codexsession",
                 "payload": "start or use one disposable synthetic session",
-                "annotation": "apps/node-backend/src/integrations/codex/experimentalSession.js permits one fixed fictional question and expires after ten minutes."
+                "annotation": "apps/node-backend/src/integrations/codex/experimentalSession.ts permits one fixed fictional question and expires after ten minutes."
               },
               {
                 "from": "sv.codexsession",
                 "to": "sv.codexchild",
                 "payload": "private root, ephemeral auth, validated effective config",
-                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.js runs the process under the Seatbelt profile in seatbelt.js."
+                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.ts runs the process under the Seatbelt profile in seatbelt.js."
               },
               {
                 "from": "sv.codexchild",
                 "to": "sv.codexproxy",
                 "payload": "only local proxy-port network access",
-                "annotation": "apps/node-backend/src/integrations/codex/seatbelt.js permits the exact local proxy port; no general outbound socket access."
+                "annotation": "apps/node-backend/src/integrations/codex/seatbelt.ts permits the exact local proxy port; no general outbound socket access."
               },
               {
                 "from": "sv.codexproxy",
                 "to": "ex.codex",
                 "payload": "bounded TLS tunnel to exact allowed host",
-                "annotation": "apps/node-backend/src/integrations/codex/connectProxy.js validates CONNECT host and port, with byte caps; encrypted payload content remains opaque."
+                "annotation": "apps/node-backend/src/integrations/codex/connectProxy.ts validates CONNECT host and port, with byte caps; encrypted payload content remains opaque."
               }
             ],
             "docs": [
@@ -4957,7 +4957,7 @@
                 "title": "Read stored records",
                 "note": "Repositories own SQL access.",
                 "payload": "transactionRepository",
-                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.ts"
               },
               {
                 "from": "be.repos",
@@ -4965,7 +4965,7 @@
                 "title": "Query PostgreSQL",
                 "note": "Stored transactions are the source records.",
                 "payload": "SELECT transactions",
-                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.ts"
               },
               {
                 "from": "be.routes",
@@ -5056,7 +5056,7 @@
                 "title": "Calculate the summary",
                 "note": "The calculation delegates to the financial summary repository and checks invariants.",
                 "payload": "computeMonthlySummary / getMonthlyFinancialSummary",
-                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js; apps/node-backend/src/repositories/infoRepository.js"
+                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js; apps/node-backend/src/repositories/infoRepository.ts"
               },
               {
                 "from": "be.repos",
@@ -5206,7 +5206,7 @@
                 "title": "Find candidate pairs",
                 "note": "Clean invalid auto links; find opposite equal amounts, same currency, different accounts, within three days.",
                 "payload": "listTransferCandidatePairs",
-                "annotation": "apps/node-backend/src/services/transferReconciliationService.js; apps/node-backend/src/repositories/transactionRepository.js"
+                "annotation": "apps/node-backend/src/services/transferReconciliationService.js; apps/node-backend/src/repositories/transactionRepository.ts"
               },
               {
                 "from": "be.repos",
@@ -5214,7 +5214,7 @@
                 "title": "Search across imports",
                 "note": "The second leg may arrive in a later import.",
                 "payload": "whole recent corpus",
-                "annotation": "apps/node-backend/src/repositories/transactionRepository.js"
+                "annotation": "apps/node-backend/src/repositories/transactionRepository.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5483,7 +5483,7 @@
                 "title": "Persist the approved grant",
                 "note": "The disclosure service writes the grant through its repository.",
                 "payload": "createDisclosureGrant",
-                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/repositories/aiDisclosureRepository.js"
+                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/repositories/aiDisclosureRepository.ts"
               },
               {
                 "from": "be.routes",
@@ -5499,7 +5499,7 @@
                 "title": "Reserve permission before sending",
                 "note": "Check mode, expiry, hash, fields and budgets; record sent before egress.",
                 "payload": "reserveDisclosure",
-                "annotation": "apps/node-backend/src/repositories/aiDisclosureRepository.js"
+                "annotation": "apps/node-backend/src/repositories/aiDisclosureRepository.ts"
               },
               {
                 "from": "sv.airesearch",
@@ -5507,7 +5507,7 @@
                 "title": "Send the approved payload",
                 "note": "Fixed Responses broker, no tools, response storage disabled (store:false), rejected redirects and macOS sandbox.",
                 "payload": "generateProvider; callOpenAiBroker; store: false",
-                "annotation": "apps/node-backend/src/services/aiProviderAdapters.js; apps/node-backend/src/integrations/openai/brokerClient.js; apps/node-backend/src/integrations/openai/egress-helper.mjs"
+                "annotation": "apps/node-backend/src/services/aiProviderAdapters.js; apps/node-backend/src/integrations/openai/brokerClient.ts; apps/node-backend/src/integrations/openai/egress-helper.mjs"
               },
               {
                 "from": "ex.openai",

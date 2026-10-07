@@ -18,7 +18,7 @@ vi.mock("../src/config/config.ts", () => {
   return { default: settings };
 });
 
-vi.mock("../src/repositories/aiChatRepository.js", () => ({
+vi.mock("../src/repositories/aiChatRepository.ts", () => ({
   aiChatRepository: {
     listConversations: vi.fn(),
     getConversation: vi.fn(),
@@ -42,9 +42,9 @@ vi.mock("../src/services/aiChat/tools/index.js", () => ({
 }));
 
 import settings from "../src/config/config.ts";
-import { aiChatRepository } from "../src/repositories/aiChatRepository.js";
+import { aiChatRepository } from "../src/repositories/aiChatRepository.ts";
 import { dispatchTool } from "../src/services/aiChat/tools/index.js";
-import { OllamaError } from "../src/integrations/ollama/client.js";
+import { OllamaError } from "../src/integrations/ollama/client.ts";
 import {
   AiChatServiceError,
   listConversations,

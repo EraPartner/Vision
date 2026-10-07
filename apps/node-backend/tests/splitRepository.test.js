@@ -7,12 +7,12 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 // LATERAL aggregate (only the relevant rows) while preserving numeric output.
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
-vi.mock("../src/repositories/auditChainRepository.js", () => ({
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
   appendAuditEvent: vi.fn(),
 }));
 
 import { query } from "../src/database/connection.ts";
-import splitPersistence from "../src/repositories/splitRepository.js";
+import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.js";
 
 const splitRepository = { ...splitPersistence, ...splitService };

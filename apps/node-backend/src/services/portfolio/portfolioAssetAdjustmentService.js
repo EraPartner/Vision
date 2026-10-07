@@ -7,7 +7,7 @@ import {
   ConflictError,
   ValidationError,
 } from "../../middleware/errorHandler.ts";
-import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
+import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.ts";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
 import { portfolioCustodyWriteHistory } from "./portfolioCustodyImportScope.js";
 import {
@@ -17,7 +17,7 @@ import {
   insertAssetAdjustment,
   getAssetAdjustmentsForBatch,
   deleteAssetAdjustmentsForBatch,
-} from "../../repositories/portfolioAssetAdjustmentRepository.js";
+} from "../../repositories/portfolioAssetAdjustmentRepository.ts";
 
 export function previewPortfolioAssetAdjustment(
   row,
@@ -135,14 +135,14 @@ export async function commitPortfolioAssetAdjustment({ row, batch }) {
       event.dedup_fingerprint_version,
     );
     if (existing) {
-      for (const field of [
+      for (const field of /** @type {const} */ ([
         "investment_id",
         "account_id",
         "date",
         "units",
         "adjustment_kind",
         "basis_policy",
-      ])
+      ]))
         if (
           !(field === "units"
             ? toDecimal(existing[field]).eq(event[field])

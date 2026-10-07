@@ -4,7 +4,7 @@ import { mockConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query } from '../src/database/connection.ts';
-import watchlistRepository from '../src/repositories/watchlistRepository.js';
+import watchlistRepository from '../src/repositories/watchlistRepository.ts';
 
 describe('watchlistRepository.buildWhereClause', () => {
   it('returns base WHERE 1=1 with no params when no asset class', () => {

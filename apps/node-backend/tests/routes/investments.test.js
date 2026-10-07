@@ -17,7 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/investmentRepository.js", () => ({
+vi.mock("../../src/repositories/investmentRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getAllWithCount: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock("../../src/repositories/investmentRepository.js", () => ({
   pickInvestmentCreateFields: (body) => body,
 }));
 
-vi.mock("../../src/repositories/portfolioTransactionRepository.js", () => ({
+vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getAllByInvestmentIds: vi.fn(),
@@ -80,8 +80,8 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import investmentRepository from "../../src/repositories/investmentRepository.js";
-import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.js";
+import investmentRepository from "../../src/repositories/investmentRepository.ts";
+import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.js";
 import {
   fetchHistoricalPrices,

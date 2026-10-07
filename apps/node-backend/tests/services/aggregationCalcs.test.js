@@ -14,7 +14,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../src/repositories/infoRepository.js", () => {
+vi.mock("../../src/repositories/infoRepository.ts", () => {
   const api = {
     getMonthlyFinancialSummary: vi.fn(),
     getCategoryBreakdown: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock("../../src/repositories/infoRepository.js", () => {
   return { default: api };
 });
 
-import infoRepository from "../../src/repositories/infoRepository.js";
+import infoRepository from "../../src/repositories/infoRepository.ts";
 import { buildEnvelope } from "../../src/services/calculations/aggregation/_envelope.js";
 import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.js";
 import { computeCategoryBreakdown } from "../../src/services/calculations/aggregation/category.js";

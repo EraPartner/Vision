@@ -8,7 +8,7 @@ const { mockClient, systemRecipient } = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
-vi.mock("../src/repositories/recipientRepository.js", () => ({
+vi.mock("../src/repositories/recipientRepository.ts", () => ({
   recipientRepository: { getOrCreateSystemId: systemRecipient },
 }));
 

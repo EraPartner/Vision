@@ -11,14 +11,14 @@ import {
 import { query, withTransaction } from "../../database/connection.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
-import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
+import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.ts";
 import { portfolioCustodyWriteHistory } from "./portfolioCustodyImportScope.js";
 import {
   deleteAssetTransfersForBatch,
   findAssetTransferFingerprint,
   getAssetTransfersForBatch,
   insertAssetTransfer,
-} from "../../repositories/portfolioAssetTransferRepository.js";
+} from "../../repositories/portfolioAssetTransferRepository.ts";
 
 function configOf(row, batch) {
   const raw = batch?.custom_config ?? row.custom_config;
@@ -164,14 +164,14 @@ export async function commitPortfolioAssetTransfer({ row, batch }) {
       event.dedup_fingerprint_version,
     );
     if (existing) {
-      for (const field of [
+      for (const field of /** @type {const} */ ([
         "investment_id",
         "source_account_id",
         "destination_account_id",
         "date",
         "units",
         "fee_units",
-      ]) {
+      ])) {
         const matches = ["units", "fee_units"].includes(field)
           ? toDecimal(existing[field]).eq(event[field])
           : String(existing[field]) === String(event[field]);

@@ -1,13 +1,13 @@
 import crypto from "node:crypto";
 import { withTransaction } from "../../database/connection.ts";
 import { validatePortfolioAssetTransferHistory } from "./portfolioAssetTransferService.js";
-import repository from "../../repositories/portfolioBrokerRetagRepository.js";
-import { appendAuditEvent } from "../../repositories/auditChainRepository.js";
+import repository from "../../repositories/portfolioBrokerRetagRepository.ts";
+import { appendAuditEvent } from "../../repositories/auditChainRepository.ts";
 import {
   buildInvestmentSummaryCorePartitioned,
   partitionOversellDeficits,
 } from "@vision/shared-utils/portfolio";
-import { settingsRepository } from "../../repositories/settingsRepository.js";
+import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import {
   ConflictError,

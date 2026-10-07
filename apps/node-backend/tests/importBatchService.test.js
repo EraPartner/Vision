@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/importBatchRepository.js", () => ({
+vi.mock("../src/repositories/importBatchRepository.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   rollbackBatch: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock("../src/repositories/importBatchRepository.js", () => ({
   categoryExists: vi.fn(),
 }));
 
-import { getPreviewRows } from "../src/repositories/importBatchRepository.js";
+import { getPreviewRows } from "../src/repositories/importBatchRepository.ts";
 import { getImportBatchPreview } from "../src/services/importBatchService.js";
 
 describe("getImportBatchPreview", () => {

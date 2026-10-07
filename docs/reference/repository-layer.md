@@ -60,7 +60,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ## 1. transactionRepository.js
 
-**File:** [[apps/node-backend/src/repositories/transactionRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/transactionRepository.ts]]  
 **Purpose:** CRUD operations for the `transactions` table with filtering, pagination, and virtual table support.
 
 ### Exported Methods
@@ -93,7 +93,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ## 2. recipientRepository.js
 
-**File:** [[apps/node-backend/src/repositories/recipientRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/recipientRepository.ts]]  
 **Purpose:** CRUD for `recipients` table with merge/unmerge, alias management, and name-based matching.
 
 ### Exported Methods
@@ -126,7 +126,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ## 3. categoryRepository.js
 
-**File:** [[apps/node-backend/src/repositories/categoryRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/categoryRepository.ts]]  
 **Purpose:** CRUD for `categories` table with hierarchical `GENERAL:DETAIL` structure and recipient assignment.
 
 ### Exported Methods
@@ -155,7 +155,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 ## 4. plannedTransactionRepository.js
 
-**File:** [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]  
 **Purpose:** Parameterized persistence for `planned_transactions`, recurrence records, tags, executions, and loan schedules. Cross-entity update orchestration lives in `plannedTransactionService.js`.
 
 ### Exported Methods
@@ -189,7 +189,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 5. recipientBankAccountRepository.js
 
-**File:** [[apps/node-backend/src/repositories/recipientBankAccountRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/recipientBankAccountRepository.ts]]  
 **Purpose:** CRUD for `recipient_bank_accounts` table with IBAN validation and primary account management.
 
 ### Exported Methods
@@ -217,7 +217,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 6. investmentRepository.js
 
-**File:** [[apps/node-backend/src/repositories/investmentRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/investmentRepository.ts]]  
 **Purpose:** CRUD for the canonical flat `investments` table after ADR-109 conversion.
 
 ### Exported Methods
@@ -245,7 +245,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 7. portfolioTransactionRepository.js
 
-**File:** [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]  
 **Purpose:** Parameterized persistence for the flat `portfolio_transactions` table. Portfolio transaction normalization, buy/sell math, recurrence hygiene, and sell-availability policy live in the portfolio transaction service.
 
 ### Exported Methods
@@ -273,7 +273,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 8. watchlistRepository.js
 
-**File:** [[apps/node-backend/src/repositories/watchlistRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/watchlistRepository.ts]]  
 **Purpose:** CRUD for `watchlist` table — track symbols without owning them.
 
 ### Exported Methods
@@ -301,7 +301,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 9. splitRepository.js
 
-**File:** [[apps/node-backend/src/repositories/splitRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/splitRepository.ts]]  
 **Purpose:** Parameterized persistence and row mapping for transaction splits, payments, outstanding rows, settlements, exports, and audit records. `splitService.js` owns lifecycle policy and orchestration.
 
 ### Exported Methods
@@ -333,7 +333,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 10. settingsRepository.js
 
-**File:** [[apps/node-backend/src/repositories/settingsRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/settingsRepository.ts]]  
 **Purpose:** Key-value settings storage with JSON serialization.
 
 ### Exported Methods
@@ -359,7 +359,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 
 ## 11. savedChartsRepository.js
 
-**File:** [[apps/node-backend/src/repositories/savedChartsRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/savedChartsRepository.ts]]  
 **Purpose:** CRUD for `saved_charts` table — user-configurable chart configurations.
 
 Filter identifiers are stored in the three normalized `saved_chart_*` membership tables. The
@@ -411,7 +411,7 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 ## 13. infoRepository.js (Composite Module — Phase 3.1)
 
-**File:** [[apps/node-backend/src/repositories/infoRepository.js]]  
+**File:** [[apps/node-backend/src/repositories/infoRepository.ts]]  
 **Purpose:** Barrel module (37 lines) that re-exports analytics and statistics repositories organized by domain. Originally 1445-line monolithic repository; refactored in Phase 3.1 into 7 domain-specific sub-repositories for improved maintainability and separation of concerns.
 
 **Phase 3.1 Refactoring (2026-04-23):**
@@ -427,13 +427,13 @@ the patch. Foreign keys provide deletion cleanup and reject stale concurrent sel
 
 | Sub-Module                    | File                                                                 | Lines | Purpose                                                                                                                                                                     |
 | ----------------------------- | -------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `infoRepositoryHelpers.js`    | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.js]]`    | 268   | Repository-specific MV cache, aggregation, category, row-mapping, and currency-conversion helpers; compatibility re-exports point generic helpers to their canonical owners |
-| `statisticsRepository`        | `[[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]` | 186   | `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`                                                                         |
-| `monthlyRepository`           | `[[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]`    | 484   | `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison`; uses batch FX conversion and parallel queries                                         |
-| `banksRepository`             | `[[apps/node-backend/src/repositories/infoRepositoryBanks.js]]`      | 145   | `getBankBalances`; uses batch FX conversion and parallel queries                                                                                                            |
-| `netWorthRepository`          | `[[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]]`   | 559   | `getNetWorthFromSnapshots` with snapshot-based valuation and spike sanitization                                                                                             |
-| `plannedRepository`           | `[[apps/node-backend/src/repositories/infoRepositoryPlanned.js]]`    | 94    | `getPlannedExpensesNextMonth`                                                                                                                                               |
-| `recipientInsightsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryRecipients.js]]` | 124   | `getRecipientInsights`                                                                                                                                                      |
+| `infoRepositoryHelpers.js`    | `[[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]]`    | 268   | Repository-specific MV cache, aggregation, category, row-mapping, and currency-conversion helpers; compatibility re-exports point generic helpers to their canonical owners |
+| `statisticsRepository`        | `[[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]]` | 186   | `getStatistics`, `getCategoryBreakdown`, `getBanks`, `getTransactionCount`, `getTransactionSummary`                                                                         |
+| `monthlyRepository`           | `[[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]]`    | 484   | `getMonthlyFinancialSummary`, `getAverageVsCurrentSpending`, `getCashflowComparison`; uses batch FX conversion and parallel queries                                         |
+| `banksRepository`             | `[[apps/node-backend/src/repositories/infoRepositoryBanks.ts]]`      | 145   | `getBankBalances`; uses batch FX conversion and parallel queries                                                                                                            |
+| `netWorthRepository`          | `[[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]]`   | 559   | `getNetWorthFromSnapshots` with snapshot-based valuation and spike sanitization                                                                                             |
+| `plannedRepository`           | `[[apps/node-backend/src/repositories/infoRepositoryPlanned.ts]]`    | 94    | `getPlannedExpensesNextMonth`                                                                                                                                               |
+| `recipientInsightsRepository` | `[[apps/node-backend/src/repositories/infoRepositoryRecipients.ts]]` | 124   | `getRecipientInsights`                                                                                                                                                      |
 
 ### Barrel Module Exports
 
@@ -561,7 +561,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 14. tagRepository.js
 
-**File:** [[apps/node-backend/src/repositories/tagRepository.js]]
+**File:** [[apps/node-backend/src/repositories/tagRepository.ts]]
 **Purpose:** CRUD for the `tags` table (orthogonal labelling dimension, ADR-052). Soft-delete via `is_active=false`.
 
 | Method                                                                | Returns                   |
@@ -576,7 +576,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 15. attachmentRepository.js
 
-**File:** [[apps/node-backend/src/repositories/attachmentRepository.js]]
+**File:** [[apps/node-backend/src/repositories/attachmentRepository.ts]]
 **Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.js|attachmentService.js]].
 
 | Method                                    | Returns     |
@@ -589,7 +589,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 16. importBatchRepository.js
 
-**File:** [[apps/node-backend/src/repositories/importBatchRepository.js]]
+**File:** [[apps/node-backend/src/repositories/importBatchRepository.ts]]
 **Purpose:** Persists `import_batches` + `import_rows` for the import pipeline (stage / validate / match / commit phases).
 
 | Method                               | Returns           |
@@ -605,7 +605,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 17. aiChatRepository.js
 
-**File:** [[apps/node-backend/src/repositories/aiChatRepository.js]]
+**File:** [[apps/node-backend/src/repositories/aiChatRepository.ts]]
 **Purpose:** Persists Ollama chat conversations and per-turn tool transcripts for the AI Chat feature (ADR-024).
 
 | Method                                            | Returns         |
@@ -619,7 +619,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 18. providerHealthRepository.js
 
-**File:** [[apps/node-backend/src/repositories/providerHealthRepository.js]]
+**File:** [[apps/node-backend/src/repositories/providerHealthRepository.ts]]
 **Purpose:** Rolling-window health metrics per external provider (latency, success/error counts). Drives the admin observability hub (ADR-034).
 
 | Method                                                    | Returns                  |
@@ -632,7 +632,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 19. cashflowForecastMcRepository.js
 
-**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRepository.js]]
+**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRepository.ts]]
 **Purpose:** Stores Monte-Carlo cashflow forecast snapshots (P25/P50/P75 paths) — the materialised cache for Phase 10 + Phase E forecast endpoints.
 
 | Method                          | Returns                 |
@@ -644,14 +644,14 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 ## 20. cashflowForecastMcRollingRepository.js
 
-**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js]]
+**File:** [[apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts]]
 **Purpose:** Same shape as `cashflowForecastMcRepository.js` but specialised for the Phase H rolling-window forecast (500 paths, P25/P75 defaults).
 
 ---
 
 ## 21. cashflowForecastAccuracyRepository.js
 
-**File:** [[apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js]]
+**File:** [[apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts]]
 **Purpose:** Persists realised-vs-forecast accuracy metrics per snapshot. Powers the Phase D accuracy endpoint and dashboard widget.
 
 | Method                                | Returns              |
@@ -665,9 +665,9 @@ UPDATE transactions SET is_active = false WHERE id = $1
 
 `portfolioTransactionRepository.js` composes three persistence files:
 
-- [[apps/node-backend/src/repositories/portfolioTxRepo.common.js|portfolioTxRepo.common.js]] — the migration-window column probe and list-query clause builder.
-- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
-- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.common.ts|portfolioTxRepo.common.js]] — the migration-window column probe and list-query clause builder.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.reads.ts|portfolioTxRepo.reads.js]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
+- [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts|portfolioTxRepo.writes.js]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
 
 [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
 

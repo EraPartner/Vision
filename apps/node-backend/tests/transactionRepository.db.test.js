@@ -33,7 +33,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import transactionRepository from "../src/repositories/transactionRepository.js";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { closePool } from "../src/database/connection.ts";
 import { toWireDate } from "../src/lib/dateFormat.ts";
 

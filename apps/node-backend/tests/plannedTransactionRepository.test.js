@@ -8,7 +8,7 @@ vi.mock("../src/middleware/validation.ts", () => ({
 }));
 
 import { getClient, query } from "../src/database/connection.ts";
-import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.js";
+import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.ts";
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 

@@ -5,7 +5,7 @@ import { executeBrokerRequest } from "../src/integrations/openai/egress-helper.m
 import {
   callOpenAiBroker,
   __seatbeltProfile,
-} from "../src/integrations/openai/brokerClient.js";
+} from "../src/integrations/openai/brokerClient.ts";
 
 describe("OpenAI egress helper contract", () => {
   it("uses only Responses API with storage, hosted tools, background, and redirects disabled", async () => {

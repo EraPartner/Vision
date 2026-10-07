@@ -15,7 +15,7 @@ vi.mock("../src/database/connection.ts", () =>
     withTransaction: mocks.withTransaction,
   }),
 );
-vi.mock("../src/repositories/portfolioImportBatchRepository.js", () => ({
+vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
   lockBatchForUpdate: mocks.lockBatchForUpdate,
   setBatchAccount: mocks.setBatchAccount,
 }));

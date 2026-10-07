@@ -77,7 +77,7 @@ vi.mock("../../src/services/accountService.js", () => ({
   default: { get: vi.fn() },
 }));
 
-vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
+vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -105,7 +105,7 @@ import {
   overrideInvestment,
 } from "../../src/services/portfolioImportBatchService.js";
 import accountService from "../../src/services/accountService.js";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.js";
+import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.js");

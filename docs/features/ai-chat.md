@@ -32,8 +32,8 @@ related_code:
   [
     "apps/node-backend/src/routes/ai.js",
     "apps/node-backend/src/services/aiChatService.js",
-    "apps/node-backend/src/repositories/aiChatRepository.js",
-    "apps/node-backend/src/integrations/ollama/client.js",
+    "apps/node-backend/src/repositories/aiChatRepository.ts",
+    "apps/node-backend/src/integrations/ollama/client.ts",
     "packages/types/src/aiChat.ts",
     "apps/frontend/src/pages/AIChatPage.tsx",
     "apps/frontend/src/features/ai-chat/",
@@ -217,7 +217,7 @@ Frontend /ai-chat
 Backend /api/ai
   ├── routes/ai.js             (SSE pass-through + CRUD + terminal events)
   ├── services/aiChatService.js (orchestrator; emits public stream events)
-  ├── integrations/ollama/client.js (HTTP wrapper, stream)
+  ├── integrations/ollama/client.ts (HTTP wrapper, stream)
   └── services/aiChat/tools/*  (registry → existing repositories)
 
 Shared contract

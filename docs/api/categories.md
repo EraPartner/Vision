@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Ordered category hierarchy with stable IDs and a compatible GENERAL:DETAIL API
-date: 2026-09-19
+date: 2026-10-07
 updated: 2026-09-19
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
-related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/categoryHierarchyRepository.js]]
+related_code: [[apps/node-backend/src/routes/categories.js]], [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/categoryHierarchyRepository.ts]]
 ---
 
 # Categories API
@@ -123,7 +123,7 @@ Create a new category or get existing category.
 
 Implementation note:
 
-- Repository `createOrGet` now uses `INSERT ... ON CONFLICT (general, detail) DO NOTHING RETURNING *` with existing-row fallback lookup, preserving idempotent create-or-get semantics while reducing race-window risk and extra round-trips under concurrent requests ([[apps/node-backend/src/repositories/categoryRepository.js]]).
+- Repository `createOrGet` now uses `INSERT ... ON CONFLICT (general, detail) DO NOTHING RETURNING *` with existing-row fallback lookup, preserving idempotent create-or-get semantics while reducing race-window risk and extra round-trips under concurrent requests ([[apps/node-backend/src/repositories/categoryRepository.ts]]).
 
 **Response:** `201` with `created: true` if created; `200` with `created: false` if the existing
 category is returned. The boolean is part of the response data alongside the category fields.

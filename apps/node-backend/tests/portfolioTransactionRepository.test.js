@@ -7,10 +7,10 @@ vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
   withPortfolioHistoryWrite: (_accounts, work) => work(),
 }));
 vi.mock(
-  "../src/repositories/portfolioAssetTransferRepository.js",
+  "../src/repositories/portfolioAssetTransferRepository.ts",
   async () => ({
     ...(await vi.importActual(
-      "../src/repositories/portfolioAssetTransferRepository.js",
+      "../src/repositories/portfolioAssetTransferRepository.ts",
     )),
     hasAssetTransfersForInvestment: () => false,
   }),
@@ -19,7 +19,7 @@ vi.mock(
 import { query } from "../src/database/connection.ts";
 import portfolioTransactionReadRepository, {
   __resetPortfolioTransactionSchemaCache,
-} from "../src/repositories/portfolioTransactionRepository.js";
+} from "../src/repositories/portfolioTransactionRepository.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
 
 const portfolioTransactionRepository = {

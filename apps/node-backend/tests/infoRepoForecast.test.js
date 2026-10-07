@@ -7,9 +7,9 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 // under test does not spend a `query` mock call on the settings lookup — the
 // call-count/param assertions below are about the cash-flow SQL only. Its
 // behaviour is exercised for real in infoRepoForecast.db.test.js.
-vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
+vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
   const actual = await vi.importActual(
-    "../src/repositories/infoRepositoryHelpers.js",
+    "../src/repositories/infoRepositoryHelpers.ts",
   );
   return {
     ...actual,
@@ -22,13 +22,13 @@ import { query } from "../src/database/connection.ts";
 import {
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
-} from "../src/repositories/infoRepositoryHelpers.js";
+} from "../src/repositories/infoRepositoryHelpers.ts";
 import {
   getCashflowComparison,
   getCashflowForecastData,
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
-} from "../src/repositories/infoRepositoryForecast.js";
+} from "../src/repositories/infoRepositoryForecast.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 

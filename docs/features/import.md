@@ -80,8 +80,8 @@ related_code:
     "apps/node-backend/src/routes/importRoutes.js",
     "apps/node-backend/src/routes/importBatchRoutes.js",
     "apps/node-backend/src/lib/sse.ts",
-    "apps/node-backend/src/repositories/importBatchRepository.js",
-    "apps/node-backend/src/repositories/customParserConfigRepository.js",
+    "apps/node-backend/src/repositories/importBatchRepository.ts",
+    "apps/node-backend/src/repositories/customParserConfigRepository.ts",
     "apps/frontend/src/features/imports/TransactionImportCard.tsx",
     "apps/frontend/src/features/imports/FileHeadersPanel.tsx",
     "apps/frontend/src/features/imports/RecipientsImportCard.tsx",
@@ -626,7 +626,7 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 | `created_at`  | TIMESTAMPTZ    |                                                                                                                                       |
 | `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                                         |
 
-**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
+**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
 
 **Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.ts` and travels with `.visionbak` exports.
 
@@ -951,7 +951,7 @@ Vision supports receipt and document attachments for transactions via the attach
 
 - [[apps/node-backend/src/middleware/attachmentUpload.ts]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
 - [[apps/node-backend/src/services/attachmentService.js]]: Content verification, file storage, path resolution, and removal
-- [[apps/node-backend/src/repositories/attachmentRepository.js]]: Database operations (CRUD)
+- [[apps/node-backend/src/repositories/attachmentRepository.ts]]: Database operations (CRUD)
 - [[apps/node-backend/src/routes/attachments.js]]: Four REST endpoints for attachment management
 - Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes
 

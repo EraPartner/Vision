@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/transactionRepository.js", () => ({
+vi.mock("../src/repositories/transactionRepository.ts", () => ({
   transactionRepository: {
     getAll: vi.fn(),
   },
@@ -9,7 +9,7 @@ vi.mock("../src/services/categoryService.js", () => ({
   listCategoryNodes: vi.fn(),
 }));
 
-import { transactionRepository } from "../src/repositories/transactionRepository.js";
+import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { listCategoryNodes } from "../src/services/categoryService.js";
 import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.js";
 

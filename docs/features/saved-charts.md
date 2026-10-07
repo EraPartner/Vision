@@ -2,7 +2,7 @@
 title: Saved Charts Feature
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 tags:
   [
     feature,
@@ -27,8 +27,8 @@ related_code:
   - apps/frontend/src/features/statistics/CustomChartBuilderModal.tsx
   - apps/frontend/src/features/statistics/SavedChartsSection.tsx
   - apps/node-backend/src/routes/savedCharts.js
-  - apps/node-backend/src/repositories/savedChartsRepository.js
-  - apps/node-backend/src/repositories/infoRepositoryTags.js
+  - apps/node-backend/src/repositories/savedChartsRepository.ts
+  - apps/node-backend/src/repositories/infoRepositoryTags.ts
   - apps/node-backend/src/services/calculations/aggregation/tagPivot.js
   - alembic/versions/0017_saved_charts_recipients_variants.py
   - alembic/versions/0063_saved_charts_tag_ids.py

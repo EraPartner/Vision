@@ -6,7 +6,7 @@ date: 2026-10-07
 updated: 2026-09-26
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
-related_code: ["apps/node-backend/src/services/currency/rateFetcher.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/lib/network.ts"]
+related_code: ["apps/node-backend/src/services/currency/rateFetcher.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
 ---
 
 # Currency Conversion
@@ -242,7 +242,7 @@ const converted = await convertRowsToEur(rows, "USD", {
 Convert N row groups in a single `convertRowsToEur()` call to eliminate redundant `exchange_rates` database queries:
 
 ```javascript
-import { batchConvertGroupsWithHistoricalRateFallback } from "./repositories/infoRepositoryHelpers.js";
+import { batchConvertGroupsWithHistoricalRateFallback } from "./repositories/infoRepositoryHelpers.ts";
 
 // Merge multiple independent row groups (e.g., current balances + history)
 // with a `_batchGroup` tag for later splitting
@@ -424,4 +424,4 @@ See [[docs/features/portfolio#historical-fx-in-snapshots-2026-05-29|Portfolio â€
 - [[docs/integrations/index]] - Integrations Index
 - [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currency/rateFetcher.js|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.js|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/currency/rateFetcher.js|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]

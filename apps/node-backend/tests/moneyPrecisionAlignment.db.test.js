@@ -48,7 +48,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import splitPersistence from "../src/repositories/splitRepository.js";
+import splitPersistence from "../src/repositories/splitRepository.ts";
 import splitService from "../src/services/splitService.js";
 import { closePool } from "../src/database/connection.ts";
 

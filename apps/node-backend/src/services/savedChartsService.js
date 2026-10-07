@@ -2,7 +2,7 @@
  * Saved-charts service — the route-facing seam over savedChartsRepository
  * (eslint vision-local/no-repo-direct-from-route).
  */
-import savedChartsRepository from "../repositories/savedChartsRepository.js";
+import savedChartsRepository from "../repositories/savedChartsRepository.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 /** @param {unknown} error */

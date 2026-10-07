@@ -4,7 +4,7 @@ import { mockConnection } from "./helpers/repoMocks.js";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query } from "../src/database/connection.ts";
-import { aiChatRepository } from "../src/repositories/aiChatRepository.js";
+import { aiChatRepository } from "../src/repositories/aiChatRepository.ts";
 
 describe("aiChatRepository.listConversations", () => {
   beforeEach(() => vi.clearAllMocks());

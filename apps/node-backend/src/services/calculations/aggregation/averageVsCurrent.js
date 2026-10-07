@@ -5,7 +5,7 @@
  * Computed live today (no MV); source flagged 'live' for meta.
  */
 
-import infoRepository from '../../../repositories/infoRepository.js';
+import infoRepository from '../../../repositories/infoRepository.ts';
 import { buildEnvelope } from './_envelope.js';
 import { assertNoNaN } from './_invariants.js';
 

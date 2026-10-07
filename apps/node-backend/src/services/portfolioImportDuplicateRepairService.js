@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import {
   compareAndSetReconciledTransaction,
   markAdoptedSourceDuplicate,
-} from "../repositories/portfolioImportReconciliationRepository.js";
+} from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   deleteExactImportedCopy,
   getActiveDuplicateRepairReceipts,
@@ -14,7 +14,7 @@ import {
   replaceRepairBatch,
   replaceRepairStaging,
   restoreExactImportedCopy,
-} from "../repositories/portfolioImportDuplicateRepairRepository.js";
+} from "../repositories/portfolioImportDuplicateRepairRepository.ts";
 
 export { getActiveDuplicateRepairReceipts };
 export function financialRepairImage(full) {

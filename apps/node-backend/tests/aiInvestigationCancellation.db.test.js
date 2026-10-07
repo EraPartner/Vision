@@ -9,7 +9,7 @@ import {
   finishJob,
   requestCancel,
   setProviderResult,
-} from "../src/repositories/aiInvestigationRepository.js";
+} from "../src/repositories/aiInvestigationRepository.ts";
 
 const pool = getTestPool();
 

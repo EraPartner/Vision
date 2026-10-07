@@ -10,8 +10,8 @@
  * marking/reconcile, and hard delete with attachment-file cleanup.
  */
 
-import transactionRepository from "../repositories/transactionRepository.js";
-import { accountRepository } from "../repositories/accountRepository.js";
+import transactionRepository from "../repositories/transactionRepository.ts";
+import { accountRepository } from "../repositories/accountRepository.ts";
 import {
   isManualDuplicate,
   lockManualTransactionIdentity,

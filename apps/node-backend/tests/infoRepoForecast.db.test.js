@@ -48,9 +48,9 @@ import {
   getCashflowForecastData,
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
-} from "../src/repositories/infoRepositoryForecast.js";
-import { getAverageVsCurrentSpending } from "../src/repositories/infoRepositoryAverageVsCurrent.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+} from "../src/repositories/infoRepositoryForecast.ts";
+import { getAverageVsCurrentSpending } from "../src/repositories/infoRepositoryAverageVsCurrent.ts";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
 import { closePool } from "../src/database/connection.ts";

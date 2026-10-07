@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/repositories/transactionRepository.js', () => ({
+vi.mock('../src/repositories/transactionRepository.ts', () => ({
   transactionRepository: {
     getAll: vi.fn(),
     getUncategorised: vi.fn(),
   },
 }));
 
-vi.mock('../src/repositories/infoRepository.js', () => ({
+vi.mock('../src/repositories/infoRepository.ts', () => ({
   default: { getMonthlyFinancialSummary: vi.fn() },
 }));
 
@@ -15,8 +15,8 @@ vi.mock('../src/services/aiChat/tools/_financialMetrics.js', () => ({
   getAiDisplayCurrency: vi.fn(),
 }));
 
-import { transactionRepository } from '../src/repositories/transactionRepository.js';
-import infoRepository from '../src/repositories/infoRepository.js';
+import { transactionRepository } from '../src/repositories/transactionRepository.ts';
+import infoRepository from '../src/repositories/infoRepository.ts';
 import { getAiDisplayCurrency } from '../src/services/aiChat/tools/_financialMetrics.js';
 import {
   getSpendByCategory,

@@ -6,7 +6,7 @@
  * the wrapper will pass them through.
  */
 
-import infoRepository from "../../../repositories/infoRepository.js";
+import infoRepository from "../../../repositories/infoRepository.ts";
 import { buildEnvelope } from "./_envelope.js";
 import { assertCategoryInvariants } from "./_invariants.js";
 

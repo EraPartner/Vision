@@ -18,15 +18,15 @@ related_code:
   - apps/node-backend/src/services/calculations/forecast/index.js
   - apps/node-backend/src/services/calculations/forecast/methods/ensemble.js
   - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
-  - apps/node-backend/src/repositories/infoRepositoryTags.js
+  - apps/node-backend/src/repositories/infoRepositoryTags.ts
   - apps/node-backend/src/services/calculations/aggregation/tagPivot.js
   - apps/frontend/src/hooks/useTagPivot.ts
-  - apps/node-backend/src/repositories/infoRepositoryRecipients.js
-  - apps/node-backend/src/repositories/infoRepositoryMonthly.js
+  - apps/node-backend/src/repositories/infoRepositoryRecipients.ts
+  - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
   - apps/node-backend/src/repositories/infoRepo.forecast.js
-  - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
-  - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
-  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
+  - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.ts
+  - apps/node-backend/src/repositories/cashflowForecastMcRepository.ts
+  - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts
   - apps/node-backend/src/jobs/refreshCashflowForecastMc.ts
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/aggregations.ts
@@ -590,7 +590,7 @@ const allTagsEnvelope = await getAggregationTagPivot({
 
 **Implementation:**
 
-- Repository: `apps/node-backend/src/repositories/infoRepositoryTags.js` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
+- Repository: `apps/node-backend/src/repositories/infoRepositoryTags.ts` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
 - Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
 - Route: wired in `apps/node-backend/src/routes/aggregations.js`; accepts the `all` query parameter and rejects the retired `all_tags` alias.
 - Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts`; enabled when `tag_ids.length > 0` **or** `all_tags = true`; cache key includes `'all'` token when all-flag is active.

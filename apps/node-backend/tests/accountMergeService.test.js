@@ -21,7 +21,7 @@ import {
   previewMerge,
   __stampRangesOverlap as stampRangesOverlap,
 } from "../src/services/accountMergeService.js";
-import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.js";
+import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 import {
   ValidationError,
   NotFoundError,

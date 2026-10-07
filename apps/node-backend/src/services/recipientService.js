@@ -7,7 +7,7 @@ import { query } from '../database/connection.ts';
 import { ValidationError } from '../middleware/errorHandler.ts';
 import { normalizeForMatching } from '../lib/textNormalization.ts';
 
-export { default } from '../repositories/recipientRepository.js';
+export { default } from '../repositories/recipientRepository.ts';
 
 /**
  * Resolve a recipient name to its id, matching on normalized_name.

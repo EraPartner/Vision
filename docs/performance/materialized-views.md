@@ -2,7 +2,7 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-08-25
+date: 2026-10-07
 updated: 2026-09-04
 tags:
   [
@@ -90,7 +90,7 @@ GROUP BY month_start, month, year, t.currency, c.id
 
 When all conditions are true, the query skips live SQL and returns aggregated data directly from the MV (~5–10ms). **When `allTime=true`, the fast path is always bypassed** — the method executes live SQL against full transaction history to ensure complete all-time data, since MVs only retain recent months (12–24 months).
 
-See [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] line 30 for the condition: `if (!allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary'))`.
+See [[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]] line 30 for the condition: `if (!allTime && validIds.length === 0 && validRecipientIds.length === 0 && await mvAvailable('mv_monthly_summary'))`.
 
 ---
 

@@ -7,7 +7,7 @@ updated: 2026-10-04
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.js", "apps/node-backend/src/repositories/infoRepositoryStatistics.js", "apps/node-backend/src/repositories/infoRepositoryMonthly.js", "apps/node-backend/src/repositories/infoRepositoryBanks.js", "apps/node-backend/src/repositories/infoRepositoryNetWorth.js", "apps/node-backend/src/repositories/infoRepositoryPlanned.js", "apps/node-backend/src/repositories/infoRepositoryRecipients.js", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js"]
+related_code: ["apps/node-backend/src/routes/info.js", "apps/node-backend/src/repositories/infoRepository.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/repositories/infoRepositoryStatistics.ts", "apps/node-backend/src/repositories/infoRepositoryMonthly.ts", "apps/node-backend/src/repositories/infoRepositoryBanks.ts", "apps/node-backend/src/repositories/infoRepositoryNetWorth.ts", "apps/node-backend/src/repositories/infoRepositoryPlanned.ts", "apps/node-backend/src/repositories/infoRepositoryRecipients.ts", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js"]
 ---
 
 # Info & Analytics API
@@ -136,7 +136,7 @@ Notes:
 
 - Historical currency conversion is date-aware for this endpoint: each transaction/month row is converted using its own row date (instead of latest FX rates).
 - This makes month-over-month values stable across restarts and exchange-rate cache refreshes.
-- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.ts` and `lib/dateKeys.ts` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.js]]).
+- Phase 3.1 refactoring: monolithic 1445-line repository split into 7 domain modules; monthly summary logic now lives in `monthlyRepository` (`infoRepositoryMonthly.js`). Repository-specific aggregation and conversion helpers remain in `infoRepositoryHelpers.js`; generic date formatting and UTC keys are owned by `lib/dateFormat.ts` and `lib/dateKeys.ts` ([[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]]).
 - Phase 3.1 optimization: income/spending rows batch-converted in 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` instead of separate conversions per month.
 - Monthly-summary MV fast path removed a redundant unused conversion pass (`mvConverted`) while keeping the merged income/spending conversion output path unchanged.
 
@@ -269,9 +269,9 @@ Get spending breakdown by category.
 
 Implementation notes:
 
-- Route calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.js]]).
-- Category aggregation in MV-backed breakdown/statistics paths uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.js]]).
-- Phase 3.1: categorization logic is part of `statisticsRepository` domain module within composite `infoRepository` barrel ([[apps/node-backend/src/repositories/infoRepositoryStatistics.js]]).
+- Route calls dedicated repository method `getCategoryBreakdown(targetCurrency)` instead of full `getStatistics(...)`, avoiding unrelated top-level stats computation while preserving payload shape (`{ categories, links: [] }`) and currency behavior ([[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/repositories/infoRepository.ts]]).
+- Category aggregation in MV-backed breakdown/statistics paths uses map-based merge helpers instead of repeated array `.find(...)` scans, reducing merge complexity while preserving category totals/counts and sort order ([[apps/node-backend/src/repositories/infoRepository.ts]]).
+- Phase 3.1: categorization logic is part of `statisticsRepository` domain module within composite `infoRepository` barrel ([[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]]).
 
 ---
 
@@ -286,7 +286,7 @@ Notes:
 - For non-EUR targets, conversion is date-aware for both the current account balances and monthly history rows.
 - Historical FX lookup uses each row `date` when converting bank-balance datasets.
 - If historical conversion fails for a row set, conversion retries with latest available rates so the endpoint still returns balance data.
-- Phase 3.1 optimization: eliminated 1 redundant `exchange_rates` query by batching current balances and history rows into 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` helper; queries now execute in parallel via `Promise.all()` ([[apps/node-backend/src/repositories/infoRepository.js]]).
+- Phase 3.1 optimization: eliminated 1 redundant `exchange_rates` query by batching current balances and history rows into 1 `convertRowsToEur` call via `batchConvertGroupsWithHistoricalRateFallback()` helper; queries now execute in parallel via `Promise.all()` ([[apps/node-backend/src/repositories/infoRepository.ts]]).
 
 **Query Parameters:**
 
@@ -790,4 +790,4 @@ These endpoints are optimized using:
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.js]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.js]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.js]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.js]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.js]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.js]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.js]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.js]] (recipients), [[apps/node-backend/src/lib/dateKeys.ts]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.ts]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.ts]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.ts]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.ts]] (recipients), [[apps/node-backend/src/lib/dateKeys.ts]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/tests/infoRepository.test.js]]

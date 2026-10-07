@@ -2,7 +2,7 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 tags:
   - url-state
@@ -53,7 +53,7 @@ related_code:
   - apps/node-backend/src/services/research/projection/portfolioProjection.js
   - apps/node-backend/src/services/research/projection/stats.js
   - apps/node-backend/src/services/research/fundamentalsScorecard.js
-  - apps/node-backend/src/repositories/providerQuotaRepository.js
+  - apps/node-backend/src/repositories/providerQuotaRepository.ts
   - apps/frontend/src/pages/research/PortfolioForecastPage.tsx
   - apps/frontend/src/pages/research/ChartBuilderPage.tsx
   - apps/frontend/src/pages/research/MarketOverviewPage.tsx

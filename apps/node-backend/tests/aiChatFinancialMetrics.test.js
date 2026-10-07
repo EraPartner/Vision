@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: vi.fn() },
 }));
 
@@ -8,7 +8,7 @@ vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
   getPortfolioSummary: vi.fn(),
 }));
 
-import { settingsRepository } from "../src/repositories/settingsRepository.js";
+import { settingsRepository } from "../src/repositories/settingsRepository.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
 import {
   getAiDisplayCurrency,

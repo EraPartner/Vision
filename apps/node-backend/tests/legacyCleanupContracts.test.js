@@ -56,7 +56,7 @@ describe("legacy cleanup contracts", () => {
 
   it("keeps active import SQL independent of the legacy tx_hash columns", () => {
     const runtimeFiles = [
-      "apps/node-backend/src/repositories/transactionRepository.js",
+      "apps/node-backend/src/repositories/transactionRepository.ts",
       "apps/node-backend/src/services/importPipeline/validate.js",
       "apps/node-backend/src/services/importPipeline/commit.js",
       "apps/node-backend/src/services/portfolioImportPipeline/validate.js",

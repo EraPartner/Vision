@@ -32,8 +32,8 @@ import { query, withTransaction } from "../database/connection.ts";
 import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
-} from "../repositories/accountBalanceSql.js";
-import { recipientRepository } from "../repositories/recipientRepository.js";
+} from "../repositories/accountBalanceSql.ts";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";

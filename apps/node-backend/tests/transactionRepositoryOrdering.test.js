@@ -16,7 +16,7 @@ import {
 } from "../src/database/connection.ts";
 import transactionRepository, {
   clearTransactionCountCache,
-} from "../src/repositories/transactionRepository.js";
+} from "../src/repositories/transactionRepository.ts";
 
 beforeEach(() => {
   query.mockReset();

@@ -8,11 +8,11 @@ import { createServer } from "node:net";
 import {
   __prepareSyntheticCodexProbe as prepareSyntheticCodexProbe,
   __validateEffectiveProbeConfig as validateEffectiveProbeConfig,
-} from "../src/integrations/codex/syntheticProbe.js";
+} from "../src/integrations/codex/syntheticProbe.ts";
 import {
   codexOfflineSeatbeltProfile,
   codexProxySeatbeltProfile,
-} from "../src/integrations/codex/seatbelt.js";
+} from "../src/integrations/codex/seatbelt.ts";
 
 const binary = await realpath(
   process.env.VISION_CODEX_PROBE_BIN || "/opt/homebrew/bin/codex",

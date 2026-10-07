@@ -7,8 +7,8 @@
  * fetches hit the database once. When `cache` is absent the read runs directly.
  */
 
-import { investmentRepository } from '../../../repositories/investmentRepository.js';
-import { portfolioTransactionRepository } from '../../../repositories/portfolioTransactionRepository.js';
+import { investmentRepository } from '../../../repositories/investmentRepository.ts';
+import { portfolioTransactionRepository } from '../../../repositories/portfolioTransactionRepository.ts';
 import { memoizeAsync } from '../toolCache.js';
 
 /**

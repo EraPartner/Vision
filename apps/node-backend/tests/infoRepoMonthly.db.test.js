@@ -43,9 +43,9 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.js";
+import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { createMaterializedViews } from "../src/services/materializedViewService.js";
-import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
+import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString, appDateStringToUtc } from "../src/lib/timezone.ts";

@@ -7,7 +7,7 @@
  * masked in responses and never returned in full.
  */
 
-import * as keyRepo from '../../repositories/providerApiKeyRepository.js';
+import * as keyRepo from '../../repositories/providerApiKeyRepository.ts';
 import {
   KEYED_PROVIDERS,
   ENV_VAR_BY_PROVIDER,

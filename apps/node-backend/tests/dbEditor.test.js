@@ -12,12 +12,12 @@ vi.mock("../src/services/materializedViewService.js", () => ({
 }));
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
-vi.mock("../src/repositories/auditChainRepository.js", () => ({
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
   appendAuditEvent: vi.fn(),
 }));
 
 import { query, getClient } from "../src/database/connection.ts";
-import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
+import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 import { scheduleRefresh } from "../src/services/materializedViewService.js";
 import {
   getTableMeta,

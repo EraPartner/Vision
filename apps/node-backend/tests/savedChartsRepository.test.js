@@ -13,7 +13,7 @@ vi.mock("../src/database/connection.ts", () =>
   }),
 );
 
-import savedChartsRepository from "../src/repositories/savedChartsRepository.js";
+import savedChartsRepository from "../src/repositories/savedChartsRepository.ts";
 
 const storedRow = {
   id: 7,

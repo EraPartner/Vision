@@ -435,7 +435,7 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 
 - New filters in `GET /api/transactions`: `category_ids` (comma-separated string, ignored if `category_id` set) and `transaction_type` (enum: 'income' | 'expense')
 - `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
-- `[[apps/node-backend/src/repositories/transactionRepository.js]]` — `getAllWithCount()` forwards filter params
+- `[[apps/node-backend/src/repositories/transactionRepository.ts]]` — `getAllWithCount()` forwards filter params
 - Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
 
 **Frontend:**

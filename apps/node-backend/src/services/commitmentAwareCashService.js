@@ -1,4 +1,4 @@
-import plannedTransactionRepository from "../repositories/plannedTransactionRepository.js";
+import plannedTransactionRepository from "../repositories/plannedTransactionRepository.ts";
 import {
   expandOccurrences,
   nextOccurrenceYmd,

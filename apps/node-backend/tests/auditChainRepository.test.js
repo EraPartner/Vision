@@ -9,7 +9,7 @@ import {
   appendAuditEvent,
   readAuditSegment,
   recordAuditCheckpoint,
-} from "../src/repositories/auditChainRepository.js";
+} from "../src/repositories/auditChainRepository.ts";
 import {
   AUDIT_CHAIN_GENESIS_HASH,
   verifyAuditChain,

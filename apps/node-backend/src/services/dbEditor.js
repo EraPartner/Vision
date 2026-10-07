@@ -32,7 +32,7 @@ import {
   NotFoundError,
 } from "../middleware/errorHandler.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
-import { appendAuditEvent } from "../repositories/auditChainRepository.js";
+import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 
 /** @typedef {import('../types/rows.ts').QueryRunner} QueryRunner */
 

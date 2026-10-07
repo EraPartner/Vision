@@ -18,7 +18,7 @@ import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
   computedBalanceSeriesCtes,
-} from "../src/repositories/accountBalanceSql.js";
+} from "../src/repositories/accountBalanceSql.ts";
 
 const BALANCE_PROVENANCE_LATERAL = balanceProvenanceLateral();
 

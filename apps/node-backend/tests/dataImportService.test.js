@@ -28,19 +28,19 @@ vi.mock("../src/config/logger.ts", () => ({
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/repositories/recipientRepository.js", () => ({
+vi.mock("../src/repositories/recipientRepository.ts", () => ({
   recipientRepository: {
     createOrGet: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/categoryRepository.js", () => ({
+vi.mock("../src/repositories/categoryRepository.ts", () => ({
   categoryRepository: {
     createOrGet: vi.fn(),
   },
 }));
 
-vi.mock("../src/repositories/recipientBankAccountRepository.js", () => ({
+vi.mock("../src/repositories/recipientBankAccountRepository.ts", () => ({
   recipientBankAccountRepository: {
     createOrGet: vi.fn(),
   },
@@ -50,9 +50,9 @@ import fs from "fs";
 import { parse } from "csv-parse/sync";
 import { logger } from "../src/config/logger.ts";
 import { query } from "../src/database/connection.ts";
-import { recipientRepository } from "../src/repositories/recipientRepository.js";
-import { categoryRepository } from "../src/repositories/categoryRepository.js";
-import { recipientBankAccountRepository } from "../src/repositories/recipientBankAccountRepository.js";
+import { recipientRepository } from "../src/repositories/recipientRepository.ts";
+import { categoryRepository } from "../src/repositories/categoryRepository.ts";
+import { recipientBankAccountRepository } from "../src/repositories/recipientBankAccountRepository.ts";
 import {
   importRecipientsCSV,
   importCategoriesCSV,

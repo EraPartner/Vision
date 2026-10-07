@@ -60,12 +60,12 @@ import {
 } from "./setup/db.js";
 import { logger } from "../src/config/logger.ts";
 import { closePool, query } from "../src/database/connection.ts";
-import { recipientRepository } from "../src/repositories/recipientRepository.js";
-import { categoryRepository } from "../src/repositories/categoryRepository.js";
+import { recipientRepository } from "../src/repositories/recipientRepository.ts";
+import { categoryRepository } from "../src/repositories/categoryRepository.ts";
 import {
   mergeCategoryNodes,
   updateCategoryNode,
-} from "../src/repositories/categoryHierarchyRepository.js";
+} from "../src/repositories/categoryHierarchyRepository.ts";
 import {
   importCategoriesCSV,
   importRecipientsCSV,

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-vi.mock('../src/repositories/settingsRepository.js', () => ({ default: {
+vi.mock('../src/repositories/settingsRepository.ts', () => ({ default: {
   getRecord: vi.fn(), replace: vi.fn(), replaceMany: vi.fn(), deleteExpected: vi.fn(),
 } }));
-import repo from '../src/repositories/settingsRepository.js';
+import repo from '../src/repositories/settingsRepository.ts';
 import router from '../src/routes/settings.js';
 const handler = (path, method) => router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]).route.stack.at(-1).handle;
 beforeEach(() => vi.clearAllMocks());

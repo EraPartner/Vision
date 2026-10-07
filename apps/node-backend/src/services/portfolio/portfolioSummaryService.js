@@ -17,8 +17,8 @@ import {
   findRateOnOrBeforeInIndex,
 } from "../currency/rateFetcher.js";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import { settingsRepository } from "../../repositories/settingsRepository.js";
-import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
+import { settingsRepository } from "../../repositories/settingsRepository.ts";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {

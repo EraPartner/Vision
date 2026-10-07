@@ -5,7 +5,7 @@ import {
   getTestPool,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
+import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 import { verifyAuditHistory } from "../src/services/auditVerificationService.js";
 import {
   planAuditRetention,

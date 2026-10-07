@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 import { query, withTransaction } from "../src/database/connection.ts";
-import repo from "../src/repositories/settingsRepository.js";
+import repo from "../src/repositories/settingsRepository.ts";
 beforeEach(() => vi.clearAllMocks());
 describe("conditional whole-value settings replacement", () => {
   it("uses persisted JSON equality for existing values and sends a complete replacement", async () => {

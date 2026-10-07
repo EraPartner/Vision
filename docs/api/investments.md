@@ -10,7 +10,7 @@ updated: 2026-10-04
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
-related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/repositories/investmentRepository.js"]
+related_code: ["apps/node-backend/src/routes/investments.js", "apps/node-backend/src/repositories/investmentRepository.ts"]
 ---
 
 # Investments API
@@ -96,7 +96,7 @@ Notes:
 
 - Internal route refactor consolidated shared query/ID parsing helpers (`parseDefaultListOptions`, `parseBulkTransactionsOptions`, `parseInvestmentTransactionsOptions`, `parseDbOnlyQueryValue`, `parseRequestId`, `parseTxnRequestId`) to reduce duplication while preserving all defaults, clamping rules, and endpoint response semantics ([[apps/node-backend/src/routes/investments.js]]).
 - Follow-up route refactor extracted shared transaction-id validation for transaction mutation endpoints via `parseAndValidateTxnRequestId(req, res)` and centralized validation-error response mapping via `handleValidationError(res, err)`; status codes and error payloads remain unchanged ([[apps/node-backend/src/routes/investments.js]]).
-- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]).
+- Investment list (`GET /api/investments`) and per-investment transaction list (`GET /api/investments/:id/transactions`) now use repository one-query pagination helpers (`getAllWithCount`) instead of separate list/count route calls, preserving filters, totals, ordering, and response payload shape ([[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]).
 
 ### GET /api/investments/exposure
 
@@ -325,7 +325,7 @@ Validation and mutability rules:
 - The response includes `show_in_ticker` once migration 0061 has been applied (via the joined read path described above).
 - The frontend `PortfolioTicker` `TickerManager` popover uses this field via an optimistic `PATCH` + React Query cache update (rolls back on error, invalidates investments + portfolio-summary on settle).
 
-Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.js]]
+Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/investmentRepository.ts]]
 
 ### DELETE /api/investments/:id
 
@@ -440,7 +440,7 @@ phantoms while the full-history invariant and compare-and-set update run in one 
 }
 ```
 
-Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
+Code links: [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/hooks/usePortfolio.ts]]
 
 `import_batch_id` records portfolio-import provenance. It is a decimal string
 when the row was created by a portfolio import because node-postgres preserves
@@ -576,7 +576,7 @@ Update endpoint notes:
 
 Update-path compatibility:
 
-- Updates target the canonical flat `portfolio_transactions` table. Migration 0087 owns conversion from the retired inheritance layout; runtime schema-shape fallbacks are no longer part of the supported write path ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]], [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js]]).
+- Updates target the canonical flat `portfolio_transactions` table. Migration 0087 owns conversion from the retired inheritance layout; runtime schema-shape fallbacks are no longer part of the supported write path ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]], [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts]]).
 - Migration `0016_add_fx_rate_to_portfolio_transactions` retains its relation-kind guard for historical upgrade ordering, while current installs reach the flat-table runtime contract through the full migration chain ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]]).
 
 ### DELETE /api/investments/transactions/:txnId
@@ -713,6 +713,6 @@ For real estate investments:
 - [[docs/api/watchlist|Watchlist API]]
 - [[docs/adr/002-database-schema|Database Schema]]
 
-Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

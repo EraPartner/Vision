@@ -9,7 +9,7 @@
 
 import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
-import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.js";
+import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import {
   sanitizeSnapshotSpikes,
   calendarDaysBetween,

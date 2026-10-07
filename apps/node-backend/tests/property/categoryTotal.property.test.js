@@ -8,7 +8,7 @@ import { mockConnection } from "../helpers/repoMocks.js";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.js";
+import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.ts";
 
 function seeded(seed) {
   let t = seed >>> 0;

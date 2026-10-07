@@ -5,7 +5,7 @@ vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../src/repositories/providerHealthRepository.js', () => ({
+vi.mock('../src/repositories/providerHealthRepository.ts', () => ({
   default: {
     recordSuccess: vi.fn(),
     recordError: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('../src/repositories/providerHealthRepository.js', () => ({
 }));
 
 import { logger } from '../src/config/logger.ts';
-import providerHealthRepository from '../src/repositories/providerHealthRepository.js';
+import providerHealthRepository from '../src/repositories/providerHealthRepository.ts';
 import {
   recordSuccess,
   recordError,

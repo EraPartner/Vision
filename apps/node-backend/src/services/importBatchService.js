@@ -1,5 +1,5 @@
 /** Import-batch service — repository access plus review view-model assembly. */
-import { getPreviewRows } from "../repositories/importBatchRepository.js";
+import { getPreviewRows } from "../repositories/importBatchRepository.ts";
 
 export {
   listBatches,
@@ -8,7 +8,7 @@ export {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from "../repositories/importBatchRepository.js";
+} from "../repositories/importBatchRepository.ts";
 
 /** @param {string|null} [general] @param {string|null} [detail] */
 function formatCategoryLabel(general, detail) {

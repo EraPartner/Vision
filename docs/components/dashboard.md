@@ -2,7 +2,7 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -672,7 +672,7 @@ The component loads chart history and the net-position total from `GET /api/aggr
 - Integer transaction counts use app locale formatter for consistent separators/grouping
 - `premium-frame` treatment on the net-position and per-account cards for consistent visual hierarchy
 
-Code links: [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/node-backend/src/repositories/infoRepositoryBanks.js]], [[docs/api/aggregations#bank-balances|Bank Balances API]]
+Code links: [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/pages/DashboardPage.tsx]], [[apps/node-backend/src/repositories/infoRepositoryBanks.ts]], [[docs/api/aggregations#bank-balances|Bank Balances API]]
 
 ---
 

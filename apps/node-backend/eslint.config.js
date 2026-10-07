@@ -183,13 +183,13 @@ export const noNullRouteFilter = {
 const SANCTIONED_REPO_SERVICE_IMPORTS = {
   // The `info*` read-repositories aggregate rows and currency-convert them as
   // part of producing API-shaped results — effectively read-services.
-  "infoRepositoryAverageVsCurrent.js": ["convertRowsToEur"],
-  "infoRepositoryHelpers.js": ["convertRowsToEur"],
-  "infoRepositoryMonthly.js": ["convertRowsToEur"],
-  "infoRepositoryPlanned.js": ["convertRowsToEur"],
-  "infoRepositoryRecipients.js": ["convertRowsToEur"],
-  "infoRepositoryStatistics.js": ["convertRowsToEur"],
-  "infoRepositoryTags.js": ["convertRowsToEur"],
+  "infoRepositoryAverageVsCurrent.ts": ["convertRowsToEur"],
+  "infoRepositoryHelpers.ts": ["convertRowsToEur"],
+  "infoRepositoryMonthly.ts": ["convertRowsToEur"],
+  "infoRepositoryPlanned.ts": ["convertRowsToEur"],
+  "infoRepositoryRecipients.ts": ["convertRowsToEur"],
+  "infoRepositoryStatistics.ts": ["convertRowsToEur"],
+  "infoRepositoryTags.ts": ["convertRowsToEur"],
 };
 
 const SANCTIONED_SERVICE_MODULE =

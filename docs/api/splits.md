@@ -25,7 +25,7 @@ description: API endpoints for transaction splitting and debt tracking between r
 related_code:
   - apps/node-backend/src/routes/splits.js
   - apps/node-backend/src/services/splitService.js
-  - apps/node-backend/src/repositories/splitRepository.js
+  - apps/node-backend/src/repositories/splitRepository.ts
 ---
 
 # Splits API
@@ -115,7 +115,7 @@ Linked recipients (those sharing a `primary_recipient_id` via merge operations) 
 
 Implementation note:
 
-- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Groups by `COALESCE(r.primary_recipient_id, r.id)` and returns `COALESCE(pr.name, r.name)` to collapse aliases into their primary. The aggregation joins `agg_split_outstanding` (trigger-maintained materialized view) + `recipients` + the primary recipient's name, filtering to unsettled splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -162,7 +162,7 @@ This ensures that viewing splits for a recipient shows the complete history even
 
 Implementation note:
 
-- Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses a CTE (`recipient_group`) to expand the input `recipientId` to all recipients in the same merge group. The CTE resolves to the recipient itself, any aliases pointing at it (when input is a primary), the recipient's primary (when input is an alias), and any siblings sharing that primary. The main query then filters `WHERE ts.recipient_id IN (SELECT id FROM recipient_group)` to retrieve the full group's splits. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -196,7 +196,7 @@ Important behavior:
 
 Implementation notes:
 
-- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The export includes all splits from recipients in the group, filtering to unsettled splits with a positive remaining amount. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 
 ---
 
@@ -543,7 +543,7 @@ This endpoint matches existing settlement behavior: it only sets `is_settled = t
 
 Implementation notes:
 
-- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.js]]).
+- Uses the same `recipient_group` CTE as `GET /api/splits/owed/:id` to expand the input to all linked aliases. The UPDATE statement sets `is_settled = true` for all unsettled splits from recipients in the group, returning the number of settled rows via `result.rowCount`. ([[apps/node-backend/src/repositories/splitRepository.ts]]).
 - `splitService.settleAllByRecipient()` runs the update and, only when `settled_count > 0`, its action='settle_all' audit in one transaction.
 
 ---

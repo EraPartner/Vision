@@ -13,9 +13,9 @@ vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
+vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
   const actual = await vi.importActual(
-    "../src/repositories/infoRepositoryHelpers.js",
+    "../src/repositories/infoRepositoryHelpers.ts",
   );
   return {
     ...actual,
@@ -27,8 +27,8 @@ vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
 
 import { query } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
-import { mvAvailable } from "../src/repositories/infoRepositoryHelpers.js";
-import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.js";
+import { mvAvailable } from "../src/repositories/infoRepositoryHelpers.ts";
+import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 
 beforeEach(() => vi.clearAllMocks());

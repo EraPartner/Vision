@@ -27,8 +27,8 @@ import {
   adapterSupports,
 } from "./providerRegistry.js";
 import * as providerHealth from "../providerHealthService.js";
-import * as mapRepo from "../../repositories/instrumentProviderMapRepository.js";
-import investmentRepo from "../../repositories/investmentRepository.js";
+import * as mapRepo from "../../repositories/instrumentProviderMapRepository.ts";
+import investmentRepo from "../../repositories/investmentRepository.ts";
 
 /** Relative price agreement tolerance for the self-audit (5%). */
 const AUDIT_PRICE_TOLERANCE = 0.05;

@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   plannedTransactionRepository: { getAll: vi.fn(), getById: vi.fn() },
 }));
 
-vi.mock("../src/repositories/infoRepository.js", () => ({
+vi.mock("../src/repositories/infoRepository.ts", () => ({
   infoRepository: { getBankBalances: vi.fn() },
 }));
 
@@ -12,8 +12,8 @@ vi.mock("../src/services/aiChat/tools/_financialMetrics.js", () => ({
   loadCanonicalPortfolioSummary: vi.fn(),
 }));
 
-import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.js";
-import { infoRepository } from "../src/repositories/infoRepository.js";
+import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.ts";
+import { infoRepository } from "../src/repositories/infoRepository.ts";
 import { loadCanonicalPortfolioSummary } from "../src/services/aiChat/tools/_financialMetrics.js";
 import {
   getUnrealizedGains,

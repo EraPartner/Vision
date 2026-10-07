@@ -1,0 +1,611 @@
+/**
+ * Info sub-repository: net worth from portfolio snapshots + bank balances.
+ */
+
+import { query } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
+import {
+  computedBalanceByCurrencyAggLateral,
+  computedBalanceSeriesCtes,
+} from "./accountBalanceSql.ts";
+import {
+  toNumber,
+  toDecimal,
+  roundMoney as roundToCents,
+} from "../lib/money.ts";
+import { formatDateToYmd } from "../lib/dateFormat.ts";
+import { extractYearMonth, addDaysUtc, getDayKeyUtc } from "../lib/dateKeys.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { sanitizeIsolatedDailyInvestmentSpikes } from "../lib/calculations/netWorthSanitizer.ts";
+import type { NetWorthSnapshot } from "../lib/calculations/netWorthSanitizer.ts";
+import {
+  mapRowsForAmountConversion,
+  convertRowsWithHistoricalRateFallback,
+} from "./infoRepositoryHelpers.ts";
+
+const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
+
+/** A current-point balance row: one per in-net-worth account. */
+type CurrentBalanceRow = {
+  bank_account: string;
+  is_liability: boolean;
+  account_currency: string;
+  balance_parts: Array<{ currency: string; balance: string }> | null;
+};
+
+// ── Shared row-level resolution ────────────────────────────────────────────
+// Both of these read `transactions.account_id` and nothing else, exactly like
+// the history walk's `account_list` below. They are module-level constants
+// because more than one statement needs them and a predicate copied into two
+// places is precisely how the walk, the date probe and the fallback drift apart.
+
+/**
+ * Excludes rows POSITIVELY attributed to a tracking-only or holdings-only
+ * account, mirroring the walk's `account_list` resolution. Requires the
+ * transactions alias to be `t`; splices onto an existing WHERE.
+ *
+ * It deliberately cannot inner-join `accounts`: rows with a NULL account_id are
+ * still tolerated and an inner join would drop them. Migration 0050 backfilled
+ * every non-empty bank_account label, and the sync trigger resolves or creates an
+ * account for such labels on INSERT. Blank-label INSERTs can still be
+ * unattributed. Current labelled unattributed rows are narrower legacy or
+ * explicit-update cases: a pre-0050 row without a label later relabelled to an
+ * unknown account (UPDATE is lookup-only), or an UPDATE that blanks a label and
+ * detaches account_id. They stay counted because nothing attributes them to a
+ * excluded account.
+ */
+const NOT_TRACKING_ONLY = `
+            AND NOT EXISTS (
+              SELECT 1 FROM accounts a
+              WHERE a.id = t.account_id
+                AND (a.in_net_worth = false
+                     OR a.type IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL}))
+            )`;
+
+/**
+ * The walk's liability split — `(a.type = 'liability')` on the row's account —
+ * as a row-level expression. Requires the transactions alias to be `t`.
+ *
+ * **Un-attributable rows resolve to `false` (liquid).** A row with a NULL
+ * `account_id` has no `accounts` row to read a type from, so there is no
+ * `is_liability` to split on; `bank_account` is deliberately NOT consulted,
+ * because resolving liability by name while {@link NOT_TRACKING_ONLY} resolves
+ * tracking by id would make the two predicates disagree about which account a
+ * row belongs to. `false` is also the choice that changes nothing: the
+ * unattributed-ledger fallback this path serves is a plain bank ledger, and
+ * `netWorth = liquid + liabilities + investments` is identical either way — only
+ * the presentational split between the two buckets moves.
+ */
+const IS_LIABILITY_BY_ACCOUNT = `
+            COALESCE(
+              (SELECT a.type = 'liability' FROM accounts a WHERE a.id = t.account_id),
+              false
+            )`;
+
+/**
+ * Whether the history WALK — not the transaction-flow fallback — is the thing
+ * that will answer this request. Emits a `walk(answers boolean)` CTE; splice it
+ * as the FIRST member of a WITH chain and read it as `(SELECT answers FROM walk)`.
+ * Takes the end bound (app-timezone today) as `$2`.
+ *
+ * The runtime gate is `bankHistoryConverted.length === 0` — i.e. "the walk
+ * produced no rows". This predicate is that gate decided in advance, and it is
+ * exact rather than approximate:
+ *
+ *   walk row ⇐ an active transaction with a non-NULL `account_id` whose account
+ *   is `in_net_worth = true` and supports cash, dated on or before the end bound.
+ *
+ * Each conjunct is load-bearing. `in_net_worth = true` + non-NULL `account_id`
+ * is exactly `account_list`'s membership test. `date <= end bound` is what makes
+ * the implication hold: such a row also passes the second date arm below, so the
+ * grid necessarily starts at or before it and ends at the end bound — the row is
+ * inside the grid, `balance_series` emits at least the day it falls on, and the
+ * join back to `account_list` keeps it (the FX conversion is 1:1 per row and
+ * cannot drop it). Without the date clause an account whose only activity is
+ * FUTURE-dated would be counted as "the walk answers" when the walk in fact sees
+ * nothing and the fallback is what runs.
+ */
+const WALK_ANSWERS_CTE = `
+      walk AS (
+        SELECT EXISTS (
+          SELECT 1
+          FROM transactions t
+          JOIN accounts a ON a.id = t.account_id
+          WHERE t.is_active = true
+            AND a.in_net_worth = true
+            AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
+            AND t.date <= $2::date
+        ) AS answers
+      )`;
+
+/**
+ * Excludes rows the walk cannot value — those with a NULL `account_id` — but
+ * ONLY when {@link WALK_ANSWERS_CTE} says the walk is what answers. Requires
+ * the transactions alias to be `t`; splices onto an existing WHERE.
+ *
+ * This is the other half of {@link NOT_TRACKING_ONLY}, and it has to be
+ * conditional in a way that one does not. A tracking-only row can never
+ * contribute to net worth by either path, so it is excluded from the span
+ * unconditionally. An unattributed row is different: it contributes nothing to
+ * the WALK (there is no account to join it to), yet it is precisely what the
+ * FALLBACK sums — it is the unattributed ledger that path exists for. Excluding
+ * it unconditionally would blank that ledger's own chart; including
+ * it unconditionally lets it set the START BOUND of a series it never appears
+ * in, which is the tracking-only pathology on a different input (measured on a
+ * ledger of one unattributed +7.00 at d−20 plus one real in-net-worth account at
+ * d−3: 21 snapshots, 17 of them leading all-zero days, `monthlyChange` 1000 with
+ * `monthlyChangePercent` 0, and the +7.00 never counted in any snapshot).
+ *
+ * So the exclusion is gated on which path will answer, which the probe CAN know:
+ * see {@link WALK_ANSWERS_CTE}.
+ */
+const ATTRIBUTED_WHEN_WALK_ANSWERS = `
+            AND (t.account_id IS NOT NULL OR NOT (SELECT answers FROM walk))`;
+
+export const netWorthRepository = {
+  /**
+   * Net Worth (snapshot-backed) — reads investment values from pre-computed
+   * portfolio_performance_snapshots (populated by portfolioPerformanceSnapshotService).
+   * Bank balances are still derived live from the transactions table.
+   * No network calls — all data from the database.
+   *
+   * The **current** point — headline, last chart point, latest table row — is
+   * the unified anchor+delta computed balance, partitioned by currency
+   * (`computedBalanceByCurrencyAggLateral`, ADR-094 / WP-A1), the same single
+   * definition the accounts hub and dashboard widget consume. The naive stamped
+   * read it replaced silently dropped manual-only (never-stamped) in-net-worth
+   * accounts from the headline and froze stamped accounts at their last imported
+   * statement figure; the unpartitioned form that followed then summed a
+   * multi-currency account's amounts as bare numbers and converted the total at
+   * one rate.
+   *
+   * The liquid/liability *history* series applies that same definition to every
+   * earlier day (`computedBalanceSeriesCtes`). It used to be stamp-based, so a
+   * manual-only account showed up in the last point only and the chart stepped
+   * up overnight — a step the monthly-change figure then reported as a real
+   * gain. A day before an account's first active row still yields no row for it
+   * (it contributes 0 to that day's total, and its first known balance is never
+   * carried backwards).
+   */
+  async getNetWorthFromSnapshots(
+    targetCurrency = "EUR",
+    { liveInvestments }: { liveInvestments?: number } = {},
+  ) {
+    // App-timezone today (ADR-009), threaded into the SQL bounds as well so
+    // the generated day series and the JS walk below agree on the last day —
+    // Postgres CURRENT_DATE follows the server timezone, not the app's. It is
+    // resolved HERE, before the date probe, because the probe's walk-vs-fallback
+    // predicate needs the same end bound the walk will run with.
+    const todayYmd = todayAppDateString();
+
+    // First data date over active transactions + snapshots. Inactive rows do
+    // not create history: the downstream walk and fallback both require active
+    // transactions, so an inactive-only span can contain only zeroes.
+    //
+    // Both transaction arms carry NOT_TRACKING_ONLY, the same exclusion the walk
+    // and the fallback apply: this date is the series START BOUND, so without it
+    // the span is set by rows that can never contribute a value to it. An
+    // all-tracking ledger returned a 401-day all-zero snapshots array whose span
+    // came entirely from excluded rows; worse, on a MIXED ledger the phantom
+    // leading-zero region became the monthly-change baseline, so an account
+    // opened this month reported its whole balance as this month's gain
+    // (measured: monthlyChange 1050 where 50 is the real movement).
+    //
+    // `ATTRIBUTED_WHEN_WALK_ANSWERS` closes the same hole for the OTHER kind of
+    // row the answering path cannot value — the unattributed (NULL account_id)
+    // one — which is conditional rather than absolute because the fallback
+    // deliberately counts those rows. See that constant and WALK_ANSWERS_CTE.
+    // The active transaction arm carries it so an unattributed row cannot move
+    // the start bound when the account walk is the answering path.
+    const firstDateResult = await query(
+      `
+      WITH ${WALK_ANSWERS_CTE}
+      SELECT LEAST(
+        (SELECT MIN(snapshot_date) FROM portfolio_performance_snapshots WHERE currency = $1),
+        (SELECT MIN(t.date)::date FROM transactions t
+          WHERE t.is_active = true AND t.date <= $2::date ${NOT_TRACKING_ONLY} ${ATTRIBUTED_WHEN_WALK_ANSWERS})
+      )::date AS first_data_date
+    `,
+      [targetCurrency, todayYmd],
+    );
+
+    const firstDataDate = firstDateResult.rows[0]?.first_data_date;
+
+    const firstDataDateYmd = firstDataDate
+      ? firstDataDate instanceof Date
+        ? formatDateToYmd(firstDataDate)
+        : String(firstDataDate).split("T")[0]
+      : null;
+
+    if (!firstDataDateYmd) {
+      logger.info("Net worth has no source records", { targetCurrency });
+      return {
+        current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
+        monthlyChange: 0,
+        monthlyChangePercent: 0,
+        snapshots: [],
+      };
+    }
+
+    const snapshotResult = await query(
+      `
+      SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, value AS investments
+      FROM portfolio_performance_snapshots
+      WHERE currency = $1
+      ORDER BY snapshot_date ASC
+    `,
+      [targetCurrency],
+    );
+
+    const investmentsByDay: Record<string, number> = {};
+    for (const row of snapshotResult.rows) {
+      investmentsByDay[row.day] = Number(row.investments) || 0;
+    }
+
+    // History walk and the unified current-point balances (the same
+    // anchor+delta definition bounded at app-timezone today) are independent.
+    const [bankHistoryResult, currentBalancesResult] = await Promise.all([
+      query(
+        `
+      WITH bounds AS (
+        SELECT $1::date AS start_date, $2::date AS end_date
+      ),
+      days AS (
+        SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
+        FROM bounds
+      ),
+      account_list AS (
+        -- in_net_worth gates the bank/cash side of net worth (ADR-089): a
+        -- tracking-only account (in_net_worth=false) does not contribute.
+        -- is_liability splits negative debt balances (ADR-092) out of the
+        -- "liquid assets" bucket so a mortgage is not counted as liquid cash.
+        SELECT a.id AS account_id, a.name AS bank_account,
+               (a.type = 'liability') AS is_liability,
+               a.currency AS account_currency
+        FROM accounts a
+        WHERE a.in_net_worth = true
+          AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
+          AND a.id IN (
+            SELECT t.account_id FROM transactions t
+             WHERE t.is_active = true AND t.account_id IS NOT NULL
+          )
+      ),
+      -- The walk resolves each day with the SAME unstamped-tolerant
+      -- anchor+delta definition the current point uses, bounded at that day.
+      -- The stamped-only probe it replaces (plus a WHERE lb.balance IS NOT
+      -- NULL gate) hid never-stamped accounts from EVERY point except the last
+      -- one — the current-point override below then added them back in one go,
+      -- so the chart stepped up overnight and reported it as a monthly gain.
+      -- Per-currency (byCurrency), mirroring the current-point lateral below
+      -- exactly — the two must agree or a step returns at the last point for
+      -- multi-currency accounts. Both sides therefore partition the anchor+delta
+      -- computation by transactions.currency and convert each partition on its
+      -- own (the history at the rate of the day it represents, the current point
+      -- at today's). The cross-currency Σ they both used before added a EUR
+      -- amount to a USD amount as bare numbers and converted the total at one
+      -- rate; it agreed with itself, but at the wrong number.
+      ${computedBalanceSeriesCtes({ byCurrency: true })}
+      -- The currency mirrors the current-point query: the partition's own,
+      -- falling back to the account's when a row carries none.
+      SELECT
+        to_char(s.day, 'YYYY-MM-DD') AS day,
+        a.bank_account,
+        a.is_liability,
+        COALESCE(s.row_currency, a.account_currency, 'EUR') AS currency,
+        s.balance
+      FROM balance_series s
+      JOIN account_list a ON a.account_id = s.account_id
+      ORDER BY s.day, s.account_id
+    `,
+        [firstDataDateYmd, todayYmd],
+      ),
+      // Unified current balance per in-net-worth account (WP-A1): the shared
+      // anchor+delta lateral, with NO `balance IS NOT NULL` population gate —
+      // a manual-only account (nothing stamped) falls back to Σ(amount) inside
+      // the lateral instead of vanishing from the headline. The SQL retains an
+      // account with no active rows as a NULL-parts row; the conversion step
+      // deliberately drops that empty partition so it cannot erase a fallback.
+      //
+      // Partitioned by currency, like the walk above: each partition carries its
+      // OWN currency and is converted separately below. The single-partition
+      // form this replaced emitted one cross-currency Σ of bare amounts tagged
+      // with the most recent active row's currency, so a 100 EUR + 100 USD
+      // account entered net worth as 200 × the USD rate. The aggregated (one row
+      // per account) form keeps SQL output at one row per account. After empty
+      // partitions are removed, the `.length > 0` guard below means at least
+      // one account has an as-of balance that can safely replace the fallback.
+      query<CurrentBalanceRow>(
+        `
+      SELECT a.name AS bank_account,
+             (a.type = 'liability') AS is_liability,
+             COALESCE(a.currency, 'EUR') AS account_currency,
+             bp.balance_parts
+      FROM accounts a
+      ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}
+      WHERE a.in_net_worth = true
+        AND a.type NOT IN (${HOLDINGS_ONLY_ACCOUNT_TYPES_SQL})
+    `,
+        [todayYmd],
+      ),
+    ]);
+
+    // Convert the current-point balances at today's date so the historical-rate
+    // lookup keys on the same day the headline represents.
+    const [bankHistoryConvertedInitial, currentBalancesConverted] =
+      await Promise.all([
+        convertRowsWithHistoricalRateFallback(
+          mapRowsForAmountConversion(bankHistoryResult.rows, "balance"),
+          targetCurrency,
+          "day",
+        ),
+        convertRowsWithHistoricalRateFallback(
+          mapRowsForAmountConversion(
+            // One conversion row per (account, currency partition). An account
+            // with no active rows has no partition at all. It must not emit a
+            // synthetic zero here: in an unattributed ledger that zero would
+            // make the current-point override erase the transaction-flow
+            // fallback that supplied the real balance.
+            currentBalancesResult.rows.flatMap((r) => {
+              const base = {
+                bank_account: r.bank_account,
+                is_liability: r.is_liability,
+                day: todayYmd,
+              };
+              const parts = r.balance_parts ?? [];
+              if (parts.length === 0) return [];
+              return parts.map((p) => ({
+                ...base,
+                balance: p.balance,
+                currency: p.currency || "EUR",
+              }));
+            }),
+            "balance",
+          ),
+          targetCurrency,
+          "day",
+        ),
+      ]);
+    let bankHistoryConverted = bankHistoryConvertedInitial;
+
+    // Reached whenever the walk produced no rows at all: no in-net-worth
+    // account owns an active row. That covers the unattributed ledger this was
+    // written for (transactions still carrying a NULL account_id) but ALSO the
+    // case where every account with activity is in_net_worth=false. The walk
+    // itself no longer needs rescuing when nothing is stamped, since an
+    // unstamped account resolves to its running Σ(amount) day by day, which is
+    // exactly what this fallback computes.
+    //
+    // `NOT_TRACKING_ONLY` (module scope) is what keeps the two populations
+    // apart. The fallback used to sum EVERY active transaction with no account /
+    // in_net_worth predicate at all, so a ledger whose only active accounts are
+    // in_net_worth=false reported THEIR running total as net worth (measured:
+    // liquid −143.25 where 0 is correct). An all-tracking ledger now yields no
+    // rows at all → every day is 0.
+    //
+    // `IS_LIABILITY_BY_ACCOUNT` (module scope) gives this path the same
+    // liquid/liability split the walk has. Without it every fallback row landed
+    // in `liquid` and `liabilities` was structurally 0 here, so the bucket a day
+    // fell into depended on which of the two paths answered. See that constant
+    // for where an un-attributable row lands and why.
+    if (bankHistoryConverted.length === 0) {
+      logger.debug(
+        "Net worth account balance history empty; using transaction flow fallback",
+        {
+          targetCurrency,
+          firstDataDate: firstDataDateYmd,
+        },
+      );
+
+      const liquidFlowResult = await query(
+        `
+        WITH bounds AS (
+          SELECT $1::date AS start_date, $2::date AS end_date
+        ),
+        days AS (
+          SELECT generate_series(start_date, end_date, interval '1 day')::date AS day
+          FROM bounds
+        ),
+        flow_rows AS (
+          -- The row population and the two resolutions, written ONCE. The
+          -- bucket list and the daily aggregate below both read this CTE, so
+          -- they cannot disagree about which rows are in scope or which bucket
+          -- one falls into.
+          SELECT
+            t.date::date AS day,
+            COALESCE(t.currency, 'EUR') AS currency,
+            ${IS_LIABILITY_BY_ACCOUNT} AS is_liability,
+            t.amount
+          FROM transactions t
+          WHERE t.is_active = true
+            AND t.date >= (SELECT start_date FROM bounds)
+            AND t.date <= (SELECT end_date FROM bounds)
+            ${NOT_TRACKING_ONLY}
+        ),
+        buckets AS (
+          -- The (currency, is_liability) pairs the ledger actually holds. Each
+          -- gets its own dense day series and its own running total, so a
+          -- liability's negative balance never nets against liquid cash before
+          -- the JS reducer can split them (ADR-092).
+          SELECT DISTINCT currency, is_liability FROM flow_rows
+        ),
+        tx_daily AS (
+          SELECT
+            day,
+            currency,
+            is_liability,
+            COALESCE(SUM(amount), 0) AS amount
+          FROM flow_rows
+          GROUP BY day, currency, is_liability
+        ),
+        tx_series AS (
+          SELECT
+            d.day,
+            b.currency,
+            b.is_liability,
+            COALESCE(td.amount, 0) AS amount
+          FROM days d
+          CROSS JOIN buckets b
+          LEFT JOIN tx_daily td
+            ON td.day = d.day
+           AND td.currency = b.currency
+           AND td.is_liability = b.is_liability
+        ),
+        tx_cumulative AS (
+          SELECT
+            day,
+            currency,
+            is_liability,
+            SUM(amount) OVER (PARTITION BY currency, is_liability ORDER BY day) AS value
+          FROM tx_series
+        )
+        SELECT
+          to_char(day, 'YYYY-MM-DD') AS day,
+          currency,
+          is_liability,
+          value
+        FROM tx_cumulative
+        ORDER BY day, currency, is_liability
+      `,
+        [firstDataDateYmd, todayYmd],
+      );
+
+      bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
+        mapRowsForAmountConversion(liquidFlowResult.rows, "value"),
+        targetCurrency,
+        "day",
+      );
+    }
+
+    // Split each in-net-worth account's daily balance into liquid assets vs
+    // liabilities (ADR-092): debt balances are negative and must not drag the
+    // "liquid assets" headline negative. netWorth = liquid + liabilities + investments.
+    const liquidByDay: Record<string, number> = {};
+    const liabilitiesByDay: Record<string, number> = {};
+    for (const row of bankHistoryConverted) {
+      const bucket = row.is_liability ? liabilitiesByDay : liquidByDay;
+      if (!bucket[row.day]) bucket[row.day] = 0;
+      // Decimal accumulation (money-hygiene): per-day EUR balances summed with
+      // native `+=` drift sub-cent before the roundToCents below.
+      bucket[row.day] = toNumber(
+        toDecimal(bucket[row.day]).plus(toDecimal(row.amount_eur)),
+      );
+    }
+
+    const start = new Date(`${firstDataDateYmd}T00:00:00Z`);
+    // End anchor on the app-timezone today (ADR-009) — UTC midnight dropped
+    // the newest day from the series between local midnight and 01:00/02:00.
+    const end = new Date(`${todayYmd}T00:00:00Z`);
+
+    const snapshots: NetWorthSnapshot[] = [];
+    // Forward-fill the last known investments value: portfolio snapshots are
+    // not guaranteed to exist for every calendar day, and a missing day must
+    // carry the prior value forward rather than collapse net worth to
+    // liquid-only.
+    let lastInvestments = 0;
+    for (let day = new Date(start); day <= end; day = addDaysUtc(day)) {
+      const dayKey = getDayKeyUtc(day);
+      const liquid = roundToCents(liquidByDay[dayKey] || 0);
+      const liabilities = roundToCents(liabilitiesByDay[dayKey] || 0);
+      if (Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey)) {
+        lastInvestments = investmentsByDay[dayKey];
+      }
+      const investments = roundToCents(lastInvestments);
+      snapshots.push({
+        date: dayKey,
+        liquid,
+        liabilities,
+        investments,
+        netWorth: roundToCents(liquid + liabilities + investments),
+      });
+    }
+
+    const sanitizedSnapshots = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
+
+    // WP-A1: set the *current* point's liquid/liability figures from the
+    // unified computed-balance definition (see the method doc). Now that the
+    // walk resolves every earlier day with that same definition this is
+    // continuous with the point before it, so no step is introduced; it still
+    // matters because the population includes every in-net-worth account with
+    // at least one current balance partition. Skipped when no such partition
+    // exists (for example, an unattributed ledger plus a future-only account),
+    // keeping the walk/fallback-derived point instead.
+    if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
+      let liquidNow = toDecimal(0);
+      let liabilitiesNow = toDecimal(0);
+      for (const row of currentBalancesConverted) {
+        if (row.is_liability)
+          liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
+        else liquidNow = liquidNow.plus(toDecimal(row.amount_eur));
+      }
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      last.liquid = roundToCents(toNumber(liquidNow));
+      last.liabilities = roundToCents(toNumber(liabilitiesNow));
+      last.netWorth = roundToCents(
+        last.liquid + last.liabilities + last.investments,
+      );
+    }
+
+    // Reconcile the most-recent point with the live portfolio summary. The
+    // stored snapshot value is only rebuilt at startup (snapshotBuilder runs
+    // once in warmup), so on its own the Net Worth "Investments" headline
+    // freezes at the boot-time price while the Dashboard/Performance cards —
+    // served live from portfolioSummaryService — keep moving with each hourly
+    // price refresh. The caller passes the live total so the latest snapshot
+    // (headline, last chart point, and latest table row) always matches those
+    // two surfaces. See ADR-064.
+    if (Number.isFinite(liveInvestments) && sanitizedSnapshots.length > 0) {
+      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+      const investments = roundToCents(liveInvestments);
+      last.investments = investments;
+      last.netWorth = roundToCents(
+        last.liquid + (last.liabilities || 0) + investments,
+      );
+    }
+
+    const latest: Omit<NetWorthSnapshot, "date"> & { date?: string } =
+      sanitizedSnapshots[sanitizedSnapshots.length - 1] || {
+        liquid: 0,
+        liabilities: 0,
+        investments: 0,
+        netWorth: 0,
+      };
+    const currentMonthPrefix = latest.date
+      ? extractYearMonth(latest.date)
+      : null;
+    const firstCurrentMonthIdx = currentMonthPrefix
+      ? sanitizedSnapshots.findIndex((s) =>
+          s.date.startsWith(currentMonthPrefix),
+        )
+      : -1;
+    const baseline =
+      firstCurrentMonthIdx > 0
+        ? sanitizedSnapshots[firstCurrentMonthIdx - 1]
+        : sanitizedSnapshots[0];
+    const monthlyChange = baseline ? latest.netWorth - baseline.netWorth : 0;
+    const monthlyChangePercent =
+      baseline && baseline.netWorth !== 0
+        ? (monthlyChange / Math.abs(baseline.netWorth)) * 100
+        : 0;
+
+    logger.debug("Net worth computed from snapshots", {
+      targetCurrency,
+      firstDataDate: firstDataDateYmd,
+      snapshots: sanitizedSnapshots.length,
+      currentLiquid: latest.liquid,
+      currentInvestments: latest.investments,
+      currentNetWorth: latest.netWorth,
+    });
+
+    return {
+      current: {
+        liquid: latest.liquid,
+        liabilities: latest.liabilities ?? 0,
+        investments: latest.investments,
+        netWorth: latest.netWorth,
+      },
+      monthlyChange: roundToCents(monthlyChange),
+      monthlyChangePercent: roundToCents(monthlyChangePercent),
+      snapshots: sanitizedSnapshots,
+    };
+  },
+};

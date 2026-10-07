@@ -24,14 +24,14 @@ related_code:
     "apps/node-backend/src/routes/ai.js",
     "apps/node-backend/src/services/aiChatService.js",
     "apps/node-backend/src/services/aiChat/tools/index.js",
-    "apps/node-backend/src/integrations/ollama/client.js",
+    "apps/node-backend/src/integrations/ollama/client.ts",
     "apps/node-backend/tests/aiChatService.test.js",
     "apps/node-backend/tests/aiChatTools.test.js",
     "apps/node-backend/src/services/aiEvaluation/localReliability.js",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
     "apps/node-backend/src/services/aiReferenceService.js",
     "apps/node-backend/src/services/agentCloakPreflight.js",
-    "apps/node-backend/src/repositories/aiReferenceRepository.js",
+    "apps/node-backend/src/repositories/aiReferenceRepository.ts",
     "apps/node-backend/tests/aiReferenceService.test.js",
   ]
 ---

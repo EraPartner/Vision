@@ -23,11 +23,11 @@ async function loadAggregationRefresh() {
     refreshMaterializedViews: refreshLegacyMaterializedViews,
     scheduleRefresh: scheduleLegacyRefresh,
   }));
-  vi.doMock("../src/repositories/cashflowForecastMcRepository.js", () => ({
+  vi.doMock("../src/repositories/cashflowForecastMcRepository.ts", () => ({
     default: { clearAll: clearMcCache },
   }));
   vi.doMock(
-    "../src/repositories/cashflowForecastMcRollingRepository.js",
+    "../src/repositories/cashflowForecastMcRollingRepository.ts",
     () => ({
       default: { clearAll: clearRollingMcCache },
     }),

@@ -44,7 +44,7 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
   - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
-  - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.js"
+  - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
   - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.js"
   - "packages/shared-utils/src/portfolioCustody.ts"
@@ -54,7 +54,7 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/services/portfolioImportCommitService.js"
   - "apps/node-backend/src/services/portfolioImportReadinessService.js"
-  - "apps/node-backend/src/repositories/portfolioImportBatchRepository.js"
+  - "apps/node-backend/src/repositories/portfolioImportBatchRepository.ts"
   - "apps/node-backend/src/routes/portfolioImportRoutes.js"
   - "apps/node-backend/src/routes/importBatchRoutes.js"
   - "apps/node-backend/src/lib/portfolioUpload.ts"
@@ -75,8 +75,8 @@ related_code:
   - "apps/node-backend/src/services/portfolioPerformanceXmlParser.js"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
   - "apps/node-backend/src/services/portfolioReferenceYieldCoverage.js"
-  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.js"
-  - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js"
+  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.ts"
+  - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
   - "apps/node-backend/src/lib/portfolioReferenceUpload.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
@@ -352,7 +352,7 @@ can still be retried with an explicit batch account under the batch lock.
 
 **Modules:** [[apps/node-backend/src/services/portfolioImportReconciliationService.js]],
 [[apps/node-backend/src/services/portfolioImportCommitService.js]], and
-[[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.js]].
+[[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts]].
 
 A session previews all selected batches together. Pending, validated, unresolved, and error rows
 block commit. The planner checks existing source fingerprints, repeated source identities across

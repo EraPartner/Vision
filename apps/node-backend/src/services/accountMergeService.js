@@ -33,17 +33,17 @@ import { todayAppDateString } from "../lib/timezone.ts";
 import { filterValidatedIdNumbers } from "../lib/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
-import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.js";
+import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import {
   convertWithRates,
   loadCurrentRates,
 } from "./currency/currencyConversionService.js";
 import { hasConversionRate } from "../lib/exchangeRates.ts";
-import { accountRepository } from "../repositories/accountRepository.js";
-import { transactionRepository } from "../repositories/transactionRepository.js";
-import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.js";
-import { portfolioTransactionRepository } from "../repositories/portfolioTransactionRepository.js";
-import * as portfolioImportBatchRepository from "../repositories/portfolioImportBatchRepository.js";
+import { accountRepository } from "../repositories/accountRepository.ts";
+import { transactionRepository } from "../repositories/transactionRepository.ts";
+import { plannedTransactionRepository } from "../repositories/plannedTransactionRepository.ts";
+import { portfolioTransactionRepository } from "../repositories/portfolioTransactionRepository.ts";
+import * as portfolioImportBatchRepository from "../repositories/portfolioImportBatchRepository.ts";
 
 export const MAX_ACCOUNT_MERGE_SOURCES = 500;
 

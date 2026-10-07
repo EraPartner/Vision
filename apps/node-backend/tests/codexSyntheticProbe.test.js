@@ -20,7 +20,7 @@ import {
   __validateEffectiveProbeConfig as validateEffectiveProbeConfig,
   __validateProbeToolCatalog as validateProbeToolCatalog,
   cleanupStaleSyntheticCodexProbes,
-} from "../src/integrations/codex/syntheticProbe.js";
+} from "../src/integrations/codex/syntheticProbe.ts";
 
 const scratch = [];
 afterEach(async () => {

@@ -2,7 +2,7 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 tags:
   [
@@ -33,7 +33,7 @@ related_code:
     "apps/frontend/src/hooks/useAccounts.ts",
     "apps/node-backend/src/routes/accounts.js",
     "apps/node-backend/src/routes/transactions.js",
-    "apps/node-backend/src/repositories/transactionRepository.js",
+    "apps/node-backend/src/repositories/transactionRepository.ts",
     "apps/node-backend/src/lib/accountBalanceSql.js",
   ]
 ---

@@ -8,7 +8,7 @@ import {
   hasPortfolioTransactionImportBatchIdColumn,
   __resetPortfolioTransactionSchemaCache,
   buildListWhereClause,
-} from "../src/repositories/portfolioTxRepo.common.js";
+} from "../src/repositories/portfolioTxRepo.common.ts";
 import {
   UNIT_BASED_ASSET_CLASSES,
   normalizeTransactionPayload,

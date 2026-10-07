@@ -4,7 +4,7 @@ import { mockConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query } from '../src/database/connection.ts';
-import repo from '../src/repositories/customParserConfigRepository.js';
+import repo from '../src/repositories/customParserConfigRepository.ts';
 
 const SAMPLE_CONFIG = {
   dateColumn: 'Date',

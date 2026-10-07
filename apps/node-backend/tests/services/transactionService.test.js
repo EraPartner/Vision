@@ -18,10 +18,10 @@ const mocks = vi.hoisted(() => ({
   unmarkTransfer: vi.fn(),
 }));
 
-vi.mock("../../src/repositories/transactionRepository.js", () => ({
+vi.mock("../../src/repositories/transactionRepository.ts", () => ({
   default: { create: mocks.create, update: mocks.update },
 }));
-vi.mock("../../src/repositories/accountRepository.js", () => ({
+vi.mock("../../src/repositories/accountRepository.ts", () => ({
   accountRepository: {
     findActiveId: mocks.findActiveId,
   },

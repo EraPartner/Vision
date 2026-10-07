@@ -231,7 +231,7 @@ bun vitest run src/path/to/test.test.js
 
 - Additional backend coverage was added for repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
 - Tests: [[apps/node-backend/tests/categoryRepository.test.js]], [[apps/node-backend/tests/plannedTransactionRepository.test.js]]
-- Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+- Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 > [!note] Schema initialization test archived
 > Schema bootstrap testing was removed in Phase 1 (2026-04-21) when `schemaInit.js` was replaced by Alembic migrations ([[docs/adr/027-alembic-single-source-of-schema|ADR-027]]).
@@ -265,7 +265,7 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend repository coverage for portfolio transaction query/filter branches and grouped summary return paths.
 - Test: [[apps/node-backend/tests/portfolioTransactionRepository.test.js]]
-- Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]]
+- Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
 - Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 

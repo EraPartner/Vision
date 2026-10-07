@@ -29,7 +29,7 @@ const listAccounts = async () => (await accountService.list()).items;
 import {
   recipientRepository,
   __SYSTEM_RECIPIENT_NAME as SYSTEM_RECIPIENT_NAME,
-} from "../src/repositories/recipientRepository.js";
+} from "../src/repositories/recipientRepository.ts";
 import { reconcileAccount } from "../src/services/reconcileService.js";
 import { setOpeningBalance } from "../src/services/openingBalanceService.js";
 import {

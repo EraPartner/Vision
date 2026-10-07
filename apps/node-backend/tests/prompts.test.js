@@ -4,7 +4,7 @@ import {
   toOllamaMessage,
   buildChatMessages,
   serializeToolResultForPrompt,
-} from "../src/integrations/ollama/prompts.js";
+} from "../src/integrations/ollama/prompts.ts";
 
 describe("buildSystemPrompt", () => {
   it("injects comma-separated tool names into the prompt", () => {

@@ -5,7 +5,7 @@ const projectionRepository = vi.hoisted(() => ({
   saveProjection: vi.fn(),
 }));
 
-vi.mock("../src/repositories/insightCashProjectionRepository.js", () => ({
+vi.mock("../src/repositories/insightCashProjectionRepository.ts", () => ({
   default: projectionRepository,
 }));
 

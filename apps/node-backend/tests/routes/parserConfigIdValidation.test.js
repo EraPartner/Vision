@@ -24,7 +24,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
 import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
 
-vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
+vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('../../src/repositories/customParserConfigRepository.js', () => ({
   },
 }));
 
-import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.js';
+import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
 const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.js');
 
 // Mirrors main.js's two mounts and each router's registerParserRoutes call.

@@ -1030,7 +1030,7 @@ Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/tes
 
 Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests/plannedTransactionRepository.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 ### Incremental backend coverage addendum (2026-04-11)
 
@@ -1049,7 +1049,7 @@ Validation runs (passed): `bun vitest run tests/categoryRepository.test.js tests
 
 Coverage snapshot after this cycle: overall `76.84/61.72/80.74/80.29` (statements/branches/functions/lines).
 
-Related code: [[apps/node-backend/src/repositories/categoryRepository.js]], [[apps/node-backend/src/repositories/plannedTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
+Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, adapters + raw import service)
 
@@ -1098,9 +1098,9 @@ Validation runs (passed):
 - `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests)
 - `npm test -- --coverage` (827 tests)
 
-Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]] `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
+Coverage snapshot after this update: overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]] `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage additions (2026-05-18, snapshot valuation parity)
 

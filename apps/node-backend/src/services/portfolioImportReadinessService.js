@@ -3,7 +3,7 @@ import {
   getImportReadinessProblems,
   getManualPortfolioOverlaps,
   lockImportReadinessHistory,
-} from "../repositories/portfolioImportBatchRepository.js";
+} from "../repositories/portfolioImportBatchRepository.ts";
 
 const MAINTAINED_ADAPTERS = new Set([
   "ibkr",

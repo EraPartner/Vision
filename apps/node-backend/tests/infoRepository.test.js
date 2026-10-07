@@ -21,7 +21,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 // getIncludeTransfers() reads the `includeTransfers` setting; stub it so the
 // transfer-exclusion lookup (ADR-083) doesn't consume the order-dependent
 // `query` mocks below. Default null → transfers excluded.
-vi.mock("../src/repositories/settingsRepository.js", () => ({
+vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: {
     get: vi.fn(async () => null),
     getAll: vi.fn(async () => ({})),
@@ -31,9 +31,9 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
 
 import { query, queryPrepared } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
-import infoRepository from "../src/repositories/infoRepository.js";
-import { clearMvCache } from "../src/repositories/infoRepository.js";
-import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.js";
+import infoRepository from "../src/repositories/infoRepository.ts";
+import { clearMvCache } from "../src/repositories/infoRepository.ts";
+import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
@@ -843,7 +843,7 @@ describe("InfoRepository", () => {
 
     it("should return empty arrays when no transactions", async () => {
       query.mockImplementation(async (sql) =>
-        sql.includes("TO_CHAR(CURRENT_DATE")
+        sql.includes("AS current_period")
           ? { rows: [{ current_period: "2026-01", prev_period: "2025-12" }] }
           : { rows: [] },
       );

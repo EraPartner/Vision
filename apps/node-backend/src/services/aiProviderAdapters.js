@@ -1,6 +1,6 @@
 import settings from "../config/config.ts";
-import { getOllamaClient } from "../integrations/ollama/client.js";
-import { callOpenAiBroker } from "../integrations/openai/brokerClient.js";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
+import { callOpenAiBroker } from "../integrations/openai/brokerClient.ts";
 import {
   assertPublicDisclosureText,
   bindDisclosureToRequest,
@@ -10,7 +10,7 @@ import {
   reserveDisclosure,
   findUncertainDisclosure,
   updateDisclosureRecord,
-} from "../repositories/aiDisclosureRepository.js";
+} from "../repositories/aiDisclosureRepository.ts";
 import { getPublicCloudAnalysisCatalog } from "./cloudAnalysisPlan.js";
 import { checkAgentCloakPreflight } from "./agentCloakPreflight.js";
 

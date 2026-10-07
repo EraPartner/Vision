@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import accountRepository from "../repositories/accountRepository.js";
+import accountRepository from "../repositories/accountRepository.ts";
 import {
   NotFoundError,
   ValidationError,
@@ -23,7 +23,7 @@ import {
 } from "./currency/currencyConversionService.js";
 import { hasConversionRate } from "../lib/exchangeRates.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
-import { statementPartition } from "../repositories/accountBalanceSql.js";
+import { statementPartition } from "../repositories/accountBalanceSql.ts";
 import { withTransaction } from "../database/connection.ts";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.

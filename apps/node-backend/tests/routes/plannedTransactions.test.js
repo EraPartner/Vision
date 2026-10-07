@@ -12,7 +12,7 @@ import { mockConnection } from "../helpers/repoMocks.js";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/repositories/plannedTransactionRepository.js", () => ({
+vi.mock("../../src/repositories/plannedTransactionRepository.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),

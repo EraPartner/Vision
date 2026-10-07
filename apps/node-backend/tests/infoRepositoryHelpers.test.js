@@ -7,7 +7,7 @@ import { query } from "../src/database/connection.ts";
 import {
   mvAvailable,
   clearMvCache,
-} from "../src/repositories/infoRepositoryHelpers.js";
+} from "../src/repositories/infoRepositoryHelpers.ts";
 import { sanitizeIsolatedValueSpikes } from "../src/services/calculations/portfolioMath.js";
 import { sanitizeIsolatedDailyInvestmentSpikes } from "../src/lib/calculations/netWorthSanitizer.ts";
 

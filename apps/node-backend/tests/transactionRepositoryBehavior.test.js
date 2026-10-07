@@ -20,7 +20,7 @@ import {
   queryPrepared,
   withTransaction,
 } from "../src/database/connection.ts";
-import transactionRepository from "../src/repositories/transactionRepository.js";
+import transactionRepository from "../src/repositories/transactionRepository.ts";
 
 beforeEach(() => {
   query.mockReset();

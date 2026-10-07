@@ -365,7 +365,7 @@ Multi-pass normalization pipeline:
 
 ## Net Worth Snapshot Algorithm
 
-**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.js]] (liquid component + cache layer)
+**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.ts]] (liquid component + cache layer)
 
 ### Problem Statement
 

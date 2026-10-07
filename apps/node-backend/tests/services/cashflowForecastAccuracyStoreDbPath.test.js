@@ -47,7 +47,7 @@ const dbRows = vi.hoisted(() => [
   },
 ]);
 
-vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.js", () => ({
+vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.ts", () => ({
   default: {
     upsert: vi.fn(async () => {}),
     getHistory: vi.fn(async ({ methodId }) =>
