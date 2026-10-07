@@ -22,7 +22,7 @@ export function IndicatorPeriodInput({
             value={period}
             min={2}
             onChange={onChange}
-            className="h-7 w-16 px-1.5 text-center type-footnote tabular-nums"
+            className="h-8 w-20 text-center tabular-nums"
         />
     );
 }

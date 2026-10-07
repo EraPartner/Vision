@@ -1,13 +1,29 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { List, ListRow } from "@/components/ui/list";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { getSetting, saveSetting } from "@/lib/api/settings";
 import { getPortfolioForecast } from "@/lib/api/research";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { parseDecimal } from "@/lib/decimal";
+import { undoToast } from "@/lib/undoToast";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type {
     PortfolioForecast,
@@ -17,6 +33,8 @@ import type { NumberFormat } from "@/utils/currency";
 import { formatCurrency, formatEditableNumber } from "@/utils/currency";
 
 const SETTING_KEY = "life_scenarios";
+/** Radix Select items need a non-empty value; this one stands for "new scenario". */
+const NEW_SCENARIO = "__new__";
 
 interface LifeScenario {
     id: string;
@@ -160,6 +178,19 @@ export default function LifeScenarioPanel({
         setError(null);
     };
 
+    const startNew = () => {
+        setDraft(blankDraft());
+        setComparison(null);
+        setError(null);
+    };
+
+    const selectSaved = (id: string) => {
+        const selected = scenarios.find((item) => item.id === id);
+        setDraft(selected ? toDraft(selected, numberFormat) : blankDraft());
+        setComparison(null);
+        setError(null);
+    };
+
     const readScenario = (): {
         scenario: LifeScenario;
         goalMonth?: number;
@@ -237,8 +268,12 @@ export default function LifeScenarioPanel({
         }
     };
 
+    // Deleting happens at once; the saved list is a setting we hold in memory,
+    // so Undo can write the previous list back (ADR-179 "forgive, don't warn").
     const deleteDraft = async () => {
         if (!draft.id) return;
+        const previous = scenarios;
+        const removed = scenarios.find((item) => item.id === draft.id);
         try {
             setSaving(true);
             const next = scenarios.filter((item) => item.id !== draft.id);
@@ -247,6 +282,19 @@ export default function LifeScenarioPanel({
             setDraft(blankDraft());
             setComparison(null);
             setError(null);
+            undoToast({
+                message: t("research.lifeScenario.deleted"),
+                undoLabel: t("common.undo"),
+                undo: async () => {
+                    try {
+                        await saveSetting(SETTING_KEY, previous);
+                        setScenarios(previous);
+                        if (removed) setDraft(toDraft(removed, numberFormat));
+                    } catch (reason) {
+                        setError(apiErrorToMessage(reason, t));
+                    }
+                },
+            });
         } catch (reason) {
             setError(apiErrorToMessage(reason, t));
         } finally {
@@ -351,76 +399,74 @@ export default function LifeScenarioPanel({
         <Card>
             <CardHeader>
                 <CardTitle>{t("research.lifeScenario.title")}</CardTitle>
-                <p className="text-sm text-muted-foreground">
+                <CardDescription>
                     {t("research.lifeScenario.subtitle")}
-                </p>
+                </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
                 {savedError && (
-                    <div className="flex flex-wrap items-center gap-3">
-                        <p role="alert" className="text-sm text-destructive">
-                            {t("research.lifeScenario.loadFailed")}
-                        </p>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={loadingSaved}
-                            onClick={() => {
-                                setLoadingSaved(true);
-                                setLoadAttempt((attempt) => attempt + 1);
-                            }}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                            <span>{t("research.lifeScenario.loadFailed")}</span>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={loadingSaved}
+                                onClick={() => {
+                                    setLoadingSaved(true);
+                                    setLoadAttempt((attempt) => attempt + 1);
+                                }}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
+
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="min-w-56 flex-1 space-y-2">
                         <Label htmlFor="life-scenario-saved">
                             {t("research.lifeScenario.saved")}
                         </Label>
-                        <select
-                            id="life-scenario-saved"
+                        <Select
+                            value={draft.id ?? NEW_SCENARIO}
                             disabled={saving}
-                            className="flex h-9 w-full rounded-control border border-input bg-background px-3 text-sm"
-                            value={draft.id ?? ""}
-                            onChange={(event) => {
-                                const selected = scenarios.find(
-                                    (item) => item.id === event.target.value,
-                                );
-                                setDraft(
-                                    selected
-                                        ? toDraft(selected, numberFormat)
-                                        : blankDraft(),
-                                );
-                                setComparison(null);
-                                setError(null);
-                            }}
+                            onValueChange={(value) =>
+                                value === NEW_SCENARIO
+                                    ? startNew()
+                                    : selectSaved(value)
+                            }
                         >
-                            <option value="">
-                                {t("research.lifeScenario.new")}
-                            </option>
-                            {scenarios.map((item) => (
-                                <option key={item.id} value={item.id}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger id="life-scenario-saved">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NEW_SCENARIO}>
+                                    {t("research.lifeScenario.new")}
+                                </SelectItem>
+                                {scenarios.map((item) => (
+                                    <SelectItem key={item.id} value={item.id}>
+                                        {item.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        disabled={saving}
-                        onClick={() => {
-                            setDraft(blankDraft());
-                            setComparison(null);
-                            setError(null);
-                        }}
-                    >
-                        {t("research.lifeScenario.new")}
-                    </Button>
+                    {draft.id && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={saving}
+                            onClick={startNew}
+                        >
+                            <Plus aria-hidden="true" />
+                            {t("research.lifeScenario.new")}
+                        </Button>
+                    )}
                 </div>
+
                 <div className="space-y-2">
                     <Label htmlFor="life-scenario-name">
                         {t("research.lifeScenario.name")}
@@ -433,7 +479,8 @@ export default function LifeScenarioPanel({
                         onChange={(event) => edit({ name: event.target.value })}
                     />
                 </div>
-                <p className="text-sm text-muted-foreground">
+
+                <p className="type-footnote text-label-secondary">
                     {t("research.lifeScenario.amountsHelp", { currency })}
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -485,8 +532,9 @@ export default function LifeScenarioPanel({
                         />
                     </div>
                 </div>
-                <fieldset className="rounded-lg border border-border/50 p-4">
-                    <legend className="px-2 text-sm font-medium">
+
+                <fieldset className="space-y-3">
+                    <legend className="type-headline text-foreground">
                         {t("research.lifeScenario.optionalGoal")}
                     </legend>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -521,13 +569,14 @@ export default function LifeScenarioPanel({
                         </div>
                     </div>
                 </fieldset>
-                <p className="text-xs text-muted-foreground">
+
+                <p className="type-footnote text-label-secondary">
                     {t("research.lifeScenario.assumption")}
                 </p>
+
                 <div className="flex flex-wrap gap-2">
                     <Button
                         type="button"
-                        variant="default"
                         onClick={run}
                         disabled={running || saving}
                     >
@@ -546,7 +595,8 @@ export default function LifeScenarioPanel({
                     {draft.id && (
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
+                            className="text-destructive hover:text-destructive"
                             onClick={deleteDraft}
                             disabled={saving}
                         >
@@ -554,66 +604,96 @@ export default function LifeScenarioPanel({
                         </Button>
                     )}
                 </div>
+
                 {error && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {error}
-                    </p>
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 )}
                 {visibleComparison && !available && (
-                    <p
-                        role="status"
-                        className="flex items-center gap-2 text-sm text-muted-foreground"
-                    >
-                        <AlertTriangle className="size-4" />
-                        {t("research.lifeScenario.unavailable")}
-                    </p>
+                    <Alert role="status">
+                        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                        <AlertDescription>
+                            {t("research.lifeScenario.unavailable")}
+                        </AlertDescription>
+                    </Alert>
                 )}
                 {visibleComparison && available && (
-                    <div
-                        className="space-y-3 rounded-lg border p-4"
-                        role="status"
-                    >
-                        <p className="font-medium">
-                            {t("research.lifeScenario.result")}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                            {t("research.lifeScenario.resultHelp")}
-                        </p>
-                        <div className="grid gap-3 sm:grid-cols-3">
-                            <div>
-                                <p className="text-xs text-muted-foreground">
-                                    {t("research.lifeScenario.baselineMedian")}
-                                </p>
-                                <p className="font-medium tabular-nums">
-                                    {money(
-                                        visibleComparison.baseline.projected
-                                            ?.p50,
-                                    )}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground">
-                                    {t(
-                                        "research.lifeScenario.interruptedMedian",
-                                    )}
-                                </p>
-                                <p className="font-medium tabular-nums">
-                                    {money(
-                                        visibleComparison.interrupted.projected
-                                            ?.p50,
-                                    )}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-muted-foreground">
-                                    {t("research.lifeScenario.medianGap")}
-                                </p>
-                                <p className="font-medium tabular-nums">
-                                    {money(medianGap)}
-                                </p>
-                            </div>
+                    <section role="status" className="space-y-3">
+                        <div className="space-y-1">
+                            <h3 className="type-headline text-foreground">
+                                {t("research.lifeScenario.result")}
+                            </h3>
+                            <p className="type-footnote text-label-secondary">
+                                {t("research.lifeScenario.resultHelp")}
+                            </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <List>
+                            <ListRow
+                                title={t("research.lifeScenario.baselineMedian")}
+                                trailing={
+                                    <span className="text-foreground">
+                                        {money(
+                                            visibleComparison.baseline.projected
+                                                ?.p50,
+                                        )}
+                                    </span>
+                                }
+                            />
+                            <ListRow
+                                title={t(
+                                    "research.lifeScenario.interruptedMedian",
+                                )}
+                                trailing={
+                                    <span className="text-foreground">
+                                        {money(
+                                            visibleComparison.interrupted
+                                                .projected?.p50,
+                                        )}
+                                    </span>
+                                }
+                            />
+                            <ListRow
+                                title={t("research.lifeScenario.medianGap")}
+                                trailing={
+                                    <span className="text-foreground">
+                                        {money(medianGap)}
+                                    </span>
+                                }
+                            />
+                            {visibleComparison.goalMonth && (
+                                <>
+                                    <ListRow
+                                        title={t(
+                                            "research.lifeScenario.baselineGoalProbability",
+                                        )}
+                                        trailing={
+                                            <span className="text-foreground">
+                                                {pct(
+                                                    visibleComparison.baseline
+                                                        .probTarget,
+                                                )}
+                                            </span>
+                                        }
+                                    />
+                                    <ListRow
+                                        title={t(
+                                            "research.lifeScenario.interruptedGoalProbability",
+                                        )}
+                                        trailing={
+                                            <span className="text-foreground">
+                                                {pct(
+                                                    visibleComparison
+                                                        .interrupted.probTarget,
+                                                )}
+                                            </span>
+                                        }
+                                    />
+                                </>
+                            )}
+                        </List>
+                        <p className="type-footnote text-label-secondary">
                             {t("research.lifeScenario.reducedContribution", {
                                 amount: money(
                                     visibleComparison.reducedContribution,
@@ -621,7 +701,7 @@ export default function LifeScenarioPanel({
                             })}
                         </p>
                         {visibleComparison.monthlyDeficit > 0 && (
-                            <p className="text-xs text-destructive">
+                            <p className="type-footnote text-destructive">
                                 {t("research.lifeScenario.deficitExcluded", {
                                     amount: money(
                                         visibleComparison.monthlyDeficit,
@@ -629,28 +709,7 @@ export default function LifeScenarioPanel({
                                 })}
                             </p>
                         )}
-                        {visibleComparison.goalMonth && (
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <p>
-                                    {t(
-                                        "research.lifeScenario.baselineGoalProbability",
-                                    )}
-                                    :{" "}
-                                    {pct(visibleComparison.baseline.probTarget)}
-                                </p>
-                                <p>
-                                    {t(
-                                        "research.lifeScenario.interruptedGoalProbability",
-                                    )}
-                                    :{" "}
-                                    {pct(
-                                        visibleComparison.interrupted
-                                            .probTarget,
-                                    )}
-                                </p>
-                            </div>
-                        )}
-                    </div>
+                    </section>
                 )}
             </CardContent>
         </Card>

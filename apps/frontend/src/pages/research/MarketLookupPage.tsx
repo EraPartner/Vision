@@ -15,7 +15,16 @@ import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { BarChart3, Clock, Star, Link2 } from "lucide-react";
+import { List, ListRow } from "@/components/ui/list";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { StateBlock } from "@/components/shared/StateBlock";
+import { Clock, Link2, MoreHorizontal, Star } from "lucide-react";
 import {
     AreaChart,
     BarChart,
@@ -271,11 +280,88 @@ export default function MarketLookupPage() {
         [quote, summaries],
     );
 
+    // Trading figures in two inset lists so the grid keeps its two-column rhythm.
+    const tradingInfo = quote
+        ? [
+              {
+                  label: t("market.open"),
+                  value: fmtPrice(quote.open, quote.currency),
+              },
+              {
+                  label: t("market.dayHigh"),
+                  value: fmtPrice(quote.dayHigh, quote.currency),
+              },
+              {
+                  label: t("market.dayLow"),
+                  value: fmtPrice(quote.dayLow, quote.currency),
+              },
+              {
+                  label: t("market.prevClose"),
+                  value: fmtPrice(quote.prevClose, quote.currency),
+              },
+              {
+                  label: t("market.volume"),
+                  value: fmtLargeNum(quote.volume),
+              },
+              {
+                  label: t("market.avgVolume"),
+                  value: fmtLargeNum(quote.avgVolume),
+              },
+              {
+                  label: t("market.52wRange"),
+                  value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}`,
+              },
+          ]
+        : [];
+    const tradingInfoColumns = [
+        tradingInfo.slice(0, 4),
+        tradingInfo.slice(4),
+    ].filter((column) => column.length > 0);
+
+    const quoteActions = quote && !isProviderAsset;
+
     return (
         <PageShell className="">
             <PageHeader
                 title={t("marketLookup.title")}
                 icon={PAGE_ICONS["/research/market"]}
+                actions={
+                    quoteActions ? (
+                        <>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        aria-label={t("marketLookup.menu")}
+                                    >
+                                        <MoreHorizontal />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onSelect={() => setWatchlistOpen(true)}
+                                    >
+                                        <Star className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("addWatchlist.title")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        onSelect={() => setMappingOpen(true)}
+                                    >
+                                        <Link2 className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("research.mapping.button")}
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <AddInvestmentFromMarketDialog
+                                quote={quote}
+                                existingInvestment={
+                                    existingInvestment ?? undefined
+                                }
+                            />
+                        </>
+                    ) : undefined
+                }
             />
 
             {/* Search */}
@@ -291,7 +377,7 @@ export default function MarketLookupPage() {
                 {!isSearching && (searchResults?.items?.length ?? 0) === 0 && (
                     <p
                         role="status"
-                        className="px-3 py-3 text-sm text-muted-foreground"
+                        className="px-3 py-3 type-callout text-label-secondary"
                     >
                         {t(
                             searchFailed
@@ -328,14 +414,12 @@ export default function MarketLookupPage() {
             {/* No selection state */}
             {!effectiveSelectedSymbol && (
                 <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-20 text-center">
-                        <BarChart3 className="h-14 w-14 text-muted-foreground/30 mb-4" />
-                        <h2 className="text-lg font-semibold text-foreground mb-1">
-                            {t("market.searchTicker")}
-                        </h2>
-                        <p className="text-sm text-muted-foreground max-w-md">
-                            {t("market.searchHint")}
-                        </p>
+                    <CardContent variant="state">
+                        <EmptyState
+                            icon={PAGE_ICONS["/research/market"]}
+                            title={t("market.searchTicker")}
+                            description={t("market.searchHint")}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -343,7 +427,7 @@ export default function MarketLookupPage() {
             {/* Quote + Chart */}
             {effectiveSelectedSymbol && (
                 <>
-                    {/* Header */}
+                    {/* Quote hero */}
                     {isQuoteBusy ? (
                         <Card>
                             <CardContent
@@ -359,27 +443,31 @@ export default function MarketLookupPage() {
                     ) : quote ? (
                         <Card>
                             <CardContent variant="headerless">
-                                <div className="flex items-start justify-between flex-wrap gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <h2 className="text-2xl font-bold text-foreground">
+                                <div className="flex flex-wrap items-start justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h2 className="type-title-1 text-foreground">
                                                 {quote.symbol}
                                             </h2>
-                                            <Badge
-                                                variant="secondary"
-                                                className="text-xs"
-                                            >
-                                                {quote.type}
-                                            </Badge>
-                                            <span className="text-sm text-muted-foreground">
-                                                {quote.exchange}
-                                            </span>
+                                            {quote.type && (
+                                                <Badge
+                                                    variant="secondary"
+                                                    size="sm"
+                                                >
+                                                    {quote.type}
+                                                </Badge>
+                                            )}
+                                            {quote.exchange && (
+                                                <span className="type-footnote text-label-secondary">
+                                                    {quote.exchange}
+                                                </span>
+                                            )}
                                         </div>
-                                        <p className="text-sm text-muted-foreground mb-3">
+                                        <p className="mt-0.5 type-body text-label-secondary">
                                             {quote.name}
                                         </p>
-                                        <div className="flex items-baseline gap-3">
-                                            <span className="text-4xl font-bold tabular-nums text-foreground">
+                                        <div className="mt-4 flex flex-wrap items-baseline gap-3">
+                                            <span className="type-large-title tabular-nums text-foreground">
                                                 {fmtPrice(
                                                     quote.price,
                                                     quote.currency,
@@ -405,67 +493,31 @@ export default function MarketLookupPage() {
                                                           )})`
                                                         : ""
                                                 }`}
-                                                className="text-sm"
                                             />
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        {!isProviderAsset && (
-                                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                                                <Clock className="h-3 w-3" />
-                                                <span>
-                                                    {t("market.autoRefresh")}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {quote && !isProviderAsset && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-1.5"
-                                                onClick={() =>
-                                                    setWatchlistOpen(true)
-                                                }
-                                            >
-                                                <Star className="h-4 w-4" />
-                                                {t("addWatchlist.title")}
-                                            </Button>
-                                        )}
-                                        {quote && !isProviderAsset && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-1.5"
-                                                onClick={() =>
-                                                    setMappingOpen(true)
-                                                }
-                                            >
-                                                <Link2 className="h-4 w-4" />
-                                                {t("research.mapping.button")}
-                                            </Button>
-                                        )}
-                                        {quote && !isProviderAsset && (
-                                            <AddInvestmentFromMarketDialog
-                                                quote={quote}
-                                                existingInvestment={
-                                                    existingInvestment ??
-                                                    undefined
-                                                }
+                                    {!isProviderAsset && (
+                                        <p className="flex items-center gap-1.5 type-footnote text-label-secondary">
+                                            <Clock
+                                                className="h-3.5 w-3.5"
+                                                aria-hidden="true"
                                             />
-                                        )}
-                                    </div>
+                                            {t("market.autoRefresh")}
+                                        </p>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>
                     ) : (
                         <Card>
-                            <CardContent
-                                variant="state"
-                                className="text-center text-muted-foreground"
-                            >
-                                {t("market.noQuote", {
-                                    symbol: effectiveSelectedSymbol,
-                                })}
+                            <CardContent variant="flush">
+                                <StateBlock
+                                    size="compact"
+                                    icon={PAGE_ICONS["/research/market"]}
+                                    title={t("market.noQuote", {
+                                        symbol: effectiveSelectedSymbol,
+                                    })}
+                                />
                             </CardContent>
                         </Card>
                     )}
@@ -503,7 +555,7 @@ export default function MarketLookupPage() {
                             {isChartBusy ? (
                                 <Skeleton
                                     {...loadingSurfaceProps}
-                                    className="h-[320px] w-full rounded-lg"
+                                    className="h-[320px] w-full"
                                 />
                             ) : displayChart?.points &&
                               displayChart.points.length > 0 ? (
@@ -603,7 +655,7 @@ export default function MarketLookupPage() {
                                     )}
                                 </div>
                             ) : (
-                                <div className="h-[320px] flex items-center justify-center text-sm text-muted-foreground">
+                                <div className="flex h-[320px] items-center justify-center type-callout text-label-secondary">
                                     {t("market.noChartData")}
                                 </div>
                             )}
@@ -619,60 +671,26 @@ export default function MarketLookupPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 sm:grid-cols-3">
-                                    {[
-                                        {
-                                            label: t("market.open"),
-                                            value: fmtPrice(
-                                                quote.open,
-                                                quote.currency,
-                                            ),
-                                        },
-                                        {
-                                            label: t("market.dayHigh"),
-                                            value: fmtPrice(
-                                                quote.dayHigh,
-                                                quote.currency,
-                                            ),
-                                        },
-                                        {
-                                            label: t("market.dayLow"),
-                                            value: fmtPrice(
-                                                quote.dayLow,
-                                                quote.currency,
-                                            ),
-                                        },
-                                        {
-                                            label: t("market.prevClose"),
-                                            value: fmtPrice(
-                                                quote.prevClose,
-                                                quote.currency,
-                                            ),
-                                        },
-                                        {
-                                            label: t("market.volume"),
-                                            value: fmtLargeNum(quote.volume),
-                                        },
-                                        {
-                                            label: t("market.avgVolume"),
-                                            value: fmtLargeNum(quote.avgVolume),
-                                        },
-                                        {
-                                            label: t("market.52wRange"),
-                                            value: `${fmtPrice(quote.low52w, quote.currency)} – ${fmtPrice(quote.high52w, quote.currency)}`,
-                                        },
-                                    ].map(({ label, value }) => (
-                                        <div
-                                            key={label}
-                                            className="flex justify-between items-center gap-2 py-1 border-b border-border/50"
-                                        >
-                                            <span className="text-sm text-muted-foreground">
-                                                {label}
-                                            </span>
-                                            <span className="text-sm font-medium tabular-nums text-foreground">
-                                                {value}
-                                            </span>
-                                        </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    {tradingInfoColumns.map((column, i) => (
+                                        <List key={i}>
+                                            {column.map(({ label, value }) => (
+                                                <ListRow
+                                                    key={label}
+                                                    className="min-h-10"
+                                                    title={
+                                                        <span className="text-label-secondary">
+                                                            {label}
+                                                        </span>
+                                                    }
+                                                    trailing={
+                                                        <span className="text-foreground">
+                                                            {value}
+                                                        </span>
+                                                    }
+                                                />
+                                            ))}
+                                        </List>
                                     ))}
                                 </div>
                             </CardContent>

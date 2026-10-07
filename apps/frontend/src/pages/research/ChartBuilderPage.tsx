@@ -4,10 +4,10 @@ import {
     Copy,
     FilePlus2,
     LineChart as LineChartIcon,
+    MoreHorizontal,
     Plus,
     Save,
     Trash2,
-    X,
 } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
@@ -15,8 +15,23 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateWithAppSettings } from "@/lib/dateUtils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { undoToast } from "@/lib/undoToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -135,7 +150,7 @@ export default function ChartBuilderPage() {
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [layoutName, setLayoutName] = useState("");
     const [confirmAction, setConfirmAction] = useState<
-        "new" | "delete" | "share" | null
+        "new" | "share" | null
     >(null);
     const [pendingSharedState, setPendingSharedState] =
         useState<BuilderState | null>(null);
@@ -270,15 +285,27 @@ export default function ChartBuilderPage() {
         toast.success(t("research.builder.layoutSaved"));
     };
 
+    // A saved layout is deleted at once; Undo writes the previous library
+    // back (ADR-179 "forgive, don't warn"), so no confirmation is needed.
     const deleteLayout = () => {
+        const previous = library;
         const next = deleteActiveChartBuilderLayout(library);
         if (!saveChartBuilderLibrary(next)) {
             toast.error(t("research.builder.storageFailed"));
             return;
         }
         setLibrary(next);
-        setConfirmAction(null);
-        toast.success(t("research.builder.layoutDeleted"));
+        undoToast({
+            message: t("research.builder.layoutDeleted"),
+            undoLabel: t("common.undo"),
+            undo: () => {
+                if (!saveChartBuilderLibrary(previous)) {
+                    toast.error(t("research.builder.storageFailed"));
+                    return;
+                }
+                setLibrary(previous);
+            },
+        });
     };
 
     const copyShareLink = async () => {
@@ -749,6 +776,14 @@ export default function ChartBuilderPage() {
     // results dropdown is open, so its overflowing rows aren't painted behind
     // those later glass cards (each forms its own backdrop-filter stacking context).
     const searchOpen = isOpen;
+    const seriesName = (s: BuilderSeries) =>
+        `${s.macro?.title ?? s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`;
+    const indicatorName = (ind: BuilderIndicator) =>
+        ind.type === "bollinger" ? "BB" : ind.type.toUpperCase();
+    const activeOptions = [
+        logLeft && t("research.builder.logScale"),
+        rebaseAll && t("research.builder.rebase"),
+    ].filter(Boolean);
 
     return (
         <PageShell className="">
@@ -756,148 +791,221 @@ export default function ChartBuilderPage() {
                 title={t("research.builder.title")}
                 subtitle={t("research.builder.subtitle")}
                 icon={PAGE_ICONS["/research/charts"]}
+                actions={
+                    <>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t("research.builder.menu")}
+                                >
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={requestNewLayout}>
+                                    <FilePlus2 className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("research.builder.newChart")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onSelect={() => void copyShareLink()}
+                                >
+                                    <Copy className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("research.builder.copyLink")}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    disabled={!activeLayout}
+                                    className="text-destructive focus:text-destructive"
+                                    onSelect={deleteLayout}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    {t("research.builder.deleteSavedLayout")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button onClick={() => setSaveDialogOpen(true)}>
+                            <Save />
+                            {t("research.builder.saveAs")}
+                        </Button>
+                    </>
+                }
             />
 
             {/* Series builder */}
             <Card className={cn(searchOpen && "relative z-20")}>
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-4">
                     <CardTitle variant="sm">
                         {t("research.builder.series")}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground">
+                    <CardDescription>
                         {t("research.builder.startHelp")}
-                    </p>
+                    </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                    {series.map((s, i) => (
-                        <div
-                            key={s.id}
-                            className="flex flex-wrap items-center gap-2 rounded-lg border border-border/60 p-2"
-                        >
-                            <span
-                                className="h-2.5 w-2.5 rounded-full"
-                                style={{ background: getChartColor(i) }}
-                            />
-                            {s.macro ? (
-                                <span
-                                    className="min-w-[4.5rem] max-w-[18rem] truncate text-sm font-medium"
-                                    title={s.macro.title}
+                <CardContent className="space-y-4">
+                    {series.length > 0 && (
+                        <List>
+                            {series.map((s, i) => (
+                                <li
+                                    key={s.id}
+                                    className="flex min-h-11 flex-wrap items-center gap-2 px-4 py-2.5"
                                 >
-                                    {s.macro.title}
-                                </span>
-                            ) : (
-                                <span className="min-w-[4.5rem] font-mono font-semibold">
-                                    {s.symbol}
-                                </span>
-                            )}
-                            {s.field === "volume" ? (
-                                <Badge variant="secondary" className="text-xs">
-                                    {t("research.builder.volume")}
-                                </Badge>
-                            ) : (
-                                <Select
-                                    value={s.type}
-                                    onValueChange={(v) =>
-                                        updateSeries(s.id, {
-                                            type: v as SeriesType,
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger
-                                        className="h-8 w-32"
-                                        aria-label={`${t("customChart.chartType")}: ${s.macro?.title ?? s.symbol}`}
-                                    >
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="line">
-                                            {t("research.builder.type.line")}
-                                        </SelectItem>
-                                        <SelectItem value="area">
-                                            {t("research.builder.type.area")}
-                                        </SelectItem>
-                                        {!s.macro && (
-                                            <SelectItem value="candlestick">
-                                                {t(
-                                                    "research.builder.type.candlestick",
-                                                )}
-                                            </SelectItem>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            <Select
-                                value={s.axis}
-                                onValueChange={(v) =>
-                                    updateSeries(s.id, {
-                                        axis: v as "left" | "right",
-                                    })
-                                }
-                            >
-                                <SelectTrigger
-                                    className="h-8 w-28"
-                                    aria-label={`${t("research.builder.axisLabel")}: ${s.macro?.title ?? s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="left">
-                                        {t("research.builder.axisLeft")}
-                                    </SelectItem>
-                                    <SelectItem value="right">
-                                        {t("research.builder.axisRight")}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {s.macro ? (
-                                <Badge
-                                    variant="outline"
-                                    className="h-8 px-2.5 text-xs capitalize"
-                                >
-                                    {s.macro.provider}
-                                </Badge>
-                            ) : (
-                                <Select
-                                    value={s.provider || "auto"}
-                                    onValueChange={(v) =>
-                                        updateSeries(s.id, {
-                                            provider: v === "auto" ? "" : v,
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger
-                                        className="h-8 w-36"
-                                        aria-label={`${t("research.builder.providerLabel")}: ${s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
-                                    >
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {PROVIDERS.map((p) => (
-                                            <SelectItem
-                                                key={p || "auto"}
-                                                value={p || "auto"}
+                                    <span
+                                        aria-hidden="true"
+                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                        style={{ background: getChartColor(i) }}
+                                    />
+                                    {s.macro ? (
+                                        <span
+                                            className="min-w-[4.5rem] max-w-[18rem] truncate type-body font-medium text-foreground"
+                                            title={s.macro.title}
+                                        >
+                                            {s.macro.title}
+                                        </span>
+                                    ) : (
+                                        <span className="min-w-[4.5rem] font-mono type-body font-medium text-foreground">
+                                            {s.symbol}
+                                        </span>
+                                    )}
+                                    {s.field === "volume" ? (
+                                        <Badge variant="secondary" size="sm">
+                                            {t("research.builder.volume")}
+                                        </Badge>
+                                    ) : (
+                                        <Select
+                                            value={s.type}
+                                            onValueChange={(v) =>
+                                                updateSeries(s.id, {
+                                                    type: v as SeriesType,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger
+                                                className="h-8 w-32"
+                                                aria-label={`${t("customChart.chartType")}: ${s.macro?.title ?? s.symbol}`}
                                             >
-                                                {p
-                                                    ? p.replace("_", " ")
-                                                    : t(
-                                                          "research.builder.providerAuto",
-                                                      )}
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="line">
+                                                    {t(
+                                                        "research.builder.type.line",
+                                                    )}
+                                                </SelectItem>
+                                                <SelectItem value="area">
+                                                    {t(
+                                                        "research.builder.type.area",
+                                                    )}
+                                                </SelectItem>
+                                                {!s.macro && (
+                                                    <SelectItem value="candlestick">
+                                                        {t(
+                                                            "research.builder.type.candlestick",
+                                                        )}
+                                                    </SelectItem>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    <Select
+                                        value={s.axis}
+                                        onValueChange={(v) =>
+                                            updateSeries(s.id, {
+                                                axis: v as "left" | "right",
+                                            })
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            className="h-8 w-28"
+                                            aria-label={`${t("research.builder.axisLabel")}: ${seriesName(s)}`}
+                                        >
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="left">
+                                                {t("research.builder.axisLeft")}
                                             </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="ml-auto h-8 w-8"
-                                onClick={() => removeSeries(s.id)}
-                                aria-label={`${t("research.builder.removeSeries")}: ${s.macro?.title ?? s.symbol}${s.field === "volume" ? ` (${t("research.builder.volume")})` : ""}`}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    ))}
+                                            <SelectItem value="right">
+                                                {t("research.builder.axisRight")}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {s.macro ? (
+                                        <Badge
+                                            variant="outline"
+                                            size="sm"
+                                            className="capitalize"
+                                        >
+                                            {s.macro.provider}
+                                        </Badge>
+                                    ) : (
+                                        <Select
+                                            value={s.provider || "auto"}
+                                            onValueChange={(v) =>
+                                                updateSeries(s.id, {
+                                                    provider:
+                                                        v === "auto" ? "" : v,
+                                                })
+                                            }
+                                        >
+                                            <SelectTrigger
+                                                className="h-8 w-36"
+                                                aria-label={`${t("research.builder.providerLabel")}: ${seriesName(s)}`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {PROVIDERS.map((p) => (
+                                                    <SelectItem
+                                                        key={p || "auto"}
+                                                        value={p || "auto"}
+                                                    >
+                                                        {p
+                                                            ? p.replace(
+                                                                  "_",
+                                                                  " ",
+                                                              )
+                                                            : t(
+                                                                  "research.builder.providerAuto",
+                                                              )}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="ml-auto h-8 w-8 text-label-secondary"
+                                                aria-label={t(
+                                                    "research.builder.seriesMenu",
+                                                    { name: seriesName(s) },
+                                                )}
+                                            >
+                                                <MoreHorizontal />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive"
+                                                onSelect={() =>
+                                                    removeSeries(s.id)
+                                                }
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                {t(
+                                                    "research.builder.removeSeries",
+                                                )}
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </li>
+                            ))}
+                        </List>
+                    )}
 
                     {series.length < MAX_SERIES && (
                         <>
@@ -915,7 +1023,7 @@ export default function ChartBuilderPage() {
                                     macroItems.length === 0 && (
                                         <p
                                             role="status"
-                                            className="px-3 py-3 text-sm text-muted-foreground"
+                                            className="px-3 py-3 type-callout text-label-secondary"
                                         >
                                             {t(
                                                 symbolFailed ||
@@ -930,7 +1038,7 @@ export default function ChartBuilderPage() {
                                     )}
                                 {searchItems.length > 0 &&
                                     macroItems.length > 0 && (
-                                        <div className="px-3 pb-1 pt-2 eyebrow">
+                                        <div className="px-3 pb-1 pt-2 type-caption text-label-tertiary">
                                             {t("research.builder.groupMarkets")}
                                         </div>
                                     )}
@@ -940,12 +1048,12 @@ export default function ChartBuilderPage() {
                                         item={item}
                                         onSelect={(it) => addSeries(it.symbol)}
                                         leadingIcon={
-                                            <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <Plus className="h-3.5 w-3.5 shrink-0 text-label-secondary" />
                                         }
                                     />
                                 ))}
                                 {macroItems.length > 0 && (
-                                    <div className="px-3 pb-1 pt-2 eyebrow">
+                                    <div className="px-3 pb-1 pt-2 type-caption text-label-tertiary">
                                         {t("research.builder.groupEconomic")}
                                     </div>
                                 )}
@@ -960,13 +1068,13 @@ export default function ChartBuilderPage() {
                                         }}
                                         onSelect={() => addMacroSeries(item)}
                                         leadingIcon={
-                                            <Plus className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <Plus className="h-3.5 w-3.5 shrink-0 text-label-secondary" />
                                         }
                                     />
                                 ))}
                             </SymbolSearchBox>
-                            <details className="text-xs text-muted-foreground">
-                                <summary className="cursor-pointer rounded-sm focus-ring">
+                            <details className="type-footnote text-label-secondary">
+                                <summary className="cursor-pointer rounded-chip focus-ring">
                                     {t("research.builder.sourceHelp")}
                                 </summary>
                                 <p className="mt-2 max-w-2xl">
@@ -978,87 +1086,127 @@ export default function ChartBuilderPage() {
 
                     {/* Indicators */}
                     {priceSeries.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-3">
-                            <span className="text-xs text-muted-foreground">
-                                {t("research.builder.indicators")}:
-                            </span>
-                            <p className="w-full text-xs text-muted-foreground">
-                                {t("research.builder.indicatorHelp")}
-                            </p>
-                            {(
-                                ["sma", "ema", "bollinger"] as IndicatorType[]
-                            ).map((typ) => (
-                                <Button
-                                    key={typ}
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-2 text-xs"
-                                    disabled={
-                                        indicators.length >=
-                                        MAX_CHART_INDICATORS
-                                    }
-                                    onClick={() => addIndicator(typ)}
-                                >
-                                    <Plus className="mr-1 h-3 w-3" />
-                                    {typ.toUpperCase()}
-                                </Button>
-                            ))}
-                            {indicators.map((ind) => (
-                                <Badge
-                                    key={ind.id}
-                                    variant="secondary"
-                                    className="gap-1.5 py-1"
-                                >
-                                    <span>
-                                        {ind.type === "bollinger"
-                                            ? `BB`
-                                            : ind.type.toUpperCase()}
-                                    </span>
-                                    <IndicatorPeriodInput
-                                        indicator={
-                                            ind.type === "bollinger"
-                                                ? "BB"
-                                                : ind.type.toUpperCase()
+                        <section className="space-y-3 border-t border-border/50 pt-4">
+                            <div className="space-y-1">
+                                <h3 className="type-headline text-foreground">
+                                    {t("research.builder.indicators")}
+                                </h3>
+                                <p className="type-footnote text-label-secondary">
+                                    {t("research.builder.indicatorHelp")}
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(
+                                    [
+                                        "sma",
+                                        "ema",
+                                        "bollinger",
+                                    ] as IndicatorType[]
+                                ).map((typ) => (
+                                    <Button
+                                        key={typ}
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={
+                                            indicators.length >=
+                                            MAX_CHART_INDICATORS
                                         }
-                                        period={ind.period}
-                                        onChange={(e) =>
-                                            updateIndicator(ind.id, {
-                                                period: Math.max(
-                                                    2,
-                                                    Number(e.target.value) || 2,
-                                                ),
-                                            })
-                                        }
-                                    />
-                                    <button
-                                        onClick={() => removeIndicator(ind.id)}
-                                        aria-label={`${t("research.builder.removeIndicator")}: ${ind.type.toUpperCase()} (${ind.period})`}
+                                        onClick={() => addIndicator(typ)}
                                     >
-                                        <X className="h-3 w-3 hover:text-destructive" />
-                                    </button>
-                                </Badge>
-                            ))}
-                        </div>
+                                        <Plus aria-hidden="true" />
+                                        {typ.toUpperCase()}
+                                    </Button>
+                                ))}
+                            </div>
+                            {indicators.length > 0 && (
+                                <List>
+                                    {indicators.map((ind) => {
+                                        const name = indicatorName(ind);
+                                        return (
+                                            <ListRow
+                                                key={ind.id}
+                                                title={
+                                                    <span className="font-mono font-medium">
+                                                        {name}
+                                                    </span>
+                                                }
+                                                trailing={
+                                                    <>
+                                                        <span className="type-footnote">
+                                                            {t(
+                                                                "research.builder.period",
+                                                            )}
+                                                        </span>
+                                                        <IndicatorPeriodInput
+                                                            indicator={name}
+                                                            period={ind.period}
+                                                            onChange={(e) =>
+                                                                updateIndicator(
+                                                                    ind.id,
+                                                                    {
+                                                                        period: Math.max(
+                                                                            2,
+                                                                            Number(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ) ||
+                                                                                2,
+                                                                        ),
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger
+                                                                asChild
+                                                            >
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-8 w-8 text-label-secondary"
+                                                                    aria-label={t(
+                                                                        "research.builder.indicatorMenu",
+                                                                        {
+                                                                            indicator: `${name} (${ind.period})`,
+                                                                        },
+                                                                    )}
+                                                                >
+                                                                    <MoreHorizontal />
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end">
+                                                                <DropdownMenuItem
+                                                                    className="text-destructive focus:text-destructive"
+                                                                    onSelect={() =>
+                                                                        removeIndicator(
+                                                                            ind.id,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                                    {t(
+                                                                        "research.builder.removeIndicator",
+                                                                    )}
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
+                                                    </>
+                                                }
+                                            />
+                                        );
+                                    })}
+                                </List>
+                            )}
+                        </section>
                     )}
                 </CardContent>
             </Card>
 
-            {/* Toolbar */}
+            {/* Layout, range and options */}
             <Card>
-                <CardContent
-                    variant="headerless"
-                    className="flex flex-wrap items-end gap-4"
-                >
-                    <p role="status" className="text-xs text-muted-foreground">
-                        {t(
-                            storageFailed
-                                ? "research.builder.storageFailed"
-                                : persistedLibrary === library
-                                  ? "research.builder.savedLocally"
-                                  : "research.builder.savingLocally",
-                        )}
-                    </p>
-                    <div className="flex w-full flex-wrap items-end gap-2 border-b border-border/50 pb-4">
+                <CardContent variant="headerless" className="space-y-4">
+                    <div className="flex flex-wrap items-end gap-4">
                         <div className="min-w-52 space-y-1.5">
                             <Label htmlFor="chart-builder-layout">
                                 {t("research.builder.layout")}
@@ -1093,125 +1241,103 @@ export default function ChartBuilderPage() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <Button
-                            variant="outline"
-                            onClick={() => setSaveDialogOpen(true)}
-                        >
-                            <Save className="mr-2 h-4 w-4" />
-                            {t("research.builder.saveAs")}
-                        </Button>
-                        <details className="rounded-lg border border-border/60">
-                            <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm focus-ring">
-                                {t("research.builder.layoutActions")}
-                            </summary>
-                            <div className="flex flex-wrap gap-2 p-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={requestNewLayout}
-                                >
-                                    <FilePlus2 className="mr-2 h-4 w-4" />
-                                    {t("research.builder.new")}
-                                </Button>
-
-                                <Button
-                                    variant="outline"
-                                    disabled={!activeLayout}
-                                    onClick={() => setConfirmAction("delete")}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    {t("research.builder.deleteLayout")}
-                                </Button>
-                                <Button
-                                    className="ml-auto"
-                                    variant="outline"
-                                    onClick={copyShareLink}
-                                >
-                                    <Copy className="mr-2 h-4 w-4" />
-                                    {t("research.builder.copyLink")}
-                                </Button>
-                            </div>
-                        </details>
-                    </div>
-                    <div className="space-y-1.5">
+                        <div className="space-y-1.5">
+                            <p
+                                id="chart-builder-range-label"
+                                className="type-body font-medium text-foreground"
+                            >
+                                {t("research.builder.range")}
+                            </p>
+                            <ResearchRangeSelector
+                                aria-labelledby="chart-builder-range-label"
+                                options={RANGES}
+                                value={range}
+                                onChange={(option) =>
+                                    patch({ range: option.range })
+                                }
+                            />
+                        </div>
                         <p
-                            id="chart-builder-range-label"
-                            className="text-xs font-medium"
+                            role="status"
+                            className="self-center type-footnote text-label-secondary sm:ml-auto"
                         >
-                            {t("research.builder.range")}
+                            {t(
+                                storageFailed
+                                    ? "research.builder.storageFailed"
+                                    : persistedLibrary === library
+                                      ? "research.builder.savedLocally"
+                                      : "research.builder.savingLocally",
+                            )}
                         </p>
-                        <ResearchRangeSelector
-                            aria-labelledby="chart-builder-range-label"
-                            options={RANGES}
-                            value={range}
-                            onChange={(option) =>
-                                patch({ range: option.range })
-                            }
-                        />
                     </div>
-                    <details className="w-full rounded-lg border border-border/60">
-                        <summary className="cursor-pointer rounded-lg px-3 py-2 text-sm font-medium focus-ring">
+                    <details className="rounded-card corner-continuous border border-border/60">
+                        <summary className="cursor-pointer rounded-card px-4 py-3 type-body font-medium text-foreground marker:text-label-tertiary focus-ring">
                             {t("research.builder.options")}
-                            {(logLeft || rebaseAll) && (
-                                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                    {[
-                                        logLeft &&
-                                            t("research.builder.logScale"),
-                                        rebaseAll &&
-                                            t("research.builder.rebase"),
-                                    ]
-                                        .filter(Boolean)
-                                        .join(" · ")}
+                            {activeOptions.length > 0 && (
+                                <span className="ml-2 type-footnote font-normal text-label-secondary">
+                                    {activeOptions.join(" · ")}
                                 </span>
                             )}
                         </summary>
-                        <div className="flex flex-wrap items-center gap-4 border-t border-border/50 p-3">
-                            <div className="flex items-center gap-2">
-                                <Switch
-                                    id="log"
-                                    checked={logLeft}
-                                    onCheckedChange={(v) =>
-                                        patch({ logLeft: v })
+                        <div className="space-y-4 border-t border-border/50 p-4">
+                            <List>
+                                <ListRow
+                                    title={
+                                        <Label htmlFor="log">
+                                            {t("research.builder.logScale")}
+                                        </Label>
+                                    }
+                                    trailing={
+                                        <Switch
+                                            id="log"
+                                            checked={logLeft}
+                                            onCheckedChange={(v) =>
+                                                patch({ logLeft: v })
+                                            }
+                                        />
                                     }
                                 />
-                                <Label htmlFor="log" className="text-xs">
-                                    {t("research.builder.logScale")}
-                                </Label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Switch
-                                    id="rebase"
-                                    checked={rebaseAll}
-                                    onCheckedChange={(v) =>
-                                        patch({ rebase: v })
+                                <ListRow
+                                    title={
+                                        <Label htmlFor="rebase">
+                                            {t("research.builder.rebase")}
+                                        </Label>
+                                    }
+                                    trailing={
+                                        <Switch
+                                            id="rebase"
+                                            checked={rebaseAll}
+                                            onCheckedChange={(v) =>
+                                                patch({ rebase: v })
+                                            }
+                                        />
                                     }
                                 />
-                                <Label htmlFor="rebase" className="text-xs">
-                                    {t("research.builder.rebase")}
-                                </Label>
-                            </div>
-                            <div className="ml-auto flex flex-wrap gap-1.5">
-                                <span className="self-center text-xs text-muted-foreground">
-                                    {t("research.builder.presets")}:
-                                </span>
-                                {[
-                                    "priceVolume",
-                                    "sma",
-                                    "bollinger",
-                                    "rsi",
-                                    "macd",
-                                    "rebased",
-                                ].map((p) => (
-                                    <Button
-                                        key={p}
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 text-xs"
-                                        disabled={priceSeries.length === 0}
-                                        onClick={() => applyPreset(p)}
-                                    >
-                                        {t(`research.builder.preset.${p}`)}
-                                    </Button>
-                                ))}
+                            </List>
+                            <div className="space-y-2">
+                                <p className="type-footnote text-label-secondary">
+                                    {t("research.builder.presets")}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        "priceVolume",
+                                        "sma",
+                                        "bollinger",
+                                        "rsi",
+                                        "macd",
+                                        "rebased",
+                                    ].map((p) => (
+                                        <Button
+                                            key={p}
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={priceSeries.length === 0}
+                                            onClick={() => applyPreset(p)}
+                                        >
+                                            {t(`research.builder.preset.${p}`)}
+                                        </Button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </details>
@@ -1220,21 +1346,25 @@ export default function ChartBuilderPage() {
 
             {/* Chart */}
             {series.length === 0 ? (
-                <EmptyState
-                    icon={LineChartIcon}
-                    title={t("research.builder.emptyTitle")}
-                    description={t("research.builder.emptyHint")}
-                />
+                <Card>
+                    <CardContent variant="state">
+                        <EmptyState
+                            icon={LineChartIcon}
+                            title={t("research.builder.emptyTitle")}
+                            description={t("research.builder.emptyHint")}
+                        />
+                    </CardContent>
+                </Card>
             ) : (
                 <Card>
                     <CardContent variant="headerless">
-                        <p className="mb-4 text-sm text-muted-foreground">
+                        <p className="mb-4 type-callout text-label-secondary">
                             {t("research.builder.chartHelp")}
                         </p>
                         {isLoading ? (
                             <Skeleton
                                 {...loadingSurfaceProps}
-                                className="h-[400px] w-full rounded-lg"
+                                className="h-[400px] w-full"
                             />
                         ) : rows.length > 0 ? (
                             <ComposedChart<Row>
@@ -1271,7 +1401,7 @@ export default function ChartBuilderPage() {
                                 }
                             />
                         ) : (
-                            <div className="flex h-[400px] items-center justify-center text-sm text-muted-foreground">
+                            <div className="flex h-[400px] items-center justify-center type-callout text-label-secondary">
                                 {t("market.noChartData")}
                             </div>
                         )}
@@ -1283,7 +1413,7 @@ export default function ChartBuilderPage() {
             {series.length > 0 && (
                 <Card>
                     <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-2">
                             <CardTitle variant="sm">
                                 {t("research.builder.oscillator")}
                             </CardTitle>
@@ -1314,7 +1444,7 @@ export default function ChartBuilderPage() {
                     {oscillator !== "none" && (
                         <CardContent>
                             {isLoading ? (
-                                <Skeleton className="h-[160px] w-full rounded-lg" />
+                                <Skeleton className="h-[160px] w-full" />
                             ) : oscRows.length > 0 ? (
                                 <LineChart<Row>
                                     data={oscRows}
@@ -1340,7 +1470,7 @@ export default function ChartBuilderPage() {
                                     tooltipValueFormat={(v) => v.toFixed(2)}
                                 />
                             ) : (
-                                <div className="flex h-[160px] items-center justify-center text-sm text-muted-foreground">
+                                <div className="flex h-[160px] items-center justify-center type-callout text-label-secondary">
                                     {t("market.noChartData")}
                                 </div>
                             )}
@@ -1387,7 +1517,7 @@ export default function ChartBuilderPage() {
                             disabled={!layoutName.trim()}
                             onClick={saveAsLayout}
                         >
-                            {t("common.save")}
+                            {t("research.builder.saveLayout")}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1402,22 +1532,14 @@ export default function ChartBuilderPage() {
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>
-                            {confirmAction === "delete"
-                                ? t("research.builder.deleteTitle")
-                                : confirmAction === "share"
-                                  ? t("research.builder.shareReplaceTitle")
-                                  : t("research.builder.newTitle")}
+                            {confirmAction === "share"
+                                ? t("research.builder.shareReplaceTitle")
+                                : t("research.builder.newTitle")}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            {confirmAction === "delete"
-                                ? t("research.builder.deleteDescription", {
-                                      name: activeLayout?.name ?? "",
-                                  })
-                                : confirmAction === "share"
-                                  ? t(
-                                        "research.builder.shareReplaceDescription",
-                                    )
-                                  : t("research.builder.newDescription")}
+                            {confirmAction === "share"
+                                ? t("research.builder.shareReplaceDescription")
+                                : t("research.builder.newDescription")}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1426,18 +1548,14 @@ export default function ChartBuilderPage() {
                         </AlertDialogCancel>
                         <AlertDialogAction
                             onClick={
-                                confirmAction === "delete"
-                                    ? deleteLayout
-                                    : confirmAction === "share"
-                                      ? applySharedChart
-                                      : startNewLayout
+                                confirmAction === "share"
+                                    ? applySharedChart
+                                    : startNewLayout
                             }
                         >
-                            {confirmAction === "delete"
-                                ? t("common.delete")
-                                : confirmAction === "share"
-                                  ? t("research.builder.openShared")
-                                  : t("research.builder.new")}
+                            {confirmAction === "share"
+                                ? t("research.builder.openShared")
+                                : t("research.builder.newChart")}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

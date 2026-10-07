@@ -1,5 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Download, Plus, RotateCcw, Save, Trash2 } from "lucide-react";
+import {
+    AlertTriangle,
+    Check,
+    Download,
+    MoreHorizontal,
+    Plus,
+    RotateCcw,
+    Save,
+    Trash2,
+} from "lucide-react";
 import { apiClient, ApiClientError } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PAGE_ICONS } from "@/lib/pageIcons";
@@ -19,12 +28,60 @@ import {
 } from "@/hooks/useDossiers";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
+import { PageError } from "@/components/shared/PageError";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { List, ListRow } from "@/components/ui/list";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+const WORKSPACES = [
+    "budgeting",
+    "portfolio",
+    "research",
+    "cross-workspace",
+] as const satisfies ReadonlyArray<AnalysisWorkspace>;
+const ORIGINS = ["user", "ai-draft"] as const satisfies ReadonlyArray<EvidenceOrigin>;
+const STANCES = [
+    "support",
+    "oppose",
+    "context",
+] as const satisfies ReadonlyArray<EvidenceStance>;
+/** Radix Select items need a non-empty value; this one stands for "no document". */
+const NO_DOCUMENT = "__none__";
 
 const emptyContent = (): DossierContent => ({
     title: "",
@@ -75,7 +132,7 @@ function LinesField({
 }) {
     const inputId = useId();
     return (
-        <div className="space-y-1">
+        <div className="space-y-2">
             <Label htmlFor={inputId}>{label}</Label>
             <Textarea
                 id={inputId}
@@ -96,6 +153,7 @@ function LinesField({
 export default function ResearchDossiersPage() {
     const { t } = useLanguage();
     const { confirm, ConfirmDialog } = useConfirmDialog();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [listOffset, setListOffset] = useState(0);
     const [draft, setDraft] = useState<DossierContent | null>(null);
@@ -214,31 +272,57 @@ export default function ResearchDossiersPage() {
             }
             setNotice(t("dossiers.saved"));
         });
-    const remove = () =>
-        run(async () => {
-            if (!selectedId || !window.confirm(t("dossiers.deleteConfirm")))
-                return;
+    // Deleting a dossier removes its whole version history and has no restore
+    // endpoint, so it keeps its confirmation (ADR-179 Undo rule).
+    const remove = async () => {
+        if (!selectedId) return;
+        const ok = await confirm({
+            title: t("dossiers.deleteTitle"),
+            description: t("dossiers.deleteConfirm"),
+            confirmLabel: t("dossiers.delete"),
+            variant: "destructive",
+        });
+        if (!ok) return;
+        await run(async () => {
             await actions.remove.mutateAsync(selectedId);
             setSelectedId(null);
             setDraft(null);
             setNotice(t("dossiers.deleted"));
         });
-    const restore = (version: number) =>
-        run(async () => {
-            if (
-                !selectedId ||
-                !detail.data ||
-                !window.confirm(t("dossiers.restoreConfirm"))
-            )
-                return;
+    };
+    const restore = async (version: number) => {
+        if (!selectedId || !detail.data) return;
+        const ok = await confirm({
+            title: t("dossiers.restoreTitle"),
+            description: t("dossiers.restoreConfirm"),
+            confirmLabel: t("dossiers.restore"),
+        });
+        if (!ok) return;
+        const expectedVersion = detail.data.version;
+        await run(async () => {
             await actions.restore.mutateAsync({
                 id: selectedId,
                 version,
-                expectedVersion: detail.data.version,
+                expectedVersion,
             });
             loadedRevision.current = null;
             setNotice(t("dossiers.restored"));
         });
+    };
+    const reloadLatest = async () => {
+        const ok = await confirm({
+            title: t("dossiers.reloadTitle"),
+            description: t("dossiers.reloadConfirm"),
+            confirmLabel: t("dossiers.reloadLatest"),
+            variant: "destructive",
+        });
+        if (!ok) return;
+        loadedRevision.current = null;
+        setDraft(null);
+        setError("");
+        setConflict(false);
+        void detail.refetch();
+    };
     const exportJson = (id?: string) =>
         run(async () => {
             const data = id
@@ -272,6 +356,12 @@ export default function ResearchDossiersPage() {
         actions.remove.isPending ||
         actions.restore.isPending;
 
+    const items = list.data?.items ?? [];
+    const readyDocuments =
+        documents.data?.filter(
+            (document) => document.extractionStatus === "ready",
+        ) ?? [];
+
     return (
         <PageShell>
             <ConfirmDialog />
@@ -281,91 +371,124 @@ export default function ResearchDossiersPage() {
                 icon={PAGE_ICONS["/research/dossiers"]}
                 actions={
                     <>
-                        <Button
-                            variant="outline"
-                            onClick={() => void exportJson()}
-                        >
-                            <Download className="mr-2 size-4" />
-                            {t("dossiers.exportAll")}
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t("dossiers.menu")}
+                                >
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onSelect={() => void exportJson()}
+                                >
+                                    <Download className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("dossiers.exportAll")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                         <Button onClick={() => void create()}>
-                            <Plus className="mr-2 size-4" />
+                            <Plus />
                             {t("dossiers.new")}
                         </Button>
                     </>
                 }
             />
+
             {error && (
-                <div
-                    role="alert"
-                    className="rounded-md border border-destructive p-3 text-destructive"
-                >
-                    <p>{error}</p>
-                    {conflict && selectedId && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            className="mt-2"
-                            onClick={() => {
-                                if (
-                                    !window.confirm(t("dossiers.reloadConfirm"))
-                                )
-                                    return;
-                                loadedRevision.current = null;
-                                setDraft(null);
-                                setError("");
-                                setConflict(false);
-                                void detail.refetch();
-                            }}
-                        >
-                            {t("dossiers.reloadLatest")}
-                        </Button>
-                    )}
-                </div>
-            )}
-            {notice && (
-                <p role="status" className="rounded-md border p-3">
-                    {notice}
-                </p>
-            )}
-            <div className="grid gap-6 lg:grid-cols-[minmax(14rem,19rem)_1fr]">
-                <aside aria-label={t("dossiers.list")} className="space-y-2">
-                    <h2 className="font-semibold">{t("dossiers.list")}</h2>
-                    {list.isLoading && <p>{t("dossiers.loading")}</p>}
-                    {list.isError && (
-                        <p role="alert">{apiErrorToMessage(list.error, t)}</p>
-                    )}
-                    {!list.isLoading && !list.data?.items.length && (
-                        <p className="text-sm text-muted-foreground">
-                            {t("dossiers.empty")}
-                        </p>
-                    )}
-                    {list.data?.items.map((item) => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            aria-current={
-                                selectedId === item.id ? "page" : undefined
-                            }
-                            onClick={() => void choose(item.id)}
-                            className="w-full rounded-lg border p-3 text-left hover:bg-accent aria-[current=page]:border-primary"
-                        >
-                            <span className="block font-medium">
-                                {item.title}
-                            </span>
-                            <span className="block text-xs text-muted-foreground">
-                                {t(`dossiers.workspace.${item.workspace}`)} ·{" "}
-                                {t("dossiers.version", {
-                                    version: item.version,
-                                })}
-                            </span>
-                        </button>
-                    ))}
-                    {list.data && list.data.total > 500 && (
-                        <div className="flex items-center gap-2 text-sm">
+                <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    <AlertDescription>
+                        <p>{error}</p>
+                        {conflict && selectedId && (
                             <Button
                                 type="button"
                                 variant="outline"
+                                size="sm"
+                                className="mt-3"
+                                onClick={() => void reloadLatest()}
+                            >
+                                {t("dossiers.reloadLatest")}
+                            </Button>
+                        )}
+                    </AlertDescription>
+                </Alert>
+            )}
+            {notice && (
+                <Alert variant="success" role="status">
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                    <AlertDescription>{notice}</AlertDescription>
+                </Alert>
+            )}
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(14rem,19rem)_1fr]">
+                <aside aria-label={t("dossiers.list")} className="space-y-3">
+                    <h2 className="type-headline text-label-secondary">
+                        {t("dossiers.list")}
+                    </h2>
+                    {list.isLoading && (
+                        <div {...loadingSurfaceProps} className="space-y-2">
+                            {[1, 2, 3].map((i) => (
+                                <Skeleton key={i} className="h-14 w-full" />
+                            ))}
+                        </div>
+                    )}
+                    {list.isError && (
+                        <PageError
+                            message={apiErrorToMessage(list.error, t)}
+                            onRetry={() => void list.refetch()}
+                        />
+                    )}
+                    {!list.isLoading && !list.isError && items.length === 0 && (
+                        <Card>
+                            <CardContent variant="state">
+                                <EmptyState
+                                    size="compact"
+                                    headingLevel={3}
+                                    icon={PAGE_ICONS["/research/dossiers"]}
+                                    title={t("dossiers.empty")}
+                                />
+                            </CardContent>
+                        </Card>
+                    )}
+                    {items.length > 0 && (
+                        <List>
+                            {items.map((item) => {
+                                const selected = selectedId === item.id;
+                                return (
+                                    <ListRow
+                                        key={item.id}
+                                        aria-current={
+                                            selected ? "page" : undefined
+                                        }
+                                        className={cn(
+                                            selected && "bg-primary/10",
+                                        )}
+                                        onActivate={() => void choose(item.id)}
+                                        title={
+                                            <span
+                                                className={cn(
+                                                    selected && "font-medium",
+                                                )}
+                                            >
+                                                {item.title}
+                                            </span>
+                                        }
+                                        subtitle={`${t(`dossiers.workspace.${item.workspace}`)} · ${t("dossiers.version", { version: item.version })}`}
+                                    />
+                                );
+                            })}
+                        </List>
+                    )}
+                    {list.data && list.data.total > 500 && (
+                        <div className="flex flex-wrap items-center gap-2 type-footnote text-label-secondary">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
                                 disabled={listOffset === 0}
                                 onClick={() =>
                                     setListOffset(Math.max(0, listOffset - 500))
@@ -373,7 +496,7 @@ export default function ResearchDossiersPage() {
                             >
                                 {t("dossiers.previous")}
                             </Button>
-                            <span>
+                            <span className="tabular-nums">
                                 {t("dossiers.pageRange", {
                                     first: listOffset + 1,
                                     last: Math.min(
@@ -386,6 +509,7 @@ export default function ResearchDossiersPage() {
                             <Button
                                 type="button"
                                 variant="outline"
+                                size="sm"
                                 disabled={listOffset + 500 >= list.data.total}
                                 onClick={() => setListOffset(listOffset + 500)}
                             >
@@ -394,17 +518,40 @@ export default function ResearchDossiersPage() {
                         </div>
                     )}
                 </aside>
-                <main className="space-y-6">
+
+                <div className="min-w-0 space-y-6">
                     {selectedId && detail.isLoading && (
-                        <p>{t("dossiers.loading")}</p>
+                        <Card>
+                            <CardContent
+                                {...loadingSurfaceProps}
+                                variant="headerless"
+                                className="space-y-3"
+                            >
+                                <Skeleton className="h-8 w-64" />
+                                <Skeleton className="h-9 w-full" />
+                                <Skeleton className="h-20 w-full" />
+                            </CardContent>
+                        </Card>
                     )}
                     {selectedId && detail.isError && (
-                        <p role="alert">{apiErrorToMessage(detail.error, t)}</p>
+                        <Card>
+                            <CardContent variant="flush">
+                                <PageError
+                                    message={apiErrorToMessage(detail.error, t)}
+                                    onRetry={() => void detail.refetch()}
+                                />
+                            </CardContent>
+                        </Card>
                     )}
                     {!draft && !selectedId && (
-                        <p className="text-muted-foreground">
-                            {t("dossiers.select")}
-                        </p>
+                        <Card>
+                            <CardContent variant="state">
+                                <EmptyState
+                                    icon={PAGE_ICONS["/research/dossiers"]}
+                                    title={t("dossiers.select")}
+                                />
+                            </CardContent>
+                        </Card>
                     )}
                     {draft && (
                         <form
@@ -414,159 +561,226 @@ export default function ResearchDossiersPage() {
                                 void save();
                             }}
                         >
-                            <div className="flex flex-wrap gap-2">
-                                <Button type="submit" disabled={busy}>
-                                    <Save className="mr-2 size-4" />
-                                    {t("dossiers.save")}
-                                </Button>
-                                {selectedId && (
-                                    <>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={() =>
-                                                void exportJson(selectedId)
-                                            }
+                            <Card>
+                                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+                                    <div className="min-w-0 space-y-1">
+                                        <CardTitle
+                                            variant="sm"
+                                            className="truncate"
                                         >
-                                            <Download className="mr-2 size-4" />
-                                            {t("dossiers.exportOne")}
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            disabled={busy}
-                                            onClick={() => void remove()}
-                                        >
-                                            <Trash2 className="mr-2 size-4" />
-                                            {t("dossiers.delete")}
-                                        </Button>
-                                    </>
-                                )}
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-1">
-                                    <Label htmlFor="dossier-title">
-                                        {t("dossiers.field.title")}
-                                    </Label>
-                                    <Input
-                                        id="dossier-title"
-                                        required
-                                        value={draft.title}
-                                        onChange={(event) =>
-                                            edit({ title: event.target.value })
-                                        }
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="dossier-workspace">
-                                        {t("dossiers.field.workspace")}
-                                    </Label>
-                                    <select
-                                        id="dossier-workspace"
-                                        className="h-9 w-full rounded-control border bg-background px-3"
-                                        value={draft.workspace}
-                                        onChange={(event) =>
-                                            edit({
-                                                workspace: event.target
-                                                    .value as AnalysisWorkspace,
-                                            })
-                                        }
-                                    >
-                                        {(
-                                            [
-                                                "budgeting",
-                                                "portfolio",
-                                                "research",
-                                                "cross-workspace",
-                                            ] as const
-                                        ).map((value) => (
-                                            <option key={value} value={value}>
+                                            {draft.title.trim() ||
+                                                t("dossiers.new")}
+                                        </CardTitle>
+                                        {selectedId && detail.data && (
+                                            <CardDescription>
                                                 {t(
-                                                    `dossiers.workspace.${value}`,
-                                                )}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="dossier-question">
-                                    {t("dossiers.field.question")}
-                                </Label>
-                                <Textarea
-                                    id="dossier-question"
-                                    required
-                                    value={draft.question}
-                                    onChange={(event) =>
-                                        edit({ question: event.target.value })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="dossier-thesis">
-                                    {t("dossiers.field.thesis")}
-                                </Label>
-                                <Textarea
-                                    id="dossier-thesis"
-                                    value={draft.userThesis}
-                                    onChange={(event) =>
-                                        edit({ userThesis: event.target.value })
-                                    }
-                                />
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <LinesField
-                                    label={t("dossiers.field.assumptions")}
-                                    value={draft.assumptions}
-                                    onChange={(assumptions) =>
-                                        edit({ assumptions })
-                                    }
-                                />
-                                <LinesField
-                                    label={t("dossiers.field.openQuestions")}
-                                    value={draft.openQuestions}
-                                    onChange={(openQuestions) =>
-                                        edit({ openQuestions })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="dossier-conclusion">
-                                    {t("dossiers.field.conclusion")}
-                                </Label>
-                                <Textarea
-                                    id="dossier-conclusion"
-                                    value={draft.conclusion}
-                                    onChange={(event) =>
-                                        edit({ conclusion: event.target.value })
-                                    }
-                                    rows={5}
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <Label htmlFor="dossier-review">
-                                    {t("dossiers.field.reviewDate")}
-                                </Label>
-                                <Input
-                                    id="dossier-review"
-                                    type="date"
-                                    value={draft.reviewDate ?? ""}
-                                    onChange={(event) =>
-                                        edit({
-                                            reviewDate:
-                                                event.target.value || null,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <section className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-lg font-semibold">
-                                        {t("dossiers.evidence")}
-                                    </h2>
+                                                    `dossiers.workspace.${detail.data.workspace}`,
+                                                )}{" "}
+                                                ·{" "}
+                                                {t("dossiers.version", {
+                                                    version:
+                                                        detail.data.version,
+                                                })}
+                                            </CardDescription>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {selectedId && (
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="icon"
+                                                        aria-label={t(
+                                                            "dossiers.editorMenu",
+                                                        )}
+                                                    >
+                                                        <MoreHorizontal />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        onSelect={() =>
+                                                            void exportJson(
+                                                                selectedId,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Download className="mr-2 h-4 w-4 text-label-secondary" />
+                                                        {t("dossiers.exportOne")}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        disabled={busy}
+                                                        className="text-destructive focus:text-destructive"
+                                                        onSelect={() =>
+                                                            void remove()
+                                                        }
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        {t("dossiers.delete")}
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        )}
+                                        <Button type="submit" disabled={busy}>
+                                            <Save />
+                                            {t("dossiers.save")}
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-5">
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="dossier-title">
+                                                {t("dossiers.field.title")}
+                                            </Label>
+                                            <Input
+                                                id="dossier-title"
+                                                required
+                                                value={draft.title}
+                                                onChange={(event) =>
+                                                    edit({
+                                                        title: event.target
+                                                            .value,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p
+                                                id="dossier-workspace-label"
+                                                className="type-body font-medium text-foreground"
+                                            >
+                                                {t("dossiers.field.workspace")}
+                                            </p>
+                                            <SegmentedControl
+                                                size="sm"
+                                                className="w-full"
+                                                aria-labelledby="dossier-workspace-label"
+                                                value={draft.workspace}
+                                                onValueChange={(value) =>
+                                                    edit({
+                                                        workspace:
+                                                            value as AnalysisWorkspace,
+                                                    })
+                                                }
+                                            >
+                                                {WORKSPACES.map((value) => (
+                                                    <SegmentedControlItem
+                                                        key={value}
+                                                        value={value}
+                                                    >
+                                                        {t(
+                                                            `dossiers.workspace.${value}`,
+                                                        )}
+                                                    </SegmentedControlItem>
+                                                ))}
+                                            </SegmentedControl>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="dossier-question">
+                                            {t("dossiers.field.question")}
+                                        </Label>
+                                        <Textarea
+                                            id="dossier-question"
+                                            required
+                                            value={draft.question}
+                                            onChange={(event) =>
+                                                edit({
+                                                    question:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="dossier-thesis">
+                                            {t("dossiers.field.thesis")}
+                                        </Label>
+                                        <Textarea
+                                            id="dossier-thesis"
+                                            value={draft.userThesis}
+                                            onChange={(event) =>
+                                                edit({
+                                                    userThesis:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <LinesField
+                                            label={t(
+                                                "dossiers.field.assumptions",
+                                            )}
+                                            value={draft.assumptions}
+                                            onChange={(assumptions) =>
+                                                edit({ assumptions })
+                                            }
+                                        />
+                                        <LinesField
+                                            label={t(
+                                                "dossiers.field.openQuestions",
+                                            )}
+                                            value={draft.openQuestions}
+                                            onChange={(openQuestions) =>
+                                                edit({ openQuestions })
+                                            }
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="dossier-conclusion">
+                                            {t("dossiers.field.conclusion")}
+                                        </Label>
+                                        <Textarea
+                                            id="dossier-conclusion"
+                                            value={draft.conclusion}
+                                            onChange={(event) =>
+                                                edit({
+                                                    conclusion:
+                                                        event.target.value,
+                                                })
+                                            }
+                                            rows={5}
+                                        />
+                                    </div>
+                                    <div className="space-y-2 md:max-w-xs">
+                                        <Label htmlFor="dossier-review">
+                                            {t("dossiers.field.reviewDate")}
+                                        </Label>
+                                        <Input
+                                            id="dossier-review"
+                                            type="date"
+                                            value={draft.reviewDate ?? ""}
+                                            onChange={(event) =>
+                                                edit({
+                                                    reviewDate:
+                                                        event.target.value ||
+                                                        null,
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+                                    <div className="min-w-0 space-y-1">
+                                        <CardTitle variant="sm">
+                                            {t("dossiers.evidence")}
+                                        </CardTitle>
+                                        <CardDescription>
+                                            {t("dossiers.evidenceHint")}
+                                        </CardDescription>
+                                    </div>
                                     <Button
                                         type="button"
                                         variant="outline"
+                                        size="sm"
                                         disabled={draft.evidence.length >= 30}
                                         onClick={() =>
                                             edit({
@@ -577,31 +791,37 @@ export default function ResearchDossiersPage() {
                                             })
                                         }
                                     >
+                                        <Plus />
                                         {t("dossiers.addEvidence")}
                                     </Button>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                    {t("dossiers.evidenceHint")}
-                                </p>
-                                {draft.evidence.map((item, index) => (
-                                    <fieldset
-                                        key={item.id}
-                                        className="space-y-3 rounded-lg border p-4"
-                                    >
-                                        <legend className="px-1 font-medium">
-                                            {t("dossiers.evidenceNumber", {
-                                                number: index + 1,
-                                            })}{" "}
-                                            ·{" "}
-                                            {t(
-                                                `dossiers.origin.${item.origin}`,
-                                            )}
-                                        </legend>
-                                        <div className="flex justify-end">
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                onClick={() =>
+                                </CardHeader>
+                                {draft.evidence.length > 0 && (
+                                    <CardContent className="divide-y divide-border/50">
+                                        {draft.evidence.map((item, index) => (
+                                            <EvidenceEditor
+                                                key={item.id}
+                                                item={item}
+                                                index={index}
+                                                documents={readyDocuments}
+                                                documentsError={
+                                                    documents.isError
+                                                }
+                                                documentMissing={
+                                                    !!item.source.documentId &&
+                                                    !documents.data?.some(
+                                                        (document) =>
+                                                            document.id ===
+                                                            item.source
+                                                                .documentId,
+                                                    )
+                                                }
+                                                onChange={(patch) =>
+                                                    updateEvidence(
+                                                        item.id,
+                                                        patch,
+                                                    )
+                                                }
+                                                onRemove={() =>
                                                     edit({
                                                         evidence:
                                                             draft.evidence.filter(
@@ -611,466 +831,424 @@ export default function ResearchDossiersPage() {
                                                             ),
                                                     })
                                                 }
-                                            >
-                                                {t("dossiers.removeEvidence")}
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label
-                                                htmlFor={`origin-${item.id}`}
-                                            >
-                                                {t("dossiers.field.origin")}
-                                            </Label>
-                                            <select
-                                                id={`origin-${item.id}`}
-                                                className="h-9 w-full rounded-control border bg-background px-3"
-                                                value={item.origin}
-                                                onChange={(event) =>
-                                                    updateEvidence(item.id, {
-                                                        origin: event.target
-                                                            .value as EvidenceOrigin,
-                                                    })
-                                                }
-                                            >
-                                                <option value="user">
-                                                    {t("dossiers.origin.user")}
-                                                </option>
-                                                <option value="ai-draft">
-                                                    {t(
-                                                        "dossiers.origin.ai-draft",
-                                                    )}
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label htmlFor={`claim-${item.id}`}>
-                                                {t("dossiers.field.claim")}
-                                            </Label>
-                                            <Textarea
-                                                id={`claim-${item.id}`}
-                                                required
-                                                value={item.claim}
-                                                onChange={(event) =>
-                                                    updateEvidence(item.id, {
-                                                        claim: event.target
-                                                            .value,
-                                                    })
-                                                }
                                             />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label
-                                                htmlFor={`stance-${item.id}`}
+                                        ))}
+                                    </CardContent>
+                                )}
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle variant="sm">
+                                        {t("dossiers.links")}
+                                    </CardTitle>
+                                    <CardDescription>
+                                        {t("dossiers.linksHint")}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {detail.data?.linkDetails
+                                        ?.filter(
+                                            (entry) =>
+                                                entry.status === "deleted",
+                                        )
+                                        .map((entry) => (
+                                            <Alert
+                                                key={`${entry.kind}-${entry.historicalId}`}
+                                                variant="warning"
                                             >
-                                                {t("dossiers.field.stance")}
-                                            </Label>
-                                            <select
-                                                id={`stance-${item.id}`}
-                                                className="h-9 w-full rounded-control border bg-background px-3"
-                                                value={item.stance}
-                                                onChange={(event) =>
-                                                    updateEvidence(item.id, {
-                                                        stance: event.target
-                                                            .value as EvidenceStance,
-                                                    })
-                                                }
-                                            >
-                                                {(
-                                                    [
-                                                        "support",
-                                                        "oppose",
-                                                        "context",
-                                                    ] as const
-                                                ).map((stance) => (
-                                                    <option
-                                                        key={stance}
-                                                        value={stance}
-                                                    >
-                                                        {t(
-                                                            `dossiers.stance.${stance}`,
-                                                        )}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label
-                                                htmlFor={`source-document-${item.id}`}
-                                            >
-                                                {t("dossiers.field.document")}
-                                            </Label>
-                                            <select
-                                                id={`source-document-${item.id}`}
-                                                className="h-9 w-full rounded-control border bg-background px-3"
-                                                value={
-                                                    item.source.documentId ?? ""
-                                                }
-                                                onChange={(event) => {
-                                                    const document =
-                                                        documents.data?.find(
-                                                            (candidate) =>
-                                                                candidate.id ===
-                                                                event.target
-                                                                    .value,
-                                                        );
-                                                    const {
-                                                        documentId: _documentId,
-                                                        documentVersion:
-                                                            _documentVersion,
-                                                        passageOrdinal:
-                                                            _passageOrdinal,
-                                                        contentSha256:
-                                                            _contentSha256,
-                                                        ...rest
-                                                    } = item.source;
-                                                    updateEvidence(item.id, {
-                                                        source: document
-                                                            ? {
-                                                                  ...rest,
-                                                                  documentId:
-                                                                      document.id,
-                                                                  documentVersion:
-                                                                      document.version,
-                                                                  title:
-                                                                      rest.title ||
-                                                                      document.title,
-                                                              }
-                                                            : rest,
-                                                    });
-                                                }}
-                                            >
-                                                <option value="">
-                                                    {t("dossiers.noDocument")}
-                                                </option>
-                                                {documents.data
-                                                    ?.filter(
-                                                        (document) =>
-                                                            document.extractionStatus ===
-                                                            "ready",
-                                                    )
-                                                    .map((document) => (
-                                                        <option
-                                                            key={document.id}
-                                                            value={document.id}
-                                                        >
-                                                            {document.title}
-                                                        </option>
-                                                    ))}
-                                            </select>
-                                            {documents.isError && (
-                                                <p role="alert">
-                                                    {t(
-                                                        "dossiers.documentsError",
-                                                    )}
-                                                </p>
+                                                <AlertTriangle
+                                                    className="h-4 w-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <AlertDescription>
+                                                    {t("dossiers.deletedLink", {
+                                                        label: entry.labelSnapshot,
+                                                        id: entry.historicalId,
+                                                    })}
+                                                </AlertDescription>
+                                            </Alert>
+                                        ))}
+                                    <div className="grid items-start gap-3 lg:grid-cols-3">
+                                        <DossierLinkPicker
+                                            label={t("dossiers.linkCategories")}
+                                            items={(
+                                                categories.data?.items ?? []
+                                            ).map((item) => ({
+                                                id: item.id,
+                                                label: item.path.join(" / "),
+                                            }))}
+                                            selected={draft.links.categoryIds}
+                                            error={categories.isError}
+                                            onToggle={(id) =>
+                                                toggleLink("categoryIds", id)
+                                            }
+                                        />
+                                        <DossierLinkPicker
+                                            label={t(
+                                                "dossiers.linkInvestments",
                                             )}
-                                            {item.source.documentId &&
-                                                !documents.data?.some(
-                                                    (document) =>
-                                                        document.id ===
-                                                        item.source.documentId,
-                                                ) && (
-                                                    <p className="text-sm text-warning">
-                                                        {t(
-                                                            "dossiers.documentUnavailable",
-                                                        )}
-                                                    </p>
-                                                )}
-                                        </div>
-                                        <div className="grid gap-3 md:grid-cols-2">
-                                            <div className="space-y-1">
-                                                <Label
-                                                    htmlFor={`source-title-${item.id}`}
-                                                >
-                                                    {t(
-                                                        "dossiers.field.sourceTitle",
-                                                    )}
-                                                </Label>
-                                                <Input
-                                                    id={`source-title-${item.id}`}
-                                                    required
-                                                    value={item.source.title}
-                                                    onChange={(event) =>
-                                                        updateEvidence(
-                                                            item.id,
-                                                            {
-                                                                source: {
-                                                                    ...item.source,
-                                                                    title: event
-                                                                        .target
-                                                                        .value,
-                                                                },
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label
-                                                    htmlFor={`source-ref-${item.id}`}
-                                                >
-                                                    {t(
-                                                        "dossiers.field.sourceReference",
-                                                    )}
-                                                </Label>
-                                                <Input
-                                                    id={`source-ref-${item.id}`}
-                                                    required
-                                                    value={
-                                                        item.source.reference
-                                                    }
-                                                    onChange={(event) =>
-                                                        updateEvidence(
-                                                            item.id,
-                                                            {
-                                                                source: {
-                                                                    ...item.source,
-                                                                    reference:
-                                                                        event
-                                                                            .target
-                                                                            .value,
-                                                                },
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label
-                                                    htmlFor={`source-date-${item.id}`}
-                                                >
-                                                    {t(
-                                                        "dossiers.field.sourceDate",
-                                                    )}
-                                                </Label>
-                                                <Input
-                                                    id={`source-date-${item.id}`}
-                                                    type="date"
-                                                    value={
-                                                        item.source
-                                                            .sourceDate ?? ""
-                                                    }
-                                                    onChange={(event) =>
-                                                        updateEvidence(
-                                                            item.id,
-                                                            {
-                                                                source: {
-                                                                    ...item.source,
-                                                                    sourceDate:
-                                                                        event
-                                                                            .target
-                                                                            .value ||
-                                                                        null,
-                                                                },
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label
-                                                    htmlFor={`source-accessed-${item.id}`}
-                                                >
-                                                    {t(
-                                                        "dossiers.field.accessedAt",
-                                                    )}
-                                                </Label>
-                                                <Input
-                                                    id={`source-accessed-${item.id}`}
-                                                    type="datetime-local"
-                                                    value={
-                                                        item.source.accessedAt?.slice(
-                                                            0,
-                                                            16,
-                                                        ) ?? ""
-                                                    }
-                                                    onChange={(event) =>
-                                                        updateEvidence(
-                                                            item.id,
-                                                            {
-                                                                source: {
-                                                                    ...item.source,
-                                                                    accessedAt:
-                                                                        event
-                                                                            .target
-                                                                            .value
-                                                                            ? new Date(
-                                                                                  event
-                                                                                      .target
-                                                                                      .value,
-                                                                              ).toISOString()
-                                                                            : null,
-                                                                },
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label htmlFor={`notes-${item.id}`}>
-                                                {t("dossiers.field.notes")}
-                                            </Label>
-                                            <Textarea
-                                                id={`notes-${item.id}`}
-                                                value={item.notes}
-                                                onChange={(event) =>
-                                                    updateEvidence(item.id, {
-                                                        notes: event.target
-                                                            .value,
-                                                    })
-                                                }
-                                            />
-                                        </div>
-                                        {(item.source.documentId ||
-                                            item.source.contentSha256) && (
-                                            <p className="break-all text-xs text-muted-foreground">
-                                                {t("dossiers.documentAnchor", {
-                                                    id:
-                                                        item.source
-                                                            .documentId ?? "—",
-                                                    version:
-                                                        item.source
-                                                            .documentVersion ??
-                                                        "—",
-                                                    passage:
-                                                        item.source
-                                                            .passageOrdinal ??
-                                                        "—",
-                                                    hash:
-                                                        item.source
-                                                            .contentSha256 ??
-                                                        "—",
-                                                })}
-                                            </p>
-                                        )}
-                                    </fieldset>
-                                ))}
-                            </section>
-                            <section className="space-y-3">
-                                <h2 className="text-lg font-semibold">
-                                    {t("dossiers.links")}
-                                </h2>
-                                <p className="text-sm text-muted-foreground">
-                                    {t("dossiers.linksHint")}
-                                </p>
-                                {detail.data?.linkDetails
-                                    ?.filter(
-                                        (entry) => entry.status === "deleted",
-                                    )
-                                    .map((entry) => (
-                                        <p
-                                            key={`${entry.kind}-${entry.historicalId}`}
-                                            className="rounded-md border border-warning/50 p-2 text-sm"
-                                        >
-                                            {t("dossiers.deletedLink", {
-                                                label: entry.labelSnapshot,
-                                                id: entry.historicalId,
-                                            })}
-                                        </p>
-                                    ))}
-                                <div className="grid items-start gap-3 lg:grid-cols-3">
-                                    <DossierLinkPicker
-                                        label={t("dossiers.linkCategories")}
-                                        items={(
-                                            categories.data?.items ?? []
-                                        ).map((item) => ({
-                                            id: item.id,
-                                            label: item.path.join(" / "),
-                                        }))}
-                                        selected={draft.links.categoryIds}
-                                        error={categories.isError}
-                                        onToggle={(id) =>
-                                            toggleLink("categoryIds", id)
-                                        }
-                                    />
-                                    <DossierLinkPicker
-                                        label={t("dossiers.linkInvestments")}
-                                        items={(
-                                            investments.data?.items ?? []
-                                        ).map((item) => ({
-                                            id: item.id,
-                                            label: item.name,
-                                        }))}
-                                        selected={draft.links.investmentIds}
-                                        error={investments.isError}
-                                        onToggle={(id) =>
-                                            toggleLink("investmentIds", id)
-                                        }
-                                    />
-                                    <DossierLinkPicker
-                                        label={t("dossiers.linkAnalyses")}
-                                        items={(analyses.data ?? []).map(
-                                            (item) => ({
+                                            items={(
+                                                investments.data?.items ?? []
+                                            ).map((item) => ({
                                                 id: item.id,
                                                 label: item.name,
-                                            }),
-                                        )}
-                                        selected={draft.links.savedAnalysisIds}
-                                        error={analyses.isError}
-                                        onToggle={(id) =>
-                                            toggleLink("savedAnalysisIds", id)
-                                        }
-                                    />
-                                </div>
-                            </section>
+                                            }))}
+                                            selected={
+                                                draft.links.investmentIds
+                                            }
+                                            error={investments.isError}
+                                            onToggle={(id) =>
+                                                toggleLink("investmentIds", id)
+                                            }
+                                        />
+                                        <DossierLinkPicker
+                                            label={t("dossiers.linkAnalyses")}
+                                            items={(analyses.data ?? []).map(
+                                                (item) => ({
+                                                    id: item.id,
+                                                    label: item.name,
+                                                }),
+                                            )}
+                                            selected={
+                                                draft.links.savedAnalysisIds
+                                            }
+                                            error={analyses.isError}
+                                            onToggle={(id) =>
+                                                toggleLink(
+                                                    "savedAnalysisIds",
+                                                    id,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
                             {selectedId && (
-                                <section className="space-y-2">
-                                    <h2 className="text-lg font-semibold">
-                                        {t("dossiers.history")}
-                                    </h2>
-                                    {history.isError && (
-                                        <p role="alert">
-                                            {t("dossiers.historyError")}
-                                        </p>
-                                    )}
-                                    {history.data?.map((entry) => (
-                                        <div
-                                            key={entry.version}
-                                            className="flex items-center justify-between rounded-lg border p-3"
-                                        >
-                                            <div className="min-w-0">
-                                                <p>
-                                                    {t("dossiers.version", {
-                                                        version: entry.version,
-                                                    })}{" "}
-                                                    ·{" "}
-                                                    {new Date(
-                                                        entry.createdAt,
-                                                    ).toLocaleString()}
-                                                </p>
-                                                <p className="truncate text-sm text-muted-foreground">
-                                                    {entry.snapshot
-                                                        .conclusion ||
-                                                        t(
-                                                            "dossiers.noConclusion",
-                                                        )}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                disabled={
-                                                    busy ||
-                                                    entry.version ===
-                                                        detail.data?.version
-                                                }
-                                                onClick={() =>
-                                                    void restore(entry.version)
-                                                }
-                                            >
-                                                <RotateCcw className="mr-2 size-4" />
-                                                {t("dossiers.restore")}
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </section>
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle variant="sm">
+                                            {t("dossiers.history")}
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-3">
+                                        {history.isError && (
+                                            <Alert variant="destructive">
+                                                <AlertTriangle
+                                                    className="h-4 w-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <AlertDescription>
+                                                    {t("dossiers.historyError")}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                        {history.data &&
+                                            history.data.length > 0 && (
+                                                <List>
+                                                    {history.data.map(
+                                                        (entry) => (
+                                                            <ListRow
+                                                                key={
+                                                                    entry.version
+                                                                }
+                                                                title={`${t("dossiers.version", { version: entry.version })} · ${new Date(entry.createdAt).toLocaleString()}`}
+                                                                subtitle={
+                                                                    entry
+                                                                        .snapshot
+                                                                        .conclusion ||
+                                                                    t(
+                                                                        "dossiers.noConclusion",
+                                                                    )
+                                                                }
+                                                                trailing={
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        disabled={
+                                                                            busy ||
+                                                                            entry.version ===
+                                                                                detail
+                                                                                    .data
+                                                                                    ?.version
+                                                                        }
+                                                                        onClick={() =>
+                                                                            void restore(
+                                                                                entry.version,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <RotateCcw />
+                                                                        {t(
+                                                                            "dossiers.restore",
+                                                                        )}
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        ),
+                                                    )}
+                                                </List>
+                                            )}
+                                    </CardContent>
+                                </Card>
                             )}
                         </form>
                     )}
-                </main>
+                </div>
             </div>
         </PageShell>
+    );
+}
+
+interface EvidenceEditorProps {
+    item: DossierEvidence;
+    index: number;
+    documents: Array<{ id: string; title: string; version: number }>;
+    documentsError: boolean;
+    documentMissing: boolean;
+    onChange: (patch: Partial<DossierEvidence>) => void;
+    onRemove: () => void;
+}
+
+function EvidenceEditor({
+    item,
+    index,
+    documents,
+    documentsError,
+    documentMissing,
+    onChange,
+    onRemove,
+}: EvidenceEditorProps) {
+    const { t } = useLanguage();
+    const headingId = `evidence-heading-${item.id}`;
+    const originLabelId = `origin-label-${item.id}`;
+    const stanceLabelId = `stance-label-${item.id}`;
+    const updateSource = (patch: Partial<DossierEvidence["source"]>) =>
+        onChange({ source: { ...item.source, ...patch } });
+
+    return (
+        <section
+            aria-labelledby={headingId}
+            className="space-y-4 py-5 first:pt-0 last:pb-0"
+        >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 id={headingId} className="type-headline text-foreground">
+                    {t("dossiers.evidenceNumber", { number: index + 1 })} ·{" "}
+                    {t(`dossiers.origin.${item.origin}`)}
+                </h3>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={onRemove}
+                >
+                    <Trash2 />
+                    {t("dossiers.removeEvidence")}
+                </Button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                    <p
+                        id={originLabelId}
+                        className="type-body font-medium text-foreground"
+                    >
+                        {t("dossiers.field.origin")}
+                    </p>
+                    <SegmentedControl
+                        size="sm"
+                        className="w-full"
+                        aria-labelledby={originLabelId}
+                        value={item.origin}
+                        onValueChange={(value) =>
+                            onChange({ origin: value as EvidenceOrigin })
+                        }
+                    >
+                        {ORIGINS.map((origin) => (
+                            <SegmentedControlItem key={origin} value={origin}>
+                                {t(`dossiers.origin.${origin}`)}
+                            </SegmentedControlItem>
+                        ))}
+                    </SegmentedControl>
+                </div>
+                <div className="space-y-2">
+                    <p
+                        id={stanceLabelId}
+                        className="type-body font-medium text-foreground"
+                    >
+                        {t("dossiers.field.stance")}
+                    </p>
+                    <SegmentedControl
+                        size="sm"
+                        className="w-full"
+                        aria-labelledby={stanceLabelId}
+                        value={item.stance}
+                        onValueChange={(value) =>
+                            onChange({ stance: value as EvidenceStance })
+                        }
+                    >
+                        {STANCES.map((stance) => (
+                            <SegmentedControlItem key={stance} value={stance}>
+                                {t(`dossiers.stance.${stance}`)}
+                            </SegmentedControlItem>
+                        ))}
+                    </SegmentedControl>
+                </div>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor={`claim-${item.id}`}>
+                    {t("dossiers.field.claim")}
+                </Label>
+                <Textarea
+                    id={`claim-${item.id}`}
+                    required
+                    value={item.claim}
+                    onChange={(event) =>
+                        onChange({ claim: event.target.value })
+                    }
+                />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor={`source-document-${item.id}`}>
+                    {t("dossiers.field.document")}
+                </Label>
+                <Select
+                    value={item.source.documentId ?? NO_DOCUMENT}
+                    onValueChange={(value) => {
+                        const document = documents.find(
+                            (candidate) => candidate.id === value,
+                        );
+                        const {
+                            documentId: _documentId,
+                            documentVersion: _documentVersion,
+                            passageOrdinal: _passageOrdinal,
+                            contentSha256: _contentSha256,
+                            ...rest
+                        } = item.source;
+                        onChange({
+                            source: document
+                                ? {
+                                      ...rest,
+                                      documentId: document.id,
+                                      documentVersion: document.version,
+                                      title: rest.title || document.title,
+                                  }
+                                : rest,
+                        });
+                    }}
+                >
+                    <SelectTrigger id={`source-document-${item.id}`}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={NO_DOCUMENT}>
+                            {t("dossiers.noDocument")}
+                        </SelectItem>
+                        {documents.map((document) => (
+                            <SelectItem key={document.id} value={document.id}>
+                                {document.title}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {documentsError && (
+                    <p role="alert" className="type-footnote text-destructive">
+                        {t("dossiers.documentsError")}
+                    </p>
+                )}
+                {documentMissing && (
+                    <p className="type-footnote text-warning">
+                        {t("dossiers.documentUnavailable")}
+                    </p>
+                )}
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                    <Label htmlFor={`source-title-${item.id}`}>
+                        {t("dossiers.field.sourceTitle")}
+                    </Label>
+                    <Input
+                        id={`source-title-${item.id}`}
+                        required
+                        value={item.source.title}
+                        onChange={(event) =>
+                            updateSource({ title: event.target.value })
+                        }
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor={`source-ref-${item.id}`}>
+                        {t("dossiers.field.sourceReference")}
+                    </Label>
+                    <Input
+                        id={`source-ref-${item.id}`}
+                        required
+                        value={item.source.reference}
+                        onChange={(event) =>
+                            updateSource({ reference: event.target.value })
+                        }
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor={`source-date-${item.id}`}>
+                        {t("dossiers.field.sourceDate")}
+                    </Label>
+                    <Input
+                        id={`source-date-${item.id}`}
+                        type="date"
+                        value={item.source.sourceDate ?? ""}
+                        onChange={(event) =>
+                            updateSource({
+                                sourceDate: event.target.value || null,
+                            })
+                        }
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor={`source-accessed-${item.id}`}>
+                        {t("dossiers.field.accessedAt")}
+                    </Label>
+                    <Input
+                        id={`source-accessed-${item.id}`}
+                        type="datetime-local"
+                        value={item.source.accessedAt?.slice(0, 16) ?? ""}
+                        onChange={(event) =>
+                            updateSource({
+                                accessedAt: event.target.value
+                                    ? new Date(
+                                          event.target.value,
+                                      ).toISOString()
+                                    : null,
+                            })
+                        }
+                    />
+                </div>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor={`notes-${item.id}`}>
+                    {t("dossiers.field.notes")}
+                </Label>
+                <Textarea
+                    id={`notes-${item.id}`}
+                    value={item.notes}
+                    onChange={(event) =>
+                        onChange({ notes: event.target.value })
+                    }
+                />
+            </div>
+            {(item.source.documentId || item.source.contentSha256) && (
+                <p className="break-all type-caption text-label-tertiary">
+                    {t("dossiers.documentAnchor", {
+                        id: item.source.documentId ?? "—",
+                        version: item.source.documentVersion ?? "—",
+                        passage: item.source.passageOrdinal ?? "—",
+                        hash: item.source.contentSha256 ?? "—",
+                    })}
+                </p>
+            )}
+        </section>
     );
 }
 
@@ -1088,6 +1266,7 @@ function DossierLinkPicker<T extends string | number>({
     onToggle: (id: T) => void;
 }) {
     const { t } = useLanguage();
+    const pickerId = useId();
     const [query, setQuery] = useState("");
     const visibleItems = items.filter((item) =>
         item.label
@@ -1095,22 +1274,22 @@ function DossierLinkPicker<T extends string | number>({
             .includes(query.trim().toLocaleLowerCase()),
     );
     return (
-        <div>
+        <div className="space-y-2">
             {error && (
-                <p role="alert" className="mb-2 text-sm text-destructive">
+                <p role="alert" className="type-footnote text-destructive">
                     {t("dossiers.linksError")}
                 </p>
             )}
-            <details className="rounded-lg border p-3">
-                <summary className="cursor-pointer rounded-sm text-sm font-medium focus-ring">
+            <details className="rounded-card corner-continuous border border-border/60">
+                <summary className="cursor-pointer rounded-card px-4 py-3 type-body font-medium text-foreground marker:text-label-tertiary focus-ring">
                     {label}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    <span className="ml-2 type-footnote font-normal text-label-secondary">
                         {t("dossiers.linksSelected", {
                             count: selected.length,
                         })}
                     </span>
                 </summary>
-                <div className="mt-3 space-y-2">
+                <div className="space-y-3 border-t border-border/50 p-3">
                     {items.length > 8 && (
                         <Input
                             type="search"
@@ -1124,23 +1303,34 @@ function DossierLinkPicker<T extends string | number>({
                             onChange={(event) => setQuery(event.target.value)}
                         />
                     )}
-                    <div className="max-h-56 space-y-1 overflow-auto">
-                        {visibleItems.map((item) => (
-                            <label
-                                key={item.id}
-                                className="flex min-h-8 cursor-pointer items-start gap-2 rounded px-1 py-1.5 text-sm hover:bg-muted/50"
-                            >
-                                <input
-                                    type="checkbox"
-                                    className="mt-0.5"
-                                    checked={selected.includes(item.id)}
-                                    onChange={() => onToggle(item.id)}
-                                />
-                                <span>{item.label}</span>
-                            </label>
-                        ))}
+                    <div className="max-h-56 overflow-auto">
+                        <ul className="m-0 list-none space-y-0.5 p-0">
+                            {visibleItems.map((item) => {
+                                const id = `${pickerId}-${item.id}`;
+                                return (
+                                    <li
+                                        key={item.id}
+                                        className="flex min-h-9 items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-foreground/[0.04]"
+                                    >
+                                        <Checkbox
+                                            id={id}
+                                            checked={selected.includes(item.id)}
+                                            onCheckedChange={() =>
+                                                onToggle(item.id)
+                                            }
+                                        />
+                                        <Label
+                                            htmlFor={id}
+                                            className="flex-1 cursor-pointer font-normal"
+                                        >
+                                            {item.label}
+                                        </Label>
+                                    </li>
+                                );
+                            })}
+                        </ul>
                         {!error && visibleItems.length === 0 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="px-2 py-1.5 type-footnote text-label-secondary">
                                 {t("dossiers.noMatchingLinks")}
                             </p>
                         )}

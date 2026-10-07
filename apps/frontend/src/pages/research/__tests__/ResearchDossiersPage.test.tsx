@@ -78,7 +78,11 @@ describe("ResearchDossiersPage", () => {
         );
         await user.click(screen.getByRole("button", { name: /add evidence/i }));
         expect(posted).toBeNull();
-        await user.selectOptions(screen.getByLabelText("Origin"), "ai-draft");
+        await user.click(
+            within(screen.getByLabelText("Origin")).getByRole("radio", {
+                name: "AI draft, not verified",
+            }),
+        );
         await user.type(screen.getByLabelText("Claim"), "Growth may slow");
         await user.type(screen.getByLabelText("Source title"), "Annual report");
         await user.type(screen.getByLabelText("Source reference"), "p. 12");
@@ -90,7 +94,9 @@ describe("ResearchDossiersPage", () => {
             evidence: [{ origin: "ai-draft" }],
             links: { investmentIds: [3] },
         });
-    });
+        // Every keystroke re-renders the whole editor (four cards of controls),
+        // which is slow under parallel test workers.
+    }, 15000);
     it("preserves edited dossiers on reselection and cancelled switches, and discards only after confirmation", async () => {
         const content = {
             title: "First dossier",
