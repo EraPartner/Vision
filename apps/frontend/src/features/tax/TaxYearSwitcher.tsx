@@ -92,9 +92,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                 <span
                                     className={cn(
                                         "tabular-nums",
-                                        isActive
-                                            ? "font-semibold text-foreground"
-                                            : "font-medium",
+                                        isActive && "font-medium text-foreground",
                                     )}
                                 >
                                     {entry.year}

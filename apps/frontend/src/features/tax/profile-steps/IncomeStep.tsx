@@ -4,15 +4,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Switch } from "@/components/ui/switch";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { cn } from "@/lib/utils";
 import type { ProfessionalExpenseMethod } from "@/lib/belgianTax";
 import type { StepProps } from "./types";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 import { ProfileNumberField } from "./ProfileNumberField";
 import { BelgianRegionSelect } from "./ProfileSelectFields";
+import {
+    ChoiceGroup,
+    ChoiceRow,
+    FieldHint,
+    StepIntro,
+    ToggleGroup,
+    ToggleRow,
+} from "./ProfileRows";
+
+function OptionalBadge() {
+    const { t } = useLanguage();
+    return (
+        <Badge variant="outline" size="sm" className="ml-1">
+            {t("common.optional")}
+        </Badge>
+    );
+}
 
 export function IncomeStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
@@ -26,14 +40,10 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
     }
     return (
         <div className="space-y-5">
-            <div>
-                <p className="text-sm font-semibold text-foreground mb-1">
-                    {t("tax.profile.section.income.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                    {t("tax.profile.section.income.desc")}
-                </p>
-            </div>
+            <StepIntro
+                title={t("tax.profile.section.income.title")}
+                description={t("tax.profile.section.income.desc")}
+            />
 
             <ProfileNumberField
                 id="gross-income"
@@ -52,10 +62,8 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 id="other-income"
                 label={
                     <>
-                        {t("tax.profile.field.otherTaxableIncome")}{" "}
-                        <Badge variant="outline" className="text-2xs ml-1">
-                            {t("common.optional")}
-                        </Badge>
+                        {t("tax.profile.field.otherTaxableIncome")}
+                        <OptionalBadge />
                     </>
                 }
                 description={t("tax.profile.field.otherTaxableIncome.desc")}
@@ -71,15 +79,16 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
             <Separator />
 
             <div className="space-y-3">
-                <div>
-                    <p className="text-sm font-semibold text-foreground mb-1">
-                        {t("tax.profile.section.professionalExpenses.title")}
-                    </p>
-                    <p className="text-xs text-muted-foreground mb-3">
-                        {t("tax.profile.section.professionalExpenses.desc")}
-                    </p>
-                </div>
-                <RadioGroup
+                <StepIntro
+                    title={t("tax.profile.section.professionalExpenses.title")}
+                    description={t(
+                        "tax.profile.section.professionalExpenses.desc",
+                    )}
+                />
+                <ChoiceGroup
+                    aria-label={t(
+                        "tax.profile.section.professionalExpenses.title",
+                    )}
                     value={profile.professionalExpenseMethod}
                     onValueChange={(v) =>
                         updateProfile({
@@ -87,59 +96,22 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 v as ProfessionalExpenseMethod,
                         })
                     }
-                    className="space-y-2"
                 >
-                    <div
-                        className={cn(
-                            "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                            profile.professionalExpenseMethod === "lump_sum"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:bg-muted/40",
-                        )}
-                    >
-                        <RadioGroupItem
-                            value="lump_sum"
-                            id="exp-lump"
-                            className="mt-0.5"
-                        />
-                        <Label
-                            htmlFor="exp-lump"
-                            className="cursor-pointer flex-1"
-                        >
-                            <span className="font-medium text-sm block">
-                                {t("tax.profile.profExp.lump.label")}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                                {t("tax.profile.profExp.lump.desc")}
-                            </span>
-                        </Label>
-                    </div>
-                    <div
-                        className={cn(
-                            "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                            profile.professionalExpenseMethod === "actual"
-                                ? "border-primary bg-primary/5"
-                                : "border-border hover:bg-muted/40",
-                        )}
-                    >
-                        <RadioGroupItem
-                            value="actual"
-                            id="exp-actual"
-                            className="mt-0.5"
-                        />
-                        <Label
-                            htmlFor="exp-actual"
-                            className="cursor-pointer flex-1"
-                        >
-                            <span className="font-medium text-sm block">
-                                {t("tax.profile.profExp.actual.label")}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                                {t("tax.profile.profExp.actual.desc")}
-                            </span>
-                        </Label>
-                    </div>
-                </RadioGroup>
+                    <ChoiceRow
+                        id="exp-lump"
+                        value="lump_sum"
+                        checked={profile.professionalExpenseMethod === "lump_sum"}
+                        label={t("tax.profile.profExp.lump.label")}
+                        description={t("tax.profile.profExp.lump.desc")}
+                    />
+                    <ChoiceRow
+                        id="exp-actual"
+                        value="actual"
+                        checked={profile.professionalExpenseMethod === "actual"}
+                        label={t("tax.profile.profExp.actual.label")}
+                        description={t("tax.profile.profExp.actual.desc")}
+                    />
+                </ChoiceGroup>
 
                 {profile.professionalExpenseMethod === "actual" && (
                     <ProfileNumberField
@@ -167,10 +139,8 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 id="cadastral"
                 label={
                     <>
-                        {t("tax.profile.field.cadastralIncome")}{" "}
-                        <Badge variant="outline" className="text-2xs ml-1">
-                            {t("common.optional")}
-                        </Badge>
+                        {t("tax.profile.field.cadastralIncome")}
+                        <OptionalBadge />
                     </>
                 }
                 description={t("tax.profile.field.cadastralIncome.desc")}
@@ -183,25 +153,21 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                 placeholder={t("tax.profile.placeholder.cadastral")}
             />
 
-            <div>
-                <p className="text-sm font-semibold text-foreground mb-2">
-                    {t("tax.profile.section.residences.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                    {t("tax.profile.section.residences.desc")}
-                </p>
+            <div className="space-y-3">
+                <StepIntro
+                    title={t("tax.profile.section.residences.title")}
+                    description={t("tax.profile.section.residences.desc")}
+                />
                 {residences.map((r, idx) => (
                     <div
                         key={residenceUids.current[idx]}
-                        className="grid grid-cols-1 gap-2 items-end mb-2 sm:grid-cols-3"
+                        className="grid grid-cols-1 items-end gap-3 sm:grid-cols-3"
                     >
-                        <div className="col-span-1">
+                        <div className="space-y-2">
                             <Label
                                 htmlFor={`residence-label-${residenceUids.current[idx]}`}
-                                className="text-xs"
                             >
-                                {t("tax.profile.field.residenceLabel") ||
-                                    "Label"}
+                                {t("tax.profile.field.residenceLabel")}
                             </Label>
                             <Input
                                 id={`residence-label-${residenceUids.current[idx]}`}
@@ -220,10 +186,9 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 }}
                             />
                         </div>
-                        <div>
+                        <div className="space-y-2">
                             <Label
                                 htmlFor={`residence-cadastral-${residenceUids.current[idx]}`}
-                                className="text-xs"
                             >
                                 {t("tax.profile.field.cadastralIncome")}
                             </Label>
@@ -246,10 +211,9 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                 }}
                             />
                         </div>
-                        <div>
+                        <div className="space-y-2">
                             <Label
                                 htmlFor={`residence-region-${residenceUids.current[idx]}`}
-                                className="text-xs"
                             >
                                 {t("tax.profile.field.regionLabel")}
                             </Label>
@@ -289,63 +253,49 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                             updateProfile({ additionalResidences: copy });
                         }}
                     >
-                        {t("tax.profile.addResidence") || "Add residence"}
+                        {t("tax.profile.addResidence")}
                     </Button>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                            updateProfile({ additionalResidences: [] })
-                        }
-                    >
-                        {t("common.reset")}
-                    </Button>
+                    {residences.length > 0 && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                                updateProfile({ additionalResidences: [] })
+                            }
+                        >
+                            {t("common.reset")}
+                        </Button>
+                    )}
                 </div>
             </div>
 
             <Separator />
 
             <div className="space-y-3">
-                <div>
-                    <p className="text-sm font-semibold text-foreground mb-1">
-                        {t("tax.profile.section.ownHome.title")}
-                    </p>
-                    <p className="text-xs text-muted-foreground mb-3">
-                        {t("tax.profile.section.ownHome.desc")}
-                    </p>
-                </div>
+                <StepIntro
+                    title={t("tax.profile.section.ownHome.title")}
+                    description={t("tax.profile.section.ownHome.desc")}
+                />
 
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div className="flex-1">
-                        <Label
-                            htmlFor="own-home-primary"
-                            className="text-sm font-medium cursor-pointer"
-                        >
-                            {t("tax.profile.field.mortgageIsPrimaryResidence")}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {t(
-                                "tax.profile.field.mortgageIsPrimaryResidence.desc",
-                            )}
-                        </p>
-                    </div>
-                    <Switch
+                <ToggleGroup>
+                    <ToggleRow
                         id="own-home-primary"
+                        label={t("tax.profile.field.mortgageIsPrimaryResidence")}
+                        description={t(
+                            "tax.profile.field.mortgageIsPrimaryResidence.desc",
+                        )}
                         checked={!!profile.mortgageIsPrimaryResidence}
                         onCheckedChange={(v) =>
                             updateProfile({ mortgageIsPrimaryResidence: v })
                         }
                     />
-                </div>
+                </ToggleGroup>
 
                 {profile.mortgageIsPrimaryResidence && (
-                    <div className="space-y-3 pl-1">
+                    <div className="space-y-3">
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div>
-                                <Label
-                                    htmlFor="mortgage-year"
-                                    className="text-xs"
-                                >
+                            <div className="space-y-2">
+                                <Label htmlFor="mortgage-year">
                                     {t("tax.profile.field.mortgageStartYear")}
                                 </Label>
                                 <ProfileNumberInput
@@ -366,11 +316,8 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                     )}
                                 />
                             </div>
-                            <div>
-                                <Label
-                                    htmlFor="mortgage-region"
-                                    className="text-xs"
-                                >
+                            <div className="space-y-2">
+                                <Label htmlFor="mortgage-region">
                                     {t("tax.profile.field.mortgageRegion")}
                                 </Label>
                                 <BelgianRegionSelect
@@ -391,8 +338,6 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <ProfileNumberField
                                 id="mortgage-interest"
-                                containerClassName=""
-                                labelClassName="text-xs"
                                 label={t(
                                     "tax.profile.field.mortgageInterestPaid",
                                 )}
@@ -410,8 +355,6 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                             />
                             <ProfileNumberField
                                 id="mortgage-capital"
-                                containerClassName=""
-                                labelClassName="text-xs"
                                 label={t(
                                     "tax.profile.field.mortgageCapitalRepaid",
                                 )}
@@ -429,14 +372,12 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                             />
                         </div>
 
-                        <p className="text-2xs text-muted-foreground">
+                        <FieldHint>
                             {t("tax.profile.section.ownHome.note")}
-                        </p>
+                        </FieldHint>
                     </div>
                 )}
             </div>
-
-            <Separator />
         </div>
     );
 }

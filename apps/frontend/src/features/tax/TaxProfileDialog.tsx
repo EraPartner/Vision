@@ -1,15 +1,25 @@
 /**
  * TaxProfileDialog
  *
- * A multi-step sheet/dialog for configuring the user's Belgian tax profile.
+ * A multi-step sheet for configuring the user's Belgian tax profile.
  * Steps:
  *   1. Employment type
  *   2. Income details
- *   3. Exemptions & dependents
- *   4. Region & surcharge
+ *   3. Taxable income sources
+ *   4. Exemptions & dependents
+ *   5. Region & surcharge
+ *
+ * Opens from its own trigger, or, with `open`/`onOpenChange`, from a menu item
+ * elsewhere on the page.
  */
 // @refresh reset
-import { useCallback, useState, type ElementType, type ReactNode } from "react";
+import {
+    useCallback,
+    useReducer,
+    useState,
+    type ElementType,
+    type ReactNode,
+} from "react";
 import {
     Sheet,
     SheetContent,
@@ -18,8 +28,11 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     Settings,
@@ -36,7 +49,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { cn } from "@/lib/utils";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import type { BelgianTaxProfile } from "@/lib/belgianTax";
 import { taxProfileIncomeStepSchema } from "./taxProfileSchema";
@@ -67,7 +79,8 @@ const STEP_ICONS: Record<Step, ElementType> = {
 };
 
 interface TaxProfileDialogProps {
-    trigger?: ReactNode;
+    /** Custom trigger; `null` renders none (drive the sheet through `open`). */
+    trigger?: ReactNode | null;
     /** Optional initial step to open the dialog on (useful for CTAs linking directly to a step) */
     initialStep?: Step;
     /**
@@ -76,12 +89,17 @@ interface TaxProfileDialogProps {
      * snapshot (historical-edit mode) and renders a warning banner.
      */
     targetYear?: number;
+    /** Controlled open state; leave undefined to let the trigger own it. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
 export function TaxProfileDialog({
     trigger,
     initialStep,
     targetYear,
+    open: controlledOpen,
+    onOpenChange,
 }: TaxProfileDialogProps) {
     const {
         profile: liveProfile,
@@ -98,9 +116,14 @@ export function TaxProfileDialog({
         snapshotMetas: state.snapshotMetas,
         unmarkYearAsFiled: state.unmarkYearAsFiled,
     }));
-    const [open, setOpen] = useState(false);
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const isControlled = controlledOpen !== undefined;
+    const open = isControlled ? controlledOpen : uncontrolledOpen;
     const [step, setStep] = useState<Step>("employment");
     const [filedOverride, setFiledOverride] = useState(false);
+    // Remount key for the step picker: when a forward jump is refused and the
+    // user stays on the same step, the control's pill must snap back.
+    const [pickerKey, resetPicker] = useReducer((n: number) => n + 1, 0);
     const { t } = useLanguage();
 
     const liveYear = liveProfile.taxYear;
@@ -168,6 +191,11 @@ export function TaxProfileDialog({
         [stepError],
     );
 
+    function setOpen(o: boolean) {
+        if (!isControlled) setUncontrolledOpen(o);
+        onOpenChange?.(o);
+    }
+
     function next() {
         // Block leaving the current step until its required fields are valid.
         const err = stepError(step);
@@ -196,7 +224,7 @@ export function TaxProfileDialog({
         if (!isFirst) setStep(STEPS[stepIdx - 1]);
     }
 
-    // Tab navigation: going back to an earlier/current step is always free; jumping
+    // Step picker: going back to an earlier/current step is always free; jumping
     // forward is only allowed once every step in between has its required fields.
     function goToStep(target: Step) {
         const targetIdx = STEPS.indexOf(target);
@@ -207,6 +235,7 @@ export function TaxProfileDialog({
         const bad = firstInvalidStepBefore(targetIdx);
         if (bad !== -1) {
             toast.error(stepError(STEPS[bad])!);
+            if (STEPS[bad] === step) resetPicker();
             setStep(STEPS[bad]);
             return;
         }
@@ -223,131 +252,133 @@ export function TaxProfileDialog({
 
     return (
         <Sheet open={open} onOpenChange={handleOpenChange}>
-            <SheetTrigger asChild>
-                {trigger ?? (
-                    <Button variant="outline" size="sm" className="gap-2">
-                        <Settings className="h-4 w-4" />
-                        {t("tax.profile.trigger")}
-                    </Button>
-                )}
-            </SheetTrigger>
+            {trigger !== null && (
+                <SheetTrigger asChild>
+                    {trigger ?? (
+                        <Button variant="outline">
+                            <Settings aria-hidden="true" />
+                            {t("tax.profile.trigger")}
+                        </Button>
+                    )}
+                </SheetTrigger>
+            )}
             <SheetContent
                 side="right"
-                className="w-full sm:max-w-lg overflow-y-auto"
+                className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
             >
-                <SheetHeader>
+                <SheetHeader className="px-6 pt-6">
                     <SheetTitle>{t("tax.profile.title")}</SheetTitle>
                     <SheetDescription>
                         {t("tax.profile.description")}
                     </SheetDescription>
                 </SheetHeader>
 
-                {/* Step progress */}
-                <div className="flex items-center gap-1 mt-6 mb-8">
-                    {STEPS.map((s, i) => {
-                        const Icon = STEP_ICONS[s];
-                        const done = i < stepIdx;
-                        const active = i === stepIdx;
-                        return (
-                            <div key={s} className="flex items-center flex-1">
-                                <button
-                                    onClick={() => goToStep(s)}
-                                    className={cn(
-                                        "flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors",
-                                        active &&
-                                            "bg-primary text-primary-foreground",
-                                        done && "text-accent",
-                                        !active &&
-                                            !done &&
-                                            "text-muted-foreground hover:text-foreground",
-                                    )}
+                <div className="space-y-2 px-6 pt-4">
+                    <SegmentedControl
+                        key={pickerKey}
+                        value={step}
+                        onValueChange={(value) => goToStep(value as Step)}
+                        aria-label={t("tax.profile.title")}
+                        className="w-full"
+                    >
+                        {STEPS.map((s, i) => {
+                            const Icon = i < stepIdx ? Check : STEP_ICONS[s];
+                            return (
+                                <SegmentedControlItem
+                                    key={s}
+                                    value={s}
+                                    aria-label={t(`tax.profile.step.${s}`)}
+                                    className="px-2"
                                 >
-                                    {done ? (
-                                        <Check className="h-3.5 w-3.5" />
-                                    ) : (
-                                        <Icon className="h-3.5 w-3.5" />
-                                    )}
+                                    <Icon
+                                        className="h-4 w-4 shrink-0"
+                                        aria-hidden="true"
+                                    />
                                     <span className="hidden sm:inline">
                                         {t(`tax.profile.step.${s}`)}
                                     </span>
-                                </button>
-                                {i < STEPS.length - 1 && (
-                                    <div
-                                        className={cn(
-                                            "flex-1 h-px mx-1",
-                                            i < stepIdx
-                                                ? "bg-accent"
-                                                : "bg-border",
-                                        )}
-                                    />
-                                )}
-                            </div>
-                        );
-                    })}
+                                </SegmentedControlItem>
+                            );
+                        })}
+                    </SegmentedControl>
+                    <p className="type-footnote text-label-secondary">
+                        {t("tax.profile.stepProgress", {
+                            current: stepIdx + 1,
+                            total: STEPS.length,
+                        })}
+                    </p>
                 </div>
 
-                {editingHistorical && !isFiled && (
-                    <Alert className="mb-4 border-warning/40 bg-warning/5">
-                        <History className="h-4 w-4 text-warning" />
-                        <AlertTitle>
-                            {t("tax.historical.editWarning.title")}
-                        </AlertTitle>
-                        <AlertDescription>
-                            {t("tax.historical.editWarning.desc", {
-                                year: String(effectiveTargetYear),
-                            })}
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {isFiled && (
-                    <Alert className="mb-4 border-warning/60 bg-warning/10">
-                        <Lock className="h-4 w-4 text-warning" />
-                        <AlertTitle>
-                            {t("tax.historical.filedLock.title")}
-                        </AlertTitle>
-                        <AlertDescription className="flex flex-col gap-3">
-                            <span className="text-xs text-muted-foreground">
-                                {t("tax.historical.filedLock.desc", {
+                <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+                    {editingHistorical && !isFiled && (
+                        <Alert variant="warning">
+                            <History className="h-4 w-4" aria-hidden="true" />
+                            <AlertTitle>
+                                {t("tax.historical.editWarning.title")}
+                            </AlertTitle>
+                            <AlertDescription>
+                                {t("tax.historical.editWarning.desc", {
                                     year: String(effectiveTargetYear),
                                 })}
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                                {!filedOverride ? (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => setFiledOverride(true)}
-                                        className="gap-1"
-                                    >
-                                        <Lock className="h-3 w-3" />
-                                        {t("tax.historical.filedLock.amendCta")}
-                                    </Button>
-                                ) : (
-                                    <span className="text-xs font-medium text-warning">
-                                        {t(
-                                            "tax.historical.filedLock.amendActive",
-                                        )}
-                                    </span>
-                                )}
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() =>
-                                        unmarkYearAsFiled(effectiveTargetYear)
-                                    }
-                                >
-                                    {t("tax.historical.filedLock.unfileCta", {
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {isFiled && (
+                        <Alert variant="warning">
+                            <Lock className="h-4 w-4" aria-hidden="true" />
+                            <AlertTitle>
+                                {t("tax.historical.filedLock.title")}
+                            </AlertTitle>
+                            <AlertDescription className="flex flex-col gap-3">
+                                <span className="text-label-secondary">
+                                    {t("tax.historical.filedLock.desc", {
                                         year: String(effectiveTargetYear),
                                     })}
-                                </Button>
-                            </div>
-                        </AlertDescription>
-                    </Alert>
-                )}
+                                </span>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {!filedOverride ? (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() =>
+                                                setFiledOverride(true)
+                                            }
+                                        >
+                                            {t(
+                                                "tax.historical.filedLock.amendCta",
+                                            )}
+                                        </Button>
+                                    ) : (
+                                        <span className="type-footnote font-medium text-warning">
+                                            {t(
+                                                "tax.historical.filedLock.amendActive",
+                                            )}
+                                        </span>
+                                    )}
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() =>
+                                            unmarkYearAsFiled(
+                                                effectiveTargetYear,
+                                            )
+                                        }
+                                    >
+                                        {t(
+                                            "tax.historical.filedLock.unfileCta",
+                                            {
+                                                year: String(
+                                                    effectiveTargetYear,
+                                                ),
+                                            },
+                                        )}
+                                    </Button>
+                                </div>
+                            </AlertDescription>
+                        </Alert>
+                    )}
 
-                {/* Step content */}
-                <div className="space-y-5 min-h-[340px]">
                     {step === "employment" && (
                         <EmploymentStep
                             profile={profile}
@@ -380,30 +411,18 @@ export function TaxProfileDialog({
                     )}
                 </div>
 
-                <Separator className="my-6" />
-
-                {/* Navigation */}
-                <div className="flex items-center justify-between">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={prev}
-                        disabled={isFirst}
-                        className="gap-1"
-                    >
-                        <ChevronLeft className="h-4 w-4" />
+                <div className="flex items-center justify-between gap-3 border-t border-border/50 px-6 py-4">
+                    <Button variant="ghost" onClick={prev} disabled={isFirst}>
+                        <ChevronLeft aria-hidden="true" />
                         {t("common.back")}
                     </Button>
-                    <Button size="sm" onClick={next} className="gap-1">
+                    <Button onClick={next}>
                         {isLast ? (
-                            <>
-                                <Check className="h-4 w-4" />
-                                {t("common.save")}
-                            </>
+                            t("tax.profile.save")
                         ) : (
                             <>
                                 {t("common.next")}
-                                <ChevronRight className="h-4 w-4" />
+                                <ChevronRight aria-hidden="true" />
                             </>
                         )}
                     </Button>

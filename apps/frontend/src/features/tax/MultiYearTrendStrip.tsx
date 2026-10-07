@@ -29,6 +29,7 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
 import { computeBelgianPIT } from "@/lib/belgianTax";
@@ -114,14 +115,15 @@ export function MultiYearTrendStrip({
                     {tiles.map((tile) => {
                         const isActive = tile.year === viewedYear;
                         return (
-                            <button
+                            <Button
                                 key={tile.year}
                                 type="button"
+                                variant="ghost"
                                 onClick={() => setViewedYear(tile.year)}
                                 className={cn(
-                                    "flex flex-col items-stretch rounded-card corner-continuous px-3 py-2.5 text-left transition-[background-color,box-shadow] duration-fast ease-glide focus-ring",
+                                    "h-auto flex-col items-stretch justify-start gap-0 whitespace-normal rounded-card corner-continuous px-3 py-2.5 text-left font-normal [&_svg]:size-3",
                                     isActive
-                                        ? "bg-primary/[0.08] shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.45)]"
+                                        ? "bg-primary/[0.08] shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.45)] hover:bg-primary/[0.1]"
                                         : "bg-foreground/[0.04] hover:bg-foreground/[0.07]",
                                 )}
                                 aria-pressed={isActive}
@@ -170,7 +172,7 @@ export function MultiYearTrendStrip({
                                         }}
                                     />
                                 </span>
-                            </button>
+                            </Button>
                         );
                     })}
                 </div>

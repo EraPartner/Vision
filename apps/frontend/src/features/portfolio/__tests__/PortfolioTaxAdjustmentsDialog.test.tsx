@@ -205,7 +205,7 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
             await screen.findByRole("button", { name: /manual adjustments/i }),
         );
         await screen.findByRole("dialog");
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await user.click(screen.getByRole("button", { name: /save adjustments/i }));
 
         // Assert — dialog closes on successful save
         await waitFor(() =>
@@ -230,7 +230,7 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
             await screen.findByRole("button", { name: /manual adjustments/i }),
         );
         await screen.findByRole("dialog");
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await user.click(screen.getByRole("button", { name: /save adjustments/i }));
 
         // Assert — dialog stays open when save fails
         await waitFor(() =>

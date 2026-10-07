@@ -6,7 +6,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { BelgianRegion } from "@/lib/belgianTax";
+
+const REGIONS: BelgianRegion[] = ["flanders", "wallonia", "brussels"];
 
 interface BelgianRegionSelectProps {
     id: string;
@@ -21,6 +24,7 @@ export function BelgianRegionSelect({
     onValueChange,
     className,
 }: BelgianRegionSelectProps) {
+    const { t } = useLanguage();
     return (
         <Select
             value={value}
@@ -30,9 +34,11 @@ export function BelgianRegionSelect({
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="flanders">Flanders</SelectItem>
-                <SelectItem value="wallonia">Wallonia</SelectItem>
-                <SelectItem value="brussels">Brussels</SelectItem>
+                {REGIONS.map((region) => (
+                    <SelectItem key={region} value={region}>
+                        {t(`tax.profile.region.${region}.label`)}
+                    </SelectItem>
+                ))}
             </SelectContent>
         </Select>
     );

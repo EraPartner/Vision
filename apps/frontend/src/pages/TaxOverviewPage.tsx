@@ -170,13 +170,18 @@ export default function TaxOverviewPage() {
 
     // Same full-page error pattern as StatisticsPage. This must replace the whole
     // stats-dependent tree, not render as an extra banner: the widget cards below
-    // also subscribe to useStatistics, and mounting them on an errored query
-    // triggers react-query's retryOnMount refetch, flipping isError back to false
-    // — an infinite empty-state/content flap plus a refetch storm.
+    // and the year switcher (via useAvailableTaxYears) also subscribe to
+    // useStatistics, and mounting them on an errored query triggers react-query's
+    // retryOnMount refetch, flipping isError back to false — an infinite
+    // empty-state/content flap plus a refetch storm.
     if (stats.isError) {
         return (
             <PageShell className="" data-print-page="tax">
-                {header}
+                <PageHeader
+                    title={t("tax.page.title")}
+                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
+                    icon={PAGE_ICONS["/tax"]}
+                />
                 <PageError
                     message={t("tax.page.loadError", {
                         msg: stats.error?.message ?? "",
