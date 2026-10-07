@@ -3,7 +3,7 @@ title: Database Maintenance UI
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-09-27
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -43,7 +43,7 @@ related_code:
 
 ## Feature Overview
 
-The DB Maintenance page (`/admin/db`) displays live statistics for every table in the Vision database and allows running `VACUUM ANALYZE` on a per-table or bulk basis. This is critical for:
+The Database maintenance page (`/admin/db`) displays live statistics for every table in the Vision database and allows running `VACUUM ANALYZE` on a per-table or bulk basis. This is critical for:
 
 - **Autovacuum monitoring**: See actual dead row counts and bloat
 - **Disk space optimization**: Reclaim space from deleted rows
@@ -175,9 +175,9 @@ The page consists of:
    - All tables display actual row counts from PostgreSQL statistics regardless of their vacuum/analyze history. Tables with no vacuum/analyze events show the last known statistics (which may be zero for newly created tables).
    - Row count accuracy improves after running VACUUM ANALYZE, which updates the statistics.
 
-3. **Action Buttons**:
-   - "Vacuum All Tables" (bulk operation)
-   - "Vacuum" (per-table operation)
+3. **Actions** ([[docs/adr/187-completeness-sweep|ADR-187]]):
+   - "Vacuum all tables" is the primary header button (bulk operation); Refresh is the header ••• menu item
+   - Each table row has a ••• menu with "Browse rows" (opens the data editor) and "Run vacuum" (per-table operation); the table name is also a link to the editor
 
 4. **Progress & Feedback**:
    - Loading state during operation
@@ -188,7 +188,7 @@ The page consists of:
 
 1. Navigate to `/admin/db` in the application
 2. Review table statistics
-3. Click "Vacuum All Tables" for bulk maintenance, or click "Vacuum" on specific tables
+3. Click "Vacuum all tables" for bulk maintenance, or choose "Run vacuum" in a table row's ••• menu
 4. Monitor progress; page auto-refreshes stats upon completion
 
 ---
@@ -196,7 +196,7 @@ The page consists of:
 ## DB Data Editor (ADR-101)
 
 > [!info] Added 2026-06-18
-> The data editor is reached by double-clicking any table row on the DB Maintenance page. It opens at route `/admin/db/:table`.
+> The data editor is reached from the table name link or the row ••• menu's "Browse rows" item on the Database maintenance page. It opens at route `/admin/db/:table`.
 
 ### How to open
 
@@ -222,13 +222,13 @@ The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[d
 - Dirty cells expose a per-cell undo button for pointer users; the same action is available with **Escape** from the active editor or boolean control.
 - Boolean columns render as checkboxes.
 - Edited cells are highlighted as **dirty state**. Filtering, sorting, and paging are paused while dirty rows exist so refetches cannot silently discard changes.
-- **Add row** button appends a new blank row in dirty state.
-- **Mark for deletion** button marks an existing row for delete in dirty state.
+- **Add row** (the primary header button) appends a new blank row in dirty state; Refresh sits in the header ••• menu.
+- Each row has a ••• menu: **Revert changes to this row** (for dirty rows), **Mark row for deletion** / **Undo delete** for existing rows, and **Discard new row** for rows added in this session.
 
 ### Previewing and committing
 
-- The **Preview** button sends the pending change set to `POST /api/admin/database/tables/:table/mutate` with `dryRun: true`. The server renders exact SQL statements and returns them in a dialog — no DB write occurs.
-- The **Commit** button sends the batch with `dryRun: false`. All changes execute in one transaction (all-or-nothing). Any failure rolls back the entire batch.
+- The **Preview SQL** button sends the pending change set to `POST /api/admin/database/tables/:table/mutate` with `dryRun: true`. The server renders exact SQL statements and returns them in a dialog — no DB write occurs.
+- The **Commit to database** button sends the batch with `dryRun: false`. All changes execute in one transaction (all-or-nothing). Any failure rolls back the entire batch.
 
 ### Optimistic concurrency
 
@@ -236,7 +236,7 @@ Each row returned by `/rows` includes a hidden `__xmin` token (PostgreSQL row ve
 
 ### Tables with no primary key
 
-Tables that lack a primary key are **read-only** in the data editor — the Commit button is disabled and `op: 'insert'/'update'/'delete'` changes are rejected server-side with a `400` error.
+Tables that lack a primary key are **read-only** in the data editor — the Commit to database button is disabled and `op: 'insert'/'update'/'delete'` changes are rejected server-side with a `400` error.
 
 ### Safety model summary
 

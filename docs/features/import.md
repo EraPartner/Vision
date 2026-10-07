@@ -3,7 +3,7 @@ title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 last_modified: 2026-10-03
 tags:
   [
@@ -180,6 +180,7 @@ The monolithic `ImportPage.tsx` was decomposed into `apps/frontend/src/features/
 - `ImportHistoryCard` and `CsvColumnMapper` have been moved from `@/components/import/` to `apps/frontend/src/features/imports/` to co-locate all import-related UI within the feature module.
 - `ImportPage` imports both from `@/features/imports/`.
 - `components/import/` no longer exists as a source directory.
+- `ImportHistoryCard` lists batches as `ListRow`s with a status `Badge` using translated labels (`importHistory.status.*`, for example _Awaiting review_, _Importing_, _Complete_), a remaining-count line for parked batches, and Resume review and Roll back (confirmed) actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 ### Benefits
 

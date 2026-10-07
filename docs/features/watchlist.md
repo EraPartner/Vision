@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-07
 last_modified: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-07
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -106,8 +106,7 @@ tone, neutral zero, and locale-aware precision therefore match the other market-
 
 ## Keyboard controls
 
-Open chart and Remove controls identify the item's name and symbol; Remove also has a
-keyboard-focus tooltip. In the chart dialog, the target-price button identifies the edit action,
+Each row opens the chart on activation (the row is a labelled button) and has a ••• menu with Open chart, Open in Market lookup and Remove (destructive, last, confirmed). The row menu identifies the item's name and symbol ([[docs/adr/187-completeness-sweep|ADR-187]]). In the chart dialog, the target-price button identifies the edit action,
 item, and current value, with a visible focus ring and tooltip. Opening its editor focuses the
 labelled price input immediately.
 
@@ -122,7 +121,7 @@ Available methods:
 - `getWatchlist(params?)` — `GET /api/watchlist` with optional `limit`/`offset` pagination
 - `createWatchlistItem(data)` — `POST /api/watchlist` to add item
 - `updateWatchlistItem(id, data)` — `PATCH /api/watchlist/:id` to update (e.g., set target price)
-- `deleteWatchlistItem(id)` — `DELETE /api/watchlist/:id` to remove item — **gated by a destructive confirm dialog since Aug 2026** (`useConfirmDialog`; the row's target price and notes are deleted with it and cannot be recovered). Previously the trash icon fired the mutation directly.
+- `deleteWatchlistItem(id)` — `DELETE /api/watchlist/:id` to remove item — **gated by a destructive confirm dialog since Aug 2026** (`useConfirmDialog`; the row's target price and notes are deleted with it and cannot be recovered). Previously the trash icon fired the mutation directly; Remove now lives in the row ••• menu.
 - `getMarketQuotes(symbols)` — `GET /api/market/quotes?symbols=...` to fetch current prices for multiple symbols
 
 All methods are typed and integrate with React Query for caching and invalidation.
@@ -162,7 +161,7 @@ interface WatchlistPrefill {
 
 When `prefill` is provided the dialog **skips its internal search step**: it seeds the selected asset, auto-detects asset class from `type`, sets currency, and defaults the target price to the current price. The user is one confirm away from adding the item. Search-based usage (no `prefill`) is completely unchanged.
 
-The primary caller of the prefill path is `[[apps/frontend/src/pages/research/MarketLookupPage.tsx]]`: when a Yahoo symbol's detail view is open, an "Add to Watchlist" outline button in the quote header opens this dialog pre-populated from the current live quote. See [[docs/features/market-lookup|Market Lookup]] for the full quote-header action context.
+The primary caller of the prefill path is `[[apps/frontend/src/pages/research/MarketLookupPage.tsx]]`: when a Yahoo symbol's detail view is open, the "Add to watchlist" item in the page header ••• menu opens this dialog pre-populated from the current live quote. See [[docs/features/market-lookup|Market Lookup]] for the full quote-header action context.
 
 ## Offline Resilience
 

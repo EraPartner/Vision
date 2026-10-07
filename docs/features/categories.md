@@ -33,9 +33,10 @@ Each transaction can be assigned a category to support spending analysis, budget
 
 ## Keyboard interaction
 
-Status buttons identify the full category path and expose whether the category is active.
-Closing the edit, merge, or delete-confirmation dialog returns focus to the button that opened
-it. If that button has left the tree, focus returns to the Include inactive filter switch.
+Each row's ••• menu identifies the category by name. An inactive category carries an _Inactive_ badge,
+and the menu's _Mark inactive_ / _Mark active_ item changes the status at once and shows an undo toast.
+Closing the edit, merge, or delete-confirmation dialog returns focus to the control that opened
+it. If that control has left the tree, focus returns to the **View** menu button.
 
 ## Category Model
 
@@ -192,7 +193,7 @@ Key behaviors:
 
 ## List visibility filters
 
-Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+_Include inactive_ and _Expand all_ / _Collapse all_ sit in the page header's **View** menu (a checkbox item with an explicit on/off state, plus a menu item) and keep the existing filtering and URL behavior. Edit, Merge, Mark inactive or active (undoable) and Delete (confirmed through `useConfirmDialog`) are the row ••• menu items ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 
 ## Clarity and recovery feedback

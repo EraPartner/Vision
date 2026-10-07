@@ -3,7 +3,7 @@ title: Statistics Feature
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 last_modified: 2026-09-27
 tags:
   [
@@ -305,8 +305,8 @@ Overview panels.
 - Grid of user-created saved charts (empty state with "Create Chart" button when none exist)
 - Each chart displays with its configured chart type, variant, and time bucket
 - Per-chart exclusion toggles
-- Edit and delete buttons on each chart card
-- Chart builder modal (two-column: form on left, live preview on right) for creating/editing charts
+- A ••• menu on each chart card with _Edit {name}_ and _Delete {name}_ (delete is confirmed; there is no restore path)
+- Chart builder modal (two-column: form on left, live preview on right) for creating/editing charts; the time bucket is a `SegmentedControl` and the From/To dates use `DatePicker` with a Clear action ([[docs/adr/187-completeness-sweep|ADR-187]])
 
 ## Charts and Visualizations
 
@@ -522,7 +522,7 @@ See [[docs/features/sankey-flow|Sankey Flow Feature]].
 
 The Monthly Chart now supports optional 3-month rolling average visualization:
 
-- **Toggle button**: Show/hide rolling average line overlay
+- **Toggle**: Show/hide rolling average line overlay (the `Toggle` primitive)
 - **Computation**: `computeRollingAverage(values, 3)` with null handling for sparse data
 - **Visual**: Line overlay on top of bar chart, distinct color
 - **Use case**: Identify trends beneath seasonal variation

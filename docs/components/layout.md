@@ -2,8 +2,8 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-07
+updated: 2026-10-07
 tags:
   [
     components,
@@ -124,12 +124,12 @@ screen readers follow the active application language.
 | Section  | Items                                                                                                                                       | Default |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | top      | Home, Transactions, Accounts, Planned Payments                                                                                              | always  |
-| Money    | Categories, Recipients, Statistics, Who Owes You, Taxes, Import / Export                                                                    | shown   |
-| Wealth   | Portfolio, Net Worth, Stocks & ETFs, Crypto, Metals, Real Estate, Savings & Bonds, Performance, Rebalance, Portfolio taxes, Import portfolio history | shown   |
-| Research | Research Home, Markets, Market Lookup, Compare, Chart Builder, Forecast, Watchlist, Dossiers, Analysis workspace, Analysis monitors         | hidden  |
-| Admin    | Overview, DB Maintenance, Data Sources, Endpoints, Exchange Rates                                                                           | admin mode |
+| Money    | Categories, Recipients, Statistics, Who owes you, Taxes, Import / Export                                                                    | shown   |
+| Wealth   | Portfolio, Net Worth, Stocks & ETFs, Crypto, Metals, Real estate, Savings & bonds, Performance, Rebalance, Portfolio taxes, Import portfolio history | shown   |
+| Research | Research home, Markets, Market lookup, Compare, Chart builder, Forecast, Watchlist, Dossiers, Analysis workspace, Analysis monitors         | hidden  |
+| Admin    | Overview, Database maintenance, Data Sources, Endpoints, Exchange rates                                                                           | admin mode |
 
-The footer holds AI Chat (a registry item) and Settings (a button that opens the settings dialog, `⌘,`). The header holds the logo (toggles the sidebar), the app name, a collapse button and a search field that opens the command palette. Market Lookup and Watchlist live in Research (moved from Portfolio by [[docs/adr/079-multi-provider-research-aggregation|ADR-079]]).
+The footer holds AI chat (a registry item) and Settings (a button that opens the settings dialog, `⌘,`). The header holds the logo (toggles the sidebar), the app name, a collapse button and a search field that opens the command palette. Market Lookup and Watchlist live in Research (moved from Portfolio by [[docs/adr/079-multi-provider-research-aggregation|ADR-079]]).
 
 ### Features
 
@@ -241,7 +241,7 @@ Code link: [[apps/frontend/src/components/layout/PageTransition.tsx]]
 
 **Coverage**:
 
-- Every non-admin page, grouped by `PALETTE_SECTIONS` as Money (top items plus Money), Wealth and Research (plus AI Chat)
+- Every non-admin page, grouped by `PALETTE_SECTIONS` as Money (top items plus Money), Wealth and Research (plus AI chat)
 - Admin pages when `adminMode` is enabled
 - A **New transaction** action (shortcut hint `N`) in the Actions group, which navigates to `/transactions?new=1`
 - Theme modes in the Actions group: Light, Dark, System, Schedule

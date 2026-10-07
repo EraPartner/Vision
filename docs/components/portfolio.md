@@ -3,7 +3,7 @@ title: Portfolio Components
 type: component
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 tags:
   [
     components,
@@ -324,11 +324,20 @@ import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog"
 
 ---
 
+## Asset page building blocks
+
+Stocks, crypto, metals, real estate and savings share two modules in `features/portfolio/` ([[docs/adr/187-completeness-sweep|ADR-187]]):
+
+- `assetPageParts.tsx` exports `Figure` (secondary hero figure), `FactRow` (one `dt`/`dd` line of a holding card), `AssetPageActions` (primary _Add investment_ plus a header ••• menu with _Export PDF_, hidden when `showExport` is false as on the Crypto page, and _Import history_) and `HoldingActionsMenu` (row ••• menu: Details, Add transaction, Archive, Delete).
+- `useHoldingActions.tsx` mounts the controlled `InvestmentDetailDialog` and `AddPortfolioTxnDialog` once per page (`dialogs`) and runs Archive and Delete through `useConfirmDialog`.
+
+`PortfolioExposureCard`'s dimension toggle is a `SegmentedControl`. `AddToWatchlistDialog` has a Cancel button. `TotalValueCard` and `netContributionSparkline` no longer exist.
+
 ## Portfolio Tax Components
 
 ### PortfolioTaxAdjustmentsDialog
 
-Manage tax adjustments for investment holdings.
+Manage tax adjustments for investment holdings. Props: `investments`, and optional `open` / `onOpenChange` for controlled mode, which Portfolio taxes uses from its page ••• menu and primary _Manual adjustments_ button; without `open` the dialog renders its own trigger. Cancel is an outline button and the submit button reads _Save adjustments_.
 
 ### Settings Propagation Notes
 
@@ -341,9 +350,11 @@ Code links: [[apps/frontend/src/features/portfolio/PortfolioTaxAdjustmentsDialog
 ```tsx
 import { PortfolioTaxAdjustmentsDialog } from "@/features/portfolio/PortfolioTaxAdjustmentsDialog";
 
-<PortfolioTaxAdjustmentsDialog investmentId={123}>
-  <Button>Tax Adjustments</Button>
-</PortfolioTaxAdjustmentsDialog>;
+<PortfolioTaxAdjustmentsDialog
+  investments={investments}
+  open={open}
+  onOpenChange={setOpen}
+/>;
 ```
 
 ---

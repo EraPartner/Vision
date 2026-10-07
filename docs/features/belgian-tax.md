@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-09-26
-updated: 2026-09-26
+date: 2026-10-07
+updated: 2026-10-07
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -352,7 +352,7 @@ Each entry exposes `{ year, isCurrent, hasSnapshot, hasTransactions }` for the s
 
 - `TaxYearSwitcher` — dropdown trigger replacing the static "Tax year" badge on both `/tax` and `/portfolio/tax`. Each item shows a chip: **Current**, **Saved**, or **Data only**. Compact filed/frozen markers in this switcher and the comparison surfaces share `TaxYearStatusIcon`, with filed status taking precedence. A footer action "Create profile for {year}" appears when the viewed year is historical and has no snapshot yet.
 - `HistoricalYearBanner` — shown above the page body when `isViewingHistorical` (via `HistoricalYearBannerSection`, still the composition used by `/portfolio/tax`). Two modes: `snapshot` (reconstructed from the saved profile) and `estimate` (live profile applied to that year's tax tables); the estimate mode exposes a primary CTA to seed the snapshot. On `/tax` this banner is no longer a separate element — `TaxFilingMasthead` renders the same modes and actions inline (see below).
-- `TaxProfileDialog` accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
+- `TaxProfileDialog` is a right-hand `Sheet` with a segmented step picker (see [[docs/components/form-dialogs#TaxProfileDialog]]) and accepts an optional `targetYear` prop. When that year has a snapshot, the dialog reads/writes the snapshot and renders an amber warning banner; the snapshot's `taxYear` is locked.
 
 ### Overview-page composition — filing-year masthead + computation flow (Aug 2026)
 
@@ -412,9 +412,9 @@ type BelgianTaxProfileSnapshotMeta = {
 
 ### UI surfaces
 
-- **`MultiYearTrendStrip`** — compact clickable year tiles in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
+- **`MultiYearTrendStrip`** — compact clickable year tiles (ghost `Button`s with `aria-pressed`) in the page header showing PIT, effective rate, and a normalized bar. Clicking switches `viewedYear`.
 - **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
-- **`YearActionsMenu`** — dropdown next to `TaxYearSwitcher` with freeze/unfreeze, mark/unmark filed, view history, export year as CSV.
+- **`YearActionsMenu`** — the ••• "More actions" menu next to `TaxYearSwitcher` with freeze/unfreeze, mark/unmark filed, view history, export year as CSV. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
 - **`MarkAsFiledDialog`** — collects an optional free-text filing reference (Tax-on-Web id, paper return code) before marking a year as filed.
 - **`SnapshotHistoryDialog`** — read-only chronological list of audit entries with kind badge, timestamp, one-line patch summary, and the filing reference where applicable.
 - **`HistoricalYearBanner`** extended with `filed` and `frozen` modes; priority order centralized in `resolveHistoricalBannerMode` and shared between `/tax` and `/portfolio/tax`.

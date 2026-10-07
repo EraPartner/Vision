@@ -242,7 +242,19 @@ package "Feature Components - Portfolio" {
   class CloseAccountDialog <<ADR-091>> {
     ' Lists account holdings, transfers in-specie, then archives account
   }
+  class assetPageParts <<ADR-187>> {
+    ' Figure, FactRow, AssetPageActions (Add + ••• Export PDF / Import history)
+    ' HoldingActionsMenu (row •••: Details, Add transaction, Archive, Delete)
+  }
+  class useHoldingActions <<ADR-187>> {
+    ' controlled detail and add-transaction dialogs, confirmed archive and delete
+    ' shared by Stocks, Crypto, Metals, Real estate and Savings pages
+  }
 }
+
+useHoldingActions --> assetPageParts : renderMenu
+useHoldingActions --> InvestmentDetailDialog : controlled open
+useHoldingActions --> AddPortfolioTxnDialog : controlled open
 
 PortfolioOverview --> PortfolioExposureCard : issuer, sector, country views
 

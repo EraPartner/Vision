@@ -3,7 +3,7 @@ title: Accounts
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-04
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -82,12 +82,12 @@ or currency with only future rows remains visible with a zero current balance.
 
 ## The hub (`/accounts`)
 
-- **Groups** (WP-B3, fixed order): _Cash & Savings_ (checking · savings · pension) → _Portfolio accounts_ (brokerage · crypto_exchange · wallet) → _Liabilities_ → _Archived_ (collapsed; any `is_active=false` account regardless of type). Cards sort by display label within a group (`groupAccounts.ts`, unit-tested).
+- **Groups** (WP-B3, fixed order): _Cash & Savings_ (checking · savings · pension) → _Portfolio accounts_ (brokerage · crypto_exchange · wallet) → _Liabilities_ → _Archived_ (collapsed; any `is_active=false` account regardless of type). Accounts render as `List` rows (one list per group) sorted by display label within a group (`groupAccounts.ts`, unit-tested).
 - **Per-group subtotals** convert each cash-bearing account's computed balance to the display currency. The Portfolio subtotal adds the already partitioned current holdings from the portfolio summary; holdings-only wallet and crypto-exchange accounts contribute no stale ledger cash. The grand **Net cash** line sums active, `in_net_worth` non-portfolio accounts — the same population as the net-worth Liquid + Liabilities figures.
-- **Portfolio-type cards** use the portfolio summary's account partition to show current holdings value and broker profit/loss. Brokerage cards compose that with their real ledger cash and balance provenance; wallet and crypto-exchange accounts are holdings-only and omit transaction, cash-drift, and Reconcile affordances. An account with no assigned position says **No assigned holdings** instead of displaying a misleading ledger zero.
-- **Card interactions** (WP-B4): the account name and the menu's **View details** item are real links to `/accounts/:id`. The card stays a passive container so its independent Reconcile control and menu do not create nested interaction. The menu also keeps **View transactions** (account-filtered Transactions page) and **Reconcile balance** (only while drift is non-zero). Everything lifecycle-shaped moved to the detail route's header menu.
-- The **drift badge** on a card (statement vs computed disagreement, ADR-094) opens the Reconcile dialog directly.
-- **Add account** stays in the page header.
+- **Portfolio-type rows** use the portfolio summary's account partition to show current holdings value and broker profit/loss. Brokerage rows compose that with their real ledger cash and balance provenance; wallet and crypto-exchange accounts are holdings-only and omit transaction, cash-drift, and Reconcile affordances. An account with no assigned position says **No assigned holdings** instead of displaying a misleading ledger zero.
+- **Row interactions** (WP-B4, rebuilt on `List`/`ListRow` by [[docs/adr/187-completeness-sweep|ADR-187]]): the row and the ••• menu's **View details** item are real links to `/accounts/:id`. The drift chip and the row menu stop row activation so they do not create nested interaction. The menu also keeps **View transactions** (account-filtered Transactions page) and **Reconcile balance** (only while drift is non-zero). Everything lifecycle-shaped moved to the detail route's header menu.
+- The **drift badge** on a row (statement vs computed disagreement, ADR-094) opens the Reconcile dialog directly.
+- **Add account** stays in the page header (and is the one action of the empty state). It opens a right-hand `Sheet`; the component keeps its `AddAccountDialog` export name. The Advanced switches and opening balance live in that sheet.
 - Account detail links use `/accounts/<id>`. The retired `/accounts?account=<id>` query form opens
   the hub and does not forward.
 
@@ -145,14 +145,14 @@ Every rendered current balance carries a muted subline (`useBalanceProvenance`):
 - stamped: _"as of {date} bank statement + {n} entries since"_
 - unstamped: _"sum of {n} entries"_
 
-fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Shown on hub cards, the detail header, the Reconcile dialog's computed row and the dashboard widget.
+fed by `anchor_date` / `post_anchor_count` from the accounts list endpoint. Shown on hub rows, the detail header, the Reconcile dialog's computed row and the dashboard widget.
 
 ## Reconcile
 
-The drift badge/chip (`selected statement reading − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub cards, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
+The drift badge/chip (`selected statement reading − reconcilable_balance`, ADR-094) opens the Reconcile dialog. `computed_balance` is the FX-converted reporting total; `reconcilable_balance` is one native currency partition. The declared `accounts.currency` partition wins whenever it exists, including at exactly zero. Only when it is absent can a sole funded foreign partition act as the compatibility fallback for a mislabelled single-currency account. The badge itself carries the statement's as-of date (_"Drift +€15,50 · statement 03/06/2026"_) and switches from destructive to **warning (amber) tone when the reading is older than 45 days** — an old anchor is age, not breakage (shared `useDriftBadge` helper; same text + tone on the hub rows, the detail header, and the dashboard `BankBalancesWidget` chips, so the surfaces cannot disagree).
 
 If a current exchange rate is missing, `computed_balance` is a partial converted total: the
-unsupported partition is excluded, its native amount remains visible on the account card, and the
+unsupported partition is excluded, its native amount remains visible on the account row, and the
 account, group, and net-cash totals are marked incomplete. Merge previews use the same rule. Vision never
 treats an unavailable rate as 1:1 for these account surfaces
 ([[docs/adr/127-no-synthetic-fx-for-account-totals|ADR-127]]).
@@ -186,7 +186,7 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 ## Testing
 
 - `apps/frontend/src/pages/__tests__/AccountDetailPage.integration.test.tsx` — header/balance/provenance, running-balance column, header menu verbs, drift chip → Reconcile, live broker holdings/P&L states, holdings-only suppression, `?since=` narrowing + clear, not-found state.
-- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, card→route navigation, reduced hub menu, and retired `?account=` query behavior.
+- `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, row→route navigation, reduced row menu, and retired `?account=` query behavior.
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
 - `apps/node-backend/tests/routes/transactions.test.js` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.

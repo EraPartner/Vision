@@ -3,7 +3,7 @@ title: Research Feature
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-09-27
+updated: 2026-10-07
 tags:
   - url-state
   - feature
@@ -106,7 +106,7 @@ Return source, blend, simulation method, and simulation count sit inside the ini
 when applicable, method, and count. Closing the disclosure preserves all selected values and keeps
 them active in the forecast request.
 
-Horizon and simulation-count buttons expose their selected state to assistive technology. In blended-return mode, the **Return blend** slider displays both the
+Return source and method are `SegmentedControl`s. Horizon and simulation-count buttons expose their selected state to assistive technology. In blended-return mode, the **Return blend** slider displays both the
 historical and forward-looking percentages and announces both proportions as its accessible
 value. Keyboard adjustments update the same blend used by the forecast request.
 
@@ -291,8 +291,7 @@ With no `FRED_API_KEY`, the macro surface degrades gracefully to the keyless **E
 The builder persists an unnamed draft plus up to 20 named layouts in the versioned
 `vision.research.chartBuilder.layouts.v2` library. The retired `research.chartBuilder.v1` browser
 key is no longer read after the cutoff in
-[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]]. New, Save as, layout selection, and
-confirmed deletion are available in the toolbar; changes to the active layout save automatically.
+[[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]]. Layout selection is a select, Save as is the primary button, and the header ••• menu holds New chart, Copy share link and Delete saved layout. Deleting a saved layout acts at once and shows an Undo toast that writes the previous library back ([[docs/adr/187-completeness-sweep|ADR-187]]); replacing an unnamed draft with a new chart still asks first. Changes to the active layout save automatically.
 Copy share link encodes a strictly validated, size-limited chart state in the `chart` query
 parameter. Opening that link imports an unnamed draft without replacing saved layouts. If an
 unnamed draft already contains work, Vision asks before replacing it. The share payload is then
@@ -357,7 +356,7 @@ surfaces remain consistent with the workspace.
 
 ## Chart Builder controls and search feedback
 
-Chart Builder places series entry before layout management. Range remains visible; Chart options groups scale and presets, with active log scale or rebasing shown in its summary. Layout actions groups new, delete, and share actions. Market Lookup, Compare, and Chart Builder distinguish empty searches from unavailable searches. Results for an earlier query are hidden while a changed query is debouncing.
+Chart Builder places series entry before layout management. Range remains visible; Chart options groups scale and presets, with active log scale or rebasing shown in its summary. The header ••• menu groups New chart, Copy share link and Delete saved layout; series and indicators are `List` rows with a row ••• menu (Remove). Market Lookup, Compare, and Chart Builder distinguish empty searches from unavailable searches. Results for an earlier query are hidden while a changed query is debouncing.
 
 ## Task-focused guidance and hierarchy
 
@@ -369,7 +368,7 @@ Chart Builder shows whether the current layout state was saved on this device, i
 
 ### Saved scenario input and recovery
 
-Life Scenario restores saved amounts using the selected number format, so decimal values remain editable and retain their meaning when compared again. If saved definitions cannot load, Retry preserves the current draft. Save stays unavailable until loading succeeds, preventing an incomplete saved list from being overwritten.
+The saved-scenario picker is a select with a _New…_ entry, and deleting a saved scenario acts at once with an Undo toast. Life Scenario restores saved amounts using the selected number format, so decimal values remain editable and retain their meaning when compared again. If saved definitions cannot load, Retry preserves the current draft. Save stays unavailable until loading succeeds, preventing an incomplete saved list from being overwritten.
 
 ### Comparison history context
 

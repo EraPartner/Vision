@@ -2,7 +2,7 @@
 title: Devtools Components
 type: component
 status: active
-date: 2026-06-18
+date: 2026-10-07
 tags: [components, frontend, devtools, observability, admin-mode, request-tracking, metrics, inspector]
 description: Observability UI components for API request tracking and query metrics. Includes ApiInspector floating panel, RequestList with virtualization, RequestDetail pane, MetricsPanel with aggregates, and InspectorToggle button. Shipped as a lazy chunk, gated by dev build flags or the runtime Admin Mode toggle.
 aliases: [devtools components, inspector, api inspector, request inspector]
@@ -75,6 +75,7 @@ type ApiInspectorProps = {
 - Uses shadcn tokens for automatic dark/light theme integration
 - `bg-background`, `border`, `text-foreground` for theme consistency
 - 520×480px fixed size with smooth drags
+- Controls are the design-system `Button`, `Input`, `Badge` and `Tabs` primitives on `rounded-card`/`focus-ring` ([[docs/adr/187-completeness-sweep|ADR-187]]); the virtualized `RequestList` row stays a raw `<button>` (`aria-pressed`) for row-height control. Devtools copy stays English because it is development-only.
 - Positioned absolutely in top-right area
 
 ---

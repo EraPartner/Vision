@@ -2,7 +2,7 @@
 title: Research Dossiers
 type: feature
 status: active
-date: 2026-09-27
+date: 2026-10-07
 tags: [feature, research, dossiers, evidence, provenance, analysis]
 description: Local versioned research records for questions, thesis, evidence, conclusions, and linked financial context.
 aliases: [dossier workspace, research dossier library]
@@ -25,6 +25,8 @@ The editor saves only on an explicit action. A successful save creates a numbere
 snapshot. When an editor is stale, the server rejects the save rather than overwriting a newer
 version. The history view can restore earlier content, which creates another version instead of
 changing the old one. Deleting a dossier deletes its history too.
+
+The page header has a primary _New dossier_ button and a ••• menu with _Export all_; the dossier list is a `List`. Origin and stance are `SegmentedControl`s and the linked source document is a select. Deleting a dossier, restoring an earlier version and reloading the latest server version each ask first through `useConfirmDialog` (none has an undo path); `window.confirm` is no longer used ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 Each citation keeps the source title, reference, optional source and access dates, claim, stance,
 and notes. A local research document may add its document ID, version, passage ordinal, and

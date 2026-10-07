@@ -3,7 +3,7 @@ title: Views & Pages
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -45,7 +45,7 @@ Money
   - Categories
   - Recipients
   - Statistics
-  - Who Owes You
+  - Who owes you
   - Taxes
   - Import / Export
 Wealth
@@ -54,16 +54,16 @@ Wealth
   - Stocks & ETFs
   - Crypto
   - Metals
-  - Real Estate
-  - Savings & Bonds
+  - Real estate
+  - Savings & bonds
   - Rebalance
   - Portfolio taxes
   - Import portfolio history
 Research (hidden until shown)
-  - Research Home, Markets, Market Lookup, Compare, Chart Builder
+  - Research home, Markets, Market lookup, Compare, Chart builder
   - Forecast, Watchlist, Dossiers, Analysis workspace, Analysis monitors
 Admin (admin mode)
-Footer: AI Chat, Settings
+Footer: AI chat, Settings
 ```
 
 ---

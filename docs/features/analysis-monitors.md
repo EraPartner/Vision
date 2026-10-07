@@ -2,7 +2,7 @@
 title: Analysis Monitors
 type: feature
 status: active
-date: 2026-09-30
+date: 2026-10-07
 tags: [feature, analysis, monitoring, research, dossiers, notifications]
 description: Local scheduled checks for saved-analysis thresholds and dossier evidence changes, with durable observations and an in-app inbox.
 aliases: [saved analysis conditions, evidence change monitors]
@@ -35,6 +35,10 @@ All checks and notifications stay in the local backend and PostgreSQL database. 
 contacts an AI model, market-data provider, or public web service, and no operating-system push
 notification is sent. The inbox is an in-app view only. The three monitor tables are included in
 normal `.visionbak` backups. Deleting a rule also deletes its observations and inbox entries.
+
+## Rule list and actions
+
+Saved rules are `List` rows. Each row has a ••• menu with **Check now**, **Enable** or **Disable** (the existing pause toggle) and **Delete**. The selected rule's details keep worded **Check now** and **Delete** buttons as well. Deleting a rule asks for confirmation through `useConfirmDialog` (it also deletes the rule's observations and inbox entries, with no restore path); `window.confirm` is no longer used. Condition type and operator are segmented controls, targets are selects, and observations and the inbox are lists ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 ## Creating and editing a rule
 

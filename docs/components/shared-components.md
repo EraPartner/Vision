@@ -2,8 +2,8 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-07
+updated: 2026-10-07
 last_modified: 2026-08-27
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
 description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; its visible reminder is dashboard-only while AppLayout keeps native badge synchronization mounted on all routes. 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-27: StateBlock unifies empty, page-error, and crash-fallback anatomy; CardSheen has a named feature tier for the Performance total-value card's 10rem sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers. 2026-08-26: SymbolSearchBox gained ARIA listbox semantics and input-owned keyboard navigation; RecipientCombobox now resolves the selected label independently of its filtered search page; VirtualDataTable column resizing gained pointer and keyboard operation.
@@ -132,7 +132,7 @@ Resolves audit finding [[docs/reference/codebase-audit-2026-05#ux.2|ux.2]] for V
 - Row action controls that are hover-revealed for fine pointers remain visible on coarse pointers.
   Repeated icon actions and filter controls use the shared 40px `icon-touch-target` hit area.
 
-> [!info] The `onActivateKeyDown` helper in `[[apps/frontend/src/utils/a11y.ts]]` remains for in-page selection surfaces on Owes and Watchlist. Cross-page entity navigation uses real links. VirtualDataTable uses an inline handler only when a consumer intentionally supplies an in-page row activation callback.
+> [!info] The `onActivateKeyDown` helper in `[[apps/frontend/src/utils/a11y.ts]]` is kept for in-page selection surfaces, but no page calls it since Owes moved to `ListRow` `onActivate` ([[docs/adr/187-completeness-sweep|ADR-187]]); the Watchlist row handles Enter and Space inline. Cross-page entity navigation uses real links. VirtualDataTable uses an inline handler only when a consumer intentionally supplies an in-page row activation callback.
 
 ### Row Selection (ADR-181)
 
@@ -445,7 +445,7 @@ Toggle button for per-graph exclusion control in the Statistics page. Shows whet
 
 **Path:** `[[apps/frontend/src/components/shared/WidgetVisibilityDialog.tsx]]`
 
-Dialog for toggling widget visibility on pages that support configurable layouts (Home, Statistics, Portfolio Tax).
+Dialog for toggling widget visibility on pages that support configurable layouts (Home, Statistics, Portfolio Tax). Widgets are a `List` of `Switch` rows ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 By default it renders its own trigger button (visible count `n/m`). Passing `open` and `onOpenChange` switches it to **controlled mode**: no trigger is rendered and the page owns the open state. Home uses this so the page header's ••• menu can open it as **Customize…** ([[docs/components/dashboard]]). Each widget row shows `labelKey` (translated) when the `WidgetDefinition` has one, otherwise `label`.
 
@@ -488,8 +488,8 @@ import { onActivateKeyDown } from "@/utils/a11y";
 | Surface                        | Pattern                                    | Notes                                                                  |
 | ------------------------------ | ------------------------------------------ | ---------------------------------------------------------------------- |
 | `CategoriesPage` detail names  | `TextLink` with a transactions href        | Opens the category-filtered transaction list with native link behavior |
-| `OwesPage` debtor cards        | `role="button"` + `tabIndex` + `onKeyDown` | Selects recipient on Enter/Space                                       |
-| `WatchlistPage` holding names  | `TextLink` plus explicit chart button      | Name opens market lookup; button opens the in-page chart dialog        |
+| `OwesPage` people rows         | `ListRow` with `onActivate`                | Selects recipient on click, Enter or Space                             |
+| `WatchlistPage` rows           | `role="button"` row plus row ••• menu       | Row opens the in-page chart dialog; the menu's Open in Market lookup item navigates |
 | `StocksPage` holding names     | `TextLink`                                 | Opens market lookup with native link behavior                          |
 | `CryptoPage` holding names     | `TextLink`                                 | Opens market lookup with native link behavior                          |
 | `InvestmentDetailDialog` title | `TextLink`                                 | Opens market lookup with native link behavior                          |
@@ -630,7 +630,6 @@ The colours are toggle-reactive: they resolve from `--gain` and `--loss` tokens 
 | Component                                                               | `tone` logic                                                                                                           |
 | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `StatCard` (dashboard)                                                  | Derived from the existing `trend` prop: `"income"/"up"` → `gain`; `"expense"/"down"` → `loss`; `"neutral"` → `neutral` |
-| `TotalValueCard` (portfolio overview)                                   | `isGain` prop: `true` → `gain`, `false` → `loss`                                                                       |
 | `NetSummaryCard`                                                        | Sign of last month's net result                                                                                        |
 | `MonthlyRhythm`                                                         | Sign of the selected month's net result                                                                                |
 | `NextSevenDaysStrip`                                                    | Sign of the seven-day net total                                                                                        |
@@ -646,9 +645,9 @@ The following rule applies across all summary/stat cards:
 | Directional figures (return %, gain/loss amount)                  | `text-gain` / `text-loss`                                                          |
 | Component figures (cost basis, unrealized, realized)              | `text-foreground` (neutral)                                                        |
 
-> [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
+> [!info] The gain/loss BORDER that previously appeared on `PerformancePage` CompactReturnCard and the former TotalValueCard (via `liquid-glass-trend-up/down` CSS classes) was removed in this pass. The hue is retained via `<TrendHue>`; the border is gone for cross-app consistency. The `glass-trend-up / glass-trend-down / liquid-glass-trend-up / liquid-glass-trend-down` classes have been deleted from `index.css` as they are now orphaned.
 
-Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/portfolio/TotalValueCard.tsx]], [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/features/statistics/MonthlyRhythm.tsx]], [[apps/frontend/src/features/planned/NextSevenDaysStrip.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
+Code links: [[apps/frontend/src/components/shared/TrendHue.tsx]], [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/NetSummaryCard.tsx]], [[apps/frontend/src/features/statistics/MonthlyRhythm.tsx]], [[apps/frontend/src/features/planned/NextSevenDaysStrip.tsx]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]]
 
 ---
 
@@ -693,7 +692,6 @@ Three named tiers, deliberately — not call-site drift. Low-emphasis content ca
 | `NetSummaryCard` (dashboard hero tile)                                                                           | `hero`, `animated` — the only `hero` call site |
 | `StatCard`, `MonthlyRhythm`, `NextSevenDaysStrip`                                                                | `default`, `animated`                          |
 | `MonthlyTrendsChart`, `CashFlowForecastChart`, `CategoryPieChart` (×2), `BankBalancesWidget`, `VirtualDataTable` | `default`                                      |
-| `TotalValueCard` (Portfolio Overview and Performance)                                                            | `feature`                                      |
 
 ---
 
@@ -749,10 +747,10 @@ The former `SuggestionCard` dashboard widget has been deleted. `UpcomingPayments
 
 **Path:** `[[apps/frontend/src/components/shared/TextLink.tsx]]`
 
-`TextLink` is the canonical inline router link for entity names and numeric drill-downs. It supplies the shared underline decoration and `ring-ring/70` focus treatment. Use the primary tone for names, the inherited tone when the surrounding cell owns gain/loss colour, and the muted tone for secondary labels.
+`TextLink` is the canonical inline router link for entity names and numeric drill-downs. It supplies the shared underline decoration and the `focus-ring` focus treatment. Use the primary tone for names, the inherited tone when the surrounding cell owns gain/loss colour, and the muted tone for secondary labels.
 
 Ordinary cross-page navigation must expose a real `href`. Recipient/category/account names, Owes transaction names, holding and watchlist names, database-table names, research results/tiles, and statistics pivot cells use links. Programmatic navigation remains appropriate for post-mutation redirects, startup normalization, command execution, and in-page selection state.
-| TrendHue | StatCard, TotalValueCard, NetSummaryCard, MonthlyRhythm, NextSevenDaysStrip, NetWorthPage StatCard |
+| TrendHue | StatCard, NetSummaryCard, MonthlyRhythm, NextSevenDaysStrip, NetWorthPage StatCard |
 
 ### StateBlock
 

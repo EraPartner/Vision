@@ -3,7 +3,7 @@ title: Feature - Splits & Owes
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -55,7 +55,7 @@ The Splits & Owes system allows users to track shared expenses and debts between
 
 ### Transaction Split
 
-A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI the **Split** action sits in the footer of the transaction inspector ([[docs/features/transactions#Inspector]]); `SplitTransactionDialog` takes a `trigger` element for it.
+A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI the **Split** action sits in the footer of the transaction inspector ([[docs/features/transactions#Inspector]]); `SplitTransactionDialog` takes a `trigger` element for it. The dialog's _Equal split_ / _Custom amounts_ choice is a `SegmentedControl`.
 
 ### Split Payment
 
@@ -206,7 +206,7 @@ Implementation notes:
 - **Owed Summary View**: Shows who owes whom with totals; linked recipients (aliases sharing a `primary_recipient_id`) are automatically collapsed into a single row
 - **Per-Person Detail View**: Detailed breakdown per recipient; expands aliased recipients to show all splits from the full alias group
 - **Split Source Context**: Shows original transaction recipient and memo
-- **Payment controls**: Record payment, settle, and delete controls identify the source transaction and date, with tooltips available on keyboard focus. The payment amount has an associated label and remaining-balance description.
+- **Payment controls**: A worded _Record payment_ button (with the payment icon) and a row ••• menu (Mark as settled, Delete split, confirmed) identify the source transaction and date. The detail header puts _Settle all_ first and _Export CSV_ in its ••• menu ([[docs/adr/187-completeness-sweep|ADR-187]]); the summary lists people as `ListRow`s and the page title reads _Who owes you_. The payment amount has an associated label and remaining-balance description.
 - **Recent Recipient Transactions**: VirtualDataTable with infinite scroll showing recent transactions for the selected recipient using `recipient_group_id` filter (Phase Q) — includes all transactions for the recipient and all linked recipients in the same primary group, surfacing the full transaction history even when linked recipients are involved
 - **Bulk Settle**: Settle all outstanding splits for a person with confirmation; settling a primary recipient or alias settles all unsettled splits from the entire alias group
 - **Jump to Source**: Double-click any split row to open Transactions filtered to the source `transaction_id`
@@ -219,7 +219,7 @@ recipient-group query key, duplicate-ID suppression, and response-body total sem
 
 ### Recipient Alias Grouping (Owed View Consistency)
 
-**Problem (pre-fix):** Two recipients linked via `primary_recipient_id` appeared as separate rows in the "Who Owes You" (`GET /api/splits/owed`) summary, even though other reporting surfaces (categories, recipient insights) already collapsed aliased recipients into their primary. This created a view inconsistency — the owed page did not reflect the merge operation's intent to consolidate linked recipients.
+**Problem (pre-fix):** Two recipients linked via `primary_recipient_id` appeared as separate rows in the "Who owes you" (`GET /api/splits/owed`) summary, even though other reporting surfaces (categories, recipient insights) already collapsed aliased recipients into their primary. This created a view inconsistency — the owed page did not reflect the merge operation's intent to consolidate linked recipients.
 
 **Root Cause:** The legacy merge endpoint (ADR-014) only stamped `primary_recipient_id` on aliases without reassigning split FKs. Splits created before the merge remained stored against the alias recipient_id. The owed summary did not collapse these together.
 
