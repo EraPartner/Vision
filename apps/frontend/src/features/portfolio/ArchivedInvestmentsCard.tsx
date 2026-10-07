@@ -30,12 +30,15 @@ export function ArchivedInvestmentsCard({ investments, onRestore, t }: Props) {
                         variant="ghost"
                         className="h-auto w-full justify-start gap-3 rounded-b-none px-6 py-4 text-left"
                     >
-                        <Archive className="h-4 w-4 text-muted-foreground" />
+                        <Archive
+                            className="h-4 w-4 text-label-secondary"
+                            aria-hidden="true"
+                        />
                         <span className="flex-1">
                             <span className="block font-medium">
                                 {t("portfolio.archivedInvestments")}
                             </span>
-                            <span className="block text-xs font-normal text-muted-foreground">
+                            <span className="block type-caption font-normal text-label-secondary">
                                 {t("portfolio.archivedInvestmentsDesc")}
                             </span>
                         </span>
@@ -51,18 +54,18 @@ export function ArchivedInvestmentsCard({ investments, onRestore, t }: Props) {
                         {investments.map((investment) => (
                             <div
                                 key={investment.id}
-                                className="flex items-center gap-3 rounded-lg border border-border/60 px-3 py-2"
+                                className="flex items-center gap-3 rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2"
                             >
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="truncate text-sm font-medium">
+                                        <span className="truncate type-body font-medium">
                                             {investment.name}
                                         </span>
-                                        <Badge variant="outline">
+                                        <Badge variant="outline" size="sm">
                                             {t("portfolio.archived")}
                                         </Badge>
                                     </div>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-caption text-label-secondary">
                                         {t("portfolio.archivedHistory", {
                                             count: investment.transactions
                                                 .length,
@@ -76,12 +79,11 @@ export function ArchivedInvestmentsCard({ investments, onRestore, t }: Props) {
                                     type="button"
                                     size="sm"
                                     variant="outline"
-                                    className="gap-1.5"
                                     onClick={() =>
                                         void onRestore(investment.id)
                                     }
                                 >
-                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    <RotateCcw aria-hidden="true" />
                                     {t("portfolio.restoreInvestment")}
                                 </Button>
                             </div>

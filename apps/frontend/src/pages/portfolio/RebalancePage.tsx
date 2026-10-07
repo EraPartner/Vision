@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/shared/Money";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
     Select,
     SelectContent,
@@ -63,6 +65,7 @@ import {
 } from "./rebalanceUrlState";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useRebalanceInputs } from "@/features/portfolio/usePortfolioQueries";
+import { Figure } from "@/features/portfolio/assetPageParts";
 import { parseDecimal } from "@/lib/decimal";
 import { formatEditableNumber, type NumberFormat } from "@/utils/currency";
 
@@ -503,10 +506,7 @@ export default function RebalancePage() {
                     className="flex flex-wrap items-start gap-3"
                 >
                     <div className="flex min-w-0 flex-col gap-1.5">
-                        <Label
-                            className="text-xs text-muted-foreground"
-                            htmlFor="rebalance-source"
-                        >
+                        <Label htmlFor="rebalance-source">
                             {t("rebalance.targetModel")}
                         </Label>
                         <Select
@@ -559,10 +559,7 @@ export default function RebalancePage() {
                         </Select>
                     </div>
                     <div className="flex min-w-0 flex-col gap-1.5">
-                        <Label
-                            htmlFor="rebalance-reserve-floor"
-                            className="text-xs text-muted-foreground"
-                        >
+                        <Label htmlFor="rebalance-reserve-floor">
                             {t("rebalance.commitment.reserveFloor")}
                         </Label>
                         <Input
@@ -579,7 +576,7 @@ export default function RebalancePage() {
                         />
                         <p
                             id="rebalance-reserve-help"
-                            className="max-w-64 text-xs text-muted-foreground"
+                            className="max-w-64 type-footnote text-label-secondary"
                         >
                             {t("rebalance.reserveHelp", {
                                 currency,
@@ -588,8 +585,8 @@ export default function RebalancePage() {
                     </div>
                 </CardContent>
                 {presetModel && (
-                    <div className="border-t border-border/60 px-4 py-3">
-                        <p className="mb-2 text-xs text-muted-foreground">
+                    <div className="border-t border-border/50 px-4 py-3">
+                        <p className="mb-2 type-caption text-label-tertiary">
                             {t("rebalance.target")}
                         </p>
                         <ul
@@ -600,7 +597,7 @@ export default function RebalancePage() {
                                 ([sleeve, weight]) => (
                                     <li
                                         key={sleeve}
-                                        className="rounded-md border border-border/70 px-2 py-1 text-xs tabular-nums"
+                                        className="rounded-chip border border-border/60 bg-foreground/[0.04] px-2.5 py-1 type-footnote tabular-nums"
                                     >
                                         {sleeveLabel(sleeve)} {pct(weight)}
                                     </li>
@@ -618,33 +615,29 @@ export default function RebalancePage() {
                             {t("rebalance.commitment.title")}
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-4 text-sm">
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <div className="rounded-lg border bg-muted/20 p-4">
-                                <p className="text-xs text-muted-foreground">
-                                    {t("rebalance.commitment.candidateLabel")}
-                                </p>
-                                <p className="mt-1 text-2xl font-semibold tabular-nums">
-                                    {fmt(projection.candidateCashCap)}
-                                </p>
-                                <p className="mt-2 text-xs text-muted-foreground">
-                                    {t("rebalance.commitment.estimateWarning")}
-                                </p>
-                            </div>
-                            <div className="flex items-center rounded-lg border p-4 text-muted-foreground">
+                    <CardContent className="space-y-4">
+                        <div className="grid gap-6 sm:grid-cols-2">
+                            <Figure
+                                label={t("rebalance.commitment.candidateLabel")}
+                                value={fmt(projection.candidateCashCap)}
+                                detail={t(
+                                    "rebalance.commitment.estimateWarning",
+                                )}
+                            />
+                            <p className="type-body text-label-secondary">
                                 {t("rebalance.commitment.minimum", {
                                     amount: fmt(
                                         projection.minimumProjectedBalance,
                                     ),
                                     date: projection.minimumDate,
                                 })}
-                            </div>
+                            </p>
                         </div>
-                        <details className="rounded-lg border px-3 py-2">
-                            <summary className="cursor-pointer rounded-sm py-1 font-medium focus-ring">
+                        <details className="rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2">
+                            <summary className="cursor-pointer rounded-control py-1 type-body font-medium focus-ring">
                                 {t("rebalance.commitment.methodology")}
                             </summary>
-                            <ul className="mt-2 list-disc space-y-2 pl-5 text-xs leading-relaxed text-muted-foreground">
+                            <ul className="mt-2 list-disc space-y-2 pl-5 type-footnote text-label-secondary">
                                 <li>
                                     {t("rebalance.commitment.includes", {
                                         date: projection.horizonEnd,
@@ -681,7 +674,7 @@ export default function RebalancePage() {
                                     seedFromPreset(v as ModelPortfolio)
                                 }
                             >
-                                <SelectTrigger className="h-8 w-48 text-sm">
+                                <SelectTrigger className="w-48">
                                     <SelectValue
                                         placeholder={t(
                                             "rebalance.editor.loadPreset",
@@ -741,7 +734,7 @@ export default function RebalancePage() {
                                             className="pr-6 text-right tabular-nums"
                                             aria-label={`${t("rebalance.target")} ${i + 1}: ${row.sleeve ? t(`rebalance.sleeve.${row.sleeve}`) : t("rebalance.editor.sleevePlaceholder")} (%)`}
                                         />
-                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 type-footnote text-label-secondary">
                                             %
                                         </span>
                                     </div>
@@ -775,9 +768,9 @@ export default function RebalancePage() {
                                 </Button>
                                 <span
                                     className={cn(
-                                        "text-sm tabular-nums",
+                                        "type-body tabular-nums",
                                         Math.round(weightTotalPct) === 100
-                                            ? "text-muted-foreground"
+                                            ? "text-label-secondary"
                                             : "text-warning",
                                     )}
                                 >
@@ -789,27 +782,28 @@ export default function RebalancePage() {
                             </div>
                             {Math.round(weightTotalPct) !== 100 &&
                                 weightTotalPct > 0 && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("rebalance.editor.normalizeNote")}
                                     </p>
                                 )}
                         </div>
 
-                        <div className="space-y-2 border-t pt-4">
-                            <label className="flex items-center gap-2 text-sm">
-                                <input
-                                    type="checkbox"
+                        <div className="space-y-2 border-t border-border/50 pt-4">
+                            <div className="flex items-center gap-3">
+                                <Switch
+                                    id="rebalance-cap-enabled"
                                     checked={useCashCap}
-                                    onChange={(e) =>
+                                    onCheckedChange={(checked) =>
                                         updateDraft((previous) => ({
                                             ...previous,
-                                            capEnabled: e.target.checked,
+                                            capEnabled: checked,
                                         }))
                                     }
-                                    className="h-4 w-4"
                                 />
-                                {t("rebalance.editor.capCash")}
-                            </label>
+                                <Label htmlFor="rebalance-cap-enabled">
+                                    {t("rebalance.editor.capCash")}
+                                </Label>
+                            </div>
                             {useCashCap && (
                                 <div className="space-y-1">
                                     <Input
@@ -830,7 +824,7 @@ export default function RebalancePage() {
                                             "rebalance.editor.capCash",
                                         )}
                                     />
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("rebalance.editor.capHint", {
                                             amount: fmt(availableCash),
                                         })}
@@ -839,12 +833,9 @@ export default function RebalancePage() {
                             )}
                         </div>
 
-                        <div className="flex flex-wrap items-end gap-2 border-t pt-4">
+                        <div className="flex flex-wrap items-end gap-2 border-t border-border/50 pt-4">
                             <div className="space-y-1.5">
-                                <Label
-                                    htmlFor="plan-name"
-                                    className="text-xs text-muted-foreground"
-                                >
+                                <Label htmlFor="plan-name">
                                     {t("rebalance.plan.name")}
                                 </Label>
                                 <Input
@@ -894,33 +885,41 @@ export default function RebalancePage() {
             )}
 
             <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
-                    <p
-                        id="rebalance-compute-help"
-                        className="max-w-2xl text-sm text-muted-foreground"
+                <Card>
+                    <CardContent
+                        variant="row"
+                        className="flex flex-wrap items-center justify-between gap-3"
                     >
-                        {t("rebalance.noSellNote")}
-                    </p>
-                    <Button
-                        aria-describedby="rebalance-compute-help"
-                        onClick={() => compute.mutate()}
-                        disabled={
-                            compute.isPending || (showEditor && !hasValidRows)
-                        }
-                        className="gap-2"
-                    >
-                        {compute.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Scale className="h-4 w-4" />
-                        )}
-                        {t("rebalance.compute")}
-                    </Button>
-                </div>
+                        <p
+                            id="rebalance-compute-help"
+                            className="max-w-2xl type-body text-label-secondary"
+                        >
+                            {t("rebalance.noSellNote")}
+                        </p>
+                        <Button
+                            aria-describedby="rebalance-compute-help"
+                            onClick={() => compute.mutate()}
+                            disabled={
+                                compute.isPending ||
+                                (showEditor && !hasValidRows)
+                            }
+                            className="gap-2"
+                        >
+                            {compute.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Scale className="h-4 w-4" />
+                            )}
+                            {t("rebalance.compute")}
+                        </Button>
+                    </CardContent>
+                </Card>
                 {compute.isError && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {apiErrorToMessage(compute.error, t)}
-                    </p>
+                    <Alert variant="destructive">
+                        <AlertDescription>
+                            {apiErrorToMessage(compute.error, t)}
+                        </AlertDescription>
+                    </Alert>
                 )}
             </div>
 
@@ -936,7 +935,7 @@ export default function RebalancePage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-2xl font-semibold tabular-nums">
+                                <p className="type-title-2 tabular-nums">
                                     <Money
                                         amount={
                                             availableCash ||
@@ -946,7 +945,7 @@ export default function RebalancePage() {
                                         fractionDigits={0}
                                     />
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="mt-1 type-footnote text-label-secondary">
                                     {t("rebalance.availableCashHint")}
                                 </p>
                             </CardContent>
@@ -958,14 +957,14 @@ export default function RebalancePage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-2xl font-semibold tabular-nums">
+                                <p className="type-title-2 tabular-nums">
                                     <Money
                                         amount={totalDeployed}
                                         currency={currency}
                                         fractionDigits={0}
                                     />
                                 </p>
-                                <p className="text-xs text-muted-foreground mt-1">
+                                <p className="mt-1 type-footnote text-label-secondary">
                                     {t("rebalance.totalDeployedHint")}
                                 </p>
                             </CardContent>
@@ -1051,7 +1050,7 @@ export default function RebalancePage() {
                                                                 />
                                                             </Badge>
                                                         ) : (
-                                                            <span className="text-muted-foreground">
+                                                            <span className="text-label-secondary">
                                                                 —
                                                             </span>
                                                         )}

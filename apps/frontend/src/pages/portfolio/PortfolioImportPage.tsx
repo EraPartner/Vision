@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { PortfolioCsvColumnMapper } from "@/features/imports/PortfolioCsvColumnMapper";
 import { portfolioMappedColumns } from "@/features/imports/portfolioColumnFields";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
@@ -378,11 +379,11 @@ export function PortfolioImportPage() {
     return (
         <PageShell className="mx-auto max-w-3xl space-y-6 p-4">
             <PortfolioImportSession accounts={brokerAccounts} />
-            <details className="rounded-lg border">
-                <summary className="cursor-pointer p-4 text-sm font-medium focus-ring">
+            <details className="rounded-card corner-continuous border border-border/60 bg-card/70">
+                <summary className="cursor-pointer rounded-card p-4 type-body font-medium focus-ring">
                     {t("portfolioImport.session.advanced")}
                 </summary>
-                <Card>
+                <Card className="rounded-t-none border-x-0 border-b-0 shadow-none">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <PortfolioImportIcon className="h-5 w-5 text-primary" />
@@ -417,10 +418,7 @@ export function PortfolioImportPage() {
 
                         {/* Parser source */}
                         <div className="space-y-2">
-                            <Label
-                                htmlFor="pf-source"
-                                className="font-semibold"
-                            >
+                            <Label htmlFor="pf-source">
                                 {t("portfolioImport.parserSource")}
                             </Label>
                             <Select
@@ -436,7 +434,7 @@ export function PortfolioImportPage() {
                                     </SelectItem>
                                     <SelectItem value="custom">
                                         <span className="inline-flex items-center gap-2">
-                                            <PencilLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <PencilLine className="h-3.5 w-3.5 text-label-secondary" />
                                             {t("portfolioImport.newCustom")}
                                         </span>
                                     </SelectItem>
@@ -488,28 +486,30 @@ export function PortfolioImportPage() {
                         {detecting && (
                             <p
                                 role="status"
-                                className="text-sm text-muted-foreground"
+                                className="type-footnote text-label-secondary"
                             >
                                 {t("portfolioImport.detecting")}
                             </p>
                         )}
                         {detectionFailed && (
-                            <p
-                                role="alert"
-                                className="text-sm text-destructive"
-                            >
-                                {t("portfolioImport.detectionFailed")}
-                            </p>
+                            <Alert variant="destructive">
+                                <XCircle className="h-4 w-4" />
+                                <AlertDescription>
+                                    {t("portfolioImport.detectionFailed")}
+                                </AlertDescription>
+                            </Alert>
                         )}
 
                         {isSpecializedFormat ? (
-                            <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">
-                                {t(specializedHintKey!)}
-                            </p>
+                            <Alert>
+                                <AlertDescription>
+                                    {t(specializedHintKey!)}
+                                </AlertDescription>
+                            </Alert>
                         ) : (
                             <>
-                                <details className="rounded-lg border p-3">
-                                    <summary className="cursor-pointer text-sm font-medium focus-ring">
+                                <details className="rounded-card corner-continuous bg-foreground/[0.04] p-3">
+                                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                                         {t("portfolioImport.formatOptions")}
                                     </summary>
                                     <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -589,7 +589,7 @@ export function PortfolioImportPage() {
                                         onChange={setConfig}
                                     />
                                 ) : (
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("portfolioImport.chooseFileFirst")}
                                     </p>
                                 )}
@@ -617,8 +617,8 @@ export function PortfolioImportPage() {
                         />
 
                         {/* Save parser */}
-                        <details className="rounded-lg border p-3">
-                            <summary className="cursor-pointer text-sm font-medium focus-ring">
+                        <details className="rounded-card corner-continuous bg-foreground/[0.04] p-3">
+                            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                                 {t("portfolioImport.saveParserOptions")}
                             </summary>
                             <div className="mt-4 flex flex-wrap items-end gap-2">
@@ -647,7 +647,7 @@ export function PortfolioImportPage() {
                                         !parserName.trim()
                                     }
                                 >
-                                    <Save className="h-4 w-4 mr-1" />
+                                    <Save />
                                     {isSaved
                                         ? t(
                                               "importPage.customParser.saveChanges",
@@ -662,7 +662,7 @@ export function PortfolioImportPage() {
                                         onClick={handleDeleteParser}
                                         disabled={deleteParser.isPending}
                                     >
-                                        <Trash2 className="h-4 w-4 mr-1" />{" "}
+                                        <Trash2 />
                                         {t("importPage.customParser.delete")}
                                     </Button>
                                 )}
@@ -671,12 +671,12 @@ export function PortfolioImportPage() {
 
                         {/* Progress */}
                         {progress && loading && (
-                            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-                                <div className="flex items-center justify-between text-sm">
-                                    <span className="text-muted-foreground font-medium capitalize">
+                            <div className="space-y-3 rounded-card corner-continuous bg-foreground/[0.04] p-4">
+                                <div className="flex items-center justify-between type-body">
+                                    <span className="capitalize text-label-secondary">
                                         {progress.phase}
                                     </span>
-                                    <span className="text-foreground font-semibold">
+                                    <span className="tabular-nums font-medium text-foreground">
                                         {progress.percent}%
                                     </span>
                                 </div>
@@ -690,24 +690,32 @@ export function PortfolioImportPage() {
                         {progress &&
                             !loading &&
                             progress.phase === "complete" && (
-                                <div className="flex items-center gap-3 p-4 rounded-lg border border-success/30 bg-success/10">
-                                    <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
-                                    <p className="text-sm font-medium text-success">
+                                <Alert variant="success">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    <AlertDescription>
                                         {t("importPage.complete")}
-                                    </p>
-                                </div>
+                                    </AlertDescription>
+                                </Alert>
                             )}
                         {progress && !loading && progress.phase === "error" && (
-                            <div className="flex items-center gap-3 p-4 rounded-lg border border-destructive/30 bg-destructive/5">
-                                <XCircle className="h-5 w-5 text-destructive shrink-0" />
-                                <p className="text-sm font-medium text-destructive">
+                            <Alert variant="destructive">
+                                <XCircle className="h-4 w-4" />
+                                <AlertDescription>
                                     {t("importPage.failed")}
-                                </p>
-                            </div>
+                                </AlertDescription>
+                            </Alert>
                         )}
 
                         {/* Actions */}
-                        <div className="flex gap-2">
+                        <div className="flex justify-end gap-2">
+                            {loading && (
+                                <Button
+                                    variant="outline"
+                                    onClick={handleCancel}
+                                >
+                                    {t("importPage.cancelBtn")}
+                                </Button>
+                            )}
                             <Button
                                 onClick={handleImport}
                                 disabled={
@@ -718,31 +726,19 @@ export function PortfolioImportPage() {
                                     (isSpecializedFormat &&
                                         config.accountId == null)
                                 }
-                                className="flex-1 h-11"
-                                size="lg"
                             >
                                 {loading ? (
                                     <>
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                                        <Loader2 className="animate-spin" />
                                         {t("importPage.importingBtn")}
                                     </>
                                 ) : (
                                     <>
-                                        <Upload className="h-4 w-4 mr-2" />{" "}
+                                        <Upload />
                                         {t("importPage.importBtn")}
                                     </>
                                 )}
                             </Button>
-                            {loading && (
-                                <Button
-                                    variant="outline"
-                                    size="lg"
-                                    className="h-11"
-                                    onClick={handleCancel}
-                                >
-                                    {t("importPage.cancelBtn")}
-                                </Button>
-                            )}
                         </div>
                         <ConfirmDialog />
                     </CardContent>

@@ -37,7 +37,11 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
                 <div className="flex items-center gap-2">
                     <CardTitle variant="sm">{t("newsFeed.title")}</CardTitle>
                     {articles.length > 0 && (
-                        <Badge variant="secondary" className="ml-auto text-xs">
+                        <Badge
+                            variant="secondary"
+                            size="sm"
+                            className="ml-auto"
+                        >
                             {t("newsFeed.articles", {
                                 n: String(articles.length),
                             })}
@@ -70,7 +74,7 @@ export function PortfolioNewsFeed({ symbols }: PortfolioNewsFeedProps) {
                                     key={i}
                                     className="flex gap-3 py-3 border-b border-border/50 last:border-0"
                                 >
-                                    <Skeleton className="h-16 w-24 rounded-md shrink-0" />
+                                    <Skeleton className="h-16 w-24 shrink-0 rounded-control" />
                                     <div className="flex-1 space-y-2">
                                         <Skeleton className="h-4 w-full" />
                                         <Skeleton className="h-3 w-3/4" />
@@ -135,8 +139,10 @@ function NewsItem({
     return (
         <Wrapper
             {...linkProps}
-            className={`flex gap-3 py-3 border-b border-border/50 last:border-0 -mx-2 px-2 rounded-md${
-                href ? " group hover:bg-muted/50 transition-colors" : ""
+            className={`-mx-2 flex gap-3 rounded-control border-b border-border/50 px-2 py-3 last:border-0${
+                href
+                    ? " group transition-colors hover:bg-foreground/[0.04]"
+                    : ""
             }`}
         >
             {article.thumbnail && (
@@ -149,7 +155,7 @@ function NewsItem({
             )}
             <div className="flex-1 min-w-0">
                 <h4
-                    className={`text-sm font-medium text-foreground leading-snug line-clamp-2${
+                    className={`line-clamp-2 type-body font-medium leading-snug text-foreground${
                         href
                             ? " group-hover:text-primary transition-colors"
                             : ""
@@ -161,24 +167,25 @@ function NewsItem({
                     )}
                 </h4>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="type-caption text-label-secondary">
                         {article.publisher}
                     </span>
                     {timeAgo && (
                         <>
-                            <span className="text-muted-foreground/40">·</span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <span
+                                className="text-label-tertiary"
+                                aria-hidden="true"
+                            >
+                                ·
+                            </span>
+                            <span className="flex items-center gap-1 type-caption text-label-secondary">
                                 <Clock className="h-3 w-3" />
                                 {timeAgo}
                             </span>
                         </>
                     )}
                     {article.relatedSymbols.map((sym) => (
-                        <Badge
-                            key={sym}
-                            variant="outline"
-                            className="text-2xs px-1.5 py-0 h-4"
-                        >
+                        <Badge key={sym} variant="outline" size="sm">
                             {sym}
                         </Badge>
                     ))}

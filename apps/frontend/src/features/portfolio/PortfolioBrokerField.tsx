@@ -39,14 +39,14 @@ export function PortfolioBrokerField({
 
     if (!editing) {
         return (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 type-caption text-label-secondary">
                 <ArrowRight className="h-3 w-3" aria-hidden="true" />
                 <span className="truncate">{label}</span>
                 <span aria-hidden="true">·</span>
                 <Button
                     type="button"
                     variant="link"
-                    className="h-auto p-0 text-xs text-muted-foreground"
+                    className="h-auto p-0 type-caption text-label-secondary"
                     onClick={() => setEditing(true)}
                 >
                     {t("addPortTxn.broker.change")}

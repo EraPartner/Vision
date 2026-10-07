@@ -6,6 +6,7 @@ import {
     Dialog,
     DialogContent,
     DialogDescription,
+    DialogFooter,
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
@@ -218,7 +219,10 @@ export function AddToWatchlistDialog({
                                 {t("addWatchlist.searchLabel")}
                             </Label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Search
+                                    aria-hidden="true"
+                                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-label-secondary"
+                                />
                                 <Input
                                     id="watchlist-search"
                                     placeholder={t(
@@ -234,13 +238,16 @@ export function AddToWatchlistDialog({
 
                             {isSearching && (
                                 <div className="flex items-center justify-center py-4">
-                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                                    <Loader2
+                                        aria-hidden="true"
+                                        className="h-5 w-5 animate-spin text-label-secondary"
+                                    />
                                 </div>
                             )}
 
                             {searchResults?.items &&
                                 searchResults.items.length > 0 && (
-                                    <div className="max-h-60 overflow-y-auto rounded-md border border-border p-1">
+                                    <div className="max-h-60 overflow-y-auto rounded-card corner-continuous border border-border/60 p-1">
                                         {searchResults.items.map((result) => (
                                             <SymbolSearchResultItem
                                                 key={result.symbol}
@@ -253,7 +260,7 @@ export function AddToWatchlistDialog({
                         </div>
                     ) : (
                         <>
-                            <div className="bg-muted/50 rounded-lg p-3">
+                            <div className="rounded-card corner-continuous bg-foreground/[0.04] p-3">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="font-medium">
@@ -261,7 +268,8 @@ export function AddToWatchlistDialog({
                                         </p>
                                         <Badge
                                             variant="outline"
-                                            className="font-mono text-xs mt-1"
+                                            size="sm"
+                                            className="mt-1 font-mono"
                                         >
                                             {selectedAsset.symbol}
                                         </Badge>
@@ -278,7 +286,7 @@ export function AddToWatchlistDialog({
                                 {quoteData &&
                                     Number.isFinite(quoteData.price) &&
                                     quoteData.price > 0 && (
-                                        <p className="text-sm text-muted-foreground mt-2">
+                                        <p className="mt-2 type-footnote text-label-secondary">
                                             {t("addWatchlist.currentPrice", {
                                                 price: quoteData.price.toFixed(
                                                     2,
@@ -385,7 +393,7 @@ export function AddToWatchlistDialog({
                                     quoteData.price > 0 &&
                                     Number.isFinite(previewTarget) &&
                                     previewTarget > 0 && (
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="type-caption text-label-secondary">
                                             {previewTarget < quoteData.price
                                                 ? t(
                                                       "addWatchlist.belowCurrent",
@@ -430,16 +438,27 @@ export function AddToWatchlistDialog({
                                 />
                             </div>
 
-                            <Button
-                                type="submit"
-                                className="w-full"
-                                disabled={!targetPrice || isSubmitting}
-                            >
-                                {isSubmitting ? (
-                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                ) : null}
-                                {t("addWatchlist.submit")}
-                            </Button>
+                            <DialogFooter>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => handleOpenChange(false)}
+                                >
+                                    {t("common.cancel")}
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    disabled={!targetPrice || isSubmitting}
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2
+                                            aria-hidden="true"
+                                            className="animate-spin"
+                                        />
+                                    ) : null}
+                                    {t("addWatchlist.submit")}
+                                </Button>
+                            </DialogFooter>
                         </>
                     )}
                 </form>

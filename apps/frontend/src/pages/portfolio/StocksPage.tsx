@@ -1,29 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/shared/StatCard";
-import { RollingNumber } from "@/components/shared/RollingNumber";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    TrendingUp,
-    TrendingDown,
-    Trash2,
-    Eye,
-    Banknote,
-    ArrowUpRight,
-    Info,
-} from "lucide-react";
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
+import { Banknote, Info, TrendingDown, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { usePortfolioSummaryQuery } from "@/hooks/portfolio/usePortfolioSummary";
 import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
-import {
-    useCurrencyPartsFormatter,
-    usePercentFormatter,
-} from "@/hooks/useCurrencyFormatter";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
+import { AssetPageActions, Figure } from "@/features/portfolio/assetPageParts";
+import {
+    toneClass,
+    useHoldingActions,
+} from "@/features/portfolio/useHoldingActions";
 import { StalePriceIndicator } from "@/features/portfolio/StalePriceIndicator";
 import { StalePricesBanner } from "@/features/portfolio/StalePricesBanner";
 import {
@@ -37,7 +35,6 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { AssetClass } from "@/types/portfolio";
@@ -49,7 +46,6 @@ import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { ExportDialog } from "@/features/reports/ExportDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { FxPnlCell } from "@/features/portfolio/FxPnlCell";
 import { Money } from "@/components/shared/Money";
@@ -69,19 +65,19 @@ interface StocksPageProps {
     enableFxAwarePnl?: boolean;
     /** Page icon shown in the header, empty state, and (combined variant) asset cell. */
     icon?: LucideIcon;
-    /** i18n key for the dashed "how it works" info card at the bottom. */
+    /** i18n key for the "how it works" note under the holdings. */
     howItWorksKey?: string;
     /** i18n keys for the delete-confirmation dialog (description key receives {name}). */
     deleteTitleKey?: string;
     deleteDescriptionKey?: string;
-    /** Whether the empty-state header also offers the portfolio ExportDialog (Stocks/Metals: yes, Crypto: no). */
+    /** Whether the header ••• menu offers the portfolio PDF export (Stocks/Metals: yes, Crypto: no). */
     showEmptyStateExport?: boolean;
     /**
-     * Whether dividends are surfaced: summary card, table column, and the
-     * dividends term inside the net-return card. Crypto hides all three.
+     * Whether dividends are surfaced: hero figure, table column, and the
+     * dividends term inside the net-return figure. Crypto hides all three.
      */
     showDividends?: boolean;
-    /** Unrealized-P&L card icon follows the sign (up/down) instead of a fixed TrendingUp (Crypto). */
+    /** Unrealized-P&L figure icon follows the sign (up/down) instead of a fixed TrendingUp (Crypto). */
     dynamicUnrealizedIcon?: boolean;
     /**
      * 'split' = separate Symbol and Name columns with an asset-class badge
@@ -109,6 +105,7 @@ interface StocksPageProps {
 
 const DEFAULT_STOCKS_ASSET_CLASSES: AssetClass[] = ["stock", "etf"];
 const DEFAULT_STOCKS_ALLOWED_ADD_ASSET_CLASSES: AssetClass[] = ["stock", "etf"];
+const headCellClass = "whitespace-nowrap text-right";
 
 export default function StocksPage({
     assetClasses = DEFAULT_STOCKS_ASSET_CLASSES,
@@ -137,7 +134,6 @@ export default function StocksPage({
     const { appSettings } = useAppSettings();
     const {
         byAssetClass,
-        deleteInvestment,
         refreshPrices,
         isRefreshingPrices,
         isLoading,
@@ -145,7 +141,10 @@ export default function StocksPage({
         error,
         refetch,
     } = usePortfolio();
-    const { confirm, ConfirmDialog } = useConfirmDialog();
+    const { dialogs, renderMenu } = useHoldingActions({
+        deleteTitleKey,
+        deleteDescriptionKey,
+    });
     const holdings = useMemo(
         () => byAssetClass(assetClasses),
         [byAssetClass, assetClasses],
@@ -175,8 +174,6 @@ export default function StocksPage({
             ),
         [holdings, targetCurrency],
     );
-
-    const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
     const displayedPnlByHoldingId = useMemo(() => {
         const map: Record<
@@ -273,7 +270,7 @@ export default function StocksPage({
         totalTaxes,
     } = totals;
     // Canonical gainLoss includes custody fees and standalone deductions.
-    // These pages include only the income they surface in their summary cards.
+    // These pages include only the income they surface in their hero figures.
     const netGain = toNumber(
         addAll(
             holdings.map((holding) =>
@@ -300,12 +297,19 @@ export default function StocksPage({
         />
     );
 
+    const headerActions = (
+        <AssetPageActions
+            allowedAssetClasses={allowedAddAssetClasses}
+            showExport={showEmptyStateExport}
+        />
+    );
+
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
                 <PageHeader title={t(titleKey)} icon={PageIcon} />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-40 w-full rounded-card" />
+                <Skeleton className="h-64 w-full rounded-card" />
             </PageShell>
         );
     }
@@ -328,23 +332,10 @@ export default function StocksPage({
                 <PageHeader
                     title={t(titleKey)}
                     icon={PageIcon}
-                    actions={
-                        showEmptyStateExport ? (
-                            <>
-                                <ExportDialog defaultType="portfolio" />
-                                <AddInvestmentDialog
-                                    allowedAssetClasses={allowedAddAssetClasses}
-                                />
-                            </>
-                        ) : (
-                            <AddInvestmentDialog
-                                allowedAssetClasses={allowedAddAssetClasses}
-                            />
-                        )
-                    }
+                    actions={headerActions}
                 />
-                <Card className="group relative overflow-hidden">
-                    <CardContent>
+                <Card>
+                    <CardContent variant="state">
                         <EmptyState
                             icon={PageIcon}
                             title={t(emptyTitleKey)}
@@ -361,17 +352,19 @@ export default function StocksPage({
         );
     }
 
+    const feesAndTaxes = -(totalFees + totalTaxes);
+    const unrealizedIcon =
+        dynamicUnrealizedIcon && totalUnrealizedGain < 0
+            ? TrendingDown
+            : TrendingUp;
+
     return (
         <>
             <PageShell className="">
                 <PageHeader
                     title={t(titleKey)}
                     icon={PageIcon}
-                    actions={
-                        <AddInvestmentDialog
-                            allowedAssetClasses={allowedAddAssetClasses}
-                        />
-                    }
+                    actions={headerActions}
                 />
 
                 <StalePricesBanner
@@ -380,304 +373,292 @@ export default function StocksPage({
                     isRefreshing={isRefreshingPrices}
                 />
 
-                {/* Summary Cards */}
-                <div
-                    className={cn(
-                        "grid grid-cols-2 sm:grid-cols-3 gap-3",
-                        showDividends ? "xl:grid-cols-6" : "xl:grid-cols-5",
-                    )}
-                >
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.portfolioValue")}
-                        emphasis="primary"
-                        value={<RollingNumber parts={fmtParts(totalValue)} />}
-                        icon={Banknote}
-                        valueClassName="text-primary"
-                        subtitle={
-                            <PriceFreshnessCaption investments={holdings} />
-                        }
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.realizedPnl")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalRealizedGain, {
-                                    signed: true,
-                                })}
-                            />
-                        }
-                        icon={ArrowUpRight}
-                        trend={totalRealizedGain >= 0 ? "income" : "expense"}
-                        valueClassName={
-                            totalRealizedGain >= 0 ? "text-gain" : "text-loss"
-                        }
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.unrealizedPnl")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalUnrealizedGain, {
-                                    signed: true,
-                                })}
-                            />
-                        }
-                        icon={
-                            dynamicUnrealizedIcon && totalUnrealizedGain < 0
-                                ? TrendingDown
-                                : TrendingUp
-                        }
-                        trend={totalUnrealizedGain >= 0 ? "income" : "expense"}
-                        valueClassName={
-                            totalUnrealizedGain >= 0 ? "text-gain" : "text-loss"
-                        }
-                    />
-                    {showDividends && (
-                        <StatCard
-                            size="compact"
-                            title={t("portfolio.dividends")}
-                            value={
-                                <RollingNumber
-                                    parts={fmtParts(totalDividends, {
-                                        signed: true,
-                                    })}
+                <Card className="overflow-hidden">
+                    <CardContent
+                        variant="headerless"
+                        className="grid gap-6 lg:grid-cols-5"
+                    >
+                        <div className="space-y-2 lg:col-span-2">
+                            <p className="eyebrow flex items-center gap-1.5">
+                                <Banknote className="h-3.5 w-3.5" aria-hidden />
+                                {t("portfolio.portfolioValue")}
+                            </p>
+                            <p className="type-large-title tabular-nums text-foreground">
+                                <Money
+                                    amount={totalValue}
+                                    currency={targetCurrency}
                                 />
-                            }
-                            trend="income"
-                            valueClassName="text-gain"
-                        />
-                    )}
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.feesAndTaxes")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(-(totalFees + totalTaxes), {
-                                    signed: true,
-                                })}
+                            </p>
+                            <PriceFreshnessCaption investments={holdings} />
+                        </div>
+                        <div
+                            className={cn(
+                                "grid grid-cols-2 gap-x-6 gap-y-4 lg:col-span-3",
+                                showDividends ? "sm:grid-cols-3" : "sm:grid-cols-2",
+                            )}
+                        >
+                            <Figure
+                                label={t("portfolio.realizedPnl")}
+                                tone={toneClass(totalRealizedGain)}
+                                value={
+                                    <Money
+                                        amount={totalRealizedGain}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
                             />
-                        }
-                        trend="expense"
-                        valueClassName="text-loss"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.netReturn")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(netGain, { signed: true })}
+                            <Figure
+                                label={t("portfolio.unrealizedPnl")}
+                                icon={unrealizedIcon}
+                                tone={toneClass(totalUnrealizedGain)}
+                                value={
+                                    <Money
+                                        amount={totalUnrealizedGain}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
                             />
-                        }
-                        trend={netGain >= 0 ? "income" : "expense"}
-                        valueClassName={
-                            netGain >= 0 ? "text-gain" : "text-loss"
-                        }
-                    />
-                </div>
+                            {showDividends && (
+                                <Figure
+                                    label={t("portfolio.dividends")}
+                                    tone={toneClass(totalDividends)}
+                                    value={
+                                        <Money
+                                            amount={totalDividends}
+                                            currency={targetCurrency}
+                                            signed
+                                        />
+                                    }
+                                />
+                            )}
+                            <Figure
+                                label={t("portfolio.feesAndTaxes")}
+                                tone={toneClass(feesAndTaxes)}
+                                value={
+                                    <Money
+                                        amount={feesAndTaxes}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                            />
+                            <Figure
+                                label={t("portfolio.netReturn")}
+                                tone={toneClass(netGain)}
+                                value={
+                                    <Money
+                                        amount={netGain}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* Holdings Table */}
                 <Card>
                     <CardHeader>
-                        <CardTitle>{t("portfolio.holdings")}</CardTitle>
+                        <CardTitle variant="sm" level={2}>
+                            {t("portfolio.holdings")}
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-border">
-                                        {assetCellVariant === "split" ? (
-                                            <>
-                                                <th className="py-2 px-3 text-left font-medium text-muted-foreground">
-                                                    {t("portfolio.symbol")}
-                                                </th>
-                                                <th className="py-2 px-3 text-left font-medium text-muted-foreground">
-                                                    {t("portfolio.name")}
-                                                </th>
-                                            </>
+                    <CardContent variant="flush">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {assetCellVariant === "split" ? (
+                                        <>
+                                            <TableHead>
+                                                {t("portfolio.symbol")}
+                                            </TableHead>
+                                            <TableHead>
+                                                {t("portfolio.name")}
+                                            </TableHead>
+                                        </>
+                                    ) : (
+                                        <TableHead>
+                                            {t("portfolio.asset")}
+                                        </TableHead>
+                                    )}
+                                    <TableHead className={headCellClass}>
+                                        {t("portfolio.units")}
+                                    </TableHead>
+                                    <TableHead className={headCellClass}>
+                                        {t("portfolio.avgCost")}
+                                    </TableHead>
+                                    <TableHead className={headCellClass}>
+                                        {priceFreshnessLabel ? (
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            aria-label={t(
+                                                                "portfolio.priceFreshnessLabel",
+                                                                {
+                                                                    price: t(
+                                                                        "portfolio.price",
+                                                                    ),
+                                                                    freshness:
+                                                                        priceFreshnessLabel,
+                                                                },
+                                                            )}
+                                                            className="-mr-2 h-7 gap-1 px-2 type-footnote font-medium text-label-secondary"
+                                                        >
+                                                            {t("portfolio.price")}
+                                                            <Info
+                                                                className="h-3 w-3"
+                                                                aria-hidden
+                                                            />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        {priceFreshnessLabel}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
                                         ) : (
-                                            <th className="py-2 px-3 text-left font-medium text-muted-foreground">
-                                                {t("portfolio.asset")}
-                                            </th>
+                                            t("portfolio.price")
                                         )}
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {t("portfolio.units")}
-                                        </th>
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {t("portfolio.avgCost")}
-                                        </th>
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {priceFreshnessLabel ? (
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <button
-                                                                type="button"
-                                                                aria-label={t(
-                                                                    "portfolio.priceFreshnessLabel",
-                                                                    {
-                                                                        price: t(
-                                                                            "portfolio.price",
-                                                                        ),
-                                                                        freshness:
-                                                                            priceFreshnessLabel,
-                                                                    },
-                                                                )}
-                                                                className="ml-auto inline-flex items-center gap-1 rounded-sm focus-ring"
-                                                            >
-                                                                {t(
-                                                                    "portfolio.price",
-                                                                )}
-                                                                <Info
-                                                                    className="h-3 w-3"
-                                                                    aria-hidden
-                                                                />
-                                                            </button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            {
-                                                                priceFreshnessLabel
-                                                            }
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            ) : (
-                                                t("portfolio.price")
-                                            )}
-                                        </th>
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {t("portfolio.value")}
-                                        </th>
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {t("portfolio.unrealized")}
-                                        </th>
-                                        <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                            {t("portfolio.realized")}
-                                        </th>
-                                        {pageHasFxExposure && (
-                                            <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                                <TouchDisclosure
-                                                    label={t(
-                                                        "portfolio.fxEffect",
-                                                    )}
-                                                    content={t(
-                                                        "portfolio.fxEffect",
-                                                    )}
-                                                >
-                                                    {t("portfolio.fxPnl")}
-                                                </TouchDisclosure>
-                                            </th>
-                                        )}
-                                        {showDividends && (
-                                            <th className="py-2 px-3 text-right font-medium text-muted-foreground">
-                                                {t("portfolio.dividends")}
-                                            </th>
-                                        )}
-                                        <th className="py-2 px-3"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {holdings.map((h) => (
-                                        <tr
-                                            key={h.id}
-                                            className="border-b border-border/50 hover:bg-muted/50 transition-colors group"
-                                        >
+                                    </TableHead>
+                                    <TableHead className={headCellClass}>
+                                        {t("portfolio.value")}
+                                    </TableHead>
+                                    <TableHead className={headCellClass}>
+                                        {t("portfolio.unrealized")}
+                                    </TableHead>
+                                    <TableHead className={headCellClass}>
+                                        {t("portfolio.realized")}
+                                    </TableHead>
+                                    {pageHasFxExposure && (
+                                        <TableHead className={headCellClass}>
+                                            <TouchDisclosure
+                                                label={t("portfolio.fxEffect")}
+                                                content={t("portfolio.fxEffect")}
+                                            >
+                                                {t("portfolio.fxPnl")}
+                                            </TouchDisclosure>
+                                        </TableHead>
+                                    )}
+                                    {showDividends && (
+                                        <TableHead className={headCellClass}>
+                                            {t("portfolio.dividends")}
+                                        </TableHead>
+                                    )}
+                                    <TableHead className="w-12">
+                                        <span className="sr-only">
+                                            {t("portfolio.menu")}
+                                        </span>
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {holdings.map((h) => {
+                                    const pnl = displayedPnlByHoldingId[h.id];
+                                    const unrealized = pnl?.unrealizedTarget || 0;
+                                    const realized = pnl?.realizedTarget || 0;
+                                    const researchHref = h.symbol
+                                        ? `/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`
+                                        : undefined;
+                                    return (
+                                        <TableRow key={h.id}>
                                             {assetCellVariant === "split" ? (
                                                 <>
-                                                    <td className="py-2 px-3 font-mono font-bold text-primary">
+                                                    <TableCell className="font-mono text-primary">
                                                         {h.symbol || "—"}
-                                                    </td>
-                                                    <td className="py-2 px-3">
-                                                        {h.symbol ? (
-                                                            <TextLink
-                                                                to={`/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`}
-                                                                className="font-medium"
-                                                            >
-                                                                {h.name}
-                                                            </TextLink>
-                                                        ) : (
-                                                            <span className="font-medium">
-                                                                {h.name}
-                                                            </span>
-                                                        )}
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="ml-2 text-2xs px-1.5 py-0"
-                                                        >
-                                                            {h.assetClass ===
-                                                            "etf"
-                                                                ? t(
-                                                                      "stocks.etf",
-                                                                  )
-                                                                : h.assetClass ===
-                                                                    "metals"
-                                                                  ? t(
-                                                                        "portfolio.assetClass.metals",
-                                                                    )
-                                                                  : t(
-                                                                        "stocks.stock",
-                                                                    )}
-                                                        </Badge>
-                                                        <PortfolioOversoldBadge
-                                                            oversold={
-                                                                h.oversold
-                                                            }
-                                                        />
-                                                    </td>
-                                                </>
-                                            ) : (
-                                                <td className="py-2 px-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                                            <PageIcon className="h-4 w-4 text-primary" />
-                                                        </div>
-                                                        <div>
-                                                            <span className="font-mono font-bold">
-                                                                {h.symbol ||
-                                                                    "?"}
-                                                            </span>
-                                                            {h.symbol ? (
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="inline-flex flex-wrap items-center gap-2">
+                                                            {researchHref ? (
                                                                 <TextLink
-                                                                    to={`/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`}
-                                                                    tone="muted"
-                                                                    className="block text-xs"
+                                                                    to={researchHref}
+                                                                    className="font-medium"
                                                                 >
                                                                     {h.name}
                                                                 </TextLink>
                                                             ) : (
-                                                                <span className="block text-xs text-muted-foreground">
+                                                                <span className="font-medium">
                                                                     {h.name}
                                                                 </span>
                                                             )}
-                                                        </div>
+                                                            <Badge
+                                                                variant="outline"
+                                                                size="sm"
+                                                            >
+                                                                {h.assetClass ===
+                                                                "etf"
+                                                                    ? t("stocks.etf")
+                                                                    : h.assetClass ===
+                                                                        "metals"
+                                                                      ? t(
+                                                                            "portfolio.assetClass.metals",
+                                                                        )
+                                                                      : t(
+                                                                            "stocks.stock",
+                                                                        )}
+                                                            </Badge>
+                                                            <PortfolioOversoldBadge
+                                                                oversold={h.oversold}
+                                                            />
+                                                        </span>
+                                                    </TableCell>
+                                                </>
+                                            ) : (
+                                                <TableCell>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                                                            <PageIcon
+                                                                className="h-4 w-4"
+                                                                aria-hidden
+                                                            />
+                                                        </span>
+                                                        <span className="flex min-w-0 flex-col">
+                                                            <span className="font-mono">
+                                                                {h.symbol || "?"}
+                                                            </span>
+                                                            {researchHref ? (
+                                                                <TextLink
+                                                                    to={researchHref}
+                                                                    tone="muted"
+                                                                    className="type-footnote"
+                                                                >
+                                                                    {h.name}
+                                                                </TextLink>
+                                                            ) : (
+                                                                <span className="type-footnote text-label-secondary">
+                                                                    {h.name}
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                         <PortfolioOversoldBadge
-                                                            oversold={
-                                                                h.oversold
-                                                            }
+                                                            oversold={h.oversold}
                                                         />
                                                     </div>
-                                                </td>
+                                                </TableCell>
                                             )}
-                                            <td
+                                            <TableCell
                                                 className={cn(
-                                                    "text-right py-2 px-3 tabular-nums",
-                                                    unitsMonospace &&
-                                                        "font-mono",
+                                                    "text-right tabular-nums",
+                                                    unitsMonospace && "font-mono",
                                                 )}
                                             >
                                                 {h.totalUnits.toFixed(
                                                     unitsDecimals,
                                                 )}
-                                            </td>
-                                            <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums text-label-secondary">
                                                 {moneyPriceCol(
                                                     h.avgCostBasis,
                                                     h.currency,
                                                 )}
-                                            </td>
-                                            <td className="text-right py-2 px-3 tabular-nums">
-                                                <span className="inline-flex items-center gap-1 justify-end">
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                                <span className="inline-flex items-center justify-end gap-1">
                                                     {moneyPriceCol(
                                                         h.currentPrice ?? 0,
                                                         h.currency,
@@ -691,45 +672,30 @@ export default function StocksPage({
                                                         }
                                                     />
                                                 </span>
-                                            </td>
-                                            <td className="text-right py-2 px-3 tabular-nums font-medium">
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums font-medium">
                                                 {moneyPriceCol(
                                                     h.currentValue,
                                                     h.currency,
                                                 )}
-                                            </td>
-                                            <td
+                                            </TableCell>
+                                            <TableCell
                                                 className={cn(
-                                                    "text-right py-2 px-3 tabular-nums font-medium",
-                                                    (displayedPnlByHoldingId[
-                                                        h.id
-                                                    ]?.unrealizedTarget || 0) >=
-                                                        0
-                                                        ? "text-gain"
-                                                        : "text-loss",
+                                                    "whitespace-nowrap text-right tabular-nums font-medium",
+                                                    toneClass(unrealized),
                                                 )}
                                             >
                                                 <Money
-                                                    amount={
-                                                        displayedPnlByHoldingId[
-                                                            h.id
-                                                        ]?.unrealizedTarget || 0
-                                                    }
+                                                    amount={unrealized}
                                                     currency={targetCurrency}
                                                     signed
                                                 />
                                                 <DeltaPill
                                                     value={
-                                                        displayedPnlByHoldingId[
-                                                            h.id
-                                                        ]?.unrealizedPercent ||
-                                                        0
+                                                        pnl?.unrealizedPercent || 0
                                                     }
                                                     label={formatPercent(
-                                                        displayedPnlByHoldingId[
-                                                            h.id
-                                                        ]?.unrealizedPercent ||
-                                                            0,
+                                                        pnl?.unrealizedPercent || 0,
                                                         {
                                                             digits: 2,
                                                             signed: true,
@@ -737,48 +703,29 @@ export default function StocksPage({
                                                     )}
                                                     className="ml-1.5"
                                                 />
-                                            </td>
-                                            <td
+                                            </TableCell>
+                                            <TableCell
                                                 className={cn(
-                                                    "text-right py-2 px-3 tabular-nums",
-                                                    (displayedPnlByHoldingId[
-                                                        h.id
-                                                    ]?.realizedTarget || 0) !==
-                                                        0
-                                                        ? (displayedPnlByHoldingId[
-                                                              h.id
-                                                          ]?.realizedTarget ||
-                                                              0) >= 0
-                                                            ? "text-gain"
-                                                            : "text-loss"
-                                                        : "text-muted-foreground",
+                                                    "text-right tabular-nums",
+                                                    realized !== 0
+                                                        ? toneClass(realized)
+                                                        : "text-label-secondary",
                                                 )}
                                             >
-                                                {(displayedPnlByHoldingId[h.id]
-                                                    ?.realizedTarget || 0) !==
-                                                0 ? (
+                                                {realized !== 0 ? (
                                                     <Money
-                                                        amount={
-                                                            displayedPnlByHoldingId[
-                                                                h.id
-                                                            ]?.realizedTarget ||
-                                                            0
-                                                        }
-                                                        currency={
-                                                            targetCurrency
-                                                        }
+                                                        amount={realized}
+                                                        currency={targetCurrency}
                                                         signed
                                                     />
                                                 ) : (
                                                     "—"
                                                 )}
-                                            </td>
+                                            </TableCell>
                                             {pageHasFxExposure && (
                                                 <FxPnlCell
                                                     holding={h}
-                                                    fxInfo={fxInfoById.get(
-                                                        h.id,
-                                                    )}
+                                                    fxInfo={fxInfoById.get(h.id)}
                                                     targetCurrency={
                                                         targetCurrency
                                                     }
@@ -786,7 +733,14 @@ export default function StocksPage({
                                                 />
                                             )}
                                             {showDividends && (
-                                                <td className="text-right py-2 px-3 tabular-nums text-gain">
+                                                <TableCell
+                                                    className={cn(
+                                                        "text-right tabular-nums",
+                                                        h.totalDividends > 0
+                                                            ? "text-gain"
+                                                            : "text-label-secondary",
+                                                    )}
+                                                >
                                                     {h.totalDividends > 0 ? (
                                                         <Money
                                                             amount={convertToTarget(
@@ -801,89 +755,24 @@ export default function StocksPage({
                                                     ) : (
                                                         "—"
                                                     )}
-                                                </td>
+                                                </TableCell>
                                             )}
-                                            <td className="py-2 px-3">
-                                                <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity">
-                                                    <InvestmentDetailDialog
-                                                        investment={h}
-                                                        trigger={
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="icon-touch-target"
-                                                                aria-label={t(
-                                                                    "portfolio.viewDetails",
-                                                                )}
-                                                                title={t(
-                                                                    "portfolio.viewDetails",
-                                                                )}
-                                                            >
-                                                                <Eye className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                        }
-                                                    />
-                                                    <AddPortfolioTxnDialog
-                                                        investment={h}
-                                                    />
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                                        aria-label={t(
-                                                            deleteTitleKey,
-                                                        )}
-                                                        title={t(
-                                                            deleteTitleKey,
-                                                        )}
-                                                        onClick={async () => {
-                                                            const ok =
-                                                                await confirm({
-                                                                    title: t(
-                                                                        deleteTitleKey,
-                                                                    ),
-                                                                    description:
-                                                                        t(
-                                                                            deleteDescriptionKey,
-                                                                            {
-                                                                                name: h.name,
-                                                                            },
-                                                                        ),
-                                                                    confirmLabel:
-                                                                        t(
-                                                                            "common.delete",
-                                                                        ),
-                                                                    variant:
-                                                                        "destructive",
-                                                                });
-                                                            if (ok)
-                                                                deleteInvestment(
-                                                                    h.id,
-                                                                );
-                                                        }}
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                            <TableCell className="py-1 text-right">
+                                                {renderMenu(h)}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
 
-                {/* Info Card */}
-                <Card className="bg-muted/30 !border-dashed">
-                    <CardContent variant="row">
-                        <p className="text-sm text-muted-foreground">
-                            {t(howItWorksKey)}
-                        </p>
-                    </CardContent>
-                </Card>
+                <p className="type-footnote text-label-secondary">
+                    {t(howItWorksKey)}
+                </p>
             </PageShell>
-            <ConfirmDialog />
+            {dialogs}
         </>
     );
 }

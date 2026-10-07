@@ -356,12 +356,13 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
         >
             <DialogTrigger asChild>
                 {trigger ?? (
-                    <Button size="sm" className="gap-1.5">
-                        <Plus className="h-4 w-4" /> {t("addInv.title")}
+                    <Button size="sm">
+                        <Plus aria-hidden="true" />
+                        {t("addInv.title")}
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>
                         {step === "type"
@@ -442,14 +443,17 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                             </Button>
                             <Button
                                 type="submit"
-                                className="gap-1.5"
+
                                 disabled={isSubmitting}
                             >
                                 {isSubmitting && (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2
+                                        aria-hidden="true"
+                                        className="animate-spin"
+                                    />
                                 )}
                                 {t("addInv.create")}{" "}
-                                <ArrowRight className="h-4 w-4" />
+                                <ArrowRight aria-hidden="true" />
                             </Button>
                         </DialogFooter>
                     </form>

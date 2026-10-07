@@ -1,5 +1,5 @@
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
-import { useId, useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Upload } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -13,7 +13,12 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { Money } from "@/components/shared/Money";
 import {
     portfolioExposureQueryKey,
@@ -25,7 +30,7 @@ type Dimension = "issuer" | "sector" | "issuerCountry";
 export function PortfolioExposureCard({ currency }: { currency: string }) {
     const { t } = useLanguage();
     const formatPercent = usePercentFormatter();
-    const sourceInputId = useId();
+    const sourceInputRef = useRef<HTMLInputElement>(null);
     const queryClient = useQueryClient();
     const [dimension, setDimension] = useState<Dimension>("issuer");
     const [error, setError] = useState<string | null>(null);
@@ -56,7 +61,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                       key: "unclassified",
                       amount: selected.unclassifiedValue,
                       percent: selected.unclassifiedWeightPercent,
-                      color: "bg-muted-foreground/50",
+                      color: "bg-label-tertiary",
                   },
                   {
                       key: "uncovered",
@@ -94,59 +99,58 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-                <div
-                    role="group"
+                <SegmentedControl
+                    size="sm"
+                    value={dimension}
+                    onValueChange={(value) => setDimension(value as Dimension)}
                     aria-label={t("portfolio.exposure.dimensionLabel")}
-                    className="flex flex-wrap gap-2"
                 >
                     {(["issuer", "sector", "issuerCountry"] as const).map(
                         (value) => (
-                            <Button
-                                key={value}
-                                type="button"
-                                size="sm"
-                                variant={
-                                    dimension === value ? "default" : "outline"
-                                }
-                                aria-pressed={dimension === value}
-                                onClick={() => setDimension(value)}
-                            >
+                            <SegmentedControlItem key={value} value={value}>
                                 {t(`portfolio.exposure.${value}`)}
-                            </Button>
+                            </SegmentedControlItem>
                         ),
                     )}
-                </div>
-                {query.isLoading && <p role="status">{t("common.loading")}</p>}
+                </SegmentedControl>
+                {query.isLoading && (
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
+                        {t("common.loading")}
+                    </p>
+                )}
                 {query.isError && (
-                    <div className="flex flex-wrap items-center gap-3">
-                        <p role="alert" className="text-sm text-destructive">
-                            {apiErrorToMessage(query.error, t)}
-                        </p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={query.isFetching}
-                            onClick={() => void query.refetch()}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+                            <span>{apiErrorToMessage(query.error, t)}</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={query.isFetching}
+                                onClick={() => void query.refetch()}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
                 {error && (
-                    <p role="alert" className="text-sm text-destructive">
-                        {error}
-                    </p>
+                    <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
                 )}
                 {query.data && selected && (
                     <>
-                        <div className="space-y-3 rounded-lg border bg-muted/10 p-4">
+                        <div className="space-y-3 rounded-card corner-continuous bg-foreground/[0.04] p-4">
                             <div className="space-y-1">
-                                <h3 className="text-sm font-medium">
+                                <h3 className="type-headline">
                                     {t("portfolio.exposure.coverage")}
                                 </h3>
                                 {(Number(selected.unclassifiedValue) > 0 ||
                                     Number(query.data.uncoveredValue) > 0) && (
-                                    <p className="max-w-prose text-sm text-muted-foreground">
+                                    <p className="max-w-prose type-footnote text-label-secondary">
                                         {t(
                                             "portfolio.exposure.partialCoverageHint",
                                         )}
@@ -156,7 +160,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                             {canChartCoverage && (
                                 <div
                                     aria-hidden="true"
-                                    className="flex h-3 overflow-hidden rounded-full bg-muted"
+                                    className="flex h-3 overflow-hidden rounded-chip bg-foreground/[0.08]"
                                 >
                                     {coverage.map(({ key, percent, color }) => (
                                         <span
@@ -173,21 +177,21 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                 {coverage.map(
                                     ({ key, amount, percent, color }) => (
                                         <div key={key} className="min-w-0 py-1">
-                                            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                                            <p className="flex items-center gap-2 type-caption text-label-secondary">
                                                 <span
                                                     aria-hidden="true"
-                                                    className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`}
+                                                    className={`h-2.5 w-2.5 shrink-0 rounded-chip ${color}`}
                                                 />
                                                 {t(`portfolio.exposure.${key}`)}
                                             </p>
                                             <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                                                <span className="text-lg font-semibold tabular-nums">
+                                                <span className="type-title-3 tabular-nums">
                                                     <Money
                                                         amount={amount}
                                                         currency={currency}
                                                     />
                                                 </span>
-                                                <span className="text-sm tabular-nums text-muted-foreground">
+                                                <span className="type-footnote tabular-nums text-label-secondary">
                                                     {formatPercent(
                                                         Number(percent),
                                                         {
@@ -197,7 +201,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                                     )}
                                                 </span>
                                             </p>
-                                            <p className="mt-1 text-xs text-muted-foreground">
+                                            <p className="mt-1 type-caption text-label-secondary">
                                                 {t(
                                                     `portfolio.exposure.${key}Hint`,
                                                 )}
@@ -208,7 +212,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                             </div>
                         </div>
                         {query.data.warnings.length > 0 && (
-                            <p className="flex items-center gap-2 text-xs text-warning">
+                            <p className="flex items-center gap-2 type-footnote text-warning">
                                 <AlertTriangle
                                     aria-hidden="true"
                                     className="h-4 w-4"
@@ -221,7 +225,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                         {query.data.fundSources.some(
                             (source) => source.stale,
                         ) && (
-                            <p className="text-sm text-warning">
+                            <p className="type-footnote text-warning">
                                 {t("portfolio.exposure.stale")}:{" "}
                                 {query.data.fundSources
                                     .filter((source) => source.stale)
@@ -229,13 +233,13 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                     .join(", ")}
                             </p>
                         )}
-                        <div className="divide-y divide-border/60 rounded-lg border border-border/60">
+                        <div className="divide-y divide-border/60 rounded-card corner-continuous border border-border/60">
                             {selected.rows.map((row) => (
                                 <details
                                     key={row.id}
-                                    className="first:rounded-t-lg last:rounded-b-lg"
+                                    className="first:rounded-t-card last:rounded-b-card"
                                 >
-                                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium hover:bg-muted/40 focus-ring">
+                                    <summary className="cursor-pointer rounded-card p-3 type-body font-medium hover:bg-foreground/[0.04] focus-ring">
                                         <span className="ml-1 inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 align-middle">
                                             <span>{row.label}</span>
                                             <span className="flex items-baseline gap-3 tabular-nums">
@@ -243,7 +247,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                                     amount={row.amount}
                                                     currency={currency}
                                                 />
-                                                <span className="text-muted-foreground">
+                                                <span className="text-label-secondary">
                                                     {formatPercent(
                                                         Number(
                                                             row.weightPercent,
@@ -257,7 +261,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                             </span>
                                         </span>
                                     </summary>
-                                    <ul className="space-y-2 border-t px-4 py-3 text-sm text-muted-foreground">
+                                    <ul className="space-y-2 border-t border-border/60 px-4 py-3 type-footnote text-label-secondary">
                                         {row.contributions.map(
                                             (item, index) => (
                                                 <li
@@ -294,26 +298,26 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                 </details>
                             ))}
                             {selected.rows.length === 0 && (
-                                <p className="p-3 text-sm text-muted-foreground">
+                                <p className="p-3 type-footnote text-label-secondary">
                                     {t("portfolio.exposure.noneClassified")}
                                 </p>
                             )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="type-caption text-label-secondary">
                             {t("portfolio.exposure.fxBoundary")}
                         </p>
                     </>
                 )}
-                <details className="rounded-lg border">
-                    <summary className="cursor-pointer rounded-lg p-3 text-sm font-medium focus-ring">
+                <details className="rounded-card corner-continuous border border-border/60">
+                    <summary className="cursor-pointer rounded-card p-3 type-body font-medium focus-ring">
                         {t("portfolio.exposure.sourcesAndImport")}
                     </summary>
-                    <div className="space-y-3 border-t p-3">
-                        <p className="text-sm text-muted-foreground">
+                    <div className="space-y-3 border-t border-border/60 p-3">
+                        <p className="type-footnote text-label-secondary">
                             {t("portfolio.exposure.sourceBoundary")}
                         </p>
                         {query.data && query.data.fundSources.length > 0 && (
-                            <ul className="space-y-2 text-sm text-muted-foreground">
+                            <ul className="space-y-2 type-footnote text-label-secondary">
                                 {query.data.fundSources.map((source) => (
                                     <li key={source.investmentId}>
                                         {source.investmentName} ·{" "}
@@ -322,63 +326,68 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                             age: source.ageDays,
                                             maximum: source.maximumAgeDays,
                                         })}
-                                        <span
-                                            className={`ml-2 inline-flex rounded-full px-2 py-0.5 text-xs ${source.stale ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground"}`}
+                                        <Badge
+                                            variant={
+                                                source.stale
+                                                    ? "warning"
+                                                    : "secondary"
+                                            }
+                                            size="sm"
+                                            className="ml-2"
                                         >
                                             {t(
                                                 source.stale
                                                     ? "portfolio.exposure.stale"
                                                     : "portfolio.exposure.fresh",
                                             )}
-                                        </span>
+                                        </Badge>
                                     </li>
                                 ))}
                             </ul>
                         )}
-                        <Label
-                            htmlFor={sourceInputId}
-                            className="inline-flex cursor-pointer items-center rounded-md border px-3 py-2 text-sm focus-within:ring-2 focus-within:ring-ring/70"
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={upsert.isPending}
+                            onClick={() => sourceInputRef.current?.click()}
                         >
-                            <Upload
-                                aria-hidden="true"
-                                className="mr-2 h-4 w-4"
-                            />
+                            <Upload aria-hidden="true" />
                             {t("portfolio.exposure.importSources")}
-                            <input
-                                id={sourceInputId}
-                                className="sr-only"
-                                type="file"
-                                accept="application/json,.json"
-                                onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = "";
-                                    if (!file) return;
-                                    if (file.size > 1_000_000) {
+                        </Button>
+                        <input
+                            ref={sourceInputRef}
+                            className="hidden"
+                            type="file"
+                            aria-label={t("portfolio.exposure.importSources")}
+                            accept="application/json,.json"
+                            onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                event.target.value = "";
+                                if (!file) return;
+                                if (file.size > 1_000_000) {
+                                    setError(
+                                        t("portfolio.exposure.invalidSource"),
+                                    );
+                                    return;
+                                }
+                                void file
+                                    .text()
+                                    .then((text) =>
+                                        upsert.mutate(JSON.parse(text)),
+                                    )
+                                    .catch((cause) =>
                                         setError(
-                                            t(
-                                                "portfolio.exposure.invalidSource",
-                                            ),
-                                        );
-                                        return;
-                                    }
-                                    void file
-                                        .text()
-                                        .then((text) =>
-                                            upsert.mutate(JSON.parse(text)),
-                                        )
-                                        .catch((cause) =>
-                                            setError(
-                                                cause instanceof Error
-                                                    ? cause.message
-                                                    : t(
-                                                          "portfolio.exposure.invalidSource",
-                                                      ),
-                                            ),
-                                        );
-                                }}
-                            />
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
+                                            cause instanceof Error
+                                                ? cause.message
+                                                : t(
+                                                      "portfolio.exposure.invalidSource",
+                                                  ),
+                                        ),
+                                    );
+                            }}
+                        />
+                        <p className="type-caption text-label-secondary">
                             {t("portfolio.exposure.importHint")}
                         </p>
                     </div>

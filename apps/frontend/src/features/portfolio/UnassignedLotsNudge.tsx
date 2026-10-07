@@ -68,7 +68,7 @@ export function UnassignedLotsNudge({
 
     if (completeHistory.isLoading) {
         return (
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center gap-2 type-caption text-label-secondary">
                 <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
                 {t("portfolio.unassignedLotsLoading")}
             </div>
@@ -76,7 +76,10 @@ export function UnassignedLotsNudge({
     }
     if (completeHistory.isError) {
         return (
-            <div className="mt-2 text-xs font-medium text-warning" role="alert">
+            <div
+                className="mt-2 type-caption font-medium text-warning"
+                role="alert"
+            >
                 {t("portfolio.unassignedLotsLoadFailed")}
             </div>
         );
@@ -130,12 +133,12 @@ export function UnassignedLotsNudge({
 
     return (
         <>
-            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-card corner-continuous border border-warning/30 bg-warning/10 px-3 py-2">
                 <AlertTriangle
                     className="h-3.5 w-3.5 shrink-0 text-warning"
                     aria-hidden="true"
                 />
-                <span className="text-xs text-muted-foreground">
+                <span className="type-caption text-label-secondary">
                     {t("portfolio.unassignedLots", {
                         count: String(unassignedIds.length),
                     })}
@@ -147,7 +150,7 @@ export function UnassignedLotsNudge({
                             onValueChange={setSelectedBroker}
                         >
                             <SelectTrigger
-                                className="h-7 w-auto min-w-32 text-xs"
+                                className="h-8 w-auto min-w-32 type-footnote"
                                 aria-label={t("portfolio.assignLotsBroker")}
                             >
                                 <SelectValue />
@@ -167,7 +170,6 @@ export function UnassignedLotsNudge({
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="h-7 px-2 text-xs"
                             disabled={
                                 !effectiveBroker ||
                                 overLimit ||
@@ -184,13 +186,13 @@ export function UnassignedLotsNudge({
                             {t("portfolio.assignLots")}
                         </Button>
                         {overLimit && (
-                            <span className="text-xs font-medium text-warning">
+                            <span className="type-caption font-medium text-warning">
                                 {t("portfolio.assignLotsOverLimit")}
                             </span>
                         )}
                     </>
                 ) : (
-                    <span className="text-xs font-medium text-warning">
+                    <span className="type-caption font-medium text-warning">
                         {t("portfolio.unassignedLotsNoBroker")}
                     </span>
                 )}

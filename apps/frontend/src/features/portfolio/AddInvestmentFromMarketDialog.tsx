@@ -369,7 +369,7 @@ export function AddInvestmentFromMarketDialog({
 
                 {step === "choose" && (
                     <div className="space-y-4">
-                        <div className="text-sm text-muted-foreground">
+                        <div className="type-footnote text-label-secondary">
                             {t("addInvFromMarket.prompt", {
                                 symbol: quote.symbol,
                             })}
@@ -378,14 +378,14 @@ export function AddInvestmentFromMarketDialog({
                             {existingInvestment && (
                                 <Button
                                     variant="outline"
-                                    className="w-full justify-start h-auto p-4"
+                                    className="h-auto w-full justify-start whitespace-normal rounded-card corner-continuous p-4 hover:border-primary/60 hover:bg-primary/[0.06]"
                                     onClick={() => setStep("transaction")}
                                 >
                                     <div className="text-left">
                                         <div className="font-medium">
                                             {t("form.addTransaction.title")}
                                         </div>
-                                        <div className="text-sm text-muted-foreground">
+                                        <div className="type-caption font-normal text-label-secondary">
                                             {t(
                                                 "addInvFromMarket.option.addTxnDesc",
                                             )}
@@ -395,14 +395,14 @@ export function AddInvestmentFromMarketDialog({
                             )}
                             <Button
                                 variant="outline"
-                                className="w-full justify-start h-auto p-4"
+                                className="h-auto w-full justify-start whitespace-normal rounded-card corner-continuous p-4 hover:border-primary/60 hover:bg-primary/[0.06]"
                                 onClick={() => setStep("new")}
                             >
                                 <div className="text-left">
                                     <div className="font-medium">
                                         {t("addInvFromMarket.option.createNew")}
                                     </div>
-                                    <div className="text-sm text-muted-foreground">
+                                    <div className="type-caption font-normal text-label-secondary">
                                         {existingInvestment
                                             ? t(
                                                   "addInvFromMarket.option.createDescExisting",

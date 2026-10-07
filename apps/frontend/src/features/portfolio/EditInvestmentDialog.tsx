@@ -277,7 +277,10 @@ export function EditInvestmentDialog({
                         </Button>
                         <Button type="submit" disabled={isUpdatingInvestment}>
                             {isUpdatingInvestment && (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2
+                                    aria-hidden="true"
+                                    className="animate-spin"
+                                />
                             )}
                             {t("common.save")}
                         </Button>

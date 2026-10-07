@@ -41,10 +41,10 @@ export function PortfolioLotRetagChoice({
     return (
         <div className="space-y-2">
             <div>
-                <p className="text-sm font-medium">
+                <p className="type-body font-medium">
                     {t("accounts.close.portfolioLots")}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="type-caption text-label-secondary">
                     {t("accounts.close.portfolioLotsCount", {
                         count: String(eligibleCount),
                     })}

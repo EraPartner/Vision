@@ -66,10 +66,10 @@ function PerformerRow({
     return (
         <div className="flex items-center justify-between">
             <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
+                <p className="truncate type-body font-medium text-foreground">
                     {inv.name}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="type-caption text-label-secondary">
                     {inv.symbol ||
                         getAssetClassLabel(t, inv.assetClass as AssetClass)}
                 </p>
@@ -77,7 +77,7 @@ function PerformerRow({
             <div className="text-right shrink-0">
                 <p
                     className={cn(
-                        "text-sm font-bold",
+                        "type-body font-medium tabular-nums",
                         inv.gainLossPercent >= 0 ? "text-gain" : "text-loss",
                     )}
                 >
@@ -86,7 +86,7 @@ function PerformerRow({
                         signed: true,
                     })}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="type-caption tabular-nums text-label-secondary">
                     <Money amount={inv.gainLoss} currency={defaultCurrency} />
                     {typeof inv.fxGain === "number" &&
                         inv.currency !== defaultCurrency && (
@@ -110,10 +110,10 @@ function PerformerRow({
 }
 
 function getHeatColor(val: number | null, maxAbsPct: number): string {
-    if (val === null) return "bg-muted/30";
-    if (val === 0) return "bg-muted text-muted-foreground";
+    if (val === null) return "bg-foreground/[0.04]";
+    if (val === 0) return "bg-foreground/[0.08] text-label-secondary";
     const absPct = Math.abs(val);
-    if (absPct < 0.25) return "bg-muted/70 text-muted-foreground";
+    if (absPct < 0.25) return "bg-foreground/[0.06] text-label-secondary";
     const scale = Math.max(maxAbsPct, 1);
     const ratio = absPct / scale;
     const strongMove = absPct >= 2.5 || ratio > 0.72;
@@ -219,17 +219,17 @@ export default function PerformanceBreakdown({
                         classGain,
                         classPct,
                     }) => (
-                        <Card key={assetClass} className="border shadow-sm">
-                            <CardContent variant="row">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-semibold text-muted-foreground">
+                        <Card key={assetClass}>
+                            <CardContent variant="compact">
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                    <span className="type-caption text-label-tertiary">
                                         {label}
                                     </span>
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="type-caption text-label-secondary">
                                         {tc("performance.holdings", count)}
                                     </span>
                                 </div>
-                                <div className="text-xl font-bold text-foreground">
+                                <div className="type-title-3 tabular-nums text-foreground">
                                     <Money
                                         amount={classValue}
                                         currency={defaultCurrency}
@@ -237,7 +237,7 @@ export default function PerformanceBreakdown({
                                 </div>
                                 <div
                                     className={cn(
-                                        "text-sm font-medium mt-1",
+                                        "mt-1 type-footnote tabular-nums",
                                         classGain >= 0
                                             ? "text-gain"
                                             : "text-loss",
@@ -255,7 +255,7 @@ export default function PerformanceBreakdown({
                                     })}
                                     )
                                 </div>
-                                <div className="text-xs text-muted-foreground mt-1">
+                                <div className="mt-1 type-caption tabular-nums text-label-secondary">
                                     {t("portfolio.invested", {
                                         amount: formatCurrency(
                                             classInvested,
@@ -282,21 +282,21 @@ export default function PerformanceBreakdown({
                     </CardHeader>
                     <CardContent>
                         <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
+                            <table className="w-full type-caption">
                                 <thead>
                                     <tr>
-                                        <th className="text-left py-2 px-2 font-semibold text-muted-foreground w-16">
+                                        <th className="w-16 px-2 py-2 text-left font-medium text-label-secondary">
                                             {t("performance.year")}
                                         </th>
                                         {MONTH_LABELS.map((m) => (
                                             <th
                                                 key={m}
-                                                className="text-center py-2 px-1 font-semibold text-muted-foreground min-w-[48px]"
+                                                className="min-w-[48px] px-1 py-2 text-center font-medium text-label-secondary"
                                             >
                                                 {m}
                                             </th>
                                         ))}
-                                        <th className="text-center py-2 px-2 font-semibold text-muted-foreground min-w-[56px]">
+                                        <th className="min-w-[56px] px-2 py-2 text-center font-medium text-label-secondary">
                                             {t("performance.ytd")}
                                         </th>
                                     </tr>
@@ -320,7 +320,7 @@ export default function PerformanceBreakdown({
 
                                         return (
                                             <tr key={year}>
-                                                <td className="py-1 px-2 font-bold text-foreground">
+                                                <td className="px-2 py-1 font-medium tabular-nums text-foreground">
                                                     {year}
                                                 </td>
                                                 {months.map((val, idx) => (
@@ -330,7 +330,7 @@ export default function PerformanceBreakdown({
                                                     >
                                                         <div
                                                             className={cn(
-                                                                "rounded-md py-1.5 px-1 text-center font-mono font-medium transition-colors",
+                                                                "rounded-control px-1 py-1.5 text-center font-mono tabular-nums transition-colors",
                                                                 getHeatColor(
                                                                     val,
                                                                     heatmapData.maxAbsPct,
@@ -355,7 +355,7 @@ export default function PerformanceBreakdown({
                                                 <td className="py-1 px-2">
                                                     <div
                                                         className={cn(
-                                                            "rounded-md py-1.5 px-1 text-center font-mono font-bold transition-colors",
+                                                            "rounded-control px-1 py-1.5 text-center font-mono font-medium tabular-nums transition-colors",
                                                             getHeatColor(
                                                                 ytd,
                                                                 heatmapData.maxAbsPct,
@@ -374,16 +374,16 @@ export default function PerformanceBreakdown({
                             </table>
                         </div>
 
-                        <div className="flex items-center justify-center gap-2 mt-4 text-xs text-muted-foreground">
+                        <div className="mt-4 flex items-center justify-center gap-2 type-caption text-label-secondary">
                             <span>{t("performance.loss")}</span>
-                            <div className="flex gap-0.5">
-                                <div className="w-6 h-4 rounded-sm bg-loss/70" />
-                                <div className="w-6 h-4 rounded-sm bg-loss/45" />
-                                <div className="w-6 h-4 rounded-sm bg-loss/20" />
-                                <div className="w-6 h-4 rounded-sm bg-muted" />
-                                <div className="w-6 h-4 rounded-sm bg-gain/20" />
-                                <div className="w-6 h-4 rounded-sm bg-gain/40" />
-                                <div className="w-6 h-4 rounded-sm bg-gain/70" />
+                            <div className="flex gap-0.5" aria-hidden="true">
+                                <div className="h-4 w-6 rounded-chip bg-loss/70" />
+                                <div className="h-4 w-6 rounded-chip bg-loss/45" />
+                                <div className="h-4 w-6 rounded-chip bg-loss/20" />
+                                <div className="h-4 w-6 rounded-chip bg-foreground/[0.08]" />
+                                <div className="h-4 w-6 rounded-chip bg-gain/20" />
+                                <div className="h-4 w-6 rounded-chip bg-gain/40" />
+                                <div className="h-4 w-6 rounded-chip bg-gain/70" />
                             </div>
                             <span>{t("performance.gain")}</span>
                         </div>
@@ -395,8 +395,14 @@ export default function PerformanceBreakdown({
             <div className="grid gap-4 lg:grid-cols-2">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-accent">
-                            <TrendingUp className="h-5 w-5" />
+                        <CardTitle
+                            variant="sm"
+                            className="flex items-center gap-2"
+                        >
+                            <TrendingUp
+                                className="h-5 w-5 text-gain"
+                                aria-hidden
+                            />
                             {t("performance.topPerformers")}
                         </CardTitle>
                     </CardHeader>
@@ -416,8 +422,14 @@ export default function PerformanceBreakdown({
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-destructive">
-                            <TrendingDown className="h-5 w-5" />
+                        <CardTitle
+                            variant="sm"
+                            className="flex items-center gap-2"
+                        >
+                            <TrendingDown
+                                className="h-5 w-5 text-loss"
+                                aria-hidden
+                            />
                             {t("performance.bottomPerformers")}
                         </CardTitle>
                     </CardHeader>

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     Dialog,
@@ -17,7 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/Money";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
     TrendingUp,
     TrendingDown,
@@ -25,12 +26,10 @@ import {
     Trash2,
     Calendar,
     Banknote,
-    Percent,
-    ArrowUpRight,
-    Clock,
     Pencil,
     Plus,
     Archive,
+    Receipt,
 } from "lucide-react";
 import { isUnitBased, isFixedIncome, isRealEstate } from "@/utils/assetClass";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -41,7 +40,10 @@ import { EditInvestmentDialog } from "./EditInvestmentDialog";
 import { EditPortfolioTxnDialog } from "./EditPortfolioTxnDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
+import {
+    useCurrencyFormatter,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import type { InvestmentSummary, PortfolioTxnType } from "@/types/portfolio";
@@ -51,6 +53,8 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useControlledOpen } from "@/hooks/useDialogFormState";
 import { TextLink } from "@/components/shared/TextLink";
 import { PortfolioOversoldBadge } from "./PortfolioOversoldBadge";
+import { FactRow } from "./assetPageParts";
+import { toneClass } from "./useHoldingActions";
 
 type TxnRow = InvestmentSummary["transactions"][number];
 
@@ -91,15 +95,15 @@ function getNumberFmt(locale: string, decimals: number): Intl.NumberFormat {
 }
 
 const TXN_TYPE_COLORS: Record<PortfolioTxnType, string> = {
-    buy: "bg-accent/10 text-accent border-accent/20",
-    sell: "bg-destructive/10 text-destructive border-destructive/20",
-    dividend: "bg-primary/10 text-primary border-primary/20",
-    interest: "bg-primary/10 text-primary border-primary/20",
-    rent_income: "bg-accent/10 text-accent border-accent/20",
-    gift: "bg-primary/10 text-primary border-primary/20",
-    fee: "bg-muted text-muted-foreground border-border",
-    tax: "bg-muted text-muted-foreground border-border",
-    appreciation: "bg-accent/10 text-accent border-accent/20",
+    buy: "border-accent/30 bg-accent/12 text-accent",
+    sell: "border-destructive/30 bg-destructive/12 text-destructive",
+    dividend: "border-primary/30 bg-primary/12 text-primary",
+    interest: "border-primary/30 bg-primary/12 text-primary",
+    rent_income: "border-accent/30 bg-accent/12 text-accent",
+    gift: "border-primary/30 bg-primary/12 text-primary",
+    fee: "border-border/60 bg-foreground/[0.06] text-label-secondary",
+    tax: "border-border/60 bg-foreground/[0.06] text-label-secondary",
+    appreciation: "border-accent/30 bg-accent/12 text-accent",
 };
 
 /** `space-y-2` between transaction rows, carried per row while virtualized. */
@@ -153,26 +157,26 @@ const TransactionRow = memo(function TransactionRow({
     const editLabel = `${t("aria.editTransaction")}: ${transactionLabel}`;
     const deleteLabel = `${t("aria.deleteTransaction")}: ${transactionLabel}`;
     return (
-        <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
-            <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-3 rounded-card corner-continuous bg-foreground/[0.04] p-3 transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.06]">
+            <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                     <Badge
                         variant="outline"
-                        className={cn(
-                            "text-xs",
-                            TXN_TYPE_COLORS[txn.type as PortfolioTxnType],
-                        )}
+                        size="sm"
+                        className={
+                            TXN_TYPE_COLORS[txn.type as PortfolioTxnType]
+                        }
                     >
                         {getTxnTypeLabel(t, txn.type as PortfolioTxnType)}
                     </Badge>
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
+                    <span className="flex items-center gap-1 type-caption text-label-secondary">
+                        <Calendar className="h-3 w-3" aria-hidden />
                         {formatDateStringWithAppSettings(txn.date, dateFormat)}
                     </span>
                 </div>
 
                 {txn.units != null && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 type-caption tabular-nums text-label-secondary">
                         {t("invDetail.unitsAt", {
                             units: fmtNum(txn.units, 4),
                             price: fmt(
@@ -190,16 +194,16 @@ const TransactionRow = memo(function TransactionRow({
                 )}
 
                 {txn.note && (
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                    <p className="mt-1 truncate type-caption text-label-secondary">
                         {txn.note}
                     </p>
                 )}
             </div>
 
-            <div className="text-right shrink-0">
+            <div className="shrink-0 text-right">
                 <p
                     className={cn(
-                        "font-bold tabular-nums",
+                        "type-body font-medium tabular-nums",
                         ["buy", "fee", "tax"].includes(txn.type)
                             ? "text-loss"
                             : "text-gain",
@@ -217,7 +221,7 @@ const TransactionRow = memo(function TransactionRow({
                 </p>
 
                 {((txn.fees ?? 0) > 0 || (txn.taxes ?? 0) > 0) && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-caption tabular-nums text-label-secondary">
                         {(txn.fees ?? 0) > 0 &&
                             t("invDetail.fee", {
                                 amount: fmt(txn.fees ?? 0, {
@@ -243,7 +247,7 @@ const TransactionRow = memo(function TransactionRow({
                                 <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                    className="icon-touch-target shrink-0 text-label-secondary hover:text-foreground"
                                     onClick={(event) => onEdit(txn, event)}
                                     aria-label={editLabel}
                                 >
@@ -253,7 +257,7 @@ const TransactionRow = memo(function TransactionRow({
                                 <Button
                                     size="icon"
                                     variant="ghost"
-                                    className="icon-touch-target shrink-0 text-muted-foreground hover:text-foreground"
+                                    className="icon-touch-target shrink-0 text-label-secondary hover:text-foreground"
                                     aria-label={editLabel}
                                     type="button"
                                     aria-haspopup="dialog"
@@ -271,7 +275,7 @@ const TransactionRow = memo(function TransactionRow({
                             <Button
                                 size="icon"
                                 variant="ghost"
-                                className="icon-touch-target shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                className="icon-touch-target shrink-0 text-label-secondary hover:bg-destructive/10 hover:text-destructive"
                                 onClick={() => onDelete(txn)}
                                 aria-label={deleteLabel}
                             >
@@ -440,6 +444,8 @@ export function InvestmentDetailDialog({
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const sectionId = useId();
+    const formatPercent = usePercentFormatter();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     // Shared cached currency formatter: fmt(val, currency?, decimals?) with the
     // same defaults (app default currency, showDecimalPlaces) as the old local copy.
@@ -488,11 +494,8 @@ export function InvestmentDetailDialog({
     // The same add-transaction control appears in three spots (overview footer,
     // empty-transactions CTA, transactions footer) — build it once.
     const addTransactionControl = archived ? null : onAddTransaction ? (
-        <Button
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onAddTransaction(investment)}
-        >
+        <Button size="sm" onClick={() => onAddTransaction(investment)}>
+            <Plus />
             {t("portfolio.addTransaction")}
         </Button>
     ) : (
@@ -502,13 +505,13 @@ export function InvestmentDetailDialog({
         <Button
             size="sm"
             variant="outline"
-            className="gap-1.5"
             type="button"
             aria-haspopup="dialog"
             aria-expanded={addTxnOpen}
             onClick={openNested(setAddTxnOpen)}
         >
-            <Plus className="h-4 w-4" /> {t("form.addTransaction.title")}
+            <Plus />
+            {t("form.addTransaction.title")}
         </Button>
     );
 
@@ -563,6 +566,15 @@ export function InvestmentDetailDialog({
         setOpen(false);
     }, [confirm, investment.id, investment.name, t, updateInvestment, setOpen]);
 
+    const researchHref = investment.symbol
+        ? `/research/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`
+        : undefined;
+    const hasRealEstateFacts =
+        realEstate &&
+        (investment.municipality ||
+            investment.cadastral_income != null ||
+            investment.municipality_tax_rate != null);
+
     return (
         <>
             <Dialog
@@ -575,41 +587,35 @@ export function InvestmentDetailDialog({
                 {!controlled && (
                     <DialogTrigger asChild>
                         {trigger ?? (
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="gap-1.5"
-                            >
-                                <Eye className="h-4 w-4" />{" "}
+                            <Button size="sm" variant="ghost">
+                                <Eye />
                                 {t("invDetail.trigger")}
                             </Button>
                         )}
                     </DialogTrigger>
                 )}
-                <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                        <div className="flex items-center gap-2">
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader className="space-y-3 pr-6">
+                        <div className="flex flex-wrap items-center gap-2">
                             {investment.symbol && (
-                                <span className="font-mono font-bold text-lg">
+                                <span className="font-mono type-headline text-primary">
                                     {investment.symbol}
                                 </span>
                             )}
-                            <DialogTitle className="text-xl">
-                                {investment.symbol ? (
-                                    <TextLink
-                                        to={`/research/market?symbol=${encodeURIComponent(investment.symbol)}&investmentId=${investment.id}`}
-                                    >
+                            <DialogTitle className="min-w-0 truncate">
+                                {researchHref ? (
+                                    <TextLink to={researchHref}>
                                         {investment.name}
                                     </TextLink>
                                 ) : (
                                     investment.name
                                 )}
                             </DialogTitle>
-                            <Badge variant="secondary">
+                            <Badge variant="secondary" size="sm">
                                 {getAssetClassLabel(t, investment.assetClass)}
                             </Badge>
                             {archived && (
-                                <Badge variant="outline">
+                                <Badge variant="outline" size="sm">
                                     {t("portfolio.archived")}
                                 </Badge>
                             )}
@@ -618,64 +624,63 @@ export function InvestmentDetailDialog({
                                     apiHolding?.oversold ?? investment.oversold
                                 }
                             />
-                            {!archived && (
-                                <div className="ml-auto flex items-center gap-1.5">
-                                    {onEditInvestment ? (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="gap-1.5"
-                                            aria-label={`${t("common.edit")}: ${investment.name}`}
-                                            onClick={() =>
-                                                onEditInvestment(investment)
-                                            }
-                                        >
-                                            <Pencil className="h-4 w-4" />{" "}
-                                            {t("common.edit")}
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="gap-1.5"
-                                            aria-label={`${t("common.edit")}: ${investment.name}`}
-                                            type="button"
-                                            aria-haspopup="dialog"
-                                            aria-expanded={editInvestmentOpen}
-                                            onClick={openNested(
-                                                setEditInvestmentOpen,
-                                            )}
-                                        >
-                                            <Pencil className="h-4 w-4" />{" "}
-                                            {t("common.edit")}
-                                        </Button>
-                                    )}
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="gap-1.5"
-                                        aria-label={`${t("portfolio.archiveInvestment")}: ${investment.name}`}
-                                        disabled={isUpdatingInvestment}
-                                        onClick={() => void handleArchive()}
-                                    >
-                                        <Archive className="h-4 w-4" />{" "}
-                                        {t("portfolio.archiveInvestment")}
-                                    </Button>
-                                </div>
-                            )}
                         </div>
                         <DialogDescription className="sr-only">
                             {investment.name}
                         </DialogDescription>
+                        {!archived && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {onEditInvestment ? (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        aria-label={`${t("common.edit")}: ${investment.name}`}
+                                        onClick={() =>
+                                            onEditInvestment(investment)
+                                        }
+                                    >
+                                        <Pencil />
+                                        {t("common.edit")}
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        aria-label={`${t("common.edit")}: ${investment.name}`}
+                                        type="button"
+                                        aria-haspopup="dialog"
+                                        aria-expanded={editInvestmentOpen}
+                                        onClick={openNested(
+                                            setEditInvestmentOpen,
+                                        )}
+                                    >
+                                        <Pencil />
+                                        {t("common.edit")}
+                                    </Button>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    aria-label={`${t("portfolio.archiveInvestment")}: ${investment.name}`}
+                                    disabled={isUpdatingInvestment}
+                                    onClick={() => void handleArchive()}
+                                >
+                                    <Archive />
+                                    {t("portfolio.archiveInvestment")}
+                                </Button>
+                            </div>
+                        )}
                     </DialogHeader>
 
                     {archived && (
-                        <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                            {t("portfolio.archivedExcluded")}
-                        </p>
+                        <Alert>
+                            <AlertDescription>
+                                {t("portfolio.archivedExcluded")}
+                            </AlertDescription>
+                        </Alert>
                     )}
 
-                    <Tabs defaultValue="overview" className="mt-4">
+                    <Tabs defaultValue="overview" className="mt-2">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="overview">
                                 {t("invDetail.tab.performance")}
@@ -689,465 +694,339 @@ export function InvestmentDetailDialog({
 
                         <TabsContent
                             value="overview"
-                            className="space-y-4 mt-4"
+                            className="mt-4 space-y-6"
                         >
-                            {/* Key Metrics */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <Card>
-                                    <CardContent className="pt-4">
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                            <Banknote className="h-4 w-4" />
-                                            {t("invDetail.currentValue")}
-                                        </div>
-                                        <p className="text-2xl font-bold tabular-nums">
-                                            {fmt(investment.currentValue, {
-                                                currency: investment.currency,
-                                            })}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-
-                                <Card>
-                                    <CardContent className="pt-4">
-                                        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                                            {investment.totalGain >= 0 ? (
-                                                <TrendingUp className="h-4 w-4 text-gain" />
-                                            ) : (
-                                                <TrendingDown className="h-4 w-4 text-loss" />
-                                            )}
-                                            {t("invDetail.totalGainLoss")}
-                                        </div>
-                                        <p
-                                            className={cn(
-                                                "text-2xl font-bold tabular-nums",
-                                                investment.totalGain >= 0
-                                                    ? "text-gain"
-                                                    : "text-loss",
-                                            )}
-                                        >
-                                            <Money
-                                                amount={investment.totalGain}
-                                                currency={investment.currency}
-                                                signed
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="min-w-0">
+                                    <p className="flex items-center gap-1.5 type-caption text-label-tertiary">
+                                        <Banknote
+                                            className="h-3.5 w-3.5"
+                                            aria-hidden
+                                        />
+                                        {t("invDetail.currentValue")}
+                                    </p>
+                                    <p className="truncate type-title-1 tabular-nums">
+                                        <Money
+                                            amount={investment.currentValue}
+                                            currency={investment.currency}
+                                        />
+                                    </p>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="flex items-center gap-1.5 type-caption text-label-tertiary">
+                                        {investment.totalGain >= 0 ? (
+                                            <TrendingUp
+                                                className="h-3.5 w-3.5 text-gain"
+                                                aria-hidden
                                             />
-                                        </p>
-                                        <p
-                                            className={cn(
-                                                "text-sm tabular-nums",
-                                                investment.gainLossPercent >= 0
-                                                    ? "text-gain"
-                                                    : "text-loss",
-                                            )}
-                                        >
-                                            {investment.gainLossPercent >= 0
-                                                ? "+"
-                                                : ""}
-                                            {fmtNum(investment.gainLossPercent)}
-                                            %
-                                        </p>
-                                    </CardContent>
-                                </Card>
+                                        ) : (
+                                            <TrendingDown
+                                                className="h-3.5 w-3.5 text-loss"
+                                                aria-hidden
+                                            />
+                                        )}
+                                        {t("invDetail.totalGainLoss")}
+                                    </p>
+                                    <p
+                                        className={cn(
+                                            "truncate type-title-1 tabular-nums",
+                                            toneClass(investment.totalGain),
+                                        )}
+                                    >
+                                        <Money
+                                            amount={investment.totalGain}
+                                            currency={investment.currency}
+                                            signed
+                                        />
+                                    </p>
+                                    <p
+                                        className={cn(
+                                            "type-footnote tabular-nums",
+                                            toneClass(
+                                                investment.gainLossPercent,
+                                            ),
+                                        )}
+                                    >
+                                        {formatPercent(
+                                            investment.gainLossPercent,
+                                            { digits: 2, signed: true },
+                                        )}
+                                    </p>
+                                </div>
                             </div>
 
-                            {/* Detailed Breakdown */}
-                            <Card>
-                                <CardHeader className="pb-2">
-                                    <CardTitle level={3} variant="sm">
-                                        {t("invDetail.breakdown")}
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                <span className="text-muted-foreground">
-                                                    {t("invDetail.totalCost")}
-                                                </span>
-                                                <span className="font-medium tabular-nums">
-                                                    {fmt(
-                                                        investment.totalBuyCost,
+                            <section aria-labelledby={`${sectionId}-breakdown`}>
+                                <h3
+                                    id={`${sectionId}-breakdown`}
+                                    className="eyebrow mb-1"
+                                >
+                                    {t("invDetail.breakdown")}
+                                </h3>
+                                <dl className="divide-y divide-border/50">
+                                    <FactRow
+                                        label={t("invDetail.totalCost")}
+                                        value={fmt(investment.totalBuyCost, {
+                                            currency: investment.currency,
+                                        })}
+                                    />
+                                    {unitBased && (
+                                        <>
+                                            <FactRow
+                                                label={t("invDetail.unitsHeld")}
+                                                value={fmtNum(
+                                                    investment.totalUnits,
+                                                    4,
+                                                )}
+                                            />
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.avgCostPerUnit",
+                                                )}
+                                                value={fmt(
+                                                    investment.avgCostBasis,
+                                                    {
+                                                        currency:
+                                                            investment.currency,
+                                                        decimals: 2,
+                                                    },
+                                                )}
+                                            />
+                                            {investment.currentPrice ? (
+                                                <FactRow
+                                                    label={t(
+                                                        "invDetail.currentPrice",
+                                                    )}
+                                                    value={fmt(
+                                                        investment.currentPrice,
+                                                        {
+                                                            currency:
+                                                                investment.currency,
+                                                            decimals: 2,
+                                                        },
+                                                    )}
+                                                />
+                                            ) : null}
+                                        </>
+                                    )}
+                                    {fixedIncome && investment.interestRate ? (
+                                        <FactRow
+                                            label={t("invDetail.interestRate")}
+                                            value={`${fmtNum(investment.interestRate)}%`}
+                                        />
+                                    ) : null}
+                                    {hasRealEstateFacts && (
+                                        <>
+                                            {investment.municipality && (
+                                                <FactRow
+                                                    label={t(
+                                                        "invDetail.municipality",
+                                                    )}
+                                                    value={
+                                                        investment.municipality
+                                                    }
+                                                />
+                                            )}
+                                            {investment.cadastral_income !=
+                                                null && (
+                                                <FactRow
+                                                    label={t(
+                                                        "invDetail.cadastralIncome",
+                                                    )}
+                                                    value={fmt(
+                                                        investment.cadastral_income,
                                                         {
                                                             currency:
                                                                 investment.currency,
                                                         },
                                                     )}
-                                                </span>
-                                            </div>
-
-                                            {unitBased && (
+                                                />
+                                            )}
+                                            {investment.municipality_tax_rate !=
+                                                null && (
+                                                <FactRow
+                                                    label={t(
+                                                        "invDetail.municipalityTaxRate",
+                                                    )}
+                                                    value={`${fmtNum(investment.municipality_tax_rate)}%`}
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                    <FactRow
+                                        label={t("invDetail.realizedGain")}
+                                        tone={toneClass(
+                                            investment.realizedGain,
+                                        )}
+                                        value={
+                                            <Money
+                                                amount={investment.realizedGain}
+                                                currency={investment.currency}
+                                                signed
+                                            />
+                                        }
+                                        detail={
+                                            fxAwarePnl ? (
                                                 <>
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.unitsHeld",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {fmtNum(
-                                                                investment.totalUnits,
-                                                                4,
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.avgCostPerUnit",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {fmt(
-                                                                investment.avgCostBasis,
-                                                                {
-                                                                    currency:
-                                                                        investment.currency,
-                                                                    decimals: 2,
-                                                                },
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                    {investment.currentPrice && (
-                                                        <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                            <span className="text-muted-foreground">
-                                                                {t(
-                                                                    "invDetail.currentPrice",
-                                                                )}
-                                                            </span>
-                                                            <span className="font-medium tabular-nums">
-                                                                {fmt(
-                                                                    investment.currentPrice,
-                                                                    {
-                                                                        currency:
-                                                                            investment.currency,
-                                                                        decimals: 2,
-                                                                    },
-                                                                )}
-                                                            </span>
-                                                        </div>
+                                                    {t(
+                                                        "invDetail.fxAwareRealized",
+                                                        {
+                                                            currency:
+                                                                targetCurrency,
+                                                        },
                                                     )}
+                                                    {": "}
+                                                    <Money
+                                                        amount={
+                                                            fxAwarePnl.realizedTarget
+                                                        }
+                                                        currency={
+                                                            targetCurrency
+                                                        }
+                                                        signed
+                                                    />
                                                 </>
-                                            )}
-
-                                            {fixedIncome &&
-                                                investment.interestRate && (
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.interestRate",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {fmtNum(
-                                                                investment.interestRate,
-                                                            )}
-                                                            %
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                            {realEstate &&
-                                                investment.municipality && (
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.municipality",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {
-                                                                investment.municipality
-                                                            }
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                            {realEstate &&
-                                                (investment.cadastral_income ||
-                                                    investment.cadastral_income ===
-                                                        0) && (
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.cadastralIncome",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {fmt(
-                                                                investment.cadastral_income ||
-                                                                    0,
-                                                                {
-                                                                    currency:
-                                                                        investment.currency,
-                                                                },
-                                                            )}
-                                                        </span>
-                                                    </div>
-                                                )}
-
-                                            {realEstate &&
-                                                (investment.municipality_tax_rate ||
-                                                    investment.municipality_tax_rate ===
-                                                        0) && (
-                                                    <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.municipalityTaxRate",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium tabular-nums">
-                                                            {fmtNum(
-                                                                investment.municipality_tax_rate ||
-                                                                    0,
-                                                            )}
-                                                            %
-                                                        </span>
-                                                    </div>
-                                                )}
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                <span className="text-muted-foreground flex items-center gap-1">
-                                                    <ArrowUpRight className="h-3 w-3 text-gain" />
+                                            ) : undefined
+                                        }
+                                    />
+                                    <FactRow
+                                        label={t("invDetail.unrealizedGain")}
+                                        tone={toneClass(
+                                            investment.unrealizedGain,
+                                        )}
+                                        value={
+                                            <Money
+                                                amount={
+                                                    investment.unrealizedGain
+                                                }
+                                                currency={investment.currency}
+                                                signed
+                                            />
+                                        }
+                                        detail={
+                                            fxAwarePnl ? (
+                                                <>
                                                     {t(
-                                                        "invDetail.realizedGain",
+                                                        "invDetail.fxAwareUnrealized",
+                                                        {
+                                                            currency:
+                                                                targetCurrency,
+                                                        },
                                                     )}
-                                                </span>
-                                                <span
-                                                    className={cn(
-                                                        "font-medium tabular-nums",
-                                                        investment.realizedGain >=
-                                                            0
-                                                            ? "text-gain"
-                                                            : "text-loss",
-                                                    )}
-                                                >
+                                                    {": "}
                                                     <Money
                                                         amount={
-                                                            investment.realizedGain
+                                                            fxAwarePnl.unrealizedTarget
                                                         }
                                                         currency={
-                                                            investment.currency
+                                                            targetCurrency
                                                         }
                                                         signed
-                                                    />
-                                                </span>
-                                            </div>
-                                            {fxAwarePnl && (
-                                                <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {t(
-                                                            "invDetail.fxAwareRealized",
-                                                            {
-                                                                currency:
-                                                                    targetCurrency,
-                                                            },
-                                                        )}
-                                                    </span>
-                                                    <span
-                                                        className={cn(
-                                                            "font-medium tabular-nums",
-                                                            fxAwarePnl.realizedTarget >=
-                                                                0
-                                                                ? "text-gain"
-                                                                : "text-loss",
-                                                        )}
-                                                    >
-                                                        <Money
-                                                            amount={
-                                                                fxAwarePnl.realizedTarget
-                                                            }
-                                                            currency={
-                                                                targetCurrency
-                                                            }
-                                                            signed
-                                                        />
-                                                    </span>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                <span className="text-muted-foreground flex items-center gap-1">
-                                                    <Clock className="h-3 w-3" />
-                                                    {t(
-                                                        "invDetail.unrealizedGain",
+                                                    />{" "}
+                                                    (
+                                                    {formatPercent(
+                                                        fxAwarePnl.unrealizedPercent,
+                                                        {
+                                                            digits: 2,
+                                                            signed: true,
+                                                        },
                                                     )}
-                                                </span>
-                                                <span
-                                                    className={cn(
-                                                        "font-medium tabular-nums",
-                                                        investment.unrealizedGain >=
-                                                            0
-                                                            ? "text-gain"
-                                                            : "text-loss",
-                                                    )}
-                                                >
-                                                    <Money
-                                                        amount={
-                                                            investment.unrealizedGain
-                                                        }
-                                                        currency={
-                                                            investment.currency
-                                                        }
-                                                        signed
-                                                    />
-                                                </span>
-                                            </div>
-                                            {fxAwarePnl && (
-                                                <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {t(
-                                                            "invDetail.fxAwareUnrealized",
-                                                            {
-                                                                currency:
-                                                                    targetCurrency,
-                                                            },
-                                                        )}
-                                                    </span>
-                                                    <span
-                                                        className={cn(
-                                                            "font-medium tabular-nums",
-                                                            fxAwarePnl.unrealizedTarget >=
-                                                                0
-                                                                ? "text-gain"
-                                                                : "text-loss",
-                                                        )}
-                                                    >
-                                                        <Money
-                                                            amount={
-                                                                fxAwarePnl.unrealizedTarget
-                                                            }
-                                                            currency={
-                                                                targetCurrency
-                                                            }
-                                                            signed
-                                                        />
-                                                        <span className="text-xs ml-1 opacity-70">
-                                                            {fxAwarePnl.unrealizedPercent >=
-                                                            0
-                                                                ? "+"
-                                                                : ""}
-                                                            {fmtNum(
-                                                                fxAwarePnl.unrealizedPercent,
-                                                            )}
-                                                            %
-                                                        </span>
-                                                    </span>
-                                                </div>
-                                            )}
+                                                    )
+                                                </>
+                                            ) : undefined
+                                        }
+                                    />
+                                    {investment.totalIncome > 0 && (
+                                        <FactRow
+                                            label={t("invDetail.totalIncome")}
+                                            tone="text-gain"
+                                            value={
+                                                <Money
+                                                    amount={
+                                                        investment.totalIncome
+                                                    }
+                                                    currency={
+                                                        investment.currency
+                                                    }
+                                                    signed
+                                                />
+                                            }
+                                        />
+                                    )}
+                                    {(investment.totalFees > 0 ||
+                                        investment.totalTaxes > 0) && (
+                                        <FactRow
+                                            label={t("invDetail.feesAndTaxes")}
+                                            tone="text-loss"
+                                            value={
+                                                <Money
+                                                    amount={
+                                                        -(
+                                                            investment.totalFees +
+                                                            investment.totalTaxes
+                                                        )
+                                                    }
+                                                    currency={
+                                                        investment.currency
+                                                    }
+                                                    signed
+                                                />
+                                            }
+                                        />
+                                    )}
+                                </dl>
+                            </section>
 
-                                            {investment.totalIncome > 0 && (
-                                                <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                    <span className="text-muted-foreground">
-                                                        {t(
-                                                            "invDetail.totalIncome",
-                                                        )}
-                                                    </span>
-                                                    <span className="font-medium tabular-nums text-gain">
-                                                        <Money
-                                                            amount={
-                                                                investment.totalIncome
-                                                            }
-                                                            currency={
-                                                                investment.currency
-                                                            }
-                                                            signed
-                                                        />
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            {(investment.totalFees > 0 ||
-                                                investment.totalTaxes > 0) && (
-                                                <div className="flex justify-between py-1.5 border-b border-border/50">
-                                                    <span className="text-muted-foreground">
-                                                        {t(
-                                                            "invDetail.feesAndTaxes",
-                                                        )}
-                                                    </span>
-                                                    <span className="font-medium tabular-nums text-loss">
-                                                        <Money
-                                                            amount={
-                                                                -(
-                                                                    investment.totalFees +
-                                                                    investment.totalTaxes
-                                                                )
-                                                            }
-                                                            currency={
-                                                                investment.currency
-                                                            }
-                                                            signed
-                                                        />
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* FX attribution — invested at purchase-date rates, gain split
-                  into asset performance vs currency effect */}
                             {fxSummary &&
                                 typeof fxSummary.fxGain === "number" && (
-                                    <Card className="!border-primary/50 bg-primary/5">
-                                        <CardContent className="pt-4 space-y-2">
-                                            <p className="text-sm font-semibold text-muted-foreground">
-                                                {t("invDetail.fxAttribution")}
-                                            </p>
-                                            <div className="flex justify-between py-1 border-b border-border/50 text-sm">
-                                                <span className="text-muted-foreground">
-                                                    {t(
-                                                        "portfolio.nativeValue",
-                                                        {
-                                                            currency:
-                                                                nativeCurrency,
-                                                        },
-                                                    )}
-                                                </span>
-                                                <span className="font-medium tabular-nums">
-                                                    {fmt(
-                                                        fxSummary.nativeCurrentValue ??
-                                                            investment.currentValue,
-                                                        {
-                                                            currency:
-                                                                nativeCurrency,
-                                                        },
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between py-1 border-b border-border/50 text-sm">
-                                                <span className="text-muted-foreground">
-                                                    {t(
-                                                        "invDetail.investedAtHistoricalRates",
-                                                        {
-                                                            currency:
-                                                                targetCurrency,
-                                                        },
-                                                    )}
-                                                </span>
-                                                <span className="font-medium tabular-nums">
-                                                    {fmt(
-                                                        fxSummary.totalInvested,
-                                                        {
-                                                            currency:
-                                                                targetCurrency,
-                                                        },
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between py-1 border-b border-border/50 text-sm">
-                                                <span className="text-muted-foreground">
-                                                    {t("portfolio.assetGain")}
-                                                </span>
-                                                <span
-                                                    className={cn(
-                                                        "font-medium tabular-nums",
-                                                        (fxSummary.assetGain ??
-                                                            0) >= 0
-                                                            ? "text-gain"
-                                                            : "text-loss",
-                                                    )}
-                                                >
+                                    <section
+                                        aria-labelledby={`${sectionId}-fx`}
+                                    >
+                                        <h3
+                                            id={`${sectionId}-fx`}
+                                            className="eyebrow mb-1"
+                                        >
+                                            {t("invDetail.fxAttribution")}
+                                        </h3>
+                                        <dl className="divide-y divide-border/50">
+                                            <FactRow
+                                                label={t(
+                                                    "portfolio.nativeValue",
+                                                    {
+                                                        currency:
+                                                            nativeCurrency,
+                                                    },
+                                                )}
+                                                value={fmt(
+                                                    fxSummary.nativeCurrentValue ??
+                                                        investment.currentValue,
+                                                    {
+                                                        currency:
+                                                            nativeCurrency,
+                                                    },
+                                                )}
+                                            />
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.investedAtHistoricalRates",
+                                                    {
+                                                        currency:
+                                                            targetCurrency,
+                                                    },
+                                                )}
+                                                value={fmt(
+                                                    fxSummary.totalInvested,
+                                                    {
+                                                        currency:
+                                                            targetCurrency,
+                                                    },
+                                                )}
+                                            />
+                                            <FactRow
+                                                label={t("portfolio.assetGain")}
+                                                tone={toneClass(
+                                                    fxSummary.assetGain ?? 0,
+                                                )}
+                                                value={
                                                     <Money
                                                         amount={
                                                             fxSummary.assetGain ??
@@ -1158,20 +1037,14 @@ export function InvestmentDetailDialog({
                                                         }
                                                         signed
                                                     />
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between py-1 text-sm">
-                                                <span className="text-muted-foreground">
-                                                    {t("portfolio.fxEffect")}
-                                                </span>
-                                                <span
-                                                    className={cn(
-                                                        "font-medium tabular-nums",
-                                                        fxSummary.fxGain >= 0
-                                                            ? "text-gain"
-                                                            : "text-loss",
-                                                    )}
-                                                >
+                                                }
+                                            />
+                                            <FactRow
+                                                label={t("portfolio.fxEffect")}
+                                                tone={toneClass(
+                                                    fxSummary.fxGain,
+                                                )}
+                                                value={
                                                     <Money
                                                         amount={
                                                             fxSummary.fxGain
@@ -1181,90 +1054,91 @@ export function InvestmentDetailDialog({
                                                         }
                                                         signed
                                                     />
-                                                </span>
-                                            </div>
-                                            {fxSummary.usedFallbackRate && (
-                                                <p className="text-xs text-warning">
-                                                    {t(
-                                                        "portfolio.fxFallbackNote",
-                                                    )}
-                                                </p>
-                                            )}
-                                        </CardContent>
-                                    </Card>
+                                                }
+                                            />
+                                        </dl>
+                                        {fxSummary.usedFallbackRate && (
+                                            <p className="mt-2 type-caption text-warning">
+                                                {t("portfolio.fxFallbackNote")}
+                                            </p>
+                                        )}
+                                    </section>
                                 )}
 
-                            {/* Fixed Income Projections */}
                             {fixedIncome &&
                                 investment.projectedAnnualInterest > 0 && (
-                                    <Card className="!border-primary/50 bg-primary/5">
-                                        <CardContent className="pt-4">
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                                                        <Percent className="h-4 w-4" />
-                                                        {t(
-                                                            "portfolio.projectedAnnualInterest",
-                                                        )}
-                                                    </p>
-                                                    <p className="text-lg font-bold text-primary tabular-nums">
+                                    <section
+                                        aria-labelledby={`${sectionId}-income`}
+                                    >
+                                        <h3
+                                            id={`${sectionId}-income`}
+                                            className="eyebrow mb-1"
+                                        >
+                                            {t(
+                                                "portfolio.projectedAnnualInterest",
+                                            )}
+                                        </h3>
+                                        <dl className="divide-y divide-border/50">
+                                            <FactRow
+                                                label={t(
+                                                    "portfolio.projectedAnnualInterest",
+                                                )}
+                                                tone="text-primary"
+                                                value={
+                                                    <Money
+                                                        amount={
+                                                            investment.projectedAnnualInterest
+                                                        }
+                                                        currency={
+                                                            investment.currency
+                                                        }
+                                                        signed
+                                                    />
+                                                }
+                                            />
+                                            {investment.accruedInterest > 0 && (
+                                                <FactRow
+                                                    label={t(
+                                                        "portfolio.accruedUnpaid",
+                                                    )}
+                                                    tone="text-gain"
+                                                    value={
                                                         <Money
                                                             amount={
-                                                                investment.projectedAnnualInterest
+                                                                investment.accruedInterest
                                                             }
                                                             currency={
                                                                 investment.currency
                                                             }
                                                             signed
                                                         />
-                                                    </p>
-                                                </div>
-                                                {investment.accruedInterest >
-                                                    0 && (
-                                                    <div className="text-right">
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {t(
-                                                                "portfolio.accruedUnpaid",
-                                                            )}
-                                                        </p>
-                                                        <p className="text-lg font-bold text-gain tabular-nums">
-                                                            <Money
-                                                                amount={
-                                                                    investment.accruedInterest
-                                                                }
-                                                                currency={
-                                                                    investment.currency
-                                                                }
-                                                                signed
-                                                            />
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
+                                                    }
+                                                />
+                                            )}
+                                        </dl>
+                                    </section>
                                 )}
 
-                            {/* Real Estate Appreciation */}
                             {realEstate &&
                                 investment.totalAppreciation !== 0 && (
-                                    <Card className="!border-accent/50 bg-accent/5">
-                                        <CardContent className="pt-4 flex items-center justify-between">
-                                            <div>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {t(
-                                                        "invDetail.totalAppreciation",
-                                                    )}
-                                                </p>
-                                                <p
-                                                    className={cn(
-                                                        "text-lg font-bold tabular-nums",
-                                                        investment.totalAppreciation >=
-                                                            0
-                                                            ? "text-gain"
-                                                            : "text-loss",
-                                                    )}
-                                                >
+                                    <section
+                                        aria-labelledby={`${sectionId}-property`}
+                                    >
+                                        <h3
+                                            id={`${sectionId}-property`}
+                                            className="eyebrow mb-1"
+                                        >
+                                            {t("invDetail.totalAppreciation")}
+                                        </h3>
+                                        <dl className="divide-y divide-border/50">
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.totalAppreciation",
+                                                )}
+                                                tone={toneClass(
+                                                    investment.totalAppreciation,
+                                                )}
+                                                value={
                                                     <Money
                                                         amount={
                                                             investment.totalAppreciation
@@ -1274,16 +1148,15 @@ export function InvestmentDetailDialog({
                                                         }
                                                         signed
                                                     />
-                                                </p>
-                                            </div>
+                                                }
+                                            />
                                             {investment.totalIncome > 0 && (
-                                                <div className="text-right">
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {t(
-                                                            "portfolio.rentalIncome",
-                                                        )}
-                                                    </p>
-                                                    <p className="text-lg font-bold text-gain tabular-nums">
+                                                <FactRow
+                                                    label={t(
+                                                        "portfolio.rentalIncome",
+                                                    )}
+                                                    tone="text-gain"
+                                                    value={
                                                         <Money
                                                             amount={
                                                                 investment.totalIncome
@@ -1293,26 +1166,29 @@ export function InvestmentDetailDialog({
                                                             }
                                                             signed
                                                         />
-                                                    </p>
-                                                </div>
+                                                    }
+                                                />
                                             )}
-                                        </CardContent>
-                                    </Card>
+                                        </dl>
+                                    </section>
                                 )}
 
-                            <div className="flex justify-end">
-                                {addTransactionControl}
-                            </div>
+                            {addTransactionControl && (
+                                <div className="flex justify-end">
+                                    {addTransactionControl}
+                                </div>
+                            )}
                         </TabsContent>
 
                         <TabsContent value="transactions" className="mt-4">
                             {investment.transactions.length === 0 ? (
-                                <div className="text-center py-8 text-muted-foreground">
-                                    <p>{t("invDetail.noTransactions")}</p>
-                                    <div className="mt-4">
-                                        {addTransactionControl}
-                                    </div>
-                                </div>
+                                <EmptyState
+                                    icon={Receipt}
+                                    size="compact"
+                                    headingLevel={3}
+                                    title={t("invDetail.noTransactions")}
+                                    action={addTransactionControl ?? undefined}
+                                />
                             ) : (
                                 <TransactionList
                                     transactions={investment.transactions}
@@ -1330,11 +1206,12 @@ export function InvestmentDetailDialog({
                                 />
                             )}
 
-                            {investment.transactions.length > 0 && (
-                                <div className="flex justify-end mt-4 pt-4 border-t border-border">
-                                    {addTransactionControl}
-                                </div>
-                            )}
+                            {investment.transactions.length > 0 &&
+                                addTransactionControl && (
+                                    <div className="mt-4 flex justify-end border-t border-border/50 pt-4">
+                                        {addTransactionControl}
+                                    </div>
+                                )}
                         </TabsContent>
                     </Tabs>
                 </DialogContent>

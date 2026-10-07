@@ -1,30 +1,27 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatCard } from "@/components/shared/StatCard";
-import { RollingNumber } from "@/components/shared/RollingNumber";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
-    PiggyBank,
-    Shield,
-    Trash2,
-    Eye,
-    Percent,
-    TrendingUp,
-    Calendar,
-    Banknote,
-} from "lucide-react";
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Banknote, Calendar, PiggyBank, Shield } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import {
+    AssetPageActions,
+    FactRow,
+    Figure,
+} from "@/features/portfolio/assetPageParts";
+import {
+    toneClass,
+    useHoldingActions,
+} from "@/features/portfolio/useHoldingActions";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import {
-    useCurrencyPartsFormatter,
-    usePercentFormatter,
-} from "@/hooks/useCurrencyFormatter";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { parseYmd, daysBetween } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
@@ -37,6 +34,9 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 
+const PageIcon = PAGE_ICONS["/portfolio/savings"];
+const ALLOWED_ASSET_CLASSES = ["savings", "bond"] as const;
+
 function daysUntil(dateStr?: string) {
     if (!dateStr) return null;
     return Math.ceil(daysBetween(new Date(), parseYmd(dateStr)));
@@ -48,20 +48,15 @@ export default function SavingsPage() {
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const targetCurrency = appSettings.defaultCurrency || "EUR";
-    const {
-        byAssetClass,
-        deleteInvestment,
-        isLoading,
-        isError,
-        error,
-        refetch,
-    } = usePortfolio();
-    const { confirm, ConfirmDialog } = useConfirmDialog();
-    const accounts = byAssetClass(["savings", "bond"]);
+    const { byAssetClass, isLoading, isError, error, refetch } =
+        usePortfolio();
+    const { dialogs, renderMenu } = useHoldingActions({
+        deleteTitleKey: "savings.deleteAccount",
+        deleteDescriptionKey: "savings.deleteAccountDesc",
+    });
+    const accounts = byAssetClass([...ALLOWED_ASSET_CLASSES]);
 
     const { convertToTarget } = useCurrencyConverter(targetCurrency);
-
-    const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
     const totalBalance = accounts.reduce(
         (s, a) => s + convertToTarget(a.currentValue, a.currency),
@@ -90,25 +85,23 @@ export default function SavingsPage() {
               ) / totalBalance
             : 0;
 
+    const headerActions = (
+        <AssetPageActions allowedAssetClasses={[...ALLOWED_ASSET_CLASSES]} />
+    );
+
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader
-                    title={t("savings.title")}
-                    icon={PAGE_ICONS["/portfolio/savings"]}
-                />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-64 w-full" />
+                <PageHeader title={t("savings.title")} icon={PageIcon} />
+                <Skeleton className="h-40 w-full rounded-card" />
+                <Skeleton className="h-64 w-full rounded-card" />
             </PageShell>
         );
     }
     if (isError) {
         return (
             <PageShell className="">
-                <PageHeader
-                    title={t("savings.title")}
-                    icon={PAGE_ICONS["/portfolio/savings"]}
-                />
+                <PageHeader title={t("savings.title")} icon={PageIcon} />
                 <PageError
                     title={t("savings.pageErrorTitle")}
                     message={error?.message ?? t("common.error")}
@@ -123,22 +116,20 @@ export default function SavingsPage() {
             <PageShell className="">
                 <PageHeader
                     title={t("savings.title")}
-                    icon={PAGE_ICONS["/portfolio/savings"]}
-                    actions={
-                        <AddInvestmentDialog
-                            allowedAssetClasses={["savings", "bond"]}
-                        />
-                    }
+                    icon={PageIcon}
+                    actions={headerActions}
                 />
-                <Card className="group relative overflow-hidden">
-                    <CardContent>
+                <Card>
+                    <CardContent variant="state">
                         <EmptyState
-                            icon={PAGE_ICONS["/portfolio/savings"]}
+                            icon={PageIcon}
                             title={t("savings.noAccounts")}
                             description={t("savings.noAccountsDesc")}
                             action={
                                 <AddInvestmentDialog
-                                    allowedAssetClasses={["savings", "bond"]}
+                                    allowedAssetClasses={[
+                                        ...ALLOWED_ASSET_CLASSES,
+                                    ]}
                                 />
                             }
                         />
@@ -153,72 +144,71 @@ export default function SavingsPage() {
             <PageShell className="">
                 <PageHeader
                     title={t("savings.title")}
-                    icon={PAGE_ICONS["/portfolio/savings"]}
-                    actions={
-                        <AddInvestmentDialog
-                            allowedAssetClasses={["savings", "bond"]}
-                        />
-                    }
+                    icon={PageIcon}
+                    actions={headerActions}
                 />
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.totalBalance")}
-                        emphasis="primary"
-                        value={<RollingNumber parts={fmtParts(totalBalance)} />}
-                        icon={Banknote}
-                        valueClassName="text-primary"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.avgInterestRate")}
-                        value={formatPercent(weightedRate, { digits: 2 })}
-                        icon={Percent}
-                        valueClassName="text-foreground"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.interestEarned")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalInterestEarned, {
-                                    signed: true,
+                <Card className="overflow-hidden">
+                    <CardContent
+                        variant="headerless"
+                        className="grid gap-6 lg:grid-cols-5"
+                    >
+                        <div className="space-y-2 lg:col-span-2">
+                            <p className="eyebrow flex items-center gap-1.5">
+                                <Banknote className="h-3.5 w-3.5" aria-hidden />
+                                {t("portfolio.totalBalance")}
+                            </p>
+                            <p className="type-large-title tabular-nums text-foreground">
+                                <Money
+                                    amount={totalBalance}
+                                    currency={targetCurrency}
+                                />
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:col-span-3">
+                            <Figure
+                                label={t("portfolio.avgInterestRate")}
+                                value={formatPercent(weightedRate, {
+                                    digits: 2,
                                 })}
                             />
-                        }
-                        icon={TrendingUp}
-                        trend="income"
-                        valueClassName="text-gain"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.projectedAnnual")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalProjectedAnnual, {
-                                    signed: true,
-                                })}
-                            />
-                        }
-                        valueClassName="text-foreground"
-                        subtitle={
-                            totalAccrued > 0 ? (
-                                <>
+                            <Figure
+                                label={t("portfolio.interestEarned")}
+                                tone={toneClass(totalInterestEarned)}
+                                value={
                                     <Money
-                                        amount={totalAccrued}
+                                        amount={totalInterestEarned}
                                         currency={targetCurrency}
-                                    />{" "}
-                                    {t("portfolio.accrued")}
-                                </>
-                            ) : undefined
-                        }
-                    />
-                </div>
+                                        signed
+                                    />
+                                }
+                            />
+                            <Figure
+                                label={t("portfolio.projectedAnnual")}
+                                value={
+                                    <Money
+                                        amount={totalProjectedAnnual}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                                detail={
+                                    totalAccrued > 0 ? (
+                                        <>
+                                            <Money
+                                                amount={totalAccrued}
+                                                currency={targetCurrency}
+                                            />{" "}
+                                            {t("portfolio.accrued")}
+                                        </>
+                                    ) : undefined
+                                }
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* Account Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {accounts.map((a) => {
                         const daysToMaturity = daysUntil(a.maturityDate);
                         const isMaturingSoon =
@@ -227,123 +217,72 @@ export default function SavingsPage() {
                             daysToMaturity > 0;
                         const isMatured =
                             daysToMaturity !== null && daysToMaturity <= 0;
+                        const isSavings = a.assetClass === "savings";
+                        const Glyph = isSavings ? PiggyBank : Shield;
+                        const interestEarned = convertToTarget(
+                            a.totalIncome,
+                            a.currency,
+                        );
 
                         return (
                             <Card
                                 key={a.id}
                                 className={cn(
-                                    "transition-[box-shadow,border-color] hover:shadow-glass-soft",
-                                    isMatured && "border-accent",
-                                    isMaturingSoon && "border-primary",
+                                    isMatured && "!border-accent/60",
+                                    isMaturingSoon && "!border-primary/60",
                                 )}
                             >
-                                <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div
-                                                className={cn(
-                                                    "h-10 w-10 rounded-lg flex items-center justify-center",
-                                                    a.assetClass === "savings"
-                                                        ? "bg-primary/10"
-                                                        : "bg-accent/10",
-                                                )}
-                                            >
-                                                {a.assetClass === "savings" ? (
-                                                    <PiggyBank className="h-5 w-5 text-primary" />
-                                                ) : (
-                                                    <Shield className="h-5 w-5 text-accent" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <CardTitle variant="sm">
-                                                    {a.name}
-                                                </CardTitle>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="text-xs"
-                                                    >
-                                                        {a.assetClass ===
-                                                        "savings"
-                                                            ? t(
-                                                                  "portfolio.savings",
-                                                              )
-                                                            : t(
-                                                                  "portfolio.bond",
-                                                              )}
-                                                    </Badge>
-                                                    {a.interestRate && (
-                                                        <span className="text-xs font-medium text-accent">
-                                                            {a.interestRate}%{" "}
-                                                            {t("savings.pa")}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <InvestmentDetailDialog
-                                                investment={a}
-                                                trigger={
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="icon-touch-target"
-                                                        aria-label={t(
-                                                            "portfolio.viewDetails",
-                                                        )}
-                                                        title={t(
-                                                            "portfolio.viewDetails",
-                                                        )}
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                }
+                                <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <span
+                                            className={cn(
+                                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-control corner-continuous",
+                                                isSavings
+                                                    ? "bg-primary/12 text-primary"
+                                                    : "bg-accent/12 text-accent",
+                                            )}
+                                        >
+                                            <Glyph
+                                                className="h-5 w-5"
+                                                aria-hidden
                                             />
-                                            <AddPortfolioTxnDialog
-                                                investment={a}
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                                aria-label={t(
-                                                    "savings.deleteAccount",
-                                                )}
-                                                title={t(
-                                                    "savings.deleteAccount",
-                                                )}
-                                                onClick={async () => {
-                                                    const ok = await confirm({
-                                                        title: t(
-                                                            "savings.deleteAccount",
-                                                        ),
-                                                        description: t(
-                                                            "savings.deleteAccountDesc",
-                                                            { name: a.name },
-                                                        ),
-                                                        confirmLabel:
-                                                            t("common.delete"),
-                                                        variant: "destructive",
-                                                    });
-                                                    if (ok)
-                                                        deleteInvestment(a.id);
-                                                }}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <CardTitle
+                                                variant="sm"
+                                                level={3}
+                                                className="truncate"
                                             >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                                {a.name}
+                                            </CardTitle>
+                                            <CardDescription className="flex flex-wrap items-center gap-2">
+                                                <Badge
+                                                    variant="secondary"
+                                                    size="sm"
+                                                >
+                                                    {isSavings
+                                                        ? t("portfolio.savings")
+                                                        : t("portfolio.bond")}
+                                                </Badge>
+                                                {a.interestRate ? (
+                                                    <span className="tabular-nums text-accent">
+                                                        {a.interestRate}%{" "}
+                                                        {t("savings.pa")}
+                                                    </span>
+                                                ) : null}
+                                            </CardDescription>
                                         </div>
                                     </div>
+                                    {renderMenu(a, "-mr-2 -mt-1")}
                                 </CardHeader>
 
-                                <CardContent className="space-y-4">
-                                    {/* Balance & Interest */}
+                                <CardContent className="space-y-3">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-xs text-muted-foreground mb-1">
+                                            <p className="type-caption text-label-tertiary">
                                                 {t("portfolio.currentBalance")}
                                             </p>
-                                            <p className="text-2xl font-bold tabular-nums">
+                                            <p className="type-title-2 tabular-nums">
                                                 <Money
                                                     amount={convertToTarget(
                                                         a.currentValue,
@@ -354,15 +293,17 @@ export default function SavingsPage() {
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-xs text-muted-foreground mb-1">
+                                            <p className="type-caption text-label-tertiary">
                                                 {t("portfolio.interestEarned")}
                                             </p>
-                                            <p className="text-2xl font-bold text-gain tabular-nums">
+                                            <p
+                                                className={cn(
+                                                    "type-title-2 tabular-nums",
+                                                    toneClass(interestEarned),
+                                                )}
+                                            >
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        a.totalIncome,
-                                                        a.currency,
-                                                    )}
+                                                    amount={interestEarned}
                                                     currency={targetCurrency}
                                                     signed
                                                 />
@@ -370,40 +311,26 @@ export default function SavingsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Projections for fixed income */}
-                                    {a.interestRate &&
-                                        a.projectedAnnualInterest > 0 && (
-                                            <div className="p-3 rounded-lg bg-muted/50 space-y-2">
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-muted-foreground">
-                                                        {t(
+                                    {(Boolean(
+                                        a.interestRate &&
+                                            a.projectedAnnualInterest > 0,
+                                    ) ||
+                                        a.maturityDate ||
+                                        a.totalFees > 0 ||
+                                        a.totalTaxes > 0) && (
+                                        <dl className="divide-y divide-border/50 border-t border-border/50">
+                                            {a.interestRate &&
+                                            a.projectedAnnualInterest > 0 ? (
+                                                <>
+                                                    <FactRow
+                                                        label={t(
                                                             "portfolio.projectedAnnualInterest",
                                                         )}
-                                                    </span>
-                                                    <span className="font-medium text-primary">
-                                                        <Money
-                                                            amount={convertToTarget(
-                                                                a.projectedAnnualInterest,
-                                                                a.currency,
-                                                            )}
-                                                            currency={
-                                                                targetCurrency
-                                                            }
-                                                            signed
-                                                        />
-                                                    </span>
-                                                </div>
-                                                {a.accruedInterest > 0 && (
-                                                    <div className="flex justify-between text-sm">
-                                                        <span className="text-muted-foreground">
-                                                            {t(
-                                                                "portfolio.accruedUnpaid",
-                                                            )}
-                                                        </span>
-                                                        <span className="font-medium text-gain">
+                                                        tone="text-primary"
+                                                        value={
                                                             <Money
                                                                 amount={convertToTarget(
-                                                                    a.accruedInterest,
+                                                                    a.projectedAnnualInterest,
                                                                     a.currency,
                                                                 )}
                                                                 currency={
@@ -411,87 +338,97 @@ export default function SavingsPage() {
                                                                 }
                                                                 signed
                                                             />
+                                                        }
+                                                    />
+                                                    {a.accruedInterest > 0 && (
+                                                        <FactRow
+                                                            label={t(
+                                                                "portfolio.accruedUnpaid",
+                                                            )}
+                                                            tone="text-gain"
+                                                            value={
+                                                                <Money
+                                                                    amount={convertToTarget(
+                                                                        a.accruedInterest,
+                                                                        a.currency,
+                                                                    )}
+                                                                    currency={
+                                                                        targetCurrency
+                                                                    }
+                                                                    signed
+                                                                />
+                                                            }
+                                                        />
+                                                    )}
+                                                </>
+                                            ) : null}
+                                            {a.maturityDate && (
+                                                <FactRow
+                                                    label={
+                                                        <span className="inline-flex items-center gap-1.5">
+                                                            <Calendar
+                                                                className="h-3.5 w-3.5"
+                                                                aria-hidden
+                                                            />
+                                                            {isMatured
+                                                                ? t(
+                                                                      "portfolio.matured",
+                                                                  )
+                                                                : t(
+                                                                      "portfolio.matures",
+                                                                  )}
                                                         </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                    {/* Maturity Date for bonds */}
-                                    {a.maturityDate && (
-                                        <div
-                                            className={cn(
-                                                "flex items-center justify-between p-3 rounded-lg",
-                                                isMatured
-                                                    ? "bg-accent/10"
-                                                    : isMaturingSoon
-                                                      ? "bg-primary/10"
-                                                      : "bg-muted/50",
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <Calendar className="h-4 w-4 text-muted-foreground" />
-                                                <span className="text-sm">
-                                                    {isMatured
-                                                        ? t("portfolio.matured")
-                                                        : t(
-                                                              "portfolio.matures",
-                                                          )}
-                                                </span>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-medium">
-                                                    {formatDateStringWithAppSettings(
+                                                    }
+                                                    tone={cn(
+                                                        isMatured &&
+                                                            "text-accent",
+                                                        isMaturingSoon &&
+                                                            "text-primary",
+                                                    )}
+                                                    value={formatDateStringWithAppSettings(
                                                         a.maturityDate,
                                                         appSettings.dateFormat,
                                                     )}
-                                                </p>
-                                                {!isMatured &&
-                                                    daysToMaturity !== null && (
-                                                        <p
-                                                            className={cn(
-                                                                "text-xs",
-                                                                isMaturingSoon
-                                                                    ? "text-primary"
-                                                                    : "text-muted-foreground",
-                                                            )}
-                                                        >
-                                                            {t(
-                                                                "portfolio.daysRemaining",
-                                                                {
-                                                                    days: String(
-                                                                        daysToMaturity,
-                                                                    ),
-                                                                },
-                                                            )}
-                                                        </p>
-                                                    )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Cost Breakdown */}
-                                    {(a.totalFees > 0 || a.totalTaxes > 0) && (
-                                        <div className="flex justify-between text-sm border-t border-border pt-3">
-                                            <span className="text-muted-foreground">
-                                                {t(
-                                                    "portfolio.feesAndTaxesPaid",
-                                                )}
-                                            </span>
-                                            <span className="font-medium text-loss">
-                                                <Money
-                                                    amount={
-                                                        -convertToTarget(
-                                                            a.totalFees +
-                                                                a.totalTaxes,
-                                                            a.currency,
-                                                        )
+                                                    detail={
+                                                        !isMatured &&
+                                                        daysToMaturity !== null
+                                                            ? t(
+                                                                  "portfolio.daysRemaining",
+                                                                  {
+                                                                      days: String(
+                                                                          daysToMaturity,
+                                                                      ),
+                                                                  },
+                                                              )
+                                                            : undefined
                                                     }
-                                                    currency={targetCurrency}
-                                                    signed
                                                 />
-                                            </span>
-                                        </div>
+                                            )}
+                                            {(a.totalFees > 0 ||
+                                                a.totalTaxes > 0) && (
+                                                <FactRow
+                                                    label={t(
+                                                        "portfolio.feesAndTaxesPaid",
+                                                    )}
+                                                    tone="text-loss"
+                                                    value={
+                                                        <Money
+                                                            amount={
+                                                                -convertToTarget(
+                                                                    a.totalFees +
+                                                                        a.totalTaxes,
+                                                                    a.currency,
+                                                                )
+                                                            }
+                                                            currency={
+                                                                targetCurrency
+                                                            }
+                                                            signed
+                                                        />
+                                                    }
+                                                />
+                                            )}
+                                        </dl>
                                     )}
                                 </CardContent>
                             </Card>
@@ -499,16 +436,11 @@ export default function SavingsPage() {
                     })}
                 </div>
 
-                {/* Info Card */}
-                <Card className="bg-muted/30 !border-dashed">
-                    <CardContent variant="row">
-                        <p className="text-sm text-muted-foreground">
-                            {t("savings.howItWorks")}
-                        </p>
-                    </CardContent>
-                </Card>
+                <p className="type-footnote text-label-secondary">
+                    {t("savings.howItWorks")}
+                </p>
             </PageShell>
-            <ConfirmDialog />
+            {dialogs}
         </>
     );
 }

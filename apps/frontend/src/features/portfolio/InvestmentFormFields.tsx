@@ -173,7 +173,7 @@ export function InvestmentFormFields({
                                 <p
                                     id="inv-rate-error"
                                     role="alert"
-                                    className="text-sm text-destructive"
+                                    className="type-footnote text-destructive"
                                 >
                                     {errors["inv-rate"]}
                                 </p>
@@ -280,7 +280,7 @@ export function InvestmentFormFields({
                                     <p
                                         id="inv-cadastral-income-error"
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {errors["inv-cadastral-income"]}
                                     </p>
@@ -317,7 +317,7 @@ export function InvestmentFormFields({
                                     <p
                                         id="inv-municipality-tax-rate-error"
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {errors["inv-municipality-tax-rate"]}
                                     </p>
@@ -329,13 +329,10 @@ export function InvestmentFormFields({
             </div>
 
             {/* Initial Purchase */}
-            <div className="rounded-lg border border-border p-4 space-y-4">
-                <div className="flex items-center justify-between">
+            <div className="space-y-4 rounded-card corner-continuous bg-foreground/[0.04] p-4">
+                <div className="flex items-center justify-between gap-3">
                     <div>
-                        <Label
-                            htmlFor="initial-purchase-enabled"
-                            className="text-sm font-medium"
-                        >
+                        <Label htmlFor="initial-purchase-enabled">
                             {t("addInv.initial.label", {
                                 txType: isRealEstate
                                     ? t("addInv.initial.purchase")
@@ -344,7 +341,7 @@ export function InvestmentFormFields({
                                       : t("addInv.initial.buy"),
                             })}
                         </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="mt-0.5 type-caption text-label-secondary">
                             {t("addInv.initial.desc", {
                                 txWord: isRealEstate
                                     ? t("addInv.initial.purchaseWord")
@@ -371,15 +368,15 @@ export function InvestmentFormFields({
                 </div>
 
                 {form.addInitialPurchase && (
-                    <div className="space-y-3 pt-2 border-t border-border">
+                    <div className="space-y-3 border-t border-border/50 pt-3">
                         {isUnitBased && (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-caption text-label-secondary">
                                 {t("addInv.initial.unitHelp")}
                             </p>
                         )}
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-2">
-                                <Label htmlFor="init-date" className="text-xs">
+                                <Label htmlFor="init-date">
                                     {t("addInv.label.date")}
                                 </Label>
                                 <DatePicker
@@ -400,14 +397,10 @@ export function InvestmentFormFields({
                                         }))
                                     }
                                     placeholder={t("plannedPage.link.pickDate")}
-                                    buttonClassName="h-9"
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label
-                                    htmlFor="init-amount"
-                                    className="text-xs"
-                                >
+                                <Label htmlFor="init-amount">
                                     {isRealEstate
                                         ? t("addInv.label.purchasePrice")
                                         : isFixedIncome
@@ -428,7 +421,6 @@ export function InvestmentFormFields({
                                     }
                                     type="text"
                                     inputMode="decimal"
-                                    className="h-9"
                                     placeholder="10000.00"
                                     value={form.initialAmount}
                                     onChange={(e) =>
@@ -442,7 +434,7 @@ export function InvestmentFormFields({
                                     <p
                                         id="init-amount-error"
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {errors["init-amount"]}
                                     </p>
@@ -453,10 +445,7 @@ export function InvestmentFormFields({
                         {isUnitBased && (
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label
-                                        htmlFor="init-units"
-                                        className="text-xs"
-                                    >
+                                    <Label htmlFor="init-units">
                                         {t("addInv.label.units")} *
                                     </Label>
                                     <Input
@@ -472,7 +461,6 @@ export function InvestmentFormFields({
                                         }
                                         type="text"
                                         inputMode="decimal"
-                                        className="h-9"
                                         placeholder="100"
                                         value={form.initialUnits}
                                         onChange={(e) =>
@@ -486,17 +474,17 @@ export function InvestmentFormFields({
                                         <p
                                             id="init-units-error"
                                             role="alert"
-                                            className="text-sm text-destructive"
+                                            className="type-footnote text-destructive"
                                         >
                                             {errors["init-units"]}
                                         </p>
                                     )}
                                 </div>
                                 <div className="space-y-2">
-                                    <p className="text-xs font-medium">
+                                    <p className="type-footnote font-medium">
                                         {t("addInv.label.pricePerUnit")}
                                     </p>
-                                    <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/50 text-sm text-muted-foreground font-mono">
+                                    <div className="flex h-9 items-center rounded-control border border-input/70 bg-foreground/[0.04] px-3 font-mono type-body tabular-nums text-label-secondary">
                                         {computedPricePerUnit || "—"}
                                     </div>
                                 </div>
@@ -504,7 +492,7 @@ export function InvestmentFormFields({
                         )}
 
                         <div className="space-y-2">
-                            <Label htmlFor="init-fees" className="text-xs">
+                            <Label htmlFor="init-fees">
                                 {t("addInv.label.fees")}
                             </Label>
                             <Input
@@ -517,7 +505,6 @@ export function InvestmentFormFields({
                                 }
                                 type="text"
                                 inputMode="decimal"
-                                className="h-9"
                                 placeholder={formatNumberPlaceholder(
                                     appSettings.numberFormat,
                                 )}
@@ -533,7 +520,7 @@ export function InvestmentFormFields({
                                 <p
                                     id="init-fees-error"
                                     role="alert"
-                                    className="text-sm text-destructive"
+                                    className="type-footnote text-destructive"
                                 >
                                     {errors["init-fees"]}
                                 </p>

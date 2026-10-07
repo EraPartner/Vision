@@ -34,7 +34,7 @@ export function FxPnlCell({
     const fxGain = fxInfo?.fxGain;
     if (!isForeign || typeof fxGain !== "number") {
         return (
-            <td className="text-right py-2 px-3 tabular-nums text-muted-foreground">
+            <td className="px-4 py-3 text-right align-middle tabular-nums text-label-secondary">
                 —
             </td>
         );
@@ -42,7 +42,7 @@ export function FxPnlCell({
     return (
         <td
             className={cn(
-                "text-right py-2 px-3 tabular-nums",
+                "px-4 py-3 text-right align-middle tabular-nums",
                 fxGain >= 0 ? "text-gain" : "text-loss",
             )}
         >

@@ -13,6 +13,8 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { InvestmentCombobox } from "@/features/portfolio/InvestmentCombobox";
 import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
@@ -20,7 +22,11 @@ import { accountLabel } from "@/features/accounts/groupAccounts";
 import { useAccounts } from "@/hooks/useAccounts";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, Loader2, PlusCircle } from "lucide-react";
-import { SectionLoader } from "@/components/shared/SectionLoader";
+import { PageShell } from "@/components/shared/PageShell";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
+import { PAGE_ICONS } from "@/lib/pageIcons";
+import { cn } from "@/lib/utils";
 import { apiClient } from "@/lib/api";
 import type {
     PortfolioPreviewGroup,
@@ -31,8 +37,10 @@ import {
     usePortfolioImportPreview,
 } from "@/features/portfolio/usePortfolioQueries";
 
+const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
+
 /**
- * Seed height of a preview row (p-2 around a single line of text-xs content
+ * Seed height of a preview row (p-2 around a single line of footnote content
  * plus the type Badge). Every mounted row reports its real height through
  * `measureElement`, and the first one to do so becomes the estimate for the
  * rows that have not been mounted yet — so the page's total height (and with
@@ -129,7 +137,7 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
     return (
         <div
             ref={containerRef}
-            className="divide-y rounded-md border text-xs"
+            className="divide-y divide-border/50 rounded-card corner-continuous border border-border/50 type-footnote"
             style={{ paddingTop, paddingBottom }}
         >
             {items.map((item) => {
@@ -140,21 +148,24 @@ function PreviewRowList({ rows }: { rows: PortfolioPreviewRow[] }) {
                         key={row.id}
                         data-index={item.index}
                         ref={virtualizer.measureElement}
-                        className={`flex flex-wrap items-center gap-x-3 gap-y-1 p-2${item.index > 0 ? " border-t" : ""}`}
+                        className={cn(
+                            "flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2",
+                            item.index > 0 && "border-t border-border/50",
+                        )}
                     >
-                        <span className="text-muted-foreground">
+                        <span className="tabular-nums text-label-secondary">
                             {row.tx_date}
                         </span>
-                        <Badge variant="outline" className="font-normal">
+                        <Badge variant="outline" size="sm">
                             {row.type ?? row.type_raw}
                         </Badge>
                         {row.units != null && (
-                            <span>
+                            <span className="tabular-nums">
                                 {row.units} @ {row.price_per_unit ?? "—"}
                             </span>
                         )}
                         {row.amount != null && (
-                            <span className="text-muted-foreground">
+                            <span className="tabular-nums text-label-secondary">
                                 {row.amount} {row.currency ?? ""}
                             </span>
                         )}
@@ -182,7 +193,8 @@ export function PortfolioImportReviewPage() {
     const brokerAccounts = activeBrokerAccounts(accountsData?.items ?? []);
 
     const queryKey = portfolioImportPreviewKey(batchId);
-    const { data, isLoading, error } = usePortfolioImportPreview(batchId);
+    const { data, isLoading, error, refetch } =
+        usePortfolioImportPreview(batchId);
 
     const commit = useMutation({
         mutationFn: (accountId?: number) =>
@@ -256,11 +268,33 @@ export function PortfolioImportReviewPage() {
     };
 
     if (isLoading) {
-        return <SectionLoader />;
+        return (
+            <PageShell className="mx-auto max-w-3xl">
+                <PageHeader
+                    title={t("portfolioImport.review.title")}
+                    subtitle={t("portfolioImport.review.subtitle")}
+                    icon={PortfolioImportIcon}
+                />
+                <Skeleton className="h-12 w-full rounded-card" />
+                <Skeleton className="h-48 w-full rounded-card" />
+            </PageShell>
+        );
     }
     if (error || !data) {
         return (
-            <div className="p-6 text-destructive">{t("importPage.failed")}</div>
+            <PageShell className="mx-auto max-w-3xl">
+                <PageHeader
+                    title={t("portfolioImport.review.title")}
+                    icon={PortfolioImportIcon}
+                />
+                <PageError
+                    title={t("importPage.failed")}
+                    message={
+                        error ? apiErrorToMessage(error, t) : t("common.error")
+                    }
+                    onRetry={() => void refetch()}
+                />
+            </PageShell>
         );
     }
 
@@ -295,49 +329,47 @@ export function PortfolioImportReviewPage() {
         tradeCount === 1
             ? "portfolioImport.review.routingUnassignedOne"
             : "portfolioImport.review.routingUnassigned";
+    const routingUnavailable = needsAccountRepair && !repairAccount;
 
     return (
-        <div className="mx-auto max-w-3xl space-y-4 p-4">
-            <div className="flex items-center justify-between gap-2">
-                <div>
-                    <h1 className="text-lg font-semibold">
-                        {t("portfolioImport.review.title")}
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        {t("portfolioImport.review.subtitle")}
-                    </p>
-                </div>
-                <div className="flex gap-2 text-xs">
-                    <Badge variant="secondary">
-                        {t("portfolioImport.review.matched", {
-                            n: data.totals.symbol + data.totals.name_exact,
-                        })}
-                    </Badge>
-                    {unresolvedCount > 0 && (
-                        <Badge
-                            variant="outline"
-                            className="border-warning text-warning"
-                        >
-                            {t("portfolioImport.review.unresolved", {
-                                n: unresolvedCount,
+        <PageShell className="mx-auto max-w-3xl">
+            <PageHeader
+                title={t("portfolioImport.review.title")}
+                subtitle={t("portfolioImport.review.subtitle")}
+                icon={PortfolioImportIcon}
+                actions={
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">
+                            {t("portfolioImport.review.matched", {
+                                n: data.totals.symbol + data.totals.name_exact,
                             })}
                         </Badge>
-                    )}
-                </div>
-            </div>
+                        {unresolvedCount > 0 && (
+                            <Badge variant="warning">
+                                {t("portfolioImport.review.unresolved", {
+                                    n: unresolvedCount,
+                                })}
+                            </Badge>
+                        )}
+                    </div>
+                }
+            />
 
-            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                {needsAccountRepair && !repairAccount
-                    ? t("portfolioImport.review.routingUnavailable")
-                    : routingAccountName
-                      ? t(routingKey, {
-                            count: tradeCount,
-                            broker: routingAccountName,
-                        })
-                      : t(unassignedRoutingKey, {
-                            count: tradeCount,
-                        })}
-            </div>
+            <Alert variant={routingUnavailable ? "warning" : "default"}>
+                {routingUnavailable && <AlertTriangle className="h-4 w-4" />}
+                <AlertDescription>
+                    {routingUnavailable
+                        ? t("portfolioImport.review.routingUnavailable")
+                        : routingAccountName
+                          ? t(routingKey, {
+                                count: tradeCount,
+                                broker: routingAccountName,
+                            })
+                          : t(unassignedRoutingKey, {
+                                count: tradeCount,
+                            })}
+                </AlertDescription>
+            </Alert>
 
             {data.groups.map((g) => {
                 const key = groupKey(g);
@@ -349,17 +381,20 @@ export function PortfolioImportReviewPage() {
                 return (
                     <Card
                         key={key}
-                        className={resolved ? "" : "border-warning/40"}
+                        className={cn(!resolved && "!border-warning/40")}
                     >
-                        <CardHeader className="pb-2">
+                        <CardHeader>
                             <CardTitle
                                 variant="sm"
-                                className="flex flex-wrap items-center justify-between gap-2"
+                                className="flex flex-wrap items-center gap-2"
                             >
-                                <span className="flex items-center gap-2">
-                                    {!resolved && (
-                                        <AlertTriangle className="h-4 w-4 text-warning" />
-                                    )}
+                                {!resolved && (
+                                    <AlertTriangle
+                                        className="h-4 w-4 text-warning"
+                                        aria-hidden
+                                    />
+                                )}
+                                <span className="min-w-0 truncate">
                                     {g.is_cash
                                         ? t(
                                               "portfolioImport.review.cashMovements",
@@ -373,19 +408,16 @@ export function PortfolioImportReviewPage() {
                                             t(
                                                 "portfolioImport.review.unknownInstrument",
                                             )}
-                                    <Badge
-                                        variant="secondary"
-                                        className="font-normal"
-                                    >
-                                        {g.row_count}
-                                    </Badge>
                                 </span>
+                                <Badge variant="secondary" size="sm">
+                                    {g.row_count}
+                                </Badge>
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             {!g.is_cash && hasResolvableRows && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="type-footnote text-label-secondary">
                                         {t("portfolioImport.review.holding")}
                                     </span>
                                     <InvestmentCombobox
@@ -401,9 +433,9 @@ export function PortfolioImportReviewPage() {
                                             disabled={busy}
                                         >
                                             {busy ? (
-                                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                                <Loader2 className="animate-spin" />
                                             ) : (
-                                                <PlusCircle className="h-3.5 w-3.5 mr-1" />
+                                                <PlusCircle />
                                             )}
                                             {t(
                                                 "portfolioImport.review.createNew",
@@ -419,55 +451,60 @@ export function PortfolioImportReviewPage() {
                 );
             })}
 
-            <div className="flex gap-2">
-                {needsAccountRepair && (
-                    <div className="flex flex-col gap-1">
-                        <span className="text-xs text-muted-foreground">
-                            {t("portfolioImport.review.cashAccount")}
-                        </span>
-                        <PortfolioBrokerField
-                            id="portfolio-import-repair-account"
-                            accounts={brokerAccounts}
-                            value={
-                                repairAccountId == null
-                                    ? undefined
-                                    : String(repairAccountId)
-                            }
-                            onChange={(value) =>
-                                setRepairAccountId(
-                                    value ? Number(value) : undefined,
-                                )
-                            }
-                            t={t}
-                        />
-                    </div>
-                )}
-                <Button
-                    onClick={() => commit.mutate(repairAccountId)}
-                    disabled={
-                        commit.isPending ||
-                        (needsAccountRepair && repairAccountId == null)
-                    }
-                    className="flex-1 h-11"
-                    size="lg"
+            <Card>
+                <CardContent
+                    variant="compact"
+                    className="flex flex-wrap items-end justify-between gap-3"
                 >
-                    {commit.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {needsAccountRepair ? (
+                        <div className="flex flex-col gap-1.5">
+                            <span className="type-footnote text-label-secondary">
+                                {t("portfolioImport.review.cashAccount")}
+                            </span>
+                            <PortfolioBrokerField
+                                id="portfolio-import-repair-account"
+                                accounts={brokerAccounts}
+                                value={
+                                    repairAccountId == null
+                                        ? undefined
+                                        : String(repairAccountId)
+                                }
+                                onChange={(value) =>
+                                    setRepairAccountId(
+                                        value ? Number(value) : undefined,
+                                    )
+                                }
+                                t={t}
+                            />
+                        </div>
                     ) : (
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        <span />
                     )}
-                    {t("portfolioImport.review.commit")}
-                </Button>
-                <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-11"
-                    onClick={() => navigate("/portfolio")}
-                >
-                    {t("common.cancel")}
-                </Button>
-            </div>
-        </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => navigate("/portfolio")}
+                        >
+                            {t("common.cancel")}
+                        </Button>
+                        <Button
+                            onClick={() => commit.mutate(repairAccountId)}
+                            disabled={
+                                commit.isPending ||
+                                (needsAccountRepair && repairAccountId == null)
+                            }
+                        >
+                            {commit.isPending ? (
+                                <Loader2 className="animate-spin" />
+                            ) : (
+                                <CheckCircle2 />
+                            )}
+                            {t("portfolioImport.review.commit")}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </PageShell>
     );
 }
 
