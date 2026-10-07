@@ -10,7 +10,7 @@
  * structural rather than `import('express').Layer`: express ships no type
  * declarations and `@types/express` is not a dependency, so referencing its
  * types resolves to an implicit `any` (TS7016) under `noImplicitAny` — same
- * reasoning as `QueryRunner` in types/rows.js for `pg`.
+ * reasoning as `QueryRunner` in types/rows.ts for `pg`.
  *
  * @typedef {object} ExpressLayer
  * @property {{ source?: string }} [regexp]

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { calculateNextDate, isValidPattern } from '../../src/lib/calculations/recurrence.js';
+import { calculateNextDate, isValidPattern } from '../../src/lib/calculations/recurrence.ts';
 
 /**
  * Golden-fixture regression suite for lib/calculations/recurrence.

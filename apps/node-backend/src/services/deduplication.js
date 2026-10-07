@@ -3,9 +3,9 @@
  */
 
 import crypto from "crypto";
-import { query, withSavepointIfInTransaction } from "../database/connection.js";
-import { logger } from "../config/logger.js";
-import { epochMsToUtcYmd } from "../lib/dateFormat.js";
+import { query, withSavepointIfInTransaction } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
+import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
 
 /**
  * @typedef {object} FieldHashInput
@@ -19,7 +19,7 @@ import { epochMsToUtcYmd } from "../lib/dateFormat.js";
 // `transactionData.date` must be a genuine UTC-instant Date (e.g. from the
 // import pipeline's parseDateFlexibleUtc) — `.toISOString()` extracts its UTC
 // calendar day. Do NOT pass a pg-read DATE column here: those parse as
-// local-midnight Date objects (see lib/dateFormat.js) and would day-shift the
+// local-midnight Date objects (see lib/dateFormat.ts) and would day-shift the
 // hash on any host east of UTC.
 /**
  * @param {FieldHashInput} transactionData

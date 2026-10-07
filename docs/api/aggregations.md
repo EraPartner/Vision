@@ -2,7 +2,7 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
@@ -27,7 +27,7 @@ related_code:
   - apps/node-backend/src/repositories/cashflowForecastAccuracyRepository.js
   - apps/node-backend/src/repositories/cashflowForecastMcRepository.js
   - apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.js
-  - apps/node-backend/src/jobs/refreshCashflowForecastMc.js
+  - apps/node-backend/src/jobs/refreshCashflowForecastMc.ts
   - apps/frontend/src/lib/api.ts
   - apps/frontend/src/lib/api/aggregations.ts
   - apps/frontend/src/hooks/useStatistics.ts

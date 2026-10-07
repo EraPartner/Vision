@@ -21,8 +21,8 @@
  */
 
 import crypto from "node:crypto";
-import { query, getClient } from "../database/connection.js";
-import { logger } from "../config/logger.js";
+import { query, getClient } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
 import { scheduleAggregationRefresh } from "./aggregationRefresh.js";
 import {
   AppError,
@@ -30,11 +30,11 @@ import {
   ConflictError,
   ForbiddenError,
   NotFoundError,
-} from "../middleware/errorHandler.js";
-import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.js";
+} from "../middleware/errorHandler.ts";
+import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 import { appendAuditEvent } from "../repositories/auditChainRepository.js";
 
-/** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
+/** @typedef {import('../types/rows.ts').QueryRunner} QueryRunner */
 
 /**
  * Column metadata for one table column, as introspected from

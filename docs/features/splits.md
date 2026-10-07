@@ -2,7 +2,7 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 tags:
   [
@@ -29,8 +29,8 @@ related_code:
     "apps/node-backend/src/routes/splits.js",
     "apps/node-backend/src/services/splitService.js",
     "apps/node-backend/src/repositories/splitRepository.js",
-    "apps/node-backend/src/lib/calculations/splits.js",
-    "apps/node-backend/src/lib/money.js",
+    "apps/node-backend/src/lib/calculations/splits.ts",
+    "apps/node-backend/src/lib/money.ts",
     "apps/frontend/src/pages/OwesPage.tsx",
     "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
     "apps/frontend/src/features/splits/owes/RecipientOwesDetail.tsx",
@@ -123,7 +123,7 @@ Splits are **hard-deleted** (not soft-deleted), but audit rows survive via `ON D
 
 ## Validation & Overpayment Guards
 
-Pure calculation functions in [[apps/node-backend/src/lib/calculations/splits.js]] enforce three key invariants:
+Pure calculation functions in [[apps/node-backend/src/lib/calculations/splits.ts]] enforce three key invariants:
 
 1. **Split allocation** — The sum of splits on a transaction cannot exceed the transaction's absolute amount.
 2. **Payment amount** — The sum of payments on a split cannot exceed the split's amount.
@@ -303,7 +303,7 @@ i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and acc
 - [[docs/adr/013-split-hard-delete-with-audit-trail]] — Audit trail design and hard-delete semantics
 - [[docs/features/views#owes]] — Owes page in views
 - [[docs/adr/002-database-schema#transaction-splits-tables]] — Schema details
-- [[apps/node-backend/src/lib/calculations/splits.js]] — Pure calc module for validation
+- [[apps/node-backend/src/lib/calculations/splits.ts]] — Pure calc module for validation
 
 
 ## Clarity and recovery feedback

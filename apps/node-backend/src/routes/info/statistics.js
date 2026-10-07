@@ -22,14 +22,14 @@ import {
 import { dismissInsight } from "../../services/insightDismissalService.js";
 import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.js";
 import { listAdapters } from "../../services/importPipeline/adapters/index.js";
-import { logger } from "../../config/logger.js";
+import { logger } from "../../config/logger.ts";
 import { getTargetCurrency } from "./_queryParams.js";
-import { assertOptionalId } from "../../middleware/validation.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
+import { assertOptionalId } from "../../middleware/validation.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

@@ -1,8 +1,8 @@
 /** Apply a literal secondary statement to review staging, never to canonical history. */
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import { createHash } from "node:crypto";
-import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
-import { toDecimal } from "../lib/money.js";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { toDecimal } from "../lib/money.ts";
 import {
   normalizeIdentityText,
   assignImportIdentities,

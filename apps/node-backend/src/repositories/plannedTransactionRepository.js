@@ -3,16 +3,16 @@
  *
  */
 
-import { query } from "../database/connection.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { buildSetClauses } from "../lib/sqlClauses.js";
+import { query } from "../database/connection.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { buildSetClauses } from "../lib/sqlClauses.ts";
 
-/** @typedef {import('../types/rows.js').QueryRunner} QueryRunner */
-/** @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow */
-/** @typedef {import('../types/rows.js').PlannedTransactionListRow} PlannedTransactionListRow */
-/** @typedef {import('../types/rows.js').PlannedMatchCandidateRow} PlannedMatchCandidateRow */
-/** @typedef {import('../types/rows.js').PlannedForecastRow} PlannedForecastRow */
-/** @typedef {import('../types/rows.js').LoanScheduleRow} LoanScheduleRow */
+/** @typedef {import('../types/rows.ts').QueryRunner} QueryRunner */
+/** @typedef {import('../types/rows.ts').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow */
+/** @typedef {import('../types/rows.ts').PlannedTransactionListRow} PlannedTransactionListRow */
+/** @typedef {import('../types/rows.ts').PlannedMatchCandidateRow} PlannedMatchCandidateRow */
+/** @typedef {import('../types/rows.ts').PlannedForecastRow} PlannedForecastRow */
+/** @typedef {import('../types/rows.ts').LoanScheduleRow} LoanScheduleRow */
 
 /**
  * Filters shared by getAll and the count fallback.

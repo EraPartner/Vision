@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { getPortfolioSummary } from '../../services/portfolio/portfolioSummaryService.js';
-import { rateLimiter } from '../../middleware/rateLimiter.js';
+import { rateLimiter } from '../../middleware/rateLimiter.ts';
 import { getTargetCurrency } from './_queryParams.js';
 import {
   portfolioSummaryCache,
@@ -16,8 +16,8 @@ import {
 } from '../../services/info/cache.js';
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

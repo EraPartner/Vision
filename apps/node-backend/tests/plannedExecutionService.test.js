@@ -9,7 +9,7 @@ vi.mock("../src/services/plannedTransactionService.js", () => ({
     executeAndAdvance: vi.fn().mockResolvedValue({ duplicate: false }),
   },
 }));
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
 import { executePlanned } from "../src/services/plannedExecutionService.js";

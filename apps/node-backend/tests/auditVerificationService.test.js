@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createAuditEntry,
   AUDIT_CHAIN_GENESIS_HASH,
-} from "../src/lib/auditChainCore.js";
+} from "../src/lib/auditChainCore.ts";
 import { verifyAuditHistory } from "../src/services/auditVerificationService.js";
 
 const digest = (values) =>

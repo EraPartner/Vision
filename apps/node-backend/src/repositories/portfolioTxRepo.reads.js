@@ -2,15 +2,15 @@
  * Portfolio transaction repo — read operations (list, count, getById, summary).
  */
 
-import { query } from "../database/connection.js";
-import { coerceNumericFields } from "../lib/money.js";
-import { toYmd } from "../lib/dateFormat.js";
-import { validateId } from "../lib/validation.js";
+import { query } from "../database/connection.ts";
+import { coerceNumericFields } from "../lib/money.ts";
+import { toYmd } from "../lib/dateFormat.ts";
+import { validateId } from "../lib/validation.ts";
 import { buildListWhereClause } from "./portfolioTxRepo.common.js";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.js";
 
-/** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
-/** @typedef {import('../types/rows.js').PortfolioTransactionSummaryRow} PortfolioTransactionSummaryRow */
+/** @typedef {import('../types/rows.ts').PortfolioTransactionRow} PortfolioTransactionRow */
+/** @typedef {import('../types/rows.ts').PortfolioTransactionSummaryRow} PortfolioTransactionSummaryRow */
 
 /** @param {number} investmentId @returns {Promise<string|undefined>} */
 export async function getAssetClassByInvestmentId(investmentId) {
@@ -341,7 +341,7 @@ export async function getById(id) {
  * @param {string} [options.dateFrom] inclusive YYYY-MM-DD lower bound on pt.date
  * @param {string} [options.dateTo] inclusive YYYY-MM-DD upper bound on pt.date
  * @param {boolean} [options.sellsLastWithinDay=false] replay ordering: sells after other types within the same day (snapshot day-walk); otherwise pt.date, pt.id
- * @returns {Promise<import('../types/rows.js').PortfolioMathTxRow[]>} raw joined rows
+ * @returns {Promise<import('../types/rows.ts').PortfolioMathTxRow[]>} raw joined rows
  */
 export async function getRowsForPortfolioMath({
   activeInvestmentsOnly = false,

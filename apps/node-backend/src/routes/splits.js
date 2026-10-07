@@ -15,14 +15,14 @@ import {
   validateIdParam,
   validateId,
   assertIdParam,
-} from "../middleware/validation.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
-import { escapeCsvValue } from "../lib/csv.js";
-import { listBody, parseOptionalPagination } from "../lib/pagination.js";
+} from "../middleware/validation.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { escapeCsvValue } from "../lib/csv.ts";
+import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 /**

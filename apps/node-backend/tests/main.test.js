@@ -12,7 +12,7 @@ import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
 // ── Mock dependencies before importing main ──────────────────
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     checkConnection: vi.fn(async () => true),
     closePool: vi.fn(async () => undefined),
@@ -23,20 +23,20 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/middleware/rateLimiter.js", () => ({
+vi.mock("../src/middleware/rateLimiter.ts", () => ({
   rateLimiter: () => (req, res, next) => next(),
   adminRateLimiter: (req, res, next) => next(),
   adminMutateLimiter: (req, res, next) => next(),
   importRateLimiter: (req, res, next) => next(),
 }));
 
-import settings from "../src/config/config.js";
-import { checkConnection } from "../src/database/connection.js";
-import { logger } from "../src/config/logger.js";
+import settings from "../src/config/config.ts";
+import { checkConnection } from "../src/database/connection.ts";
+import { logger } from "../src/config/logger.ts";
 
 describe("Main Application", () => {
   beforeEach(() => vi.clearAllMocks());

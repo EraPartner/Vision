@@ -2082,7 +2082,7 @@
                 "from": "be.routes",
                 "to": "fe.apiclient",
                 "payload": "201 { ok: true, data: { transaction fields, auto_linked }, meta }",
-                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/middleware/envelope.js; apps/frontend/src/hooks/useTransactions.ts",
+                "annotation": "apps/node-backend/src/routes/transactions.js; apps/node-backend/src/middleware/envelope.ts; apps/frontend/src/hooks/useTransactions.ts",
                 "title": "Return the saved transaction",
                 "note": "The response uses the unified success envelope. The mutation invalidates affected queries."
               }
@@ -2421,7 +2421,7 @@
                 "from": "db.alembic",
                 "to": "db.postgres",
                 "payload": "after successful migrations: validate executor and grant six approved views",
-                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.js after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
+                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.ts after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
                 "title": "Grant approved views after migration"
               },
               {
@@ -2552,7 +2552,7 @@
                 "from": "be.routes",
                 "to": "sv.monitors",
                 "payload": "claim lease; inspect threshold or evidence",
-                "annotation": "apps/node-backend/src/services/analysisMonitorService.js applies exact decimal comparison and persisted episode state; startup/analysisMonitorScheduler.js checks overdue rules."
+                "annotation": "apps/node-backend/src/services/analysisMonitorService.js applies exact decimal comparison and persisted episode state; startup/analysisMonitorScheduler.ts checks overdue rules."
               },
               {
                 "from": "sv.monitors",
@@ -2770,7 +2770,7 @@
                 "title": "Generate text or tool requests",
                 "note": "The endpoint can be local or explicitly remote.",
                 "payload": "settings.ollama.url /api/chat",
-                "annotation": "apps/node-backend/src/integrations/ollama/client.js; apps/node-backend/src/config/config.js"
+                "annotation": "apps/node-backend/src/integrations/ollama/client.js; apps/node-backend/src/config/config.ts"
               },
               {
                 "from": "sv.aichat",
@@ -3388,7 +3388,7 @@
                 "title": "Check configured authentication",
                 "note": "Timing-safe in-memory comparison; missing/wrong token gives 401 when configured. Without a configured token, access is open.",
                 "payload": "ADMIN_AUTH_TOKEN",
-                "annotation": "apps/node-backend/src/middleware/adminAuth.js"
+                "annotation": "apps/node-backend/src/middleware/adminAuth.ts"
               },
               {
                 "from": "be.routes",
@@ -3621,7 +3621,7 @@
                 "from": "be.routes",
                 "to": "be.repos",
                 "payload": "tagRepository.findOrCreateBySlug(slug, color)",
-                "annotation": "Slug computed via lib/slugify.js  \u00b7  unique constraint."
+                "annotation": "Slug computed via lib/slugify.ts  \u00b7  unique constraint."
               },
               {
                 "from": "be.repos",
@@ -3807,7 +3807,7 @@
                 "from": "sv.forecast",
                 "to": "be.repos",
                 "payload": "cashflowForecastMcRepository.getCached(paramsHash, ttl: 6h)",
-                "annotation": "6-hour materialised cache; startup/dailyJobs.js coalesces overdue refresh after restart, and the daily forecast job awaits persistence before checkpointing success."
+                "annotation": "6-hour materialised cache; startup/dailyJobs.ts coalesces overdue refresh after restart, and the daily forecast job awaits persistence before checkpointing success."
               },
               {
                 "from": "be.repos",
@@ -3949,13 +3949,13 @@
                 "from": "fe.apiclient",
                 "to": "be.middleware",
                 "payload": "multipart file + config fields; importRateLimiter; portfolio-only CSV/XLSX upload",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses portfolioUpload from apps/node-backend/src/lib/portfolioUpload.js to enforce the 50 MiB file limit. Bank imports retain lib/csvUpload.js and CSV-only input."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses portfolioUpload from apps/node-backend/src/lib/portfolioUpload.ts to enforce the 50 MiB file limit. Bank imports retain lib/csvUpload.ts and CSV-only input."
               },
               {
                 "from": "be.middleware",
                 "to": "be.routes",
                 "payload": "validated multipart config + account + optional included_symbols; read-only workbook preflight before batch / SSE",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.js rejects unsupported XLSX, bounds archive expansion, and preflights the detailed Saxo adapter before batch creation or SSE headers."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js builds the required mapping and validates an active broker account. apps/node-backend/src/lib/portfolioUpload.ts rejects unsupported XLSX, bounds archive expansion, and preflights the detailed Saxo adapter before batch creation or SSE headers."
               },
               {
                 "from": "be.routes",
@@ -3997,7 +3997,7 @@
                 "from": "fe.apiclient",
                 "to": "sv.portfolioreference",
                 "payload": "optional POST /reconciliation/reference: XML + explicit batch_ids + placeholder_basis_policy=zero",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses apps/node-backend/src/lib/portfolioReferenceUpload.js for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
+                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.js uses apps/node-backend/src/lib/portfolioReferenceUpload.ts for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
               },
               {
                 "from": "sv.portfolioreference",
@@ -4933,7 +4933,7 @@
                 "title": "Check the API boundary",
                 "note": "Host, cross-origin, rate and mutation-origin checks apply before routes. Admin requests also use token authentication.",
                 "payload": "HTTP request and X-Request-Id",
-                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/middleware/csrfGuard.js"
+                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/middleware/csrfGuard.ts"
               },
               {
                 "from": "be.middleware",
@@ -4973,7 +4973,7 @@
                 "title": "Wrap success or failure",
                 "note": "Success carries data; failures carry a code and message.",
                 "payload": "{ ok, data or error, meta: { requestId } }",
-                "annotation": "apps/node-backend/src/middleware/envelope.js; apps/node-backend/src/middleware/errorHandler.js"
+                "annotation": "apps/node-backend/src/middleware/envelope.ts; apps/node-backend/src/middleware/errorHandler.ts"
               },
               {
                 "from": "be.envelope",
@@ -5139,7 +5139,7 @@
                 "title": "Run guarded migrations",
                 "note": "Use the reviewed migration path before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.js"
+                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.ts"
               },
               {
                 "from": "db.alembic",

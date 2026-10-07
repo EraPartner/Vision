@@ -11,8 +11,8 @@
  *     onToken, returns the final aggregated message + usage.
  */
 
-import { logger } from "../../config/logger.js";
-import settings from "../../config/config.js";
+import { logger } from "../../config/logger.ts";
+import settings from "../../config/config.ts";
 
 export class OllamaError extends Error {
   /**

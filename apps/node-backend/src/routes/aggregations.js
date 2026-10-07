@@ -35,15 +35,15 @@ import { computeRecipientByYear } from "../services/calculations/aggregation/rec
 import { computeRecipientPivot } from "../services/calculations/aggregation/recipientPivot.js";
 import { computeTagPivot } from "../services/calculations/aggregation/tagPivot.js";
 import { getTargetCurrency } from "./info/_queryParams.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
-import { parseIntClamped } from "../lib/pagination.js";
-import { ValidationError } from "../middleware/errorHandler.js";
-import { validateId, validateIntArray } from "../middleware/validation.js";
-import { parseAggregationDateRange } from "../lib/aggregationDateRange.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
+import { parseIntClamped } from "../lib/pagination.ts";
+import { ValidationError } from "../middleware/errorHandler.ts";
+import { validateId, validateIntArray } from "../middleware/validation.ts";
+import { parseAggregationDateRange } from "../lib/aggregationDateRange.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

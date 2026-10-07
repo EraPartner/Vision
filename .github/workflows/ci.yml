@@ -318,6 +318,9 @@ jobs:
       - name: Type-check backend (noImplicitAny ratchet)
         run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
 
+      - name: Type-check backend (strict TypeScript)
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.json
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Python type check — mypy --strict over Alembic env and migrations, repo
   # scripts and their tests (config/mypy.ini). Dependencies come from the

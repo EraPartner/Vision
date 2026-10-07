@@ -24,13 +24,13 @@ import {
   roundMoney,
   multiply,
   divide,
-} from "../../lib/money.js";
-import { VALID_PORTFOLIO_TXN_TYPES } from "../../lib/portfolioTxnTypes.js";
-import { makeValidationError } from "../../lib/repositoryErrors.js";
+} from "../../lib/money.ts";
+import { VALID_PORTFOLIO_TXN_TYPES } from "../../lib/portfolioTxnTypes.ts";
+import { makeValidationError } from "../../lib/repositoryErrors.ts";
 import { UNIT_BASED_ASSET_CLASSES as UNIT_BASED_ASSET_CLASS_LIST } from "@vision/types/assetClasses";
 import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";
 
-/** @typedef {import('../../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+/** @typedef {import('../../types/rows.ts').PortfolioTransactionRow} PortfolioTransactionRow */
 
 /**
  * The caller-facing portfolio-transaction payload, before/after

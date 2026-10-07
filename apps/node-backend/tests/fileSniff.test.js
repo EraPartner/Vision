@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sniffMime, extensionMime } from '../src/lib/fileSniff.js';
+import { sniffMime, extensionMime } from '../src/lib/fileSniff.ts';
 
 const buf = (...bytes) => Buffer.from(bytes);
 

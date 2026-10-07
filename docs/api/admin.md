@@ -2,7 +2,7 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-09-20
+date: 2026-10-07
 updated: 2026-09-20
 tags:
   - api
@@ -26,9 +26,9 @@ related_code:
   - apps/node-backend/src/routes/codexExperimental.js
   - apps/node-backend/src/services/dbEditor.js
   - apps/node-backend/src/main.js
-  - apps/node-backend/src/config/config.js
+  - apps/node-backend/src/config/config.ts
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
-  - apps/node-backend/src/middleware/requestMetrics.js
+  - apps/node-backend/src/middleware/requestMetrics.ts
   - apps/frontend/src/lib/api/admin.ts
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
 ---

@@ -5,7 +5,7 @@
  * All mutations use parameterised queries.
  */
 
-import { query } from '../database/connection.js';
+import { query } from '../database/connection.ts';
 
 /**
  * @typedef {Object} ProviderHealth

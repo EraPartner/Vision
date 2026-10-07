@@ -2,7 +2,7 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last_modified: 2026-10-04
 tags:
@@ -441,7 +441,7 @@ renormalized by the exposure service.
 
 **Write path:** `investmentRepository.update()` peels `show_in_ticker` out of the update body (it is **not** in the column allow-list `allowed`) and performs an `INSERT ... ON CONFLICT (investment_id) DO UPDATE` upsert into `investment_ticker_prefs`, then returns the joined read.
 
-**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.js`) so it is included in `.visionbak` exports.
+**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.ts`) so it is included in `.visionbak` exports.
 
 **Related:** [[docs/features/portfolio|Portfolio Feature — Portfolio Overview Ticker Widget]], [[docs/api/investments|Investments API — PATCH /api/investments/:id]]
 
@@ -801,7 +801,7 @@ Migration [[alembic/versions/0118_audit_retention_pruner.py|0118]] adds a guarde
 | `api_key`    | TEXT        | NOT NULL                | Stored key, plaintext (single-user self-hosted threat model, same as `.env`); masked in API responses and never returned in full to the frontend |
 | `updated_at` | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | Last modification; maintained by the shared `update_updated_at_column()` trigger                                                                 |
 
-**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.js`) — user-configured data worth preserving.
+**Backup:** Registered in `BACKUP_COVERED_TABLES` (`apps/node-backend/src/backup/coverage.ts`) — user-configured data worth preserving.
 
 **Related:** [[docs/features/research|Research Feature]], [[docs/adr/079-multi-provider-research-aggregation|ADR-079]], [[docs/adr/080-layered-env-loading-shared-secrets|ADR-080]], migration [[alembic/versions/0043_add_provider_api_keys.py|0043]]
 
@@ -1363,7 +1363,7 @@ All of them share these anchor columns; the remaining columns are the source's n
 
 **Repository:** [[apps/node-backend/src/repositories/customParserConfigRepository.js]] — maps `config_json` → `config` for application callers; `kind` passed as filter parameter
 
-**Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.js`)
+**Backup:** Included in `.visionbak` exports (registered in `apps/node-backend/src/backup/coverage.ts`)
 
 **Related:** [[docs/features/import#saved-named-custom-csv-parsers-adr-066|Import Feature — Saved Parsers]], [[docs/api/imports|Imports API]], [[docs/adr/066-saved-named-custom-csv-parsers|ADR-066]], [[docs/features/portfolio-import#saved-portfolio-parser-configs|Portfolio Import — Saved Parser Configs]], [[docs/api/portfolio-imports|Portfolio Imports API]], [[docs/adr/078-portfolio-csv-import|ADR-078]]
 

@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     withSavepointIfInTransaction: vi.fn(async (_name, fn) => fn()),
   }),
@@ -21,8 +21,8 @@ import {
   lockManualTransactionIdentity,
   recordManualTransactionDedupClaim,
 } from "../src/services/deduplication.js";
-import { query } from "../src/database/connection.js";
-import { withSavepointIfInTransaction } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
+import { withSavepointIfInTransaction } from "../src/database/connection.ts";
 
 describe("DeduplicationService", () => {
   beforeEach(() => {

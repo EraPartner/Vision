@@ -8,10 +8,10 @@ import { mockConnection } from "./helpers/repoMocks.js";
 // success toast. The pipeline also dropped the adapter's `skipped` count, so
 // a partially unparseable file looked fully imported.
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: vi.fn().mockResolvedValue({ rows: [{ is_brokerage: false }] }),
   }),
@@ -37,11 +37,11 @@ vi.mock("../src/services/portfolioImportPipeline/commit.js", () => ({
     .mockResolvedValue({ imported: 5, duplicates: 0, errors: 0 }),
 }));
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.js";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 import {
   prepareImport,
   runPortfolioImportPipeline,

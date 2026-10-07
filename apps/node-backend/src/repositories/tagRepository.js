@@ -5,10 +5,10 @@
  * while preserving junction row history.
  */
 
-import { query } from '../database/connection.js';
-import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.js';
+import { query } from '../database/connection.ts';
+import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.ts';
 
-/** @typedef {import('../types/rows.js').TagRow} TagRow */
+/** @typedef {import('../types/rows.ts').TagRow} TagRow */
 
 export const tagRepository = {
   /**
@@ -125,7 +125,7 @@ export const tagRepository = {
    * @returns {Promise<TagRow|null>}
    */
   async update(id, { color, is_active }) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped;
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped;
     // null is_active means "leave unchanged" (pre-mapped to undefined).
     const { clauses: setClauses, params, nextIdx: idx } = buildSetClauses({
       color,

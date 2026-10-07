@@ -28,16 +28,16 @@
  * income/spending aggregations and out of the ADR-083 transfer reconciler.
  */
 
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
 } from "../repositories/accountBalanceSql.js";
 import { recipientRepository } from "../repositories/recipientRepository.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { roundToCents, toDecimal, toNumber } from "../lib/money.js";
-import { assertCurrency } from "../lib/validation.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
+import { assertCurrency } from "../lib/validation.ts";
 
 const ADJUSTMENT_MEMO = "BALANCE ADJUSTMENT";
 const VALID_MODES = new Set(["accept", "adjustment"]);

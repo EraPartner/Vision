@@ -1,5 +1,5 @@
 /** Single canonical custody event, with no editable transaction legs. */
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export async function hasAssetTransfersForInvestment(investmentId) {
   return (

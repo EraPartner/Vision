@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 // getIncludeTransfers() reads `user_settings` (ADR-083). Stub it so the module
 // under test does not spend a `query` mock call on the settings lookup — the
@@ -18,7 +18,7 @@ vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
   };
 });
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
@@ -29,8 +29,8 @@ import {
   getCashflowForecastDataRolling,
   getCashflowForecastDataByCategory,
 } from "../src/repositories/infoRepositoryForecast.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
-import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
+import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

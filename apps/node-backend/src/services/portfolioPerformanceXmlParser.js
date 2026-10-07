@@ -2,8 +2,8 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { SaxesParser } from "saxes";
-import { ValidationError } from "../middleware/errorHandler.js";
-import { toDecimal } from "../lib/money.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
+import { toDecimal } from "../lib/money.ts";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 const MAX_NODES = 300000;

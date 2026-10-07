@@ -1,6 +1,6 @@
 /**
  * CSV utilities — escape + formula-injection guard, shared by the frontend
- * (lib/csv.ts) and backend (lib/csv.js) so the two mirrored escapers can no
+ * (lib/csv.ts) and backend (lib/csv.ts) so the two mirrored escapers can no
  * longer drift (SIMP-10).
  *
  * Excel/Sheets auto-execute leading =, +, -, @ as formulas. Tab (\t) and

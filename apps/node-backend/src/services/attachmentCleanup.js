@@ -13,7 +13,7 @@
  */
 
 import { removeAttachmentFile } from './attachmentService.js';
-import { logger } from '../config/logger.js';
+import { logger } from '../config/logger.ts';
 
 /**
  * @param {string[]} storedPaths

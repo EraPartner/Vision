@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { __parseBrokerRetagBody as parseBrokerRetagBody } from "../src/services/investmentService.js";
-import { ValidationError } from "../src/middleware/errorHandler.js";
+import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 const valid = {
   transaction_ids: [1, 2],

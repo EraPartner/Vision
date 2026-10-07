@@ -46,7 +46,7 @@ vi.mock("../../src/repositories/infoRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -115,7 +115,7 @@ vi.mock("../../src/services/insightDismissalService.js", () => ({
 }));
 
 import infoRepository from "../../src/repositories/infoRepository.js";
-import { logger } from "../../src/config/logger.js";
+import { logger } from "../../src/config/logger.ts";
 import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,

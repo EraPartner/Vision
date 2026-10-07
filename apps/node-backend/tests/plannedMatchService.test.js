@@ -22,7 +22,7 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
 vi.mock("../src/services/plannedExecutionService.js", () => ({
   executePlanned: (...a) => mockExecutePlanned(...a),
 }));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 

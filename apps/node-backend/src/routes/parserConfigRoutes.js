@@ -9,14 +9,14 @@ import {
   ValidationError,
   NotFoundError,
   ConflictError,
-} from "../middleware/errorHandler.js";
-import { assertIdParam, validateIdParam } from "../middleware/validation.js";
+} from "../middleware/errorHandler.ts";
+import { assertIdParam, validateIdParam } from "../middleware/validation.ts";
 import customParserConfigService from "../services/customParserConfigService.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/express.js').ExpressRouter} ExpressRouter
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRouter} ExpressRouter
  */
 
 // (name, kind)-unique since migration 0041; both budgeting and portfolio parsers share it.

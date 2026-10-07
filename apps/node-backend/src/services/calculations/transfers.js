@@ -12,7 +12,7 @@
 const DAY_MS = 86_400_000;
 /** @param {Date|string} d */
 const toMs = (d) => (d instanceof Date ? d : new Date(d)).getTime();
-/** @param {import('../../types/rows.js').TransactionRow} t */
+/** @param {import('../../types/rows.ts').TransactionRow} t */
 const ccyOf = (t) => t.currency || 'EUR';
 
 /**
@@ -63,7 +63,7 @@ export function resolveTransferMatches(candidatePairs) {
  * `account_id` FK (ADR-088 — the reconciliation service's SQL sibling,
  * `listTransferCandidatePairs`, keys on the same column), never the retired
  * `bank_account` string.
- * @param {Array<import('../../types/rows.js').TransactionRow>} transactions
+ * @param {Array<import('../../types/rows.ts').TransactionRow>} transactions
  * @param {{windowDays?:number}} [opts]
  */
  function findTransferMatches(transactions, { windowDays = 3 } = {}) {

@@ -2,14 +2,14 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-04-26
+date: 2026-10-07
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases:
   [debugging, error handling, troubleshooting, debugging guide, error codes]
 related_code:
   [
-    "apps/node-backend/src/middleware/validation.js",
+    "apps/node-backend/src/middleware/validation.ts",
     "apps/frontend/src/components/shared/ErrorBoundary.tsx",
     "apps/frontend/src/lib/api.ts",
   ]
@@ -50,7 +50,7 @@ User Action → Hook Mutation → API Client → Express Route
 
 ### Validation Middleware
 
-**File:** [[apps/node-backend/src/middleware/validation.js]]
+**File:** [[apps/node-backend/src/middleware/validation.ts]]
 
 Validates request parameters before they reach route handlers:
 
@@ -331,7 +331,7 @@ curl -X POST http://localhost:3002/api/info/refresh-views
 
 ### Backend Logging
 
-**File:** [[apps/node-backend/src/config/logger.js]]
+**File:** [[apps/node-backend/src/config/logger.ts]]
 
 | Level   | Usage                                                                      |
 | ------- | -------------------------------------------------------------------------- |

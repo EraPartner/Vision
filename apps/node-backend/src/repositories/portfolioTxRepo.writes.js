@@ -1,11 +1,11 @@
 /** Parameterized SQL writes for portfolio transactions. */
 
-import { query } from "../database/connection.js";
-import { buildSetClauses } from "../lib/sqlClauses.js";
+import { query } from "../database/connection.ts";
+import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { mapPortfolioTxRow } from "./portfolioTxRepo.reads.js";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.js";
 
-/** @typedef {import('../types/rows.js').PortfolioTransactionRow} PortfolioTransactionRow */
+/** @typedef {import('../types/rows.ts').PortfolioTransactionRow} PortfolioTransactionRow */
 
 /** @param {import('../services/portfolio/portfolioTransactionRules.js').PortfolioTransactionInput} payload */
 export async function insert(payload) {

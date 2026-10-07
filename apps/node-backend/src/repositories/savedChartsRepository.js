@@ -1,7 +1,7 @@
-import { query, withTransaction } from "../database/connection.js";
-import { buildSetClauses, buildLimitOffset } from "../lib/sqlClauses.js";
+import { query, withTransaction } from "../database/connection.ts";
+import { buildSetClauses, buildLimitOffset } from "../lib/sqlClauses.ts";
 
-/** @typedef {import('../types/rows.js').SavedChartRow} SavedChartRow */
+/** @typedef {import('../types/rows.ts').SavedChartRow} SavedChartRow */
 
 /**
  * The camelCase field bag the routes pass for create/update. All fields are
@@ -223,7 +223,7 @@ const savedChartsRepository = {
       dateRangeEnd,
     },
   ) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped,
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped,
     // mapColumn translates the camelCase API bag to the snake_case columns.
     const {
       clauses: fields,

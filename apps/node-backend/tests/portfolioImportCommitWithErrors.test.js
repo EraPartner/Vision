@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
     withTransaction: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock("../src/services/info/cache.js", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
 import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.js";
 import {

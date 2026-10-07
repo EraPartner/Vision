@@ -7,9 +7,9 @@
  * provider). All mutations use parameterised queries.
  */
 
-import { query } from '../database/connection.js';
+import { query } from '../database/connection.ts';
 
-/** @typedef {import('../types/rows.js').InstrumentProviderMapRow} InstrumentProviderMapRow */
+/** @typedef {import('../types/rows.ts').InstrumentProviderMapRow} InstrumentProviderMapRow */
 
 const COLUMNS = `id, instrument_key, key_type, provider, provider_symbol,
                  resolved_name, exchange, currency, status, verified_at,

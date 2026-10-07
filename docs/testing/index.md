@@ -2,7 +2,7 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-06
+date: 2026-10-07
 updated: 2026-10-06
 last-updated: 2026-10-06
 modified: 2026-10-06
@@ -250,7 +250,7 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend coverage for info-route dependency orchestration, stale FX refresh branching, recurring-pattern fallback semantics, and cache prewarm failure isolation.
 - Tests: [[apps/node-backend/tests/routes/info.test.js]]
-- Related source: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+- Related source: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Validation + coverage snapshot: `bun vitest run tests/routes/info.test.js`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 

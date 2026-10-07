@@ -1,5 +1,5 @@
 import accountService from "./accountService.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
 
 const PORTFOLIO_ACCOUNT_TYPES = new Set([
   "brokerage",

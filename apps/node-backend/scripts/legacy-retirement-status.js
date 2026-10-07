@@ -46,7 +46,7 @@ async function resolveConnectionString() {
     }
     return nativeUrl;
   }
-  const { default: settings } = await import("../src/config/config.js");
+  const { default: settings } = await import("../src/config/config.ts");
   return settings.database.migrationsUrl ?? settings.database.url;
 }
 

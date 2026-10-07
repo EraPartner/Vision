@@ -5,7 +5,7 @@
  * (user_id, method_id, as_of_month).
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 /**
  * @typedef {Object} AccuracyRow
@@ -16,7 +16,7 @@ import { query } from "../database/connection.js";
  * @property {number} rmse
  * @property {number} mape
  * @property {number} sample_days
- * @property {Date} recorded_at - TIMESTAMPTZ, pg default parser (see types/rows.js)
+ * @property {Date} recorded_at - TIMESTAMPTZ, pg default parser (see types/rows.ts)
  */
 
 /**

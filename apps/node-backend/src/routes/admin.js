@@ -20,24 +20,24 @@ import {
   getClient,
   getTableCount,
   query,
-} from "../database/connection.js";
-import settings from "../config/config.js";
-import { env } from "../config/env.js";
-import { logger } from "../config/logger.js";
+} from "../database/connection.ts";
+import settings from "../config/config.ts";
+import { env } from "../config/env.ts";
+import { logger } from "../config/logger.ts";
 import { sanitizePersistedKinesisHistory } from "../services/priceProviderService.js";
 import {
   AppError,
   ForbiddenError,
   NotFoundError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import {
   listProviderHealth,
   probeProvider,
 } from "../services/providerHealthService.js";
-import { getMetrics } from "../middleware/requestMetrics.js";
+import { getMetrics } from "../middleware/requestMetrics.ts";
 import { getRouteManifest } from "../services/routeManifest.js";
-import { adminMutateLimiter } from "../middleware/rateLimiter.js";
+import { adminMutateLimiter } from "../middleware/rateLimiter.ts";
 import { isAccuracyTableHealthy } from "../services/calculations/forecast/accuracyStore.js";
 import {
   getTableMeta,
@@ -46,8 +46,8 @@ import {
 } from "../services/dbEditor.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const GITHUB_OWNER = "EraPartner";

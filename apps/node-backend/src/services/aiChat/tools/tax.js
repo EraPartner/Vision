@@ -9,13 +9,13 @@
 
 import infoRepository from "../../../repositories/infoRepository.js";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
-import settings from "../../../config/config.js";
+import settings from "../../../config/config.ts";
 import {
   toDecimal,
   roundToCents,
   addAll,
   roundMoney,
-} from "../../../lib/money.js";
+} from "../../../lib/money.ts";
 import { DEDUCTION_TYPES } from "../../tax/deductionClassifier.js";
 import { computeDeductionCandidates } from "../../tax/deductionCandidatesService.js";
 import {

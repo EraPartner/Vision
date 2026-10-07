@@ -3,7 +3,7 @@
  * unexecuted planned obligations. It is an end-of-day projection, not a promise
  * that scheduled income arrives or that unplanned expenses do not occur.
  */
-import { toDecimal, roundToCents, toNumber } from "../lib/money.js";
+import { toDecimal, roundToCents, toNumber } from "../lib/money.ts";
 
 /**
  * @param {{ currentCash: number, reserveFloor: number, today: string,

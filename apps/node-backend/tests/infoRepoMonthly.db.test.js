@@ -47,8 +47,8 @@ import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMo
 import { createMaterializedViews } from "../src/services/materializedViewService.js";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
-import { todayAppDateString, appDateStringToUtc } from "../src/lib/timezone.js";
+import { closePool } from "../src/database/connection.ts";
+import { todayAppDateString, appDateStringToUtc } from "../src/lib/timezone.ts";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 

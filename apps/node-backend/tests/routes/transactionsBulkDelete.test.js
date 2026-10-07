@@ -24,7 +24,7 @@ vi.mock("../../src/repositories/transactionRepository.js", () =>
 
 vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -36,7 +36,7 @@ vi.mock("../../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
 );
 
-vi.mock("../../src/database/connection.js", () => mockPooledTxConnection());
+vi.mock("../../src/database/connection.ts", () => mockPooledTxConnection());
 
 vi.mock("../../src/services/attachmentRecordService.js", () =>
   mockAttachmentRecordService(),
@@ -49,7 +49,7 @@ vi.mock("../../src/services/attachmentService.js", () =>
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.js");
 
-import { getClient, query as dbQuery } from "../../src/database/connection.js";
+import { getClient, query as dbQuery } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.js";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });

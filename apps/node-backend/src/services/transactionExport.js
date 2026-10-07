@@ -5,13 +5,13 @@
  * place so the two entry points cannot drift.
  */
 
-import { getClient, query as dbQuery } from "../database/connection.js";
-import { logger } from "../config/logger.js";
-import { NotFoundError } from "../middleware/errorHandler.js";
-import { toDecimal } from "../lib/money.js";
+import { getClient, query as dbQuery } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
+import { NotFoundError } from "../middleware/errorHandler.ts";
+import { toDecimal } from "../lib/money.ts";
 import { toYmd } from "./calculations/portfolioMath.js";
-import { escapeCsvValue } from "../lib/csv.js";
-import { buildTransactionWhere } from "../lib/filterBuilder.js";
+import { escapeCsvValue } from "../lib/csv.ts";
+import { buildTransactionWhere } from "../lib/filterBuilder.ts";
 import {
   resolveBulkSelection,
   validateBulkSelection,
@@ -23,7 +23,7 @@ import {
  * declarations and `@types/express` is not a dependency, so referencing its
  * types resolves to an implicit `any` (TS7016) under `noImplicitAny` — same
  * reasoning as `ExpressApp` in services/routeManifest.js and `QueryRunner` in
- * types/rows.js for `pg`.
+ * types/rows.ts for `pg`.
  * @typedef {object} ExpressResponse
  * @property {(name: string, value: string) => void} setHeader
  * @property {(chunk: string) => boolean} write

@@ -47,7 +47,7 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   scheduleRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -185,7 +185,7 @@ describe("Recipient Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));

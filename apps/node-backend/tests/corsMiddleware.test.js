@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createCorsMiddleware } from "../src/middleware/cors.js";
+import { createCorsMiddleware } from "../src/middleware/cors.ts";
 
 function createResponse() {
   const headers = new Map();

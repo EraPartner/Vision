@@ -65,11 +65,11 @@
 import express from 'express';
 import supertest from 'supertest';
 
-import { requestId } from '../../src/middleware/requestId.js';
-import { requestMetrics } from '../../src/middleware/requestMetrics.js';
-import { wrapResponse } from '../../src/middleware/envelope.js';
-import { createCsrfGuard } from '../../src/middleware/csrfGuard.js';
-import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHandler.js';
+import { requestId } from '../../src/middleware/requestId.ts';
+import { requestMetrics } from '../../src/middleware/requestMetrics.ts';
+import { wrapResponse } from '../../src/middleware/envelope.ts';
+import { createCsrfGuard } from '../../src/middleware/csrfGuard.ts';
+import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHandler.ts';
 
 /**
  * @typedef {object} RouteAppOptions

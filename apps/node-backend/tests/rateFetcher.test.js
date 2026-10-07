@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { query, withTransaction } from "../src/database/connection.js";
+import { query, withTransaction } from "../src/database/connection.ts";
 import {
   normalizeDateInput,
   fetchFromEcb,

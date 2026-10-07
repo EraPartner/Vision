@@ -15,14 +15,14 @@ vi.mock("pg", () => ({
     },
   },
 }));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: { warn: vi.fn() },
 }));
 
 import {
   __ANALYSIS_ROLE,
   ensureAnalysisRole,
-} from "../src/database/analysisRoleBootstrap.js";
+} from "../src/database/analysisRoleBootstrap.ts";
 
 describe("analysis role bootstrap", () => {
   beforeEach(() => {

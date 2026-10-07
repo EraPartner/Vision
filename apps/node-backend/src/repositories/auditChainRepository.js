@@ -7,13 +7,13 @@
  * A database-local chain and checkpoint table cannot detect a coordinated
  * privileged rewrite or restore of an older database snapshot.
  */
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import {
   AUDIT_CHAIN_GENESIS_HASH,
   AUDIT_CHAIN_VERSION,
   canonicalAuditPayload,
   createAuditEntry,
-} from "../lib/auditChainCore.js";
+} from "../lib/auditChainCore.ts";
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 

@@ -34,7 +34,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
 
 const pool = getTestPool();

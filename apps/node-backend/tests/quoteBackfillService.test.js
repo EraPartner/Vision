@@ -6,11 +6,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 import { mockLogger } from "./helpers/mockLogger.js";
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/priceProviderService.js", () => ({
   fetchHistoricalPrices: vi.fn(),
@@ -27,7 +27,7 @@ import {
   __holdingWindowsNeedBackfill as holdingWindowsNeedBackfill,
   backfillHoldingGaps,
 } from "../src/services/quoteBackfillService.js";
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,

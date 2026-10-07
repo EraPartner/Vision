@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockPooledTxConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockPooledTxConnection());
+vi.mock("../src/database/connection.ts", () => mockPooledTxConnection());
 
-vi.mock("../src/middleware/validation.js", () => ({
+vi.mock("../src/middleware/validation.ts", () => ({
   sanitizeUpdateFields: vi.fn((_, fields) => fields),
 }));
 
-import { getClient, query } from "../src/database/connection.js";
+import { getClient, query } from "../src/database/connection.ts";
 import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.js";
 import plannedTransactionService from "../src/services/plannedTransactionService.js";
-import { todayAppDateString } from "../src/lib/timezone.js";
+import { todayAppDateString } from "../src/lib/timezone.ts";
 
 const plannedTransactionRepository = {
   ...plannedTransactionPersistence,

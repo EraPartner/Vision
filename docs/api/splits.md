@@ -2,7 +2,7 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-04-23
+date: 2026-10-07
 updated: 2026-08-19
 tags:
   - api
@@ -48,7 +48,7 @@ All monetary values in split responses (amounts, outstanding, paid) use **Decima
 
 - Split amounts must be **positive numbers**.
 - The cumulative split amount for a transaction (existing splits + new split(s)) cannot exceed the absolute transaction amount.
-- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Validation uses `validateSplitAllocation` (single) or `validateBatchSplitAllocation` (batch) from the pure calc module ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - Decimal.js enforcement compares allocation at the `NUMERIC(18,4)` storage scale.
 - If a transaction does not exist, split creation returns `404`.
 
@@ -291,7 +291,7 @@ The endpoint validates split allocation via `validateSplitAllocation` before wri
 
 Implementation notes:
 
-- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Allocation validation via `validateSplitAllocation({ newSplitAmount, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - `splitService.createSplitAtomic()` owns allocation validation, insertion, and the action='create' audit in one transaction. The route supplies the actor resolved from headers.
 
 ---
@@ -361,7 +361,7 @@ The endpoint validates total batch allocation via `validateBatchSplitAllocation`
 
 Implementation notes:
 
-- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.js]]).
+- Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.js]]).
 - `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
 
@@ -640,7 +640,7 @@ interface SplitCreateInput {
 - [[docs/api/recipients]] - Recipients API
 - [[docs/features/splits]] - Feature specification
 - [[docs/adr/013-split-hard-delete-with-audit-trail]] - Audit trail design and hard-delete semantics
-- [[apps/node-backend/src/lib/calculations/splits.js]] - Pure validation module
+- [[apps/node-backend/src/lib/calculations/splits.ts]] - Pure validation module
 - [[docs/components/form-dialogs|SplitTransactionDialog]] - Frontend split dialog component
 
 ## Migrations

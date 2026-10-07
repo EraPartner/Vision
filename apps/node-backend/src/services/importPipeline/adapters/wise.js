@@ -5,8 +5,8 @@
 import {
   cleanRecipientName,
   normalizeToUppercase,
-} from "../../../lib/textNormalization.js";
-import { logger } from "../../../config/logger.js";
+} from "../../../lib/textNormalization.ts";
+import { logger } from "../../../config/logger.ts";
 import {
   parseCsvFile,
   buildOptionalComment,

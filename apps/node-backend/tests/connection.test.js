@@ -39,15 +39,15 @@ async function loadConnectionModule({
     },
   }));
 
-  vi.doMock("../src/config/config.js", () => ({
+  vi.doMock("../src/config/config.ts", () => ({
     default: settings,
   }));
 
-  vi.doMock("../src/config/logger.js", () => ({
+  vi.doMock("../src/config/logger.ts", () => ({
     logger,
   }));
 
-  const module = await import("../src/database/connection.js");
+  const module = await import("../src/database/connection.ts");
   return { module, pool, poolCtor, logger };
 }
 

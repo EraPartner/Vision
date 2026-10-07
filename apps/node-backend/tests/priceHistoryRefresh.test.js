@@ -13,9 +13,9 @@ vi.mock("yahoo-finance2", () => ({
     return { chart, quote: vi.fn() };
   }),
 }));
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
-vi.mock("../src/database/connection.js", () => mockConnection());
-vi.mock("../src/lib/urlSafety.js", () => ({ assertPublicHttpUrl: vi.fn() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
+vi.mock("../src/database/connection.ts", () => mockConnection());
+vi.mock("../src/lib/urlSafety.ts", () => ({ assertPublicHttpUrl: vi.fn() }));
 vi.mock("../src/services/prices/priceCache.js", async (importOriginal) => ({
   ...(await importOriginal()),
   loadHistoricalPointsFromDatabase: loadHistory,

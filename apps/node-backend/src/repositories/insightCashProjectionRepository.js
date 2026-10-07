@@ -1,4 +1,4 @@
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export async function getProjection(month, currency, methodId) {
   const result = await query(

@@ -15,12 +15,12 @@
 /// <reference path="../types/thirdPartyModules.d.ts" />
 import { Router } from "express";
 import { z } from "zod";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
   assertOptionalId,
   assertIdParam,
-} from "../middleware/validation.js";
+} from "../middleware/validation.ts";
 import { researchAggregator } from "../services/research/researchAggregator.js";
 import { researchMappingService } from "../services/research/researchMappingService.js";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";
@@ -32,8 +32,8 @@ import {
 } from "../services/research/adapters/macroCatalog.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOpenAiModelCatalog } from "../src/config/openAiModelCatalog.js";
+import { parseOpenAiModelCatalog } from "../src/config/openAiModelCatalog.ts";
 
 describe("OpenAI model catalog configuration", () => {
   it("parses an allowlisted catalog with per-model prices", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeValidationError } from '../src/lib/repositoryErrors.js';
+import { makeValidationError } from '../src/lib/repositoryErrors.ts';
 
 describe('makeValidationError', () => {
   it('preserves the message and attaches the repository validation code', () => {

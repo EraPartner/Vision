@@ -38,8 +38,8 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
     delete: vi.fn(),
   },
 }));
-vi.mock("../../src/database/connection.js", () => mockConnection());
-vi.mock("../../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../../src/database/connection.ts", () => mockConnection());
+vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.js";
 import accountService from "../../src/services/accountService.js";

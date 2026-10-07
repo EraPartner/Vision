@@ -5,7 +5,7 @@
  * service wraps the complete compare-and-set mutation in withTransaction().
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import { getUnitEventsForInvestment } from "./portfolioTxRepo.reads.js";
 
 export async function lockPortfolioTransactionWrites() {

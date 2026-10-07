@@ -38,9 +38,9 @@ Service Layer (business logic)
 - Repositories return plain JavaScript objects, not domain models
 - Error handling is delegated to the calling service/route
 
-**Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.js` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
+**Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.ts` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
 
-**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.js`) cover the boundary:
+**Phase 9+ Note — Decimal Enforcement (Mandatory):** All repositories returning monetary values must coerce NUMERIC/DECIMAL columns on emit to eliminate IEEE 754 floating-point drift (node-postgres returns NUMERIC as JS strings; no global type parser is set deliberately to avoid loss in the decimal.js pipeline). Two helpers in `packages/shared-utils/src/money.ts` (re-exported via `apps/node-backend/src/lib/money.ts`) cover the boundary:
 
 - `numericColumn(v)` — converts a single NUMERIC value to number; `null`/`undefined` pass through unchanged; `''` → `undefined`
 - `coerceNumericFields(row, fields)` — shallow-copy coercion of named columns via `numericColumn`; no-op on nullish rows
@@ -239,7 +239,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Dependencies
 
 - `connection.js`
-- `../lib/money.js` (`coerceNumericFields`)
+- `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
@@ -267,7 +267,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Dependencies
 
 - `connection.js`
-- `../lib/money.js` (`coerceNumericFields`)
+- `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
@@ -295,7 +295,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Dependencies
 
 - `connection.js`
-- `../lib/money.js` (`coerceNumericFields`)
+- `../lib/money.ts` (`coerceNumericFields`)
 
 ---
 
@@ -467,17 +467,17 @@ The main `infoRepository.js` file:
 - **FX Conversion:** Multi-currency endpoints support `targetCurrency` parameter with date-aware historical rate fallback
 - **Batch FX Optimization (Phase 3.1):** `batchConvertGroupsWithHistoricalRateFallback()` helper in `infoRepositoryHelpers.js` combines N row groups into 1 `convertRowsToEur` call, eliminating redundant `exchange_rates` queries per group
 - **Parallel Query Execution:** `Promise.all` for independent queries (`getMonthlyFinancialSummary`, `getCashflowComparison`, `getBankBalances`, `getAverageVsCurrentSpending`)
-- **Spike Sanitization:** `getNetWorthFromSnapshots` applies `sanitizeIsolatedDailyInvestmentSpikes()` from `lib/calculations/netWorthSanitizer.js`; the wrapper delegates needle detection and numeric smoothing to `lib/calculations/valueSpikeSanitizer.js`, then recomputes the corrected row's net worth with liabilities included
+- **Spike Sanitization:** `getNetWorthFromSnapshots` applies `sanitizeIsolatedDailyInvestmentSpikes()` from `lib/calculations/netWorthSanitizer.ts`; the wrapper delegates needle detection and numeric smoothing to `lib/calculations/valueSpikeSanitizer.ts`, then recomputes the corrected row's net worth with liabilities included
 - **Complex Aggregations:** CTEs with window functions for recipient insights and category breakdowns
-- **Shared Utilities:** `infoRepositoryHelpers.js` centralizes repository-specific MV caching, aggregation, category merging, row mapping, and currency conversion fallback. Generic date keys live in `lib/dateKeys.js`; date serialization in `lib/dateFormat.js`; numeric rounding in `lib/money.js`.
+- **Shared Utilities:** `infoRepositoryHelpers.js` centralizes repository-specific MV caching, aggregation, category merging, row mapping, and currency conversion fallback. Generic date keys live in `lib/dateKeys.ts`; date serialization in `lib/dateFormat.ts`; numeric rounding in `lib/money.ts`.
 
 ### Dependencies (All Sub-Modules)
 
 - `connection.js`
 - `currencyConversionService.js` (for FX conversions)
 - `infoRepositoryHelpers.js` (repository aggregation helpers and MV cache)
-- `lib/dateKeys.js`, `lib/dateFormat.js`, and `lib/money.js` (generic formatting and rounding)
-- `lib/calculations/valueSpikeSanitizer.js` (shared numeric needle rule) and `lib/calculations/netWorthSanitizer.js` (net-worth recomputation wrapper)
+- `lib/dateKeys.ts`, `lib/dateFormat.ts`, and `lib/money.ts` (generic formatting and rounding)
+- `lib/calculations/valueSpikeSanitizer.ts` (shared numeric needle rule) and `lib/calculations/netWorthSanitizer.ts` (net-worth recomputation wrapper)
 
 ---
 
@@ -669,7 +669,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 - [[apps/node-backend/src/repositories/portfolioTxRepo.reads.js|portfolioTxRepo.reads.js]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
 - [[apps/node-backend/src/repositories/portfolioTxRepo.writes.js|portfolioTxRepo.writes.js]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
 
-[[apps/node-backend/src/services/portfolio/portfolioTransactionService.js|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.js|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
+[[apps/node-backend/src/services/portfolio/portfolioTransactionService.js|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
 
 ---
 

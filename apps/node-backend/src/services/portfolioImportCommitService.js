@@ -1,9 +1,9 @@
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import {
   ConflictError,
   NotFoundError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import {
   lockBatchForUpdate,
   setBatchAccount,

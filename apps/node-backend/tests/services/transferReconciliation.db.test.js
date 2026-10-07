@@ -39,7 +39,7 @@ import {
   unmarkTransfer,
   backfillTransfersOnce,
 } from "../../src/services/transferReconciliationService.js";
-import { closePool } from "../../src/database/connection.js";
+import { closePool } from "../../src/database/connection.ts";
 
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */
 const DAY0 = "2024-03-10";

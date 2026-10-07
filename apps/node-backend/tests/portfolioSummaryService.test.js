@@ -7,9 +7,9 @@ import {
   makeInvestmentRow,
   makePortfolioTransactionRow,
 } from "./builders/domainRows.js";
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -33,7 +33,7 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
 }));
 
 import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.js";
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import { settingsRepository } from "../src/repositories/settingsRepository.js";
 import {
   getPortfolioSummary,

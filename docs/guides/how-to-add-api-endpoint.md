@@ -2,7 +2,7 @@
 title: How to Add a New API Endpoint
 type: guide
 status: active
-date: 2026-03-31
+date: 2026-10-07
 updated: 2026-08-26
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
@@ -42,7 +42,7 @@ Decide on:
 
 ### 2. Create the Route File
 
-Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Use `validateIdParam` for `/:id` routes and throw the typed errors from `middleware/errorHandler.js` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.js` for a live reference.
+Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Use `validateIdParam` for `/:id` routes and throw the typed errors from `middleware/errorHandler.ts` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.js` for a live reference.
 
 `validateIdParam` is validation-only and leaves Express path strings unchanged. Read the numeric id
 through `assertIdParam(req)` inside the handler; for a named sub-resource parameter, pair
@@ -51,8 +51,8 @@ through `assertIdParam(req)` inside the handler; for a named sub-resource parame
 ```javascript
 import { Router } from 'express';
 import <resource>Service from '../services/<resource>Service.js';
-import { validateIdParam, assertIdParam } from '../middleware/validation.js';
-import { parsePagination } from '../lib/pagination.js';
+import { validateIdParam, assertIdParam } from '../middleware/validation.ts';
+import { parsePagination } from '../lib/pagination.ts';
 
 const router = Router();
 
@@ -111,7 +111,7 @@ mountRouter(app, '/api/<resource>', <resource>Router);
 
 ```javascript
 import <resource>Repository from '../repositories/<resource>Repository.js';
-import { NotFoundError, ValidationError } from '../middleware/errorHandler.js';
+import { NotFoundError, ValidationError } from '../middleware/errorHandler.ts';
 
 const <resource>Service = {
   list: ({ limit, offset }) => <resource>Repository.getAllWithCount({ limit, offset }),
@@ -144,10 +144,10 @@ const <resource>Service = {
 export default <resource>Service;
 ```
 
-**Repository** — parameterized SQL only, via the shared `query` helper (there is no `database/pool.js`; the connection module is `database/connection.js`). Create `apps/node-backend/src/repositories/<resource>Repository.js`:
+**Repository** — parameterized SQL only, via the shared `query` helper (there is no `database/pool.js`; the connection module is `database/connection.ts`). Create `apps/node-backend/src/repositories/<resource>Repository.js`:
 
 ```javascript
-import { query } from '../database/connection.js';
+import { query } from '../database/connection.ts';
 
 const <resource>Repository = {
   async getAllWithCount({ limit = 50, offset = 0 }) {
@@ -251,7 +251,7 @@ The endpoint is not "done" until the API contract and the generated frontend typ
 
 - [ ] Route file created (thin — delegates to the service, uses `res.ok()` + `validateIdParam`, throws typed errors)
 - [ ] Service module created (ADR-067 seam; validation + orchestration)
-- [ ] Repository created (parameterized SQL via `query` from `database/connection.js`)
+- [ ] Repository created (parameterized SQL via `query` from `database/connection.ts`)
 - [ ] Route registered in `main.js` via `mountRouter`
 - [ ] Database migration created and tested
 - [ ] Tests written for all endpoints

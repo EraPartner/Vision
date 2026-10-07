@@ -32,26 +32,26 @@
  *    contiguous prefix of $-indices it references.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import {
   addAll,
   divide,
   roundMoney as roundToCents,
   toNumber,
-} from "../lib/money.js";
-import { formatDateToYmd } from "../lib/dateFormat.js";
+} from "../lib/money.ts";
+import { formatDateToYmd } from "../lib/dateFormat.ts";
 import {
   mapRowsForAmountConversion,
   batchConvertGroupsWithHistoricalRateFallback,
   getIncludeTransfers,
 } from "./infoRepositoryHelpers.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { ValidationError } from "../middleware/errorHandler.js";
-import { buildExclusionClauses } from "../lib/filterBuilder.js";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { ValidationError } from "../middleware/errorHandler.ts";
+import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import {
   countObservedMonths,
   monthKeyFromDbDate,
-} from "../lib/observedMonths.js";
+} from "../lib/observedMonths.ts";
 
 /** @param {unknown} value */
 function safeMoneyInput(value) {
@@ -112,7 +112,7 @@ function aggregateByDate(rows) {
  * — see the comment on that query for why, and for why a planned row cannot
  * establish it.
  *
- * The shared implementation lives in lib/observedMonths.js so this 24-month
+ * The shared implementation lives in lib/observedMonths.ts so this 24-month
  * report and the six-month average-vs-current card cannot drift apart.
  */
 // Average, across months, of the running cumulative day-of-month net (SIMP-50).
@@ -162,7 +162,7 @@ export async function getCashflowComparison(
   const currentDay = Number(todayYmd.slice(8, 10));
   const HISTORY_MONTHS = 24;
 
-  // Canonical exclusion clauses (lib/filterBuilder.js). The joins are only
+  // Canonical exclusion clauses (lib/filterBuilder.ts). The joins are only
   // needed when a clause actually references r/pr, so they stay conditional.
   const excl = buildExclusionClauses({
     excludedCategoryIds,
@@ -468,7 +468,7 @@ export async function getCashflowForecastData(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
+  // Canonical exclusion clauses (lib/filterBuilder.ts); joins stay conditional.
   const excl = buildExclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
@@ -601,7 +601,7 @@ export async function getCashflowForecastDataRolling(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.js); joins stay conditional.
+  // Canonical exclusion clauses (lib/filterBuilder.ts); joins stay conditional.
   const excl = buildExclusionClauses({
     excludedCategoryIds,
     excludedRecipientIds,
@@ -713,7 +713,7 @@ export async function getCashflowForecastDataByCategory(
   // of CURRENT_DATE — see convention 1 at the top of this file.
   const todayYmd = todayAppDateString();
 
-  // Canonical exclusion clauses (lib/filterBuilder.js). The r/pr joins are
+  // Canonical exclusion clauses (lib/filterBuilder.ts). The r/pr joins are
   // unconditional here (the effective-category COALESCE needs them anyway).
   const excl = buildExclusionClauses({
     excludedCategoryIds,

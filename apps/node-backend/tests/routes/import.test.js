@@ -86,7 +86,7 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -116,7 +116,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { runImportPipeline } from "../../src/services/importPipeline/index.js";
 import {

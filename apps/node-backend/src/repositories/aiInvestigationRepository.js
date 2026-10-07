@@ -1,4 +1,4 @@
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 
 const COLUMNS = `id,conversation_id AS "conversationId",question,route,model,depth,language,state,
  scope_json AS scope,plan_json AS plan,checkpoint_json AS checkpoint,result_json AS result,

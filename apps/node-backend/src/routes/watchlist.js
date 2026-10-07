@@ -10,19 +10,19 @@
 import { Router } from "express";
 import { z } from "zod";
 import { watchlistRepository } from "../services/watchlistService.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
   validateNumber,
   assertMaxLength,
   assertCurrency,
   assertIdParam,
-} from "../middleware/validation.js";
-import { parsePagination } from "../lib/pagination.js";
+} from "../middleware/validation.ts";
+import { parsePagination } from "../lib/pagination.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

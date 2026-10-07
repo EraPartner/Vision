@@ -27,10 +27,10 @@ async function loadMaterializedViewService() {
     release,
   }));
 
-  vi.doMock("../src/database/connection.js", () =>
+  vi.doMock("../src/database/connection.ts", () =>
     mockConnection({ query, getClient }),
   );
-  vi.doMock("../src/config/logger.js", () => ({ logger }));
+  vi.doMock("../src/config/logger.ts", () => ({ logger }));
   const invalidateStatisticsCaches = vi.fn();
   vi.doMock("../src/services/info/cache.js", () => ({
     invalidateStatisticsCaches,

@@ -13,8 +13,8 @@
  * transaction-list tag filter), so per-tag lines can legitimately overlap.
  */
 
-import { query } from '../database/connection.js';
-import { validateInt4Ids } from '../lib/filterBuilder.js';
+import { query } from '../database/connection.ts';
+import { validateInt4Ids } from '../lib/filterBuilder.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
 import {
   buildPeriodPivot,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -11,12 +11,12 @@ vi.mock("../src/services/materializedViewService.js", () => ({
   refreshMaterializedViews: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/repositories/auditChainRepository.js", () => ({
   appendAuditEvent: vi.fn(),
 }));
 
-import { query, getClient } from "../src/database/connection.js";
+import { query, getClient } from "../src/database/connection.ts";
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.js";
 import { scheduleRefresh } from "../src/services/materializedViewService.js";
 import {

@@ -9,7 +9,7 @@ import {
   __isBlockedAddress as isBlockedAddress,
   assertPublicHttpUrl,
   BlockedUrlError,
-} from "../src/lib/urlSafety.js";
+} from "../src/lib/urlSafety.ts";
 
 describe("isBlockedIpv4", () => {
   it("blocks loopback, private, link-local, CGNAT and unspecified ranges", () => {

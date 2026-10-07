@@ -5,7 +5,7 @@
  * exposes DB read helpers, and re-exports math utilities consumed by info routes.
  */
 
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import {
   computeMetrics,
   computeHeatmap,
@@ -15,9 +15,9 @@ import {
   getPortfolioSummary,
   getBreakdownSummary,
 } from "./portfolio/portfolioSummaryService.js";
-import { addAll, toDecimal } from "../lib/money.js";
+import { addAll, toDecimal } from "../lib/money.ts";
 
-/** @typedef {import('../types/rows.js').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow */
+/** @typedef {import('../types/rows.ts').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow */
 
 // Re-export the imported bindings so both `import { x } from` consumers and the
 // default-object consumers below share a single declaration each (SIMP-51).

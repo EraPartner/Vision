@@ -7,7 +7,7 @@
  * for securities trades, not independent portfolio positions.
  */
 
-import { logger } from "../../config/logger.js";
+import { logger } from "../../config/logger.ts";
 import {
   parseAmountField,
   parseCsvFile,

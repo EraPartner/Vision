@@ -10,7 +10,7 @@ import {
   mockCurrencyConversion,
   mockRowsAlreadyInTargetCurrency,
 } from "./helpers/mockCurrencyConversion.js";
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion({
@@ -29,21 +29,21 @@ vi.mock("../src/repositories/settingsRepository.js", () => ({
   default: { get: vi.fn(async () => null), getAll: vi.fn(async () => ({})) },
 }));
 
-import { query, queryPrepared } from "../src/database/connection.js";
+import { query, queryPrepared } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
 import infoRepository from "../src/repositories/infoRepository.js";
 import { clearMvCache } from "../src/repositories/infoRepository.js";
 import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.js";
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { logger } from "../src/config/logger.js";
+import { logger } from "../src/config/logger.ts";
 
 // App-timezone today (ADR-009) — getNetWorthFromSnapshots anchors its day
 // series on the app timezone, not the server-local/UTC calendar day.
-import { todayAppDateString, addDaysYmd } from "../src/lib/timezone.js";
+import { todayAppDateString, addDaysYmd } from "../src/lib/timezone.ts";
 
 // YYYY-MM period helpers. Derive the previous month from the first-of-month in
 // UTC so end-of-month run dates (the 29th–31st) don't roll `setMonth(-1)` into

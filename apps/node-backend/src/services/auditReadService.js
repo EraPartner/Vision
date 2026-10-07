@@ -1,4 +1,4 @@
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import { readAuditSegment } from "../repositories/auditChainRepository.js";
 import { verifyAuditHistory } from "./auditVerificationService.js";
 

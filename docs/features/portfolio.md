@@ -836,7 +836,7 @@ Each investment can be individually included in or excluded from the ticker. The
 - An absent row means visible (`COALESCE(tp.show_in_ticker, true)`); only explicit opt-outs need storing — no backfill required for existing holdings.
 - **Read path**: `investmentRepository` reads (`getById`, `getAll`, `getAllWithCount`) each `LEFT JOIN investment_ticker_prefs tp ON tp.investment_id = i.id` and select `COALESCE(tp.show_in_ticker, true) AS show_in_ticker`.
 - **Write path**: `investmentRepository.update()` peels `show_in_ticker` out of the PATCH body — it is **not** in `allowed` / `BASE_ALLOWED_FIELDS` — and UPSERTs it via `INSERT ... ON CONFLICT (investment_id) DO UPDATE`, then returns the joined read.
-- **Backup**: `investment_ticker_prefs` is registered in `BACKUP_COVERED_TABLES` in `apps/node-backend/src/backup/coverage.js` and is included in `.visionbak` exports.
+- **Backup**: `investment_ticker_prefs` is registered in `BACKUP_COVERED_TABLES` in `apps/node-backend/src/backup/coverage.ts` and is included in `.visionbak` exports.
 - **NOT auto-applied** — the user runs `bun run db:upgrade`.
 
 > [!warning] Apply migration 0061 before deploying the ticker manager

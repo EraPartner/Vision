@@ -7,7 +7,7 @@
  */
 
 import { renderHtmlToPdf } from './puppeteerRenderer.js';
-import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.js';
+import { toAppDateString, toAppTz, APP_TIMEZONE } from '../../lib/timezone.ts';
 import { buildThemeCss } from './themeCss.js';
 import { escapeHtml, SECTION_CSS } from './sectionHelpers.js';
 import { fetchFinancialData } from './dataFetcher.js';

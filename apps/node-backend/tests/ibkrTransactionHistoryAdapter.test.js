@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.js";
 
-vi.mock("../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { parseIbkrTransactionHistory } from "../src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js";
 import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";

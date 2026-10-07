@@ -1,5 +1,5 @@
-import { query } from "../database/connection.js";
-import { buildExclusionClauses } from "../lib/filterBuilder.js";
+import { query } from "../database/connection.ts";
+import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import { getIncludeTransfers } from "./infoRepositoryHelpers.js";
 
 /**

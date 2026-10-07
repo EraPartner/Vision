@@ -8,8 +8,8 @@
 
 import fs from "fs";
 import { parse } from "csv-parse/sync";
-import { toDecimal } from "../../../lib/money.js";
-import { ValidationError } from "../../../middleware/errorHandler.js";
+import { toDecimal } from "../../../lib/money.ts";
+import { ValidationError } from "../../../middleware/errorHandler.ts";
 
 /**
  * Normalize the CSV encodings offered by the import forms and their aliases.

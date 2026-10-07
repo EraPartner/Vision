@@ -21,11 +21,11 @@ vi.mock("../../src/repositories/settingsRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { ConflictError } from "../../src/middleware/errorHandler.js";
+import { ConflictError } from "../../src/middleware/errorHandler.ts";
 import settingsRepository from "../../src/repositories/settingsRepository.js";
 
 const { default: settingsRouter } =

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseBooleanQueryParam } from "../src/lib/httpParams.js";
-import { withCreateOutcome } from "../src/lib/createOutcome.js";
+import { parseBooleanQueryParam } from "../src/lib/httpParams.ts";
+import { withCreateOutcome } from "../src/lib/createOutcome.ts";
 
 describe("parseBooleanQueryParam", () => {
   it.each([

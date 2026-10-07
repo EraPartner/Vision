@@ -12,14 +12,14 @@
 
 import { Router } from "express";
 import tagService from "../services/tagService.js";
-import { validateIdParam, assertIdParam } from "../middleware/validation.js";
-import { listBody, parseOptionalPagination } from "../lib/pagination.js";
-import { withCreateOutcome } from "../lib/createOutcome.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
+import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
+import { withCreateOutcome } from "../lib/createOutcome.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

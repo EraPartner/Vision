@@ -29,7 +29,7 @@ vi.mock("../../src/services/aiChatService.js", async () => {
   // Mirror the real class's hierarchy: AiChatServiceError extends AppError, so
   // the route's `err instanceof AppError` passthrough (no translation shim)
   // behaves the same here as against the real service module.
-  const { AppError } = await import("../../src/middleware/errorHandler.js");
+  const { AppError } = await import("../../src/middleware/errorHandler.ts");
   class AiChatServiceError extends AppError {
     constructor(message, { code, status, cause } = {}) {
       super(message, {
@@ -67,14 +67,14 @@ vi.mock("../../src/integrations/ollama/client.js", () => {
   };
 });
 
-vi.mock("../../src/config/config.js", () => ({
+vi.mock("../../src/config/config.ts", () => ({
   default: {
     aiChat: { enabled: true, maxHistoryMessages: 20 },
     ollama: { defaultModel: "llama3.2:3b", baseUrl: "http://localhost:11434" },
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -87,7 +87,7 @@ import {
   renameConversation,
   runChatTurn,
 } from "../../src/services/aiChatService.js";
-import settings from "../../src/config/config.js";
+import settings from "../../src/config/config.ts";
 
 const { default: aiRouter } = await import("../../src/routes/ai.js");
 

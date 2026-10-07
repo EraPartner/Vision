@@ -1,5 +1,5 @@
 /**
- * Shared `vi.mock('.../database/connection.js', ...)` factories.
+ * Shared `vi.mock('.../database/connection.ts', ...)` factories.
  *
  * Repository/service tests re-implement the connection mock in dozens of
  * files with three recurring shapes; these helpers centralize them. The
@@ -8,8 +8,8 @@
  *
  * Usage:
  *   import { mockConnection, mockTxConnection } from '../helpers/repoMocks.js';
- *   vi.mock('../src/database/connection.js', () => mockConnection());
- *   vi.mock('../src/database/connection.js', () => mockTxConnection());
+ *   vi.mock('../src/database/connection.ts', () => mockConnection());
+ *   vi.mock('../src/database/connection.ts', () => mockTxConnection());
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { vi } from "vitest";
@@ -53,7 +53,7 @@ export function mockConnection(extra = {}) {
  * shares the module-level `query` spy so tests can route pooled and
  * transactional SQL through one mock; pass a `client` to use it instead.
  *
- * Models the AMBIENT TRANSACTION CONTEXT of the real connection.js (added in
+ * Models the AMBIENT TRANSACTION CONTEXT of the real connection.ts (added in
  * 32806e2): while a `withTransaction` callback is running, module-level
  * `query`/`queryPrepared` execute on that transaction's client instead of the
  * pool (connection.js:85-88 and :149-152). Without this the mock contradicted

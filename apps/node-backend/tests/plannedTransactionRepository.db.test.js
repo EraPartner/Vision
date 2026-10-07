@@ -29,8 +29,8 @@ import {
   releaseDbSuiteLock,
 } from './setup/db.js';
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.js';
-import { closePool } from '../src/database/connection.js';
-import { todayAppDateString, appDateStringToUtc } from '../src/lib/timezone.js';
+import { closePool } from '../src/database/connection.ts';
+import { todayAppDateString, appDateStringToUtc } from '../src/lib/timezone.ts';
 
 /** Insert one planned row directly, so the repository is not asserted against itself. */
 async function insertPlanned({ date, amount = '-10.00', memo = null, isActive = true, isExecuted = false }) {

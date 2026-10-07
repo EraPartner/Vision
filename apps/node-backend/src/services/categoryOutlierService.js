@@ -14,10 +14,10 @@
  * of dismiss records lives elsewhere (UI layer owns it).
  */
 
-import { query } from "../database/connection.js";
-import { logger } from "../config/logger.js";
-import { addAll, roundMoney, toDecimal } from "../lib/money.js";
-import { median } from "../lib/math.js";
+import { query } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
+import { addAll, roundMoney, toDecimal } from "../lib/money.ts";
+import { median } from "../lib/math.ts";
 
 // Modified z-score constant (Iglewicz & Hoaglin): scales MAD so the score is
 // comparable to a standard z-score under normality.
@@ -64,7 +64,7 @@ export function __clearCategoryOutlierCacheForTests() {
 /**
  * Extract calendar {year, month, day} from a transaction date.
  *
- * pg reads DATE columns as local-midnight Date objects (see lib/dateFormat.js),
+ * pg reads DATE columns as local-midnight Date objects (see lib/dateFormat.ts),
  * so Date instances use LOCAL getters. Plain 'YYYY-MM-DD...' strings are
  * sliced directly to avoid any timezone-dependent parsing.
  *

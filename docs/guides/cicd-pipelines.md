@@ -55,13 +55,16 @@ Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and mig
 hash-pinned `config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic
 audit callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
 
-The backend runs the base JSDoc type check and a `noImplicitAny` check over every `src/` file.
+The backend runs three checks. Converted TypeScript files (`src/**/*.ts`) are checked by the
+strict `apps/node-backend/tsconfig.json`; see [[docs/adr/186-backend-strict-typescript|ADR-186]].
+The remaining JavaScript gets the base JSDoc type check and a `noImplicitAny` check.
 The latter compares diagnostics with `scripts/checkjs-ratchet-baseline.json`, which records the
 2,155 existing diagnostics measured on 2026-10-05 by file, code, message, and source line. That
 rebaseline accepted 912 diagnostics added since 2026-09-24, mostly in the portfolio import
 reconciliation and analysis workbench services, and removed 10 entries that no longer occur. A
 new diagnostic fails CI, including one in a newly added file. A corrected diagnostic also
-requires removal of its baseline entry, so the same error cannot silently return later.
+requires removal of its baseline entry, so the same error cannot silently return later. Entries for
+files converted to TypeScript are removed in the converting change.
 
 ### Dependency and workflow admission
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toDecimal } from "../src/lib/money.js";
+import { toDecimal } from "../src/lib/money.ts";
 import { __computeSourceRecordHash } from "../src/services/importIdentity.js";
 import { parsePortfolioPerformanceXml } from "../src/services/portfolioPerformanceXmlParser.js";
 import { findNexoReferenceYieldGroups } from "../src/services/portfolioReferenceYieldCoverage.js";

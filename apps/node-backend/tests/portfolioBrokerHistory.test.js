@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/database/connection.js", () => mockTxConnection());
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
+vi.mock("../src/config/logger.ts", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock("../src/services/currency/currencyConversionService.js", () => ({
   convertToCurrency: vi.fn(async (value) => value),
 }));
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import {
   getBrokerSnapshots,
   __storeCurrentBrokerSnapshot,

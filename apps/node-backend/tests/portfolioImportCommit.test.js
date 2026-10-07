@@ -4,12 +4,12 @@ import { mockLogger } from "./helpers/mockLogger.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 import { makePortfolioImportStagingRow } from "./builders/domainRows.js";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
 // Transaction shim: runs the callback; a throw propagates (= rollback).
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 
 vi.mock("../src/repositories/portfolioTransactionRepository.js", () => ({
   default: { hardDelete: vi.fn() },
@@ -34,7 +34,7 @@ vi.mock("../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
-import { query, poolQuery } from "../src/database/connection.js";
+import { query, poolQuery } from "../src/database/connection.ts";
 import portfolioTransactionPersistence from "../src/repositories/portfolioTransactionRepository.js";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
 import recipientRepository from "../src/repositories/recipientRepository.js";

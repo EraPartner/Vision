@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/config/config.js", () => ({
+vi.mock("../src/config/config.ts", () => ({
   default: { isDevelopment: () => false },
 }));
 
@@ -10,8 +10,8 @@ import {
   importRateLimiter,
   rateLimiter,
   __ipMatchesRule as ipMatchesRule,
-} from "../src/middleware/rateLimiter.js";
-import { RateLimitedError } from "../src/middleware/errorHandler.js";
+} from "../src/middleware/rateLimiter.ts";
+import { RateLimitedError } from "../src/middleware/errorHandler.ts";
 
 function createRequest({ ip, remoteAddress } = {}) {
   const req = {};
@@ -252,7 +252,7 @@ describe("rateLimiter middleware", () => {
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
 
     const { rateLimiter: isolatedRateLimiter } =
-      await import("../src/middleware/rateLimiter.js");
+      await import("../src/middleware/rateLimiter.ts");
     const limiter = isolatedRateLimiter({
       windowMs: 120_000,
       maxRequests: 1,

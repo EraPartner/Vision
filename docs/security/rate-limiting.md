@@ -2,7 +2,7 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-04-23
+date: 2026-10-07
 updated: 2026-09-11
 tags:
   - security
@@ -19,15 +19,15 @@ aliases:
   - ddos protection
   - throttling
 related_code:
-  - apps/node-backend/src/middleware/rateLimiter.js
+  - apps/node-backend/src/middleware/rateLimiter.ts
   - apps/node-backend/src/routes/info.js
   - apps/node-backend/src/routes/transactions.js
   - apps/node-backend/src/routes/reports.js
   - apps/node-backend/src/routes/marketLookup.js
   - apps/node-backend/src/routes/investments.js
   - apps/node-backend/src/routes/aggregations.js
-  - apps/node-backend/src/config/config.js
-  - apps/node-backend/src/config/env.js
+  - apps/node-backend/src/config/config.ts
+  - apps/node-backend/src/config/env.ts
 ---
 
 # Rate Limiting
@@ -299,7 +299,7 @@ Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLim
 - client IP key fallback order (`req.ip` → `remoteAddress` → `unknown`),
 - presets: `adminRateLimiter` (`500 req/min` for observability reads), `adminMutateLimiter` (`30 req/min` for destructive operations), `importRateLimiter` (`20 req/min`), `attachmentRateLimiter` (`60 req/min` for file operations), `spaRateLimiter` (`600 req/min` for SPA fallback serving), `reportRateLimiter` (`30 req/min` for Puppeteer render), `marketRateLimiter` (`90 req/min` for Yahoo Finance proxy), `investmentRateLimiter` (`300 req/min` for external price providers), and `aggregationRateLimiter` (`600 req/min` for CPU-bound dashboard/forecast endpoints).
 
-Related code: [[apps/node-backend/src/middleware/rateLimiter.js]]
+Related code: [[apps/node-backend/src/middleware/rateLimiter.ts]]
 
 ## X-Forwarded-For / Trusted Proxies (June 2026)
 

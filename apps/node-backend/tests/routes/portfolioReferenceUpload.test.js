@@ -38,17 +38,17 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
     delete: vi.fn(),
   },
 }));
-vi.mock("../../src/database/connection.js", () => mockConnection());
-vi.mock("../../src/config/logger.js", () => ({ logger: mockLogger() }));
-vi.mock("../../src/lib/csvUpload.js", async (importOriginal) => {
+vi.mock("../../src/database/connection.ts", () => mockConnection());
+vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
+vi.mock("../../src/lib/csvUpload.ts", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, cleanup: vi.fn(actual.cleanup) };
 });
 
 import { applyPortfolioImportReference } from "../../src/services/portfolioImportReferenceService.js";
 import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.js";
-import { cleanup } from "../../src/lib/csvUpload.js";
-import { ConflictError } from "../../src/middleware/errorHandler.js";
+import { cleanup } from "../../src/lib/csvUpload.ts";
+import { ConflictError } from "../../src/middleware/errorHandler.ts";
 import router from "../../src/routes/portfolioImportRoutes.js";
 
 const api = routeAgent(router, { mountPath: "/api/portfolio/import" });

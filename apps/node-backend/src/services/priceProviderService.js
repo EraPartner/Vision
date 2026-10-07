@@ -6,10 +6,10 @@
  *   - prices/priceProviderRegistry.js — provider strategies (Binance, Yahoo, custom, Kinesis)
  */
 
-import { logger } from "../config/logger.js";
-import { UpstreamError } from "../middleware/errorHandler.js";
-import { assertPublicHttpUrl } from "../lib/urlSafety.js";
-import { epochMsToUtcYmd } from "../lib/dateFormat.js";
+import { logger } from "../config/logger.ts";
+import { UpstreamError } from "../middleware/errorHandler.ts";
+import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
+import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
 import {
   recordSuccess as recordProviderSuccess,
   recordError as recordProviderError,
@@ -37,8 +37,8 @@ import {
 } from "./prices/priceProviderRegistry.js";
 import { getYahooClient } from "./prices/yahooClient.js";
 
-/** @typedef {import('../types/rows.js').InvestmentRow} InvestmentRow */
-/** @typedef {import('../types/rows.js').PricePoint} PricePoint */
+/** @typedef {import('../types/rows.ts').InvestmentRow} InvestmentRow */
+/** @typedef {import('../types/rows.ts').PricePoint} PricePoint */
 /** @typedef {import('./prices/priceProviderRegistry.js').LivePriceQuote} LivePriceQuote */
 
 /**
@@ -552,7 +552,7 @@ export async function fetchHistoricalPrices(
 
     if (!points) {
       try {
-        const url = `${(await import("../config/kinesisConfig.js")).KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
+        const url = `${(await import("../config/kinesisConfig.ts")).KINESIS_BASE_URL}?symbolIds=${encodeURIComponent(symbol)}&timeFrame=${timeframe}&fromDate=${fromDate}`;
         const res = await fetch(url, {
           headers: { Accept: "application/json" },
           signal: AbortSignal.timeout(15_000),
@@ -673,7 +673,7 @@ export async function fetchHistoricalPrices(
 
 export async function sanitizePersistedKinesisHistory() {
   const investmentsResult = await (
-    await import("../database/connection.js")
+    await import("../database/connection.ts")
   ).query(`SELECT id FROM investments WHERE price_provider = 'kinesis'`, []);
 
   const investments = investmentsResult.rows || [];

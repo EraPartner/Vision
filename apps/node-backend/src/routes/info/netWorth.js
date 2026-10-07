@@ -14,7 +14,7 @@
 
 import { Router } from 'express';
 import infoService from '../../services/infoService.js';
-import { rateLimiter } from '../../middleware/rateLimiter.js';
+import { rateLimiter } from '../../middleware/rateLimiter.ts';
 import { getTargetCurrency } from './_queryParams.js';
 import {
   netWorthResponseCache,
@@ -22,11 +22,11 @@ import {
   resolveCacheWithInflight,
 } from '../../services/info/cache.js';
 import { resolveLivePortfolioValue } from '../../services/info/liveSummary.js';
-import { parseOptionalPagination } from '../../lib/pagination.js';
+import { parseOptionalPagination } from '../../lib/pagination.ts';
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

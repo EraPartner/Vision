@@ -43,7 +43,7 @@ describe("materialized-view housekeeping", () => {
   });
 
   it("records create, index, and refresh as distinct post-listen boot phases", () => {
-    const warmup = readRepoFile("apps/node-backend/src/startup/warmup.js");
+    const warmup = readRepoFile("apps/node-backend/src/startup/warmup.ts");
 
     for (const phase of [
       "materialized_views_create",

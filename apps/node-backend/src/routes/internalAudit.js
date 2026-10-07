@@ -5,13 +5,13 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
-import { isLoopbackHost } from "../middleware/adminAuth.js";
+import { isLoopbackHost } from "../middleware/adminAuth.ts";
 import {
   ConflictError,
   ForbiddenError,
   UnauthorizedError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 import {
   recordElectronAuditCheckpoint,
   recordElectronUpdateDecision,
@@ -54,7 +54,7 @@ function tokenEquals(provided, configured) {
   return timingSafeEqual(digest(provided), digest(configured));
 }
 
-/** @param {import('../types/express.js').ExpressRequest} req */
+/** @param {import('../types/express.ts').ExpressRequest} req */
 function assertAuditBridgeAccess(
   req,
   getToken = () => process.env.VISION_AUDIT_BRIDGE_TOKEN,

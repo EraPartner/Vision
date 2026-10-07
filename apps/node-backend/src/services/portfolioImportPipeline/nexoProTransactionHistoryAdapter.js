@@ -1,8 +1,8 @@
 /** Nexo Pro Spot order-history CSV adapter. Financial values come only from fills. */
 
-import { logger } from "../../config/logger.js";
-import { ValidationError } from "../../middleware/errorHandler.js";
-import { Decimal, toDecimal, toNumber } from "../../lib/money.js";
+import { logger } from "../../config/logger.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
+import { Decimal, toDecimal, toNumber } from "../../lib/money.ts";
 import {
   parseCsvFile,
   parseCsvText,

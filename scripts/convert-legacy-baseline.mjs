@@ -13,8 +13,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "../apps/node-backend/node_modules/pg/lib/index.js";
-import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.js";
-import { installFreshBaseline } from "../apps/node-backend/src/database/freshBaseline.js";
+import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.ts";
+import { installFreshBaseline } from "../apps/node-backend/src/database/freshBaseline.ts";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -512,7 +512,7 @@ try {
   process.env.VISION_SKIP_CONFIG_ENV_LOCAL = "true";
   const [{ verifyAuditHistory }, { closePool }] = await Promise.all([
     import("../apps/node-backend/src/services/auditVerificationService.js"),
-    import("../apps/node-backend/src/database/connection.js"),
+    import("../apps/node-backend/src/database/connection.ts"),
   ]);
   try {
     const result = await verifyAuditHistory({
@@ -529,7 +529,7 @@ try {
     await closePool();
   }
   const { ensureAppRole } =
-    await import("../apps/node-backend/src/database/roleBootstrap.js");
+    await import("../apps/node-backend/src/database/roleBootstrap.ts");
   const grants = await ensureAppRole({
     databaseUrl: targetAppUrl,
     migrationsUrl: targetOwnerUrl,

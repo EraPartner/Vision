@@ -16,17 +16,22 @@
     "db:reset": "bun run scripts/db-migrate.js reset",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck": "tsc -p tsconfig.check.json && tsc -p tsconfig.json",
     "typecheck:ratchet": "node scripts/checkjs-ratchet.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^4.1.10",
     "archiver": "^8.0.0",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
     "supertest": "^7.2.2",
     "typescript": "^6.0.3",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^4.1.10",
     "yauzl": "^3.4.0"
   },

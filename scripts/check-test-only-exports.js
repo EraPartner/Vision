@@ -27,11 +27,13 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/aiEvaluation/localReliability.js:runLocalAiCase",
   "apps/node-backend/src/services/aiEvaluation/localReliability.js:scoreLocalAiRun",
   "apps/node-backend/src/services/aiEvaluation/localReliability.js:summarizeLocalAiEvaluation",
-  "apps/node-backend/src/lib/importBatchIds.js:coercedIdSchema",
+  "apps/node-backend/src/lib/importBatchIds.ts:coercedIdSchema",
+  // Imported by the root baseline maintenance scripts, which this scan does not read.
+  "apps/node-backend/src/database/baselineManifest.ts:readBaselineManifest",
   // Named helpers mirrored by a stable runtime default object.
-  "apps/node-backend/src/lib/calculations/splits.js:roundToCents",
-  "apps/node-backend/src/lib/calculations/splits.js:validatePaymentAmount",
-  "apps/node-backend/src/lib/urlSafety.js:BlockedUrlError",
+  "apps/node-backend/src/lib/calculations/splits.ts:roundToCents",
+  "apps/node-backend/src/lib/calculations/splits.ts:validatePaymentAmount",
+  "apps/node-backend/src/lib/urlSafety.ts:BlockedUrlError",
   "apps/node-backend/src/repositories/infoRepository.js:clearMvCache",
   // Named methods mirrored by stable runtime repository default objects.
   "apps/node-backend/src/repositories/cashflowForecastMcRepository.js:get",
@@ -74,7 +76,7 @@ function walkJavaScriptFiles(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) return walkJavaScriptFiles(entryPath);
-    return entry.name.endsWith(".js") ? [entryPath] : [];
+    return /\.(js|ts)$/.test(entry.name) ? [entryPath] : [];
   });
 }
 
@@ -85,7 +87,13 @@ const knownFiles = new Set([...sourceFiles, ...testFiles]);
 function resolveRelativeModule(importer, specifier) {
   if (!specifier.startsWith(".")) return undefined;
   const basePath = path.resolve(path.dirname(importer), specifier);
-  return [basePath, `${basePath}.js`, path.join(basePath, "index.js")].find(
+  return [
+    basePath,
+    `${basePath}.js`,
+    `${basePath}.ts`,
+    path.join(basePath, "index.js"),
+    path.join(basePath, "index.ts"),
+  ].find(
     (candidate) => knownFiles.has(candidate),
   );
 }

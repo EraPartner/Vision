@@ -4,7 +4,7 @@ type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
 description: Portfolio CSV/Saxo XLSX staging, optional bounded XML evidence, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 last_modified: 2026-10-04
 tags:
@@ -49,14 +49,14 @@ related_code:
   - "apps/node-backend/src/services/portfolioPerformanceXmlParser.js"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
   - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.js"
-  - "apps/node-backend/src/lib/portfolioReferenceUpload.js"
+  - "apps/node-backend/src/lib/portfolioReferenceUpload.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/services/portfolioImportCommitService.js"
   - "apps/node-backend/src/services/portfolioImportReadinessService.js"
   - "apps/node-backend/src/repositories/portfolioImportBatchRepository.js"
   - "apps/node-backend/src/services/customParserConfigService.js"
-  - "apps/node-backend/src/lib/portfolioUpload.js"
+  - "apps/node-backend/src/lib/portfolioUpload.ts"
   - "apps/node-backend/src/services/portfolio/fxResolve.js"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"
@@ -511,7 +511,7 @@ When the pipeline detects unresolved instruments (symbol not found in `investmen
 > [!warning] Batch/row id contract (2026-08-11 — breaking for malformed ids)
 > Every `:id` and `:rowId` on `/api/portfolio/import/batches/*` accepts **only** a plain base-10 integer in 1..9,007,199,254,740,991 (`portfolio_import_batches.id` and `portfolio_import_staging_rows.id` are `BIGSERIAL`, so the ceiling is _not_ `int32`). Anything else returns `400 VALIDATION_ERROR`.
 >
-> These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.js`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
+> These ids were parsed with a bare `Number()`, which silently addressed a **different batch** on `"0x10"` → 16, `"1e3"` → 1000 and `"9007199254740993"` → …992, and additionally accepted `"+5"`, `" 12 "` and `"12.0"`. The parser now delegates to the shared `validateId` (`lib/importBatchIds.ts`, shared with the transaction import router). Clients sending plain integers are unaffected. Full accept set: [[docs/security/input-validation#coercedIdSchema (import batch/row ids)|Input Validation]].
 >
 > As of 2026-08-22, `openapi.yaml` publishes these path parameters as `integer` / `int64` with the same positive safe-integer range. Generated TypeScript clients therefore expose `id` and `rowId` path arguments as `number`, matching runtime validation and the shipped frontend callers. This is a breaking schema correction for external spec consumers that generated string-valued path arguments; runtime behavior did not change. `PortfolioImportBatch.id` in batch list/detail responses remains a string because node-postgres returns raw `BIGINT` values as strings at that repository boundary.
 

@@ -1,9 +1,9 @@
 /** One-to-one, reviewable adoption of existing portfolio history. */
 import { createHash } from "node:crypto";
 import { partitionOversellDeficits } from "@vision/shared-utils/portfolio";
-import { ConflictError, ValidationError } from "../middleware/errorHandler.js";
-import { withTransaction } from "../database/connection.js";
-import { toDecimal } from "../lib/money.js";
+import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
+import { withTransaction } from "../database/connection.ts";
+import { toDecimal } from "../lib/money.ts";
 import { normalizeTransactionPayload } from "./portfolio/portfolioTransactionRules.js";
 import {
   getNexoProSpotReconciliationEvidence,

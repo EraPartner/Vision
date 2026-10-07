@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/currency/currencyConversionService.js", () =>
   mockCurrencyConversion(),
@@ -19,7 +19,7 @@ vi.mock("../src/repositories/infoRepositoryHelpers.js", async () => {
   };
 });
 
-import { query, queryPrepared } from "../src/database/connection.js";
+import { query, queryPrepared } from "../src/database/connection.ts";
 import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
 import { mvAvailable } from "../src/repositories/infoRepositoryHelpers.js";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.js";

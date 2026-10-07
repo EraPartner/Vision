@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   FRESH_BASELINE_REVISION,
   installFreshBaseline,
-} from "../src/database/freshBaseline.js";
-import { __readBaselineManifest as readBaselineManifest } from "../src/database/baselineManifest.js";
+} from "../src/database/freshBaseline.ts";
+import { readBaselineManifest } from "../src/database/baselineManifest.ts";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

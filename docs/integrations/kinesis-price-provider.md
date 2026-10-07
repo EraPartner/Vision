@@ -2,12 +2,12 @@
 title: Integration - Kinesis Price Provider
 type: integration
 status: active
-date: 2026-04-25
+date: 2026-10-07
 last_modified: 2026-05-14
 tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization, currency-conversion, historical-fx]
 description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping, currency conversion, and misconfiguration detection
 aliases: [kinesis, kinesis price provider, metals prices, commodity data, kinesis eur conversion]
-related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.js", "apps/node-backend/src/routes/admin.js", "apps/node-backend/tests/priceProviderRegistry.test.js"]
+related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.js", "apps/node-backend/src/config/kinesisConfig.ts", "apps/node-backend/src/routes/admin.js", "apps/node-backend/tests/priceProviderRegistry.test.js"]
 ---
 
 # Integration: Kinesis Price Provider
@@ -38,7 +38,7 @@ Kinesis is a market data provider used for metals and commodity price feeds in V
 
 ### Config File
 
-**Location:** `apps/node-backend/src/config/kinesisConfig.js`
+**Location:** `apps/node-backend/src/config/kinesisConfig.ts`
 
 Contains:
 - Asset symbol mappings

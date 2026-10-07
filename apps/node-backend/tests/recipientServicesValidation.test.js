@@ -6,8 +6,8 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 // the service threads the client through explicitly or a repository issues it
 // via module-level query() inside withTransaction (see repoMocks.js).
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
-vi.mock("../src/database/connection.js", () => mockTxConnection(mockClient));
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -15,13 +15,13 @@ import {
   query,
   poolQuery,
   withTransaction,
-} from "../src/database/connection.js";
+} from "../src/database/connection.ts";
 import { updatePattern } from "../src/services/recipientPatternService.js";
 import { mergeRecipients } from "../src/services/recipientMergeService.js";
 import {
   ValidationError,
   NotFoundError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 beforeEach(() => {
   query.mockClear();

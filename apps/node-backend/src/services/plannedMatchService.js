@@ -23,10 +23,10 @@ import {
   addDaysYmd,
   differenceInCalendarDaysYmd,
   todayAppDateString,
-} from "../lib/timezone.js";
-import { toDecimal, toNumber } from "../lib/money.js";
-import { normalizeDateLikeToYmd } from "../lib/dateFormat.js";
-import { logger } from "../config/logger.js";
+} from "../lib/timezone.ts";
+import { toDecimal, toNumber } from "../lib/money.ts";
+import { normalizeDateLikeToYmd } from "../lib/dateFormat.ts";
+import { logger } from "../config/logger.ts";
 
 const AMOUNT_TOLERANCE_PCT = 5;
 const DATE_WINDOW_DAYS = 5;

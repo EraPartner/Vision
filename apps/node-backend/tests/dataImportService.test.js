@@ -22,11 +22,11 @@ vi.mock("csv-parse/sync", () => ({
   parse: vi.fn(),
 }));
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/database/connection.js", () => mockConnection());
+vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/repositories/recipientRepository.js", () => ({
   recipientRepository: {
@@ -48,8 +48,8 @@ vi.mock("../src/repositories/recipientBankAccountRepository.js", () => ({
 
 import fs from "fs";
 import { parse } from "csv-parse/sync";
-import { logger } from "../src/config/logger.js";
-import { query } from "../src/database/connection.js";
+import { logger } from "../src/config/logger.ts";
+import { query } from "../src/database/connection.ts";
 import { recipientRepository } from "../src/repositories/recipientRepository.js";
 import { categoryRepository } from "../src/repositories/categoryRepository.js";
 import { recipientBankAccountRepository } from "../src/repositories/recipientBankAccountRepository.js";

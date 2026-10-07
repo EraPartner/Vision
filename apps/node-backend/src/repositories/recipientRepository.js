@@ -10,10 +10,10 @@
  *   Callers that need both can call them concurrently via Promise.all.
  */
 
-import { query } from "../database/connection.js";
-import { normalizeForMatching } from "../lib/textNormalization.js";
-import { buildSetClauses } from "../lib/sqlClauses.js";
-import { makeValidationError } from "../lib/repositoryErrors.js";
+import { query } from "../database/connection.ts";
+import { normalizeForMatching } from "../lib/textNormalization.ts";
+import { buildSetClauses } from "../lib/sqlClauses.ts";
+import { makeValidationError } from "../lib/repositoryErrors.ts";
 
 /**
  * Display name of the shared recipient that owns server-generated ledger rows
@@ -24,8 +24,8 @@ import { makeValidationError } from "../lib/repositoryErrors.js";
  */
 const SYSTEM_RECIPIENT_NAME = "SYSTEM";
 
-/** @typedef {import('../types/rows.js').RecipientRow} RecipientRow */
-/** @typedef {import('../types/rows.js').EnrichedRecipientRow} EnrichedRecipientRow */
+/** @typedef {import('../types/rows.ts').RecipientRow} RecipientRow */
+/** @typedef {import('../types/rows.ts').EnrichedRecipientRow} EnrichedRecipientRow */
 
 /**
  * Filters shared by getAll / getCount.
@@ -353,7 +353,7 @@ export const recipientRepository = {
    * @returns {Promise<EnrichedRecipientRow|null>}
    */
   async update(id, { name, default_category_id, notes, is_active }) {
-    // Shared clause builder (lib/sqlClauses.js): undefined fields are skipped.
+    // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
     // A name write always updates the derived normalized_name alongside it;
     // null name / is_active mean "leave unchanged" (pre-mapped to undefined).
     const hasName = name !== undefined && name !== null;

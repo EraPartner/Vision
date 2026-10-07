@@ -72,7 +72,7 @@ vi.mock("../../src/services/portfolio/fxResolve.js", () => ({
   autoResolveFxRateToEur: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({ logger: mockLogger() }));
+vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import investmentRepository from "../../src/repositories/investmentRepository.js";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.js";

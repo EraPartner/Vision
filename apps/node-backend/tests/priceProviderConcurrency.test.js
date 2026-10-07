@@ -3,10 +3,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockLogger } from './helpers/mockLogger.js';
 // Per-holding work remains concurrent, with a bounded number of active requests.
 
-vi.mock('../src/config/logger.js', () => ({
+vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
-vi.mock('../src/config/kinesisConfig.js', () => ({
+vi.mock('../src/config/kinesisConfig.ts', () => ({
   KINESIS_BASE_URL: 'https://kinesis.example/api',
   KINESIS_DEFAULT_TIMEFRAME: '1d',
   KINESIS_DEFAULT_FROM_DATE: '2020-01-01',
@@ -15,7 +15,7 @@ vi.mock('../src/config/kinesisConfig.js', () => ({
 vi.mock('../src/services/currency/currencyConversionService.js', () => ({
   convertToCurrency: vi.fn(async (v) => v),
 }));
-vi.mock('../src/lib/urlSafety.js', () => ({ assertPublicHttpUrl: vi.fn() }));
+vi.mock('../src/lib/urlSafety.ts', () => ({ assertPublicHttpUrl: vi.fn() }));
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), chart: vi.fn() }));
 vi.mock("../src/services/prices/yahooClient.js", () => ({

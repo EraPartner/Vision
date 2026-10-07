@@ -2,7 +2,7 @@
 title: Admin Observability Dashboard
 type: feature
 status: active
-date: 2026-04-25
+date: 2026-10-07
 updated: 2026-05-08
 tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
@@ -10,7 +10,7 @@ aliases: [admin dashboard, system observability, admin monitoring, admin hub]
 related_code:
   - apps/node-backend/src/routes/admin.js
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
-  - apps/node-backend/src/middleware/requestMetrics.js
+  - apps/node-backend/src/middleware/requestMetrics.ts
   - apps/frontend/src/pages/admin/AdminOverviewPage.tsx
   - apps/frontend/src/pages/admin/ProviderHealthPage.tsx
   - apps/frontend/src/pages/admin/EndpointLivenessPage.tsx
@@ -195,7 +195,7 @@ Four entries: Overview, Database, Data Sources, Endpoints.
 | Module | Purpose |
 |--------|---------|
 | `services/providerHealth/` | `recordSuccess`, `recordError`, `listHealth`, `probe` |
-| `middleware/requestMetrics.js` | In-memory rolling window (15 min / 1 min buckets), p50/p95 |
+| `middleware/requestMetrics.ts` | In-memory rolling window (15 min / 1 min buckets), p50/p95 |
 | `services/routeManifest.js` | Express router stack scan → static endpoint list |
 
 ### API Endpoints

@@ -18,8 +18,8 @@
  * Phase primitives are also re-exported for direct use by route handlers.
  */
 
-import { query } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
@@ -53,7 +53,7 @@ export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };
  * Always a NUMBER. Two producers feed it and both now agree: `createBatch`
  * (stage.js) normalizes node-postgres's BIGSERIAL string at the boundary, and
  * the review/commit routes parse it out of the URL through `coercedIdSchema`
- * (lib/importBatchIds.js:17), which already yielded a number. It was a
+ * (lib/importBatchIds.ts:17), which already yielded a number. It was a
  * `string|number` union until the two disagreed on the wire — see the note on
  * `createBatch` for why number won.
  *

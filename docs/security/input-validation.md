@@ -2,7 +2,7 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-04-26
+date: 2026-10-07
 updated: 2026-09-05
 tags:
   [
@@ -33,20 +33,20 @@ aliases:
   ]
 related_code:
   [
-    "apps/node-backend/src/lib/validation.js",
-    "apps/node-backend/src/middleware/validation.js",
-    "apps/node-backend/src/lib/importBatchIds.js",
+    "apps/node-backend/src/lib/validation.ts",
+    "apps/node-backend/src/middleware/validation.ts",
+    "apps/node-backend/src/lib/importBatchIds.ts",
     "apps/node-backend/src/routes/parserConfigRoutes.js",
     "apps/node-backend/src/routes/importRoutes.js",
     "apps/node-backend/src/routes/portfolioImportRoutes.js",
     "apps/node-backend/src/routes/investments.js",
     "apps/node-backend/src/services/accountService.js",
-    "apps/node-backend/src/lib/filterBuilder.js",
+    "apps/node-backend/src/lib/filterBuilder.ts",
     "apps/node-backend/src/routes/aggregations.js",
     "apps/node-backend/src/routes/transactions.js",
     "apps/node-backend/src/services/aiChat/tools/_validate.js",
-    "apps/node-backend/src/lib/csv.js",
-    "apps/node-backend/src/lib/urlSafety.js",
+    "apps/node-backend/src/lib/csv.ts",
+    "apps/node-backend/src/lib/urlSafety.ts",
     "apps/node-backend/src/services/investmentService.js",
     "apps/node-backend/src/repositories/portfolioTxRepo.reads.js",
     "apps/node-backend/src/services/prices/priceProviderRegistry.js",
@@ -59,12 +59,12 @@ Vision implements comprehensive input validation to prevent SQL injection, XSS a
 
 ## Overview
 
-`lib/validation.js` owns the pure value rules and update-field whitelist used by routes, services,
-repositories, and lower-level libraries. `middleware/validation.js` contains the Express
+`lib/validation.ts` owns the pure value rules and update-field whitelist used by routes, services,
+repositories, and lower-level libraries. `middleware/validation.ts` contains the Express
 parameter adapters (`validateIdParam`, `validateIntParam`, and the point-of-use `assertIdParam`) and
 re-exports the pure helpers for route compatibility. Lower layers import the library directly and
-do not depend on `middleware/validation.js`; typed application errors remain owned by
-`middleware/errorHandler.js` under the existing project-wide convention.
+do not depend on `middleware/validation.ts`; typed application errors remain owned by
+`middleware/errorHandler.ts` under the existing project-wide convention.
 
 ## Validation Functions
 
@@ -297,7 +297,7 @@ always been a silent filter, and the throwing guard belongs where a 400 can reac
 
 ### SQL-build-time id lists (`validateInt4Ids`)
 
-`apps/node-backend/src/lib/filterBuilder.js` — the last layer before an id becomes a `$n`
+`apps/node-backend/src/lib/filterBuilder.ts` — the last layer before an id becomes a `$n`
 placeholder. Used by `buildTransactionWhere` (`accountIds`, `categoryIds`),
 `buildExclusionClauses` (`excludedCategoryIds`, `excludedRecipientIds`),
 `resolveBulkSelection`, `bulkTagTransactions`, and the price-history batch loader.
@@ -443,7 +443,7 @@ The last `parseInt`-based id parsers outside the transactions routes, converged 
 ### Pagination Validation
 
 Validates and normalizes pagination parameters. `validatePagination(limit, offset)` was removed
-in PR #103; list routes now use the helpers in `apps/node-backend/src/lib/pagination.js`.
+in PR #103; list routes now use the helpers in `apps/node-backend/src/lib/pagination.ts`.
 
 ```javascript
 parseIntClamped(raw, { min = 1, max, fallback })
@@ -578,7 +578,7 @@ Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js
 
 ### coercedIdSchema (import batch/row ids)
 
-The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.js`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
+The import pipelines' batch and row ids (`/api/import/batches/*`, `/api/portfolio/import/batches/*`) are parsed by the zod adapter `coercedIdSchema` in `lib/importBatchIds.ts`, via `parseBatchIdParam(req)` and `parseBatchRowIdParams(req)`. It **delegates to `validateId`**, so there is one definition of a valid id rather than two kept in step by hand.
 
 ```javascript
 const id = parseBatchIdParam(req); // req.params.id
@@ -635,7 +635,7 @@ The id **route params** above are only half of what a write addresses. The other
 
 | Site                                                                                   | Field                         | Parser                                                             |
 | -------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------ |
-| `POST /api/import/batches/:id/rows/:rowId/override`                                    | `recipient_id`                | `parseOverrideId` (`lib/importBatchIds.js`)                        |
+| `POST /api/import/batches/:id/rows/:rowId/override`                                    | `recipient_id`                | `parseOverrideId` (`lib/importBatchIds.ts`)                        |
 | `POST /api/import/batches/:id/rows/:rowId/category-override`                           | `category_id`                 | `parseOverrideId`                                                  |
 | `POST /api/portfolio/import/batches/:id/rows/:rowId/investment-override`               | `investment_id`               | `parseOverrideId`                                                  |
 | `POST /api/portfolio/import/batches/:id/rows/investment-override`                      | `row_ids[]`, `investment_id`  | `validateId`, inline; safe-integer row ids and int32 investment id |
@@ -714,7 +714,7 @@ All CSV exports use a centralized utility that prefixes dangerous leading charac
 Example: "  =formula" → trimmed to "=formula" → prefixed to "'=formula" (rendered as literal text)
 ```
 
-**Implementation:** [[apps/node-backend/src/lib/csv.js|lib/csv.js]]
+**Implementation:** [[apps/node-backend/src/lib/csv.ts|lib/csv.ts]]
 
 ```js
 export function escapeCsvValue(value) {
@@ -734,7 +734,7 @@ export function escapeCsvValue(value) {
 Every CSV export route **must** pass all user-controllable fields through `escapeCsvValue()`:
 
 ```js
-import { escapeCsvValue } from "../lib/csv.js";
+import { escapeCsvValue } from "../lib/csv.ts";
 
 // Transaction export
 const cols = [row.date, row.recipient_name, row.memo, row.comment];
@@ -758,7 +758,7 @@ Custom price-provider investments may carry user-supplied URLs (`price_provider_
 
 ### Module
 
-**[[apps/node-backend/src/lib/urlSafety.js]]** exports:
+**[[apps/node-backend/src/lib/urlSafety.ts]]** exports:
 
 | Export                           | Description                                                                                                                                                                        |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

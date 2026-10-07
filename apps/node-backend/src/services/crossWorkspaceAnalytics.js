@@ -5,7 +5,7 @@
  * workspace inputs.
  */
 
-import { toDecimal, toNumber, roundToCents } from '../lib/money.js';
+import { toDecimal, toNumber, roundToCents } from '../lib/money.ts';
 
 /**
  * Net-worth / FI projection cone. Median path = exact monthly compounding

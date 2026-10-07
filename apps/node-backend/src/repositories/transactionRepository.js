@@ -8,7 +8,7 @@
  * - getAllWithCount() keeps the row query pipelined under LIMIT and briefly
  *   caches the separate filtered count across page requests.
  *
- * Row shapes are declared against the shared contracts in `src/types/rows.js`;
+ * Row shapes are declared against the shared contracts in `src/types/rows.ts`;
  * mind that `amount`/`balance` are pg NUMERIC (strings) and `date` is a `Date`.
  */
 
@@ -16,12 +16,12 @@ import {
   query,
   queryPrepared,
   withTransaction,
-} from "../database/connection.js";
-import { sanitizeUpdateFields } from "../lib/validation.js";
-import { buildTransactionWhere } from "../lib/filterBuilder.js";
-import { buildSetClauses } from "../lib/sqlClauses.js";
+} from "../database/connection.ts";
+import { sanitizeUpdateFields } from "../lib/validation.ts";
+import { buildTransactionWhere } from "../lib/filterBuilder.ts";
+import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { accountRepository } from "./accountRepository.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
 
 /**
  * Validate canonical account identity before dynamic SET clauses are built.
@@ -31,7 +31,7 @@ import { ValidationError } from "../middleware/errorHandler.js";
  * admits the canonical account_id only.
  *
  * @param {Record<string, any>} sanitized output of sanitizeUpdateFields
- * @param {import('../types/rows.js').QueryRunner} [client]
+ * @param {import('../types/rows.ts').QueryRunner} [client]
  * @returns {Promise<Record<string, any>>}
  */
 export async function stampAccountIdForUpdate(sanitized, client) {
@@ -47,9 +47,9 @@ export async function stampAccountIdForUpdate(sanitized, client) {
   return sanitized;
 }
 
-/** @typedef {import('../types/rows.js').TransactionRow} TransactionRow */
-/** @typedef {import('../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
-/** @typedef {import('../types/rows.js').UnlinkedTransactionRow} UnlinkedTransactionRow */
+/** @typedef {import('../types/rows.ts').TransactionRow} TransactionRow */
+/** @typedef {import('../types/rows.ts').EnrichedTransactionRow} EnrichedTransactionRow */
+/** @typedef {import('../types/rows.ts').UnlinkedTransactionRow} UnlinkedTransactionRow */
 
 /**
  * Filters shared by getAll / getCount / getAllWithCount / getUncategorised*.
@@ -288,7 +288,7 @@ async function attachTagsToRows(rows) {
 /**
  * Replace a transaction's tag junction rows inside the caller's transaction.
  *
- * @param {import('../types/rows.js').QueryRunner} client
+ * @param {import('../types/rows.ts').QueryRunner} client
  * @param {number} transactionId
  * @param {string[]|null|undefined} slugs
  * @returns {Promise<void>}

@@ -1,6 +1,6 @@
 /** Contract-phase smoke with accounts.statement_balance* absent. */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.js";
 import { accountService } from "../src/services/accountService.js";
 import { transactionRepository } from "../src/repositories/transactionRepository.js";

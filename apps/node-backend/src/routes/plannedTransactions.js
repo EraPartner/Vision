@@ -22,27 +22,27 @@ import {
   validateId,
   assertCurrency,
   assertIdParam,
-} from "../middleware/validation.js";
-import { formatDateToYmd } from "../lib/dateFormat.js";
-import { rateLimiter } from "../middleware/rateLimiter.js";
+} from "../middleware/validation.ts";
+import { formatDateToYmd } from "../lib/dateFormat.ts";
+import { rateLimiter } from "../middleware/rateLimiter.ts";
 import { generateLoanRepaymentSchedule } from "../services/calculations/loanSchedule.js";
-import { isValidPattern } from "../lib/calculations/recurrence.js";
+import { isValidPattern } from "../lib/calculations/recurrence.ts";
 import { executePlanned } from "../services/plannedExecutionService.js";
 import { getMatchSuggestions } from "../services/plannedMatchService.js";
 import {
   AppError,
   NotFoundError,
   ValidationError,
-} from "../middleware/errorHandler.js";
-import { toDecimal, toNumber } from "../lib/money.js";
-import { parsePagination } from "../lib/pagination.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+} from "../middleware/errorHandler.ts";
+import { toDecimal, toNumber } from "../lib/money.ts";
+import { parsePagination } from "../lib/pagination.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/rows.js').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow
- * @typedef {import('../types/rows.js').PlannedTransactionListRow} PlannedTransactionListRow
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/rows.ts').HydratedPlannedTransactionRow} HydratedPlannedTransactionRow
+ * @typedef {import('../types/rows.ts').PlannedTransactionListRow} PlannedTransactionListRow
  */
 
 /**
@@ -52,7 +52,7 @@ import { parseBooleanQueryParam } from "../lib/httpParams.js";
  * fields — formatPlannedTransaction's own `row.x || fallback` reads below are
  * written defensively for exactly that gap. Modeled as one flat type with the
  * hydration-only fields optional (see the noImplicitAny discriminated-union
- * narrowing quirk noted in middleware/validation.js) rather than a union of
+ * narrowing quirk noted in middleware/validation.ts) rather than a union of
  * the two row typedefs.
  * @typedef {PlannedTransactionListRow & Partial<Pick<HydratedPlannedTransactionRow,
  *   'executions'|'execution_count'|'executed_transaction_id'|'loan_schedule'|'tags'
@@ -856,7 +856,7 @@ function formatPlannedTransaction(row) {
         : null,
     loan_first_payment_date: ymd(row.loan_first_payment_date) || null,
     loan_schedule: (row.loan_schedule || []).map(
-      (/** @type {import('../types/rows.js').LoanScheduleRow} */ entry) => ({
+      (/** @type {import('../types/rows.ts').LoanScheduleRow} */ entry) => ({
         installment_number: parseInt(String(entry.installment_number), 10),
         due_date: ymd(entry.due_date),
         payment_amount: toNumber(toDecimal(entry.payment_amount)),
@@ -868,7 +868,7 @@ function formatPlannedTransaction(row) {
     executed_transaction_id: row.executed_transaction_id || null,
     execution_count: row.execution_count || 0,
     executions: (row.executions || []).map(
-      (/** @type {import('../types/rows.js').PlannedExecutionRow} */ e) => ({
+      (/** @type {import('../types/rows.ts').PlannedExecutionRow} */ e) => ({
         id: e.id,
         executed_transaction_id: e.executed_transaction_id,
         execution_date: ymd(e.execution_date),

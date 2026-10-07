@@ -32,7 +32,7 @@ Pure logic that is needed on both the frontend and backend lives in this Bun wor
 
 Both apps add `"@vision/shared-utils": "workspace:*"` to their `package.json` dependencies. Use an explicit package subpath for modules exposed that way; `category` remains the root-barrel exception. Asset-class constants belong to `@vision/types/assetClasses`, not shared-utils. Add new modules only when their logic is genuinely shared and pure; backend-only or frontend-only domain logic stays in its owning app.
 
-> [!important] Do not import from `apps/node-backend/src/lib/money.js` directly in the frontend, or vice-versa. Frontend code imports `@vision/shared-utils/money` directly. The backend keeps its app-local `src/lib/money.js` boundary where backend modules already use it.
+> [!important] Do not import from `apps/node-backend/src/lib/money.ts` directly in the frontend, or vice-versa. Frontend code imports `@vision/shared-utils/money` directly. The backend keeps its app-local `src/lib/money.ts` boundary where backend modules already use it.
 
 ## Backend test-only export convention
 
@@ -61,7 +61,7 @@ This eliminates the prior frontend/backend money-rounding drift that was caused 
 
 ## Money Utility Pattern (Phase 9 + June 2026)
 
-**Source:** [[packages/shared-utils/src/money.ts]] (re-exported via [[apps/node-backend/src/lib/money.js]] and [[apps/frontend/src/lib/money.ts]])
+**Source:** [[packages/shared-utils/src/money.ts]] (re-exported via [[apps/node-backend/src/lib/money.ts]] and [[apps/frontend/src/lib/money.ts]])
 
 For rendered frontend values, use `components/shared/Money.tsx` after calculation. Pass raw negative/positive deltas with `signed`; pass an explicit currency when the amount is native or already converted. Keep `useCurrencyFormatter` for APIs that require a string, such as translated interpolation, chart ticks/tooltips, input placeholders, titles, and ARIA text.
 
@@ -91,7 +91,7 @@ import {
   divide,
   roundMoney,
   toNumber,
-} from "../lib/money.js";
+} from "../lib/money.ts";
 
 // Convert any input (number, string, Decimal, null) to Decimal
 const amount = toDecimal(100.5);
@@ -116,7 +116,7 @@ const scaled = toNumber(roundMoney("0.123456", 4)); // 0.1235 (to 4 DP)
 const dbAmount = toNumber(toDecimal("100.00")); // Safe from string precision loss
 
 // Repository read boundary: coerce a single DB NUMERIC column, preserving SQL NULL
-import { numericColumn, coerceNumericFields } from "../lib/money.js";
+import { numericColumn, coerceNumericFields } from "../lib/money.ts";
 
 const price = numericColumn(row.current_price); // '31.20' → 31.2; null → null; '' → undefined
 
@@ -492,7 +492,7 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 > `null` for absence.
 
 ```js
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 export const entityRepository = {
   async getAll({ limit = 50, offset = 0, active = true, ...filters } = {}) {
@@ -560,7 +560,7 @@ export default entityRepository;
 
 | Pattern         | Rule                                                                        |
 | --------------- | --------------------------------------------------------------------------- |
-| DB access       | Import `query` from `../database/connection.js`                             |
+| DB access       | Import `query` from `../database/connection.ts`                             |
 | Filter building | `WHERE 1=1` + dynamic `AND` clauses                                         |
 | Parameters      | Positional (`$1`, `$2`) with manual index tracking                          |
 | Single row      | `result.rows[0]                                                             |     | null` |
@@ -574,9 +574,9 @@ export default entityRepository;
 The intended layering is `routes → services → repositories`, with pure, framework-free helpers in
 `lib/` importable from any layer. Pure helpers that used to sit under `services/` were relocated to
 `lib/` in Wave A2 (2026-07) precisely so repositories can use them without inverting the layers:
-`lib/filterBuilder.js`, `lib/textNormalization.js`, `lib/calculations/splits.js`,
-`lib/calculations/recurrence.js`, and the `VALID_PORTFOLIO_TXN_TYPES` const
-(`lib/portfolioTxnTypes.js`).
+`lib/filterBuilder.ts`, `lib/textNormalization.ts`, `lib/calculations/splits.ts`,
+`lib/calculations/recurrence.ts`, and the `VALID_PORTFOLIO_TXN_TYPES` const
+(`lib/portfolioTxnTypes.ts`).
 
 **Enforced mechanically** since 2026-08-11 by `vision-local/no-service-import-from-repo`
 ([[apps/node-backend/eslint.config.js|eslint.config.js]]), the mirror of
@@ -612,7 +612,7 @@ two lists must be edited together.
 
 ## Timezone Boundary Handling & APP_TIMEZONE Consistency (Phase 9, ADR-009)
 
-**Source:** [[apps/node-backend/src/lib/timezone.js|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
+**Source:** [[apps/node-backend/src/lib/timezone.ts|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
 
 **May 2026 Update:** As of 2026-05-14, date bucketing throughout the backend now consistently uses `APP_TIMEZONE` (default `Europe/Brussels`):
 
@@ -627,7 +627,7 @@ Certain JavaScript environments (some older Intl implementations, edge cases in 
 ### Pattern
 
 ```js
-import { toAppTz } from '../lib/timezone.js';
+import { toAppTz } from '../lib/timezone.ts';
 
 // Before (buggy):
 const zoned = new Intl.DateTimeFormat('en-GB', {
@@ -676,9 +676,9 @@ Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{
 ```js
 import { Router } from "express";
 import entityRepository from "../repositories/entityRepository.js";
-import { logger } from "../config/logger.js";
-import { validateIdParam } from "../middleware/validation.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { logger } from "../config/logger.ts";
+import { validateIdParam } from "../middleware/validation.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();
 
@@ -743,7 +743,7 @@ export default router;
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **List envelope**      | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ADR-026]]                  |
 | **Parallel fetch**     | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.js`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.ts`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Error handling**     | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Success response**   | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | DELETE Response Pattern]]) |
@@ -834,7 +834,7 @@ its count and window fields belong in the `data` body as described above.
 
 A list endpoint that has always returned every row cannot simply adopt
 `parsePagination` — its `defaultLimit` would truncate every existing client on the
-next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.js]]:
+next deploy. Use the opt-in pair from [[apps/node-backend/src/lib/pagination.ts]]:
 
 ```js
 // null when the caller sent neither limit nor offset ⇒ serve the whole list.
@@ -846,7 +846,7 @@ res.ok(listBody(items, total, page)); // adds limit/offset only when paging
 ```
 
 Repository side: build the tail with `buildLimitOffset(params, { limit, offset })`
-([[apps/node-backend/src/lib/sqlClauses.js]]) so a `null` limit emits no `LIMIT`
+([[apps/node-backend/src/lib/sqlClauses.ts]]) so a `null` limit emits no `LIMIT`
 clause at all, rather than a large default that silently caps the result.
 
 ### Frontend Consumption
@@ -1248,14 +1248,14 @@ Query parameters from `req.query.*` are always strings (or string arrays if mult
 ### Pattern: `parseBooleanQueryParam()`
 
 All backend boolean query parameters use
-`lib/httpParams.js#parseBooleanQueryParam`. The accepted compatibility
+`lib/httpParams.ts#parseBooleanQueryParam`. The accepted compatibility
 spellings are `true` / `1` and `false` / `0`, including primitive booleans and
 numbers in listener-free tests. Missing, empty, multi-valued, or unrecognised
 values use the endpoint's explicit default. New clients should emit the
 canonical `true` or `false` strings.
 
 ```js
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 
 const includeBalance = parseBooleanQueryParam(req.query.include_balance);
 const active = parseBooleanQueryParam(req.query.active, true);
@@ -1376,15 +1376,15 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ## Express App Setup
 
-**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.js|cors.js]], [[apps/node-backend/src/middleware/compression.js|compression.js]]
+**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.ts|cors.js]], [[apps/node-backend/src/middleware/compression.ts|compression.js]]
 
 ### Middleware Stack (in order)
 
 1. **Request ID and metrics** — attach the correlation ID, then begin rolling request measurement
-2. **CORS** — `middleware/cors.js` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
+2. **CORS** — `middleware/cors.ts` checks `Origin` against `settings.api.corsOrigins`, sets `Access-Control-*` headers, and terminates OPTIONS preflight with 204
 3. **JSON parsing** — `express.json({ limit: '1mb' })`
 4. **Security headers** — CSP, HSTS (prod), X-Frame-Options, etc.
-5. **Compression** — `middleware/compression.js` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
+5. **Compression** — `middleware/compression.ts` uses `node:zlib` `createGzip()` for gzip-capable clients, compressible types, and responses of at least 1 KB when length is known; Server-Sent Events remain uncompressed
 6. **Request logging and response envelope** — log the request and attach `res.ok(data, meta?)`
 7. **Global guards and rate limiter** — apply cross-site request forgery protection and limiting before routes
 8. **Routes** — registered with per-route limiters where needed
@@ -1415,7 +1415,7 @@ process.on("SIGTERM", async () => {
 
 ## Error Handling Pattern
 
-**Source:** [[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
+**Source:** [[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
 
 Centralized error-handling middleware with typed error classes. Routes throw typed errors; middleware maps to HTTP responses.
 
@@ -1465,7 +1465,7 @@ import {
   NotFoundError,
   ConflictError,
   RateLimitedError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 // Usage in routes:
 if (!requiredField) {
@@ -1484,7 +1484,7 @@ if (isDuplicate) {
 
 ### Response Format
 
-The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.js|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
+The `errorHandler` middleware ([[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]]) converts every thrown error into the unified envelope (ADR-026):
 
 ```json
 {
@@ -1579,7 +1579,7 @@ class AppError extends Error {
 
 ## Filter Builder Pattern
 
-**Source:** [[apps/node-backend/src/lib/filterBuilder.js|filterBuilder.js]] _(moved from `services/` to `lib/` in Wave A2, 2026-07)_
+**Source:** [[apps/node-backend/src/lib/filterBuilder.ts|filterBuilder.js]] _(moved from `services/` to `lib/` in Wave A2, 2026-07)_
 
 Centralized SQL WHERE clause builder for transaction-like queries. Consolidates previously duplicated filter logic across repositories.
 
@@ -1589,7 +1589,7 @@ Centralized SQL WHERE clause builder for transaction-like queries. Consolidates 
 import {
   buildTransactionWhere,
   validateInt4Ids,
-} from "../lib/filterBuilder.js";
+} from "../lib/filterBuilder.ts";
 
 const opts = {
   startDate: "2026-01-01",
@@ -1727,8 +1727,8 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 | Module                                                                              | Purpose                                                                                                          |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `services/calculations/loanSchedule.js`                                             | Loan amortization schedule generation (amortizing, fixed_principal, interest_only)                               |
-| `lib/calculations/recurrence.js` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
-| `lib/calculations/splits.js` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
+| `lib/calculations/recurrence.ts` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
+| `lib/calculations/splits.ts` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
 | `services/calculations/portfolioMath.js`                                            | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation                         |
 | `@vision/shared-utils/portfolio`                                                    | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
 
@@ -2226,7 +2226,7 @@ const result = await query("SELECT ... FROM mv_category_totals LIMIT 500");
 
 ## Safe CSV Export Pattern (Phase 5+)
 
-**Source:** [[apps/node-backend/src/lib/csv.js|csv.js]] — Shared utility with formula injection guard
+**Source:** [[apps/node-backend/src/lib/csv.ts|csv.js]] — Shared utility with formula injection guard
 **Used in:** [[apps/node-backend/src/routes/transactions.js|transactions.js]], [[apps/node-backend/src/routes/splits.js|splits.js]]
 
 CSV exports must escape field values to prevent formula injection (CWE-1236). A centralized utility ensures all exports are protected.
@@ -2245,7 +2245,7 @@ Result: Arbitrary code execution when file is opened
 ### Shared Implementation
 
 ```js
-// apps/node-backend/src/lib/csv.js
+// apps/node-backend/src/lib/csv.ts
 const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(["=", "+", "-", "@"]);
 
 export function neutralizeCsvFormula(value) {
@@ -2273,7 +2273,7 @@ export function escapeCsvValue(value) {
 Import the utility and use it to escape all user-controllable fields before CSV serialization:
 
 ```js
-import { escapeCsvValue } from "../lib/csv.js";
+import { escapeCsvValue } from "../lib/csv.ts";
 
 function buildTransactionCsvRow(row, { includeBalance = false } = {}) {
   const cols = [
@@ -2660,7 +2660,7 @@ Successful long-running streams use `complete` as the terminal event. Error even
 `{ detail, code }`. Payload field casing remains endpoint-local during this
 migration: import events are snake_case, while the grandfathered AI router remains camelCase.
 
-**Source:** [[apps/node-backend/src/lib/sse.js|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
+**Source:** [[apps/node-backend/src/lib/sse.ts|sse.js]], [[apps/node-backend/src/routes/ai.js|ai.js]], [[apps/node-backend/src/routes/importRoutes.js|importRoutes.js]]
 
 For long-running streaming responses (AI chat, CSV import progress), propagate TCP backpressure from the HTTP client into the server's event-generation loop to prevent unbounded write buffer growth and memory exhaustion.
 
@@ -2684,7 +2684,7 @@ Node.js's `res.write()` returns `false` when the internal buffer is full (`res.w
 Create a backpressure-aware writer and `await` after each frame:
 
 ```js
-import { createSseWriter } from "../lib/sse.js";
+import { createSseWriter } from "../lib/sse.ts";
 
 router.post("/import/csv/stream", async (req, res) => {
   const writer = createSseWriter(req, res);
@@ -2801,7 +2801,7 @@ export function createSseWriter(req, res) {
 
 ```js
 import { test, expect } from "vitest";
-import { createSseWriter, drainIfNeeded } from "../lib/sse.js";
+import { createSseWriter, drainIfNeeded } from "../lib/sse.ts";
 
 test("drainIfNeeded returns immediately when buffer not full", async () => {
   const res = { writableNeedDrain: false };
@@ -2828,7 +2828,7 @@ test("createSseWriter tracks client close", (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/database/connection.js|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
+**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.js|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
 For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
 
@@ -2837,7 +2837,7 @@ Vision is a single-user application, but the HTTP process can overlap user reque
 ### Pattern
 
 ```js
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 
 export async function complexMultiStepOperation(primaryId, aliasIds) {
   if (!Number.isInteger(primaryId) || !Array.isArray(aliasIds)) {

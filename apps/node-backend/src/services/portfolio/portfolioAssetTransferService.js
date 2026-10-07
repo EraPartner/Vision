@@ -7,10 +7,10 @@ import {
 import {
   ConflictError,
   ValidationError,
-} from "../../middleware/errorHandler.js";
-import { query, withTransaction } from "../../database/connection.js";
-import { toDecimal } from "../../lib/money.js";
-import { toYmd } from "../../lib/dateFormat.js";
+} from "../../middleware/errorHandler.ts";
+import { query, withTransaction } from "../../database/connection.ts";
+import { toDecimal } from "../../lib/money.ts";
+import { toYmd } from "../../lib/dateFormat.ts";
 import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.js";
 import { portfolioCustodyWriteHistory } from "./portfolioCustodyImportScope.js";
 import {

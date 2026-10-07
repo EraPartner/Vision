@@ -10,7 +10,7 @@
  */
 
 import accuracyRepo from "../../../repositories/cashflowForecastAccuracyRepository.js";
-import { logger } from "../../../config/logger.js";
+import { logger } from "../../../config/logger.ts";
 
 /**
  * Uniform store output shape. `accuracyRepo`'s Postgres rows come back

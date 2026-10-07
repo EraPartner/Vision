@@ -9,7 +9,7 @@
  * Usage: bun run db:index-stats
  */
 
-import { query, closePool } from '../src/database/connection.js';
+import { query, closePool } from '../src/database/connection.ts';
 
 async function main() {
   const { rows } = await query(

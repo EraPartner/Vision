@@ -87,7 +87,7 @@ vi.mock("../../src/repositories/cashflowForecastMcRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 

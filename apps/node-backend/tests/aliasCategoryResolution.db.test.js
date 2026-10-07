@@ -53,7 +53,7 @@ import { createMaterializedViews } from "../src/services/materializedViewService
 import transactionRepository from "../src/repositories/transactionRepository.js";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.js";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import {
   __buildIdListWhere as buildIdListWhere,
   streamCsvExport,
@@ -62,7 +62,7 @@ import {
 import splitRepository from "../src/repositories/splitRepository.js";
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.js";
 import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.js";
-import { todayAppDateString } from "../src/lib/timezone.js";
+import { todayAppDateString } from "../src/lib/timezone.ts";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 

@@ -7,9 +7,9 @@
  * next stage. No recipient resolution or dedup happens here.
  */
 
-import { query, withTransaction } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { parsedDateToYmd } from "../../lib/importDates.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { getAdapter } from "./adapters/index.js";
 import generic from "./adapters/generic.js";
 import {
@@ -18,7 +18,7 @@ import {
 } from "../importStageLifecycle.js";
 
 /**
- * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('../../types/rows.ts').ImportStagingRow} ImportStagingRow
  * @typedef {import('./index.js').ImportBatchId} ImportBatchId
  * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
  */
@@ -33,7 +33,7 @@ import {
  *   STRING, so this used to leak a string all the way to the wire: POST
  *   /api/import/csv answered `batch_id: "12"` while the review-commit route
  *   (routes/importRoutes.js:570), which reads the id back off the URL through
- *   `coercedIdSchema` (lib/importBatchIds.js:17), answered `batch_id: 12` —
+ *   `coercedIdSchema` (lib/importBatchIds.ts:17), answered `batch_id: 12` —
  *   same JSON field, two types, so strict-equality across the two responses
  *   broke. Normalizing here, at the single boundary where the id enters the
  *   application, makes NUMBER the one wire type; it matches the coerced input

@@ -13,8 +13,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
-import settings from "../config/config.js";
-import envConfig from "../config/env.js";
+import settings from "../config/config.ts";
+import envConfig from "../config/env.ts";
 import { mappingKey } from "./aiReferenceService.js";
 
 const LOCAL_ENV_PATH = fileURLToPath(

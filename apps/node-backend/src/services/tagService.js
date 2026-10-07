@@ -6,8 +6,8 @@
  */
 
 import tagRepository from "../repositories/tagRepository.js";
-import { slugify } from "../lib/slugify.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+import { slugify } from "../lib/slugify.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 
 export const tagService = {
   /**

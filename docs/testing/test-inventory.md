@@ -2,7 +2,7 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-06
+date: 2026-10-07
 last_modified: 2026-10-06
 updated: 2026-10-06
 last-updated: 2026-10-06
@@ -897,7 +897,7 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | -------------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/node-backend/tests/filterBuilder.test.js`                | Filter builder                 | Fixed assertion in `buildTransactionWhere — tagSlugs > produces no clause when tagSlugs is empty`: changed `expect(sql).toBe('')` to `expect(sql).not.toContain('transaction_tags')` (filterBuilder always initializes clauses with `['1=1']`) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction repository | Added `mockResolvedValueOnce({ rows: [] })` for new tag queries in `getAll`, `getById`, `create`, and `update`; updated `toHaveBeenCalledTimes` from 3→4 in getAll/getById/update-loan tests, 2→3 in update-no-fields test                     |
-| `apps/node-backend/src/backup/coverage.js`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
+| `apps/node-backend/src/backup/coverage.ts`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
 | `apps/node-backend/tests/routes/transactions.test.js`          | Transactions route             | Added `'tags'` to expected fields array in NDJSON export test                                                                                                                                                                                  |
 | `apps/node-backend/tests/routes/tags.test.js`                  | Tags route                     | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file                                                                                                                                       |
 
@@ -1085,7 +1085,7 @@ Validation runs (passed):
 
 Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.js]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.js]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/routes/info.js]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 

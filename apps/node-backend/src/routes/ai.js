@@ -36,9 +36,9 @@
 import { Router } from "express";
 import { z } from "zod";
 
-import { logger } from "../config/logger.js";
-import { createSseWriter } from "../lib/sse.js";
-import settings from "../config/config.js";
+import { logger } from "../config/logger.ts";
+import { createSseWriter } from "../lib/sse.ts";
+import settings from "../config/config.ts";
 import { getOllamaClient, OllamaError } from "../integrations/ollama/client.js";
 import {
   AiChatServiceError,
@@ -51,18 +51,18 @@ import {
 } from "../services/aiChatService.js";
 import { ApiErrorCode } from "@vision/types/errors";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
-import { listBody, parsePagination } from "../lib/pagination.js";
+import { listBody, parsePagination } from "../lib/pagination.ts";
 import {
   AppError,
   NotFoundError,
   UpstreamError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
- * @typedef {import('../types/express.js').ExpressNextFunction} ExpressNextFunction
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressNextFunction} ExpressNextFunction
  */
 
 const UUID_RE =
@@ -407,10 +407,10 @@ router.post(
       messageLen: parsed.message.length,
     });
 
-    // createSseWriter is typed via node:http's base classes (lib/sse.js) —
+    // createSseWriter is typed via node:http's base classes (lib/sse.ts) —
     // ExpressRequest/ExpressResponse are a narrower structural stand-in that
     // doesn't model IncomingMessage/ServerResponse, so forward via an any cast,
-    // same as lib/importProgress.js's streamImport call sites.
+    // same as lib/importProgress.ts's streamImport call sites.
     const writer = createSseWriter(
       /** @type {any} */ (req),
       /** @type {any} */ (res),

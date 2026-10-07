@@ -10,12 +10,12 @@
  * value (the same form adapters store in import_staging_rows.recipient_raw).
  */
 
-import { query } from '../database/connection.js';
-import { buildSetClauses } from '../lib/sqlClauses.js';
-import { logger } from '../config/logger.js';
-import { ValidationError, NotFoundError } from '../middleware/errorHandler.js';
+import { query } from '../database/connection.ts';
+import { buildSetClauses } from '../lib/sqlClauses.ts';
+import { logger } from '../config/logger.ts';
+import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
 
-/** @typedef {import('../types/rows.js').RecipientMatchPatternRow} RecipientMatchPatternRow */
+/** @typedef {import('../types/rows.ts').RecipientMatchPatternRow} RecipientMatchPatternRow */
 
 /**
  * `RecipientMatchPatternRow` as `loadActivePatterns` projects it: `updated_at`
@@ -389,7 +389,7 @@ export async function updatePattern(patternId, updates) {
     if (!validation.valid) throw new ValidationError(validation.error);
   }
 
-  // Shared clause builder (lib/sqlClauses.js); `allowed` keeps the writable-
+  // Shared clause builder (lib/sqlClauses.ts); `allowed` keeps the writable-
   // column whitelist, undefined values are skipped (JSON bodies never carry any).
   const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses(updates, {
     allowed: ['pattern', 'pattern_kind', 'case_sensitive', 'priority', 'is_active', 'notes'],

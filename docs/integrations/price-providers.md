@@ -2,7 +2,7 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-09-27
+date: 2026-10-07
 last_modified: 2026-09-27
 updated: 2026-09-27
 tags:
@@ -51,7 +51,7 @@ related_code:
     [apps/node-backend/src/services/quoteBackfillService.js],
     [apps/node-backend/src/services/prices/priceProviderRegistry.js],
     [apps/node-backend/tests/priceProviderRegistry.test.js],
-    [apps/node-backend/src/lib/network.js],
+    [apps/node-backend/src/lib/network.ts],
   ]
 ---
 
@@ -86,7 +86,7 @@ Price providers fetch live and historical market prices for investments, support
 
 - **Asset Classes**: Metals, commodities
 - **API**: Kinesis market trendline API
-- **Endpoint**: default `https://api.kinesis.money/api/market-data/trendlines` via `KINESIS_BASE_URL` ([[apps/node-backend/src/config/kinesisConfig.js]])
+- **Endpoint**: default `https://api.kinesis.money/api/market-data/trendlines` via `KINESIS_BASE_URL` ([[apps/node-backend/src/config/kinesisConfig.ts]])
 - **Features**:
   - Live/latest price from trendline points
   - Historical points from same symbol stream
@@ -382,4 +382,4 @@ they need no separate per-dialog catalog edits.
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.js]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]

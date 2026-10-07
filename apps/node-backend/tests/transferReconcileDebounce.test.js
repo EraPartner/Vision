@@ -12,10 +12,10 @@ async function loadService() {
   const query = vi.fn(async () => ({ rows: [], rowCount: 0 }));
   const scheduleAggregationRefresh = vi.fn();
 
-  vi.doMock("../src/database/connection.js", () =>
+  vi.doMock("../src/database/connection.ts", () =>
     mockTxConnection({ query }, { query }),
   );
-  vi.doMock("../src/config/logger.js", () => ({
+  vi.doMock("../src/config/logger.ts", () => ({
     logger: mockLogger(),
   }));
   vi.doMock("../src/services/aggregationRefresh.js", () => ({

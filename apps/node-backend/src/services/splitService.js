@@ -1,7 +1,7 @@
 /** Split lifecycle, validation, projection, and audit orchestration. */
 
 import crypto from "node:crypto";
-import { withTransaction } from "../database/connection.js";
+import { withTransaction } from "../database/connection.ts";
 import { appendAuditEvent } from "../repositories/auditChainRepository.js";
 import {
   computeOwedSummary,
@@ -9,10 +9,10 @@ import {
   roundToMoneyPrecision,
   validateBatchSplitAllocation,
   validateSplitAllocation,
-} from "../lib/calculations/splits.js";
-import { subtract, toDecimal, toNumber } from "../lib/money.js";
-import { toAppDateString } from "../lib/timezone.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
+} from "../lib/calculations/splits.ts";
+import { subtract, toDecimal, toNumber } from "../lib/money.ts";
+import { toAppDateString } from "../lib/timezone.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import splitRepository, {
   formatSplit,
   getPaidAmountInTransaction,

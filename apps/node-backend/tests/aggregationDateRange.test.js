@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAggregationDateRange } from "../src/lib/aggregationDateRange.js";
+import { parseAggregationDateRange } from "../src/lib/aggregationDateRange.ts";
 
 describe("parseAggregationDateRange", () => {
   it("returns canonical bounds", () => {

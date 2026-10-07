@@ -29,7 +29,7 @@ const { mockClient, mockWithTransaction, mockRepository, mockPrimitives } =
     };
   });
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({
     withTransaction: mockWithTransaction,
   }),

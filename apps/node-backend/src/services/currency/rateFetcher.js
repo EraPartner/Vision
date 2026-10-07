@@ -5,17 +5,17 @@
  * persists them to the database, and provides historical rate lookup utilities.
  */
 
-import { query, withTransaction } from "../../database/connection.js";
-import { logger } from "../../config/logger.js";
-import { toDecimal, toNumber } from "../../lib/money.js";
-import { todayAppDateString } from "../../lib/timezone.js";
-import { formatDateToYmd, epochMsToUtcYmd } from "../../lib/dateFormat.js";
+import { query, withTransaction } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { toDecimal, toNumber } from "../../lib/money.ts";
+import { todayAppDateString } from "../../lib/timezone.ts";
+import { formatDateToYmd, epochMsToUtcYmd } from "../../lib/dateFormat.ts";
 
 /**
- * @typedef {import('../../types/rows.js').ExchangeRateRow} ExchangeRateRow
- * @typedef {import('../../types/rows.js').HistoricalRatePoint} HistoricalRatePoint
- * @typedef {import('../../types/rows.js').HistoricalRateIndex} HistoricalRateIndex
- * @typedef {import('../../types/rows.js').RateTable} RateTable
+ * @typedef {import('../../types/rows.ts').ExchangeRateRow} ExchangeRateRow
+ * @typedef {import('../../types/rows.ts').HistoricalRatePoint} HistoricalRatePoint
+ * @typedef {import('../../types/rows.ts').HistoricalRateIndex} HistoricalRateIndex
+ * @typedef {import('../../types/rows.ts').RateTable} RateTable
  */
 
 /**

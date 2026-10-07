@@ -11,7 +11,7 @@
  */
 
 import { getStoredRateToEurOnOrBefore, normalizeDateInput } from '../currency/rateFetcher.js';
-import { logger } from '../../config/logger.js';
+import { logger } from '../../config/logger.ts';
 
 /**
  * @param {string} currency

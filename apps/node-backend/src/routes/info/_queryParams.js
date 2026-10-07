@@ -2,10 +2,10 @@
  * Query-string helpers shared by /api/info sub-routers.
  */
 
-import { todayAppDateString } from "../../lib/timezone.js";
+import { todayAppDateString } from "../../lib/timezone.ts";
 
 /**
- * @typedef {import('../../types/express.js').ExpressRequest} ExpressRequest
+ * @typedef {import('../../types/express.ts').ExpressRequest} ExpressRequest
  */
 
 /**

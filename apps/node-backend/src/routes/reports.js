@@ -16,11 +16,11 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { generateReport } from '../services/reports/index.js';
 import { HSL_COMPONENT_RE } from '../services/reports/themeCss.js';
-import { ValidationError } from '../middleware/errorHandler.js';
+import { ValidationError } from '../middleware/errorHandler.ts';
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

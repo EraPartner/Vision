@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   getSetting: vi.fn(),
 }));
 
-vi.mock("../src/database/connection.js", () =>
+vi.mock("../src/database/connection.ts", () =>
   mockConnection({ withTransaction: (fn) => fn() }),
 );
 
@@ -39,7 +39,7 @@ import {
 import {
   ConflictError,
   ValidationError,
-} from "../src/middleware/errorHandler.js";
+} from "../src/middleware/errorHandler.ts";
 
 const request = {
   transaction_ids: [12, 11],

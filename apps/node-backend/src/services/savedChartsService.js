@@ -3,7 +3,7 @@
  * (eslint vision-local/no-repo-direct-from-route).
  */
 import savedChartsRepository from "../repositories/savedChartsRepository.js";
-import { ValidationError } from "../middleware/errorHandler.js";
+import { ValidationError } from "../middleware/errorHandler.ts";
 
 /** @param {unknown} error */
 function translateMembershipError(error) {

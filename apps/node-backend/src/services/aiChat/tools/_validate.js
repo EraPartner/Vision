@@ -8,7 +8,7 @@
  * dispatcher can feed the error back to the model for retry.
  */
 
-import { validateId } from "../../../lib/validation.js";
+import { validateId } from "../../../lib/validation.ts";
 
 /**
  * Per-turn context threaded through every tool's `run(args, context)` by

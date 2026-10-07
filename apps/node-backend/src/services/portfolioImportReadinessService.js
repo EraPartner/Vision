@@ -1,4 +1,4 @@
-import { ConflictError } from "../middleware/errorHandler.js";
+import { ConflictError } from "../middleware/errorHandler.ts";
 import {
   getImportReadinessProblems,
   getManualPortfolioOverlaps,

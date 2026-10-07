@@ -36,7 +36,7 @@ vi.mock("../../src/services/plannedTransactionService.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => ({
+vi.mock("../../src/database/connection.ts", () => ({
   ...mockConnection(),
   withTransaction: vi.fn(async (fn) => fn()),
 }));
@@ -46,11 +46,11 @@ vi.mock("../../src/database/connection.js", () => ({
 // keyed by IP, so the real 30/min ceiling would make the file self-throttling
 // and flaky as tests are added. The transactions suites exercise the real
 // limiter chain. Every OTHER middleware on the chain is real.
-vi.mock("../../src/middleware/rateLimiter.js", () => ({
+vi.mock("../../src/middleware/rateLimiter.ts", () => ({
   rateLimiter: () => (_req, _res, next) => next(),
 }));
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -72,7 +72,7 @@ vi.mock(
 );
 
 import plannedTransactionService from "../../src/services/plannedTransactionService.js";
-import { query as dbQuery } from "../../src/database/connection.js";
+import { query as dbQuery } from "../../src/database/connection.ts";
 import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
 
 const { default: plannedRouter } =
@@ -782,7 +782,7 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
-      // Previously `vi.mock('.../middleware/validation.js')` replaced
+      // Previously `vi.mock('.../middleware/validation.ts')` replaced
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
 

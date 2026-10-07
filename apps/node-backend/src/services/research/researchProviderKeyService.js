@@ -16,7 +16,7 @@ import {
   setKeyOverride,
   loadKeyOverrides,
 } from './providerKeys.js';
-import { ValidationError } from '../../middleware/errorHandler.js';
+import { ValidationError } from '../../middleware/errorHandler.ts';
 
 const LABELS = Object.freeze({
   twelve_data: 'Twelve Data',

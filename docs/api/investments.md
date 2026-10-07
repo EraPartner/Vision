@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-04
+date: 2026-10-07
 last_modified: 2026-10-04
 updated: 2026-10-04
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
@@ -123,7 +123,8 @@ identity, the investment must exist, and a fund document may target only an ETF 
 Matching targets are updated atomically; sources omitted from the bundle are not deleted.
 
 Invalid shapes, duplicate targets, mismatched share classes, or invalid holdings documents return
-`400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`. Unexpected persistence failures remain server errors. This
+`400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`, with the validation issues in `error.details.issues`.
+Unexpected persistence failures remain server errors. This
 is an additive, non-breaking API change. See
 [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]].
 
@@ -714,4 +715,4 @@ For real estate investments:
 
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.js]], [[apps/node-backend/src/repositories/infoRepository.js]], [[apps/node-backend/src/services/priceProviderService.js]]
 
-Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.js]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]

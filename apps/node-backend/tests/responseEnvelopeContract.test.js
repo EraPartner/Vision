@@ -10,7 +10,7 @@ function javascriptFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name);
     if (entry.isDirectory()) return javascriptFiles(entryPath);
-    return entry.isFile() && entry.name.endsWith(".js") ? [entryPath] : [];
+    return entry.isFile() && /\.(js|ts)$/.test(entry.name) ? [entryPath] : [];
   });
 }
 
@@ -36,8 +36,8 @@ describe("response envelope writer convention", () => {
       "main.js",
       "main.js",
       "main.js",
-      "middleware/envelope.js",
-      "middleware/errorHandler.js",
+      "middleware/envelope.ts",
+      "middleware/errorHandler.ts",
     ]);
 
     expect(

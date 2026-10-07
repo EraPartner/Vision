@@ -6,8 +6,8 @@ import {
   getTestPool,
   hasTestDatabase,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
-import { createDailyJob } from "../src/startup/dailyJobs.js";
+import { closePool } from "../src/database/connection.ts";
+import { createDailyJob } from "../src/startup/dailyJobs.ts";
 import repo from "../src/repositories/settingsRepository.js";
 const pool = getTestPool();
 const keys = ["vision_test_conflict_a", "vision_test_conflict_b"];

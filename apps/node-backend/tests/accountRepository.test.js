@@ -17,7 +17,7 @@ const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockLoadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
 }));
 
-vi.mock("../src/database/connection.js", () => mockTxConnection());
+vi.mock("../src/database/connection.ts", () => mockTxConnection());
 // accountService.list folds the repository's per-currency partitions into
 // `accounts.currency`. Stub its rate table so these SQL + shaping tests do not
 // reach the database or ECB.
@@ -28,7 +28,7 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
   }),
 );
 
-import { query } from "../src/database/connection.js";
+import { query } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.js";
 import { accountService } from "../src/services/accountService.js";
 

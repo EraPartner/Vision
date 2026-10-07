@@ -11,7 +11,7 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { closePool } from "../src/database/connection.js";
+import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.js";
 import { transactionRepository } from "../src/repositories/transactionRepository.js";
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.js";

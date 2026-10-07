@@ -92,9 +92,9 @@ vi.mock("../../src/repositories/customParserConfigRepository.js", () => ({
   },
 }));
 
-vi.mock("../../src/database/connection.js", () => mockConnection());
+vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
@@ -108,7 +108,7 @@ import {
 } from "../../src/services/portfolioImportBatchService.js";
 import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.js";
 import { previewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.js";
-import { ConflictError } from "../../src/middleware/errorHandler.js";
+import { ConflictError } from "../../src/middleware/errorHandler.ts";
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.js");

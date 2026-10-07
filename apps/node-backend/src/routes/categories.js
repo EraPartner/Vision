@@ -13,11 +13,11 @@ import {
   deleteCategoryNode,
   mergeCategoryNodes,
 } from "../services/categoryService.js";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.js";
-import { validateIdParam, assertIdParam } from "../middleware/validation.js";
-import { listBody, parseOptionalPagination } from "../lib/pagination.js";
-import { withCreateOutcome } from "../lib/createOutcome.js";
-import { parseBooleanQueryParam } from "../lib/httpParams.js";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
+import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
+import { withCreateOutcome } from "../lib/createOutcome.ts";
+import { parseBooleanQueryParam } from "../lib/httpParams.ts";
 // mv_monthly_summary / mv_category_totals embed the category name and the
 // recipient default-category mapping, so category mutations must schedule a
 // refresh — otherwise renamed/reassigned categories serve stale until an
@@ -25,8 +25,8 @@ import { parseBooleanQueryParam } from "../lib/httpParams.js";
 import { scheduleRefresh } from "../services/materializedViewService.js";
 
 /**
- * @typedef {import('../types/express.js').ExpressRequest} ExpressRequest
- * @typedef {import('../types/express.js').ExpressResponse} ExpressResponse
+ * @typedef {import('../types/express.ts').ExpressRequest} ExpressRequest
+ * @typedef {import('../types/express.ts').ExpressResponse} ExpressResponse
  */
 
 const router = Router();

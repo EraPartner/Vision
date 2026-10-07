@@ -3,9 +3,9 @@
  * Not intended for direct use outside this folder.
  */
 
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
-import { toDecimal, toNumber, roundMoney } from "../lib/money.js";
+import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.js";
 
 /**

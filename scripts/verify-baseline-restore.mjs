@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.js";
+import { readBaselineManifest } from "../apps/node-backend/src/database/baselineManifest.ts";
 
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

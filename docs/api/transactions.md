@@ -4,7 +4,7 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
-date: 2026-09-27
+date: 2026-10-07
 updated: 2026-09-27
 last_modified: 2026-09-27
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
@@ -64,15 +64,15 @@ Notes:
 
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
-- `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` by default — magnitude-based, so they do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign, OR pass `amount_signed=true` to compare the signed amount directly (2026-06-28, additive, non-breaking — [[apps/node-backend/src/lib/filterBuilder.js]]).
+- `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` by default — magnitude-based, so they do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign, OR pass `amount_signed=true` to compare the signed amount directly (2026-06-28, additive, non-breaking — [[apps/node-backend/src/lib/filterBuilder.ts]]).
 - `amount_signed=true` switches the comparison column from `ABS(t.amount)` to `t.amount`, so the bounds may be negative and `+50` vs `-50` match exactly. It is orthogonal to `transaction_type` (both can be combined). The frontend search-suggestion UI sends it automatically when the user prefixes the amount with `+` or `-`.
 - `amount_exact` sets both bounds to the same value and takes precedence when `amount_min`/`amount_max` are also supplied.
-- `search` now additionally matches `CAST(t.date AS TEXT)` (e.g., typing `2026-01` surfaces all January 2026 rows) and active tag slugs on the row via an EXISTS subquery over `transaction_tags`/`tags` (2026-06-28, [[apps/node-backend/src/lib/filterBuilder.js]]).
-- `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/lib/filterBuilder.js]]).
-- `recipient_group_id` resolves the complete primary-recipient group via an indexable semi-join on `recipients`: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/lib/filterBuilder.js]]).
-- `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.js]]).
+- `search` now additionally matches `CAST(t.date AS TEXT)` (e.g., typing `2026-01` surfaces all January 2026 rows) and active tag slugs on the row via an EXISTS subquery over `transaction_tags`/`tags` (2026-06-28, [[apps/node-backend/src/lib/filterBuilder.ts]]).
+- `recipient_id` matches the transaction recipient directly and any aliases under it (single direction). Use `recipient_group_id` to include the full primary-recipient group (Phase Q) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
+- `recipient_group_id` resolves the complete primary-recipient group via an indexable semi-join on `recipients`: matches the recipient itself, any aliases under it, the recipient's own primary (if it is an alias), and all other aliases under that primary. Ignores `recipient_id` when both are provided (Phase Q) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
+- `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
 - **Id params are strict (changed 2026-08-11, breaking for malformed ids).** `transaction_id`, `category_id`, `recipient_id`, `recipient_group_id` and `account_id` accept only a plain base-10 integer in 1..2,147,483,647; every element of `category_ids` must satisfy the same rule. Anything else — `12abc`, `12.5`, `1e3`, `0x10`, `+5`, `-4`, `0`, `5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty (`?category_id=`, `?category_ids=`) still mean _no filter_ and answer `200`. See the warning under [[docs/api/transactions#GET /api/transactions/export/csv|the export endpoints]] and [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
-- `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.js]]).
+- `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
 - `include_balance=true` adds `running_balance` with `SUM(amount) OVER (PARTITION BY account_id, COALESCE(currency, 'EUR') ORDER BY date ASC, id ASC)`. It never adds unlike currencies. The window runs over the filtered set before pagination; legacy NULL currencies use EUR ([[apps/node-backend/src/repositories/transactionRepository.js]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.js]]).
 - Non-`uncategorised` list requests use a top-N data query plus a narrow count query (`getAllWithCount`) instead of `COUNT(*) OVER ()`, so PostgreSQL can stop the row query at `LIMIT`. Identical normalized filters share their count for two seconds across page and page-size changes, including concurrent requests. Transaction CRUD and committed imports clear the cache. Merge repoints and other direct SQL writers can leave `total` briefly stale until the two-second bound expires. Filters and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.js]], [[apps/node-backend/src/repositories/transactionRepository.js]]).
@@ -669,4 +669,4 @@ Recent coverage in [[apps/node-backend/tests/routes/transactions.test.js]] verif
 Related services:
 
 - [[apps/node-backend/src/services/currency/currencyConversionService.js]]
-- [[apps/node-backend/src/lib/filterBuilder.js]] (shared filter construction)
+- [[apps/node-backend/src/lib/filterBuilder.ts]] (shared filter construction)

@@ -3,12 +3,12 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-import { query, withTransaction } from "../database/connection.js";
+import { query, withTransaction } from "../database/connection.ts";
 import {
   ConflictError,
   NotFoundError,
   ValidationError,
-} from "../middleware/errorHandler.js";
+} from "../middleware/errorHandler.ts";
 
 const date = z
   .string()

@@ -2,8 +2,8 @@
  * Info sub-repository: net worth from portfolio snapshots + bank balances.
  */
 
-import { query } from "../database/connection.js";
-import { logger } from "../config/logger.js";
+import { query } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
 import {
   computedBalanceByCurrencyAggLateral,
   computedBalanceSeriesCtes,
@@ -12,11 +12,11 @@ import {
   toNumber,
   toDecimal,
   roundMoney as roundToCents,
-} from "../lib/money.js";
-import { formatDateToYmd } from "../lib/dateFormat.js";
-import { extractYearMonth, addDaysUtc, getDayKeyUtc } from "../lib/dateKeys.js";
-import { todayAppDateString } from "../lib/timezone.js";
-import { sanitizeIsolatedDailyInvestmentSpikes } from "../lib/calculations/netWorthSanitizer.js";
+} from "../lib/money.ts";
+import { formatDateToYmd } from "../lib/dateFormat.ts";
+import { extractYearMonth, addDaysUtc, getDayKeyUtc } from "../lib/dateKeys.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { sanitizeIsolatedDailyInvestmentSpikes } from "../lib/calculations/netWorthSanitizer.ts";
 import {
   mapRowsForAmountConversion,
   convertRowsWithHistoricalRateFallback,

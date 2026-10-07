@@ -9,10 +9,10 @@ import { transactionRepository } from "../../../repositories/transactionReposito
 import { memoizeAsync } from "../toolCache.js";
 import infoRepository from "../../../repositories/infoRepository.js";
 import { getAiDisplayCurrency } from "./_financialMetrics.js";
-import settings from "../../../config/config.js";
-import { toDecimal, roundToCents } from "../../../lib/money.js";
+import settings from "../../../config/config.ts";
+import { toDecimal, roundToCents } from "../../../lib/money.ts";
 import { toYmd } from "../../calculations/portfolioMath.js";
-import { todayAppDateString, firstOfMonthYmd } from "../../../lib/timezone.js";
+import { todayAppDateString, firstOfMonthYmd } from "../../../lib/timezone.ts";
 import {
   requireDate,
   parsePositiveInt,
@@ -21,7 +21,7 @@ import {
   ToolValidationError,
 } from "./_validate.js";
 
-/** @typedef {import('../../../types/rows.js').EnrichedTransactionRow} EnrichedTransactionRow */
+/** @typedef {import('../../../types/rows.ts').EnrichedTransactionRow} EnrichedTransactionRow */
 
 const UNCATEGORISED_LABEL = "Uncategorised";
 const UNKNOWN_RECIPIENT_LABEL = "Unknown";

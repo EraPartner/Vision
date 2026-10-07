@@ -12,8 +12,8 @@ import { computeRecipientInsights } from '../calculations/aggregation/recipient.
 import { computeBankBalances } from '../calculations/aggregation/bankBalances.js';
 import { computeAverageVsCurrent } from '../calculations/aggregation/averageVsCurrent.js';
 import infoRepository from '../../repositories/infoRepository.js';
-import { logger } from '../../config/logger.js';
-import { toAppTz } from '../../lib/timezone.js';
+import { logger } from '../../config/logger.ts';
+import { toAppTz } from '../../lib/timezone.ts';
 
 /**
  * @typedef {{ kind: 'ytd' }

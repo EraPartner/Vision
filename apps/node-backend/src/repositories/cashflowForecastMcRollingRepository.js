@@ -1,4 +1,4 @@
-import { query } from "../database/connection.js";
+import { query } from "../database/connection.ts";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 

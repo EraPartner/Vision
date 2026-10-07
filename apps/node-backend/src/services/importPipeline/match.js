@@ -16,8 +16,8 @@
  * row was resolved.
  */
 
-import { query } from '../../database/connection.js';
-import { logger } from '../../config/logger.js';
+import { query } from '../../database/connection.ts';
+import { logger } from '../../config/logger.ts';
 import {
   findBestRecipientMatches,
   normalizeForMatching,
@@ -25,7 +25,7 @@ import {
 import { loadActivePatterns, applyPatterns } from '../recipientPatternService.js';
 
 /**
- * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('../../types/rows.ts').ImportStagingRow} ImportStagingRow
  * @typedef {import('./index.js').ImportBatchId} ImportBatchId
  * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
  */

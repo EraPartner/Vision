@@ -18,7 +18,7 @@ import {
   query,
   withSavepointIfInTransaction,
   withTransaction,
-} from "../../database/connection.js";
+} from "../../database/connection.ts";
 import {
   clearTransactionCountCache,
   transactionRepository,
@@ -29,13 +29,13 @@ import {
   markStagingRowDuplicate,
   markStagingRowError,
 } from "../../repositories/importBatchRepository.js";
-import { logger } from "../../config/logger.js";
-import { formatDateToYmd } from "../../lib/dateFormat.js";
+import { logger } from "../../config/logger.ts";
+import { formatDateToYmd } from "../../lib/dateFormat.ts";
 import { autoLinkTransactions } from "../plannedMatchService.js";
 import { getAdapter } from "./adapters/index.js";
 
 /**
- * @typedef {import('../../types/rows.js').ImportStagingRow} ImportStagingRow
+ * @typedef {import('../../types/rows.ts').ImportStagingRow} ImportStagingRow
  * @typedef {import('./index.js').ImportBatchId} ImportBatchId
  * @typedef {import('./index.js').ImportProgressCallback} ImportProgressCallback
  */

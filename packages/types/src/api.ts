@@ -21,7 +21,7 @@ export type { ApiErrorCodeValue } from "./errors.ts";
  * whenever the request actually paginated — `total` is always the full match
  * count, never the length of the page. Endpoints that only recently gained
  * pagination keep answering the complete list when no limit/offset is supplied
- * (lib/pagination.js::parseOptionalPagination), so `limit`/`offset` are absent
+ * (lib/pagination.ts::parseOptionalPagination), so `limit`/`offset` are absent
  * exactly when the body already holds everything.
  *
  *   { ok: true, data: { items: [...], total: 128, limit: 50, offset: 50 } }

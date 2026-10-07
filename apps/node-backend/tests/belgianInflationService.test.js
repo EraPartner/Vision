@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockPooledTxConnection } from "./helpers/repoMocks.js";
-vi.mock("../src/database/connection.js", () => mockPooledTxConnection());
+vi.mock("../src/database/connection.ts", () => mockPooledTxConnection());
 
-vi.mock("../src/config/logger.js", () => ({
+vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { getClient, query } from "../src/database/connection.js";
-import { logger } from "../src/config/logger.js";
+import { getClient, query } from "../src/database/connection.ts";
+import { logger } from "../src/config/logger.ts";
 import {
   clearInflationMemoryCache,
   getInflationRates,

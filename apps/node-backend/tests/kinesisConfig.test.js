@@ -16,7 +16,7 @@ function clearManagedEnv() {
 
 async function importFresh() {
   vi.resetModules();
-  return import('../src/config/kinesisConfig.js');
+  return import('../src/config/kinesisConfig.ts');
 }
 
 describe('kinesisConfig', () => {

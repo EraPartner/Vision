@@ -43,7 +43,7 @@ vi.mock("../../src/services/deduplication.js", () => ({
   lockManualTransactionIdentity: mocks.lockManualTransactionIdentity,
   recordManualTransactionDedupClaim: mocks.recordManualTransactionDedupClaim,
 }));
-vi.mock("../../src/database/connection.js", () =>
+vi.mock("../../src/database/connection.ts", () =>
   mockConnection({ withTransaction: mocks.withTransaction }),
 );
 vi.mock("../../src/services/plannedMatchService.js", () => ({
@@ -55,7 +55,7 @@ vi.mock("../../src/services/attachmentRecordService.js", () => ({
 vi.mock("../../src/services/attachmentCleanup.js", () => ({
   removeAttachmentFilesBestEffort: vi.fn(),
 }));
-vi.mock("../../src/config/logger.js", () => ({
+vi.mock("../../src/config/logger.ts", () => ({
   logger: { info: vi.fn(), warn: vi.fn() },
 }));
 
