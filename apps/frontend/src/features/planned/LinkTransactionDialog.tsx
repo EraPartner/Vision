@@ -569,7 +569,7 @@ export function LinkTransactionDialog({
                 </div>
 
                 <DialogFooter>
-                    <Button variant="ghost" onClick={handleClose}>
+                    <Button variant="outline" onClick={handleClose}>
                         {t("common.cancel")}
                     </Button>
                     <Button

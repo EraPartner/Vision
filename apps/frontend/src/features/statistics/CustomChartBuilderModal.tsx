@@ -910,7 +910,7 @@ export function CustomChartBuilderModal({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             onClick={() => onOpenChange(false)}
                         >
                             {t("common.cancel")}
