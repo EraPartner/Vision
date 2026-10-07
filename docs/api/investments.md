@@ -123,7 +123,8 @@ identity, the investment must exist, and a fund document may target only an ETF 
 Matching targets are updated atomically; sources omitted from the bundle are not deleted.
 
 Invalid shapes, duplicate targets, mismatched share classes, or invalid holdings documents return
-`400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`. Unexpected persistence failures remain server errors. This
+`400 INVALID_PORTFOLIO_EXPOSURE_SOURCE`, with the validation issues in `error.details.issues`.
+Unexpected persistence failures remain server errors. This
 is an additive, non-breaking API change. See
 [[docs/adr/150-explicit-portfolio-look-through-exposure|ADR-150]].
 
