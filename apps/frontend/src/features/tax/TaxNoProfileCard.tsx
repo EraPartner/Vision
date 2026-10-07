@@ -1,4 +1,4 @@
-import { Calculator, Landmark } from "lucide-react";
+import { Landmark, SlidersHorizontal } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,7 @@ export function TaxNoProfileCard() {
     const { t } = useLanguage();
     return (
         <Card>
-            <CardContent variant="flush">
+            <CardContent variant="state">
                 <EmptyState
                     icon={Landmark}
                     title={t("tax.noProfile.title")}
@@ -18,8 +18,8 @@ export function TaxNoProfileCard() {
                     action={
                         <TaxProfileDialog
                             trigger={
-                                <Button size="sm" className="gap-2">
-                                    <Calculator className="h-4 w-4" />
+                                <Button>
+                                    <SlidersHorizontal />
                                     {t("tax.profile.setup")}
                                 </Button>
                             }

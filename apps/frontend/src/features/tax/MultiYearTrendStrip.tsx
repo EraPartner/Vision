@@ -5,10 +5,10 @@
  * numbers at a glance. Distinct from the page's large yearly chart — this is a
  * navigation/comparison aid, not a data-viz primary surface.
  *
- * Each tile shows: year, total PIT, effective rate, and a normalized bar comparing PIT
- * against the maximum across visible years. Filed/frozen status surfaces as inline
- * indicators (lock / snowflake). The currently-viewed year is visually emphasized.
- * Clicking a tile sets `viewedYear`.
+ * Each tile shows: year, total income tax, effective rate, and a normalized bar
+ * comparing income tax against the maximum across visible years. Filed/frozen
+ * status surfaces as inline indicators (lock / snowflake). The currently-viewed
+ * year is visually emphasized. Clicking a tile sets `viewedYear`.
  *
  * Uses `displayCalculationForYear` so filed/frozen years render their "as-filed"
  * numbers rather than today's live recomputation (engine-drift protection — ADR-059).
@@ -98,9 +98,9 @@ export function MultiYearTrendStrip({
 
     return (
         <Card className={cn("overflow-hidden", className)}>
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-4">
                 <CardTitle variant="sm">{t("tax.trendStrip.title")}</CardTitle>
-                <CardDescription className="text-xs">
+                <CardDescription>
                     {t("tax.trendStrip.description")}
                 </CardDescription>
             </CardHeader>
@@ -119,47 +119,48 @@ export function MultiYearTrendStrip({
                                 type="button"
                                 onClick={() => setViewedYear(tile.year)}
                                 className={cn(
-                                    "group flex flex-col items-stretch rounded-lg border px-2.5 py-2 text-left transition focus-ring",
+                                    "flex flex-col items-stretch rounded-card corner-continuous px-3 py-2.5 text-left transition-[background-color,box-shadow] duration-fast ease-glide focus-ring",
                                     isActive
-                                        ? "border-primary/60 bg-primary/5"
-                                        : "border-border hover:border-primary/40 hover:bg-accent/40",
+                                        ? "bg-primary/[0.08] shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.45)]"
+                                        : "bg-foreground/[0.04] hover:bg-foreground/[0.07]",
                                 )}
                                 aria-pressed={isActive}
                             >
                                 <span className="flex items-center justify-between gap-1">
                                     <span
                                         className={cn(
-                                            "text-xs font-semibold tabular-nums",
+                                            "type-caption tabular-nums",
                                             isActive
                                                 ? "text-primary"
-                                                : "text-foreground",
+                                                : "text-label-secondary",
                                         )}
                                     >
                                         {tile.year}
                                     </span>
-                                    <span className="flex items-center gap-0.5">
-                                        <TaxYearStatusIcon
-                                            isFiled={tile.isFiled}
-                                            hasFrozenCalculation={
-                                                tile.hasFrozenCalculation
-                                            }
-                                            className="h-3 w-3"
-                                        />
-                                    </span>
+                                    <TaxYearStatusIcon
+                                        isFiled={tile.isFiled}
+                                        hasFrozenCalculation={
+                                            tile.hasFrozenCalculation
+                                        }
+                                        className="h-3 w-3"
+                                    />
                                 </span>
-                                <span className="mt-1 text-sm font-bold text-foreground tabular-nums">
+                                <span className="mt-1 truncate type-headline tabular-nums text-foreground">
                                     {fmtCurrency(tile.totalPIT)}
                                 </span>
-                                <span className="eyebrow">
+                                <span className="truncate type-footnote tabular-nums text-label-secondary">
                                     {formatPercent(tile.effectiveRate, {
                                         digits: 1,
                                     })}{" "}
                                     {t("tax.trendStrip.effective")}
                                 </span>
-                                <div className="mt-2 h-1 w-full rounded-full bg-muted">
-                                    <div
+                                <span
+                                    aria-hidden="true"
+                                    className="mt-2 h-1 w-full rounded-full bg-foreground/[0.08]"
+                                >
+                                    <span
                                         className={cn(
-                                            "h-full rounded-full transition-[width]",
+                                            "block h-full rounded-full transition-[width] duration-normal ease-glide",
                                             isActive
                                                 ? "bg-primary"
                                                 : "bg-primary/40",
@@ -168,7 +169,7 @@ export function MultiYearTrendStrip({
                                             width: `${tile.barRatio * 100}%`,
                                         }}
                                     />
-                                </div>
+                                </span>
                             </button>
                         );
                     })}

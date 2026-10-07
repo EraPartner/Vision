@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { FlaskConical, Database } from "lucide-react";
+import { Database } from "lucide-react";
 
 import {
     Sheet,
@@ -43,23 +43,17 @@ const METHOD_COLORS: Record<string, string> = {
 function RankBadge({ rank }: { rank: number }) {
     if (rank === 1)
         return (
-            <Badge className="text-2xs px-1.5 py-0 h-4 bg-warning/20 text-warning border-0">
+            <Badge variant="warning" size="sm">
                 #{rank}
             </Badge>
         );
-    if (rank === 2)
+    if (rank <= 3)
         return (
-            <Badge className="text-2xs px-1.5 py-0 h-4 bg-muted-foreground/20 text-muted-foreground border-0">
+            <Badge variant="muted" size="sm">
                 #{rank}
             </Badge>
         );
-    if (rank === 3)
-        return (
-            <Badge className="text-2xs px-1.5 py-0 h-4 bg-chart-5/20 text-chart-5 border-0">
-                #{rank}
-            </Badge>
-        );
-    return <span className="text-xs text-muted-foreground">#{rank}</span>;
+    return <span className="type-footnote text-label-secondary">#{rank}</span>;
 }
 
 interface MethodRowProps {
@@ -95,21 +89,23 @@ function MethodRow({
                         className="inline-block size-2.5 rounded-full flex-shrink-0"
                         style={{ background: color }}
                     />
-                    <span className="text-sm font-medium">{entry.label}</span>
+                    <span className="type-body font-medium">{entry.label}</span>
                 </div>
             </TableCell>
-            <TableCell className="py-2 text-right tabular-nums text-sm">
+            <TableCell className="py-2 text-right tabular-nums">
                 {formatCurrency(entry.mae, currency, locale, fractionDigits)}
             </TableCell>
-            <TableCell className="py-2 text-right tabular-nums text-sm">
+            <TableCell className="py-2 text-right tabular-nums">
                 {formatCurrency(entry.rmse, currency, locale, fractionDigits)}
             </TableCell>
-            <TableCell className="py-2 text-right tabular-nums text-sm">
-                {entry.mape === null || !Number.isFinite(entry.mape) || entry.mape > 9999
+            <TableCell className="py-2 text-right tabular-nums">
+                {entry.mape === null ||
+                !Number.isFinite(entry.mape) ||
+                entry.mape > 9999
                     ? "N/A"
                     : formatPercent(entry.mape, { digits: 1 })}
             </TableCell>
-            <TableCell className="py-2 text-right tabular-nums text-xs text-muted-foreground">
+            <TableCell className="py-2 text-right tabular-nums text-label-secondary">
                 {entry.months}
             </TableCell>
             <TableCell className="py-2">
@@ -124,7 +120,9 @@ function MethodRow({
                         strokeWidth={1.5}
                     />
                 ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
+                    <span className="type-footnote text-label-secondary">
+                        —
+                    </span>
                 )}
             </TableCell>
         </TableRow>
@@ -219,12 +217,7 @@ export function CashFlowForecastDiagnostics({
                 className="w-full sm:max-w-2xl overflow-y-auto"
             >
                 <SheetHeader className="mb-6">
-                    <div className="flex items-center gap-2">
-                        <FlaskConical className="h-5 w-5 text-primary" />
-                        <SheetTitle>
-                            {t("cashflow.diagnostics.title")}
-                        </SheetTitle>
-                    </div>
+                    <SheetTitle>{t("cashflow.diagnostics.title")}</SheetTitle>
                     <SheetDescription>
                         {t("cashflow.diagnostics.desc", {
                             months: String(diagnostics.history_months),
@@ -234,11 +227,11 @@ export function CashFlowForecastDiagnostics({
 
                 <section className="mb-8">
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-foreground">
+                        <h3 className="type-headline text-foreground">
                             {t("cashflow.diagnostics.accuracy")}
                         </h3>
                         {hasPersistedData && (
-                            <div className="flex items-center gap-1 text-2xs text-muted-foreground">
+                            <div className="flex items-center gap-1 type-caption text-label-secondary">
                                 <Database className="h-3 w-3" />
                                 <span>
                                     {t("cashflow.diagnostics.persistedHistory")}
@@ -246,10 +239,10 @@ export function CashFlowForecastDiagnostics({
                             </div>
                         )}
                     </div>
-                    <div className="rounded-lg border overflow-hidden">
+                    <div className="overflow-hidden rounded-card corner-continuous border border-border/60">
                         <Table>
                             <TableHeader>
-                                <TableRow className="text-xs">
+                                <TableRow>
                                     <TableHead className="py-2">
                                         {t("cashflow.diagnostics.method")}
                                     </TableHead>
@@ -291,7 +284,7 @@ export function CashFlowForecastDiagnostics({
                             </TableBody>
                         </Table>
                     </div>
-                    <p className="mt-2 text-2xs text-muted-foreground">
+                    <p className="mt-2 type-footnote text-label-secondary">
                         {hasPersistedData
                             ? t("cashflow.diagnostics.backtestNoteWithHistory")
                             : t("cashflow.diagnostics.backtestNote", {
@@ -303,10 +296,10 @@ export function CashFlowForecastDiagnostics({
 
                 {inverseWeights.size > 0 && (
                     <section>
-                        <h3 className="text-sm font-semibold mb-1 text-foreground">
+                        <h3 className="mb-1 type-headline text-foreground">
                             {t("cashflow.diagnostics.suggestedWeights")}
                         </h3>
-                        <p className="text-2xs text-muted-foreground mb-3">
+                        <p className="mb-3 type-footnote text-label-secondary">
                             {t("cashflow.diagnostics.weightsNote")}
                         </p>
                         <div className="space-y-2">
@@ -332,7 +325,7 @@ export function CashFlowForecastDiagnostics({
                                                 className="inline-block size-2 rounded-full flex-shrink-0"
                                                 style={{ background: color }}
                                             />
-                                            <span className="text-xs w-44 truncate">
+                                            <span className="w-44 truncate type-footnote">
                                                 {e.label}
                                             </span>
                                             <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
@@ -344,7 +337,7 @@ export function CashFlowForecastDiagnostics({
                                                     }}
                                                 />
                                             </div>
-                                            <span className="text-xs tabular-nums w-8 text-right text-muted-foreground">
+                                            <span className="w-8 text-right type-footnote tabular-nums text-label-secondary">
                                                 {pct}%
                                             </span>
                                         </div>

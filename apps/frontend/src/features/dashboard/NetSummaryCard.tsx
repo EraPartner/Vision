@@ -121,18 +121,19 @@ export function NetSummaryCard({
                     <CardTitle variant="label">
                         {t("dashboard.stat.lastMonthNet")}
                     </CardTitle>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 type-footnote text-label-secondary">
                         {isPositive
                             ? t("dashboard.stat.positiveCashFlow")
                             : t("dashboard.stat.negativeCashFlow")}
                     </p>
                 </div>
                 <div
+                    aria-hidden="true"
                     className={cn(
-                        "h-8 w-8 rounded-xl flex items-center justify-center bg-gradient-to-br",
+                        "flex h-8 w-8 items-center justify-center rounded-control",
                         isPositive
-                            ? "from-gain/20 to-gain/10 text-gain"
-                            : "from-loss/20 to-loss/10 text-loss",
+                            ? "bg-gain/12 text-gain"
+                            : "bg-loss/12 text-loss",
                     )}
                 >
                     <Banknote className="h-5 w-5" />
@@ -143,7 +144,7 @@ export function NetSummaryCard({
                 <div className="flex items-end gap-3 flex-wrap">
                     <div
                         className={cn(
-                            "text-4xl md:text-5xl font-bold tabular-nums",
+                            "type-large-title tabular-nums",
                             netColor,
                         )}
                     >
@@ -162,10 +163,7 @@ export function NetSummaryCard({
                         />
                     </div>
                     {savingsRate !== null && (
-                        <Badge
-                            variant="outline"
-                            className="font-semibold text-xs"
-                        >
+                        <Badge variant="outline">
                             {t("dashboard.stat.savingsRate")}:{" "}
                             {formatPercent(savingsRate, { digits: 1 })}
                         </Badge>
@@ -173,7 +171,7 @@ export function NetSummaryCard({
                 </div>
 
                 <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between type-footnote text-label-secondary">
                         <span>{t("dashboard.stat.incomeVsSpending")}</span>
                     </div>
                     <div
@@ -192,7 +190,7 @@ export function NetSummaryCard({
                             style={{ width: `${spendingPct}%` }}
                         />
                     </div>
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center justify-between type-footnote">
                         <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                             <ArrowUpRight className="h-3.5 w-3.5 text-gain" />
                             <CompactValueDisclosure
@@ -242,7 +240,7 @@ export function NetSummaryCard({
                     >
                         <p
                             className={cn(
-                                "text-xs mb-1",
+                                "mb-1 type-footnote",
                                 scrubPoint
                                     ? "font-medium text-foreground"
                                     : "text-muted-foreground",

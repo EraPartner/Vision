@@ -69,7 +69,7 @@ export function DeductionCandidatesCard() {
                     <CardTitle>{t("tax.deductionCandidates.title")}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between gap-4">
-                    <p role="alert" className="text-sm text-muted-foreground">
+                    <p role="alert" className="type-body text-label-secondary">
                         {t("tax.deductionCandidates.unavailable")}
                     </p>
                     <Button
@@ -141,12 +141,12 @@ export function DeductionCandidatesCard() {
     return (
         <>
             <Card>
-                <CardHeader className="pb-3">
+                <CardHeader>
                     <CardTitle>{t("tax.deductionCandidates.title")}</CardTitle>
                     <CardDescription>
                         {t("tax.deductionCandidates.description")}
                     </CardDescription>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("tax.deductionCandidates.disclaimer")}
                     </p>
                 </CardHeader>
@@ -157,33 +157,33 @@ export function DeductionCandidatesCard() {
                         if (!mapping) return null;
                         const currentValue = profile[mapping.amountField] ?? 0;
                         return (
-                            <div
+                            <section
                                 key={group.deductionType}
-                                className="rounded-lg border bg-card p-3"
+                                className="rounded-card corner-continuous bg-foreground/[0.04] p-4"
                             >
-                                <div className="flex items-start justify-between gap-3">
+                                <div className="flex items-start justify-between gap-4">
                                     <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-semibold text-foreground">
+                                        <h3 className="type-headline text-foreground">
                                             {t(
                                                 `tax.deductionCandidates.type.${group.deductionType}`,
                                             )}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                        </h3>
+                                        <p className="mt-0.5 type-footnote text-label-secondary">
                                             {t(
                                                 "tax.deductionCandidates.fromCategories",
                                                 { count: group.categoryCount },
                                             )}
                                         </p>
-                                        <ul className="mt-1 space-y-0.5">
+                                        <ul className="mt-1.5 space-y-0.5">
                                             {group.categories.map((cat) => (
                                                 <li
                                                     key={cat.category}
-                                                    className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground"
+                                                    className="flex items-baseline justify-between gap-2 type-footnote text-label-secondary"
                                                 >
                                                     <span className="truncate">
                                                         {cat.category}
                                                     </span>
-                                                    <span className="shrink-0">
+                                                    <span className="shrink-0 tabular-nums">
                                                         {fmt(cat.total, {
                                                             currency,
                                                         })}
@@ -191,7 +191,7 @@ export function DeductionCandidatesCard() {
                                                 </li>
                                             ))}
                                         </ul>
-                                        <p className="text-xs text-muted-foreground mt-1.5">
+                                        <p className="mt-1.5 type-footnote text-label-secondary">
                                             {t(
                                                 "tax.deductionCandidates.currentValue",
                                                 {
@@ -202,18 +202,18 @@ export function DeductionCandidatesCard() {
                                             )}
                                         </p>
                                     </div>
-                                    <div className="shrink-0 flex flex-col items-end gap-1.5 text-right">
-                                        <span className="text-sm font-bold text-foreground">
+                                    <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+                                        <span className="type-headline tabular-nums text-foreground">
                                             {fmt(group.total, { currency })}
                                         </span>
                                         {appliedTypes.has(
                                             group.deductionType,
                                         ) ? (
-                                            <Badge
-                                                variant="outline"
-                                                className="text-xs text-accent border-accent/30 bg-accent/10"
-                                            >
-                                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                            <Badge variant="success" size="sm">
+                                                <CheckCircle2
+                                                    className="mr-1 h-3 w-3"
+                                                    aria-hidden="true"
+                                                />
                                                 {t(
                                                     "tax.deductionCandidates.applied",
                                                 )}
@@ -222,8 +222,6 @@ export function DeductionCandidatesCard() {
                                             <div className="flex items-center gap-1">
                                                 <Button
                                                     size="sm"
-                                                    variant="default"
-                                                    className="h-7 text-xs"
                                                     onClick={() =>
                                                         void handleConfirm(
                                                             group,
@@ -237,7 +235,6 @@ export function DeductionCandidatesCard() {
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
-                                                    className="h-7 text-xs text-muted-foreground"
                                                     onClick={() =>
                                                         handleDismiss(
                                                             group.deductionType,
@@ -252,7 +249,7 @@ export function DeductionCandidatesCard() {
                                         )}
                                     </div>
                                 </div>
-                            </div>
+                            </section>
                         );
                     })}
                 </CardContent>

@@ -54,21 +54,21 @@ describe("forecast comparison controls", () => {
         renderWithApp(<CashFlowForecastChart />, {
             initialEntries: ["/?forecastMode=rolling"],
         });
-        const ninetyDays = await screen.findByRole("button", {
+        const ninetyDays = await screen.findByRole("radio", {
             name: "90 days",
         });
-        expect(ninetyDays).toHaveAttribute("aria-pressed", "true");
+        expect(ninetyDays).toHaveAttribute("aria-checked", "true");
         for (const days of [30, 60, 180]) {
             expect(
-                screen.getByRole("button", { name: `${days} days` }),
-            ).toHaveAttribute("aria-pressed", "false");
+                screen.getByRole("radio", { name: `${days} days` }),
+            ).toHaveAttribute("aria-checked", "false");
         }
-        fireEvent.click(screen.getByRole("button", { name: "30 days" }));
-        expect(screen.getByRole("button", { name: "30 days" })).toHaveAttribute(
-            "aria-pressed",
+        fireEvent.click(screen.getByRole("radio", { name: "30 days" }));
+        expect(screen.getByRole("radio", { name: "30 days" })).toHaveAttribute(
+            "aria-checked",
             "true",
         );
-        expect(ninetyDays).toHaveAttribute("aria-pressed", "false");
+        expect(ninetyDays).toHaveAttribute("aria-checked", "false");
         expect(
             screen.getByText("Past 30 days actual + next 30 days forecast"),
         ).toBeInTheDocument();

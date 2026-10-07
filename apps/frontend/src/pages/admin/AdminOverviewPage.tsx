@@ -3,7 +3,13 @@ import { Activity, Database, KeyRound } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Input } from "@/components/ui/input";
@@ -44,25 +50,22 @@ function OverviewCard({
               : "";
 
     return (
-        <Link to={to} className="block group">
-            <Card
-                variant="interactive"
-                className={cn("glass-chrome", statusRing)}
-            >
+        <Link to={to} className="group block rounded-card focus-ring">
+            <Card variant="interactive" className={cn("h-full", statusRing)}>
                 <CardContent variant="headerless">
                     <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                            <Icon className="h-5 w-5 text-primary" />
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary/12 text-primary">
+                            <Icon className="h-5 w-5" aria-hidden="true" />
                         </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">
+                        <div className="min-w-0">
+                            <p className="type-callout text-label-secondary">
                                 {label}
                             </p>
-                            <p className="text-xl font-bold tracking-tight">
+                            <p className="type-title-2 tabular-nums text-foreground">
                                 {value}
                             </p>
                             {sub && (
-                                <p className="text-xs text-muted-foreground mt-0.5">
+                                <p className="mt-0.5 type-footnote text-label-secondary">
                                     {sub}
                                 </p>
                             )}
@@ -96,22 +99,26 @@ function AdminTokenCard() {
     };
 
     return (
-        <Card className="glass-chrome">
-            <CardContent variant="headerless" className="space-y-3">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-                        <KeyRound className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                        <p className="text-sm font-semibold">
-                            {t("admin.token.title")}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {t("admin.token.description")}
-                        </p>
-                    </div>
+        <Card>
+            <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary/12 text-primary">
+                    <KeyRound className="h-5 w-5" aria-hidden="true" />
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-0 space-y-1">
+                    <CardTitle variant="sm">{t("admin.token.title")}</CardTitle>
+                    <CardDescription>
+                        {t("admin.token.description")}
+                    </CardDescription>
+                </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        if (value.trim()) save();
+                    }}
+                >
                     <Input
                         type="password"
                         autoComplete="off"
@@ -121,19 +128,20 @@ function AdminTokenCard() {
                         aria-label={t("admin.token.title")}
                         className="max-w-xs flex-1"
                     />
-                    <Button onClick={save} disabled={!value.trim()}>
+                    <Button type="submit" disabled={!value.trim()}>
                         {t("admin.token.save")}
                     </Button>
                     <Button
+                        type="button"
                         variant="outline"
                         onClick={clear}
                         disabled={!active}
                     >
                         {t("admin.token.clear")}
                     </Button>
-                </div>
+                </form>
                 {active && (
-                    <p className="text-xs text-success">
+                    <p role="status" className="type-footnote text-success">
                         {t("admin.token.active")}
                     </p>
                 )}
@@ -170,7 +178,7 @@ export default function AdminOverviewPage() {
         overallErrorRate >= 10 ? "error" : overallErrorRate > 2 ? "warn" : "ok";
 
     return (
-        <PageShell className="p-6">
+        <PageShell>
             <PageHeader
                 title={t("admin.overview.title")}
                 subtitle={t("admin.overview.description")}
@@ -178,19 +186,19 @@ export default function AdminOverviewPage() {
             />
 
             {/* The grid is shared with the loaded cards, so the status role is
-                spread only while loading — one region for all three skeleton
+                spread only while loading: one region for all three skeleton
                 cards rather than one per card. */}
             <div
                 {...(dbLoading ? loadingSurfaceProps : {})}
-                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+                className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
             >
                 {dbLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
-                        <Card key={i} className="glass-chrome">
+                        <Card key={i}>
                             <CardContent variant="headerless">
                                 <div className="flex items-center gap-4">
-                                    <Skeleton className="h-10 w-10 rounded-xl" />
-                                    <div className="space-y-2 flex-1">
+                                    <Skeleton className="h-10 w-10 rounded-control" />
+                                    <div className="flex-1 space-y-2">
                                         <Skeleton className="h-3 w-24" />
                                         <Skeleton className="h-6 w-16" />
                                     </div>

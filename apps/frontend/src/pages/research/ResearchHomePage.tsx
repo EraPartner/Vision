@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import { Link } from "react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Target, ArrowRight, Plus } from "lucide-react";
+import { List, ListRow } from "@/components/ui/list";
+import { ArrowRight, Plus } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -37,6 +38,9 @@ const BENCHMARKS: ReadonlyArray<{ symbol: string; label: string }> = [
     { symbol: "BTC-USD", label: "Bitcoin" },
 ];
 const BENCHMARK_SYMBOLS = BENCHMARKS.map((b) => b.symbol).join(",");
+
+const marketHref = (symbol: string) =>
+    `/research/market?symbol=${encodeURIComponent(symbol)}`;
 
 export default function ResearchHomePage() {
     const formatPercent = usePercentFormatter();
@@ -129,7 +133,7 @@ export default function ResearchHomePage() {
                 onDismiss={() => setSearchText("")}
             >
                 {searchUnavailable ? (
-                    <div className="px-3 py-3">
+                    <div className="p-2">
                         <ResearchUnavailableNote
                             provider={searchResult?.meta.provider ?? null}
                         />
@@ -139,11 +143,11 @@ export default function ResearchHomePage() {
                         <SymbolSearchResultItem
                             key={`${item.symbol}-${item.exchange}`}
                             item={item}
-                            to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
+                            to={marketHref(item.symbol)}
                         />
                     ))
                 ) : !isFetching ? (
-                    <p className="px-3 py-3 text-sm text-muted-foreground">
+                    <p className="px-3 py-3 type-callout text-label-secondary">
                         {t("research.noResults")}
                     </p>
                 ) : null}
@@ -151,7 +155,7 @@ export default function ResearchHomePage() {
 
             {/* Market snapshot strip */}
             <section className="space-y-3">
-                <h2 className="text-sm font-semibold text-muted-foreground">
+                <h2 className="type-headline text-label-secondary">
                     {t("research.marketSnapshot")}
                 </h2>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -160,12 +164,10 @@ export default function ResearchHomePage() {
                         const pct = quote?.changePercent;
                         return (
                             <Card key={b.symbol} variant="interactive" asChild>
-                                <Link
-                                    to={`/research/market?symbol=${encodeURIComponent(b.symbol)}`}
-                                >
+                                <Link to={marketHref(b.symbol)}>
                                     <CardContent variant="compact">
                                         <div className="flex items-center justify-between gap-2">
-                                            <span className="truncate text-xs font-medium text-muted-foreground">
+                                            <span className="truncate type-caption text-label-secondary">
                                                 {b.label}
                                             </span>
                                             {pct != null && (
@@ -180,12 +182,12 @@ export default function ResearchHomePage() {
                                         </div>
                                         {quote ? (
                                             <>
-                                                <p className="mt-2 text-lg font-bold tabular-nums">
+                                                <p className="mt-2 type-title-3 tabular-nums text-foreground">
                                                     {numberFmt.format(
                                                         quote.price,
                                                     )}
                                                 </p>
-                                                <p className="text-xs font-medium tabular-nums text-muted-foreground">
+                                                <p className="type-footnote tabular-nums text-label-secondary">
                                                     {quote.change > 0
                                                         ? "+"
                                                         : ""}
@@ -195,7 +197,7 @@ export default function ResearchHomePage() {
                                                 </p>
                                             </>
                                         ) : (
-                                            <p className="mt-2 text-lg font-bold text-muted-foreground/40 tabular-nums">
+                                            <p className="mt-2 type-title-3 tabular-nums text-label-tertiary">
                                                 —
                                             </p>
                                         )}
@@ -211,107 +213,82 @@ export default function ResearchHomePage() {
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch">
                 <div className="h-full min-h-0 lg:col-span-2">
                     <Card className="flex h-full flex-col">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle
-                                    variant="sm"
-                                    className="flex items-center gap-2"
-                                >
-                                    <Target className="h-4 w-4" />{" "}
-                                    {t("research.watchlistPreview")}
-                                </CardTitle>
-                                {watchlistPreview.length > 0 && (
-                                    <Button
-                                        asChild
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-xs"
-                                    >
-                                        <Link to="/research/watchlist">
-                                            {t("research.viewAll")}{" "}
-                                            <ArrowRight className="ml-1 h-3 w-3" />
-                                        </Link>
-                                    </Button>
-                                )}
-                            </div>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                            <CardTitle variant="sm">
+                                {t("research.watchlistPreview")}
+                            </CardTitle>
+                            {watchlistPreview.length > 0 && (
+                                <Button asChild variant="ghost" size="sm">
+                                    <Link to="/research/watchlist">
+                                        {t("research.viewAll")}
+                                        <ArrowRight
+                                            className="h-4 w-4"
+                                            aria-hidden="true"
+                                        />
+                                    </Link>
+                                </Button>
+                            )}
                         </CardHeader>
                         <CardContent className="min-h-0 flex-1">
                             {watchlistPreview.length > 0 ? (
-                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                <List>
                                     {watchlistPreview.map((item) => {
                                         const quote = item.symbol
                                             ? watchlistPriceMap.get(item.symbol)
                                             : undefined;
                                         const pct = quote?.changePercent;
-                                        const content = (
+                                        const trailing = (
                                             <>
-                                                <div className="flex items-center gap-2">
-                                                    {item.symbol ? (
-                                                        <span className="font-mono text-sm font-bold">
-                                                            {item.symbol}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-sm font-semibold truncate">
-                                                            {item.name}
-                                                        </span>
-                                                    )}
-                                                    {pct != null && (
-                                                        <DeltaPill
-                                                            className="ml-auto"
-                                                            value={pct}
-                                                            label={formatPercent(
-                                                                pct,
-                                                                {
-                                                                    digits: 2,
-                                                                    signed: true,
-                                                                },
-                                                            )}
-                                                        />
-                                                    )}
-                                                </div>
-                                                {item.symbol && (
-                                                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                                                        {item.name}
-                                                    </p>
-                                                )}
-                                                <p className="mt-1 text-sm font-semibold tabular-nums">
-                                                    {quote ? (
-                                                        formatPrice(
-                                                            quote.price,
+                                                <span className="text-foreground">
+                                                    {quote
+                                                        ? formatPrice(
+                                                              quote.price,
+                                                              {
+                                                                  currency:
+                                                                      item.currency,
+                                                              },
+                                                          )
+                                                        : "—"}
+                                                </span>
+                                                {pct != null && (
+                                                    <DeltaPill
+                                                        value={pct}
+                                                        label={formatPercent(
+                                                            pct,
                                                             {
-                                                                currency:
-                                                                    item.currency,
+                                                                digits: 2,
+                                                                signed: true,
                                                             },
-                                                        )
-                                                    ) : (
-                                                        <span className="text-muted-foreground/40">
-                                                            —
-                                                        </span>
-                                                    )}
-                                                </p>
+                                                        )}
+                                                    />
+                                                )}
                                             </>
                                         );
-                                        const previewClass =
-                                            "press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] rounded-lg border border-border p-3 text-left hover:border-primary/40 hover:bg-muted/60";
                                         return item.symbol ? (
-                                            <Link
+                                            <ListRow
                                                 key={item.id}
-                                                to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
-                                                className={previewClass}
+                                                asChild
+                                                chevron
+                                                title={
+                                                    <span className="font-mono font-medium">
+                                                        {item.symbol}
+                                                    </span>
+                                                }
+                                                subtitle={item.name}
+                                                trailing={trailing}
                                             >
-                                                {content}
-                                            </Link>
+                                                <Link to={marketHref(item.symbol)} />
+                                            </ListRow>
                                         ) : (
-                                            <div
+                                            <ListRow
                                                 key={item.id}
-                                                aria-disabled="true"
-                                                className={`${previewClass} cursor-not-allowed opacity-50`}
-                                            >
-                                                {content}
-                                            </div>
+                                                className="opacity-60"
+                                                title={item.name}
+                                                trailing={trailing}
+                                            />
                                         );
                                     })}
-                                </div>
+                                </List>
                             ) : (
                                 <EmptyState
                                     headingLevel={3}
@@ -325,7 +302,10 @@ export default function ResearchHomePage() {
                                             variant="outline"
                                         >
                                             <Link to="/research/watchlist">
-                                                <Plus className="mr-1.5 h-4 w-4" />{" "}
+                                                <Plus
+                                                    className="h-4 w-4"
+                                                    aria-hidden="true"
+                                                />
                                                 {t(
                                                     "research.watchlistEmptyCta",
                                                 )}

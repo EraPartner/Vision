@@ -715,7 +715,7 @@ export function TransactionImportCard({
                                 {progress.phase === "connecting" &&
                                     t("importPage.connecting")}
                             </span>
-                            <span className="font-semibold tabular-nums text-foreground">
+                            <span className="font-medium tabular-nums text-foreground">
                                 {progress.percent}%
                             </span>
                         </div>

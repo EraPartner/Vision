@@ -8,7 +8,7 @@
 
 import { useState, useCallback } from "react";
 import { useSearchParams } from "react-router";
-import { FlaskConical } from "lucide-react";
+import { AlertCircle, FlaskConical } from "lucide-react";
 
 import {
     Card,
@@ -22,7 +22,12 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import { Label } from "@/components/ui/label";
+import { StateBlock } from "@/components/shared/StateBlock";
 import { getChartColor } from "@/components/charts/palette";
 import { numberFormatToLocale } from "@/utils/currency";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -45,7 +50,7 @@ const EMPTY_IDS: number[] = [];
 function methodToggleStyle(color: string, active: boolean) {
     return {
         borderColor: active ? color : BORDER_COLOR,
-        opacity: active ? 1 : 0.4,
+        opacity: active ? 1 : 0.5,
     };
 }
 
@@ -168,91 +173,82 @@ export function CashFlowForecastChart({
             : t("cashflow.forecastDesc", { monthName });
 
     const modeTabs = (
-        <Tabs
+        <SegmentedControl
+            size="sm"
             value={mode}
             onValueChange={(v) => setMode(v as ForecastMode)}
+            aria-label={t("cashflow.forecastTitle")}
             className="mb-3"
         >
-            <TabsList className="h-8">
-                <TabsTrigger value="month" className="text-xs px-3">
-                    {t("cashflow.modeMonth")}
-                </TabsTrigger>
-                <TabsTrigger value="rolling" className="text-xs px-3">
-                    {t("cashflow.modeRolling")}
-                </TabsTrigger>
-            </TabsList>
-        </Tabs>
+            <SegmentedControlItem value="month">
+                {t("cashflow.modeMonth")}
+            </SegmentedControlItem>
+            <SegmentedControlItem value="rolling">
+                {t("cashflow.modeRolling")}
+            </SegmentedControlItem>
+        </SegmentedControl>
     );
 
     const rollingPresets = mode === "rolling" && (
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="text-xs text-muted-foreground">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+            <span
+                id="cashflow-rolling-window-label"
+                className="type-footnote text-label-secondary"
+            >
                 {t("cashflow.rollingWindow")}
             </span>
-            {ROLLING_PRESETS.map((days) => {
-                const active = rollingDays === days;
-                return (
-                    <button
-                        key={days}
-                        type="button"
-                        onClick={() => setRollingDays(days)}
-                        aria-pressed={active}
-                        className="min-h-8 px-3 py-0.5 rounded-full border text-xs transition-opacity focus-ring"
-                        style={{
-                            borderColor: active
-                                ? "hsl(var(--primary))"
-                                : BORDER_COLOR,
-                            opacity: active ? 1 : 0.55,
-                            background: active
-                                ? "hsl(var(--primary) / 0.08)"
-                                : "transparent",
-                        }}
-                    >
+            <SegmentedControl
+                size="sm"
+                value={String(rollingDays)}
+                onValueChange={(v) => setRollingDays(Number(v) as RollingDays)}
+                aria-labelledby="cashflow-rolling-window-label"
+            >
+                {ROLLING_PRESETS.map((days) => (
+                    <SegmentedControlItem key={days} value={String(days)}>
                         {t("cashflow.windowDays", { days })}
-                    </button>
-                );
-            })}
+                    </SegmentedControlItem>
+                ))}
+            </SegmentedControl>
         </div>
     );
 
     const controls = (
-        <div className="flex flex-wrap items-center gap-4 mb-3">
-            <Tabs
+        <div className="mb-3 flex flex-wrap items-center gap-4">
+            <SegmentedControl
+                size="sm"
                 value={view}
                 onValueChange={(v) => setView(v as "cumulative" | "daily")}
+                aria-label={t("cashflow.cumulative")}
             >
-                <TabsList className="h-8">
-                    <TabsTrigger value="cumulative" className="text-xs px-3">
-                        {t("cashflow.cumulative")}
-                    </TabsTrigger>
-                    <TabsTrigger value="daily" className="text-xs px-3">
-                        {t("cashflow.dailyNet")}
-                    </TabsTrigger>
-                </TabsList>
-            </Tabs>
+                <SegmentedControlItem value="cumulative">
+                    {t("cashflow.cumulative")}
+                </SegmentedControlItem>
+                <SegmentedControlItem value="daily">
+                    {t("cashflow.dailyNet")}
+                </SegmentedControlItem>
+            </SegmentedControl>
 
             <div className="flex items-center gap-2">
                 <Switch
                     id="include-planned"
                     checked={includePlanned}
                     onCheckedChange={setIncludePlanned}
-                    className="scale-90"
                 />
-                <label
+                <Label
                     htmlFor="include-planned"
-                    className="text-xs text-muted-foreground cursor-pointer"
+                    className="font-normal text-label-secondary"
                 >
                     {t("cashflow.withPlanned")}
-                </label>
+                </Label>
             </div>
 
             <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs gap-1 ml-auto"
+                className="ml-auto"
                 onClick={() => setShowDiagnostics(true)}
             >
-                <FlaskConical className="h-3.5 w-3.5" />
+                <FlaskConical />
                 {t("cashflow.diagnostics")}
             </Button>
         </div>
@@ -262,7 +258,7 @@ export function CashFlowForecastChart({
         <div className="flex flex-wrap gap-2 mb-3">
             {/* Non-toggleable "This Month" actual indicator */}
             <span
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs"
+                className="flex min-h-8 items-center gap-1.5 rounded-chip border px-2 py-0.5 type-footnote text-foreground"
                 style={{ borderColor: ACTUAL_COLOR }}
             >
                 <span
@@ -280,7 +276,7 @@ export function CashFlowForecastChart({
                         type="button"
                         onClick={() => toggleMethod(m.id)}
                         aria-pressed={active}
-                        className="flex min-h-8 items-center gap-1.5 px-2 py-0.5 rounded-full border text-xs transition-opacity focus-ring"
+                        className="flex min-h-8 items-center gap-1.5 rounded-chip border px-2 py-0.5 type-footnote text-foreground transition-opacity duration-fast ease-glide focus-ring"
                         style={methodToggleStyle(color, active)}
                     >
                         <span
@@ -289,10 +285,7 @@ export function CashFlowForecastChart({
                         />
                         {m.label}
                         {m.error && (
-                            <Badge
-                                variant="destructive"
-                                className="text-2xs px-1 py-0 h-4"
-                            >
+                            <Badge variant="destructive" size="sm">
                                 {t("cashflow.methodError")}
                             </Badge>
                         )}
@@ -310,21 +303,25 @@ export function CashFlowForecastChart({
             {isLoading && (
                 <Skeleton
                     {...loadingSurfaceProps}
-                    className="w-full h-[320px] rounded-lg"
+                    className="h-[320px] w-full rounded-card"
                 />
             )}
             {error && (
-                <div className="flex items-center justify-center h-[320px] text-sm text-destructive">
-                    {t("cashflow.loadError")}
-                </div>
+                <StateBlock
+                    icon={AlertCircle}
+                    tone="destructive"
+                    size="compact"
+                    headingLevel={3}
+                    title={t("cashflow.loadError")}
+                />
             )}
             {data && !isLoading && (
                 <>
                     <details className="mb-3">
-                        <summary className="w-fit cursor-pointer rounded-sm py-2 text-xs text-muted-foreground focus-ring">
+                        <summary className="w-fit cursor-pointer rounded-chip py-2 type-footnote text-label-secondary focus-ring">
                             {t("cashflow.compareMethods")}
                         </summary>
-                        <p className="mb-3 text-xs text-muted-foreground">
+                        <p className="mb-3 type-footnote text-label-secondary">
                             {t("cashflow.compareMethodsHelp")}
                         </p>
                         {methodToggles}
@@ -378,9 +375,7 @@ export function CashFlowForecastChart({
                     <CardTitle variant="sm">
                         {t("cashflow.forecastTitle")}
                     </CardTitle>
-                    <CardDescription className="text-base">
-                        {description}
-                    </CardDescription>
+                    <CardDescription>{description}</CardDescription>
                 </div>
             </CardHeader>
             <CardContent>{chartContent}</CardContent>

@@ -187,8 +187,8 @@ export function PortfolioCsvColumnMapper({
                     ([key]) => !ADDITIONAL_COLUMNS.has(key),
                 ).map(renderField)}
             </div>
-            <details className="rounded-lg border p-3">
-                <summary className="cursor-pointer text-sm font-medium focus-ring">
+            <details className="rounded-card corner-continuous border border-border/60 p-3">
+                <summary className="cursor-pointer rounded-chip type-body font-medium text-foreground focus-ring">
                     {t("portfolioImport.optionalColumns")}
                 </summary>
                 <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -199,7 +199,7 @@ export function PortfolioCsvColumnMapper({
             </details>
 
             {duplicateColumns.length > 0 && (
-                <p className="text-sm text-warning" role="alert">
+                <p className="type-footnote text-warning" role="alert">
                     {t("portfolioImport.duplicateColumnsWarning", {
                         columns: duplicateColumns.join(", "),
                     })}
@@ -208,14 +208,14 @@ export function PortfolioCsvColumnMapper({
 
             {/* Type-value mapping */}
             {config.typeColumn && distinctTypeValues.length > 0 && (
-                <div className="space-y-2 rounded-md border bg-muted/20 p-3">
-                    <p className="text-xs font-medium text-muted-foreground">
+                <div className="space-y-2 rounded-card corner-continuous border border-border/60 bg-card/70 p-3">
+                    <p className="type-body font-medium text-label-primary">
                         {t("portfolioImport.typeMappingTitle")}
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {distinctTypeValues.map((raw) => (
                             <div key={raw} className="flex items-center gap-2">
-                                <span className="min-w-0 flex-1 truncate text-sm">
+                                <span className="min-w-0 flex-1 truncate type-body">
                                     {raw}
                                 </span>
                                 <Select
@@ -223,14 +223,14 @@ export function PortfolioCsvColumnMapper({
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >
                                     <SelectTrigger
-                                        className="h-8 w-[150px] text-xs"
+                                        className="w-[160px]"
                                         aria-label={`${t("portfolioImport.typeMappingTitle")}: ${raw}`}
                                     >
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value={NONE}>
-                                            <span className="text-muted-foreground">
+                                            <span className="text-label-secondary">
                                                 {t(
                                                     "portfolioImport.typeMappingAuto",
                                                 )}
@@ -249,7 +249,7 @@ export function PortfolioCsvColumnMapper({
                 </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
+            <p className="type-footnote text-label-secondary">
                 {t("portfolioImport.requiredNote")}
             </p>
         </div>

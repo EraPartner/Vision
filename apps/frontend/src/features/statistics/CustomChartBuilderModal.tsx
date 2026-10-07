@@ -264,7 +264,7 @@ export function CustomChartBuilderModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="max-w-4xl"
                 onCloseAutoFocus={(event) => {
                     if (onCloseAutoFocus) {
                         event.preventDefault();
@@ -291,12 +291,9 @@ export function CustomChartBuilderModal({
                         <div className="space-y-4">
                             {/* Name */}
                             <div className="space-y-1">
-                                <label
-                                    htmlFor={`${fieldId}-name`}
-                                    className="text-sm font-medium"
-                                >
+                                <Label htmlFor={`${fieldId}-name`}>
                                     {t("customChart.builder.name")}
-                                </label>
+                                </Label>
                                 <Input
                                     id={`${fieldId}-name`}
                                     value={state.name}
@@ -312,12 +309,9 @@ export function CustomChartBuilderModal({
 
                             {/* Chart type combo */}
                             <div className="space-y-1">
-                                <label
-                                    htmlFor={`${fieldId}-type`}
-                                    className="text-sm font-medium"
-                                >
+                                <Label htmlFor={`${fieldId}-type`}>
                                     {t("customChart.chartType")}
-                                </label>
+                                </Label>
                                 <Select
                                     value={selectedComboKey}
                                     onValueChange={handleComboChange}
@@ -350,12 +344,9 @@ export function CustomChartBuilderModal({
                             {/* Time bucket — irrelevant for ranked (totals over the whole range) */}
                             {state.chartVariant !== "ranked" && (
                                 <div className="space-y-1">
-                                    <label
-                                        htmlFor={`${fieldId}-bucket`}
-                                        className="text-sm font-medium"
-                                    >
+                                    <Label htmlFor={`${fieldId}-bucket`}>
                                         {t("customChart.timeBucket")}
-                                    </label>
+                                    </Label>
                                     <Select
                                         value={state.timeBucket}
                                         onValueChange={(v) =>
@@ -386,12 +377,9 @@ export function CustomChartBuilderModal({
                             {/* Date range */}
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                 <div className="space-y-1">
-                                    <label
-                                        htmlFor={`${fieldId}-from`}
-                                        className="text-sm font-medium"
-                                    >
+                                    <Label htmlFor={`${fieldId}-from`}>
                                         {t("customChart.dateFrom")}
-                                    </label>
+                                    </Label>
                                     <Input
                                         id={`${fieldId}-from`}
                                         type="date"
@@ -405,12 +393,9 @@ export function CustomChartBuilderModal({
                                     />
                                 </div>
                                 <div className="space-y-1">
-                                    <label
-                                        htmlFor={`${fieldId}-to`}
-                                        className="text-sm font-medium"
-                                    >
+                                    <Label htmlFor={`${fieldId}-to`}>
                                         {t("customChart.dateTo")}
-                                    </label>
+                                    </Label>
                                     <Input
                                         id={`${fieldId}-to`}
                                         type="date"
@@ -428,9 +413,9 @@ export function CustomChartBuilderModal({
                             {/* Category picker */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">
+                                    <span className="type-body font-medium text-label-primary">
                                         {t("customChart.categoriesLabel")}
-                                    </label>
+                                    </span>
                                     <div className="flex items-center gap-2">
                                         <Switch
                                             id="all-categories"
@@ -441,14 +426,14 @@ export function CustomChartBuilderModal({
                                         />
                                         <Label
                                             htmlFor="all-categories"
-                                            className="text-xs font-normal text-muted-foreground"
+                                            className="type-footnote font-normal text-label-secondary"
                                         >
                                             {t("customChart.allCategories")}
                                         </Label>
                                     </div>
                                 </div>
                                 {state.allCategories ? (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("customChart.allHint")}
                                     </p>
                                 ) : (
@@ -464,8 +449,8 @@ export function CustomChartBuilderModal({
                                                     aria-expanded={catOpen}
                                                     className="w-full justify-between font-normal"
                                                 >
-                                                    <span className="text-muted-foreground">
-                                                        <Plus className="h-4 w-4 inline mr-1" />
+                                                    <span className="inline-flex items-center gap-1 text-label-secondary">
+                                                        <Plus className="h-4 w-4" />
                                                         {t(
                                                             "customChart.addCategory",
                                                         )}
@@ -520,7 +505,7 @@ export function CustomChartBuilderModal({
                                                                                 cat.name
                                                                             }
                                                                         </span>
-                                                                        <span className="text-xs text-muted-foreground ml-2">
+                                                                        <span className="ml-2 type-footnote text-label-secondary">
                                                                             {formatCurrency(
                                                                                 cat.total,
                                                                             )}
@@ -552,8 +537,11 @@ export function CustomChartBuilderModal({
                                                         <span className="truncate max-w-[150px]">
                                                             {cat.name}
                                                         </span>
-                                                        <button
+                                                        <Button
                                                             type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="ml-1 h-5 w-5 rounded-chip text-label-secondary hover:text-foreground [&_svg]:size-3"
                                                             aria-label={t(
                                                                 "customChart.removeSeries",
                                                                 {
@@ -565,10 +553,9 @@ export function CustomChartBuilderModal({
                                                                     cat.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
+                                                            <X />
+                                                        </Button>
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -580,9 +567,9 @@ export function CustomChartBuilderModal({
                             {/* Recipient picker */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">
+                                    <span className="type-body font-medium text-label-primary">
                                         {t("customChart.recipientsLabel")}
-                                    </label>
+                                    </span>
                                     <div className="flex items-center gap-2">
                                         <Switch
                                             id="all-recipients"
@@ -593,14 +580,14 @@ export function CustomChartBuilderModal({
                                         />
                                         <Label
                                             htmlFor="all-recipients"
-                                            className="text-xs font-normal text-muted-foreground"
+                                            className="type-footnote font-normal text-label-secondary"
                                         >
                                             {t("customChart.allRecipients")}
                                         </Label>
                                     </div>
                                 </div>
                                 {state.allRecipients ? (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("customChart.allHint")}
                                     </p>
                                 ) : (
@@ -616,8 +603,8 @@ export function CustomChartBuilderModal({
                                                     aria-expanded={recOpen}
                                                     className="w-full justify-between font-normal"
                                                 >
-                                                    <span className="text-muted-foreground">
-                                                        <Plus className="h-4 w-4 inline mr-1" />
+                                                    <span className="inline-flex items-center gap-1 text-label-secondary">
+                                                        <Plus className="h-4 w-4" />
                                                         {t(
                                                             "customChart.addRecipient",
                                                         )}
@@ -700,8 +687,11 @@ export function CustomChartBuilderModal({
                                                         <span className="truncate max-w-[150px]">
                                                             {rec.name}
                                                         </span>
-                                                        <button
+                                                        <Button
                                                             type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="ml-1 h-5 w-5 rounded-chip text-label-secondary hover:text-foreground [&_svg]:size-3"
                                                             aria-label={t(
                                                                 "customChart.removeSeries",
                                                                 {
@@ -713,10 +703,9 @@ export function CustomChartBuilderModal({
                                                                     rec.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
+                                                            <X />
+                                                        </Button>
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -728,9 +717,9 @@ export function CustomChartBuilderModal({
                             {/* Tag picker */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium">
+                                    <span className="type-body font-medium text-label-primary">
                                         {t("customChart.tagsLabel")}
-                                    </label>
+                                    </span>
                                     <div className="flex items-center gap-2">
                                         <Switch
                                             id="all-tags"
@@ -741,14 +730,14 @@ export function CustomChartBuilderModal({
                                         />
                                         <Label
                                             htmlFor="all-tags"
-                                            className="text-xs font-normal text-muted-foreground"
+                                            className="type-footnote font-normal text-label-secondary"
                                         >
                                             {t("customChart.allTags")}
                                         </Label>
                                     </div>
                                 </div>
                                 {state.allTags ? (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         {t("customChart.allHint")}
                                     </p>
                                 ) : (
@@ -764,8 +753,8 @@ export function CustomChartBuilderModal({
                                                     aria-expanded={tagOpen}
                                                     className="w-full justify-between font-normal"
                                                 >
-                                                    <span className="text-muted-foreground">
-                                                        <Plus className="h-4 w-4 inline mr-1" />
+                                                    <span className="inline-flex items-center gap-1 text-label-secondary">
+                                                        <Plus className="h-4 w-4" />
                                                         {t(
                                                             "customChart.addTag",
                                                         )}
@@ -850,8 +839,11 @@ export function CustomChartBuilderModal({
                                                         <span className="truncate max-w-[150px]">
                                                             #{tag.slug}
                                                         </span>
-                                                        <button
+                                                        <Button
                                                             type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="ml-1 h-5 w-5 rounded-chip text-label-secondary hover:text-foreground [&_svg]:size-3"
                                                             aria-label={t(
                                                                 "customChart.removeSeries",
                                                                 {
@@ -863,10 +855,9 @@ export function CustomChartBuilderModal({
                                                                     tag.id,
                                                                 )
                                                             }
-                                                            className="ml-1 inline-flex min-h-6 min-w-6 items-center justify-center rounded-full hover:bg-muted focus-ring p-0.5"
                                                         >
-                                                            <X className="h-3 w-3" />
-                                                        </button>
+                                                            <X />
+                                                        </Button>
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -878,7 +869,7 @@ export function CustomChartBuilderModal({
 
                         {/* Right: live preview */}
                         <div className="min-w-0">
-                            <p className="text-sm font-medium mb-2 text-muted-foreground">
+                            <p className="mb-2 type-headline text-foreground">
                                 {t("customChart.builder.preview")}
                             </p>
                             <CustomChart
@@ -891,7 +882,7 @@ export function CustomChartBuilderModal({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             onClick={() => onOpenChange(false)}
                         >
                             {t("common.cancel")}
@@ -906,7 +897,7 @@ export function CustomChartBuilderModal({
                         >
                             {createChart.isPending || updateChart.isPending
                                 ? t("customChart.saving")
-                                : t("common.save")}
+                                : t("customChart.builder.save")}
                         </Button>
                     </DialogFooter>
                 </form>

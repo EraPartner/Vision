@@ -184,7 +184,7 @@ export function BulkActionsBar({
     return (
         <>
             <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium">
+                <span className="type-body font-medium text-foreground">
                     {t("txPage.bulk.nSelected", { n: effectiveCount })}
                 </span>
 
@@ -192,7 +192,6 @@ export function BulkActionsBar({
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs"
                         onClick={onPromoteToFilterMode}
                         disabled={anyBusy}
                     >
@@ -204,13 +203,9 @@ export function BulkActionsBar({
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            disabled={anyBusy}
-                        >
+                        <Button size="sm" disabled={anyBusy}>
                             {t("txPage.bulk.actions")}
-                            <ChevronDown className="h-3 w-3" />
+                            <ChevronDown />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
@@ -219,7 +214,7 @@ export function BulkActionsBar({
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {selectionMode === "filter" && (
-                            <p className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
+                            <p className="max-w-64 px-2 py-1.5 type-footnote text-label-secondary">
                                 {t("txPage.bulk.tagSelectionHint")}
                             </p>
                         )}
@@ -268,7 +263,6 @@ export function BulkActionsBar({
                 <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs"
                     onClick={onClearSelection}
                     disabled={anyBusy}
                 >

@@ -6,7 +6,12 @@ import {
     CardTitle,
     CardDescription,
 } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import { RefreshCw, Database, Globe, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
@@ -16,11 +21,13 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { SectionLoader } from "@/components/shared/SectionLoader";
+import { PageError } from "@/components/shared/PageError";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { exchangeRateKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { useTabParam } from "@/hooks/useTabParam";
 import { PAGE_ICONS } from "@/lib/pageIcons";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     Table,
     TableBody,
@@ -50,69 +57,52 @@ function RatesTable({
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
     return (
-        <div>
-            <Table className="w-full text-sm">
-                {showFallbackNote && (
-                    <TableCaption className="mt-3 px-3 text-left text-xs">
-                        {t("exchangeRates.fallbackNote")}
-                    </TableCaption>
-                )}
-                <TableHeader>
-                    <TableRow className="border-b text-muted-foreground hover:bg-transparent">
-                        <TableHead
-                            scope="col"
-                            className="h-auto px-3 py-2 text-left text-sm font-medium normal-case tracking-normal"
-                        >
-                            {t("exchangeRates.col.currency")}
-                        </TableHead>
-                        <TableHead
-                            scope="col"
-                            className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal"
-                        >
-                            {t("exchangeRates.col.unitToEur")}
-                        </TableHead>
-                        <TableHead
-                            scope="col"
-                            className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal"
-                        >
-                            {t("exchangeRates.col.eurToUnit")}
-                        </TableHead>
-                        <TableHead
-                            scope="col"
-                            className="h-auto px-3 py-2 text-right text-sm font-medium normal-case tracking-normal"
-                        >
-                            {t("exchangeRates.col.hundredInEur")}
-                        </TableHead>
+        <Table>
+            {showFallbackNote && (
+                <TableCaption className="px-4 pb-4 text-left type-footnote text-label-secondary">
+                    {t("exchangeRates.fallbackNote")}
+                </TableCaption>
+            )}
+            <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                    <TableHead scope="col">
+                        {t("exchangeRates.col.currency")}
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                        {t("exchangeRates.col.unitToEur")}
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                        {t("exchangeRates.col.eurToUnit")}
+                    </TableHead>
+                    <TableHead scope="col" className="text-right">
+                        {t("exchangeRates.col.hundredInEur")}
+                    </TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {rows.map(({ currency, rate }) => (
+                    <TableRow key={currency}>
+                        <TableCell className="font-mono font-medium">
+                            {currency}
+                        </TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
+                            {rate.toFixed(6)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
+                            {(1 / rate).toFixed(4)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                            {formatCurrency(
+                                100 * rate,
+                                defaultCurrency,
+                                locale,
+                                appSettings.showDecimalPlaces ?? 2,
+                            )}
+                        </TableCell>
                     </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {rows.map(({ currency, rate }) => (
-                        <TableRow
-                            key={currency}
-                            className="border-b border-border/50 hover:bg-muted/50"
-                        >
-                            <TableCell className="px-3 py-2 font-mono font-medium">
-                                {currency}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right font-mono tabular-nums">
-                                {rate.toFixed(6)}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right font-mono tabular-nums">
-                                {(1 / rate).toFixed(4)}
-                            </TableCell>
-                            <TableCell className="px-3 py-2 text-right tabular-nums">
-                                {formatCurrency(
-                                    100 * rate,
-                                    defaultCurrency,
-                                    locale,
-                                    appSettings.showDecimalPlaces ?? 2,
-                                )}
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
+                ))}
+            </TableBody>
+        </Table>
     );
 }
 
@@ -121,15 +111,15 @@ export default function ExchangeRatesPage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const queryClient = useQueryClient();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const [activeTab, setActiveTab] = useTabParam(EXCHANGE_RATE_TABS, "live");
 
-    // Share the one exchange-rates cache entry — same flat key, queryFn, and
+    // Share the one exchange-rates cache entry: same flat key, queryFn, and
     // staleTime as useExchangeRates/useCurrencyConverter, so this page reads
     // the copy every other consumer already fetched instead of a third
-    // duplicate (the request is always db-only, so the {dbOnly} discriminator
-    // carried no information). "Refresh rates" below invalidates the shared
-    // namespace for everyone.
-    const { data, isLoading, error, isFetching } = useExchangeRatesQuery();
+    // duplicate. "Refresh" below invalidates the shared namespace for everyone.
+    const { data, isLoading, error, isFetching, refetch } =
+        useExchangeRatesQuery();
 
     const refreshMutation = useMutation({
         mutationFn: () => apiClient.refreshExchangeRates(),
@@ -144,20 +134,60 @@ export default function ExchangeRatesPage() {
 
     const isRefreshing = refreshMutation.isPending || isFetching;
 
+    const header = (
+        <PageHeader
+            title={t("exchangeRates.title")}
+            subtitle={t("exchangeRates.subtitle")}
+            icon={PAGE_ICONS["/admin/exchange-rates"]}
+            actions={
+                <Button
+                    variant="outline"
+                    onClick={() => refreshMutation.mutate()}
+                    disabled={isRefreshing || isLoading}
+                >
+                    <RefreshCw
+                        aria-hidden="true"
+                        className={cn(isRefreshing && "animate-spin")}
+                    />
+                    {t("exchangeRates.refresh")}
+                </Button>
+            }
+        />
+    );
+
     if (isLoading) {
-        return <SectionLoader />;
+        return (
+            <PageShell {...loadingSurfaceProps}>
+                {header}
+                <div className="grid gap-4 sm:grid-cols-3">
+                    {Array.from({ length: 3 }).map((_, index) => (
+                        <Card key={index}>
+                            <CardContent
+                                variant="headerless"
+                                className="space-y-3"
+                            >
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-7 w-20" />
+                                <Skeleton className="h-3 w-36" />
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+                <Skeleton className="h-9 w-56 rounded-control" />
+                <Skeleton className="h-72 w-full rounded-card" />
+            </PageShell>
+        );
     }
 
     if (error) {
         return (
-            <Card>
-                <CardContent
-                    variant="state"
-                    className="text-center text-muted-foreground"
-                >
-                    {t("exchangeRates.failedToLoad")}
-                </CardContent>
-            </Card>
+            <PageShell>
+                {header}
+                <PageError
+                    message={t("exchangeRates.failedToLoad")}
+                    onRetry={() => void refetch()}
+                />
+            </PageShell>
         );
     }
 
@@ -200,34 +230,13 @@ export default function ExchangeRatesPage() {
     ];
 
     return (
-        <PageShell className="">
-            <PageHeader
-                title={t("exchangeRates.title")}
-                subtitle={t("exchangeRates.subtitle")}
-                icon={PAGE_ICONS["/admin/exchange-rates"]}
-                actions={
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        onClick={() => refreshMutation.mutate()}
-                        disabled={isRefreshing}
-                    >
-                        <RefreshCw
-                            className={cn(
-                                "h-4 w-4",
-                                isRefreshing && "animate-spin",
-                            )}
-                        />
-                        {t("exchangeRates.refresh")}
-                    </Button>
-                }
-            />
+        <PageShell>
+            {header}
 
             {(data?.is_stale || data?.source === "fallback") && (
-                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-                    <AlertTriangle className="h-4 w-4 mt-0.5 text-warning shrink-0" />
-                    <div className="text-foreground/80">
+                <Alert variant="warning">
+                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                    <AlertDescription>
                         {data?.source === "fallback"
                             ? t("exchangeRates.fallbackInUse")
                             : t("exchangeRates.staleWarning", {
@@ -239,25 +248,25 @@ export default function ExchangeRatesPage() {
                                         )
                                       : "—",
                               })}
-                    </div>
-                </div>
+                    </AlertDescription>
+                </Alert>
             )}
 
-            {/* Summary cards */}
             <div className="grid gap-4 sm:grid-cols-3">
                 {summaryCards.map(({ icon: Icon, title, value, sub }) => (
                     <Card key={title}>
-                        <CardHeader className="pb-2">
-                            <CardTitle
-                                variant="sm"
-                                className="flex items-center gap-2"
-                            >
-                                <Icon className="h-4 w-4" /> {title}
-                            </CardTitle>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle variant="label">{title}</CardTitle>
+                            <Icon
+                                aria-hidden="true"
+                                className="h-4 w-4 text-label-tertiary"
+                            />
                         </CardHeader>
                         <CardContent>
-                            <p className="text-2xl font-bold">{value}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-title-1 tabular-nums text-foreground">
+                                {value}
+                            </p>
+                            <p className="mt-1 type-footnote text-label-secondary">
                                 {sub}
                             </p>
                         </CardContent>
@@ -265,88 +274,100 @@ export default function ExchangeRatesPage() {
                 ))}
             </div>
 
-            <Tabs
+            <SegmentedControl
                 value={activeTab}
                 onValueChange={setActiveTab}
-                className="space-y-4"
+                aria-label={t("exchangeRates.viewLabel")}
+                className="w-full sm:w-auto"
             >
-                <TabsList>
-                    <TabsTrigger value="live">
-                        <Database className="h-4 w-4 mr-1.5" />{" "}
-                        {t("exchangeRates.liveRates")}
-                    </TabsTrigger>
-                    <TabsTrigger value="fallback">
-                        <Globe className="h-4 w-4 mr-1.5" />{" "}
-                        {t("exchangeRates.fallbackRates")}
-                    </TabsTrigger>
-                </TabsList>
+                <SegmentedControlItem value="live">
+                    <Database className="h-4 w-4" aria-hidden="true" />
+                    {t("exchangeRates.liveRates")}
+                </SegmentedControlItem>
+                <SegmentedControlItem value="fallback">
+                    <Globe className="h-4 w-4" aria-hidden="true" />
+                    {t("exchangeRates.fallbackRates")}
+                </SegmentedControlItem>
+            </SegmentedControl>
 
-                <TabsContent value="live">
-                    {liveRates.length === 0 ? (
-                        <Card>
-                            <CardContent
-                                variant="state"
-                                className="text-center text-muted-foreground"
-                            >
-                                {t("exchangeRates.noRates")}
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle variant="sm">
-                                    {t("exchangeRates.latestEcbRates")}
-                                </CardTitle>
-                                <CardDescription>
-                                    {t("exchangeRates.latestEcbDesc", {
-                                        count: liveRates.length,
-                                        date: rateDate ?? "",
-                                        fetchedAt: fetchedAt
-                                            ? formatDateTimeStringWithAppSettings(
-                                                  fetchedAt,
-                                                  appSettings.dateFormat,
-                                                  locale,
-                                              )
-                                            : "",
-                                    })}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <RatesTable
-                                    rows={liveRates.map((r) => ({
-                                        currency: r.currency,
-                                        rate: r.rate_to_eur,
-                                    }))}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="fallback">
+            {activeTab === "live" ? (
+                liveRates.length === 0 ? (
                     <Card>
-                        <CardHeader>
-                            <CardTitle variant="sm">
-                                {t("exchangeRates.fallbackRates")}
-                            </CardTitle>
-                            <CardDescription>
-                                {t("exchangeRates.fallbackDesc")}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <RatesTable
-                                rows={fallbackEntries.map(
-                                    ([currency, rate]) => ({
-                                        currency,
-                                        rate: rate as number,
-                                    }),
-                                )}
-                                showFallbackNote
+                        <CardContent variant="state">
+                            <EmptyState
+                                size="compact"
+                                icon={Database}
+                                title={t("exchangeRates.latestEcbRates")}
+                                description={t("exchangeRates.noRates")}
+                                action={
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => refreshMutation.mutate()}
+                                        disabled={isRefreshing}
+                                    >
+                                        <RefreshCw
+                                            aria-hidden="true"
+                                            className={cn(
+                                                isRefreshing && "animate-spin",
+                                            )}
+                                        />
+                                        {t("exchangeRates.refresh")}
+                                    </Button>
+                                }
                             />
                         </CardContent>
                     </Card>
-                </TabsContent>
-            </Tabs>
+                ) : (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle variant="sm">
+                                {t("exchangeRates.latestEcbRates")}
+                            </CardTitle>
+                            <CardDescription>
+                                {t("exchangeRates.latestEcbDesc", {
+                                    count: liveRates.length,
+                                    date: rateDate ?? "",
+                                    fetchedAt: fetchedAt
+                                        ? formatDateTimeStringWithAppSettings(
+                                              fetchedAt,
+                                              appSettings.dateFormat,
+                                              locale,
+                                          )
+                                        : "",
+                                })}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent variant="flush">
+                            <RatesTable
+                                rows={liveRates.map((r) => ({
+                                    currency: r.currency,
+                                    rate: r.rate_to_eur,
+                                }))}
+                            />
+                        </CardContent>
+                    </Card>
+                )
+            ) : (
+                <Card>
+                    <CardHeader>
+                        <CardTitle variant="sm">
+                            {t("exchangeRates.fallbackRates")}
+                        </CardTitle>
+                        <CardDescription>
+                            {t("exchangeRates.fallbackDesc")}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent variant="flush">
+                        <RatesTable
+                            rows={fallbackEntries.map(([currency, rate]) => ({
+                                currency,
+                                rate: rate as number,
+                            }))}
+                            showFallbackNote
+                        />
+                    </CardContent>
+                </Card>
+            )}
         </PageShell>
     );
 }

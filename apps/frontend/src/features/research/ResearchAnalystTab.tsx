@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { List, ListRow } from "@/components/ui/list";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -61,7 +62,7 @@ export function ResearchAnalystTab({
 
     if (!a || total === 0) {
         return (
-            <p className="text-sm text-muted-foreground py-4 text-center">
+            <p className="py-4 text-center type-callout text-label-secondary">
                 {t("research.analyst.none")}
             </p>
         );
@@ -88,20 +89,20 @@ export function ResearchAnalystTab({
               : "text-warning";
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-5">
             <div className="flex justify-end">
                 <ProvenanceBadge meta={result?.meta} />
             </div>
             <div className="flex items-start gap-6">
-                <div className="text-center shrink-0">
-                    <div className={cn("text-2xl font-bold", verdictColor)}>
+                <div className="shrink-0 text-center">
+                    <p className={cn("type-title-1", verdictColor)}>
                         {verdict}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
+                    </p>
+                    <p className="mt-0.5 type-footnote text-label-secondary">
                         {total !== 1
                             ? t("market.analystCountPlural", { n: total })
                             : t("market.analystCount", { n: total })}
-                    </div>
+                    </p>
                 </div>
                 <div className="flex-1 space-y-2">
                     {[
@@ -133,12 +134,12 @@ export function ResearchAnalystTab({
                     ].map(({ label, count, barClass }) => (
                         <div
                             key={label}
-                            className="flex items-center gap-2 text-xs"
+                            className="flex items-center gap-2 type-footnote"
                         >
-                            <span className="text-muted-foreground w-20 shrink-0">
+                            <span className="w-20 shrink-0 text-label-secondary">
                                 {label}
                             </span>
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-foreground/[0.08]">
                                 <div
                                     className={cn(
                                         "h-full rounded-full",
@@ -149,7 +150,7 @@ export function ResearchAnalystTab({
                                     }}
                                 />
                             </div>
-                            <span className="w-4 text-right tabular-nums text-muted-foreground">
+                            <span className="w-4 text-right tabular-nums text-label-secondary">
                                 {count}
                             </span>
                         </div>
@@ -160,7 +161,7 @@ export function ResearchAnalystTab({
             {(a.targetMean != null ||
                 a.targetLow != null ||
                 a.targetHigh != null) && (
-                <div className="grid grid-cols-3 gap-3 border-t border-border pt-3 text-center">
+                <div className="grid grid-cols-3 gap-3 border-t border-border/50 pt-4 text-center">
                     <TargetCell
                         label={t("research.analyst.targetLow")}
                         value={a.targetLow}
@@ -177,53 +178,52 @@ export function ResearchAnalystTab({
             )}
 
             {a.recentActions && a.recentActions.length > 0 && (
-                <div className="border-t border-border pt-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                <section className="space-y-2">
+                    <h3 className="type-headline text-foreground">
                         {t("market.recentActions")}
-                    </p>
-                    <div className="space-y-2">
+                    </h3>
+                    <List>
                         {a.recentActions.map((action, i) => (
-                            <div
+                            <ListRow
                                 key={`${action.date}-${action.firm}-${i}`}
-                                className="flex items-center gap-2 text-xs"
-                            >
-                                {action.action === "up" ||
-                                action.action === "upgrade" ? (
-                                    <TrendingUp className="h-3 w-3 text-success shrink-0" />
-                                ) : action.action === "down" ||
-                                  action.action === "downgrade" ? (
-                                    <TrendingDown className="h-3 w-3 text-destructive shrink-0" />
-                                ) : (
-                                    <ArrowUpDown className="h-3 w-3 text-muted-foreground shrink-0" />
+                                leading={
+                                    action.action === "up" ||
+                                    action.action === "upgrade" ? (
+                                        <TrendingUp className="text-success" />
+                                    ) : action.action === "down" ||
+                                      action.action === "downgrade" ? (
+                                        <TrendingDown className="text-destructive" />
+                                    ) : (
+                                        <ArrowUpDown />
+                                    )
+                                }
+                                title={action.firm}
+                                subtitle={formatDateStringWithAppSettings(
+                                    String(action.date),
+                                    appSettings.dateFormat,
                                 )}
-                                <span className="text-muted-foreground shrink-0 w-20 tabular-nums whitespace-nowrap">
-                                    {formatDateStringWithAppSettings(
-                                        String(action.date),
-                                        appSettings.dateFormat,
-                                    )}
-                                </span>
-                                <span className="font-medium text-foreground truncate flex-1">
-                                    {action.firm}
-                                </span>
-                                <span
-                                    className={cn(
-                                        "shrink-0",
-                                        gradeColor(action.toGrade),
-                                    )}
-                                >
-                                    {action.toGrade}
-                                    {action.fromGrade &&
-                                        action.fromGrade !== action.toGrade && (
-                                            <span className="text-muted-foreground font-normal">
-                                                {" "}
-                                                ← {action.fromGrade}
-                                            </span>
+                                trailing={
+                                    <span
+                                        className={cn(
+                                            "type-callout",
+                                            gradeColor(action.toGrade),
                                         )}
-                                </span>
-                            </div>
+                                    >
+                                        {action.toGrade}
+                                        {action.fromGrade &&
+                                            action.fromGrade !==
+                                                action.toGrade && (
+                                                <span className="text-label-secondary">
+                                                    {" "}
+                                                    ← {action.fromGrade}
+                                                </span>
+                                            )}
+                                    </span>
+                                }
+                            />
                         ))}
-                    </div>
-                </div>
+                    </List>
+                </section>
             )}
         </div>
     );
@@ -232,8 +232,8 @@ export function ResearchAnalystTab({
 function TargetCell({ label, value }: { label: string; value: number | null }) {
     return (
         <div>
-            <p className="eyebrow">{label}</p>
-            <p className="text-sm font-semibold tabular-nums">
+            <p className="type-caption text-label-tertiary">{label}</p>
+            <p className="type-title-3 tabular-nums text-foreground">
                 {value != null ? value.toFixed(2) : "—"}
             </p>
         </div>

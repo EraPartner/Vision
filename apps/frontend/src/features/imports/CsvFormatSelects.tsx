@@ -146,7 +146,7 @@ export function NumberFormatSelect({
                     ))}
                 </SelectContent>
             </Select>
-            <p id={`${id}-hint`} className="text-xs text-muted-foreground">
+            <p id={`${id}-hint`} className="type-footnote text-label-secondary">
                 {t("importPage.numberFormat.hint")}
             </p>
         </div>

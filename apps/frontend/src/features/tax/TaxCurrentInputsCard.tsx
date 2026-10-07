@@ -4,7 +4,6 @@ import type {
     BelgianTaxCalculation,
     BelgianTaxProfile,
 } from "@/lib/belgianTax";
-import { Separator } from "@/components/ui/separator";
 import { TaxProfileInputsCard } from "./TaxProfileInputsCard";
 
 interface TaxCurrentInputsCardProps {
@@ -26,48 +25,40 @@ export function TaxCurrentInputsCard({
             calculation={calculation}
             description={t("tax.profile.currentInputs.desc")}
             variant="overview"
-        >
-            <Separator />
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                    {t("tax.pit.row.federalAfter")}
-                </span>
-                <span className="font-semibold tabular-nums text-loss">
-                    {fmt(calculation.federalPITAfterReductions)}
-                </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                    {t("tax.pit.row.communalSurcharge")}
-                </span>
-                <span className="font-semibold tabular-nums text-loss">
-                    {fmt(calculation.communalSurcharge)}
-                </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                    {t("tax.pit.row.employeeSS")}
-                </span>
-                <span className="font-semibold tabular-nums text-loss">
-                    {fmt(calculation.employeeSocialSecurity)}
-                </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                    {t("tax.pit.row.specialSS")}
-                </span>
-                <span className="font-semibold tabular-nums text-loss">
-                    {fmt(calculation.specialSocialSecurityContribution)}
-                </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                    {t("tax.pit.row.totalBurden")}
-                </span>
-                <span className="font-bold tabular-nums text-primary">
-                    {fmt(calculation.totalTaxBurden)}
-                </span>
-            </div>
-        </TaxProfileInputsCard>
+            extraRows={[
+                {
+                    key: "federalAfter",
+                    label: t("tax.pit.row.federalAfter"),
+                    value: fmt(calculation.federalPITAfterReductions),
+                    tone: "text-loss",
+                    emphasis: true,
+                },
+                {
+                    key: "communalSurcharge",
+                    label: t("tax.pit.row.communalSurcharge"),
+                    value: fmt(calculation.communalSurcharge),
+                    tone: "text-loss",
+                },
+                {
+                    key: "employeeSS",
+                    label: t("tax.pit.row.employeeSS"),
+                    value: fmt(calculation.employeeSocialSecurity),
+                    tone: "text-loss",
+                },
+                {
+                    key: "specialSS",
+                    label: t("tax.pit.row.specialSS"),
+                    value: fmt(calculation.specialSocialSecurityContribution),
+                    tone: "text-loss",
+                },
+                {
+                    key: "totalBurden",
+                    label: t("tax.pit.row.totalBurden"),
+                    value: fmt(calculation.totalTaxBurden),
+                    tone: "text-primary",
+                    emphasis: true,
+                },
+            ]}
+        />
     );
 }

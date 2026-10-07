@@ -1,17 +1,32 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminKeys } from "@/lib/queryKeys";
-import { Database, HardDrive, RefreshCw, Zap } from "lucide-react";
+import {
+    Database,
+    HardDrive,
+    MoreHorizontal,
+    RefreshCw,
+    Table2,
+    Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
@@ -47,27 +62,35 @@ function SkeletonRow() {
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
-function StatCard({
+function SummaryCard({
     label,
     value,
     icon: Icon,
+    loading,
 }: {
     label: string;
     value: string;
     icon: React.ElementType;
+    loading: boolean;
 }) {
     return (
-        <Card className="glass-chrome">
+        <Card>
             <CardContent variant="headerless">
                 <div className="flex items-center gap-4">
-                    <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-primary" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary/12 text-primary">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <div>
-                        <p className="text-sm text-muted-foreground">{label}</p>
-                        <p className="text-xl font-bold tracking-tight">
-                            {value}
+                    <div className="min-w-0">
+                        <p className="type-callout text-label-secondary">
+                            {label}
                         </p>
+                        {loading ? (
+                            <Skeleton className="mt-1 h-6 w-20" />
+                        ) : (
+                            <p className="type-title-2 tabular-nums text-foreground">
+                                {value}
+                            </p>
+                        )}
                     </div>
                 </div>
             </CardContent>
@@ -81,17 +104,18 @@ function TableStatRow({
     row,
     onVacuum,
     isVacuuming,
-    t,
 }: {
     row: DbTableStat;
     onVacuum: (table: string) => void;
     isVacuuming: boolean;
-    t: (key: string) => string;
 }) {
-    // App settings, not the browser locale — an eu-format nl user with an
+    const { t } = useLanguage();
+    const navigate = useNavigate();
+    // App settings, not the browser locale: an eu-format nl user with an
     // en-US browser otherwise saw US date order and separators here.
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
+    const editorHref = `/admin/db/${encodeURIComponent(row.table_name)}`;
 
     function fmt(ts: string | null) {
         if (!ts) return "—";
@@ -108,11 +132,8 @@ function TableStatRow({
 
     return (
         <TableRow>
-            <TableCell className="font-mono text-xs">
-                <TextLink
-                    to={`/admin/db/${encodeURIComponent(row.table_name)}`}
-                    className="font-mono text-xs"
-                >
+            <TableCell>
+                <TextLink to={editorHref} className="font-mono type-footnote">
                     {row.table_name}
                 </TextLink>
             </TableCell>
@@ -128,26 +149,49 @@ function TableStatRow({
                     {Number(row.dead_rows).toLocaleString(locale)}
                 </span>
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell className="type-footnote text-label-secondary">
                 {fmt(row.last_autovacuum)}
             </TableCell>
-            <TableCell className="text-xs text-muted-foreground">
+            <TableCell className="type-footnote text-label-secondary">
                 {fmt(row.last_autoanalyze)}
             </TableCell>
-            <TableCell className="text-right tabular-nums font-medium">
+            <TableCell className="text-right font-medium tabular-nums">
                 {row.size}
             </TableCell>
             <TableCell className="text-right">
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 gap-1.5 text-xs"
-                    disabled={isVacuuming}
-                    onClick={() => onVacuum(row.table_name)}
-                >
-                    <Zap className="h-3 w-3" />
-                    {t("dbMaintenance.vacuumTable")}
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            aria-label={t("dbMaintenance.rowMenu", {
+                                table: row.table_name,
+                            })}
+                        >
+                            <MoreHorizontal aria-hidden="true" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => navigate(editorHref)}>
+                            <Table2
+                                aria-hidden="true"
+                                className="mr-2 h-4 w-4 text-label-secondary"
+                            />
+                            {t("dbMaintenance.openTable")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            disabled={isVacuuming}
+                            onSelect={() => onVacuum(row.table_name)}
+                        >
+                            <Zap
+                                aria-hidden="true"
+                                className="mr-2 h-4 w-4 text-label-secondary"
+                            />
+                            {t("dbMaintenance.vacuumTable")}
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </TableCell>
         </TableRow>
     );
@@ -159,9 +203,7 @@ export default function DbMaintenancePage() {
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const qc = useQueryClient();
-    const [vacuumingTable, setVacuumingTable] = useState<string | null>(
-        undefined as unknown as null,
-    );
+    const [vacuumingTable, setVacuumingTable] = useState<string | null>(null);
 
     const { data, isLoading, error } = useDbStats();
 
@@ -200,59 +242,65 @@ export default function DbMaintenancePage() {
     const isVacuuming = vacuumMutation.isPending;
 
     return (
-        <PageShell className="">
+        <PageShell>
             <PageHeader
                 title={t("dbMaintenance.title")}
                 subtitle={t("dbMaintenance.subtitle")}
                 icon={PAGE_ICONS["/admin/db"]}
                 iconColor="from-warning/20 to-warning/5 text-warning"
                 actions={
-                    <div className="flex items-center gap-2">
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleRefresh}
-                            disabled={isLoading}
-                            className="gap-2"
-                        >
-                            <RefreshCw
-                                className={cn(
-                                    "h-4 w-4",
-                                    isLoading && "animate-spin",
-                                )}
-                            />
-                            {t("dbMaintenance.refresh")}
-                        </Button>
-                        <Button
-                            size="sm"
-                            onClick={handleVacuumAll}
-                            disabled={isVacuuming}
-                            className="gap-2"
-                        >
-                            <Zap className="h-4 w-4" />
+                    <>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    aria-label={t("admin.moreActions")}
+                                >
+                                    <MoreHorizontal aria-hidden="true" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    disabled={isLoading}
+                                    onSelect={handleRefresh}
+                                >
+                                    <RefreshCw
+                                        aria-hidden="true"
+                                        className={cn(
+                                            "mr-2 h-4 w-4 text-label-secondary",
+                                            isLoading && "animate-spin",
+                                        )}
+                                    />
+                                    {t("dbMaintenance.refresh")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        <Button onClick={handleVacuumAll} disabled={isVacuuming}>
+                            <Zap aria-hidden="true" />
                             {isVacuuming && vacuumingTable === "__all__"
                                 ? t("dbMaintenance.vacuuming")
                                 : t("dbMaintenance.vacuumAll")}
                         </Button>
-                    </div>
+                    </>
                 }
             />
 
-            {/* Summary cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <StatCard
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SummaryCard
                     label={t("dbMaintenance.totalSize")}
                     value={data?.db_size ?? "—"}
                     icon={HardDrive}
+                    loading={isLoading}
                 />
-                <StatCard
+                <SummaryCard
                     label={t("dbMaintenance.tableCount")}
                     value={tableCount.toString()}
                     icon={Database}
+                    loading={isLoading}
                 />
             </div>
 
-            {/* Error state */}
             {error && (
                 <AdminErrorState
                     error={error}
@@ -260,15 +308,14 @@ export default function DbMaintenancePage() {
                 />
             )}
 
-            {/* Table stats */}
-            <Card className="glass-chrome">
+            <Card>
                 <CardHeader>
                     <CardTitle variant="sm">
                         {t("dbMaintenance.tableStats")}
                     </CardTitle>
                 </CardHeader>
                 {/* The skeleton rows live inside <tbody>, where a wrapper
-                    element would be invalid HTML — the CardContent around the
+                    element would be invalid HTML; the CardContent around the
                     table carries the status role instead, only while loading. */}
                 <CardContent
                     {...(isLoading ? loadingSurfaceProps : {})}
@@ -295,8 +342,10 @@ export default function DbMaintenancePage() {
                                 <TableHead className="text-right">
                                     {t("dbMaintenance.col.size")}
                                 </TableHead>
-                                <TableHead className="text-right">
-                                    {t("dbMaintenance.col.actions")}
+                                <TableHead className="w-12 text-right">
+                                    <span className="sr-only">
+                                        {t("dbMaintenance.col.actions")}
+                                    </span>
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
@@ -311,25 +360,34 @@ export default function DbMaintenancePage() {
                                           row={row}
                                           onVacuum={handleVacuumTable}
                                           isVacuuming={isVacuuming}
-                                          t={t}
                                       />
                                   ))}
                             {!isLoading && !error && tableCount === 0 && (
-                                <TableRow>
-                                    <TableCell
-                                        colSpan={7}
-                                        className="h-24 text-center text-muted-foreground"
-                                    >
-                                        {t("dbMaintenance.noTables")}
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell colSpan={7}>
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={Database}
+                                            title={t("dbMaintenance.noTables")}
+                                            action={
+                                                <Button
+                                                    variant="outline"
+                                                    onClick={handleRefresh}
+                                                >
+                                                    {t("dbMaintenance.refresh")}
+                                                </Button>
+                                            }
+                                        />
                                     </TableCell>
                                 </TableRow>
                             )}
                         </TableBody>
                     </Table>
                 </CardContent>
-                <div className="px-6 pb-4 text-xs text-muted-foreground">
+                <p className="px-6 pb-5 type-footnote text-label-secondary">
                     {t("dbMaintenance.statsNote")}
-                </div>
+                </p>
             </Card>
         </PageShell>
     );

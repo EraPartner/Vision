@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { getChartColor } from "@/components/charts";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 type Row = Record<string, unknown>;
 
@@ -41,7 +42,7 @@ function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
 const tooltipStyle = {
     backgroundColor: "hsl(var(--popover))",
     border: "1px solid hsl(var(--border))",
-    borderRadius: "8px",
+    borderRadius: "var(--radius-control)",
     fontSize: "11px",
     color: "hsl(var(--popover-foreground))",
 };
@@ -52,9 +53,14 @@ function CartesianChart({
     yKeys,
     kind,
 }: ToolResultChartProps & { kind: "line" | "bar" }) {
+    const { t } = useLanguage();
     const { xk, yk } = resolveAxes(rows, xKey, yKeys);
     if (rows.length === 0 || yk.length === 0) {
-        return <p className="text-xs text-muted-foreground">No chart data.</p>;
+        return (
+            <p className="type-footnote text-label-secondary">
+                {t("aiChat.noChartData")}
+            </p>
+        );
     }
     const frame = [
         <CartesianGrid
@@ -134,11 +140,16 @@ function CartesianChart({
 }
 
 function PieResultChart({ rows, xKey, yKeys }: ToolResultChartProps) {
+    const { t } = useLanguage();
     const formatPercent = usePercentFormatter();
     const { xk, yk } = resolveAxes(rows, xKey, yKeys);
     const valueKey = yk[0];
     if (rows.length === 0 || !valueKey) {
-        return <p className="text-xs text-muted-foreground">No chart data.</p>;
+        return (
+            <p className="type-footnote text-label-secondary">
+                {t("aiChat.noChartData")}
+            </p>
+        );
     }
     const data = rows.map((row) => ({
         name: String(row[xk] ?? ""),

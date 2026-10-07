@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Search } from "lucide-react";
+import { Radar, Search } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableSkeletonRows } from "@/components/shared/TableSkeletonRows";
@@ -33,14 +34,14 @@ function methodBadgeClass(method: string) {
         case "DELETE":
             return "bg-destructive/10 text-destructive";
         default:
-            return "bg-muted text-muted-foreground";
+            return "bg-foreground/[0.06] text-label-secondary";
     }
 }
 
-function errorRateBadgeClass(rate: number) {
-    if (rate >= 10) return "text-destructive font-semibold";
+function errorRateClass(rate: number) {
+    if (rate >= 10) return "text-destructive font-medium";
     if (rate > 2) return "text-warning";
-    return "text-muted-foreground";
+    return "text-label-secondary";
 }
 
 type MergedRow = EndpointEntry & Partial<RouteMetric>;
@@ -81,25 +82,29 @@ export default function EndpointLivenessPage() {
     }, [rows, filter]);
 
     return (
-        <PageShell className="p-6">
+        <PageShell>
             <PageHeader
                 title={t("admin.endpoints.title")}
                 subtitle={t("admin.endpoints.description")}
                 icon={PAGE_ICONS["/admin/endpoints"]}
             />
 
-            <Card className="glass-chrome">
-                <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <Card>
+                <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
                     <CardTitle variant="sm">
                         {t("admin.endpoints.tableTitle")}
                     </CardTitle>
-                    <div className="relative w-56">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <div className="relative w-full sm:w-64">
+                        <Search
+                            aria-hidden="true"
+                            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-label-tertiary"
+                        />
                         <Input
                             placeholder={t("admin.endpoints.filterPlaceholder")}
+                            aria-label={t("admin.endpoints.filterPlaceholder")}
                             value={filter}
                             onChange={(e) => setFilter(e.target.value)}
-                            className="pl-8 h-8 text-sm"
+                            className="pl-9"
                         />
                     </div>
                 </CardHeader>
@@ -112,7 +117,7 @@ export default function EndpointLivenessPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-20">
+                                <TableHead className="w-24">
                                     {t("admin.endpoints.colMethod")}
                                 </TableHead>
                                 <TableHead>
@@ -138,13 +143,26 @@ export default function EndpointLivenessPage() {
                         <TableBody>
                             {manifestLoading ? (
                                 <TableSkeletonRows rows={10} cols={7} />
+                            ) : filtered.length === 0 ? (
+                                <TableRow className="hover:bg-transparent">
+                                    <TableCell colSpan={7}>
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={Radar}
+                                            title={t(
+                                                "admin.endpoints.noMatches",
+                                            )}
+                                        />
+                                    </TableCell>
+                                </TableRow>
                             ) : (
                                 filtered.map((row) => (
                                     <TableRow key={`${row.method}:${row.path}`}>
                                         <TableCell>
                                             <span
                                                 className={cn(
-                                                    "text-xs font-mono font-semibold rounded px-1.5 py-0.5",
+                                                    "inline-flex items-center rounded-chip px-1.5 py-0.5 font-mono type-caption",
                                                     methodBadgeClass(
                                                         row.method,
                                                     ),
@@ -153,23 +171,23 @@ export default function EndpointLivenessPage() {
                                                 {row.method}
                                             </span>
                                         </TableCell>
-                                        <TableCell className="font-mono text-xs">
+                                        <TableCell className="font-mono type-footnote">
                                             {row.path}
                                         </TableCell>
-                                        <TableCell className="text-right text-sm">
+                                        <TableCell className="text-right tabular-nums">
                                             {row.count ?? "—"}
                                         </TableCell>
-                                        <TableCell className="text-right text-sm">
+                                        <TableCell className="text-right tabular-nums">
                                             {row.errors ?? "—"}
                                         </TableCell>
                                         <TableCell
                                             className={cn(
-                                                "text-right text-sm",
+                                                "text-right tabular-nums",
                                                 row.error_rate !== undefined
-                                                    ? errorRateBadgeClass(
+                                                    ? errorRateClass(
                                                           row.error_rate * 100,
                                                       )
-                                                    : "text-muted-foreground",
+                                                    : "text-label-secondary",
                                             )}
                                         >
                                             {row.error_rate !== undefined
@@ -179,12 +197,12 @@ export default function EndpointLivenessPage() {
                                                   )
                                                 : "—"}
                                         </TableCell>
-                                        <TableCell className="text-right text-sm text-muted-foreground">
+                                        <TableCell className="text-right tabular-nums text-label-secondary">
                                             {row.p50_ms !== undefined
                                                 ? `${row.p50_ms}ms`
                                                 : "—"}
                                         </TableCell>
-                                        <TableCell className="text-right text-sm text-muted-foreground">
+                                        <TableCell className="text-right tabular-nums text-label-secondary">
                                             {row.p95_ms !== undefined
                                                 ? `${row.p95_ms}ms`
                                                 : "—"}

@@ -1,20 +1,25 @@
 /**
  * TaxYearSwitcher
  *
- * Dropdown that lets the user view past income years on the tax overview surfaces.
+ * Header control that lets the user view past income years on the tax surfaces.
  *
  * Behavior:
- *  - Trigger displays the currently-viewed year, styled like the original year badge.
- *  - Items list every year from `useAvailableTaxYears()`, sorted desc.
+ *  - Trigger displays the currently-viewed year.
+ *  - Items list every year from `useAvailableTaxYears()`, sorted desc, each with
+ *    its filed/frozen marker and a status badge.
  *  - Selecting a year sets the provider's `viewedYear` (transient, not persisted).
- *  - When the currently-viewed year has no snapshot AND is not the live year, the menu
- *    surfaces a "Create historical profile for {year}" footer action that seeds a snapshot
- *    from the live profile so the user can then edit it via the profile dialog.
+ *  - When the currently-viewed year has no snapshot AND is not the live year, the
+ *    menu surfaces a "Create profile for {year}" footer action that seeds a
+ *    snapshot from the live profile so the user can then edit it.
+ *
+ * A menu rather than a Select because the rows carry badges and the footer
+ * carries an action, neither of which a Select can hold.
  */
-import { ChevronDown, History, Plus, Sparkles, Wallet } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useAvailableTaxYears } from "@/hooks/useAvailableTaxYears";
+import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -57,25 +62,20 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button
-                    type="button"
-                    className={cn(
-                        "inline-flex items-center gap-1.5 rounded-md border border-border bg-secondary/60 px-2.5 py-1 text-xs font-medium text-secondary-foreground transition hover:bg-secondary focus-ring",
-                        className,
-                    )}
+                <Button
+                    variant="outline"
+                    className={cn("tabular-nums", className)}
                     aria-label={t("tax.yearSwitcher.trigger")}
                 >
-                    <History className="h-3 w-3 text-muted-foreground" />
-                    <span>
-                        {t("tax.yearSwitcher.label", {
-                            year: String(viewedYear),
-                        })}
-                    </span>
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                </button>
+                    {t("tax.yearSwitcher.label", { year: String(viewedYear) })}
+                    <ChevronDown
+                        className="text-label-secondary"
+                        aria-hidden="true"
+                    />
+                </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[220px]">
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+                <DropdownMenuLabel>
                     {t("tax.yearSwitcher.menuLabel")}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -85,13 +85,18 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                         <DropdownMenuItem
                             key={entry.year}
                             onSelect={() => setViewedYear(entry.year)}
-                            className={cn(
-                                "flex items-center justify-between gap-2",
-                                isActive && "bg-accent/60",
-                            )}
+                            className="flex items-center justify-between gap-3"
+                            aria-current={isActive ? "true" : undefined}
                         >
                             <span className="flex items-center gap-1.5">
-                                <span className="font-medium tabular-nums">
+                                <span
+                                    className={cn(
+                                        "tabular-nums",
+                                        isActive
+                                            ? "font-semibold text-foreground"
+                                            : "font-medium",
+                                    )}
+                                >
                                     {entry.year}
                                 </span>
                                 <TaxYearStatusIcon
@@ -102,61 +107,7 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                                     className="h-3 w-3"
                                 />
                             </span>
-                            <span className="flex items-center gap-1">
-                                {entry.isCurrent && (
-                                    <Badge
-                                        variant="default"
-                                        className="h-4 px-1.5 text-2xs"
-                                    >
-                                        <Sparkles className="mr-0.5 h-2.5 w-2.5" />
-                                        {t("tax.yearSwitcher.currentBadge")}
-                                    </Badge>
-                                )}
-                                {!entry.isCurrent && entry.isFiled && (
-                                    <Badge
-                                        variant="outline"
-                                        className="h-4 px-1.5 text-2xs border-warning/40 text-warning"
-                                    >
-                                        {t("tax.yearSwitcher.filedBadge")}
-                                    </Badge>
-                                )}
-                                {!entry.isCurrent &&
-                                    !entry.isFiled &&
-                                    entry.hasFrozenCalculation && (
-                                        <Badge
-                                            variant="outline"
-                                            className="h-4 px-1.5 text-2xs border-info/40 text-info"
-                                        >
-                                            {t("tax.yearSwitcher.frozenBadge")}
-                                        </Badge>
-                                    )}
-                                {!entry.isCurrent &&
-                                    !entry.isFiled &&
-                                    !entry.hasFrozenCalculation &&
-                                    entry.hasSnapshot && (
-                                        <Badge
-                                            variant="secondary"
-                                            className="h-4 px-1.5 text-2xs"
-                                        >
-                                            {t(
-                                                "tax.yearSwitcher.snapshotBadge",
-                                            )}
-                                        </Badge>
-                                    )}
-                                {!entry.isCurrent &&
-                                    !entry.hasSnapshot &&
-                                    entry.hasTransactions && (
-                                        <Badge
-                                            variant="outline"
-                                            className="h-4 px-1.5 text-2xs text-muted-foreground"
-                                        >
-                                            <Wallet className="mr-0.5 h-2.5 w-2.5" />
-                                            {t(
-                                                "tax.yearSwitcher.transactionsBadge",
-                                            )}
-                                        </Badge>
-                                    )}
-                            </span>
+                            <YearStatusBadge entry={entry} />
                         </DropdownMenuItem>
                     );
                 })}
@@ -165,9 +116,8 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             onSelect={() => createSnapshotFromLive(viewedYear)}
-                            className="text-primary"
                         >
-                            <Plus className="mr-2 h-3.5 w-3.5" />
+                            <Plus className="mr-2 h-4 w-4 text-label-secondary" />
                             {t("tax.yearSwitcher.createSnapshot", {
                                 year: String(viewedYear),
                             })}
@@ -177,4 +127,49 @@ export function TaxYearSwitcher({ className }: TaxYearSwitcherProps) {
             </DropdownMenuContent>
         </DropdownMenu>
     );
+}
+
+interface YearStatusBadgeProps {
+    entry: ReturnType<typeof useAvailableTaxYears>[number];
+}
+
+/** One badge per year, by precedence: current > filed > frozen > saved > data only. */
+function YearStatusBadge({ entry }: YearStatusBadgeProps) {
+    const { t } = useLanguage();
+    if (entry.isCurrent) {
+        return (
+            <Badge variant="default" size="sm">
+                {t("tax.yearSwitcher.currentBadge")}
+            </Badge>
+        );
+    }
+    if (entry.isFiled) {
+        return (
+            <Badge variant="warning" size="sm">
+                {t("tax.yearSwitcher.filedBadge")}
+            </Badge>
+        );
+    }
+    if (entry.hasFrozenCalculation) {
+        return (
+            <Badge variant="outline" size="sm" className="text-info">
+                {t("tax.yearSwitcher.frozenBadge")}
+            </Badge>
+        );
+    }
+    if (entry.hasSnapshot) {
+        return (
+            <Badge variant="secondary" size="sm">
+                {t("tax.yearSwitcher.snapshotBadge")}
+            </Badge>
+        );
+    }
+    if (entry.hasTransactions) {
+        return (
+            <Badge variant="muted" size="sm">
+                {t("tax.yearSwitcher.transactionsBadge")}
+            </Badge>
+        );
+    }
+    return null;
 }

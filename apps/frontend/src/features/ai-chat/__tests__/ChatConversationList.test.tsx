@@ -197,7 +197,7 @@ describe("ChatConversationList", () => {
         });
         await user.click(renameItem);
 
-        const dialog = await screen.findByRole("alertdialog");
+        const dialog = await screen.findByRole("dialog");
         const input = within(dialog).getByRole("textbox");
         await user.clear(input);
         await user.type(input, "Renamed chat");
@@ -230,7 +230,7 @@ describe("ChatConversationList", () => {
         });
         await user.click(renameItem);
 
-        const dialog = await screen.findByRole("alertdialog");
+        const dialog = await screen.findByRole("dialog");
         const input = within(dialog).getByRole("textbox");
         await user.clear(input);
 

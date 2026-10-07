@@ -21,7 +21,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileSearch, Loader2, RefreshCw, Undo2 } from "lucide-react";
+import { List } from "@/components/ui/list";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { FileSearch, Loader2, RefreshCw, Undo2, History } from "lucide-react";
 import type { ImportBatch } from "@/types/apiClient";
 import { cn } from "@/lib/utils";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -46,7 +48,7 @@ const STATUS_VARIANT: Record<
 
 function BatchStatusBadge({ status }: { status: ImportBatch["status"] }) {
     return (
-        <Badge variant={STATUS_VARIANT[status]} className="capitalize text-xs">
+        <Badge variant={STATUS_VARIANT[status]} size="sm">
             {status}
         </Badge>
     );
@@ -84,9 +86,7 @@ function RollbackButton({
         setRolling(true);
         try {
             const { deleted } = await apiClient.rollbackImportBatch(batch.id);
-            toast.success(
-                t("importHistory.rollbackSuccess", { n: deleted }),
-            );
+            toast.success(t("importHistory.rollbackSuccess", { n: deleted }));
             onRolledBack();
         } catch (err) {
             toast.error(t("importHistory.rollbackFailed"), {
@@ -102,18 +102,12 @@ function RollbackButton({
             <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 disabled={rolling}
                 onClick={() => void handleRollback()}
             >
-                {rolling ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                    <Undo2 className="h-3.5 w-3.5" />
-                )}
-                <span className="ml-1 text-xs">
-                    {t("importHistory.rollback")}
-                </span>
+                {rolling ? <Loader2 className="animate-spin" /> : <Undo2 />}
+                {t("importHistory.rollback")}
             </Button>
             <ConfirmDialog />
         </>
@@ -130,15 +124,15 @@ function BatchRow({
     const { t } = useLanguage();
     const started = formatDate(parseISO(batch.started_at), "yyyy-MM-dd HH:mm");
     return (
-        <div className="flex items-start justify-between gap-4 py-3 border-b last:border-0">
+        <li className="flex items-start justify-between gap-4 px-4 py-3">
             <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium truncate">
+                    <span className="truncate type-body font-medium text-foreground">
                         {batch.source_filename ?? `Batch #${batch.id}`}
                     </span>
                     <BatchStatusBadge status={batch.status} />
                 </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                <div className="flex flex-wrap items-center gap-3 type-footnote text-label-secondary">
                     <span>{batch.adapter_name}</span>
                     <span>{started}</span>
                     {batch.rows_imported != null && (
@@ -165,30 +159,23 @@ function BatchRow({
                     )}
                 </div>
                 {batch.error_summary && (
-                    <p className="text-xs text-destructive truncate max-w-xs">
+                    <p className="max-w-xs truncate type-footnote text-destructive">
                         {batch.error_summary}
                     </p>
                 )}
             </div>
             <div className="flex shrink-0 items-center gap-1">
                 {batch.status === "awaiting_review" && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
-                        asChild
-                    >
+                    <Button variant="ghost" size="sm" asChild>
                         <Link to={`/import/${batch.id}/review`}>
-                            <FileSearch className="h-3.5 w-3.5" />
-                            <span className="ml-1 text-xs">
-                                {t("importHistory.resumeReview")}
-                            </span>
+                            <FileSearch />
+                            {t("importHistory.resumeReview")}
                         </Link>
                     </Button>
                 )}
                 <RollbackButton batch={batch} onRolledBack={onRolledBack} />
             </div>
-        </div>
+        </li>
     );
 }
 
@@ -248,10 +235,10 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
                     </div>
                     <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
                         onClick={() => invalidate()}
                         disabled={isFetching}
-                        title={t("common.refresh")}
+                        aria-label={t("common.refresh")}
                     >
                         <RefreshCw
                             className={cn(
@@ -266,12 +253,15 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
                 {isLoading ? (
                     <SectionLoader />
                 ) : batches.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                        {t("importHistory.empty")}
-                    </p>
+                    <EmptyState
+                        icon={History}
+                        size="compact"
+                        headingLevel={3}
+                        title={t("importHistory.empty")}
+                    />
                 ) : (
                     <>
-                        <div>
+                        <List>
                             {batches.map((b) => (
                                 <BatchRow
                                     key={b.id}
@@ -279,11 +269,11 @@ export function ImportHistoryCard({ refreshKey }: { refreshKey?: number }) {
                                     onRolledBack={handleRolledBack}
                                 />
                             ))}
-                        </div>
+                        </List>
 
                         {totalPages > 1 && (
                             <div className="flex items-center justify-between mt-4 pt-2">
-                                <p className="text-xs text-muted-foreground">
+                                <p className="type-footnote text-label-secondary">
                                     {t("importHistory.page", {
                                         page: currentPage,
                                         total: totalPages,

@@ -9,14 +9,22 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { List, ListRow } from "@/components/ui/list";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     AlertTriangle,
     Check,
-    Link2,
+    MoreHorizontal,
     RefreshCw,
     ShieldCheck,
     Trash2,
@@ -66,6 +74,13 @@ function isConfirmable(p: MappingProposal): boolean {
         !isFromHolding(p) &&
         (p.status === "auto" || p.status === "confirmed")
     );
+}
+
+function detailLine(
+    ...parts: Array<string | null | undefined>
+): string | undefined {
+    const line = parts.filter(Boolean).join(" · ");
+    return line || undefined;
 }
 
 export function ResearchMappingDialog({
@@ -210,12 +225,9 @@ export function ResearchMappingDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Link2 className="h-5 w-5" />{" "}
-                        {t("research.mapping.title")}
-                    </DialogTitle>
+                    <DialogTitle>{t("research.mapping.title")}</DialogTitle>
                     <DialogDescription>
                         {t("research.mapping.desc", {
                             name: displayName ?? instrumentKey,
@@ -225,22 +237,22 @@ export function ResearchMappingDialog({
 
                 {/* Proposals */}
                 <section className="space-y-2">
-                    <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold">
+                    <div className="flex items-center justify-between gap-2">
+                        <h3 className="type-headline text-foreground">
                             {t("research.mapping.proposals")}
-                        </h4>
+                        </h3>
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-xs gap-1.5"
                             onClick={() => resolveMutation.mutate()}
                             disabled={resolveMutation.isPending}
                         >
                             <RefreshCw
                                 className={cn(
-                                    "h-3.5 w-3.5",
+                                    "h-4 w-4",
                                     resolveMutation.isPending && "animate-spin",
                                 )}
+                                aria-hidden="true"
                             />
                             {t("research.mapping.reresolve")}
                         </Button>
@@ -249,72 +261,67 @@ export function ResearchMappingDialog({
                     {resolveMutation.isPending ? (
                         <div {...loadingSurfaceProps} className="space-y-2">
                             {Array.from({ length: 3 }).map((_, i) => (
-                                <Skeleton key={i} className="h-14 w-full" />
+                                <Skeleton key={i} className="h-12 w-full" />
                             ))}
                         </div>
                     ) : resolveMutation.isError ? (
-                        <p
-                            role="alert"
-                            className="flex items-center gap-2 py-2 text-sm text-destructive"
-                        >
-                            <AlertTriangle
-                                className="h-4 w-4 shrink-0"
-                                aria-hidden="true"
-                            />
-                            {t("research.mapping.resolveError")}
-                        </p>
+                        <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                            <AlertDescription>
+                                {t("research.mapping.resolveError")}
+                            </AlertDescription>
+                        </Alert>
                     ) : proposals.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">
+                        <p className="py-2 type-callout text-label-secondary">
                             {t("research.mapping.noProposals")}
                         </p>
                     ) : (
-                        <ul className="space-y-2">
+                        <List>
                             {proposals.map((p) => {
                                 const confirmable = isConfirmable(p);
                                 const fromHolding = isFromHolding(p);
                                 return (
-                                    <li
+                                    <ListRow
                                         key={p.provider}
                                         className={cn(
-                                            "flex items-start gap-3 rounded-lg border border-border p-3",
-                                            fromHolding &&
-                                                "border-success/40 bg-success/5",
                                             !confirmable &&
                                                 !fromHolding &&
                                                 "opacity-70",
                                         )}
-                                    >
-                                        {confirmable && (
-                                            <Checkbox
-                                                className="mt-0.5"
-                                                checked={!!selected[p.provider]}
-                                                onCheckedChange={(v) =>
-                                                    setSelected((s) => ({
-                                                        ...s,
-                                                        [p.provider]:
-                                                            v === true,
-                                                    }))
-                                                }
-                                                aria-label={p.provider}
-                                            />
-                                        )}
-                                        {fromHolding && (
-                                            <Check
-                                                className="mt-0.5 h-4 w-4 text-success shrink-0"
-                                                aria-label={t(
-                                                    "research.mapping.fromHolding",
-                                                )}
-                                            />
-                                        )}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="font-semibold text-sm">
+                                        leading={
+                                            confirmable ? (
+                                                <Checkbox
+                                                    checked={!!selected[p.provider]}
+                                                    onCheckedChange={(v) =>
+                                                        setSelected((s) => ({
+                                                            ...s,
+                                                            [p.provider]:
+                                                                v === true,
+                                                        }))
+                                                    }
+                                                    aria-label={p.provider}
+                                                />
+                                            ) : fromHolding ? (
+                                                <Check
+                                                    className="text-success"
+                                                    aria-label={t(
+                                                        "research.mapping.fromHolding",
+                                                    )}
+                                                />
+                                            ) : (
+                                                <span aria-hidden="true" />
+                                            )
+                                        }
+                                        title={
+                                            <span className="inline-flex max-w-full flex-wrap items-center gap-2">
+                                                <span className="font-medium">
                                                     {p.provider}
                                                 </span>
                                                 {p.providerSymbol && (
                                                     <Badge
                                                         variant="secondary"
-                                                        className="font-mono text-2xs"
+                                                        size="sm"
+                                                        className="font-mono"
                                                     >
                                                         {p.providerSymbol}
                                                     </Badge>
@@ -324,57 +331,49 @@ export function ResearchMappingDialog({
                                                 />
                                                 {fromHolding && (
                                                     <Badge
-                                                        variant="outline"
-                                                        className="text-2xs border-success/30 text-success"
+                                                        variant="success"
+                                                        size="sm"
                                                     >
                                                         {t(
                                                             "research.mapping.fromHolding",
                                                         )}
                                                     </Badge>
                                                 )}
-                                            </div>
-                                            {/* resolved name + exchange + currency so the user can catch ticker collisions */}
-                                            {(p.resolvedName ||
-                                                p.exchange ||
-                                                p.currency) && (
-                                                <p className="text-xs text-muted-foreground mt-1 truncate">
-                                                    {[
-                                                        p.resolvedName,
-                                                        p.exchange,
-                                                        p.currency,
-                                                    ]
-                                                        .filter(Boolean)
-                                                        .join(" · ")}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </li>
+                                            </span>
+                                        }
+                                        /* resolved name + exchange + currency so the user can catch ticker collisions */
+                                        subtitle={detailLine(
+                                            p.resolvedName,
+                                            p.exchange,
+                                            p.currency,
+                                        )}
+                                    />
                                 );
                             })}
-                        </ul>
+                        </List>
                     )}
                 </section>
 
                 {/* Existing mappings */}
-                <section className="space-y-2 border-t border-border pt-3">
-                    <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-semibold">
+                <section className="space-y-2 border-t border-border/50 pt-4">
+                    <div className="flex items-center justify-between gap-2">
+                        <h3 className="type-headline text-foreground">
                             {t("research.mapping.existing")}
-                        </h4>
+                        </h3>
                         {existing.length > 0 && (
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-xs gap-1.5"
                                 onClick={() => auditMutation.mutate()}
                                 disabled={auditMutation.isPending}
                             >
                                 <ShieldCheck
                                     className={cn(
-                                        "h-3.5 w-3.5",
+                                        "h-4 w-4",
                                         auditMutation.isPending &&
                                             "motion-safe:animate-pulse",
                                     )}
+                                    aria-hidden="true"
                                 />
                                 {t("research.mapping.audit")}
                             </Button>
@@ -387,93 +386,120 @@ export function ResearchMappingDialog({
                             className="h-10 w-full"
                         />
                     ) : existing.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">
+                        <p className="py-2 type-callout text-label-secondary">
                             {t("research.mapping.noExisting")}
                         </p>
                     ) : (
-                        <ul className="space-y-2">
+                        <List>
                             {existing.map((m) => (
-                                <li
+                                <ListRow
                                     key={m.id}
-                                    className="flex items-center gap-3 rounded-lg border border-border p-2.5"
-                                >
-                                    <span className="font-semibold text-sm w-24 shrink-0">
-                                        {m.provider}
-                                    </span>
-                                    <Badge
-                                        variant="secondary"
-                                        className="font-mono text-2xs"
-                                    >
-                                        {m.provider_symbol}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground truncate flex-1">
-                                        {[
-                                            m.resolved_name,
-                                            m.exchange,
-                                            m.currency,
-                                        ]
-                                            .filter(Boolean)
-                                            .join(" · ")}
-                                    </span>
-                                    {m.verified_at && (
-                                        <Check
-                                            className="h-3.5 w-3.5 text-success shrink-0"
-                                            aria-label={t(
-                                                "research.mapping.verified",
-                                            )}
-                                        />
+                                    title={
+                                        <span className="inline-flex max-w-full items-center gap-2">
+                                            <span className="font-medium">
+                                                {m.provider}
+                                            </span>
+                                            <Badge
+                                                variant="secondary"
+                                                size="sm"
+                                                className="font-mono"
+                                            >
+                                                {m.provider_symbol}
+                                            </Badge>
+                                        </span>
+                                    }
+                                    subtitle={detailLine(
+                                        m.resolved_name,
+                                        m.exchange,
+                                        m.currency,
                                     )}
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                                        onClick={() =>
-                                            void handleRemove(
-                                                m.id,
-                                                m.provider,
-                                                m.provider_symbol,
-                                            )
-                                        }
-                                        aria-label={t(
-                                            "research.mapping.remove",
-                                        )}
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                </li>
+                                    trailing={
+                                        <>
+                                            {m.verified_at && (
+                                                <Check
+                                                    className="h-4 w-4 text-success"
+                                                    aria-label={t(
+                                                        "research.mapping.verified",
+                                                    )}
+                                                />
+                                            )}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-label-secondary"
+                                                        aria-label={t(
+                                                            "research.mapping.rowMenu",
+                                                            {
+                                                                provider:
+                                                                    m.provider,
+                                                            },
+                                                        )}
+                                                    >
+                                                        <MoreHorizontal />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem
+                                                        className="text-destructive focus:text-destructive"
+                                                        onSelect={() =>
+                                                            void handleRemove(
+                                                                m.id,
+                                                                m.provider,
+                                                                m.provider_symbol,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        {t(
+                                                            "research.mapping.remove",
+                                                        )}
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </>
+                                    }
+                                />
                             ))}
-                        </ul>
+                        </List>
                     )}
 
                     {/* Audit discrepancies */}
                     {auditMutation.data &&
                         (discrepancies.length > 0 ? (
-                            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 space-y-1">
-                                <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
-                                    <AlertTriangle className="h-3.5 w-3.5" />{" "}
+                            <Alert variant="destructive">
+                                <AlertTriangle
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
+                                <AlertTitle>
                                     {t("research.mapping.discrepancies")}
-                                </p>
-                                {discrepancies.map((d, i) => (
-                                    <p
-                                        key={i}
-                                        className="text-xs text-foreground/80"
-                                    >
-                                        {d.type === "currency_mismatch"
-                                            ? t(
-                                                  "research.mapping.currencyMismatch",
-                                              )
-                                            : t(
-                                                  "research.mapping.priceOutlier",
-                                              )}
-                                        {d.provider ? ` — ${d.provider}` : ""}
-                                    </p>
-                                ))}
-                            </div>
+                                </AlertTitle>
+                                <AlertDescription>
+                                    {discrepancies.map((d, i) => (
+                                        <span key={i} className="block">
+                                            {d.type === "currency_mismatch"
+                                                ? t(
+                                                      "research.mapping.currencyMismatch",
+                                                  )
+                                                : t(
+                                                      "research.mapping.priceOutlier",
+                                                  )}
+                                            {d.provider
+                                                ? ` — ${d.provider}`
+                                                : ""}
+                                        </span>
+                                    ))}
+                                </AlertDescription>
+                            </Alert>
                         ) : (
-                            <p className="text-xs text-success flex items-center gap-1.5">
-                                <Check className="h-3.5 w-3.5" />{" "}
-                                {t("research.mapping.auditClean")}
-                            </p>
+                            <Alert variant="success" role="status">
+                                <Check className="h-4 w-4" aria-hidden="true" />
+                                <AlertDescription>
+                                    {t("research.mapping.auditClean")}
+                                </AlertDescription>
+                            </Alert>
                         ))}
                 </section>
 
@@ -501,39 +527,42 @@ export function ResearchMappingDialog({
 
 function ProposalStatus({ status }: { status: MappingProposal["status"] }) {
     const { t } = useLanguage();
-    const map: Record<string, { label: string; className: string }> = {
+    const map: Record<
+        string,
+        { label: string; variant: BadgeProps["variant"] }
+    > = {
         auto: {
             label: t("research.mapping.status.auto"),
-            className: "border-primary/30 text-primary",
+            variant: "default",
         },
         confirmed: {
             label: t("research.mapping.status.confirmed"),
-            className: "border-success/30 text-success",
+            variant: "success",
         },
         skipped: {
             label: t("research.mapping.status.skipped"),
-            className: "text-muted-foreground",
+            variant: "muted",
         },
         none: {
             label: t("research.mapping.status.none"),
-            className: "text-muted-foreground",
+            variant: "muted",
         },
         unavailable: {
             label: t("research.mapping.status.unavailable"),
-            className: "text-muted-foreground",
+            variant: "muted",
         },
         error: {
             label: t("research.mapping.status.error"),
-            className: "border-destructive/30 text-destructive",
+            variant: "destructive",
         },
         failed: {
             label: t("research.mapping.status.error"),
-            className: "border-destructive/30 text-destructive",
+            variant: "destructive",
         },
     };
     const entry = map[status] ?? map.none;
     return (
-        <Badge variant="outline" className={cn("text-2xs", entry.className)}>
+        <Badge variant={entry.variant} size="sm">
             {entry.label}
         </Badge>
     );

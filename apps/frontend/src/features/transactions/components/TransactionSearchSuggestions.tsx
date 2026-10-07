@@ -40,14 +40,15 @@ function SuggestionRow({
     onClick: () => void;
 }) {
     return (
-        <button
+        <Button
             type="button"
+            variant="ghost"
             onClick={onClick}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground transition-colors"
+            className="h-auto w-full justify-start gap-2.5 rounded-none px-3 py-2 text-left font-normal text-foreground"
         >
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <Icon className="shrink-0 text-label-secondary" />
             <span className="truncate">{label}</span>
-        </button>
+        </Button>
     );
 }
 
@@ -90,7 +91,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
     };
 
     const container =
-        "rounded-lg border border-border bg-popover text-popover-foreground shadow-lg overflow-hidden";
+        "overflow-hidden rounded-card corner-continuous border border-border/60 bg-popover text-popover-foreground shadow-elevation-3";
 
     if (mode === "amountExact" || mode === "amountRange") {
         const isRange = mode === "amountRange";
@@ -165,11 +166,10 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         onKeyDown={(e) => {
                             if (e.key === "Enter") onApplyAmount();
                         }}
-                        className="h-9"
                     />
                     {isRange && (
                         <>
-                            <span className="text-muted-foreground text-sm">
+                            <span className="type-body text-label-secondary">
                                 –
                             </span>
                             <Input
@@ -186,13 +186,11 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") onApplyAmount();
                                 }}
-                                className="h-9"
                             />
                         </>
                     )}
                     <Button
-                        size="sm"
-                        className="h-9 shrink-0"
+                        className="shrink-0"
                         disabled={!valid}
                         onClick={onApplyAmount}
                     >
@@ -203,12 +201,12 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                     <p
                         id={amountErrorId}
                         role="alert"
-                        className="px-3 pt-2 text-sm text-destructive"
+                        className="px-3 pt-2 type-footnote text-destructive"
                     >
                         {t("search.suggest.amount.invalid")}
                     </p>
                 )}
-                <p className="px-3 pb-2.5 pt-1.5 text-xs text-muted-foreground">
+                <p className="px-3 pb-2.5 pt-1.5 type-footnote text-label-secondary">
                     {t("search.suggest.amount.hint")}
                 </p>
             </div>
@@ -240,11 +238,9 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         onKeyDown={(e) => {
                             if (e.key === "Enter") onApplyYear();
                         }}
-                        className="h-9"
                     />
                     <Button
-                        size="sm"
-                        className="h-9 shrink-0"
+                        className="shrink-0"
                         disabled={!valid}
                         onClick={onApplyYear}
                     >
@@ -286,7 +282,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         placeholder={t("search.suggest.date.from")}
                         allowClear
                     />
-                    <span className="text-muted-foreground text-sm">→</span>
+                    <span className="type-body text-label-secondary">→</span>
                     <DatePicker
                         value={
                             dateEnd ? parseLocalDateFromYmd(dateEnd) : undefined
@@ -300,8 +296,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                         allowClear
                     />
                     <Button
-                        size="sm"
-                        className="h-9 shrink-0 ml-auto"
+                        className="ml-auto shrink-0"
                         disabled={!valid}
                         onClick={onApplyDates}
                     >
@@ -312,7 +307,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
                     <p
                         id={dateErrorId}
                         role="alert"
-                        className="px-3 pb-3 text-sm text-destructive"
+                        className="px-3 pb-3 type-footnote text-destructive"
                     >
                         {t("search.suggest.date.invalidOrder")}
                     </p>
@@ -323,7 +318,7 @@ export function TransactionSearchSuggestions({ query, onApply, close }: Props) {
 
     return (
         <div className={container}>
-            <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border/60">
+            <div className="border-b border-border/60 px-3 py-2 type-footnote font-medium text-label-secondary">
                 {t("search.suggest.header")}
             </div>
             <div className="max-h-[60vh] overflow-y-auto py-1">
@@ -397,13 +392,13 @@ function FormHeader({
             <Button
                 variant="ghost"
                 size="icon"
-                className="h-7 w-7 text-muted-foreground"
+                className="h-8 w-8 text-label-secondary"
                 onClick={onBack}
                 aria-label={backLabel}
             >
                 <ArrowLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="type-footnote font-medium text-label-secondary">
                 {label}
             </span>
         </div>

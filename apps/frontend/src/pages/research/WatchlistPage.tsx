@@ -1,17 +1,31 @@
 import { PageError } from "@/components/shared/PageError";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-} from "@/components/ui/tooltip";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useNavigate } from "react-router";
+import type { LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { List, ListRow } from "@/components/ui/list";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { LineChart, Plus, Trash2, WifiOff } from "lucide-react";
+import {
+    Check,
+    LineChart,
+    MoreHorizontal,
+    Plus,
+    Search,
+    Trash2,
+    WifiOff,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -36,17 +50,30 @@ import {
     useWatchlist,
 } from "@/features/research/useWatchlistData";
 import { PageShell } from "@/components/shared/PageShell";
-import { TextLink } from "@/components/shared/TextLink";
 
-const ASSET_CLASS_COLORS: Record<string, string> = {
-    stock: "bg-chart-3/10 text-chart-3 border-chart-3/20",
-    etf: "bg-chart-1/10 text-chart-1 border-chart-1/20",
-    crypto: "bg-warning/10 text-warning border-warning/20",
+const ASSET_CLASS_ICON: Record<WatchlistItem["asset_class"], LucideIcon> = {
+    stock: PAGE_ICONS["/portfolio/stocks"],
+    etf: PAGE_ICONS["/portfolio/stocks"],
+    crypto: PAGE_ICONS["/portfolio/crypto"],
+    metals: PAGE_ICONS["/portfolio/metals"],
 };
 
+const ASSET_CLASS_LABEL_KEY: Record<WatchlistItem["asset_class"], string> = {
+    stock: "addWatchlist.stock",
+    etf: "addWatchlist.etf",
+    crypto: "addWatchlist.crypto",
+    metals: "addWatchlist.metals",
+};
+
+/**
+ * Watchlist: one row per prospective investment with its current and target
+ * price; the row opens its chart, the ••• menu holds Market lookup and the
+ * confirmed removal (notes and the target price have no restore endpoint).
+ */
 export default function WatchlistPage() {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
+    const navigate = useNavigate();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const isOnline = useOnlineStatus();
@@ -94,27 +121,34 @@ export default function WatchlistPage() {
     const watchlistEmptyTitle = watchlistEmptyLines[0] ?? t("watchlist.empty");
     const watchlistEmptyDescriptionLines = watchlistEmptyLines.slice(1);
 
+    /* The row surface opens the chart; the row menu sits inside it, so its
+       events must not fall through to the row. */
+    const stopRowActivation = (event: MouseEvent | KeyboardEvent) =>
+        event.stopPropagation();
+
+    const addButton = (
+        <Button onClick={() => setAddDialogOpen(true)}>
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {t("watchlist.addButton")}
+        </Button>
+    );
+
     return (
         <PageShell className="">
             <PageHeader
                 title={t("watchlist.title")}
                 subtitle={t("watchlist.subtitle")}
                 icon={PAGE_ICONS["/research/watchlist"]}
-                actions={
-                    <Button onClick={() => setAddDialogOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        {t("watchlist.addButton")}
-                    </Button>
-                }
+                actions={addButton}
             />
 
             {quotesUnavailable && data?.items && data.items.length > 0 && (
-                <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
-                    <WifiOff className="h-4 w-4 mt-0.5 text-warning shrink-0" />
-                    <div className="flex-1 text-foreground/80">
+                <Alert variant="warning">
+                    <WifiOff className="h-4 w-4" aria-hidden="true" />
+                    <AlertDescription>
                         {t("watchlist.quotesOffline")}
-                    </div>
-                </div>
+                    </AlertDescription>
+                </Alert>
             )}
 
             {loadError && data && (
@@ -129,17 +163,14 @@ export default function WatchlistPage() {
                     onRetry={() => void refetch()}
                 />
             ) : isLoading ? (
-                <div
-                    {...loadingSurfaceProps}
-                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-                >
+                <div {...loadingSurfaceProps} className="space-y-2">
                     {[1, 2, 3].map((i) => (
-                        <Skeleton key={i} className="h-40" />
+                        <Skeleton key={i} className="h-14 w-full" />
                     ))}
                 </div>
             ) : !data?.items?.length ? (
                 <Card>
-                    <CardContent>
+                    <CardContent variant="state">
                         <EmptyState
                             icon={PAGE_ICONS["/research/watchlist"]}
                             title={watchlistEmptyTitle}
@@ -159,17 +190,12 @@ export default function WatchlistPage() {
                                     </>
                                 ) : undefined
                             }
-                            action={
-                                <Button onClick={() => setAddDialogOpen(true)}>
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    {t("watchlist.addButton")}
-                                </Button>
-                            }
+                            action={addButton}
                         />
                     </CardContent>
                 </Card>
             ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <List>
                     {data.items.map((item) => {
                         const quote = item.symbol
                             ? priceMap.get(item.symbol)
@@ -198,188 +224,167 @@ export default function WatchlistPage() {
                             item.created_at,
                             appSettings.dateFormat,
                         );
+                        const Icon = ASSET_CLASS_ICON[item.asset_class];
+                        const name = item.name || item.symbol || "";
+                        const subtitle = [
+                            t(ASSET_CLASS_LABEL_KEY[item.asset_class]),
+                            sinceAddedPct != null
+                                ? `${t("watchlist.sinceAdded", { date: addedDate })} ${formatPercent(sinceAddedPct, { digits: 1, signed: true })}`
+                                : undefined,
+                            item.notes || undefined,
+                        ]
+                            .filter(Boolean)
+                            .join(" · ");
+                        const openChart = () => setSelectedItemId(item.id);
 
                         return (
-                            <Card
+                            <ListRow
                                 key={item.id}
-                                className={cn(
-                                    // cv-auto: skip layout + the backdrop-filter blur composite for
-                                    // off-screen cards in this uncapped grid (compositor cost scales
-                                    // with visible count, not total). Appearance unchanged on screen.
-                                    "cv-auto transition-[box-shadow,border-color] hover:shadow-glass-soft hover:border-primary/50",
-                                    isBelowTarget && "ring-2 ring-success/50",
-                                )}
-                            >
-                                <CardHeader className="pb-2">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0 flex-1 space-y-1">
-                                            <CardTitle variant="sm">
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        {item.symbol ? (
-                                                            <TextLink
-                                                                className="block truncate"
-                                                                to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
-                                                            >
-                                                                {item.name}
-                                                            </TextLink>
-                                                        ) : (
-                                                            <span
-                                                                className="block truncate"
-                                                                tabIndex={0}
-                                                            >
-                                                                {item.name}
-                                                            </span>
-                                                        )}
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>
-                                                        {item.name}
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </CardTitle>
-                                            {item.symbol && (
-                                                <Badge
-                                                    variant="outline"
-                                                    className="font-mono text-xs"
-                                                >
-                                                    {item.symbol}
-                                                </Badge>
-                                            )}
-                                        </div>
-                                        <Badge
-                                            className={cn(
-                                                "shrink-0 text-xs",
-                                                ASSET_CLASS_COLORS[
-                                                    item.asset_class
-                                                ],
-                                            )}
-                                        >
-                                            {item.asset_class.toUpperCase()}
-                                        </Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">
-                                                {t("watchlist.targetPrice")}
-                                            </p>
-                                            <p className="text-xl font-semibold text-primary">
+                                asChild
+                                leading={Icon ? <Icon /> : undefined}
+                                title={
+                                    <span className="inline-flex max-w-full items-center gap-2">
+                                        <span className="truncate">{name}</span>
+                                        {item.symbol && (
+                                            <Badge
+                                                variant="outline"
+                                                size="sm"
+                                                className="font-mono"
+                                            >
+                                                {item.symbol}
+                                            </Badge>
+                                        )}
+                                    </span>
+                                }
+                                subtitle={subtitle}
+                                trailing={
+                                    <>
+                                        <span className="flex flex-col items-end">
+                                            <span className="text-foreground">
+                                                {currentPrice != null
+                                                    ? formatDisplayCurrency(
+                                                          currentPrice,
+                                                          {
+                                                              currency:
+                                                                  item.currency,
+                                                          },
+                                                      )
+                                                    : "—"}
+                                            </span>
+                                            <span className="inline-flex items-center gap-1.5 type-footnote">
+                                                {t("watchlist.targetPrice")}{" "}
                                                 {formatDisplayCurrency(
                                                     item.target_price,
-                                                    {
-                                                        currency: item.currency,
-                                                    },
+                                                    { currency: item.currency },
                                                 )}
-                                            </p>
-                                        </div>
-                                        {currentPrice != null && (
-                                            <div className="text-right">
-                                                {priceDiff! > 0 ? (
-                                                    // Above target: show percentage
+                                                {isBelowTarget ? (
+                                                    <Badge
+                                                        variant="success"
+                                                        size="sm"
+                                                        className="gap-1"
+                                                        title={t(
+                                                            "watchlist.atTarget",
+                                                        )}
+                                                    >
+                                                        <Check
+                                                            className="h-3 w-3"
+                                                            aria-hidden="true"
+                                                        />
+                                                        {t(
+                                                            "watchlist.atTargetShort",
+                                                        )}
+                                                    </Badge>
+                                                ) : priceDiff != null &&
+                                                  priceDiff > 0 ? (
                                                     <DeltaPill
-                                                        value={priceDiff!}
+                                                        value={priceDiff}
                                                         invert
                                                         label={`${formatPercent(
-                                                            Math.abs(
-                                                                priceDiff!,
-                                                            ),
-                                                            {
-                                                                digits: 1,
-                                                            },
-                                                        )} ${t(
-                                                            "watchlist.aboveTarget",
-                                                        )}`}
+                                                            Math.abs(priceDiff),
+                                                            { digits: 1 },
+                                                        )} ${t("watchlist.aboveTarget")}`}
                                                     />
-                                                ) : (
-                                                    // At or below target: show current price
-                                                    <>
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {t(
-                                                                "watchlist.currentPrice",
-                                                            )}
-                                                        </p>
-                                                        <p className="text-lg font-medium">
-                                                            {formatDisplayCurrency(
-                                                                currentPrice,
-                                                                {
-                                                                    currency:
-                                                                        item.currency,
-                                                                },
-                                                            )}
-                                                        </p>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {isBelowTarget && (
-                                        <div className="bg-success/10 text-success text-xs px-2 py-1 rounded text-center font-medium">
-                                            {t("watchlist.atTarget")}
-                                        </div>
-                                    )}
-
-                                    {sinceAddedPct != null && (
-                                        <div className="flex items-center justify-between rounded-md bg-muted/40 px-2 py-1.5 text-xs">
-                                            <span className="text-muted-foreground">
-                                                {t("watchlist.sinceAdded", {
-                                                    date: addedDate,
-                                                })}
+                                                ) : null}
                                             </span>
-                                            <DeltaPill
-                                                value={sinceAddedPct}
-                                                label={formatPercent(
-                                                    sinceAddedPct,
-                                                    {
-                                                        digits: 1,
-                                                        signed: true,
-                                                    },
-                                                )}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {item.notes && (
-                                        <p className="text-xs text-muted-foreground line-clamp-2">
-                                            {item.notes}
-                                        </p>
-                                    )}
-
-                                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            aria-label={`${t("watchlist.openChart")}: ${item.name} (${item.symbol})`}
-                                            onClick={() =>
-                                                setSelectedItemId(item.id)
-                                            }
-                                        >
-                                            <LineChart className="mr-2 h-4 w-4" />
-                                            {t("watchlist.openChart")}
-                                        </Button>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
+                                        </span>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                                    aria-label={`${t("aria.removeFromWatchlist")}: ${item.name} (${item.symbol})`}
-                                                    onClick={() =>
+                                                    className="h-8 w-8 text-label-secondary"
+                                                    aria-label={t(
+                                                        "watchlist.rowMenu",
+                                                        { name },
+                                                    )}
+                                                    onClick={stopRowActivation}
+                                                    onKeyDown={stopRowActivation}
+                                                >
+                                                    <MoreHorizontal />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent
+                                                align="end"
+                                                onClick={stopRowActivation}
+                                                onKeyDown={stopRowActivation}
+                                            >
+                                                <DropdownMenuItem
+                                                    onSelect={openChart}
+                                                >
+                                                    <LineChart className="mr-2 h-4 w-4 text-label-secondary" />
+                                                    {t("watchlist.openChart")}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    disabled={!item.symbol}
+                                                    onSelect={() =>
+                                                        item.symbol &&
+                                                        navigate(
+                                                            `/research/market?symbol=${encodeURIComponent(item.symbol)}`,
+                                                        )
+                                                    }
+                                                >
+                                                    <Search className="mr-2 h-4 w-4 text-label-secondary" />
+                                                    {t("watchlist.openLookup")}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    className="text-destructive focus:text-destructive"
+                                                    onSelect={() =>
                                                         void handleRemove(item)
                                                     }
                                                 >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                            </TooltipTrigger>
-                                            <TooltipContent>{`${t("aria.removeFromWatchlist")}: ${item.name} (${item.symbol})`}</TooltipContent>
-                                        </Tooltip>
-                                    </div>
-                                </CardContent>
-                            </Card>
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    {t(
+                                                        "aria.removeFromWatchlist",
+                                                    )}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </>
+                                }
+                            >
+                                <div
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-label={`${t("watchlist.openChart")}: ${name}${item.symbol ? ` (${item.symbol})` : ""}`}
+                                    className={cn(
+                                        isBelowTarget && "bg-success/[0.06]",
+                                    )}
+                                    onClick={openChart}
+                                    onKeyDown={(event) => {
+                                        if (
+                                            event.key === "Enter" ||
+                                            event.key === " "
+                                        ) {
+                                            event.preventDefault();
+                                            openChart();
+                                        }
+                                    }}
+                                />
+                            </ListRow>
                         );
                     })}
-                </div>
+                </List>
             )}
 
             <AddToWatchlistDialog

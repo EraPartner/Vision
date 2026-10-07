@@ -1,5 +1,6 @@
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { useAdapters } from "./useAdapters";
 
@@ -8,33 +9,34 @@ export function SupportedBanksCard() {
     const { adapters, loading } = useAdapters();
 
     return (
-        <Card className="bg-muted/30">
-            <CardContent variant="headerless">
-                <p className="text-sm font-semibold text-foreground mb-2">
+        <Card>
+            <CardHeader className="pb-3">
+                <CardTitle variant="sm">
                     {t("importPage.supportedBanks")}
-                </p>
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-2">
                     {loading ? (
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />{" "}
+                        <Badge
+                            variant="secondary"
+                            role="status"
+                            className="gap-1.5"
+                        >
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             {t("importPage.supportedLoading")}
-                        </span>
+                        </Badge>
                     ) : adapters.length > 0 ? (
                         adapters.map((adapter) => (
-                            <span
-                                key={adapter.key}
-                                className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary"
-                            >
-                                {adapter.name}
-                            </span>
+                            <Badge key={adapter.key}>{adapter.name}</Badge>
                         ))
                     ) : (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="type-footnote text-label-secondary">
                             {t("importPage.noSupportedParsers")}
                         </span>
                     )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">
+                <p className="type-footnote text-label-secondary">
                     {t("importPage.noSupportedBank")}
                 </p>
             </CardContent>

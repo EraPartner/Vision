@@ -140,7 +140,7 @@ describe("CustomChartBuilderModal", () => {
         expect(
             screen.queryByRole("button", { name: "Remove FOOD:GROCERIES" }),
         ).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Save chart" })).toBeDisabled();
     });
 
     it("names chart actions and identifies their chart", async () => {
@@ -198,7 +198,7 @@ describe("CustomChartBuilderModal", () => {
         );
 
         // Assert — no name entered, no categories selected
-        const saveBtn = await screen.findByRole("button", { name: "Save" });
+        const saveBtn = await screen.findByRole("button", { name: "Save chart" });
         expect(saveBtn).toBeDisabled();
     });
 
@@ -221,7 +221,7 @@ describe("CustomChartBuilderModal", () => {
         await user.type(nameInput, "My chart");
 
         // Assert
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         expect(saveBtn).toBeDisabled();
     });
 
@@ -253,7 +253,7 @@ describe("CustomChartBuilderModal", () => {
         await user.click(categoryOption);
 
         // Assert
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         expect(saveBtn).not.toBeDisabled();
     });
 
@@ -295,7 +295,7 @@ describe("CustomChartBuilderModal", () => {
 
         // Act — close popover by pressing Escape, then save
         await user.keyboard("{Escape}");
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         await user.click(saveBtn);
 
         // Assert
@@ -474,7 +474,7 @@ describe("CustomChartBuilderModal", () => {
         await user.click(categoryOption);
 
         await user.keyboard("{Escape}");
-        await user.click(screen.getByRole("button", { name: "Save" }));
+        await user.click(screen.getByRole("button", { name: "Save chart" }));
 
         // Wait for the failed mutation to settle
         await new Promise((r) => setTimeout(r, 400));

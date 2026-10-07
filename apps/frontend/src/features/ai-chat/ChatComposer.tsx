@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { Send, Square, Wrench } from "lucide-react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { Send, Square } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
     Select,
     SelectContent,
@@ -11,7 +13,6 @@ import {
 } from "@/components/ui/select";
 import { useOllamaModels, useOllamaStatus } from "@/hooks/useOllamaStatus";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { cn } from "@/lib/utils";
 
 interface ChatComposerProps {
     onSend: (message: string) => void;
@@ -39,6 +40,8 @@ export function ChatComposer({
     const { t } = useLanguage();
     const [value, setValue] = useState("");
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const modelId = useId();
+    const toolsId = useId();
 
     const { data: status } = useOllamaStatus();
     const { data: modelsData } = useOllamaModels(Boolean(status?.ok));
@@ -74,54 +77,55 @@ export function ChatComposer({
     };
 
     return (
-        <div className="border-t border-border/60 bg-card px-4 py-3">
+        <div className="border-t border-border/50 px-4 py-3">
             <div className="mx-auto flex max-w-3xl flex-col gap-2">
-                <div className="flex items-center gap-2 text-2xs text-muted-foreground">
-                    <span className="eyebrow">{t("aiChat.model")}</span>
-                    <Select
-                        value={effectiveModel}
-                        onValueChange={onModelChange}
-                        disabled={!status?.ok || models.length === 0}
-                    >
-                        <SelectTrigger className="h-7 w-auto min-w-[160px] text-xs">
-                            <SelectValue
-                                placeholder={t("aiChat.selectModel")}
-                            />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {models.map((m) => (
-                                <SelectItem
-                                    key={m.name}
-                                    value={m.name}
-                                    className="text-xs"
-                                >
-                                    {m.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <button
-                        type="button"
-                        onClick={() => onUseToolsChange(!useTools)}
-                        disabled={isStreaming}
-                        aria-pressed={useTools}
-                        title={
-                            useTools
-                                ? t("aiChat.toolsOn")
-                                : t("aiChat.toolsOff")
-                        }
-                        className={cn(
-                            "inline-flex h-7 items-center gap-1 rounded-md border px-2 eyebrow transition-colors",
-                            useTools
-                                ? "border-primary/40 bg-primary/10 text-primary"
-                                : "border-border/60 bg-transparent text-muted-foreground hover:bg-muted/40",
-                        )}
-                    >
-                        <Wrench className="h-3 w-3" />
-                        {useTools ? t("aiChat.toolsOn") : t("aiChat.toolsOff")}
-                    </button>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <div className="flex items-center gap-2">
+                        <Label
+                            htmlFor={modelId}
+                            className="type-footnote text-label-secondary"
+                        >
+                            {t("aiChat.model")}
+                        </Label>
+                        <Select
+                            value={effectiveModel}
+                            onValueChange={onModelChange}
+                            disabled={!status?.ok || models.length === 0}
+                        >
+                            <SelectTrigger
+                                id={modelId}
+                                className="h-8 w-auto min-w-40"
+                            >
+                                <SelectValue
+                                    placeholder={t("aiChat.selectModel")}
+                                />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {models.map((m) => (
+                                    <SelectItem key={m.name} value={m.name}>
+                                        {m.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Switch
+                            id={toolsId}
+                            checked={useTools}
+                            onCheckedChange={onUseToolsChange}
+                            disabled={isStreaming}
+                            aria-label={t("aiChat.tools")}
+                        />
+                        <Label
+                            htmlFor={toolsId}
+                            className="type-footnote text-label-secondary"
+                        >
+                            {useTools ? t("aiChat.toolsOn") : t("aiChat.toolsOff")}
+                        </Label>
+                    </div>
                 </div>
-                <div className="flex items-end gap-2 rounded-xl border border-border/60 bg-background/80 p-2 focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/60 transition-colors">
+                <div className="relative">
                     <Textarea
                         ref={textareaRef}
                         value={value}
@@ -130,37 +134,38 @@ export function ChatComposer({
                         }
                         onKeyDown={handleKeyDown}
                         placeholder={t("aiChat.composerPlaceholder")}
+                        aria-label={t("aiChat.composerPlaceholder")}
                         disabled={disabled || isStreaming}
                         rows={1}
-                        className="min-h-[40px] max-h-[200px] resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:outline-none"
+                        className="max-h-[200px] min-h-11 resize-none py-2.5 pr-14"
                     />
-                    {isStreaming ? (
-                        <Button
-                            type="button"
-                            onClick={onCancel}
-                            variant="outline"
-                            size="icon"
-                            aria-label={t("aiChat.stop")}
-                            className="shrink-0"
-                        >
-                            <Square className="h-4 w-4" />
-                        </Button>
-                    ) : (
-                        <Button
-                            type="button"
-                            onClick={submit}
-                            disabled={!canSend}
-                            size="icon"
-                            aria-label={t("aiChat.send")}
-                            className="shrink-0"
-                        >
-                            <Send className="h-4 w-4" />
-                        </Button>
-                    )}
+                    <div className="absolute bottom-1 right-1">
+                        {isStreaming ? (
+                            <Button
+                                type="button"
+                                onClick={onCancel}
+                                variant="outline"
+                                size="icon"
+                                aria-label={t("aiChat.stop")}
+                            >
+                                <Square className="h-4 w-4" />
+                            </Button>
+                        ) : (
+                            <Button
+                                type="button"
+                                onClick={submit}
+                                disabled={!canSend}
+                                size="icon"
+                                aria-label={t("aiChat.send")}
+                            >
+                                <Send className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                <div className="flex justify-between text-2xs text-muted-foreground/80">
+                <div className="flex justify-between type-caption text-label-tertiary">
                     <span>{t("aiChat.enterHint")}</span>
-                    <span>
+                    <span className="tabular-nums">
                         {value.length}/{MAX_LEN}
                     </span>
                 </div>

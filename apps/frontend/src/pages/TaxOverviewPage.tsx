@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { FileDown, LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
@@ -14,10 +16,11 @@ import { TaxCurrentInputsCard } from "@/features/tax/TaxCurrentInputsCard";
 import { YearlyTaxChartCard } from "@/features/tax/YearlyTaxChartCard";
 import { TaxAutomationCard } from "@/features/tax/TaxAutomationCard";
 import { TaxNoProfileCard } from "@/features/tax/TaxNoProfileCard";
-import { Card, CardContent } from "@/components/ui/card";
+import { TaxYearSwitcher } from "@/features/tax/TaxYearSwitcher";
+import { YearActionsMenu } from "@/features/tax/YearActionsMenu";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SlidersHorizontal } from "lucide-react";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import SuggestedDeductionsCard from "@/features/tax/SuggestedDeductionsCard";
 import DeductionCandidatesCard from "@/features/tax/DeductionCandidatesCard";
@@ -27,6 +30,7 @@ import {
     type WidgetDefinition,
 } from "@/hooks/useWidgetVisibility";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { PageError } from "@/components/shared/PageError";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageShell } from "@/components/shared/PageShell";
@@ -100,6 +104,69 @@ export default function TaxOverviewPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("budgetTax", WIDGETS);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [customizeOpen, setCustomizeOpen] = useState(false);
+
+    const header = (
+        <PageHeader
+            title={t("tax.page.title")}
+            subtitle={t("tax.page.subtitle", { year: viewedYear })}
+            icon={PAGE_ICONS["/tax"]}
+            actions={
+                <div
+                    className="flex flex-wrap items-center gap-2"
+                    data-print-actions
+                >
+                    <TaxYearSwitcher />
+                    <YearActionsMenu
+                        year={viewedYear}
+                        pageItems={
+                            <>
+                                <DropdownMenuItem
+                                    onSelect={() => setExportOpen(true)}
+                                >
+                                    <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("tax.menu.exportPdf")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onSelect={() => setCustomizeOpen(true)}
+                                >
+                                    <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("tax.menu.customize")}
+                                </DropdownMenuItem>
+                            </>
+                        }
+                    />
+                    <TaxProfileDialog
+                        targetYear={viewedYear}
+                        trigger={
+                            <Button>
+                                <SlidersHorizontal />
+                                {hasProfile
+                                    ? t("tax.profile.edit")
+                                    : t("tax.profile.setup")}
+                            </Button>
+                        }
+                    />
+                    <ExportDialog
+                        defaultType="tax"
+                        trigger={null}
+                        open={exportOpen}
+                        onOpenChange={setExportOpen}
+                    />
+                    <WidgetVisibilityDialog
+                        open={customizeOpen}
+                        onOpenChange={setCustomizeOpen}
+                        widgets={widgetDefs}
+                        isVisible={isVisible}
+                        setWidgetVisible={setWidgetVisible}
+                        setAllVisible={setAllVisible}
+                        resetToDefaults={resetToDefaults}
+                    />
+                </div>
+            }
+        />
+    );
 
     // Same full-page error pattern as StatisticsPage. This must replace the whole
     // stats-dependent tree, not render as an extra banner: the widget cards below
@@ -109,20 +176,12 @@ export default function TaxOverviewPage() {
     if (stats.isError) {
         return (
             <PageShell className="" data-print-page="tax">
-                <PageHeader
-                    title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
-                    icon={PAGE_ICONS["/tax"]}
+                {header}
+                <PageError
+                    message={t("tax.page.loadError", {
+                        msg: stats.error?.message ?? "",
+                    })}
                 />
-                <Card>
-                    <CardContent variant="headerless">
-                        <p className="text-destructive">
-                            {t("tax.page.loadError", {
-                                msg: stats.error?.message ?? "",
-                            })}
-                        </p>
-                    </CardContent>
-                </Card>
             </PageShell>
         );
     }
@@ -130,44 +189,9 @@ export default function TaxOverviewPage() {
     return (
         <TooltipProvider>
             <PageShell className="" data-print-page="tax">
-                <PageHeader
-                    title={t("tax.page.title")}
-                    subtitle={t("tax.page.subtitle", { year: viewedYear })}
-                    icon={PAGE_ICONS["/tax"]}
-                    actions={
-                        <div
-                            className="flex flex-wrap items-center gap-2"
-                            data-print-actions
-                        >
-                            <ExportDialog defaultType="tax" />
-                            <TaxProfileDialog
-                                targetYear={viewedYear}
-                                trigger={
-                                    <Button
-                                        variant="default"
-                                        size="sm"
-                                        className="gap-2"
-                                    >
-                                        <SlidersHorizontal className="h-4 w-4" />
-                                        {hasProfile
-                                            ? t("tax.profile.edit")
-                                            : t("tax.profile.setup")}
-                                    </Button>
-                                }
-                            />
-                            <WidgetVisibilityDialog
-                                widgets={widgetDefs}
-                                isVisible={isVisible}
-                                setWidgetVisible={setWidgetVisible}
-                                setAllVisible={setAllVisible}
-                                resetToDefaults={resetToDefaults}
-                            />
-                        </div>
-                    }
-                />
+                {header}
                 {/* The year is a document, not a filter: its identity, state, region,
-            rates and historical-year notice read as one masthead instead of a
-            badge row plus a separate banner. */}
+                    rates and historical-year notice read as one hero. */}
                 <TaxFilingMasthead
                     profile={profile}
                     calculation={calculation}
@@ -200,7 +224,7 @@ export default function TaxOverviewPage() {
                             />
                         )}
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                             {isVisible("pitBreakdown") && (
                                 <PitBreakdownCard
                                     calculation={calculation}
@@ -220,7 +244,7 @@ export default function TaxOverviewPage() {
                             {isVisible("taxRules") && <TaxRulesCard />}
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                             {isVisible("incomeBreakdown") && (
                                 <MonthlyIncomeTaxCard
                                     data={monthlyIncomeTax}
@@ -234,9 +258,7 @@ export default function TaxOverviewPage() {
                                 profile={profile}
                                 calculation={calculation}
                             />
-                            <div>
-                                <SuggestedDeductionsCard />
-                            </div>
+                            <SuggestedDeductionsCard />
                             <DeductionCandidatesCard />
                         </div>
 
