@@ -1,12 +1,21 @@
 /** Dated custody moves are replay events, never acquisitions or disposals. */
 import Decimal from "decimal.js";
-import { toDecimal } from "./money.js";
+import { toDecimal } from "./money.ts";
+import type {
+  CostBasisMethod,
+  CustodyLot,
+  PartitionedTxnLike,
+  ProjectedCustodyTxn,
+} from "./portfolio.ts";
+
+type PartitionKey = number | null;
 
 const ZERO = toDecimal(0);
-const keyOf = (row) => (row.account_id == null ? null : Number(row.account_id));
-const chronological = (a, b) =>
+const keyOf = (row: PartitionedTxnLike): PartitionKey =>
+  row.account_id == null ? null : Number(row.account_id);
+const chronological = (a: PartitionedTxnLike, b: PartitionedTxnLike): number =>
   a.date.localeCompare(b.date) || Number(a.id ?? 0) - Number(b.id ?? 0);
-const acquisitionOrder = (a, b) =>
+const acquisitionOrder = (a: CustodyLot, b: CustodyLot): number =>
   a.acquiredDate.localeCompare(b.acquiredDate) ||
   Number(a.acquisitionId) - Number(b.acquisitionId);
 
@@ -14,32 +23,34 @@ const acquisitionOrder = (a, b) =>
  * Project one investment's canonical events into account streams. Temporary
  * transfer legs carry remaining original lots; they are never stored/editable.
  * Amount/fees are zero on legs, so transfers contribute no income or capital.
- * @param {Array<Record<string, any>>} txns
- * @param {'weighted_avg'|'fifo'|'lifo'} [method]
- * @param {{defaultFxMultiplier?: number|string}} [opts]
- * @returns {Map<number|null, Array<Record<string, any>>>}
  */
 export function projectAssetTransferPartitions(
-  txns,
-  method = "weighted_avg",
-  opts = {},
-) {
-  const partitions = new Map();
-  const custody = new Map();
-  const lotsAt = (key) => {
+  txns: readonly PartitionedTxnLike[],
+  method: CostBasisMethod = "weighted_avg",
+  opts: { defaultFxMultiplier?: number | string | Decimal } = {},
+): Map<PartitionKey, ProjectedCustodyTxn[]> {
+  const partitions = new Map<PartitionKey, ProjectedCustodyTxn[]>();
+  const custody = new Map<PartitionKey, CustodyLot[]>();
+  const lotsAt = (key: PartitionKey): CustodyLot[] => {
     if (!custody.has(key)) custody.set(key, []);
-    return custody.get(key);
+    // Set just above when missing.
+    return custody.get(key)!;
   };
-  const push = (key, row) => {
+  const push = (key: PartitionKey, row: ProjectedCustodyTxn): void => {
     if (!partitions.has(key)) partitions.set(key, []);
-    partitions.get(key).push(row);
+    partitions.get(key)!.push(row);
   };
-  const held = (lots) => lots.reduce((sum, lot) => sum.plus(lot.units), ZERO);
-  const consume = (key, requested, predicate = () => true) => {
+  const held = (lots: readonly CustodyLot[]): Decimal =>
+    lots.reduce((sum, lot) => sum.plus(lot.units), ZERO);
+  const consume = (
+    key: PartitionKey,
+    requested: Decimal,
+    predicate: (lot: CustodyLot) => boolean = () => true,
+  ): CustodyLot[] => {
     const lots = lotsAt(key);
     const eligible = lots.filter(predicate);
     const total = held(eligible);
-    const taken = [];
+    const taken: CustodyLot[] = [];
     let remaining = Decimal.min(requested, total);
     if (method === "weighted_avg") {
       const ratio = total.gt(0) ? remaining.div(total) : ZERO;
@@ -51,7 +62,7 @@ export function projectAssetTransferPartitions(
             ? remaining
             : Decimal.min(remaining, lot.units.times(ratio));
         const lotRatio = lot.units.gt(0) ? units.div(lot.units) : ZERO;
-        const part = {
+        const part: CustodyLot = {
           ...lot,
           units,
           costBasis: lot.costBasis.times(lotRatio),
@@ -70,7 +81,7 @@ export function projectAssetTransferPartitions(
         if (lot.units.lte(0)) continue;
         const units = Decimal.min(remaining, lot.units);
         const ratio = units.div(lot.units);
-        const part = {
+        const part: CustodyLot = {
           ...lot,
           units,
           costBasis: lot.costBasis.times(ratio),
@@ -118,7 +129,8 @@ export function projectAssetTransferPartitions(
       consume(key, units);
       push(key, row);
     } else if (row.type === "asset_adjustment") {
-      if (!Number.isInteger(key) || key <= 0 || !units.gt(0))
+      // Number.isInteger(key) rules out null before the comparison runs.
+      if (!Number.isInteger(key) || (key as number) <= 0 || !units.gt(0))
         throw new Error(
           "Asset adjustment requires an account and positive units",
         );
@@ -130,8 +142,10 @@ export function projectAssetTransferPartitions(
             row.basis_policy !== "carried"))
       )
         throw new Error("Asset adjustment basis policy is unresolved");
-      const eligibleHashes = new Set(row.eligible_source_record_hashes || []);
-      const eligible = (lot) =>
+      const eligibleHashes = new Set<string | undefined>(
+        row.eligible_source_record_hashes || [],
+      );
+      const eligible = (lot: CustodyLot): boolean =>
         !reversal ||
         (lot.acquisitionType === "gift" &&
           lot.costBasis.eq(0) &&
@@ -192,13 +206,13 @@ export function projectAssetTransferPartitions(
       );
       const receivedUnits = units.minus(feeUnits);
       const ratio = receivedUnits.div(units);
-      const received = moved.map((lot) => ({
+      const received = moved.map((lot): CustodyLot => ({
         ...lot,
         units: lot.units.times(ratio),
         costBasis: lot.costBasis.times(ratio),
         costBasisConv: lot.costBasisConv.times(ratio),
       }));
-      const feeLots = moved.map((lot) => ({
+      const feeLots = moved.map((lot): CustodyLot => ({
         ...lot,
         units: lot.units.times(feeUnits.div(units)),
         costBasis: lot.costBasis.times(feeUnits.div(units)),
@@ -206,7 +220,7 @@ export function projectAssetTransferPartitions(
       }));
       const receivedBasis = transferredBasis.times(ratio);
       const receivedBasisConv = transferredBasisConv.times(ratio);
-      const leg = {
+      const leg: ProjectedCustodyTxn = {
         ...row,
         amount: 0,
         fees: 0,

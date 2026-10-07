@@ -1,16 +1,18 @@
-export declare const AI_CHAT_STREAM_EVENT: Readonly<{
-  USER_MESSAGE: "user_message";
-  TOKEN: "token";
-  TOOL_CALL: "tool_call";
-  TOOL_RESULT: "tool_result";
-  COMPLETE: "complete";
-  ERROR: "error";
-}>;
-
-export declare const AI_CHAT_STREAM_EVENT_NAMES: readonly AiChatStreamEventName[];
+/** Canonical Server-Sent Event names for the AI chat stream. */
+export const AI_CHAT_STREAM_EVENT = Object.freeze({
+  USER_MESSAGE: "user_message",
+  TOKEN: "token",
+  TOOL_CALL: "tool_call",
+  TOOL_RESULT: "tool_result",
+  COMPLETE: "complete",
+  ERROR: "error",
+} as const);
 
 export type AiChatStreamEventName =
   (typeof AI_CHAT_STREAM_EVENT)[keyof typeof AI_CHAT_STREAM_EVENT];
+
+export const AI_CHAT_STREAM_EVENT_NAMES: readonly AiChatStreamEventName[] =
+  Object.freeze(Object.values(AI_CHAT_STREAM_EVENT));
 
 export type ToolRenderAs = "table" | "line" | "bar" | "pie";
 

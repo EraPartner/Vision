@@ -8,7 +8,97 @@ export const FUND_HOLDING_IDENTIFIER_TYPES = Object.freeze([
   "cusip",
   "lei",
   "proprietary",
-]);
+] as const);
+
+export type FundHoldingIdentifierType =
+  (typeof FUND_HOLDING_IDENTIFIER_TYPES)[number];
+export interface FundHoldingIdentifier {
+  type: FundHoldingIdentifierType;
+  value: string;
+  exchange?: string;
+}
+export interface FundHoldingsIdentity {
+  name: string;
+  identifiers: FundHoldingIdentifier[];
+}
+export interface FundHoldingRow {
+  provenance: { rowNumber: number; sheetName?: string };
+  name: string;
+  identifiers: FundHoldingIdentifier[];
+  instrumentType: "equity" | "bond" | "cash" | "fund" | "derivative" | "other";
+  exposureKind:
+    "direct" | "cash" | "nested-fund" | "derivative" | "synthetic" | "unknown";
+  exposureStatus: "supported" | "unsupported";
+  unsupportedReason?: string;
+  weightPercent: string;
+  currency?: string;
+  countryCode?: string;
+}
+export interface FundHoldingsDocument {
+  contractVersion: 1;
+  fund: FundHoldingsIdentity;
+  shareClass: FundHoldingsIdentity & { currency: string };
+  source: {
+    kind: "user-supplied-file";
+    providerName?: string;
+    fileName: string;
+    sourceUrl?: string;
+    asOfDate: string;
+    retrievedAt: string;
+    license: {
+      status:
+        "user-provided" | "permission-confirmed" | "unknown" | "restricted";
+      redistribution: "allowed" | "forbidden" | "unknown";
+      termsUrl?: string;
+      note?: string;
+    };
+  };
+  holdings: FundHoldingRow[];
+  coverage: {
+    status: "complete" | "partial";
+    reportedWeightPercent: string;
+    supportedWeightPercent: string;
+    unsupportedWeightPercent: string;
+    missingWeightPercent: string;
+  };
+  staleness: {
+    evaluatedAt: string;
+    maximumAgeDays: number;
+    ageDays: number;
+    status: "current" | "stale";
+  };
+}
+export type FundHoldingsImportIssueCode =
+  | "INVALID_FILE"
+  | "MISSING_FUND_IDENTITY"
+  | "MISSING_SHARE_CLASS_IDENTITY"
+  | "INVALID_IDENTIFIER"
+  | "DUPLICATE_IDENTIFIER"
+  | "INVALID_WEIGHT"
+  | "WEIGHT_TOTAL_MISMATCH"
+  | "STALE_SOURCE"
+  | "PARTIAL_COVERAGE"
+  | "UNSUPPORTED_EXPOSURE"
+  | "LICENSE_RESTRICTION"
+  | "UNMAPPED_COLUMN"
+  | "UNSUPPORTED_FORMAT";
+export interface FundHoldingsImportResult {
+  contractVersion: 1;
+  importId: string;
+  status: "imported" | "partial" | "rejected";
+  fileName: string;
+  parsedAt: string;
+  rowCounts: { input: number; accepted: number; rejected: number };
+  document?: FundHoldingsDocument;
+  issues: Array<{
+    code: FundHoldingsImportIssueCode;
+    severity: "warning" | "error";
+    message: string;
+    rowNumber?: number;
+    field?: string;
+    rawValue?: string;
+  }>;
+}
 
 const decimalSchema = z
   .string()
@@ -50,8 +140,11 @@ const identifierSchema = z
     }
   });
 
-function duplicateKeys(values, key) {
-  const seen = new Set();
+function duplicateKeys<T>(
+  values: readonly T[],
+  key: (value: T) => string,
+): T[] {
+  const seen = new Set<string>();
   return values.filter((value) => {
     const current = key(value);
     if (seen.has(current)) return true;
@@ -230,14 +323,16 @@ const stalenessSchema = z
     }
   });
 
-function asScaledInteger(value, scale = 12) {
+function asScaledInteger(value: string, scale = 12): bigint {
   const [integer, fraction = ""] = value.split(".");
+  // String.prototype.split always yields at least one element.
   return (
-    BigInt(integer) * 10n ** BigInt(scale) + BigInt(fraction.padEnd(scale, "0"))
+    BigInt(integer!) * 10n ** BigInt(scale) +
+    BigInt(fraction.padEnd(scale, "0"))
   );
 }
 
-export const fundHoldingsDocumentSchema = z
+export const fundHoldingsDocumentSchema: z.ZodType<FundHoldingsDocument> = z
   .object({
     contractVersion: z.literal(FUND_HOLDINGS_CONTRACT_VERSION),
     fund: identitySchema,
@@ -302,8 +397,8 @@ export const fundHoldingsDocumentSchema = z
     }
 
     const scale = 12;
-    const sum = (values) =>
-      values.reduce(
+    const sum = (values: readonly string[]) =>
+      values.reduce<bigint>(
         (total, value) => total + asScaledInteger(value, scale),
         0n,
       );
@@ -399,90 +494,93 @@ const importIssueSchema = z
   })
   .strict();
 
-export const fundHoldingsImportResultSchema = z
-  .object({
-    contractVersion: z.literal(FUND_HOLDINGS_CONTRACT_VERSION),
-    importId: z.string().uuid(),
-    status: z.enum(["imported", "partial", "rejected"]),
-    fileName: z.string().trim().min(1).max(512),
-    parsedAt: dateTimeSchema,
-    rowCounts: z
-      .object({
-        input: z.number().int().nonnegative(),
-        accepted: z.number().int().nonnegative(),
-        rejected: z.number().int().nonnegative(),
-      })
-      .strict(),
-    document: fundHoldingsDocumentSchema.optional(),
-    issues: z.array(importIssueSchema).max(10_000),
-  })
-  .strict()
-  .superRefine((result, context) => {
-    if (
-      result.rowCounts.accepted + result.rowCounts.rejected !==
-      result.rowCounts.input
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["rowCounts"],
-        message: "Accepted and rejected row counts must equal input rows",
-      });
-    }
-    if (
-      result.document !== undefined &&
-      result.rowCounts.accepted !== result.document.holdings.length
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["rowCounts", "accepted"],
-        message: "Accepted row count must equal normalized holding rows",
-      });
-    }
-    if (
-      result.document !== undefined &&
-      result.fileName !== result.document.source.fileName
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["fileName"],
-        message: "Result file name must match document source provenance",
-      });
-    }
-    const errors = result.issues.filter(({ severity }) => severity === "error");
-    if (
-      result.status === "imported" &&
-      (errors.length > 0 ||
-        result.rowCounts.rejected > 0 ||
-        result.document === undefined)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["status"],
-        message:
-          "Imported results require a document and cannot contain errors or rejected rows",
-      });
-    }
-    if (
-      result.status === "partial" &&
-      (errors.length === 0 ||
-        result.rowCounts.rejected === 0 ||
-        result.document === undefined)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["status"],
-        message: "Partial results require errors and a validated document",
-      });
-    }
-    if (
-      result.status === "rejected" &&
-      (errors.length === 0 || result.document !== undefined)
-    ) {
-      context.addIssue({
-        code: "custom",
-        path: ["status"],
-        message:
-          "Rejected results require errors and cannot contain a document",
-      });
-    }
-  });
+export const fundHoldingsImportResultSchema: z.ZodType<FundHoldingsImportResult> =
+  z
+    .object({
+      contractVersion: z.literal(FUND_HOLDINGS_CONTRACT_VERSION),
+      importId: z.string().uuid(),
+      status: z.enum(["imported", "partial", "rejected"]),
+      fileName: z.string().trim().min(1).max(512),
+      parsedAt: dateTimeSchema,
+      rowCounts: z
+        .object({
+          input: z.number().int().nonnegative(),
+          accepted: z.number().int().nonnegative(),
+          rejected: z.number().int().nonnegative(),
+        })
+        .strict(),
+      document: fundHoldingsDocumentSchema.optional(),
+      issues: z.array(importIssueSchema).max(10_000),
+    })
+    .strict()
+    .superRefine((result, context) => {
+      if (
+        result.rowCounts.accepted + result.rowCounts.rejected !==
+        result.rowCounts.input
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["rowCounts"],
+          message: "Accepted and rejected row counts must equal input rows",
+        });
+      }
+      if (
+        result.document !== undefined &&
+        result.rowCounts.accepted !== result.document.holdings.length
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["rowCounts", "accepted"],
+          message: "Accepted row count must equal normalized holding rows",
+        });
+      }
+      if (
+        result.document !== undefined &&
+        result.fileName !== result.document.source.fileName
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["fileName"],
+          message: "Result file name must match document source provenance",
+        });
+      }
+      const errors = result.issues.filter(
+        ({ severity }) => severity === "error",
+      );
+      if (
+        result.status === "imported" &&
+        (errors.length > 0 ||
+          result.rowCounts.rejected > 0 ||
+          result.document === undefined)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["status"],
+          message:
+            "Imported results require a document and cannot contain errors or rejected rows",
+        });
+      }
+      if (
+        result.status === "partial" &&
+        (errors.length === 0 ||
+          result.rowCounts.rejected === 0 ||
+          result.document === undefined)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["status"],
+          message: "Partial results require errors and a validated document",
+        });
+      }
+      if (
+        result.status === "rejected" &&
+        (errors.length === 0 || result.document !== undefined)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["status"],
+          message:
+            "Rejected results require errors and cannot contain a document",
+        });
+      }
+    });

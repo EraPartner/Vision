@@ -1,5 +1,27 @@
+export interface ReportThemeDefaults {
+  primary: string;
+  accent: string;
+  success: string;
+  expense: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  chart1: string;
+  chart2: string;
+  chart3: string;
+  chart4: string;
+  chart5: string;
+  chart6: string;
+  chart7: string;
+  chart8: string;
+}
+
 /** Canonical fallback palette shared by the default frontend theme and reports. */
-export const REPORT_THEME_DEFAULTS = Object.freeze({
+export const REPORT_THEME_DEFAULTS: Readonly<{
+  light: Readonly<ReportThemeDefaults>;
+  dark: Readonly<ReportThemeDefaults>;
+}> = Object.freeze({
   light: Object.freeze({
     primary: "164 78% 26%",
     accent: "38 58% 52%",

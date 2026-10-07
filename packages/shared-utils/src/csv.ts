@@ -8,20 +8,23 @@
  * with a single quote so it renders as a literal string.
  */
 
-const DANGEROUS_CSV_FORMULA_PREFIXES = new Set(['=', '+', '-', '@', '\t', '\r']);
+const DANGEROUS_CSV_FORMULA_PREFIXES = new Set([
+  "=",
+  "+",
+  "-",
+  "@",
+  "\t",
+  "\r",
+]);
 const STRICT_NUMERIC_RE = /^-?\d+(\.\d+)?$/;
 
-/**
- * Neutralise a leading formula character on a string cell.
- * @param {string} value
- * @returns {string}
- */
-export function neutralizeCsvFormula(value) {
+/** Neutralise a leading formula character on a string cell. */
+export function neutralizeCsvFormula(value: string): string {
   if (!value) return value;
   // Strip only *safe* leading whitespace (space, NBSP) before inspecting the
   // first character. Tab and CR are themselves dangerous prefixes — trimming
   // them away would hide a leading "\t=SUM()" from the check entirely.
-  const leading = value.replace(/^[  ]+/, '');
+  const leading = value.replace(/^[  ]+/, "");
   if (!leading) return value;
   if (!DANGEROUS_CSV_FORMULA_PREFIXES.has(leading.charAt(0))) return value;
   return `'${value}`;
@@ -30,10 +33,8 @@ export function neutralizeCsvFormula(value) {
 /**
  * Quote a cell if it contains a delimiter, quote, or line break. Quotes on \r
  * as well as \n — a bare CR can split a row for strict parsers.
- * @param {string} value
- * @returns {string}
  */
-export function quoteCsvValue(value) {
+export function quoteCsvValue(value: string): string {
   return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
@@ -45,16 +46,18 @@ export function quoteCsvValue(value) {
  * unquoted-prefixed — quoting it to "'-12.34" would break a Vision-export
  * round-trip. When false (frontend), only typed numbers/booleans bypass the
  * guard, so a numeric-looking *string* is still neutralised.
- * @param {unknown} value
- * @param {{ treatNumericStringsAsSafe?: boolean }} [options]
- * @returns {string}
  */
-export function escapeCsvValue(value, { treatNumericStringsAsSafe = false } = {}) {
-  if (value == null) return '';
+export function escapeCsvValue(
+  value: unknown,
+  {
+    treatNumericStringsAsSafe = false,
+  }: { treatNumericStringsAsSafe?: boolean } = {},
+): string {
+  if (value == null) return "";
   const raw = String(value);
   const isSafeNumeric =
-    typeof value === 'number' ||
-    typeof value === 'boolean' ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
     (treatNumericStringsAsSafe && STRICT_NUMERIC_RE.test(raw));
   return quoteCsvValue(isSafeNumeric ? raw : neutralizeCsvFormula(raw));
 }

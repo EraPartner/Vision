@@ -2,7 +2,7 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
@@ -408,7 +408,7 @@ Notes:
   are emitted. With either, `snapshots` is a newest-first page and the body carries
   `snapshotsTotal` / `snapshotsLimit` / `snapshotsOffset`. (This endpoint previously
   also emitted an envelope-level `meta.pagination`; that convention is retired —
-  see [[packages/types/src/api.js]].)
+  see [[packages/types/src/api.ts]].)
 - Route applies per-currency in-memory response caching (TTL 60s) to reduce repeated heavy repository recomputation on dashboard refreshes.
 - Concurrent requests for the same currency are deduplicated in-flight and share the same repository promise.
 - Route uses a modest per-route rate limiter (`30 requests / 60s` per key prefix) to protect expensive net-worth computations.

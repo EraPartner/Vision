@@ -11,7 +11,19 @@
  * but not offered in the transaction dialogs.
  */
 export const PORTFOLIO_TXN_TYPES = [
-  'buy', 'sell', 'dividend', 'fee', 'tax', 'interest',
-  'rent_income', 'appreciation', 'gift', 'split', 'merger',
-  'spinoff', 'return_of_capital',
-];
+  "buy",
+  "sell",
+  "dividend",
+  "fee",
+  "tax",
+  "interest",
+  "rent_income",
+  "appreciation",
+  "gift",
+  "split",
+  "merger",
+  "spinoff",
+  "return_of_capital",
+] as const;
+
+export type PortfolioTxnType = (typeof PORTFOLIO_TXN_TYPES)[number];

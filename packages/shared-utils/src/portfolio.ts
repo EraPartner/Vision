@@ -13,26 +13,62 @@
  */
 
 import Decimal from "decimal.js";
-import { projectAssetTransferPartitions } from "./portfolioCustody.js";
-export { projectAssetTransferPartitions } from "./portfolioCustody.js";
+import { projectAssetTransferPartitions } from "./portfolioCustody.ts";
+export { projectAssetTransferPartitions } from "./portfolioCustody.ts";
 import {
   UNIT_BASED_ASSET_CLASSES,
   FIXED_INCOME_ASSET_CLASSES,
   REAL_ESTATE_ASSET_CLASS,
 } from "@vision/types/assetClasses";
-import { toDecimal, roundToCents, toNumber } from "./money.js";
+import { toDecimal, roundToCents, toNumber } from "./money.ts";
 
 // Derived from the canonical subsets in @vision/types/assetClasses (widened to
 // Set<string>: .has() probes raw row values).
-const UNIT_BASED_CLASSES = new Set(
-  /** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES),
-);
-const FIXED_INCOME_CLASSES = new Set(
-  /** @type {readonly string[]} */ (FIXED_INCOME_ASSET_CLASSES),
-);
-const REAL_ESTATE_CLASS = REAL_ESTATE_ASSET_CLASS;
+const UNIT_BASED_CLASSES = new Set<string>(UNIT_BASED_ASSET_CLASSES);
+const FIXED_INCOME_CLASSES = new Set<string>(FIXED_INCOME_ASSET_CLASSES);
+const REAL_ESTATE_CLASS: string = REAL_ESTATE_ASSET_CLASS;
 
-/** @typedef {'weighted_avg'|'fifo'|'lifo'} CostBasisMethod */
+export type CostBasisMethod = "weighted_avg" | "fifo" | "lifo";
+
+/**
+ * A transaction-row numeric field: raw DB/API values arrive as number or
+ * numeric string; rows synthesized by partitioning/custody projection carry
+ * Decimal instances.
+ */
+export type TxnNumeric = number | string | Decimal | null;
+
+/** FX multiplier input (native → target rate). */
+export type FxMultiplierInput = number | string | Decimal;
+
+export interface PortfolioTxnLike {
+  id?: number | string;
+  type: string;
+  date: string;
+  fxMultiplier?: number | string;
+  units?: TxnNumeric;
+  amount?: TxnNumeric;
+  fees?: TxnNumeric;
+  taxes?: TxnNumeric;
+}
+
+/**
+ * A row the cost-basis engines can replay: a stored transaction, or a
+ * temporary custody leg (transfer_in / transfer_out / asset_fee /
+ * unit_reversal) projected by projectAssetTransferPartitions, which carries
+ * the basis and lots it moves.
+ */
+export interface CostBasisTxnLike extends PortfolioTxnLike {
+  transferredBasis?: Decimal;
+  transferredBasisConv?: Decimal;
+  transferredLots?: CustodyLot[];
+  assetFeeBasis?: Decimal;
+  assetFeeBasisConv?: Decimal;
+  consumedLots?: CustodyLot[];
+}
+
+export interface CostBasisOptions {
+  defaultFxMultiplier?: FxMultiplierInput;
+}
 
 /**
  * Shared result shape returned by all cost-basis calculators.
@@ -49,21 +85,105 @@ const REAL_ESTATE_CLASS = REAL_ESTATE_ASSET_CLASS;
  * quantity, but the flag lets callers surface a warning (mirrors the
  * `_fxFellBack` convention used elsewhere).
  *
- * @typedef {{ totalUnits: number, totalCost: number, avgCostBasis: number, realizedGain: number, totalBuyCost: number, totalSellProceeds: number, totalCostConv: number, avgCostBasisConv: number, realizedGainConv: number, totalBuyCostConv: number, totalSellProceedsConv: number, _oversold?: boolean }} CostBasisResult
  */
+export interface CostBasisResult {
+  totalUnits: number;
+  totalCost: number;
+  avgCostBasis: number;
+  realizedGain: number;
+  totalBuyCost: number;
+  totalSellProceeds: number;
+  totalCostConv: number;
+  avgCostBasisConv: number;
+  realizedGainConv: number;
+  totalBuyCostConv: number;
+  totalSellProceedsConv: number;
+  _oversold?: boolean;
+}
+
+export interface ConvertedTrack {
+  currentValue: Decimal;
+  totalInvested: Decimal;
+  totalBuyCost: Decimal;
+  totalSellProceeds: Decimal;
+  avgCostBasis: Decimal;
+  realizedGain: Decimal;
+  unrealizedGain: Decimal;
+  totalGain: Decimal;
+  gainLoss: Decimal;
+  gainLossPercent: Decimal;
+  assetGain: Decimal;
+  fxGain: Decimal;
+  totalFees: Decimal;
+  totalTaxes: Decimal;
+  totalDividends: Decimal;
+  totalIncome: Decimal;
+}
+
+export interface InvestmentSummaryCore {
+  totalUnits: Decimal;
+  avgCostBasis: Decimal;
+  totalInvested: Decimal;
+  totalBuyCost: Decimal;
+  totalSellProceeds: Decimal;
+  currentValue: Decimal;
+  realizedGain: Decimal;
+  unrealizedGain: Decimal;
+  totalGain: Decimal;
+  gainLoss: Decimal;
+  gainLossPercent: Decimal;
+  totalFees: Decimal;
+  totalTaxes: Decimal;
+  feeTxnAmount: Decimal;
+  taxTxnAmount: Decimal;
+  totalDividends: Decimal;
+  totalInterestPaid: Decimal;
+  totalRent: Decimal;
+  totalAppreciation: Decimal;
+  totalIncome: Decimal;
+  accruedInterest: Decimal;
+  projectedAnnualInterest: Decimal;
+  /** True when a sell exceeded held units; values remain clamped and readable. */
+  oversold: boolean;
+  converted: ConvertedTrack;
+}
+
+export interface InvestmentLike {
+  asset_class: string;
+  current_price?: number | string | null;
+  interest_rate?: number | string | null;
+}
+
+export interface InvestmentSummaryCoreOptions {
+  costBasisMethod?: CostBasisMethod;
+  todayYmd: string;
+  fxMultiplierNow?: number | string;
+}
+
+/** Minimal lot shape the corporate-action helper rescales. */
+interface BasisLot {
+  units: Decimal;
+  costBasis: Decimal;
+  costBasisConv: Decimal;
+}
+
+/** A lot held by the FIFO/LIFO replay (bought here or carried in by a transfer). */
+interface ReplayLot extends BasisLot {
+  acquiredDate: string;
+  acquisitionId: number | string;
+  acquisitionType?: string;
+}
 
 /**
  * Whole-day count between two YYYY-MM-DD strings. Pure calendar math (UTC
  * parse on both ends), so the result is identical in every host timezone.
- *
- * @param {string} fromYmd
- * @param {string} toYmd
- * @returns {number}
  */
-export function daysBetweenYmd(fromYmd, toYmd) {
-  const parse = (s) => {
+export function daysBetweenYmd(fromYmd: string, toYmd: string): number {
+  const parse = (s: string): number => {
     const [y, m, d] = String(s).slice(0, 10).split("-").map(Number);
-    return Date.UTC(y, m - 1, d);
+    // split() always yields at least one element, so y is defined; a missing
+    // m stays undefined and yields NaN exactly as in plain arithmetic.
+    return Date.UTC(y!, (m as number) - 1, d);
   };
   return Math.round((parse(toYmd) - parse(fromYmd)) / 86_400_000);
 }
@@ -72,14 +192,17 @@ export function daysBetweenYmd(fromYmd, toYmd) {
  * Apply corporate-action events (split, merger, spinoff, return_of_capital) to
  * a lot array. Called by both FIFO and LIFO helpers.
  *
- * @param {{ units: Decimal, costBasis: Decimal, costBasisConv: Decimal }[]} lots
- * @param {string} type
- * @param {Decimal} units - new total units after split, or units received from spinoff
- * @param {Decimal} amount - proceeds for return_of_capital
- * @param {Decimal} totalUnits - current total units held
- * @returns {{ totalUnits: Decimal, lots: { units: Decimal, costBasis: Decimal, costBasisConv: Decimal }[] }}
+ * @param units - new total units after split, or units received from spinoff
+ * @param amount - proceeds for return_of_capital
+ * @param totalUnits - current total units held
  */
-function applyEventToLots(lots, type, units, amount, totalUnits) {
+function applyEventToLots<L extends BasisLot>(
+  lots: L[],
+  type: string,
+  units: Decimal,
+  amount: Decimal,
+  totalUnits: Decimal,
+): { totalUnits: Decimal; lots: L[] } {
   const ZERO = toDecimal(0);
 
   if (type === "split" && totalUnits.gt(0) && units.gt(0)) {
@@ -121,12 +244,11 @@ function applyEventToLots(lots, type, units, amount, totalUnits) {
  * Calculate weighted average cost basis using the moving-average method.
  * Buys and gifts increase the position; sells reduce it at the current avg cost.
  * Corporate actions (split, return_of_capital) adjust units / cost basis.
- *
- * @param {Array<{type: string, units?: number|string, amount?: number|string, fees?: number|string, taxes?: number|string, date: string, fxMultiplier?: number|string}>} txns
- * @param {{ defaultFxMultiplier?: number|string }} [opts]
- * @returns {CostBasisResult}
  */
-export function calculateCostBasis(txns, opts = {}) {
+export function calculateCostBasis(
+  txns: readonly CostBasisTxnLike[],
+  opts: CostBasisOptions = {},
+): CostBasisResult {
   const sorted = [...txns].sort((a, b) => {
     const byDate = a.date.localeCompare(b.date);
     if (byDate !== 0) return byDate;
@@ -163,14 +285,15 @@ export function calculateCostBasis(txns, opts = {}) {
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
     } else if (txn.type === "transfer_in") {
       totalUnits = totalUnits.plus(units);
-      totalCost = totalCost.plus(txn.transferredBasis);
-      totalCostConv = totalCostConv.plus(txn.transferredBasisConv);
+      // Projected custody legs always carry their transferred basis.
+      totalCost = totalCost.plus(txn.transferredBasis!);
+      totalCostConv = totalCostConv.plus(txn.transferredBasisConv!);
     } else if (
       ["transfer_out", "asset_fee", "unit_reversal"].includes(txn.type)
     ) {
       totalUnits = totalUnits.minus(units);
-      totalCost = totalCost.minus(txn.transferredBasis);
-      totalCostConv = totalCostConv.minus(txn.transferredBasisConv);
+      totalCost = totalCost.minus(txn.transferredBasis!);
+      totalCostConv = totalCostConv.minus(txn.transferredBasisConv!);
       realizedGain = realizedGain.minus(txn.assetFeeBasis || 0);
       realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
     } else if (txn.type === "sell") {
@@ -236,33 +359,27 @@ export function calculateCostBasis(txns, opts = {}) {
 /**
  * Calculate FIFO (first-in, first-out) cost basis.
  * Sells exhaust the oldest lots first.
- *
- * @param {Array<{type: string, units?: number|string, amount?: number|string, fees?: number|string, taxes?: number|string, date: string, fxMultiplier?: number|string}>} txns
- * @param {{ defaultFxMultiplier?: number|string }} [opts]
- * @returns {CostBasisResult}
  */
 /**
  * Lot-based cost basis (FIFO or LIFO). The two methods differ only in which lot
  * a sell consumes first — the head of the queue (FIFO) or the tail (LIFO, when
  * `fromEnd` is true). All other math is identical, so it lives here once
  * (SIMP-21). Golden-fixture-covered money math; keep the arithmetic verbatim.
- *
- * @param {PortfolioTxnLike[]} txns
- * @param {{ defaultFxMultiplier?: number|string }} opts
- * @param {{ fromEnd?: boolean }} config
- * @returns {CostBasisResult}
  */
-function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
+function calculateCostBasisLotBased(
+  txns: readonly CostBasisTxnLike[],
+  opts: CostBasisOptions = {},
+  { fromEnd = false }: { fromEnd?: boolean } = {},
+): CostBasisResult {
   const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
 
   const ZERO = toDecimal(0);
   const defaultFx = toDecimal(opts.defaultFxMultiplier ?? 1);
-  /** @type {{ units: Decimal, costBasis: Decimal, costBasisConv: Decimal }[]} */
   // FIFO consumes from lots[head] forward (head advances); LIFO pops from the end;
   // buys push to the end. The active (unconsumed) lots are lots[head..]. This keeps
   // each buy/consume O(1) amortized instead of the previous per-op spread-copy
   // (which made a B-buy history O(B^2)); results are unchanged.
-  let lots = [];
+  let lots: ReplayLot[] = [];
   let head = 0;
   let totalUnits = ZERO;
   let realizedGain = ZERO;
@@ -297,7 +414,8 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
     } else if (txn.type === "transfer_in") {
       lots = lots.slice(head);
       head = 0;
-      lots.push(...txn.transferredLots.map((lot) => ({ ...lot })));
+      // Projected transfer_in legs always carry their lots.
+      lots.push(...txn.transferredLots!.map((lot) => ({ ...lot })));
       lots.sort(
         (a, b) =>
           a.acquiredDate.localeCompare(b.acquiredDate) ||
@@ -307,7 +425,8 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
     } else if (txn.type === "unit_reversal") {
       lots = lots.slice(head);
       head = 0;
-      for (const consumed of txn.consumedLots) {
+      // Projected unit_reversal legs always carry their consumed lots.
+      for (const consumed of txn.consumedLots!) {
         let remaining = toDecimal(consumed.units);
         for (const lot of lots) {
           if (remaining.lte(0)) break;
@@ -344,7 +463,8 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
 
       while (unitsToSell.gt(0) && head < lots.length) {
         const idx = fromEnd ? lots.length - 1 : head;
-        const lot = lots[idx];
+        // head <= idx < lots.length, guarded by the loop condition.
+        const lot = lots[idx]!;
         if (lot.units.lte(unitsToSell)) {
           costOfSold = costOfSold.plus(lot.costBasis);
           costOfSoldConv = costOfSoldConv.plus(lot.costBasisConv);
@@ -435,31 +555,32 @@ function calculateCostBasisLotBased(txns, opts = {}, { fromEnd = false } = {}) {
   };
 }
 
-export function calculateCostBasisFIFO(txns, opts = {}) {
+export function calculateCostBasisFIFO(
+  txns: readonly CostBasisTxnLike[],
+  opts: CostBasisOptions = {},
+): CostBasisResult {
   return calculateCostBasisLotBased(txns, opts, { fromEnd: false });
 }
 
 /**
  * Calculate LIFO (last-in, first-out) cost basis.
  * Sells exhaust the most-recently-acquired lots first.
- *
- * @param {Array<{type: string, units?: number|string, amount?: number|string, fees?: number|string, taxes?: number|string, date: string, fxMultiplier?: number|string}>} txns
- * @param {{ defaultFxMultiplier?: number|string }} [opts]
- * @returns {CostBasisResult}
  */
-export function calculateCostBasisLIFO(txns, opts = {}) {
+export function calculateCostBasisLIFO(
+  txns: readonly CostBasisTxnLike[],
+  opts: CostBasisOptions = {},
+): CostBasisResult {
   return calculateCostBasisLotBased(txns, opts, { fromEnd: true });
 }
 
 /**
  * Dispatch to the correct cost-basis calculator based on `method`.
- *
- * @param {Array} txns
- * @param {CostBasisMethod} [method]
- * @param {{ defaultFxMultiplier?: number|string }} [opts]
- * @returns {CostBasisResult}
  */
-export function calculateCostBasisByMethod(txns, method, opts = {}) {
+export function calculateCostBasisByMethod(
+  txns: readonly CostBasisTxnLike[],
+  method?: CostBasisMethod,
+  opts: CostBasisOptions = {},
+): CostBasisResult {
   if (method === "fifo") return calculateCostBasisFIFO(txns, opts);
   if (method === "lifo") return calculateCostBasisLIFO(txns, opts);
   return calculateCostBasis(txns, opts); // default: weighted_avg
@@ -469,18 +590,17 @@ export function calculateCostBasisByMethod(txns, method, opts = {}) {
  * Calculate accrued simple interest for fixed-income assets.
  * Clock starts from last interest payment date, or first buy if no payments yet.
  *
- * @param {Array<{type: string, date: string}>} txns
- * @param {number} principal - Current invested principal
- * @param {number} interestRate - Annual rate as a percentage (e.g. 3.5 for 3.5%)
- * @param {string} todayYmd - "today" as YYYY-MM-DD in the caller's business timezone
- * @returns {number} Accrued interest amount
+ * @param principal - Current invested principal
+ * @param interestRate - Annual rate as a percentage (e.g. 3.5 for 3.5%)
+ * @param todayYmd - "today" as YYYY-MM-DD in the caller's business timezone
+ * @returns Accrued interest amount
  */
 export function calculateAccruedInterest(
-  txns,
-  principal,
-  interestRate,
-  todayYmd,
-) {
+  txns: readonly Pick<PortfolioTxnLike, "type" | "date">[],
+  principal: number,
+  interestRate: number,
+  todayYmd: string,
+): number {
   if (!interestRate || principal <= 0) return 0;
 
   const sortedDesc = [...txns].sort((a, b) => b.date.localeCompare(a.date));
@@ -504,11 +624,12 @@ export function calculateAccruedInterest(
 /**
  * Calculate projected annual interest for fixed-income assets.
  *
- * @param {number} principal
- * @param {number} ratePercent - Annual rate as a percentage
- * @returns {number}
+ * @param ratePercent - Annual rate as a percentage
  */
-export function projectedAnnualInterest(principal, ratePercent) {
+export function projectedAnnualInterest(
+  principal: number,
+  ratePercent: number,
+): number {
   if (!ratePercent || principal <= 0) return 0;
   return toNumber(toDecimal(principal).times(toDecimal(ratePercent).div(100)));
 }
@@ -529,16 +650,17 @@ export function projectedAnnualInterest(principal, ratePercent) {
  * residual currency effect). With no FX inputs `converted` equals the native
  * fields — callers that don't care can ignore it.
  *
- * @param {{ asset_class: string, current_price?: number|string, interest_rate?: number|string }} inv
- * @param {Array<object>} txns transaction rows ({type, amount, units, fees, taxes, date, fxMultiplier?})
- * @param {{ costBasisMethod?: CostBasisMethod, todayYmd: string, fxMultiplierNow?: number|string }} opts
- * @returns {Record<string, Decimal> & { converted: Record<string, Decimal> }}
+ * @param txns transaction rows ({type, amount, units, fees, taxes, date, fxMultiplier?})
  */
 export function buildInvestmentSummaryCore(
-  inv,
-  txns,
-  { costBasisMethod = "weighted_avg", todayYmd, fxMultiplierNow = 1 },
-) {
+  inv: InvestmentLike,
+  txns: readonly CostBasisTxnLike[],
+  {
+    costBasisMethod = "weighted_avg",
+    todayYmd,
+    fxMultiplierNow = 1,
+  }: InvestmentSummaryCoreOptions,
+): InvestmentSummaryCore {
   const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
   const isFixedIncome = FIXED_INCOME_CLASSES.has(inv.asset_class);
   const isRealEstate = inv.asset_class === REAL_ESTATE_CLASS;
@@ -547,7 +669,7 @@ export function buildInvestmentSummaryCore(
   const mNow = toDecimal(fxMultiplierNow ?? 1);
   // Unannotated transactions convert at today's rate — with no per-txn rates
   // the converted track degrades exactly to the pre-FX-attribution behavior.
-  const txnFx = (txn) =>
+  const txnFx = (txn: PortfolioTxnLike): Decimal =>
     txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : mNow;
 
   // All running sums are kept as Decimal — IEEE-754 drift on money paths
@@ -648,21 +770,21 @@ export function buildInvestmentSummaryCore(
 
   let totalUnits = ZERO;
   let avgCostBasis = ZERO;
-  let totalBuyCost;
-  let totalSellProceeds;
+  let totalBuyCost: Decimal;
+  let totalSellProceeds: Decimal;
   let realizedGain = ZERO;
   let unrealizedGain = ZERO;
-  let currentValue;
-  let totalInvested;
+  let currentValue: Decimal;
+  let totalInvested: Decimal;
   let accruedInterest = ZERO;
   let projectedInterest = ZERO;
 
   // Converted-track equivalents (invested locked at purchase-date rates).
   let avgCostBasisC = ZERO;
-  let totalBuyCostC;
-  let totalSellProceedsC;
+  let totalBuyCostC: Decimal;
+  let totalSellProceedsC: Decimal;
   let realizedGainC = ZERO;
-  let totalInvestedC;
+  let totalInvestedC: Decimal;
   let oversold = false;
 
   if (isUnitBased) {
@@ -843,8 +965,53 @@ export function buildInvestmentSummaryCore(
 
 // ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
 
+export interface PartitionedTxnLike extends PortfolioTxnLike {
+  account_id?: number | string | null;
+  source_account_id?: number | string;
+  destination_account_id?: number | string;
+  fee_units?: number | string;
+  adjustment_kind?: "yield_reversal" | "asset_fee";
+  basis_policy?: "zero_yield_only" | "carried";
+  eligible_source_record_hashes?: string[];
+  source_record_hash?: string;
+  currency?: string;
+}
+export interface CustodyLot {
+  acquisitionType?: string;
+  sourceRecordHash?: string;
+  units: Decimal;
+  costBasis: Decimal;
+  costBasisConv: Decimal;
+  acquiredDate: string;
+  acquisitionId: number | string;
+  currency?: string;
+  fxResolved: boolean;
+}
+export interface ProjectedCustodyTxn
+  extends PartitionedTxnLike, CostBasisTxnLike {
+  consumedLots?: CustodyLot[];
+  staging_row_id?: number;
+  assetFeeLots?: CustodyLot[];
+}
+
+export type ContributionKind = "position" | "non_position";
+
+export interface InvestmentSummaryPartition {
+  accountId: number | null;
+  contributionKind: ContributionKind;
+  core: InvestmentSummaryCore;
+}
+
+export interface PartitionedInvestmentSummaryCore {
+  core: InvestmentSummaryCore;
+  partitions: InvestmentSummaryPartition[];
+  fullyAssigned: boolean;
+}
+
+type PartitionKey = number | null;
+
 /** Transaction types that create or consume lots (whole-lot broker tagging). */
-export const LOT_TXN_TYPES = new Set([
+export const LOT_TXN_TYPES: Set<string> = new Set([
   "buy",
   "gift",
   "sell",
@@ -854,11 +1021,9 @@ export const LOT_TXN_TYPES = new Set([
   "unit_reversal",
 ]);
 
-/**
- * @param {Array<{ type: string }>} rows
- * @returns {"position"|"non_position"}
- */
-const contributionKindOf = (rows) =>
+const contributionKindOf = (
+  rows: readonly Pick<PortfolioTxnLike, "type">[],
+): ContributionKind =>
   rows.some((row) => LOT_TXN_TYPES.has(row.type)) ? "position" : "non_position";
 
 /**
@@ -869,17 +1034,16 @@ const contributionKindOf = (rows) =>
  * A NULL-account SELL also blocks full assignment: under partitioned math it
  * could only consume from the (empty) unassigned partition, which would emit
  * garbage partitions — exactly what the transition rule exists to prevent.
- *
- * @param {Array<{ type: string, account_id?: number|string|null }>} txns
- * @returns {boolean}
  */
-export function areLotsFullyAssigned(txns) {
+export function areLotsFullyAssigned(
+  txns: readonly Pick<PartitionedTxnLike, "type" | "account_id">[],
+): boolean {
   return txns.every((t) => !LOT_TXN_TYPES.has(t.type) || t.account_id != null);
 }
 
-/** @param {{ account_id?: number|string|null }} txn @returns {number|null} */
-const partitionKeyOf = (txn) =>
-  txn.account_id == null ? null : Number(txn.account_id);
+const partitionKeyOf = (
+  txn: Pick<PartitionedTxnLike, "account_id">,
+): PartitionKey => (txn.account_id == null ? null : Number(txn.account_id));
 
 /**
  * Split an investment's transactions into per-(investment, account) partition
@@ -910,14 +1074,14 @@ const partitionKeyOf = (txn) =>
  * Unit availability mirrors the calculators: sells consume at most what their
  * partition holds; splits only rescale when units are actually held.
  *
- * @param {Array<Record<string, any>>} txns one investment's transactions
- * @returns {Map<number|null, Array<Record<string, any>>>} partition key (account id or null) → rows
+ * @param txns one investment's transactions
+ * @returns partition key (account id or null) → rows
  */
 export function partitionTxnsByAccount(
-  txns,
-  method = "weighted_avg",
-  opts = {},
-) {
+  txns: readonly PartitionedTxnLike[],
+  method: CostBasisMethod = "weighted_avg",
+  opts: CostBasisOptions = {},
+): Map<PartitionKey, ProjectedCustodyTxn[]> {
   if (
     txns.some((row) =>
       ["asset_transfer", "asset_adjustment"].includes(row.type),
@@ -931,13 +1095,10 @@ export function partitionTxnsByAccount(
     return Number(a.id ?? 0) - Number(b.id ?? 0);
   });
 
-  /** @type {Map<number|null, Array<Record<string, any>>>} */
-  const partitions = new Map();
-  /** @type {Map<number|null, Decimal>} */
-  const held = new Map();
+  const partitions = new Map<PartitionKey, ProjectedCustodyTxn[]>();
+  const held = new Map<PartitionKey, Decimal>();
 
-  /** @param {number|null} key @param {Record<string, any>} row */
-  const push = (key, row) => {
+  const push = (key: PartitionKey, row: ProjectedCustodyTxn): void => {
     let rows = partitions.get(key);
     if (!rows) {
       rows = [];
@@ -949,7 +1110,7 @@ export function partitionTxnsByAccount(
     [...held.values()].reduce((sum, h) => sum.plus(h), ZERO);
   // The fee/tax-carrying residual of a rewritten corporate action; omitted when
   // there is nothing to carry, so rewriting cannot mint empty partitions.
-  const carriesFeesOrTaxes = (txn) =>
+  const carriesFeesOrTaxes = (txn: PortfolioTxnLike): boolean =>
     !toDecimal(txn.fees || 0).eq(0) || !toDecimal(txn.taxes || 0).eq(0);
 
   for (const txn of sorted) {
@@ -1035,7 +1196,7 @@ const ADDITIVE_CORE_FIELDS = [
   "totalIncome",
   "accruedInterest",
   "projectedAnnualInterest",
-];
+] as const satisfies readonly (keyof InvestmentSummaryCore)[];
 const ADDITIVE_CONVERTED_FIELDS = [
   "currentValue",
   "totalInvested",
@@ -1051,20 +1212,26 @@ const ADDITIVE_CONVERTED_FIELDS = [
   "totalTaxes",
   "totalDividends",
   "totalIncome",
-];
+] as const satisfies readonly (keyof ConvertedTrack)[];
+type AdditiveCoreField = (typeof ADDITIVE_CORE_FIELDS)[number];
+type AdditiveConvertedField = (typeof ADDITIVE_CONVERTED_FIELDS)[number];
 
 /**
  * Reduce per-partition cores into one investment-level core: additive fields
  * sum; avg cost basis and return % are re-derived from the summed aggregates,
  * exactly as the flat core derives them.
- *
- * @param {ReturnType<typeof buildInvestmentSummaryCore>[]} cores
- * @returns {ReturnType<typeof buildInvestmentSummaryCore>}
  */
-function aggregatePartitionCores(cores) {
+function aggregatePartitionCores(
+  cores: readonly InvestmentSummaryCore[],
+): InvestmentSummaryCore {
   const ZERO = toDecimal(0);
-  /** @type {Record<string, any>} */
-  const agg = { converted: {} };
+  // Key insertion order matches the field lists (and therefore the flat
+  // core's emitted shape): converted first, then the summed fields, then the
+  // re-derived ratios.
+  const converted = {} as Pick<ConvertedTrack, AdditiveConvertedField> &
+    Partial<ConvertedTrack>;
+  const agg = { converted } as Pick<InvestmentSummaryCore, AdditiveCoreField> &
+    Partial<InvestmentSummaryCore> & { converted: typeof converted };
   for (const field of ADDITIVE_CORE_FIELDS) {
     agg[field] = cores.reduce((sum, c) => sum.plus(c[field]), ZERO);
   }
@@ -1087,7 +1254,9 @@ function aggregatePartitionCores(cores) {
     ? agg.converted.gainLoss.div(agg.converted.totalBuyCost).times(100)
     : ZERO;
   agg.oversold = cores.some((core) => core.oversold === true);
-  return /** @type {ReturnType<typeof buildInvestmentSummaryCore>} */ (agg);
+  // Every additive field was summed above and the remaining ratio/flag fields
+  // were just assigned, so the object is a complete core.
+  return agg as InvestmentSummaryCore;
 }
 
 /**
@@ -1095,12 +1264,13 @@ function aggregatePartitionCores(cores) {
  * behavior. Only fully assigned lot histories participate; transition-state
  * histories continue to use the global replay.
  *
- * @param {Array<Record<string, any>>} txns
- * @returns {Map<number, number>} excess units requested per account
+ * @returns excess units requested per account
  */
-export function partitionOversellDeficits(txns) {
+export function partitionOversellDeficits(
+  txns: readonly PartitionedTxnLike[],
+): Map<number, number> {
   if (!areLotsFullyAssigned(txns)) return new Map();
-  const deficits = new Map();
+  const deficits = new Map<number, number>();
   const streams = partitionTxnsByAccount(txns);
   for (const [accountId, rows] of streams) {
     if (accountId == null) continue;
@@ -1150,17 +1320,12 @@ export function partitionOversellDeficits(txns) {
  *    transaction stream, so per-row splitting cannot sum to the global
  *    figure): flat replay, attributed whole to its single account when every
  *    row names the same one, else to the unassigned partition.
- *
- * @param {{ asset_class: string, current_price?: number|string, interest_rate?: number|string }} inv
- * @param {Array<Record<string, any>>} txns
- * @param {{ costBasisMethod?: CostBasisMethod, todayYmd: string, fxMultiplierNow?: number|string }} opts
- * @returns {{
- *   core: ReturnType<typeof buildInvestmentSummaryCore>,
- *   partitions: Array<{ accountId: number|null, contributionKind: "position"|"non_position", core: ReturnType<typeof buildInvestmentSummaryCore> }>,
- *   fullyAssigned: boolean,
- * }}
  */
-export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
+export function buildInvestmentSummaryCorePartitioned(
+  inv: InvestmentLike,
+  txns: readonly PartitionedTxnLike[],
+  opts: InvestmentSummaryCoreOptions,
+): PartitionedInvestmentSummaryCore {
   const isUnitBased = UNIT_BASED_CLASSES.has(inv.asset_class);
 
   if (!isUnitBased) {
@@ -1168,8 +1333,11 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
     const accountKeys = new Set(txns.map(partitionKeyOf));
     const fullyAssigned =
       txns.length === 0 || (accountKeys.size === 1 && !accountKeys.has(null));
+    // fullyAssigned with rows means exactly one non-null key.
     const accountId =
-      txns.length > 0 && fullyAssigned ? [...accountKeys][0] : null;
+      txns.length > 0 && fullyAssigned
+        ? ([...accountKeys][0] as number | null)
+        : null;
     return {
       core,
       partitions:
@@ -1205,10 +1373,12 @@ export function buildInvestmentSummaryCorePartitioned(inv, txns, opts) {
   if (streams.size <= 1) {
     const projectedRows =
       streams.size === 1 && txns.some((row) => row.type === "asset_adjustment")
-        ? streams.values().next().value
+        ? // size === 1, so the iterator yields a value.
+          streams.values().next().value!
         : txns;
     const core = buildInvestmentSummaryCore(inv, projectedRows, opts);
-    const accountId = streams.size === 1 ? [...streams.keys()][0] : null;
+    const accountId =
+      streams.size === 1 ? ([...streams.keys()][0] as PartitionKey) : null;
     return {
       core,
       partitions:

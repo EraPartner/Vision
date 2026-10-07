@@ -22,14 +22,13 @@
 /**
  * Join a general/detail pair into the `GENERAL:DETAIL` interchange string.
  * A missing or empty (after trim) detail yields just the general part.
- *
- * @param {string|null|undefined} general
- * @param {string|null|undefined} detail
- * @returns {string}
  */
-export function formatCategoryName(general, detail) {
-  const g = String(general ?? '').trim();
-  const d = String(detail ?? '').trim();
+export function formatCategoryName(
+  general: string | null | undefined,
+  detail: string | null | undefined,
+): string {
+  const g = String(general ?? "").trim();
+  const d = String(detail ?? "").trim();
   return d ? `${g}:${d}` : g;
 }
 
@@ -37,14 +36,14 @@ export function formatCategoryName(general, detail) {
  * Split a `GENERAL:DETAIL` interchange string into its parts. Splits on the
  * first ':' only, so a detail containing colons is preserved. A string with no
  * ':' returns an empty detail.
- *
- * @param {string|null|undefined} str
- * @returns {{ general: string, detail: string }}
  */
-export function parseCategoryName(str) {
-  const s = String(str ?? '');
-  const idx = s.indexOf(':');
-  if (idx === -1) return { general: s.trim(), detail: '' };
+export function parseCategoryName(str: string | null | undefined): {
+  general: string;
+  detail: string;
+} {
+  const s = String(str ?? "");
+  const idx = s.indexOf(":");
+  if (idx === -1) return { general: s.trim(), detail: "" };
   return {
     general: s.slice(0, idx).trim(),
     detail: s.slice(idx + 1).trim(),

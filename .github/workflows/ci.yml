@@ -260,7 +260,7 @@ jobs:
         run: bun run lint:backend
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Type-check — TypeScript strict check on frontend
+  # Type-check — TypeScript strict check on frontend and shared packages
   # ─────────────────────────────────────────────────────────────────────────────
   typecheck:
     name: Type Check
@@ -283,6 +283,9 @@ jobs:
 
       - name: Type-check frontend
         run: cd apps/frontend && bun run typecheck
+
+      - name: Type-check shared packages
+        run: bun run typecheck:packages
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Backend checkJs — tsc --checkJs over JSDoc-typed JS files.

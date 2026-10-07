@@ -130,7 +130,7 @@ async function respond(res, dataType, params) {
   const data =
     result.source === "unavailable" ? EMPTY_BY_TYPE[dataType] : result.data;
   // Provenance facts are route-specific envelope metadata and live beside the
-  // requestId at the top level (packages/types/src/api.js).
+  // requestId at the top level (packages/types/src/api.ts).
   const meta = { provider: result.provider ?? null, source: result.source };
   res.ok(data ?? null, meta);
 }

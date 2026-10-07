@@ -2,7 +2,7 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-07
 last_modified: 2026-10-06
 updated: 2026-10-06
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
@@ -719,7 +719,7 @@ Portfolio tax calculations support multiple cost basis accounting methods, confi
 
 **Implementation:**
 
-- Shared calculation functions in `[[packages/shared-utils/src/portfolio.js|@vision/shared-utils/portfolio]]` (used directly by backend portfolio services and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
+- Shared calculation functions in `[[packages/shared-utils/src/portfolio.ts|@vision/shared-utils/portfolio]]` (used directly by backend portfolio services and `apps/frontend/src/hooks/portfolio/usePortfolioCalculations.ts`):
   - `calculateCostBasis()` — Weighted average method
   - `calculateCostBasisFIFO()` — FIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
   - `calculateCostBasisLIFO()` — LIFO method (immutable-safe: uses spread operations, returns immutable lot copies)
@@ -740,7 +740,7 @@ All cost basis methods handle:
 - **Mergers** — Cost-basis-neutral treatment
 - **Return of Capital** — Reduces cost basis per unit across all lots
 
-Code links: [[packages/shared-utils/src/portfolio.js]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
+Code links: [[packages/shared-utils/src/portfolio.ts]], [[apps/frontend/src/stores/settingsStore.ts]], [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]
 
 ## Info Card Security Hardening (Phase 9)
 
@@ -1033,7 +1033,7 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
-Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.js]], [[packages/shared-utils/src/portfolio.js]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.js]], [[packages/shared-utils/src/portfolio.ts]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
 

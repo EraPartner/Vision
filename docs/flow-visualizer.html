@@ -4033,7 +4033,7 @@
                 "from": "sv.portfoliocustody",
                 "to": "pkg.shared-utils",
                 "payload": "projectAssetTransferPartitions: FIFO / LIFO / weighted-average original lots",
-                "annotation": "packages/shared-utils/src/portfolioCustody.js carries acquisition IDs/dates, native basis, and original purchase FX. Source loses gross units; destination receives gross minus asset fee units. No fictional sale, proceeds, income, or cash leg is created."
+                "annotation": "packages/shared-utils/src/portfolioCustody.ts carries acquisition IDs/dates, native basis, and original purchase FX. Source loses gross units; destination receives gross minus asset fee units. No fictional sale, proceeds, income, or cash leg is created."
               },
               {
                 "from": "sv.portfolioreconciliation",
@@ -4045,7 +4045,7 @@
                 "from": "sv.portfolioadjustment",
                 "to": "pkg.shared-utils",
                 "payload": "all-method original lot allocations; native basis + original purchase FX; no sale/cash",
-                "annotation": "packages/shared-utils/src/portfolioCustody.js consumes only remaining eligible lots under FIFO/LIFO/weighted average. apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js retains acquisition allocation receipts and restrictive links to original yield staging, including older batches."
+                "annotation": "packages/shared-utils/src/portfolioCustody.ts consumes only remaining eligible lots under FIFO/LIFO/weighted average. apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.js retains acquisition allocation receipts and restrictive links to original yield staging, including older batches."
               },
               {
                 "from": "fe.apiclient",

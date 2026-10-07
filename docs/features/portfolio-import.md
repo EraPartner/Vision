@@ -2,7 +2,7 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-04
+date: 2026-10-07
 updated: 2026-10-04
 last_modified: 2026-10-04
 tags:
@@ -47,7 +47,7 @@ related_code:
   - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.js"
   - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
   - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.js"
-  - "packages/shared-utils/src/portfolioCustody.js"
+  - "packages/shared-utils/src/portfolioCustody.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
   - "apps/node-backend/src/services/importIdentity.js"
@@ -433,7 +433,7 @@ timestamp-trigger changes on retained rows do not replace the financial equality
 ### Dated custody and original basis
 
 **Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js]] and
-[[packages/shared-utils/src/portfolioCustody.js]].
+[[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_transfers` stores one dated, source-identified event for a whole or partial custody
 move. The source and destination must be different active brokerage, exchange, or wallet accounts.
@@ -457,7 +457,7 @@ partial custody movement. See [[docs/adr/177-reviewed-history-reconciliation-and
 ### Unit adjustments and consumed basis
 
 **Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js]] and
-[[packages/shared-utils/src/portfolioCustody.js]].
+[[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_adjustments` stores dated positive unit removals as `yield_reversal` with
 `zero_yield_only` basis, or `asset_fee` with carried basis. These rows use the `asset_adjustment`

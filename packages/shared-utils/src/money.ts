@@ -12,25 +12,18 @@
  * ROUND_HALF_UP while the backend used ROUND_HALF_EVEN).
  */
 
-import Decimal from 'decimal.js';
+import Decimal from "decimal.js";
+
+export type DecimalInput = number | string | Decimal | null | undefined;
 
 Decimal.set({ precision: 30, rounding: Decimal.ROUND_HALF_EVEN });
 
-/**
- * @param {number|string|Decimal|null|undefined} v
- * @returns {Decimal}
- */
-export function toDecimal(v) {
-  if (v === null || v === undefined || v === '') return new Decimal(0);
+export function toDecimal(v: DecimalInput): Decimal {
+  if (v === null || v === undefined || v === "") return new Decimal(0);
   return v instanceof Decimal ? v : new Decimal(v);
 }
 
-/**
- * @param {Array<number|string|Decimal>} values
- * @returns {Decimal}
- */
-export function addAll(values) {
-  /** @type {Decimal} */
+export function addAll(values: readonly DecimalInput[]): Decimal {
   let acc = new Decimal(0);
   for (const v of values) {
     acc = acc.plus(toDecimal(v));
@@ -38,39 +31,20 @@ export function addAll(values) {
   return acc;
 }
 
-/**
- * @param {number|string|Decimal} a
- * @param {number|string|Decimal} b
- * @returns {Decimal}
- */
-export function subtract(a, b) {
+export function subtract(a: DecimalInput, b: DecimalInput): Decimal {
   return toDecimal(a).minus(toDecimal(b));
 }
 
-/**
- * Banker's rounding to 2 decimal places.
- * @param {number|string|Decimal} v
- * @returns {Decimal}
- */
-export function roundToCents(v) {
+/** Banker's rounding to 2 decimal places. */
+export function roundToCents(v: DecimalInput): Decimal {
   return toDecimal(v).toDecimalPlaces(2, Decimal.ROUND_HALF_EVEN);
 }
 
-/**
- * @param {number|string|Decimal} a
- * @param {number|string|Decimal} b
- * @returns {Decimal}
- */
-export function multiply(a, b) {
+export function multiply(a: DecimalInput, b: DecimalInput): Decimal {
   return toDecimal(a).times(toDecimal(b));
 }
 
-/**
- * @param {number|string|Decimal} a
- * @param {number|string|Decimal} b
- * @returns {Decimal}
- */
-export function divide(a, b) {
+export function divide(a: DecimalInput, b: DecimalInput): Decimal {
   return toDecimal(a).div(toDecimal(b));
 }
 
@@ -78,20 +52,14 @@ export function divide(a, b) {
  * Rounding to N decimal places, returned as a plain number. Use on emit to
  * replace lossy `Math.round(x * 10**n) / 10**n`. Uses banker's rounding
  * (the canonical mode declared at the top of this module).
- *
- * @param {number|string|Decimal} v
- * @param {number} [places=2]
- * @returns {number}
  */
-export function roundMoney(v, places = 2) {
-  return toDecimal(v).toDecimalPlaces(places, Decimal.ROUND_HALF_EVEN).toNumber();
+export function roundMoney(v: DecimalInput, places = 2): number {
+  return toDecimal(v)
+    .toDecimalPlaces(places, Decimal.ROUND_HALF_EVEN)
+    .toNumber();
 }
 
-/**
- * @param {number|string|Decimal} v
- * @returns {number}
- */
-export function toNumber(v) {
+export function toNumber(v: DecimalInput): number {
   return toDecimal(v).toNumber();
 }
 
@@ -107,13 +75,12 @@ export function toNumber(v) {
  *
  * Use this at the read boundary, AFTER any decimal summation — internal math
  * must still run through {@link toDecimal} on the raw string to stay exact.
- *
- * @param {number|string|Decimal|null|undefined} v
- * @returns {number|null|undefined}
  */
-export function numericColumn(v) {
-  if (v === null || v === undefined) return v;
-  if (v === '') return undefined;
+export function numericColumn(v: DecimalInput): number | null | undefined {
+  // Separate returns keep this narrowing valid for the backend's non-strict check.
+  if (v === null) return null;
+  if (v === undefined) return undefined;
+  if (v === "") return undefined;
   return new Decimal(v).toNumber();
 }
 
@@ -121,19 +88,26 @@ export function numericColumn(v) {
  * Return a shallow copy of `row` with the named NUMERIC columns coerced to
  * numbers via {@link numericColumn}. No-op for a nullish row. Lets a repository
  * normalise every money/quantity column in one call instead of per-field.
- *
- * @template {Record<string, any>} T
- * @param {T | null | undefined} row
- * @param {readonly string[]} fields
- * @returns {T}
+ * A nullish row is returned unchanged.
  */
-export function coerceNumericFields(row, fields) {
+export function coerceNumericFields<T extends object>(
+  row: T,
+  fields: readonly string[],
+): T;
+export function coerceNumericFields<T extends object>(
+  row: T | null | undefined,
+  fields: readonly string[],
+): T | null | undefined;
+export function coerceNumericFields<T extends object>(
+  row: T | null | undefined,
+  fields: readonly string[],
+): T | null | undefined {
   if (!row) return row;
-  const out = { ...row };
+  const out = { ...row } as Record<string, unknown>;
   for (const field of fields) {
-    if (field in out) out[field] = numericColumn(out[field]);
+    if (field in out) out[field] = numericColumn(out[field] as DecimalInput);
   }
-  return out;
+  return out as T;
 }
 
 export { Decimal };
