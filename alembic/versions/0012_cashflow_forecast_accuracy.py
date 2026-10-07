@@ -18,7 +18,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute(sa.text("""
         CREATE TABLE IF NOT EXISTS cashflow_forecast_accuracy (
             id          SERIAL PRIMARY KEY,
@@ -44,7 +44,7 @@ def upgrade():
     ))
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(sa.text("DROP INDEX IF EXISTS idx_cfa_as_of_month"))
     op.execute(sa.text("DROP INDEX IF EXISTS idx_cfa_user_method"))
     op.execute(sa.text("DROP TABLE IF EXISTS cashflow_forecast_accuracy"))

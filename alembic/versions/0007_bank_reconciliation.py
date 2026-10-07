@@ -26,7 +26,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute(sa.text("""
         DO $$ BEGIN
             CREATE TYPE reconciliation_match_status
@@ -99,7 +99,7 @@ def upgrade():
         """))
 
 
-def downgrade():
+def downgrade() -> None:
     for table in ('bank_statements', 'reconciliation_entries'):
         op.execute(sa.text(
             f"DROP TRIGGER IF EXISTS update_{table}_updated_at ON {table}"

@@ -73,7 +73,9 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterable, Mapping
 from pathlib import Path
+from typing import Protocol
 
 TAG = "[check-todo-stamps]"
 
@@ -123,6 +125,14 @@ def parse(text: str) -> list[Token]:
 # ── Git access, isolated behind a resolver so the classifier can be tested without a repo ────
 
 
+class Resolver(Protocol):
+    def on_base(self, sha: str) -> bool: ...
+
+    def on_head(self, sha: str) -> bool: ...
+
+    def merge_for_pr(self, pr: int) -> str | None: ...
+
+
 class GitResolver:
     """Three git calls total, then everything is answered in-process.
 
@@ -150,13 +160,13 @@ class GitResolver:
         return self._git("rev-list", ref).split()
 
     @staticmethod
-    def _prefix_index(shas) -> dict:
-        idx = collections.defaultdict(list)
+    def _prefix_index(shas: Iterable[str]) -> dict[str, list[str]]:
+        idx: dict[str, list[str]] = collections.defaultdict(list)
         for s in shas:
             idx[s[:7]].append(s)
         return idx
 
-    def _merge_commits(self, ref: str) -> dict:
+    def _merge_commits(self, ref: str) -> dict[int, list[tuple[str, str]]]:
         merges: dict[int, list[tuple[str, str]]] = collections.defaultdict(list)
         for line in self._git("log", "--format=%H%x09%s", ref).split("\n"):
             sha, _, subject = line.partition("\t")
@@ -168,7 +178,7 @@ class GitResolver:
         return merges
 
     @staticmethod
-    def _hit(index: dict, abbrev: str) -> bool:
+    def _hit(index: dict[str, list[str]], abbrev: str) -> bool:
         return any(c.startswith(abbrev) for c in index.get(abbrev[:7], ()))
 
     def on_base(self, sha: str) -> bool:
@@ -177,7 +187,7 @@ class GitResolver:
     def on_head(self, sha: str) -> bool:
         return self._hit(self._head_by7, sha)
 
-    def merge_for_pr(self, pr: int):
+    def merge_for_pr(self, pr: int) -> str | None:
         """The squash-merge commit for PR #pr on the base branch, or None if it has not landed.
 
         A PR number appearing on more than one subject line would make the mapping ambiguous;
@@ -188,7 +198,7 @@ class GitResolver:
         return hits[0][0] if len(hits) == 1 else None
 
 
-def classify(tokens: list[Token], resolver) -> list[Token]:
+def classify(tokens: list[Token], resolver: Resolver) -> list[Token]:
     for t in tokens:
         if resolver.on_base(t.sha):
             t.verdict, t.detail = OK, "resolves on the base branch"
@@ -264,16 +274,21 @@ def verify_open(tokens: list[Token]) -> list[str]:
 
 
 class FakeResolver:
-    def __init__(self, base_shas, head_shas, merges):
+    def __init__(
+        self,
+        base_shas: list[str],
+        head_shas: list[str],
+        merges: Mapping[int, str | None],
+    ) -> None:
         self.base_shas, self.head_shas, self.merges = base_shas, head_shas, merges
 
-    def on_base(self, sha):
+    def on_base(self, sha: str) -> bool:
         return any(s.startswith(sha) for s in self.base_shas)
 
-    def on_head(self, sha):
+    def on_head(self, sha: str) -> bool:
         return any(s.startswith(sha) for s in self.head_shas)
 
-    def merge_for_pr(self, pr):
+    def merge_for_pr(self, pr: int) -> str | None:
         return self.merges.get(pr)
 
 
@@ -407,7 +422,7 @@ def resolve_base(repo: Path, explicit: str | None) -> str:
     )
 
 
-def arg_value(argv: list[str], flag: str):
+def arg_value(argv: list[str], flag: str) -> str | None:
     return (
         argv[argv.index(flag) + 1]
         if flag in argv and argv.index(flag) + 1 < len(argv)

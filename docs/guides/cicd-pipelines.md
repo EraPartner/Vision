@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-06
+date: 2026-10-07
 tags:
   [
     guide,
@@ -28,16 +28,16 @@ scan, or publish a product container image. The required aggregate check remains
 
 `.github/workflows/ci.yml` classifies changed paths and runs the relevant independent jobs:
 
-| Area              | Jobs and evidence                                                              |
-| ----------------- | ------------------------------------------------------------------------------ |
-| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan  |
-| Dependencies      | PR dependency review, Bun audit and pip-audit                                  |
-| Static checks     | frontend/backend lint, frontend/backend type checks, generated-artifact checks |
-| Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests          |
-| Database safety   | destructive-migration check against repository source                          |
-| Security          | Trivy filesystem scan with table and SARIF output                              |
-| Runtime           | native production-health and migration-reversibility smoke                     |
-| Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18  |
+| Area              | Jobs and evidence                                                             |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Repository policy | cloud tooling, package/workflow supply-chain checks, commitlint, secrets scan |
+| Dependencies      | PR dependency review, Bun audit and pip-audit                                 |
+| Static checks     | frontend/backend lint, frontend/backend/Python type checks, generated checks  |
+| Builds and tests  | frontend build, frontend tests, Electron/runtime tests, backend tests         |
+| Database safety   | destructive-migration check against repository source                         |
+| Security          | Trivy filesystem scan with table and SARIF output                             |
+| Runtime           | native production-health and migration-reversibility smoke                    |
+| Contracts         | live API contract tests against a native backend and disposable PostgreSQL 18 |
 
 `quality-gate` aggregates the portable pre-runtime checks. `CI Complete` aggregates every required
 stage and keeps a stable branch-protection name. A skipped path-filtered job is handled explicitly;
@@ -49,6 +49,11 @@ headroom over a production build: the preload limit over the 2026-09-24 build, a
 limit over the 2026-10-06 build, after the owner approved raising it for growth in lazy route
 and locale chunks. The checker reads the generated `index.html` and assets to catch new eager
 imports and total bundle growth.
+
+Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
+`scripts/`, the packaged Alembic wrapper) in the `Type Check (Python)` job, which installs the
+hash-pinned `config/requirements.txt` and `config/requirements-dev.txt` and also runs the Alembic
+audit callback test. See [[docs/adr/184-strict-python-type-checking|ADR-184]].
 
 The backend runs the base JSDoc type check and a `noImplicitAny` check over every `src/` file.
 The latter compares diagnostics with `scripts/checkjs-ratchet-baseline.json`, which records the
@@ -179,6 +184,7 @@ the change:
 bun run lint
 bun run lint:backend
 bun run typecheck
+bun run typecheck:python
 bun run validate-locales
 bun run test:scripts
 bun run test

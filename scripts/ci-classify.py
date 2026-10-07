@@ -3,9 +3,10 @@
 
 import os
 import subprocess
+from collections.abc import Collection, Sequence
 
 
-def classify(paths, special_paths=()):
+def classify(paths: Sequence[str], special_paths: Collection[str] = ()) -> bool:
     if not paths:
         return True
     for path in paths:
@@ -20,11 +21,11 @@ def classify(paths, special_paths=()):
     return False
 
 
-def git(*args):
+def git(*args: str) -> bytes:
     return subprocess.check_output(["git", *args], stderr=subprocess.DEVNULL)
 
 
-def classify_range(base, head):
+def classify_range(base: str, head: str) -> bool:
     try:
         if not base or not head or base == "0" * 40:
             return True
@@ -36,7 +37,7 @@ def classify_range(base, head):
             .decode()
             .split("\0")[:-1]
         )
-        special = set()
+        special: set[str] = set()
         for ref in (base, head):
             for entry in git("ls-tree", "-rz", ref).decode().split("\0"):
                 if entry:

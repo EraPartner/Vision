@@ -9,6 +9,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TypedDict
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,14 @@ TRACKING_MARKER_RE = re.compile(
     r"🔎\s+(verified-present|partial|decision-needed|runtime-unverified|needs-github-check)\b",
     re.IGNORECASE,
 )
+
+
+class PendingItem(TypedDict):
+    line: int
+    section: str
+    domain: str
+    heading: str
+    body: list[str]
 
 
 @dataclass(frozen=True)
@@ -94,13 +103,13 @@ def parse_todo(path: Path) -> list[TodoItem]:
     items: list[TodoItem] = []
     section = ""
     domain = ""
-    current: dict[str, object] | None = None
+    current: PendingItem | None = None
 
     def finish() -> None:
         nonlocal current
         if current is None:
             return
-        heading = str(current["heading"])
+        heading = current["heading"]
         body = tuple(current["body"])
         title_match = TITLE_RE.search(heading)
         priority_match = PRIORITY_RE.search(heading)
@@ -108,9 +117,9 @@ def parse_todo(path: Path) -> list[TodoItem]:
         combined = "\n".join((heading, *body))
         items.append(
             TodoItem(
-                line=int(current["line"]),
-                section=str(current["section"]),
-                domain=str(current["domain"]),
+                line=current["line"],
+                section=current["section"],
+                domain=current["domain"],
                 title=title_match.group(1).strip() if title_match else heading,
                 priority=priority_match.group(1) if priority_match else "",
                 state=classify_state(combined),

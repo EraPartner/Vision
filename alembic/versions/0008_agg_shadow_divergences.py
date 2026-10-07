@@ -20,7 +20,7 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     op.execute(sa.text("""
         CREATE TABLE IF NOT EXISTS agg_shadow_divergences (
             id               SERIAL PRIMARY KEY,
@@ -42,5 +42,5 @@ def upgrade():
     ))
 
 
-def downgrade():
+def downgrade() -> None:
     op.execute(sa.text("DROP TABLE IF EXISTS agg_shadow_divergences"))

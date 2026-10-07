@@ -21,6 +21,8 @@ def literal_assignment(tree: ast.Module, name: str) -> object:
         if any(
             isinstance(target, ast.Name) and target.id == name for target in targets
         ):
+            if node.value is None:
+                raise ValueError(f"{name!r} is declared without a value")
             return ast.literal_eval(node.value)
     raise ValueError(f"missing {name!r} assignment")
 
