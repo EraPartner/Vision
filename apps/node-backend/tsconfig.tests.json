@@ -1,0 +1,8 @@
+{
+  "//": "Strict check for backend tests written in TypeScript (tests/**/*.ts), with the sources they import. Tests still in JavaScript are imported but not checked until they convert (ADR-192).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

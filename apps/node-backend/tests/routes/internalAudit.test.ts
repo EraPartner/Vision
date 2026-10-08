@@ -47,6 +47,7 @@ describe("Electron audit bridge access", () => {
       "Unauthorized",
     );
     expect(() =>
+      // @ts-expect-error -- a null authorization header must still be rejected at runtime
       assertAuditBridgeAccess(request({ authorization: null }), () => TOKEN),
     ).toThrow("Unauthorized");
   });

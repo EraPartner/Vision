@@ -4,7 +4,7 @@ import currencyConversionService from "../../src/services/currency/currencyConve
 import {
   mockCurrencyConversion,
   mockRowsAlreadyInTargetCurrency,
-} from "./mockCurrencyConversion.js";
+} from "./mockCurrencyConversion.ts";
 
 describe("mockCurrencyConversion", () => {
   it("exposes the complete named surface with matching default-export spies", async () => {

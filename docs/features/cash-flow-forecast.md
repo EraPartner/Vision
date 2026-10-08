@@ -585,7 +585,7 @@ Plan for this when reviewing the forecast. Use [[docs/features/exchange-rates|Ex
 
 ## Forecast regression benchmarks and percentage errors
 
-`tests/services/forecastQuality.test.js` fixes UTC daily synthetic series and a 30-day holdout.
+`tests/services/forecastQuality.test.ts` fixes UTC daily synthetic series and a 30-day holdout.
 Zero/constant mean absolute error (MAE) is bounded by 1e-6; linear trend by 0.05 reporting currency
 units. Weekly and weekly-trend series use 1.5 at 60/90 training days and 0.25 at 180/365/730 days.
 A trend that becomes a plateau uses 0.3. Calendar annual seasonality uses 6 at 365/730/1095 days;

@@ -11,7 +11,7 @@ import express from 'express';
 import supertest from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { mockLogger } from './helpers/mockLogger.js';
+import { mockLogger } from './helpers/mockLogger.ts';
 vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
@@ -28,7 +28,7 @@ const {
   createErrorHandler,
 } = await import('../src/middleware/errorHandler.ts');
 
-const { createRouteApp } = await import('./helpers/routeApp.js');
+const { createRouteApp } = await import('./helpers/routeApp.ts');
 
 function mockRes() {
   const res = {};

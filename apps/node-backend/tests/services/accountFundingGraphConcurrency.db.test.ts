@@ -13,7 +13,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "../setup/db.js";
+} from "../setup/db.ts";
 import { accountService } from "../../src/services/accountService.ts";
 import { mergeAccounts } from "../../src/services/accountMergeService.ts";
 import { closePool } from "../../src/database/connection.ts";
@@ -22,8 +22,11 @@ import {
   __ACCOUNT_FUNDING_GRAPH_LOCK_SQL as ACCOUNT_FUNDING_GRAPH_LOCK_SQL,
 } from "../../src/lib/accountFundingGraphLock.ts";
 
-async function insertAccount(name, fundingAccountId = null) {
-  const { rows } = await getTestPool().query(
+async function insertAccount(
+  name: string,
+  fundingAccountId: number | null = null,
+): Promise<number> {
+  const { rows } = await getTestPool()!.query(
     `INSERT INTO accounts (name, display_name, funding_account_id)
      VALUES ($1, $1, $2)
      RETURNING id`,
@@ -33,7 +36,7 @@ async function insertAccount(name, fundingAccountId = null) {
 }
 
 async function expectAcyclic() {
-  const { rows } = await getTestPool().query(
+  const { rows } = await getTestPool()!.query(
     "SELECT id, funding_account_id FROM accounts ORDER BY id",
   );
   const parentById = new Map(
@@ -53,7 +56,7 @@ async function expectAcyclic() {
   }
 }
 
-function expectOneWinner(outcomes) {
+function expectOneWinner(outcomes: PromiseSettledResult<unknown>[]) {
   expect(outcomes.filter(({ status }) => status === "fulfilled")).toHaveLength(
     1,
   );
@@ -63,7 +66,7 @@ function expectOneWinner(outcomes) {
 }
 
 async function holdFundingGraphLock() {
-  const client = await getTestPool().connect();
+  const client = await getTestPool()!.connect();
   await client.query("BEGIN");
   await client.query(ACCOUNT_FUNDING_GRAPH_LOCK_SQL, [
     ...ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,
@@ -80,10 +83,10 @@ async function holdFundingGraphLock() {
   };
 }
 
-async function waitForFundingGraphWaiters(expected) {
+async function waitForFundingGraphWaiters(expected: number) {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
-    const { rows } = await getTestPool().query(
+    const { rows } = await getTestPool()!.query(
       `SELECT count(*)::integer AS count
          FROM pg_stat_activity
         WHERE state = 'active'
@@ -99,8 +102,14 @@ async function waitForFundingGraphWaiters(expected) {
   );
 }
 
-async function releaseLockAndCollect(releaseLock, outcomesPromise, expected) {
-  let waiterError;
+async function releaseLockAndCollect<
+  T extends PromiseSettledResult<unknown>[],
+>(
+  releaseLock: () => Promise<void>,
+  outcomesPromise: Promise<T>,
+  expected: number,
+): Promise<T> {
+  let waiterError: unknown;
   try {
     await waitForFundingGraphWaiters(expected);
   } catch (err) {
@@ -125,7 +134,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       await pool.query("UPDATE accounts SET funding_account_id = NULL");
       await pool.query("DELETE FROM accounts");
     });
@@ -201,7 +210,7 @@ describe.skipIf(!hasTestDatabase())(
             outcomes[1].reason?.message,
           ),
       ).toBe(true);
-      const { rows } = await getTestPool().query(
+      const { rows } = await getTestPool()!.query(
         "SELECT funding_account_id FROM accounts WHERE id = $1",
         [dependent],
       );

@@ -5,10 +5,10 @@ import {
   getTestPool,
   closeTestPool,
   hasTestDatabase,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
-import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.js";
-import { networkSource } from "./helpers/kinesisNetwork.js";
+import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.ts";
+import { networkSource } from "./helpers/kinesisNetwork.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";

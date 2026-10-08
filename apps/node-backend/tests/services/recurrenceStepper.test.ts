@@ -83,7 +83,7 @@ describe("nextOccurrenceYmd (string-space stepper)", () => {
 
   it("compounds the clamp across sequential hops (Jan 31 -> Feb 28 -> Mar 28, never back to the 31st)", () => {
     const feb = nextOccurrenceYmd("2026-01-31", "monthly");
-    const mar = nextOccurrenceYmd(feb, "monthly");
+    const mar = nextOccurrenceYmd(feb!, "monthly");
     expect([feb, mar]).toEqual(["2026-02-28", "2026-03-28"]);
   });
 
@@ -101,21 +101,21 @@ describe("nextOccurrenceYmd (string-space stepper)", () => {
 
 describe("string-space vs Date-space steppers", () => {
   /** Walk `steps` string-space hops from `anchor`. */
-  const stringWalk = (anchor, pattern, steps) => {
-    const out = [];
+  const stringWalk = (anchor: string, pattern: string, steps: number) => {
+    const out: string[] = [];
     let cur = anchor;
     for (let i = 0; i < steps; i++) {
-      cur = nextOccurrenceYmd(cur, pattern);
+      cur = nextOccurrenceYmd(cur, pattern)!;
       out.push(cur);
     }
     return out;
   };
   /** Walk `steps` calculateNextDate hops from start-of-day(anchor), rendered per app TZ. */
-  const dateWalk = (anchor, pattern, steps) => {
-    const out = [];
+  const dateWalk = (anchor: string, pattern: string, steps: number) => {
+    const out: string[] = [];
     let cur = appDateStringToUtc(anchor);
     for (let i = 0; i < steps; i++) {
-      cur = calculateNextDate(cur, pattern);
+      cur = calculateNextDate(cur, pattern)!;
       out.push(toAppDateString(cur));
     }
     return out;
@@ -147,7 +147,7 @@ describe("string-space vs Date-space steppers", () => {
       ["weekly", 80],
       ["biweekly", 40],
       ["every 3 days", 200],
-    ]) {
+    ] as const) {
       expect(stringWalk("2026-01-05", pattern, steps)).toEqual(
         dateWalk("2026-01-05", pattern, steps),
       );
@@ -160,7 +160,7 @@ describe("string-space vs Date-space steppers", () => {
     expect(nextOccurrenceYmd("2026-10-20", "weekly")).toBe("2026-10-27");
     expect(
       toAppDateString(
-        calculateNextDate(appDateStringToUtc("2026-10-20"), "weekly"),
+        calculateNextDate(appDateStringToUtc("2026-10-20"), "weekly")!,
       ),
     ).toBe("2026-10-27");
 
@@ -182,7 +182,7 @@ describe("fastForwardYmd (optional fast-forward)", () => {
     expect(jumped).toBe("2026-06-10");
     // Phase preserved: the jump is exactly 11 sequential biweekly hops...
     let walked = "2026-01-07";
-    for (let i = 0; i < 11; i++) walked = nextOccurrenceYmd(walked, "biweekly");
+    for (let i = 0; i < 11; i++) walked = nextOccurrenceYmd(walked, "biweekly")!;
     expect(walked).toBe(jumped);
     // ...and the next occurrences bracket the target without skipping it.
     expect(nextOccurrenceYmd(jumped, "biweekly")).toBe("2026-06-24"); // still before
@@ -246,7 +246,7 @@ describe("fastForwardYmd (optional fast-forward)", () => {
         const jumped = fastForwardYmd(anchor, pattern, target);
         // Walk sequentially until within the jump's landing zone.
         let walked = anchor;
-        while (walked < jumped) walked = nextOccurrenceYmd(walked, pattern);
+        while (walked < jumped) walked = nextOccurrenceYmd(walked, pattern)!;
         expect(walked).toBe(jumped);
         expect(jumped < target).toBe(true);
       }

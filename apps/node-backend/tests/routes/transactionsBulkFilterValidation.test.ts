@@ -1,6 +1,6 @@
 /**
  * The `filter` selector of POST /bulk-delete, /bulk-update and /bulk-export,
- * driven over HTTP against the real router (tests/helpers/routeApp.js).
+ * driven over HTTP against the real router (tests/helpers/routeApp.ts).
  *
  * All three endpoints resolve their selection through the one
  * `resolveBulkSelection` → `normalizeBulkFilter` pair, and that normaliser used
@@ -18,12 +18,12 @@
  * Each file gets its own module registry, hence its own limiter counter.
  *
  * The per-field accept/reject matrix lives one layer down, in
- * tests/services/bulkSelectionFilter.test.js. What is pinned HERE is the wire
+ * tests/services/bulkSelectionFilter.test.ts. What is pinned HERE is the wire
  * behaviour: the status code, and that neither the COUNT(*) precheck nor the
  * pooled write client is ever reached.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockPooledTxConnection } from "../helpers/repoMocks.js";
+import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -31,9 +31,9 @@ import {
   mockCurrencyConversion,
   mockAttachmentRecordService,
   mockAttachmentService,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -66,14 +66,21 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
-import { getClient, query as dbQuery } from "../../src/database/connection.ts";
+import {
+  getClient as rawGetClient,
+  query as rawQuery,
+} from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+
+const dbQuery = vi.mocked(rawQuery);
+const getClient = vi.mocked(rawGetClient);
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
-const bulkDelete = (body) =>
+const bulkDelete = (body: object) =>
   api.post("/api/transactions/bulk-delete").send(body);
-const bulkUpdate = (body) =>
+const bulkUpdate = (body: object) =>
   api.post("/api/transactions/bulk-update").send(body);
-const bulkExport = (body) =>
+const bulkExport = (body: object) =>
   api.post("/api/transactions/bulk-export").send(body);
 
 /**
@@ -139,8 +146,8 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
     // the 5000-row cap rather than by validation — it must not be mistaken for
     // an empty filter and rejected.
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 11 }] });
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [{ id: 11 }] } as PgQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
@@ -157,8 +164,10 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
 
   it("still accepts a well-formed filter unchanged", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 2 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 11 }, { id: 22 }] });
+      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as PgQueryResult)
+      .mockResolvedValueOnce({
+        rows: [{ id: 11 }, { id: 22 }],
+      } as PgQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

@@ -11,7 +11,7 @@
  * Usage inside a vitest spec:
  *
  *   import { describe, it, expect } from 'vitest';
- *   import { runGolden } from '../golden/runGolden.js';
+ *   import { runGolden } from '../golden/runGolden.ts';
  *   import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.ts';
  *
  *   describe('loanSchedule golden', () => {
@@ -35,11 +35,20 @@ const FIXTURE_ROOT = join(
 
 /**
  * Run a fixture-backed regression check.
- * @param {string} name fixture slug, e.g. "loanSchedule/amortizing-standard"
- * @param {(input: any) => any | Promise<any>} fn function under test
- * @param {string} [fixtureRoot] alternate root for harness self-tests
+ *
+ * `Input` is the shape of `<name>.input.json`. It is not validated — the JSON
+ * is trusted to match — so declare it with the type parameter or by annotating
+ * `fn`'s parameter.
+ *
+ * @param name fixture slug, e.g. "loanSchedule/amortizing-standard"
+ * @param fn function under test
+ * @param fixtureRoot alternate root for harness self-tests
  */
-export async function runGolden(name, fn, fixtureRoot = FIXTURE_ROOT) {
+export async function runGolden<Input = unknown>(
+  name: string,
+  fn: (input: Input) => unknown,
+  fixtureRoot: string = FIXTURE_ROOT,
+): Promise<void> {
   if (process.env.UPDATE_GOLDENS === "1" && process.env.CI) {
     throw new Error(
       "UPDATE_GOLDENS=1 cannot run in CI; golden verification must compare existing fixtures",
@@ -48,7 +57,7 @@ export async function runGolden(name, fn, fixtureRoot = FIXTURE_ROOT) {
   const inputPath = join(fixtureRoot, `${name}.input.json`);
   const expectedPath = join(fixtureRoot, `${name}.expected.json`);
 
-  const input = JSON.parse(await readFile(inputPath, "utf8"));
+  const input = JSON.parse(await readFile(inputPath, "utf8")) as Input;
   const actual = await fn(input);
 
   if (process.env.UPDATE_GOLDENS === "1") {
@@ -61,11 +70,11 @@ export async function runGolden(name, fn, fixtureRoot = FIXTURE_ROOT) {
     return;
   }
 
-  let expected;
+  let expected: unknown;
   try {
     expected = JSON.parse(await readFile(expectedPath, "utf8"));
   } catch (err) {
-    if (err.code === "ENOENT") {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error(
         `Missing golden fixture at ${expectedPath}. Run with UPDATE_GOLDENS=1 to create it.`,
       );

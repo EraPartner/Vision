@@ -3,11 +3,11 @@
  * Mirrors: apps/backend/tests/test_recipient_bank_accounts.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
+ * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 // The route imports its repository through services/recipientBankAccountService.js,
 // which re-exports the default from this module — mocking the repository here
@@ -28,7 +28,14 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import bankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
+import rawBankAccountRepo from "../../src/repositories/recipientBankAccountRepository.ts";
+import type { RecipientBankAccountRow } from "../../src/repositories/recipientBankAccountRepository.ts";
+
+const bankAccountRepo = vi.mocked(rawBankAccountRepo);
+
+/** Bank-account fixture carrying only the columns a test sets. */
+const bankAccount = (fields: Partial<RecipientBankAccountRow>) =>
+  fields as RecipientBankAccountRow;
 
 const { default: recipientBankAccountsRouter } =
   await import("../../src/routes/recipientBankAccounts.ts");
@@ -44,13 +51,13 @@ describe("Recipient Bank Account Routes", () => {
   describe("GET /:recipientId/bank-accounts", () => {
     it("should return bank accounts for recipient", async () => {
       bankAccountRepo.getByRecipientId.mockResolvedValue([
-        {
+        bankAccount({
           id: 1,
           recipient_id: 1,
           account_number: "BE61734041478017",
           bank_name: "BELFIUS",
           is_primary: true,
-        },
+        }),
       ]);
 
       const res = await api.get(`${BASE}/1/bank-accounts`).expect(200);
@@ -71,11 +78,11 @@ describe("Recipient Bank Account Routes", () => {
   describe("POST /:recipientId/bank-accounts", () => {
     it("should create bank account with 201", async () => {
       bankAccountRepo.createOrGet.mockResolvedValue({
-        bankAccount: {
+        bankAccount: bankAccount({
           id: 1,
           account_number: "BE61734041478017",
           bank_name: "BELFIUS",
-        },
+        }),
         created: true,
       });
 
@@ -88,7 +95,7 @@ describe("Recipient Bank Account Routes", () => {
 
     it("should return 200 for existing account", async () => {
       bankAccountRepo.createOrGet.mockResolvedValue({
-        bankAccount: { id: 1, account_number: "BE61734041478017" },
+        bankAccount: bankAccount({ id: 1, account_number: "BE61734041478017" }),
         created: false,
       });
 
@@ -119,7 +126,7 @@ describe("Recipient Bank Account Routes", () => {
     it("accepts an account_number at the 34-char boundary (IBAN max)", async () => {
       const acct = "X".repeat(34);
       bankAccountRepo.createOrGet.mockResolvedValue({
-        bankAccount: { id: 2, account_number: acct },
+        bankAccount: bankAccount({ id: 2, account_number: acct }),
         created: true,
       });
 
@@ -172,10 +179,12 @@ describe("Recipient Bank Account Routes", () => {
     });
 
     it("should return updated account with links when update succeeds", async () => {
-      bankAccountRepo.update.mockResolvedValue({
-        id: 5,
-        bank_name: "Updated Bank",
-      });
+      bankAccountRepo.update.mockResolvedValue(
+        bankAccount({
+          id: 5,
+          bank_name: "Updated Bank",
+        }),
+      );
 
       const res = await api
         .patch(`${BASE}/1/bank-accounts/5`)
@@ -227,11 +236,13 @@ describe("Recipient Bank Account Routes", () => {
     // docs/reference/code-patterns.md, "DELETE responses").
     it("should deactivate account and return the deactivated entity", async () => {
       bankAccountRepo.softDelete.mockResolvedValue(true);
-      bankAccountRepo.getById.mockResolvedValue({
-        id: 15,
-        account_number: "BE01",
-        is_active: false,
-      });
+      bankAccountRepo.getById.mockResolvedValue(
+        bankAccount({
+          id: 15,
+          account_number: "BE01",
+          is_active: false,
+        }),
+      );
 
       const res = await api.delete(`${BASE}/1/bank-accounts/15`).expect(200);
 
@@ -272,11 +283,13 @@ describe("Recipient Bank Account Routes", () => {
 
     it("should return account payload when setting primary succeeds", async () => {
       bankAccountRepo.setPrimary.mockResolvedValue(true);
-      bankAccountRepo.getById.mockResolvedValue({
-        id: 2,
-        recipient_id: 1,
-        is_primary: true,
-      });
+      bankAccountRepo.getById.mockResolvedValue(
+        bankAccount({
+          id: 2,
+          recipient_id: 1,
+          is_primary: true,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/1/bank-accounts/2/set-primary`)

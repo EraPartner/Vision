@@ -29,12 +29,11 @@ export const KINESIS_COLUMNS = [
 /**
  * Parse literal statement lines and return the batch configuration that the
  * stage pipeline records (`source_columns` and `kinesis_source_context`).
- * @param {string[]} lines literal CSV records without the header
- * @param {{ yield_basis_policy?: string }} [options]
+ * @param lines literal CSV records without the header
  */
 export async function capturedKinesisStatement(
-  lines,
-  { yield_basis_policy = "zero" } = {},
+  lines: string[],
+  { yield_basis_policy = "zero" }: { yield_basis_policy?: "zero" } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "vision-kinesis-"));
   try {

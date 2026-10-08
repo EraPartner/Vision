@@ -2,13 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 import {
   writeSyntheticWorkbook,
   syntheticSaxoWorkbook,
-} from "../helpers/saxoWorkbook.js";
+} from "../helpers/saxoWorkbook.ts";
 
 vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
@@ -41,22 +41,26 @@ vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
-import accountService from "../../src/services/accountService.ts";
+import { runPortfolioImportPipeline as rawRunPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
+import rawAccountService from "../../src/services/accountService.ts";
 import router from "../../src/routes/portfolioImportRoutes.ts";
+
+const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
+const accountService = vi.mocked(rawAccountService);
+type AccountRow = Awaited<ReturnType<typeof rawAccountService.get>>;
 const BASE = "/api/portfolio/import";
 const api = routeAgent(router, { mountPath: BASE });
 const MIME =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-let directory;
-let file;
+let directory: string;
+let file: string;
 beforeEach(async () => {
   vi.clearAllMocks();
   accountService.get.mockResolvedValue({
     id: 7,
     type: "brokerage",
     is_active: true,
-  });
+  } as Partial<AccountRow> as AccountRow);
   runPortfolioImportPipeline.mockResolvedValue({
     batchId: 12,
     total: 4,

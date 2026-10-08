@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { getTestPool, hasTestDatabase, closeTestPool } from './db.js';
+import { getTestPool, hasTestDatabase, closeTestPool } from './db.ts';
 
 const originalUrl = process.env.TEST_DATABASE_URL;
 

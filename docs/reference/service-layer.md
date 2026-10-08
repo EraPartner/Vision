@@ -591,7 +591,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 | `getSupportedPatterns` | `() => string[]`                                             | `['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']`                         |
 
 > [!warning] Known (preserved) stepper divergence
-> The two steppers agree except for day-based steps whose walk starts on a DST-offset (summer) anchor and crosses APP_TIMEZONE's fall-back transition: Date-space lands a calendar day early (daily repeats the transition day) while string-space stays calendar-exact. Pinned by `tests/services/recurrenceStepper.test.js` and `tests/services/recurrenceExpandOccurrences.test.js`; changing either side changes published schedules.
+> The two steppers agree except for day-based steps whose walk starts on a DST-offset (summer) anchor and crosses APP_TIMEZONE's fall-back transition: Date-space lands a calendar day early (daily repeats the transition day) while string-space stays calendar-exact. Pinned by `tests/services/recurrenceStepper.test.ts` and `tests/services/recurrenceExpandOccurrences.test.ts`; changing either side changes published schedules.
 
 ### Dependencies
 

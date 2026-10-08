@@ -7,7 +7,7 @@
  * of that boundary.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { routeAgent } from '../helpers/routeApp.js';
+import { routeAgent } from '../helpers/routeApp.ts';
 
 vi.mock('../../src/services/calculations/forecast/accuracyStore.ts', () => ({
   getAllAccuracyHistory: vi.fn(async () => [
@@ -34,7 +34,7 @@ describe('GET /api/aggregations/cashflow-forecast-accuracy', () => {
     expect(limit_months).toBe(24);
     expect(methods).toHaveLength(2);
 
-    const ewma = methods.find((m) => m.method_id === 'ewma');
+    const ewma = methods.find((m: { method_id: string }) => m.method_id === 'ewma');
     expect(ewma).toEqual({
       method_id: 'ewma',
       as_of_month: '2026-03',
@@ -48,7 +48,7 @@ describe('GET /api/aggregations/cashflow-forecast-accuracy', () => {
       ],
     });
 
-    const simple = methods.find((m) => m.method_id === 'simple_avg');
+    const simple = methods.find((m: { method_id: string }) => m.method_id === 'simple_avg');
     expect(simple.sample_days).toBe(90);
     expect(simple.as_of_month).toBe('2026-03');
   });

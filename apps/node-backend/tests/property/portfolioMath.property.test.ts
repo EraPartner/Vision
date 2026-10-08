@@ -20,7 +20,7 @@ import {
 
 // ── Seeded RNG (same pattern as currencyRoundTrip.property.test.js) ──────────
 
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -33,12 +33,12 @@ function seeded(seed) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function randBetween(rng, lo, hi) {
+function randBetween(rng: () => number, lo: number, hi: number) {
   return lo + rng() * (hi - lo);
 }
 
 /** Generate a sorted array of YYYY-MM-DD strings */
-function genDates(rng, count) {
+function genDates(rng: () => number, count: number) {
   const base = 2020;
   const dates = [];
   for (let i = 0; i < count; i++) {
@@ -189,6 +189,7 @@ describe("property: projectedAnnualInterest", () => {
 
   it("returns 0 when rate is falsy", () => {
     expect(projectedAnnualInterest(1000, 0)).toBe(0);
+    // @ts-expect-error -- a null rate must still be treated as falsy at runtime
     expect(projectedAnnualInterest(1000, null)).toBe(0);
   });
 });
@@ -308,6 +309,7 @@ describe("property: calculateAccruedInterest", () => {
   it("returns 0 when interestRate is falsy", () => {
     const txns = [{ type: "buy", date: "2022-01-01" }];
     expect(calculateAccruedInterest(txns, 1000, 0)).toBe(0);
+    // @ts-expect-error -- a null rate must still be treated as falsy at runtime
     expect(calculateAccruedInterest(txns, 1000, null)).toBe(0);
   });
 
@@ -452,7 +454,7 @@ describe("property: sanitizeSnapshotSpikes", () => {
     // `value`, which is exactly how the cash gap stayed invisible. These rows
     // are built the way snapshotBuilder builds them, with needles injected.
     const rng2 = seeded(0xca5f1073);
-    const round = (v) => Math.round(v * 100) / 100;
+    const round = (v: number) => Math.round(v * 100) / 100;
     // Without these an identity sanitizer would pass every assertion below.
     const seen = {
       smoothed: 0,
@@ -478,7 +480,8 @@ describe("property: sanitizeSnapshotSpikes", () => {
           rng2() < 0.5
             ? randBetween(rng2, 4, 10)
             : randBetween(rng2, 0.05, 0.2);
-        const scale = (leg) => (needle && needleLeg === leg ? factor : 1);
+        const scale = (leg: number) =>
+          needle && needleLeg === leg ? factor : 1;
         const stocks = heldLegs[0]
           ? round(randBetween(rng2, 1000, 5000) * scale(0))
           : 0;

@@ -6,16 +6,16 @@
  * rather than the old hand-rolled { code: 'BAD_REQUEST' } body.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js).
+ * tests/helpers/routeApp.ts).
  */
 import { describe, it, expect, vi } from 'vitest';
-import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
+import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
 
 // The real parseIntClamped caps days_back/days_forward at 365 each, so their sum
 // can never exceed 730 and the guard is otherwise unreachable. Bypass the clamp
 // (identity) so 400 + 400 = 800 actually reaches the guard — the line under test.
 vi.mock('../../src/lib/pagination.ts', () => ({
-  parseIntClamped: (raw) => Number(raw),
+  parseIntClamped: (raw: unknown) => Number(raw),
   parsePagination: () => ({ limit: 50, offset: 0 }),
 }));
 

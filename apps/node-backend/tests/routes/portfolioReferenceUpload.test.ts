@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),

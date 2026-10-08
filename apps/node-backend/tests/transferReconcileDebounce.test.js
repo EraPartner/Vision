@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 // scheduleReconcile debounce (TODO E20): the old trailing-only 1s window only
 // coalesced edits made <1s apart — human editing cadence paid a full-corpus
 // reconcile per save — and a steady mutation stream deferred it indefinitely.

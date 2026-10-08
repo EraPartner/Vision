@@ -674,7 +674,7 @@ All aggregation endpoints return:
 
 **Contract Tests:**
 
-- `apps/node-backend/tests/services/aggregationCalcs.test.js` — 13 tests covering envelope shape, argument forwarding, and source heuristic
+- `apps/node-backend/tests/services/aggregationCalcs.test.ts` — 13 tests covering envelope shape, argument forwarding, and source heuristic
 
 Source code: [[apps/node-backend/src/services/calculations/aggregation]]
 
@@ -749,7 +749,7 @@ and [[docs/guides/deployment#Network and admin security|Deployment]].
 - Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.ts]], [[apps/node-backend/src/config/config.ts]]).
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.ts]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/importRoutes.ts]], [[apps/node-backend/src/routes/transactions.ts]]).
-- Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.js]] against [[apps/node-backend/src/routes/settings.ts]].
+- Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.ts]] against [[apps/node-backend/src/routes/settings.ts]].
 - Database connection/pool resilience paths are now regression-covered in [[apps/node-backend/tests/connection.test.js]] for [[apps/node-backend/src/database/connection.ts]] (idle pool error handler, transient retry/backoff, non-transient fail-fast, helper methods and pool stats).
 - Pure value-validation rules live in [[apps/node-backend/src/lib/validation.ts]], while [[apps/node-backend/src/middleware/validation.ts]] keeps the Express path-parameter adapters and route compatibility exports. ID coercion and error semantics are covered in [[apps/node-backend/tests/validation.test.js]].
 

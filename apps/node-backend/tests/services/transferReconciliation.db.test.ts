@@ -10,7 +10,7 @@
  * database actually produces, which is exactly how the existing suites came to
  * encode query ORDER instead of behaviour.
  *
- * Isolation strategy (per the setup/db.js contract, which permits a per-suite
+ * Isolation strategy (per the setup/db.ts contract, which permits a per-suite
  * wipe when transactions would hide the behaviour under test): a per-test delete
  * of the touched tables rather than a wrapping transaction. `reconcileTransfers`
  * opens its own `withTransaction`, and it reconciles the WHOLE corpus rather
@@ -31,7 +31,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "../setup/db.js";
+} from "../setup/db.ts";
 import {
   reconcileTransfers,
   getTransferSuggestions,
@@ -44,18 +44,17 @@ import { closePool } from "../../src/database/connection.ts";
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */
 const DAY0 = "2024-03-10";
 
-/** @param {number} n */
-const daysAfter = (n) => {
+const daysAfter = (n: number) => {
   const d = new Date(`${DAY0}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
 
-let recipientId;
-const accountIds = {};
+let recipientId: number;
+const accountIds: Record<string, number> = {};
 
 async function seedFixtures() {
-  const pool = getTestPool();
+  const pool = getTestPool()!;
   const rec = await pool.query(
     `INSERT INTO recipients (name, normalized_name) VALUES ('Transfer Fixture', 'transfer fixture')
      RETURNING id`,
@@ -70,12 +69,18 @@ async function seedFixtures() {
   }
 }
 
-/**
- * Insert one transaction and return its id.
- * @param {{account:string, amount:number|string, date?:string, currency?:string,
- *          isActive?:boolean, isTransfer?:boolean, peerId?:number|null,
- *          source?:string|null}} spec
- */
+interface TxnSpec {
+  account: string;
+  amount: number | string;
+  date?: string;
+  currency?: string;
+  isActive?: boolean;
+  isTransfer?: boolean;
+  peerId?: number | null;
+  source?: string | null;
+}
+
+/** Insert one transaction and return its id. */
 async function insertTxn({
   account,
   amount,
@@ -85,8 +90,8 @@ async function insertTxn({
   isTransfer = false,
   peerId = null,
   source = null,
-}) {
-  const pool = getTestPool();
+}: TxnSpec): Promise<number> {
+  const pool = getTestPool()!;
   const { rows } = await pool.query(
     `INSERT INTO transactions
        (date, amount, currency, recipient_id, account_id, is_active, is_transfer,
@@ -109,8 +114,8 @@ async function insertTxn({
 }
 
 /** Read back the transfer-relevant columns of one row. */
-async function readTxn(id) {
-  const { rows } = await getTestPool().query(
+async function readTxn(id: number) {
+  const { rows } = await getTestPool()!.query(
     `SELECT id, is_transfer, transfer_peer_id, transfer_source
        FROM transactions WHERE id = $1`,
     [id],
@@ -142,12 +147,12 @@ describe.skipIf(!hasTestDatabase())(
         "DATABASE_URL must equal TEST_DATABASE_URL for this suite (see scripts/with-test-db.sh)",
       ).toBe(process.env.TEST_DATABASE_URL);
       // DB suites share one database across parallel vitest workers — serialize
-      // them behind the shared advisory lock (see tests/setup/db.js).
+      // them behind the shared advisory lock (see tests/setup/db.ts).
       await acquireDbSuiteLock();
     }, 180_000);
 
     afterEach(async () => {
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       // Targeted DELETEs, deliberately NOT `TRUNCATE ... CASCADE`: the cascade off
       // `transactions` reaches a dozen unrelated tables (split_audit,
       // planned_transaction_tags, portfolio_import_staging_rows, ...) and costs
@@ -316,7 +321,7 @@ describe.skipIf(!hasTestDatabase())(
         await reconcileTransfers();
 
         // Edit one leg's amount: the pair is no longer equal-and-opposite.
-        await getTestPool().query(
+        await getTestPool()!.query(
           "UPDATE transactions SET amount = $1 WHERE id = $2",
           [-999, outId],
         );
@@ -339,7 +344,7 @@ describe.skipIf(!hasTestDatabase())(
 
         // The FK is ON DELETE SET NULL, so deleting the peer leaves a phantom
         // one-way transfer that only releaseOrphanedTransfers can clean up.
-        await getTestPool().query("DELETE FROM transactions WHERE id = $1", [
+        await getTestPool()!.query("DELETE FROM transactions WHERE id = $1", [
           inId,
         ]);
         expect(await readTxn(outId)).toMatchObject({
@@ -422,9 +427,9 @@ describe.skipIf(!hasTestDatabase())(
         const suggestions = await getTransferSuggestions();
 
         expect(suggestions).toHaveLength(1);
-        expect(suggestions[0].outflow.id).toBe(outId);
+        expect(suggestions[0].outflow!.id).toBe(outId);
         expect(
-          suggestions[0].candidates.map((c) => c.id).sort((a, b) => a - b),
+          suggestions[0].candidates.map((c) => c!.id).sort((a, b) => a - b),
         ).toEqual([inA, inB].sort((a, b) => a - b));
       });
 
@@ -549,7 +554,7 @@ describe.skipIf(!hasTestDatabase())(
             transfer_source: null,
           });
         }
-        const { rows } = await getTestPool().query(
+        const { rows } = await getTestPool()!.query(
           "SELECT txn_a_id, txn_b_id FROM transfer_dismissals",
         );
         expect(rows).toEqual([
@@ -586,7 +591,7 @@ describe.skipIf(!hasTestDatabase())(
           date: daysAfter(2),
         });
         // Remove B from the pool so A↔C is the only unambiguous match.
-        await getTestPool().query(
+        await getTestPool()!.query(
           "UPDATE transactions SET is_active = false WHERE id = $1",
           [inId],
         );
@@ -627,7 +632,7 @@ describe.skipIf(!hasTestDatabase())(
           pairsCreated: 1,
         });
 
-        const { rows } = await getTestPool().query(
+        const { rows } = await getTestPool()!.query(
           `SELECT 1 FROM user_settings WHERE key = 'transfers_backfilled'`,
         );
         expect(rows).toHaveLength(1);

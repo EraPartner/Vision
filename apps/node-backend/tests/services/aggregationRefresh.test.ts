@@ -28,7 +28,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "../setup/db.js";
+} from "../setup/db.ts";
 import {
   __TRIGGER_MAINTAINED_TABLES as TRIGGER_MAINTAINED_TABLES,
   default as aggregationRefresh,
@@ -61,7 +61,7 @@ describe.skipIf(!hasTestDatabase())(
     }, 180_000);
 
     afterAll(async () => {
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       try {
         await pool.query(
           "DROP MATERIALIZED VIEW IF EXISTS mv_monthly_summary CASCADE",
@@ -80,7 +80,7 @@ describe.skipIf(!hasTestDatabase())(
       // amplification. The refresh set is now empty by design; a new MV
       // appearing here means someone reintroduced that cost without wiring a
       // reader, which is the exact regression those migrations exist to prevent.
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       const mvs = await pool.query("SELECT matviewname FROM pg_matviews");
       expect(mvs.rows.map((r) => r.matviewname)).toEqual([]);
     });
@@ -90,7 +90,7 @@ describe.skipIf(!hasTestDatabase())(
     // directly, so there is no table/trigger to assert here anymore.
 
     it("creates agg_split_outstanding with triggers on splits and payments", async () => {
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       const table = await pool.query(
         `SELECT 1 FROM information_schema.tables
          WHERE table_name = 'agg_split_outstanding'`,
@@ -121,7 +121,7 @@ describe.skipIf(!hasTestDatabase())(
     });
 
     it("creates a pg_trgm GIN index on recipients.name", async () => {
-      const pool = getTestPool();
+      const pool = getTestPool()!;
       const idx = await pool.query(
         `SELECT indexdef FROM pg_indexes
          WHERE tablename = 'recipients'

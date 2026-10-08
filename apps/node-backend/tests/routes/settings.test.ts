@@ -2,11 +2,11 @@
  * Settings route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js).
+ * tests/helpers/routeApp.ts).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 // The route imports its repository through services/settingsService.js, which
 // re-exports the default from this module — mocking the repository here
@@ -25,8 +25,14 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
+import type { IRoute } from "express";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
-import settingsRepository from "../../src/repositories/settingsRepository.ts";
+import rawSettingsRepository from "../../src/repositories/settingsRepository.ts";
+
+const settingsRepository = vi.mocked(rawSettingsRepository);
+
+/** Express's Route keeps its verb map at runtime; @types/express omits it. */
+type RouteWithMethods = IRoute & { methods: Record<string, boolean> };
 
 const { default: settingsRouter } =
   await import("../../src/routes/settings.ts");
@@ -34,12 +40,24 @@ const { default: settingsRouter } =
 const api = routeAgent(settingsRouter, { mountPath: "/api/settings" });
 const BASE = "/api/settings";
 
-function registeredHandler(path, method) {
+type ReplaceResult = Awaited<
+  ReturnType<typeof rawSettingsRepository.replace<unknown>>
+>;
+/** `replace` result without the echoed `expected`, which the route ignores. */
+const replaced = (fields: Omit<ReplaceResult, "expected">) =>
+  fields as ReplaceResult;
+
+/** A route's final handler, called directly with partial req/res stand-ins. */
+type DirectHandler = (req: object, res: object) => Promise<unknown>;
+
+function registeredHandler(path: string, method: string): DirectHandler {
   const layer = settingsRouter.stack.find(
-    (entry) => entry.route?.path === path && entry.route.methods[method],
+    (entry) =>
+      entry.route?.path === path &&
+      (entry.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path} route`);
-  return layer.route.stack.at(-1).handle;
+  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
 }
 
 const putSingleSetting = registeredHandler("/:key", "put");
@@ -171,10 +189,12 @@ describe("Settings Routes", () => {
   describe("PUT /:key", () => {
     it("accepts the complete brokerage cash category ID mapping", async () => {
       const value = { dividend: 7, interest: null, fee: 8, tax: 9 };
-      settingsRepository.replace.mockResolvedValue({
-        key: "brokerage_cash_category_ids",
-        value,
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "brokerage_cash_category_ids",
+          value,
+        }),
+      );
       const res = { ok: vi.fn() };
 
       await putSingleSetting(
@@ -220,10 +240,12 @@ describe("Settings Routes", () => {
         excludedCategoryIds: [7],
         excludedRecipientIds: [8],
       };
-      settingsRepository.replace.mockResolvedValue({
-        key: "dashboard_settings",
-        value: stored,
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "dashboard_settings",
+          value: stored,
+        }),
+      );
       const res = { ok: vi.fn() };
 
       await putSingleSetting(
@@ -321,10 +343,12 @@ describe("Settings Routes", () => {
     });
 
     it("saves setting when payload is valid", async () => {
-      settingsRepository.replace.mockResolvedValue({
-        key: "theme_settings",
-        value: { theme: "dark" },
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "theme_settings",
+          value: { theme: "dark" },
+        }),
+      );
 
       const res = await api
         .put(`${BASE}/theme_settings`)
@@ -373,14 +397,16 @@ describe("Settings Routes", () => {
     });
 
     it("accepts theme_settings with known variant, mode, and schedule", async () => {
-      settingsRepository.replace.mockResolvedValue({
-        key: "theme_settings",
-        value: {
-          mode: "schedule",
-          schedule: { lightFrom: "07:00", darkFrom: "20:00" },
-          variant: "dracula",
-        },
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "theme_settings",
+          value: {
+            mode: "schedule",
+            schedule: { lightFrom: "07:00", darkFrom: "20:00" },
+            variant: "dracula",
+          },
+        }),
+      );
 
       await api
         .put(`${BASE}/theme_settings`)
@@ -419,10 +445,12 @@ describe("Settings Routes", () => {
     });
 
     it("accepts dismissed_recurring_patterns as an array (RecurringDetectionPanel payload)", async () => {
-      settingsRepository.replace.mockResolvedValue({
-        key: "dismissed_recurring_patterns",
-        value: [3, 7],
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "dismissed_recurring_patterns",
+          value: [3, 7],
+        }),
+      );
 
       await api
         .put(`${BASE}/dismissed_recurring_patterns`)
@@ -446,10 +474,12 @@ describe("Settings Routes", () => {
 
     it("accepts a portfolio_tax_adjustments_v1 entry map (usePortfolioTaxAdjustments payload)", async () => {
       const value = { "2026:4": { taxes: 12.5, fees: 3 } };
-      settingsRepository.replace.mockResolvedValue({
-        key: "portfolio_tax_adjustments_v1",
-        value,
-      });
+      settingsRepository.replace.mockResolvedValue(
+        replaced({
+          key: "portfolio_tax_adjustments_v1",
+          value,
+        }),
+      );
 
       await api
         .put(`${BASE}/portfolio_tax_adjustments_v1`)
@@ -681,10 +711,10 @@ describe("Settings Routes", () => {
   });
 });
 
-function singleBody(body) {
+function singleBody(body: Record<string, unknown>) {
   return { ...body, expected: { exists: false } };
 }
-function bulkBody(settings) {
+function bulkBody(settings: Record<string, unknown>) {
   return {
     settings,
     expected: Object.fromEntries(
@@ -693,7 +723,9 @@ function bulkBody(settings) {
   };
 }
 
-function record(value) {
+function record(
+  value: unknown,
+): Awaited<ReturnType<typeof rawSettingsRepository.getRecord>> {
   return value === null
     ? { expected: { exists: false } }
     : { value, expected: { exists: true, value } };

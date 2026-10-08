@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
-import { makeImportStagingRow } from "./builders/domainRows.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { makeImportStagingRow } from "./builders/domainRows.ts";
 import { validateBatch } from "../src/services/importPipeline/validate.ts";
 import { stageBatch } from "../src/services/importPipeline/stage.ts";
 import { matchBatch } from "../src/services/importPipeline/match.ts";

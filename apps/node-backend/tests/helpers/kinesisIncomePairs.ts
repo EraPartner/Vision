@@ -2,16 +2,16 @@
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./kinesisAdoptionScope.js";
+} from "./kinesisAdoptionScope.ts";
 export async function syntheticKinesisIncomePair() {
   const source = await syntheticKinesisScope();
   const prior = await syntheticKinesisScope({ batchId: 1, rowStart: 100 });
   const unit = source.rows.find(
     (row) => row.source_transaction_id === "TX-YIELD:units",
-  );
+  )!;
   const income = source.rows.find(
     (row) => row.source_transaction_id === "TX-YIELD:income",
-  );
+  )!;
   const before = syntheticKinesisManual(unit);
   const current = {
     ...before,
@@ -22,7 +22,7 @@ export async function syntheticKinesisIncomePair() {
   };
   const retained = prior.rows.find(
     (row) => row.source_transaction_id === unit.source_transaction_id,
-  );
+  )!;
   retained.status = "duplicate";
   const receipt = {
     id: "1",

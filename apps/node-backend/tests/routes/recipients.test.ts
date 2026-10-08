@@ -3,11 +3,11 @@
  * Mirrors: apps/backend/tests/test_recipients.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
+ * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 // The route imports its repository through services/recipientService.js, which
 // re-exports the default from this module — mocking the repository here
@@ -51,12 +51,27 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import recipientRepository from "../../src/repositories/recipientRepository.ts";
-import { mergeRecipients as mergeRecipientsAtomic } from "../../src/services/recipientMergeService.ts";
+import rawRecipientRepository from "../../src/repositories/recipientRepository.ts";
+import type {
+  EnrichedRecipientRow,
+  RecipientRow,
+} from "../../src/repositories/recipientRepository.ts";
+import { mergeRecipients as rawMergeRecipientsAtomic } from "../../src/services/recipientMergeService.ts";
 import {
   updatePattern,
   deletePattern,
 } from "../../src/services/recipientPatternService.ts";
+
+const recipientRepository = vi.mocked(rawRecipientRepository);
+const mergeRecipientsAtomic = vi.mocked(rawMergeRecipientsAtomic);
+
+type AliasRow = RecipientRow & { default_category_name: string | null };
+
+/** Recipient fixture carrying only the columns a test sets. */
+const recipient = (fields: Partial<EnrichedRecipientRow>) =>
+  fields as EnrichedRecipientRow;
+/** Alias-row fixture (getAliases) carrying only the columns a test sets. */
+const alias = (fields: Partial<AliasRow>) => fields as AliasRow;
 
 const { default: recipientsRouter } =
   await import("../../src/routes/recipients.ts");
@@ -81,8 +96,8 @@ describe("Recipient Routes", () => {
 
     it("should return recipients with data", async () => {
       recipientRepository.getAll.mockResolvedValue([
-        { id: 1, name: "JOHN DOE", is_active: true },
-        { id: 2, name: "JANE SMITH", is_active: true },
+        recipient({ id: 1, name: "JOHN DOE", is_active: true }),
+        recipient({ id: 2, name: "JANE SMITH", is_active: true }),
       ]);
       recipientRepository.getCount.mockResolvedValue(2);
 
@@ -142,7 +157,7 @@ describe("Recipient Routes", () => {
   describe("POST /", () => {
     it("should create recipient with 201", async () => {
       recipientRepository.createOrGet.mockResolvedValue({
-        recipient: { id: 1, name: "JOHN DOE", is_active: true },
+        recipient: recipient({ id: 1, name: "JOHN DOE", is_active: true }),
         created: true,
       });
 
@@ -152,7 +167,7 @@ describe("Recipient Routes", () => {
 
     it("should return 200 for duplicate", async () => {
       recipientRepository.createOrGet.mockResolvedValue({
-        recipient: { id: 1, name: "JOHN DOE", is_active: true },
+        recipient: recipient({ id: 1, name: "JOHN DOE", is_active: true }),
         created: false,
       });
 
@@ -168,10 +183,12 @@ describe("Recipient Routes", () => {
 
   describe("GET /:id", () => {
     it("should return recipient by id", async () => {
-      recipientRepository.getById.mockResolvedValue({
-        id: 1,
-        name: "JOHN DOE",
-      });
+      recipientRepository.getById.mockResolvedValue(
+        recipient({
+          id: 1,
+          name: "JOHN DOE",
+        }),
+      );
 
       const res = await api.get(`${BASE}/1`).expect(200);
       expect(res.body.data.id).toBe(1);
@@ -195,7 +212,9 @@ describe("Recipient Routes", () => {
 
   describe("PATCH /:id", () => {
     it("should update recipient", async () => {
-      recipientRepository.update.mockResolvedValue({ id: 1, name: "UPDATED" });
+      recipientRepository.update.mockResolvedValue(
+        recipient({ id: 1, name: "UPDATED" }),
+      );
 
       const res = await api
         .patch(`${BASE}/1`)
@@ -238,10 +257,12 @@ describe("Recipient Routes", () => {
     });
 
     it("should return a 400 VALIDATION_ERROR envelope when primary recipient is itself an alias", async () => {
-      recipientRepository.getById.mockResolvedValue({
-        id: 1,
-        primary_recipient_id: 2,
-      });
+      recipientRepository.getById.mockResolvedValue(
+        recipient({
+          id: 1,
+          primary_recipient_id: 2,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/1/merge`)
@@ -252,23 +273,27 @@ describe("Recipient Routes", () => {
 
     it("should merge aliases and return primary plus aliases", async () => {
       recipientRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          name: "PRIMARY",
-          primary_recipient_id: null,
-        })
-        .mockResolvedValueOnce({
-          id: 1,
-          name: "PRIMARY",
-          primary_recipient_id: null,
-        });
+        .mockResolvedValueOnce(
+          recipient({
+            id: 1,
+            name: "PRIMARY",
+            primary_recipient_id: null,
+          }),
+        )
+        .mockResolvedValueOnce(
+          recipient({
+            id: 1,
+            name: "PRIMARY",
+            primary_recipient_id: null,
+          }),
+        );
       mergeRecipientsAtomic.mockResolvedValue({
         mergedAliasIds: [3, 4],
         reassigned: { transactions: 7, splits: 0, planned: 0, bankAccounts: 1 },
       });
       recipientRepository.getAliases.mockResolvedValue([
-        { id: 3, name: "ALIAS A" },
-        { id: 4, name: "ALIAS B" },
+        alias({ id: 3, name: "ALIAS A" }),
+        alias({ id: 4, name: "ALIAS B" }),
       ]);
 
       const res = await api
@@ -295,11 +320,13 @@ describe("Recipient Routes", () => {
     });
 
     it("rejects the whole merge when any alias id is malformed, without calling the service", async () => {
-      recipientRepository.getById.mockResolvedValue({
-        id: 1,
-        name: "PRIMARY",
-        primary_recipient_id: null,
-      });
+      recipientRepository.getById.mockResolvedValue(
+        recipient({
+          id: 1,
+          name: "PRIMARY",
+          primary_recipient_id: null,
+        }),
+      );
 
       for (const bad of ["12abc", "1e3", "0x10", 1.5, 0, -1, true]) {
         const res = await api
@@ -333,11 +360,13 @@ describe("Recipient Routes", () => {
 
     it("should return updated recipient when unmerge succeeds", async () => {
       recipientRepository.unmergeRecipient.mockResolvedValue(true);
-      recipientRepository.getById.mockResolvedValue({
-        id: 44,
-        name: "UNMERGED",
-        primary_recipient_id: null,
-      });
+      recipientRepository.getById.mockResolvedValue(
+        recipient({
+          id: 44,
+          name: "UNMERGED",
+          primary_recipient_id: null,
+        }),
+      );
 
       const res = await api.post(`${BASE}/44/unmerge`).expect(200);
 
@@ -355,8 +384,8 @@ describe("Recipient Routes", () => {
   describe("GET /:id/aliases", () => {
     it("should return aliases with pagination meta", async () => {
       recipientRepository.getAliases.mockResolvedValue([
-        { id: 10, name: "Alias One", primary_recipient_id: 1 },
-        { id: 11, name: "Alias Two", primary_recipient_id: 1 },
+        alias({ id: 10, name: "Alias One", primary_recipient_id: 1 }),
+        alias({ id: 11, name: "Alias Two", primary_recipient_id: 1 }),
       ]);
 
       const res = await api.get(`${BASE}/1/aliases`).expect(200);

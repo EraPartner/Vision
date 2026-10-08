@@ -2,7 +2,7 @@
  * Market Lookup route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). All validation in marketLookup.js is inline in
+ * tests/helpers/routeApp.ts). All validation in marketLookup.js is inline in
  * the handlers (no route-level guard middleware), so this migration is mostly
  * mechanical: `routeHandlers[...]` calls become supertest requests and
  * `.rejects.toBeInstanceOf(...)` assertions become status-code + envelope
@@ -14,8 +14,8 @@
  * reproduced here — it would 429 this suite's own many requests.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mockLogger } from '../helpers/mockLogger.js';
-import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
+import { mockLogger } from '../helpers/mockLogger.ts';
+import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.ts';
 
 const mockYahooSearch = vi.fn();
 const mockYahooQuote = vi.fn();

@@ -7,12 +7,12 @@
  * provider/series_id guards.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). main.ts:294 also mounts `marketRateLimiter`
+ * tests/helpers/routeApp.ts). main.ts:294 also mounts `marketRateLimiter`
  * before this router — deliberately not reproduced here (module-level counter
  * shared across the whole worker; see routeApp.js's fidelity map).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/services/research/researchAggregator.ts", () => ({
   researchAggregator: {
@@ -50,13 +50,22 @@ vi.mock("../../src/services/research/fundamentalsScorecard.ts", () => ({
   fundamentalsScorecard: vi.fn(() => ({ score: 1 })),
 }));
 
-import { researchAggregator } from "../../src/services/research/researchAggregator.ts";
-import { researchMappingService } from "../../src/services/research/researchMappingService.ts";
+import { researchAggregator as rawResearchAggregator } from "../../src/services/research/researchAggregator.ts";
+import { researchMappingService as rawResearchMappingService } from "../../src/services/research/researchMappingService.ts";
 import {
-  clearKey,
+  clearKey as rawClearKey,
   listKeyStatuses,
 } from "../../src/services/research/researchProviderKeyService.ts";
-import { runPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.ts";
+import { runPortfolioForecast as rawRunPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.ts";
+
+const researchAggregator = vi.mocked(rawResearchAggregator);
+const researchMappingService = vi.mocked(rawResearchMappingService);
+const clearKey = vi.mocked(rawClearKey);
+const runPortfolioForecast = vi.mocked(rawRunPortfolioForecast);
+
+type ForecastResult = Awaited<ReturnType<typeof rawRunPortfolioForecast>>;
+/** Stand-in forecast payload; the route forwards it without reading it. */
+const forecastResult = (value: object) => value as ForecastResult;
 
 const { default: researchRouter } =
   await import("../../src/routes/research.ts");
@@ -358,7 +367,7 @@ describe("Research route parameter guards", () => {
   // `undefined` and the projection service applies its own defaults.
   describe("POST /portfolio-forecast body casing", () => {
     it("reads the snake_case spellings", async () => {
-      runPortfolioForecast.mockResolvedValue({ bands: [] });
+      runPortfolioForecast.mockResolvedValue(forecastResult({ bands: [] }));
       const res = await api
         .post(`${BASE}/portfolio-forecast`)
         .send({
@@ -383,7 +392,9 @@ describe("Research route parameter guards", () => {
     });
 
     it("passes a bounded contribution schedule and dated goal", async () => {
-      runPortfolioForecast.mockResolvedValue({ available: true });
+      runPortfolioForecast.mockResolvedValue(
+        forecastResult({ available: true }),
+      );
       await api
         .post(`${BASE}/portfolio-forecast`)
         .send({
@@ -438,7 +449,7 @@ describe("Research route parameter guards", () => {
     });
 
     it("no longer accepts the camelCase spellings", async () => {
-      runPortfolioForecast.mockResolvedValue({ bands: [] });
+      runPortfolioForecast.mockResolvedValue(forecastResult({ bands: [] }));
       await api
         .post(`${BASE}/portfolio-forecast`)
         .send({
@@ -460,7 +471,7 @@ describe("Research route parameter guards", () => {
     });
 
     it("does not fall back to camelCase when the snake_case key is absent", async () => {
-      runPortfolioForecast.mockResolvedValue({ bands: [] });
+      runPortfolioForecast.mockResolvedValue(forecastResult({ bands: [] }));
       await api
         .post(`${BASE}/portfolio-forecast`)
         .send({

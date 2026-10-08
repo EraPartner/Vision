@@ -6,7 +6,7 @@
  * option coercion (parseCsvImportOptions), the csv/custom required/trim/default
  * build, and normalizeParserConfig's defaults — so a change cannot alter the wire.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js), which
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts), which
  * also puts the router's own trailing error middleware
  * (`router.use(csvUploadErrorTranslator)`, routes/importRoutes.js:580) on the
  * tested path — the mock-router harness dropped it entirely.
@@ -16,20 +16,27 @@
  * `main.ts` uses for per-mount middleware.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("multer", () => {
-  const multer = vi.fn(() => ({
-    single: vi.fn(() => (req, res, next) => next()),
-  }));
-  multer.MulterError = class MulterError extends Error {
-    constructor(code) {
-      super(code);
-      this.code = code;
-    }
-  };
+  const multer = Object.assign(
+    vi.fn(() => ({
+      single: vi.fn(
+        () => (_req: unknown, _res: unknown, next: () => void) => next(),
+      ),
+    })),
+    {
+      MulterError: class MulterError extends Error {
+        code: string;
+        constructor(code: string) {
+          super(code);
+          this.code = code;
+        }
+      },
+    },
+  );
   return { default: multer };
 });
 
@@ -95,25 +102,41 @@ vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import {
-  runImportPipeline,
-  commitImport,
+  runImportPipeline as rawRunImportPipeline,
+  commitImport as rawCommitImport,
 } from "../../src/services/importPipeline/index.ts";
 // NOT mocked: only .../importPipeline/index.js is. This is the real boundary
 // function, run here over the mocked pg connection.
 import { createBatch } from "../../src/services/importPipeline/stage.ts";
 import {
-  importCategoriesCSV,
-  importRecipientsCSV,
+  importCategoriesCSV as rawImportCategoriesCSV,
+  importRecipientsCSV as rawImportRecipientsCSV,
 } from "../../src/services/dataImportService.ts";
 import {
-  getBatch,
-  getPreviewRows,
-  overrideRecipient,
-  overrideCategory,
-  categoryExists,
+  getBatch as rawGetBatch,
+  getPreviewRows as rawGetPreviewRows,
+  overrideRecipient as rawOverrideRecipient,
+  overrideCategory as rawOverrideCategory,
+  categoryExists as rawCategoryExists,
 } from "../../src/repositories/importBatchRepository.ts";
-import { query as dbQuery } from "../../src/database/connection.ts";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import { query as rawQuery } from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+
+const runImportPipeline = vi.mocked(rawRunImportPipeline);
+const commitImport = vi.mocked(rawCommitImport);
+const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
+const importRecipientsCSV = vi.mocked(rawImportRecipientsCSV);
+const getBatch = vi.mocked(rawGetBatch);
+const getPreviewRows = vi.mocked(rawGetPreviewRows);
+const overrideRecipient = vi.mocked(rawOverrideRecipient);
+const overrideCategory = vi.mocked(rawOverrideCategory);
+const categoryExists = vi.mocked(rawCategoryExists);
+const dbQuery = vi.mocked(rawQuery);
+const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: Partial<NoInfer<T>>) => value as T;
 
 const { default: importRouter, __parseCsvImportOptionsForTests } =
   await import("../../src/routes/importRoutes.ts");
@@ -126,7 +149,7 @@ const BASE = "/api/import";
 const api = routeAgent(importRouter, {
   mountPath: BASE,
   before: [
-    (req, _res, next) => {
+    (req: { file?: unknown }, _res: unknown, next: () => void) => {
       req.file = { ...UPLOAD };
       next();
     },
@@ -134,7 +157,7 @@ const api = routeAgent(importRouter, {
 });
 
 /** Encode a path segment so ids with spaces survive the URL round-trip. */
-const seg = (v) => encodeURIComponent(String(v));
+const seg = (v: unknown) => encodeURIComponent(String(v));
 
 describe("multipart body parameters", () => {
   it.each([
@@ -164,36 +187,40 @@ describe("multipart body parameters", () => {
   });
 
   it("resolves CSV import options from the body without a listener", () => {
+    // A real request also carries a query string, which the parser must ignore.
+    const withQuery = (body: { separator?: unknown; encoding?: unknown }) => ({
+      body,
+      query: { separator: ";", encoding: "latin1" },
+    });
+
     expect(
-      __parseCsvImportOptionsForTests({
-        body: { separator: "|", encoding: "utf-8" },
-        query: { separator: ";", encoding: "latin1" },
-      }),
+      __parseCsvImportOptionsForTests(
+        withQuery({ separator: "|", encoding: "utf-8" }),
+      ),
     ).toEqual({ separator: "|", encoding: "utf-8" });
 
     expect(
-      __parseCsvImportOptionsForTests({
-        body: { separator: "", encoding: null },
-        query: { separator: ";", encoding: "latin1" },
-      }),
+      __parseCsvImportOptionsForTests(
+        withQuery({ separator: "", encoding: null }),
+      ),
     ).toEqual({ separator: ",", encoding: "utf-8" });
 
-    expect(
-      __parseCsvImportOptionsForTests({
-        body: {},
-        query: { separator: ";", encoding: "latin1" },
-      }),
-    ).toEqual({ separator: ",", encoding: "utf-8" });
+    expect(__parseCsvImportOptionsForTests(withQuery({}))).toEqual({
+      separator: ",",
+      encoding: "utf-8",
+    });
   });
 
   it("uses the multipart body bank_name", async () => {
-    runImportPipeline.mockResolvedValue({
-      batchId: 1,
-      total: 1,
-      imported: 1,
-      duplicates: 0,
-      errors: 0,
-    });
+    runImportPipeline.mockResolvedValue(
+      partial({
+        batchId: 1,
+        total: 1,
+        imported: 1,
+        duplicates: 0,
+        errors: 0,
+      }),
+    );
 
     await api.post(`${BASE}/csv`).send({ bank_name: "body-bank" }).expect(201);
 
@@ -243,15 +270,17 @@ describe("multipart body parameters", () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  runImportPipeline.mockResolvedValue({
-    total: 1,
-    imported: 1,
-    duplicates: 0,
-    errors: 0,
-  });
-  importRecipientsCSV.mockResolvedValue({ imported: 1, errors: 0 });
-  importCategoriesCSV.mockResolvedValue({ imported: 1, errors: 0 });
-  customParserConfigRepository.create.mockResolvedValue({ id: 1 });
+  runImportPipeline.mockResolvedValue(
+    partial({
+      total: 1,
+      imported: 1,
+      duplicates: 0,
+      errors: 0,
+    }),
+  );
+  importRecipientsCSV.mockResolvedValue(partial({ imported: 1, errors: 0 }));
+  importCategoriesCSV.mockResolvedValue(partial({ imported: 1, errors: 0 }));
+  customParserConfigRepository.create.mockResolvedValue(partial({ id: 1 }));
 });
 
 describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
@@ -264,7 +293,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   // batch 16, yet batch 16 is what it got. coercedIdSchema now delegates to
   // validateId, so only a plain digit string parses.
   it("rejects '12.0', ' 12 ' and '0x10' instead of coercing them to a batch", async () => {
-    getBatch.mockResolvedValue({ id: 12, status: "complete" });
+    getBatch.mockResolvedValue(partial({ id: 12, status: "complete" }));
 
     for (const id of ["12.0", " 12 ", "0x10", "0o17", "0b11", "1e3", "+12"]) {
       const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
@@ -286,7 +315,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   // that is where it has to stop — '9007199254740993' would otherwise address
   // record …992.
   it("accepts an integral id past int32 and 404s it, but rejects one past 2^53", async () => {
-    getBatch.mockResolvedValue(undefined);
+    getBatch.mockResolvedValue(undefined as unknown as null);
 
     const res = await api.get(`${BASE}/batches/2147483648`).expect(404);
     expect(res.body.error.code).toBe("NOT_FOUND");
@@ -307,7 +336,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   // API accepts, and it is the same exponent form that made '1e3' resolve to
   // batch 1000. It is now a 400 like every other malformed id.
   it("400s an exponent-notation id rather than 404ing it downstream", async () => {
-    getBatch.mockResolvedValue(undefined);
+    getBatch.mockResolvedValue(undefined as unknown as null);
 
     const res = await api.get(`${BASE}/batches/1e300`).expect(400);
 
@@ -318,10 +347,10 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   it("rejects fractional, trailing-garbage, zero, and negative ids on every site", async () => {
     const badIds = ["12.5", "12abc", "0", "-1", "abc"];
     const sites = [
-      (id) => api.get(`${BASE}/batches/${seg(id)}`),
-      (id) => api.delete(`${BASE}/batches/${seg(id)}`),
-      (id) => api.get(`${BASE}/batches/${seg(id)}/preview`),
-      (id) => api.post(`${BASE}/batches/${seg(id)}/commit`).send({}),
+      (id: string) => api.get(`${BASE}/batches/${seg(id)}`),
+      (id: string) => api.delete(`${BASE}/batches/${seg(id)}`),
+      (id: string) => api.get(`${BASE}/batches/${seg(id)}/preview`),
+      (id: string) => api.post(`${BASE}/batches/${seg(id)}/commit`).send({}),
     ];
     for (const site of sites) {
       for (const id of badIds) {
@@ -650,7 +679,7 @@ describe("POST /csv/custom config-build pins", () => {
 });
 
 describe("normalizeParserConfig pins (POST /parsers)", () => {
-  const create = (config) =>
+  const create = (config: unknown) =>
     api.post(`${BASE}/parsers`).send({ name: "P", config });
 
   const base = {
@@ -686,7 +715,11 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
 
   it("strips unknown keys and blanks a non-string memoColumn", async () => {
     await create({ ...base, foo: "bar", memoColumn: 123 }).expect(201);
-    const { config } = customParserConfigRepository.create.mock.calls.at(-1)[0];
+    const { config } = customParserConfigRepository.create.mock.calls.at(
+      -1,
+    )![0] as {
+      config: Record<string, unknown>;
+    };
     expect("foo" in config).toBe(false);
     expect(config.memoColumn).toBe("");
     expect(Object.keys(config).sort()).toEqual([
@@ -743,18 +776,22 @@ describe("batch_id wire type", () => {
   // these route pins honest — before the stage-boundary fix they failed with
   // `batch_id: "12"`, exactly the wire split the finding describes.
   const realBatchId = async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: String(BATCH_ID) }] });
+    dbQuery.mockResolvedValueOnce({
+      rows: [{ id: String(BATCH_ID) }],
+    } as PgQueryResult);
     return createBatch({ adapterName: "vision" });
   };
 
   it("POST /csv (201, committed) emits a numeric batch_id", async () => {
-    runImportPipeline.mockImplementation(async () => ({
-      batchId: await realBatchId(),
-      total: 1,
-      imported: 1,
-      duplicates: 0,
-      errors: 0,
-    }));
+    runImportPipeline.mockImplementation(async () =>
+      partial({
+        batchId: await realBatchId(),
+        total: 1,
+        imported: 1,
+        duplicates: 0,
+        errors: 0,
+      }),
+    );
 
     const res = await api
       .post(`${BASE}/csv`)
@@ -766,11 +803,13 @@ describe("batch_id wire type", () => {
   });
 
   it("POST /csv (202, review required) emits a numeric batch_id", async () => {
-    runImportPipeline.mockImplementation(async () => ({
-      batchId: await realBatchId(),
-      requiresReview: true,
-      matchSourceCounts: { exact: 1 },
-    }));
+    runImportPipeline.mockImplementation(async () =>
+      partial({
+        batchId: await realBatchId(),
+        requiresReview: true,
+        matchSourceCounts: { exact: 1 },
+      }),
+    );
 
     const res = await api
       .post(`${BASE}/csv`)
@@ -782,23 +821,29 @@ describe("batch_id wire type", () => {
   });
 
   it("POST /batches/:id/commit emits the SAME type and value for the same batch", async () => {
-    runImportPipeline.mockImplementation(async () => ({
-      batchId: await realBatchId(),
-      requiresReview: true,
-      matchSourceCounts: {},
-    }));
+    runImportPipeline.mockImplementation(async () =>
+      partial({
+        batchId: await realBatchId(),
+        requiresReview: true,
+        matchSourceCounts: {},
+      }),
+    );
     const started = await api
       .post(`${BASE}/csv`)
       .send({ bank_name: "vision" })
       .expect(202);
 
-    getBatch.mockResolvedValue({ id: BATCH_ID, status: "awaiting_review" });
-    commitImport.mockResolvedValue({
-      imported: 1,
-      duplicates: 0,
-      errors: 0,
-      autoLinkedCount: 0,
-    });
+    getBatch.mockResolvedValue(
+      partial({ id: BATCH_ID, status: "awaiting_review" }),
+    );
+    commitImport.mockResolvedValue(
+      partial({
+        imported: 1,
+        duplicates: 0,
+        errors: 0,
+        autoLinkedCount: 0,
+      }),
+    );
     const committed = await api
       .post(`${BASE}/batches/${BATCH_ID}/commit`)
       .send({})

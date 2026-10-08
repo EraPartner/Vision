@@ -17,7 +17,7 @@ describe("summarizeSimulationPaths", () => {
     expect(result.cumulative_bands.p10.map((point) => point.value)).toEqual([
       10, 100,
     ]);
-    expect(result.cumulative_bands.p50.at(-1).value).toBe(100);
-    expect(result.cumulative_bands.p90.at(-1).value).toBe(100);
+    expect(result.cumulative_bands.p50.at(-1)!.value).toBe(100);
+    expect(result.cumulative_bands.p90.at(-1)!.value).toBe(100);
   });
 });

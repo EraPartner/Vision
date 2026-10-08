@@ -3,16 +3,157 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { parseKinesisTransactionHistory } from "../../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import { captureKinesisSourceContext } from "../../src/services/portfolioKinesisAdoptionScope.ts";
+import type { KinesisSourceContext } from "../../src/services/portfolioKinesisAdoptionScope.ts";
+import type { ParsedPortfolioRow } from "../../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
 import { toDecimal } from "../../src/lib/money.ts";
+import type { DecimalInput } from "../../src/lib/money.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,
 } from "../../src/services/importIdentity.ts";
 
-export const kinesisHash = (value) =>
+/** Batch `custom_config` exactly as the Kinesis stage records it. */
+export interface SyntheticKinesisConfig {
+  format: string;
+  yield_basis_policy: "zero";
+  source_columns: string[] | undefined;
+  kinesis_source_context: KinesisSourceContext;
+  /** Attached by reference-evidence fixtures (see kinesisYieldGroups.ts). */
+  portfolio_performance_reference?: unknown;
+  reference_blockers?: unknown;
+}
+
+/**
+ * A staged Kinesis row as `portfolio_import_staging_rows` would hold it, with
+ * the batch config joined in. NUMERIC columns are fixed-scale strings.
+ */
+export interface SyntheticKinesisRow {
+  id: number;
+  batch_id: number;
+  row_index: number;
+  status: string;
+  route: string | null;
+  type: string | null;
+  type_raw: string;
+  tx_date: string | undefined;
+  investment_id: number | null;
+  asset_class: string;
+  account_id: number;
+  symbol_raw: string | null;
+  name_raw: string | null;
+  source_account_identity: string | null | undefined;
+  source_transaction_id: string | null | undefined;
+  units: string | null;
+  price_per_unit: string | null;
+  amount: string | null;
+  fees: string | null;
+  taxes: string | null;
+  currency: string | null;
+  fx_rate_to_eur: string | null;
+  note: string;
+  raw_data: string;
+  source_record_hash: string;
+  dedup_fingerprint: string | null;
+  dedup_fingerprint_version: number | null;
+  dedup_occurrence: number;
+  custom_config: SyntheticKinesisConfig;
+  asset_transfer_details: ParsedPortfolioRow["assetTransfer"] | null;
+  asset_adjustment_details: ParsedPortfolioRow["assetAdjustment"] | null;
+  error_message?: string;
+  /** Joined by the review reads; set by fixtures that model them. */
+  resolved_investment_id?: number | null;
+  user_override_investment_id?: number | null;
+}
+
+export interface SyntheticKinesisBatch {
+  id: number;
+  account_id: number;
+  status: string;
+  adapter_name: string;
+  custom_config: SyntheticKinesisConfig;
+  rows_total: number;
+}
+
+/** A `portfolio_import_reconciliations` receipt as the adoption fixtures build it. */
+export interface SyntheticAdoptionReceipt {
+  id: number | string;
+  batch_id: number;
+  staging_row_id: number;
+  transaction_id: number;
+  action?: string;
+  policy: string;
+  before_data: SyntheticKinesisManualRow;
+  after_data: SyntheticKinesisManualRow;
+}
+
+export interface SyntheticKinesisAdoptionContext {
+  sources: SyntheticKinesisRow[];
+  batches: SyntheticKinesisBatch[];
+  receipts: SyntheticAdoptionReceipt[];
+}
+
+export interface SyntheticKinesisScope {
+  rows: SyntheticKinesisRow[];
+  batches: SyntheticKinesisBatch[];
+  history: SyntheticKinesisManualRow[];
+  /** Attached by adoption fixtures: the prior batch being adopted from. */
+  kinesisAdoptionContext?: SyntheticKinesisAdoptionContext;
+  /** Attached by `attachKinesisYieldReference`. */
+  referenceOriginalRows?: SyntheticKinesisRow[];
+}
+
+/** The staged columns `syntheticKinesisManual` reads. */
+export type KinesisManualSource = Pick<
+  SyntheticKinesisRow,
+  | "investment_id"
+  | "type"
+  | "tx_date"
+  | "amount"
+  | "units"
+  | "price_per_unit"
+  | "fees"
+  | "taxes"
+  | "currency"
+>;
+
+/** A manual `portfolio_transactions` row (NUMERIC columns as strings). */
+export interface SyntheticKinesisManualRow {
+  id: number;
+  investment_id: number | null;
+  type: string | null;
+  date: string | undefined;
+  amount: string | null;
+  units: string | null;
+  price_per_unit: string | null;
+  fees: string;
+  taxes: string;
+  currency: string;
+  fx_rate_to_eur: string | null;
+  account_id: number | null;
+  note: string;
+  dividend_amount_convention: string;
+  is_recurring: boolean;
+  recurrence_interval: string | null;
+  recurrence_end_date: string | null;
+  import_batch_id: string | null;
+  source_record_hash: string | null;
+  dedup_fingerprint: string | null;
+  dedup_fingerprint_version: number | null;
+}
+
+export interface SyntheticKinesisScopeOptions {
+  batchId?: number;
+  account?: number;
+  investment?: number | null;
+  rowStart?: number;
+  singleGift?: boolean;
+  sourcePath?: string;
+}
+
+export const kinesisHash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-const fixed = (value, places) =>
+const fixed = (value: DecimalInput, places: number) =>
   value == null
     ? null
     : toDecimal(value).toDecimalPlaces(places, 4).toFixed(places);
@@ -24,7 +165,7 @@ export async function syntheticKinesisScope({
   rowStart = 20,
   singleGift = false,
   sourcePath = undefined,
-} = {}) {
+}: SyntheticKinesisScopeOptions = {}): Promise<SyntheticKinesisScope> {
   const path =
     sourcePath ??
     fileURLToPath(
@@ -36,13 +177,13 @@ export async function syntheticKinesisScope({
   const parsed = await parseKinesisTransactionHistory(path, {
     yield_basis_policy: "zero",
   });
-  const config = {
+  const config: SyntheticKinesisConfig = {
     format: "kinesis_transaction_history",
     yield_basis_policy: "zero",
     source_columns: parsed.sourceColumns,
     kinesis_source_context: await captureKinesisSourceContext(path, parsed),
   };
-  const rows = parsed.map((item, index) => {
+  const rows = parsed.map((item, index): SyntheticKinesisRow => {
     const type = ["Buy", "Sell", "Gift", "Dividend"].includes(item.typeRaw)
       ? item.typeRaw.toLowerCase()
       : null;
@@ -96,7 +237,7 @@ export async function syntheticKinesisScope({
   rows.forEach((row, index) => {
     if (row.route) row.dedup_fingerprint = identities[index].fingerprint;
   });
-  const batch = {
+  const batch: SyntheticKinesisBatch = {
     id: batchId,
     account_id: account,
     status: "awaiting_review",
@@ -107,14 +248,20 @@ export async function syntheticKinesisScope({
   return { rows, batches: [batch], history: [] };
 }
 
-export function syntheticKinesisManual(row, id = 40) {
+/** The manual `portfolio_transactions` row an adoption would preserve for `row`. */
+export function syntheticKinesisManual(
+  row: KinesisManualSource,
+  id = 40,
+): SyntheticKinesisManualRow {
   return {
     id,
     investment_id: row.investment_id,
     type: row.type,
     date: row.tx_date,
     amount:
-      row.amount ?? fixed(toDecimal(row.units).times(row.price_per_unit), 4),
+      row.amount ??
+      // A row without an amount always carries a unit price (buy/sell legs).
+      fixed(toDecimal(row.units).times(row.price_per_unit!), 4),
     units: row.units,
     price_per_unit: row.price_per_unit,
     fees: row.fees ?? "0.0000",

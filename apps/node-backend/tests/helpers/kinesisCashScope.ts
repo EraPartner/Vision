@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { syntheticKinesisScope } from "./kinesisAdoptionScope.js";
+import { syntheticKinesisScope } from "./kinesisAdoptionScope.ts";
 const sourcePath = fileURLToPath(
   new URL("../fixtures/portfolio/kinesis-closed-cash.csv", import.meta.url),
 );

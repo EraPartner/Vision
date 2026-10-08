@@ -9,10 +9,10 @@
  * accepted any value via `!== 'false'`, rolling only `=== 'true'`).
  *
  * The router half runs against the REAL router mounted on a throwaway Express
- * app (see tests/helpers/routeApp.js).
+ * app (see tests/helpers/routeApp.ts).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { routeAgent } from "../helpers/routeApp.js";
+import { routeAgent } from "../helpers/routeApp.ts";
 import { parseBooleanQueryParam } from "../../src/lib/httpParams.ts";
 
 describe("parseBooleanQueryParam — default-aware boolean query param", () => {
@@ -42,12 +42,23 @@ describe("parseBooleanQueryParam — default-aware boolean query param", () => {
   });
 });
 
-const methodsSpy = vi.fn(async () => ({ data: {}, meta: {} }));
-const rollingSpy = vi.fn(async () => ({ data: {}, meta: {} }));
+interface ForecastOptions {
+  includeBacktest?: boolean;
+}
+
+const methodsSpy = vi.fn(async (_options: ForecastOptions) => ({
+  data: {},
+  meta: {},
+}));
+const rollingSpy = vi.fn(async (_options: ForecastOptions) => ({
+  data: {},
+  meta: {},
+}));
 
 vi.mock("../../src/services/calculations/forecast/index.ts", () => ({
-  computeCashflowForecast: (...a) => methodsSpy(...a),
-  computeCashflowForecastRolling: (...a) => rollingSpy(...a),
+  computeCashflowForecast: (options: ForecastOptions) => methodsSpy(options),
+  computeCashflowForecastRolling: (options: ForecastOptions) =>
+    rollingSpy(options),
 }));
 
 const { default: aggregationsRouter } =
@@ -55,7 +66,7 @@ const { default: aggregationsRouter } =
 
 const api = routeAgent(aggregationsRouter, { mountPath: "/api/aggregations" });
 
-const run = async (path, query = {}) => {
+const run = async (path: string, query: Record<string, string> = {}) => {
   const qs = new URLSearchParams(query).toString();
   await api.get(`/api/aggregations${path}${qs ? `?${qs}` : ""}`).expect(200);
 };

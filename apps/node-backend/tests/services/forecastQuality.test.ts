@@ -4,9 +4,18 @@ import {
   walkForwardBacktest,
   walkForwardBacktestRolling,
 } from "../../src/services/calculations/forecast/backtest.ts";
-const dateAt = (i) =>
+import type { BacktestMethod } from "../../src/services/calculations/forecast/backtest.ts";
+
+/** [name, value(i, n), MAE ceiling(n)] */
+type Pattern = [
+  string,
+  (i: number, n: number) => number,
+  (n: number) => number,
+];
+
+const dateAt = (i: number) =>
   new Date(Date.UTC(2023, 0, 1 + i)).toISOString().slice(0, 10);
-const patterns = [
+const patterns: Pattern[] = [
   ["zero", () => 0, () => 1e-6],
   ["constant", () => 100, () => 1e-6],
   ["linear", (i) => 100 + 0.1 * i, () => 0.05],
@@ -53,7 +62,7 @@ describe("declared Prophet-lite synthetic regression benchmarks", () => {
   it.each([365, 730, 1095])(
     "calendar annual baseline after %i days (limited fit)",
     (n) => {
-      const value = (i) => {
+      const value = (i: number) => {
         const d = new Date(Date.UTC(2023, 0, 1 + i));
         const doy =
           (d.getTime() - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000;
@@ -75,7 +84,7 @@ describe("declared Prophet-lite synthetic regression benchmarks", () => {
     },
   );
 });
-const methods = [
+const methods: BacktestMethod[] = [
   {
     id: "wrong",
     label: "Wrong",
@@ -83,7 +92,7 @@ const methods = [
       forecastDates.map((date) => ({ date, value: 10 })),
   },
 ];
-function februaryHistory(total) {
+function februaryHistory(total: number) {
   return [
     { date: "2024-01-01", net: 100 },
     ...Array.from({ length: 29 }, (_, i) => ({

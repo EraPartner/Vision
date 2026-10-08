@@ -4,13 +4,13 @@
  * or validate database grouping and exclusions.
  */
 import { describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildMonthlySummary } from "../../src/repositories/infoRepositoryHelpers.ts";
 
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -48,7 +48,7 @@ describe("property: production monthly summary", () => {
       for (const [field, centsField] of [
         ["total_spending", "spendingCents"],
         ["total_income", "incomeCents"],
-      ]) {
+      ] as const) {
         const expectedCents = entries.reduce(
           (total, entry) => total + BigInt(entry[centsField]),
           0n,
@@ -65,7 +65,7 @@ describe("property: production monthly summary", () => {
         entries.reduce((total, entry) => total + entry.count, 0),
       );
       expect(summary.period_start).toBe(months[0].period_start);
-      expect(summary.period_end).toBe(months.at(-1).period_end);
+      expect(summary.period_end).toBe(months.at(-1)!.period_end);
     }
   });
 

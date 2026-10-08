@@ -54,7 +54,7 @@
  *                             main.ts:161-237, 344-384  not reachable from a router.
  *
  * Usage:
- *   import { routeAgent } from '../helpers/routeApp.js';
+ *   import { routeAgent } from '../helpers/routeApp.ts';
  *   // ... vi.mock() the repositories/services this router imports ...
  *   const { default: router } = await import('../../src/routes/transactions.ts');
  *   const api = routeAgent(router, { mountPath: '/api/transactions' });
@@ -63,7 +63,10 @@
  *   expect(res.body).toEqual({ ok: true, data: {...}, meta: { requestId: expect.any(String) } });
  */
 import express from 'express';
+import type { Express, RequestHandler, Router } from 'express';
 import supertest from 'supertest';
+import type { Test, TestAgent } from 'supertest';
+import type { ExpressHandler } from '../../src/types/express.ts';
 
 import { requestId } from '../../src/middleware/requestId.ts';
 import { requestMetrics } from '../../src/middleware/requestMetrics.ts';
@@ -72,35 +75,55 @@ import { createCsrfGuard } from '../../src/middleware/csrfGuard.ts';
 import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHandler.ts';
 
 /**
- * @typedef {object} RouteAppOptions
- * @property {string} [mountPath='/']   Path the router is mounted at. Use the
- *   production path (`/api/transactions`, `/api/planned-transactions`, …) so
- *   `req.baseUrl` and the request paths in the test read like real traffic.
- * @property {import('express').RequestHandler[]} [before=[]]  Extra middleware
- *   mounted on `mountPath` BEFORE the router — the slot `main.ts` uses for
- *   per-mount rate limiters and the admin auth guard (main.ts:261-338).
- * @property {import('express').RequestHandler[]} [after=[]]   Extra middleware
- *   mounted after the router but before the 404 handler.
- * @property {boolean} [csrf=true]      Mount the CSRF guard (main.ts:252).
- *   supertest sends neither `Origin` nor `Sec-Fetch-Site`, so it is treated as
- *   a non-browser client and passes; set false only to prove the guard's effect.
- * @property {string|string[]} [corsOrigins=[]]  Allowlist handed to the CSRF
- *   guard (main.ts:49 passes `settings.api.corsOrigins`).
- * @property {string} [jsonLimit='1mb'] Body-size limit (main.ts:123).
- * @property {() => boolean} [isProduction]  Predicate handed to the error
- *   handler (main.ts:395). Defaults to false so 5xx messages stay visible,
- *   matching a dev/test run.
+ * Middleware for the `before`/`after` slots: real Express handlers, or the
+ * structurally typed ones `src/` builds (src/types/express.ts), which main.ts
+ * mounts the same way.
  */
+export type RouteMiddleware = RequestHandler | ExpressHandler;
+
+export interface RouteAppOptions {
+  /**
+   * Path the router is mounted at (default `'/'`). Use the production path
+   * (`/api/transactions`, `/api/planned-transactions`, …) so `req.baseUrl` and
+   * the request paths in the test read like real traffic.
+   */
+  mountPath?: string;
+  /**
+   * Extra middleware mounted on `mountPath` BEFORE the router — the slot
+   * `main.ts` uses for per-mount rate limiters and the admin auth guard
+   * (main.ts:261-338).
+   */
+  before?: RouteMiddleware[];
+  /** Extra middleware mounted after the router but before the 404 handler. */
+  after?: RouteMiddleware[];
+  /**
+   * Mount the CSRF guard (main.ts:252; default true). supertest sends neither
+   * `Origin` nor `Sec-Fetch-Site`, so it is treated as a non-browser client and
+   * passes; set false only to prove the guard's effect.
+   */
+  csrf?: boolean;
+  /** Allowlist handed to the CSRF guard (main.ts:49 passes `settings.api.corsOrigins`). */
+  corsOrigins?: string | string[];
+  /** Body-size limit (main.ts:123; default `'1mb'`). */
+  jsonLimit?: string;
+  /**
+   * Predicate handed to the error handler (main.ts:395). Defaults to false so
+   * 5xx messages stay visible, matching a dev/test run.
+   */
+  isProduction?: () => boolean;
+}
+
+/** The supertest agent `routeAgent` returns. */
+export type RouteAgent = TestAgent<Test>;
 
 /**
  * Build a throwaway Express app with `router` mounted the way main.ts mounts
  * the data plane.
- *
- * @param {import('express').Router} router
- * @param {RouteAppOptions} [options]
- * @returns {import('express').Express}
  */
-export function createRouteApp(router, options = {}) {
+export function createRouteApp(
+  router: Router | RequestHandler,
+  options: RouteAppOptions = {},
+): Express {
   const {
     mountPath = '/',
     before = [],
@@ -125,8 +148,8 @@ export function createRouteApp(router, options = {}) {
   app.use(wrapResponse);
 
   // main.ts:254+ — mountRouter(app, path, ...perMountMiddleware, router)
-  app.use(mountPath, ...before, router);
-  for (const mw of after) app.use(mountPath, mw);
+  app.use(mountPath, ...(before as RequestHandler[]), router);
+  for (const mw of after) app.use(mountPath, mw as RequestHandler);
 
   // main.ts:389 — unmatched paths funnel through the error handler.
   app.use((req, _res, next) => {
@@ -140,12 +163,11 @@ export function createRouteApp(router, options = {}) {
 
 /**
  * `createRouteApp` + a supertest agent bound to it.
- *
- * @param {import('express').Router} router
- * @param {RouteAppOptions} [options]
- * @returns {import('supertest').SuperTest<import('supertest').Test>}
  */
-export function routeAgent(router, options = {}) {
+export function routeAgent(
+  router: Router | RequestHandler,
+  options: RouteAppOptions = {},
+): RouteAgent {
   return supertest(createRouteApp(router, options));
 }
 
@@ -153,11 +175,11 @@ export function routeAgent(router, options = {}) {
  * Matcher for the ADR-026 success envelope: `{ ok: true, data, meta }`, where
  * `meta.requestId` is injected by `wrapResponse` from `req.id` (envelope.js:31).
  * Use with `expect(res.body).toEqual(okEnvelope({...}))`.
- *
- * @param {any} data
- * @param {Record<string, any>} [extraMeta]
  */
-export function okEnvelope(data, extraMeta = {}) {
+export function okEnvelope(
+  data: unknown,
+  extraMeta: Record<string, unknown> = {},
+): { ok: true; data: unknown; meta: Record<string, unknown> } {
   return {
     ok: true,
     data,
@@ -168,12 +190,17 @@ export function okEnvelope(data, extraMeta = {}) {
 /**
  * Matcher for the ADR-026 failure envelope emitted by `createErrorHandler`
  * (errorHandler.js:240-244). `details` is only present on typed AppErrors that
- * carry it, so it is opt-in here.
- *
- * @param {{ code?: any, message?: any, details?: any }} [error]
+ * carry it, so it is opt-in here. Each field may be a literal or an
+ * asymmetric matcher (`expect.any(String)`, `expect.stringMatching(...)`).
  */
-export function errEnvelope(error = {}) {
-  const shape = {
+export function errEnvelope(
+  error: { code?: unknown; message?: unknown; details?: unknown } = {},
+): {
+  ok: false;
+  error: { code: unknown; message: unknown; details?: unknown };
+  meta: { requestId: unknown };
+} {
+  const shape: { code: unknown; message: unknown; details?: unknown } = {
     code: error.code ?? expect.any(String),
     message: error.message ?? expect.any(String),
   };

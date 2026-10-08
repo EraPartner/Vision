@@ -2,11 +2,11 @@ import { fileURLToPath } from "node:url";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./helpers/kinesisAdoptionScope.js";
+} from "./helpers/kinesisAdoptionScope.ts";
 import { describe, expect, it } from "vitest";
-import { fullFixture } from "./helpers/kinesisFullImport.js";
+import { fullFixture } from "./helpers/kinesisFullImport.ts";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
-import { syntheticKinesisIncomePair } from "./helpers/kinesisIncomePairs.js";
+import { syntheticKinesisIncomePair } from "./helpers/kinesisIncomePairs.ts";
 
 const plan = (source) =>
   buildPortfolioImportReconciliationPlan({

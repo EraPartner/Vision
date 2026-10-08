@@ -2,6 +2,23 @@
 import fs from "node:fs/promises";
 import { ZipArchive } from "archiver";
 
+/**
+ * A cell value in a synthetic workbook record. Dates become serial-date cells,
+ * numbers numeric cells, and `{ type: "number", raw }` writes `raw` verbatim
+ * as a numeric cell; anything else is written as an inline string.
+ */
+export type SyntheticCellValue =
+  string | number | Date | null | undefined | { type: "number"; raw: string };
+
+/** One record, keyed by normalized header (NBSP → space, trimmed). */
+export type SyntheticRecord = Record<string, SyntheticCellValue>;
+
+export interface SyntheticSheet {
+  sheet: string;
+  headers: string[];
+  records: SyntheticRecord[];
+}
+
 const mainHeaders = [
   "Gebruikersnaam",
   "Transactiedatum",
@@ -82,9 +99,9 @@ const bookingHeaders = [
   "Instrument ISIN",
   "Instrumentvaluta",
 ];
-const normalize = (header) => header.trim().replaceAll("\u00a0", " ");
+const normalize = (header: string) => header.trim().replaceAll("\u00a0", " ");
 
-export function syntheticSaxoWorkbook() {
+export function syntheticSaxoWorkbook(): SyntheticSheet[] {
   const shared = {
     "Rekening-ID": "ACC-1",
     Instrument: "Example Inc",
@@ -137,7 +154,12 @@ export function syntheticSaxoWorkbook() {
     Acties: "Opname",
     Boekingsbedrag: -50,
   };
-  const booking = (parent, id, kind, amount) => ({
+  const booking = (
+    parent: SyntheticRecord,
+    id: string,
+    kind: string,
+    amount: number,
+  ) => ({
     ...parent,
     "Booking Id": id,
     "Amount Type": kind,
@@ -183,34 +205,37 @@ export function syntheticSaxoWorkbook() {
   ];
 }
 
-const escape = (value) =>
+const escape = (value: unknown) =>
   String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll('"', "&quot;");
-function columnName(index) {
+function columnName(index: number) {
   let name = "";
   for (let number = index + 1; number; number = Math.floor((number - 1) / 26))
     name = String.fromCharCode(65 + ((number - 1) % 26)) + name;
   return name;
 }
-function cellXml(value, address) {
+function cellXml(value: SyntheticCellValue, address: string) {
   if (value == null) return "";
   if (value instanceof Date)
     return `<c r="${address}" s="1"><v>${(value.getTime() - Date.UTC(1899, 11, 30)) / 86400000}</v></c>`;
-  if (typeof value === "number" || value?.type === "number")
-    return `<c r="${address}"><v>${value?.raw ?? value}</v></c>`;
+  if (
+    typeof value === "number" ||
+    (typeof value === "object" && value.type === "number")
+  )
+    return `<c r="${address}"><v>${typeof value === "number" ? value : value.raw}</v></c>`;
   return `<c r="${address}" t="inlineStr"><is><t xml:space="preserve">${escape(value)}</t></is></c>`;
 }
 
 /** Construct small valid OOXML files directly to test the parser, not Excel authoring. */
 export async function writeSyntheticWorkbook(
-  filePath,
-  sheets = syntheticSaxoWorkbook(),
-) {
+  filePath: string,
+  sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
+): Promise<Buffer> {
   const zip = new ZipArchive({ zlib: { level: 6 } });
-  const chunks = [];
-  zip.on("data", (chunk) => chunks.push(chunk));
+  const chunks: Buffer[] = [];
+  zip.on("data", (chunk: Buffer) => chunks.push(chunk));
   const complete = new Promise((resolve, reject) => {
     zip.on("end", resolve);
     zip.on("error", reject);

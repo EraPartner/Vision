@@ -5,7 +5,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 

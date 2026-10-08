@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { routeAgent, okEnvelope } from "./helpers/routeApp.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { routeAgent, okEnvelope } from "./helpers/routeApp.ts";
 
 // Mock the DB layer used by the settings repository
 vi.mock("../src/database/connection.ts", () => mockConnection());

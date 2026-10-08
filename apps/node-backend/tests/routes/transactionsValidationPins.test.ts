@@ -7,20 +7,21 @@
  * 400/VALIDATION_ERROR, accepted inputs reach the repository byte-identically
  * (raw vs coerced), and clear-vs-absent semantics survive.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts), so the
  * status/envelope assertions are the ones the error handler actually emits
  * rather than a hand-replayed approximation.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockTxConnection } from "../helpers/repoMocks.js";
+import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
   mockTransferReconciliation,
   mockCurrencyConversion,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
+import type { Response } from "supertest";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -54,32 +55,38 @@ vi.mock("../../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.ts";
+import rawTransactionRepository from "../../src/repositories/transactionRepository.ts";
+import type { EnrichedTransactionRow } from "../../src/repositories/transactionRepository.ts";
 import {
   recordManualTransactionDedupClaim,
-  isManualDuplicate,
+  isManualDuplicate as rawIsManualDuplicate,
 } from "../../src/services/deduplication.ts";
+
+const transactionRepository = vi.mocked(rawTransactionRepository);
+const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
+type ManualDuplicateResult = Awaited<ReturnType<typeof rawIsManualDuplicate>>;
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 
-const validPostBody = () => ({
+const validPostBody = (): Record<string, unknown> => ({
   transaction_date: "2026-01-15",
   account_id: 1,
   recipient_id: 1,
   amount: -50,
 });
 
-const post = (body) => api.post("/api/transactions/").send(body);
-const patch = (body) => api.patch("/api/transactions/1").send(body);
-const bulkTag = (body) => api.post("/api/transactions/bulk-tag").send(body);
-const bulkUpdate = (body) =>
+const post = (body: object) => api.post("/api/transactions/").send(body);
+const patch = (body: object) => api.patch("/api/transactions/1").send(body);
+const bulkTag = (body: object) =>
+  api.post("/api/transactions/bulk-tag").send(body);
+const bulkUpdate = (body: object) =>
   api.post("/api/transactions/bulk-update").send(body);
 
 /** Assert a 400 VALIDATION_ERROR envelope and return the response. */
-async function expectValidationError(pending) {
+async function expectValidationError(pending: Promise<Response>) {
   const res = await pending;
   expect(res.status).toBe(400);
   expect(res.body.ok).toBe(false);
@@ -89,17 +96,19 @@ async function expectValidationError(pending) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  isManualDuplicate.mockResolvedValue({ isDuplicate: false });
+  isManualDuplicate.mockResolvedValue({
+    isDuplicate: false,
+  } as ManualDuplicateResult);
   transactionRepository.create.mockResolvedValue({
     id: 1,
     amount: "-50",
     date: "2026-01-15",
-  });
+  } as unknown as EnrichedTransactionRow);
   transactionRepository.update.mockResolvedValue({
     id: 1,
     amount: "10",
     date: "2026-07-01",
-  });
+  } as unknown as EnrichedTransactionRow);
 });
 
 describe("POST / — validation pins", () => {
@@ -311,7 +320,7 @@ describe("PATCH /:id — validation pins", () => {
   });
 
   // The retargeting half of this contract ('1e3' → recipient 1000) lives in
-  // tests/routes/transactionsFkIdValidation.test.js: it needs more PATCHes than
+  // tests/routes/transactionsFkIdValidation.test.ts: it needs more PATCHes than
   // this file has left under the route's own 30/min rate limiter.
 
   it("strips read-only keys (id, created_at, links) before the repository", async () => {

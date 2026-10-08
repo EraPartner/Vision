@@ -19,7 +19,7 @@ const LOAN_TYPES = ['amortizing', 'fixed_principal', 'interest_only'];
 /**
  * Deterministic seeded PRNG (mulberry32) so property suite is reproducible.
  */
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -30,7 +30,7 @@ function seeded(seed) {
   };
 }
 
-function randomCase(rng, loanType) {
+function randomCase(rng: () => number, loanType: string) {
   const principal = Math.round((1000 + rng() * 499000) * 100) / 100;
   const annualRate = Math.round(rng() * 15 * 100) / 100; // 0-15% APR
   const termMonths = 1 + Math.floor(rng() * 360); // 1..360

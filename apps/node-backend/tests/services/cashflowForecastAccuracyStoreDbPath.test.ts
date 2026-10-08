@@ -99,14 +99,14 @@ describe("accuracyStore DB path returns camelCase records", () => {
     // Pre-fix, snake_case rows made this map empty → equal-weight fallback.
     expect(weights.size).toBe(3);
 
-    const values = methodIds.map((id) => weights.get(id));
+    const values = methodIds.map((id) => weights.get(id)!);
     for (const v of values) expect(Number.isFinite(v)).toBe(true);
     expect(values.reduce((s, v) => s + v, 0)).toBeCloseTo(1, 6);
 
     // Weights track backtest accuracy: lower RMSE → higher weight.
-    expect(weights.get("ewma")).toBeGreaterThan(weights.get("holt_winters"));
+    expect(weights.get("ewma")).toBeGreaterThan(weights.get("holt_winters")!);
     expect(weights.get("holt_winters")).toBeGreaterThan(
-      weights.get("simple_avg"),
+      weights.get("simple_avg")!,
     );
 
     // And they are decisively non-equal — equal weighting (1/3 each) would fail.

@@ -3,7 +3,7 @@
  * Mirrors: apps/backend/tests/test_admin.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). The production admin mount
+ * tests/helpers/routeApp.ts). The production admin mount
  * (main.ts:276 — `mountRouter(app, '/api/admin', adminRateLimiter,
  * adminCsrfGuard, adminAuthMiddleware, adminRouter)`) is reproduced via the
  * harness's `before` slot with the REAL `createAdminAuthMiddleware`, driven by
@@ -16,10 +16,11 @@
  * is exercised for free since the real router is mounted.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import type { Mock } from "vitest";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 import { createAdminAuthMiddleware } from "../../src/middleware/adminAuth.ts";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("https", () => ({
   default: {
@@ -37,7 +38,7 @@ vi.mock("../../src/database/connection.ts", () =>
 );
 
 const settings = vi.hoisted(() => ({
-  admin: { enableResetDb: false, authToken: undefined },
+  admin: { enableResetDb: false, authToken: undefined as string | undefined },
   isDevelopment: () => true,
 }));
 
@@ -61,13 +62,21 @@ vi.mock("../../src/services/routeManifest.ts", () => ({
 }));
 
 import {
-  checkConnection,
-  getTableCount,
+  checkConnection as rawCheckConnection,
+  getTableCount as rawGetTableCount,
 } from "../../src/database/connection.ts";
-import { sanitizePersistedKinesisHistory } from "../../src/services/priceProviderService.ts";
-import { listProviderHealth } from "../../src/services/providerHealthService.ts";
-import { getRouteManifest } from "../../src/services/routeManifest.ts";
+import { sanitizePersistedKinesisHistory as rawSanitizePersistedKinesisHistory } from "../../src/services/priceProviderService.ts";
+import { listProviderHealth as rawListProviderHealth } from "../../src/services/providerHealthService.ts";
+import { getRouteManifest as rawGetRouteManifest } from "../../src/services/routeManifest.ts";
 import https from "https";
+
+const checkConnection = vi.mocked(rawCheckConnection);
+const getTableCount = vi.mocked(rawGetTableCount);
+const sanitizePersistedKinesisHistory = vi.mocked(
+  rawSanitizePersistedKinesisHistory,
+);
+const listProviderHealth = vi.mocked(rawListProviderHealth);
+const getRouteManifest = vi.mocked(rawGetRouteManifest);
 
 const { default: adminRouter } = await import("../../src/routes/admin.ts");
 
@@ -424,7 +433,9 @@ describe("Admin Routes", () => {
         { provider: "yahoo", kind: "price" },
         { provider: "ecb", kind: "fx" },
       ];
-      listProviderHealth.mockResolvedValue(providers);
+      listProviderHealth.mockResolvedValue(
+        providers as Awaited<ReturnType<typeof rawListProviderHealth>>,
+      );
 
       const res = await api.get(`${BASE}/providers/health`).expect(200);
 
@@ -465,8 +476,8 @@ describe("Admin Routes", () => {
   });
 });
 
-function mockGitHubReleaseBody(body) {
-  const httpsGet = /** @type {import('vitest').Mock} */ (https.get);
+function mockGitHubReleaseBody(body: string) {
+  const httpsGet = https.get as unknown as Mock;
   httpsGet.mockImplementation((url, options, callback) => {
     expect(url).toContain("/releases/latest");
     expect(options).toMatchObject({

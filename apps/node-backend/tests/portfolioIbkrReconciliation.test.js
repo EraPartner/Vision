@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 
-import { syntheticIbkrPlannerSource } from "./helpers/ibkrReconciliation.js";
+import { syntheticIbkrPlannerSource } from "./helpers/ibkrReconciliation.ts";
 
 const manual = (overrides = {}) => ({
   id: 40,

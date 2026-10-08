@@ -5,24 +5,45 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import {
   __createResearchMappingService as createResearchMappingService,
   __analyzeQuotes as analyzeQuotes,
 } from '../../src/services/research/researchMappingService.ts';
 
+import type { upsert as repoUpsert } from '../../src/repositories/instrumentProviderMapRepository.ts';
+
+type ServiceDeps = NonNullable<Parameters<typeof createResearchMappingService>[0]>;
+type UpsertInput = Parameters<typeof repoUpsert>[0];
+
+/** In-memory stand-in for an instrument_provider_map row. */
+interface FakeMapRow {
+  id: number;
+  instrument_key: string;
+  key_type: string;
+  provider: string;
+  provider_symbol?: string | null;
+  resolved_name?: string | null;
+  exchange?: string | null;
+  currency?: string | null;
+  status?: string | null;
+  verified_at: string | undefined;
+}
+type FakeMapSeed = Omit<FakeMapRow, 'id' | 'verified_at'> & { id?: number };
+
 const KEY = 'US0378331005';
 const TYPE = 'isin';
 
-const makeRepo = (seed = []) => {
-  let rows = seed.map((r, i) => ({ id: r.id ?? i + 1, verified_at: undefined, ...r }));
+const makeRepo = (seed: FakeMapSeed[] = []) => {
+  let rows: FakeMapRow[] = seed.map((r, i) => ({ id: r.id ?? i + 1, verified_at: undefined, ...r }));
   return {
     rows: () => rows,
-    listByInstrument: vi.fn(async (k, t) => rows.filter((r) => r.instrument_key === k && r.key_type === t)),
-    upsert: vi.fn(async (m) => {
+    listByInstrument: vi.fn(async (k: string, t: string) => rows.filter((r) => r.instrument_key === k && r.key_type === t)),
+    upsert: vi.fn(async (m: UpsertInput) => {
       const idx = rows.findIndex(
         (r) => r.instrument_key === m.instrumentKey && r.key_type === m.keyType && r.provider === m.provider,
       );
-      const row = {
+      const row: FakeMapRow = {
         id: idx >= 0 ? rows[idx].id : rows.length + 1,
         instrument_key: m.instrumentKey,
         key_type: m.keyType,
@@ -38,12 +59,12 @@ const makeRepo = (seed = []) => {
       else rows.push(row);
       return row;
     }),
-    deleteById: vi.fn(async (id) => {
+    deleteById: vi.fn(async (id: number) => {
       const before = rows.length;
       rows = rows.filter((r) => r.id !== id);
       return rows.length < before;
     }),
-    markVerified: vi.fn(async (k, t) => {
+    markVerified: vi.fn(async (k: string, t: string) => {
       let n = 0;
       rows.forEach((r) => {
         if (r.instrument_key === k && r.key_type === t) {
@@ -58,15 +79,16 @@ const makeRepo = (seed = []) => {
 
 const governorAllow = () => ({ canSpend: vi.fn(async () => true), spend: vi.fn(async () => {}) });
 
-let recordSuccess;
-let recordError;
+let recordSuccess: Mock;
+let recordError: Mock;
 beforeEach(() => {
   recordSuccess = vi.fn();
   recordError = vi.fn();
 });
 
-const build = (deps) =>
-  createResearchMappingService({ recordSuccess, recordError, ...deps });
+// Fakes implement only what each case exercises, hence the single cast here.
+const build = (deps: Record<string, unknown>) =>
+  createResearchMappingService({ recordSuccess, recordError, ...deps } as ServiceDeps);
 
 describe('researchMappingService.resolve', () => {
   it('auto-proposes the top search hit for a keyed, search-capable provider', async () => {
@@ -74,13 +96,13 @@ describe('researchMappingService.resolve', () => {
       yahoo: { search: vi.fn(async () => ({ items: [{ symbol: 'AAPL', name: 'Apple Inc.', exchange: 'NASDAQ' }] })) },
     };
     const governor = governorAllow();
-    const svc = build({ repo: makeRepo(), adapters, governor, isKeyed: (p) => p === 'yahoo' });
+    const svc = build({ repo: makeRepo(), adapters, governor, isKeyed: (p: string) => p === 'yahoo' });
 
     const { proposals } = await svc.resolve({ instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple' });
 
     const yahoo = proposals.find((p) => p.provider === 'yahoo');
     expect(yahoo).toMatchObject({ status: 'auto', providerSymbol: 'AAPL', resolvedName: 'Apple Inc.' });
-    expect(yahoo.candidates).toHaveLength(1);
+    expect(yahoo!.candidates).toHaveLength(1);
     expect(governor.spend).toHaveBeenCalledWith('yahoo');
     expect(recordSuccess).toHaveBeenCalledWith('yahoo');
   });
@@ -170,7 +192,7 @@ describe('researchMappingService.resolve', () => {
     const repo = makeRepo([
       { instrument_key: KEY, key_type: TYPE, provider: 'twelve_data', provider_symbol: 'AAPL', status: 'auto' },
     ]);
-    const svc = build({ repo, adapters, governor: governorAllow(), isKeyed: (p) => p === 'yahoo' });
+    const svc = build({ repo, adapters, governor: governorAllow(), isKeyed: (p: string) => p === 'yahoo' });
 
     const { proposals } = await svc.resolve({ instrumentKey: KEY, keyType: TYPE, assetClass: 'stock', query: 'apple' });
 

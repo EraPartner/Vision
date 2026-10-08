@@ -1,7 +1,7 @@
 /**
  * Vitest reporter: shout when a run silently omitted the DB-backed suites.
  *
- * `tests/setup/db.js` is opt-in — without TEST_DATABASE_URL every case behind
+ * `tests/setup/db.ts` is opt-in — without TEST_DATABASE_URL every case behind
  * that seam self-skips. Vitest reports the result as "N passed | M skipped" and
  * exits 0, which reads as routine rather than as "a fifth of the DB-touching
  * surface was never exercised". A green local suite is then mistaken for a
@@ -17,19 +17,41 @@
 
 import { readFileSync } from 'node:fs';
 
-// The seam is always imported directly ('./setup/db.js' / '../setup/db.js'),
+// The seam is always imported directly ('./setup/db.ts' / '../setup/db.ts'),
 // so a source-level match is enough to tell a DB-backed module from one that
-// skipped for an unrelated reason (todo, platform gate, it.skip).
-const DB_SEAM_IMPORT = /from\s*['"][^'"]*setup\/db\.js['"]/;
+// skipped for an unrelated reason (todo, platform gate, it.skip). Both
+// extensions match while the suite migrates from JavaScript (ADR-192).
+const DB_SEAM_IMPORT = /from\s*['"][^'"]*setup\/db\.(?:js|ts)['"]/;
 
 const SEPARATOR = '='.repeat(78);
 
 /**
- * @param {string} moduleId
- * @param {Map<string, boolean>} cache
- * @returns {boolean}
+ * The slice of a vitest `TestModule` this reporter reads. Real modules satisfy
+ * it structurally; tests pass minimal stand-ins.
  */
-function importsDbSeam(moduleId, cache) {
+export interface SkipCountModule {
+  moduleId: string;
+  children?: { allTests(state?: string): Iterable<unknown> };
+}
+
+export interface DbSkipCounts {
+  skippedTests: number;
+  skippedFiles: number;
+  totalSkipped: number;
+}
+
+export interface DbSkipBannerOptions {
+  env?: NodeJS.ProcessEnv;
+  write?: (text: string) => void;
+  color?: boolean;
+}
+
+export interface DbSkipBannerReporter {
+  isDbSkipBanner: true;
+  onTestRunEnd(testModules: Iterable<SkipCountModule> | undefined): void;
+}
+
+function importsDbSeam(moduleId: string, cache: Map<string, boolean>): boolean {
   const cached = cache.get(moduleId);
   if (cached !== undefined) return cached;
   let result = false;
@@ -45,12 +67,14 @@ function importsDbSeam(moduleId, cache) {
 /**
  * Count skipped cases that live behind the DB seam.
  *
- * @param {Iterable<any>} testModules vitest TestModule objects
- * @param {(moduleId: string) => boolean} [isDbBacked]
- * @returns {{ skippedTests: number, skippedFiles: number, totalSkipped: number }}
+ * @param testModules vitest TestModule objects
+ * @param isDbBacked defaults to detecting the seam import in the module source
  */
-export function collectDbSkips(testModules, isDbBacked) {
-  const cache = new Map();
+export function collectDbSkips(
+  testModules: Iterable<SkipCountModule> | undefined,
+  isDbBacked?: (moduleId: string) => boolean,
+): DbSkipCounts {
+  const cache = new Map<string, boolean>();
   const dbBacked = isDbBacked ?? ((moduleId) => importsDbSeam(moduleId, cache));
 
   let skippedTests = 0;
@@ -60,7 +84,8 @@ export function collectDbSkips(testModules, isDbBacked) {
   for (const testModule of testModules ?? []) {
     let moduleSkipped = 0;
     try {
-      for (const _test of testModule.children.allTests('skipped')) moduleSkipped += 1;
+      // A module whose children cannot be walked throws here and counts as 0.
+      for (const _test of testModule.children!.allTests('skipped')) moduleSkipped += 1;
     } catch {
       moduleSkipped = 0;
     }
@@ -74,12 +99,10 @@ export function collectDbSkips(testModules, isDbBacked) {
   return { skippedTests, skippedFiles, totalSkipped };
 }
 
-/**
- * @param {{ skippedTests: number, skippedFiles: number }} counts
- * @param {boolean} [color]
- * @returns {string}
- */
-export function formatDbSkipBanner({ skippedTests, skippedFiles }, color = false) {
+export function formatDbSkipBanner(
+  { skippedTests, skippedFiles }: Pick<DbSkipCounts, 'skippedTests' | 'skippedFiles'>,
+  color = false,
+): string {
   const bold = color ? '\u001B[1;31m' : '';
   const dim = color ? '\u001B[31m' : '';
   const reset = color ? '\u001B[0m' : '';
@@ -90,7 +113,7 @@ export function formatDbSkipBanner({ skippedTests, skippedFiles }, color = false
     `${bold}${SEPARATOR}${reset}`,
     `${bold}  INCOMPLETE RUN -- ${skippedTests} DB-backed tests across ${skippedFiles} ${files} were SKIPPED${reset}`,
     `${bold}${SEPARATOR}${reset}`,
-    `${dim}  TEST_DATABASE_URL is not set, so every case behind the tests/setup/db.js${reset}`,
+    `${dim}  TEST_DATABASE_URL is not set, so every case behind the tests/setup/db.ts${reset}`,
     `${dim}  seam self-skipped. This run did NOT exercise them, and is NOT equivalent${reset}`,
     `${dim}  to CI's "Test (Backend)" job -- green here does not mean green there.${reset}`,
     '',
@@ -104,14 +127,14 @@ export function formatDbSkipBanner({ skippedTests, skippedFiles }, color = false
  * Build the reporter. Appended to vitest's own reporter list (see
  * vitest.config.js) so it runs after the default reporter has printed its
  * summary.
- *
- * @param {{ env?: NodeJS.ProcessEnv, write?: (text: string) => void, color?: boolean }} [options]
  */
-export function createDbSkipBannerReporter(options = {}) {
+export function createDbSkipBannerReporter(
+  options: DbSkipBannerOptions = {},
+): DbSkipBannerReporter {
   const env = options.env ?? process.env;
   // stdout, not stderr: the summary this banner must follow is written to
   // stdout, and interleaving two streams through a pipe loses that ordering.
-  const write = options.write ?? ((text) => process.stdout.write(text));
+  const write = options.write ?? ((text: string) => process.stdout.write(text));
   const color =
     options.color ??
     (!env.NO_COLOR && (Boolean(env.FORCE_COLOR) || Boolean(process.stdout.isTTY)));

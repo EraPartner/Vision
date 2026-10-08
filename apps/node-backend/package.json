@@ -16,7 +16,7 @@
     "db:reset": "bun run scripts/db-migrate.js reset",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.tests.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

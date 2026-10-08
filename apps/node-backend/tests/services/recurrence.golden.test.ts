@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
+import { runGolden } from '../golden/runGolden.ts';
 import { calculateNextDate, isValidPattern } from '../../src/lib/calculations/recurrence.ts';
 
 /**
@@ -7,7 +7,7 @@ import { calculateNextDate, isValidPattern } from '../../src/lib/calculations/re
  * Fixture inputs: { currentDate: ISO string, pattern: string }.
  * Output is normalized to { next: ISO string | null } so JSON round-trip is stable.
  */
-function runPattern({ currentDate, pattern }) {
+function runPattern({ currentDate, pattern }: { currentDate: string; pattern: string }) {
   const result = calculateNextDate(new Date(currentDate), pattern);
   return { next: result ? result.toISOString() : null };
 }

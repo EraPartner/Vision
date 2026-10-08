@@ -16,14 +16,22 @@
  * keep answering 200 with no exclusions applied. It is pinned here so a later
  * tightening cannot take it away by accident.
  *
- * Runs against the REAL router on a throwaway Express app (helpers/routeApp.js);
+ * Runs against the REAL router on a throwaway Express app (helpers/routeApp.ts);
  * only the calc modules are mocked, so the parse, the error handler and the
  * envelope are all real.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
+import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
 
-const envelope = async () => ({ data: {}, meta: {} });
+/** The parsed options each calc module receives (only the fields pinned here). */
+interface CalcOptions {
+  excludedCategoryIds?: number[];
+  excludedRecipientIds?: number[];
+  mcPercentiles?: number[];
+}
+type CalcArgs = [options: CalcOptions, ...rest: unknown[]];
+
+const envelope = async (..._args: CalcArgs) => ({ data: {}, meta: {} });
 
 const monthlySpy = vi.fn(envelope);
 const recipientInsightsSpy = vi.fn(envelope);
@@ -37,39 +45,39 @@ const recipientPivotSpy = vi.fn(envelope);
 const tagPivotSpy = vi.fn(envelope);
 
 vi.mock('../../src/services/calculations/aggregation/monthly.ts', () => ({
-  computeMonthlySummary: (...a) => monthlySpy(...a),
+  computeMonthlySummary: (...a: CalcArgs) => monthlySpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/recipient.ts', () => ({
-  computeRecipientInsights: (...a) => recipientInsightsSpy(...a),
+  computeRecipientInsights: (...a: CalcArgs) => recipientInsightsSpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/cashflow.ts', () => ({
-  computeCashflowComparison: (...a) => cashflowComparisonSpy(...a),
+  computeCashflowComparison: (...a: CalcArgs) => cashflowComparisonSpy(...a),
 }));
 vi.mock('../../src/services/calculations/forecast/index.ts', () => ({
-  computeCashflowForecast: (...a) => forecastMethodsSpy(...a),
-  computeCashflowForecastRolling: (...a) => forecastRollingSpy(...a),
+  computeCashflowForecast: (...a: CalcArgs) => forecastMethodsSpy(...a),
+  computeCashflowForecastRolling: (...a: CalcArgs) => forecastRollingSpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/sankey.ts', () => ({
-  computeSankeyFlow: (...a) => sankeySpy(...a),
+  computeSankeyFlow: (...a: CalcArgs) => sankeySpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/categoryPivot.ts', () => ({
-  computeCategoryPivot: (...a) => categoryPivotSpy(...a),
+  computeCategoryPivot: (...a: CalcArgs) => categoryPivotSpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/recipientByYear.ts', () => ({
-  computeRecipientByYear: (...a) => recipientByYearSpy(...a),
+  computeRecipientByYear: (...a: CalcArgs) => recipientByYearSpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/recipientPivot.ts', () => ({
-  computeRecipientPivot: (...a) => recipientPivotSpy(...a),
+  computeRecipientPivot: (...a: CalcArgs) => recipientPivotSpy(...a),
 }));
 vi.mock('../../src/services/calculations/aggregation/tagPivot.ts', () => ({
-  computeTagPivot: (...a) => tagPivotSpy(...a),
+  computeTagPivot: (...a: CalcArgs) => tagPivotSpy(...a),
 }));
 
 const { default: aggregationsRouter } = await import('../../src/routes/aggregations.ts');
 
 const api = routeAgent(aggregationsRouter, { mountPath: '/api/aggregations' });
 
-const get = (path, query = '') =>
+const get = (path: string, query = '') =>
   api.get(`/api/aggregations${path}${query ? `?${query}` : ''}`);
 
 /**
@@ -125,7 +133,7 @@ describe('aggregation id query params — malformed elements are rejected, not d
 describe('aggregation id query params — accept set', () => {
   // Same accept set as validateId: a plain base-10 digit string (leading zeros
   // allowed) or an integer number, 1..2^31-1.
-  const ACCEPTED = [
+  const ACCEPTED: [string, number][] = [
     ['5', 5],
     ['007', 7],
     ['2147483647', 2147483647],

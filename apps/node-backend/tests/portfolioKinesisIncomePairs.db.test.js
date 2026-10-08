@@ -13,12 +13,12 @@ import {
   getTestPool,
   closeTestPool,
   hasTestDatabase,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./helpers/kinesisAdoptionScope.js";
+} from "./helpers/kinesisAdoptionScope.ts";
 import {
   readReconciliationSources,
   readReconciliationHistory,

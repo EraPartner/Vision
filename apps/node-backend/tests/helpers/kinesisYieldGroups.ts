@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./kinesisAdoptionScope.js";
+} from "./kinesisAdoptionScope.ts";
+import type {
+  SyntheticAdoptionReceipt,
+  SyntheticKinesisRow,
+  SyntheticKinesisScope,
+} from "./kinesisAdoptionScope.ts";
 import { portfolioReferenceStagingBinding } from "../../src/services/portfolioPerformanceReferenceEvidence.ts";
 import { kinesisYieldReferenceDigest } from "../../src/services/portfolioKinesisYieldGroups.ts";
 import { toDecimal } from "../../src/lib/money.ts";
@@ -12,10 +17,39 @@ import {
   retainedEvent,
   retainedReference,
   retainedEvidenceRow,
-} from "../fixtures/retainedPortfolioEvidence.js";
+} from "../fixtures/retainedPortfolioEvidence.ts";
+import type { RetainedReference } from "../fixtures/retainedPortfolioEvidence.ts";
+import type { ReconciliationSourceRow } from "../../src/repositories/portfolioImportReconciliationRepository.ts";
+
+export interface KinesisYieldGroupOptions {
+  /** Give the first two yields a sub-satoshi residual. */
+  fractionalResidual?: boolean;
+  /** Make the first yield's income an exact half cent. */
+  halfwayIncome?: boolean;
+  account?: number;
+  investment?: number;
+  priorBatchId?: number;
+  priorRowStart?: number;
+  batchId?: number;
+  rowStart?: number;
+  scope?: string;
+  /** Attach the reference cache to the source batches (default true). */
+  withReference?: boolean;
+}
+
+export interface KinesisYieldPlan {
+  blockers: unknown[];
+  yieldGroupEvidence: ReturnType<typeof retainedKinesisYieldEvidence>;
+}
+
+/** Synthetic rows carry only the columns the binding digest reads. */
+const asSourceRows = (rows: SyntheticKinesisRow[]) =>
+  rows as unknown as ReconciliationSourceRow[];
 
 /** Complete synthetic source and already-retained JSON proof, with independent deposits. */
-export async function syntheticKinesisYieldGroup(options = {}) {
+export async function syntheticKinesisYieldGroup(
+  options: KinesisYieldGroupOptions = {},
+) {
   const directory = await mkdtemp(join(tmpdir(), "vision-closed-yields-"));
   const path = join(directory, "source.csv");
   const columns = [
@@ -38,7 +72,13 @@ export async function syntheticKinesisYieldGroup(options = {}) {
     "Closing_Balance",
     "Closing_Balance_Currency",
   ];
-  const record = (day, type, id, units, value = "") =>
+  const record = (
+    day: string,
+    type: string,
+    id: string,
+    units: string,
+    value = "",
+  ) =>
     [
       day + " 12:00:00 UTC",
       "SYNTHETIC-GROUP",
@@ -180,7 +220,7 @@ export async function syntheticKinesisYieldGroup(options = {}) {
       if (index === 0 || index === 4) {
         current.amount = index === 0 ? "50.0000" : "100.0000";
         current.price_per_unit = toDecimal(current.amount)
-          .div(row.units)
+          .div(row.units!)
           .toFixed(6);
         current.fx_rate_to_eur = "1.0000000000";
       } else current.date = reference.events[index].date;
@@ -193,7 +233,7 @@ export async function syntheticKinesisYieldGroup(options = {}) {
         row,
         retainedEvidenceRow(row, reference, event, "recorded_native", {
           amount: event.amount,
-          price_per_unit: toDecimal(event.amount).div(row.units).toFixed(6),
+          price_per_unit: toDecimal(event.amount).div(row.units!).toFixed(6),
           currency: event.currency,
           fx_rate_to_eur: null,
           asset_transfer_details: {
@@ -217,10 +257,14 @@ export async function syntheticKinesisYieldGroup(options = {}) {
       originalBatchIds: [prior.batches[0].id],
       effectiveBatchIds: [prior.batches[0].id],
       routing: priorRouting,
-      stagingBinding: portfolioReferenceStagingBinding(prior.rows),
-      originalStagingBinding: portfolioReferenceStagingBinding(prior.rows),
+      stagingBinding: portfolioReferenceStagingBinding(
+        asSourceRows(prior.rows),
+      ),
+      originalStagingBinding: portfolioReferenceStagingBinding(
+        asSourceRows(prior.rows),
+      ),
     };
-    const receipts = [];
+    const receipts: SyntheticAdoptionReceipt[] = [];
     for (const index of [0, 3, 4]) {
       const row = giftRows[index];
       const before = structuredClone(history[index]);
@@ -257,7 +301,7 @@ export async function syntheticKinesisYieldGroup(options = {}) {
       receipts,
     };
     const scope = options.scope ?? "adopt_existing_only";
-    const groupPlan = {
+    const groupPlan: KinesisYieldPlan = {
       blockers: [],
       yieldGroupEvidence: retainedKinesisYieldEvidence(source, reference),
     };
@@ -270,11 +314,11 @@ export async function syntheticKinesisYieldGroup(options = {}) {
 }
 
 export function attachKinesisYieldReference(
-  source,
-  reference,
-  plan,
+  source: SyntheticKinesisScope,
+  reference: Pick<RetainedReference, "sourceHash">,
+  plan: KinesisYieldPlan,
   scope = "adopt_existing_only",
-) {
+): void {
   const ids = source.batches.map((batch) => Number(batch.id));
   const routing = source.batches.map((batch) => ({
     batchId: Number(batch.id),
@@ -289,8 +333,10 @@ export function attachKinesisYieldReference(
     effectiveBatchIds: ids,
     routing,
     originalRouting: routing,
-    stagingBinding: portfolioReferenceStagingBinding(source.rows),
-    originalStagingBinding: portfolioReferenceStagingBinding(source.rows),
+    stagingBinding: portfolioReferenceStagingBinding(asSourceRows(source.rows)),
+    originalStagingBinding: portfolioReferenceStagingBinding(
+      asSourceRows(source.rows),
+    ),
     yieldGroupEvidence: plan.yieldGroupEvidence,
   };
   for (const batch of source.batches) {
@@ -301,7 +347,10 @@ export function attachKinesisYieldReference(
 }
 
 /** Fixed five-member fixture topology; this does not discover documentary matches. */
-export function retainedKinesisYieldEvidence(source, reference) {
+export function retainedKinesisYieldEvidence(
+  source: SyntheticKinesisScope,
+  reference: RetainedReference,
+) {
   const gifts = source.rows.filter((row) => row.type === "gift");
   const history = source.history;
   if (
@@ -313,7 +362,8 @@ export function retainedKinesisYieldEvidence(source, reference) {
       "Synthetic retained group must have exactly five fixture members",
     );
   const capture = source.batches[0].custom_config.kinesis_source_context;
-  const context = source.kinesisAdoptionContext;
+  // Present by construction: the yield group is built on an adopted prior batch.
+  const context = source.kinesisAdoptionContext!;
   const manifest = {
     sourceFileHash: capture.source_file_hash,
     referenceHash: reference.sourceHash,
@@ -329,7 +379,7 @@ export function retainedKinesisYieldEvidence(source, reference) {
         context.receipts.find(
           (receipt) =>
             Number(receipt.transaction_id) === Number(history[index].id),
-        ).id,
+        )!.id,
       ),
       sourceHash: gifts[index].source_record_hash,
       referenceId: reference.events[index].id,

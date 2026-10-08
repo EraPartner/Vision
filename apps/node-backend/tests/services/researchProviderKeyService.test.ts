@@ -26,6 +26,10 @@ import {
   loadKeyOverrides,
 } from '../../src/services/research/providerKeys.ts';
 
+import type { ProviderApiKeyRow } from '../../src/repositories/providerApiKeyRepository.ts';
+
+type KeyedProvider = Parameters<typeof requireProviderKey>[0];
+
 const PROVIDER_ENV = ['TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY', 'FRED_API_KEY'];
 
 beforeEach(() => {
@@ -77,7 +81,7 @@ describe('requireProviderKey', () => {
     expect(requireProviderKey('fmp')).toBe('settings-value');
   });
 
-  it.each([
+  it.each<[KeyedProvider, string]>([
     ['twelve_data', 'TWELVE_DATA_API_KEY'],
     ['finnhub', 'FINNHUB_API_KEY'],
     ['fmp', 'FMP_API_KEY'],
@@ -92,7 +96,7 @@ describe('clearKey', () => {
   it('removes the override and falls back to env', async () => {
     process.env.FMP_API_KEY = 'env-value';
     await setKey('fmp', 'settings-value');
-    keyRepo.remove.mockResolvedValueOnce(true);
+    vi.mocked(keyRepo.remove).mockResolvedValueOnce(true);
 
     const removed = await clearKey('fmp');
 
@@ -105,7 +109,9 @@ describe('clearKey', () => {
 
 describe('hydrate', () => {
   it('loads persisted overrides into the in-memory map', async () => {
-    keyRepo.listAll.mockResolvedValueOnce([{ provider: 'alpha_vantage', api_key: 'persisted-av-key' }]);
+    vi.mocked(keyRepo.listAll).mockResolvedValueOnce([
+      { provider: 'alpha_vantage', api_key: 'persisted-av-key' } as ProviderApiKeyRow,
+    ]);
     const count = await hydrate();
     expect(count).toBe(1);
     expect(providerKey('alpha_vantage')).toBe('persisted-av-key');

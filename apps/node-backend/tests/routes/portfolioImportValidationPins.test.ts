@@ -7,28 +7,34 @@
  * required/enum/trim/default build, and normalizePortfolioParserConfig's
  * pass-through semantics — so the swap cannot change the wire.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js),
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts),
  * mirroring importValidationPins.test.js: multer is stubbed to a pass-through
  * (no real multipart parsing) and the uploaded file is injected by a `before`
  * middleware, the same per-mount slot main.ts uses (main.ts:285 mounts
  * importRateLimiter there for this router).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("multer", () => {
   const multer = vi.fn(() => ({
-    single: vi.fn(() => (req, res, next) => next()),
+    single: vi.fn(
+      () => (req: unknown, res: unknown, next: () => void) => next(),
+    ),
   }));
-  multer.MulterError = class MulterError extends Error {
-    constructor(code) {
-      super(code);
-      this.code = code;
-    }
+  return {
+    default: Object.assign(multer, {
+      MulterError: class MulterError extends Error {
+        declare code: string;
+        constructor(code: string) {
+          super(code);
+          this.code = code;
+        }
+      },
+    }),
   };
-  return { default: multer };
 });
 
 vi.mock("../../src/lib/portfolioUpload.ts", async (importOriginal) => ({
@@ -94,18 +100,37 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
-import { commitReviewedPortfolioImport } from "../../src/services/portfolioImportCommitService.ts";
+import { runPortfolioImportPipeline as rawRunPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
+import { commitReviewedPortfolioImport as rawCommitReviewedPortfolioImport } from "../../src/services/portfolioImportCommitService.ts";
 // NOT mocked: only .../portfolioImportPipeline/index.js is. This is the real
 // boundary function, run here over the mocked pg connection.
 import { createBatch } from "../../src/services/portfolioImportPipeline/stage.ts";
-import { query as dbQuery } from "../../src/database/connection.ts";
+import { query as rawDbQuery } from "../../src/database/connection.ts";
 import {
-  getBatch,
-  overrideInvestment,
+  getBatch as rawGetBatch,
+  overrideInvestment as rawOverrideInvestment,
 } from "../../src/services/portfolioImportBatchService.ts";
-import accountService from "../../src/services/accountService.ts";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import rawAccountService from "../../src/services/accountService.ts";
+import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+
+const runPortfolioImportPipeline = vi.mocked(rawRunPortfolioImportPipeline);
+const dbQuery = vi.mocked(rawDbQuery);
+const commitReviewedPortfolioImport = vi.mocked(
+  rawCommitReviewedPortfolioImport,
+);
+const getBatch = vi.mocked(rawGetBatch);
+const overrideInvestment = vi.mocked(rawOverrideInvestment);
+const accountService = vi.mocked(rawAccountService);
+const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
+
+/**
+ * The routes forward service and repository results without reading most of
+ * their fields, so fixtures carry only the fields a test asserts on. `loose`
+ * casts one to the type the mocked function resolves with.
+ */
+function loose<T>(value: unknown): T {
+  return value as T;
+}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");
@@ -117,7 +142,7 @@ const BASE = "/api/portfolio/import";
 const api = routeAgent(portfolioImportRouter, {
   mountPath: BASE,
   before: [
-    (req, _res, next) => {
+    (req: { file?: unknown }, _res: unknown, next: () => void) => {
       req.file = { ...UPLOAD };
       next();
     },
@@ -125,7 +150,7 @@ const api = routeAgent(portfolioImportRouter, {
 });
 
 /** Encode a path segment so ids with spaces survive the URL round-trip. */
-const seg = (v) => encodeURIComponent(String(v));
+const seg = (v: unknown) => encodeURIComponent(String(v));
 
 const minimalBody = {
   date_column: "D",
@@ -137,11 +162,13 @@ const runCustom = (body = {}) => api.post(`${BASE}/csv/custom`).send(body);
 
 beforeEach(() => {
   vi.clearAllMocks();
-  accountService.get.mockResolvedValue({
-    id: 7,
-    type: "brokerage",
-    is_active: true,
-  });
+  accountService.get.mockResolvedValue(
+    loose({
+      id: 7,
+      type: "brokerage",
+      is_active: true,
+    }),
+  );
   runPortfolioImportPipeline.mockResolvedValue({
     requiresReview: false,
     batchId: 1,
@@ -151,7 +178,7 @@ beforeEach(() => {
     duplicates: 0,
     errors: 0,
   });
-  customParserConfigRepository.create.mockResolvedValue({ id: 1 });
+  customParserConfigRepository.create.mockResolvedValue(loose({ id: 1 }));
 });
 
 describe("multipart body parameters", () => {
@@ -169,7 +196,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
   // intended contract. coercedIdSchema delegates to validateId now, so the
   // portfolio router shares the one definition of a valid id.
   it("rejects '12.0' / ' 12 ' instead of coercing them to a batch", async () => {
-    getBatch.mockResolvedValue({ id: 12, status: "complete" });
+    getBatch.mockResolvedValue(loose({ id: 12, status: "complete" }));
 
     for (const id of ["12.0", " 12 ", "0x10", "1e3", "+12"]) {
       const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
@@ -327,7 +354,7 @@ describe("override/commit body id shape", () => {
   });
 
   it("rejects a commit account_id that used to stamp the batch with another account", async () => {
-    getBatch.mockResolvedValue({ id: 5, status: "awaiting_review" });
+    getBatch.mockResolvedValue(loose({ id: 5, status: "awaiting_review" }));
 
     for (const account_id of [...RETARGETING, ...MALFORMED]) {
       const res = await api
@@ -344,7 +371,7 @@ describe("override/commit body id shape", () => {
   });
 
   it('still accepts a commit account_id, and absent/null still means "no batch account"', async () => {
-    getBatch.mockResolvedValue({ id: 5, status: "awaiting_review" });
+    getBatch.mockResolvedValue(loose({ id: 5, status: "awaiting_review" }));
     commitReviewedPortfolioImport.mockResolvedValue({
       imported: 1,
       duplicates: 0,
@@ -582,7 +609,7 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
 });
 
 describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
-  const create = (config) =>
+  const create = (config: unknown) =>
     api.post(`${BASE}/parsers`).send({ name: "P", config });
 
   it("passes a valid config through UNCHANGED, unknown keys and all", async () => {
@@ -645,10 +672,12 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
 describe("parser :id shape (PATCH/DELETE /parsers/:id)", () => {
   it("rejects a malformed id on both operations, repository untouched", async () => {
     customParserConfigRepository.delete.mockResolvedValue(true);
-    customParserConfigRepository.update.mockResolvedValue({
-      id: 22,
-      name: "X",
-    });
+    customParserConfigRepository.update.mockResolvedValue(
+      loose({
+        id: 22,
+        name: "X",
+      }),
+    );
 
     for (const id of ["22abc", "1e3", "0"]) {
       await api.delete(`${BASE}/parsers/${id}`).expect(400);
@@ -683,7 +712,7 @@ describe("batch_id wire type", () => {
   // actually returns for a BIGSERIAL: the STRING '12'. Before the stage-boundary
   // fix these pins failed with `batch_id: "12"`.
   const realBatchId = async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: String(BATCH_ID) }] });
+    dbQuery.mockResolvedValueOnce(loose({ rows: [{ id: String(BATCH_ID) }] }));
     return createBatch({ adapterName: "generic" });
   };
 
@@ -701,11 +730,13 @@ describe("batch_id wire type", () => {
     expect(typeof committed.body.data.batch_id).toBe("number");
     expect(committed.body.data.batch_id).toBe(BATCH_ID);
 
-    runPortfolioImportPipeline.mockImplementation(async () => ({
-      requiresReview: true,
-      batchId: await realBatchId(),
-      matchSourceCounts: { symbol: 1 },
-    }));
+    runPortfolioImportPipeline.mockImplementation(async () =>
+      loose({
+        requiresReview: true,
+        batchId: await realBatchId(),
+        matchSourceCounts: { symbol: 1 },
+      }),
+    );
     const review = await runCustom(minimalBody).expect(202);
     expect(typeof review.body.data.batch_id).toBe("number");
     expect(review.body.data.batch_id).toStrictEqual(
@@ -714,14 +745,18 @@ describe("batch_id wire type", () => {
   });
 
   it("POST /batches/:id/commit emits the SAME type and value for the same batch", async () => {
-    runPortfolioImportPipeline.mockImplementation(async () => ({
-      requiresReview: true,
-      batchId: await realBatchId(),
-      matchSourceCounts: {},
-    }));
+    runPortfolioImportPipeline.mockImplementation(async () =>
+      loose({
+        requiresReview: true,
+        batchId: await realBatchId(),
+        matchSourceCounts: {},
+      }),
+    );
     const started = await runCustom(minimalBody).expect(202);
 
-    getBatch.mockResolvedValue({ id: BATCH_ID, status: "awaiting_review" });
+    getBatch.mockResolvedValue(
+      loose({ id: BATCH_ID, status: "awaiting_review" }),
+    );
     commitReviewedPortfolioImport.mockResolvedValue({
       imported: 1,
       duplicates: 0,
@@ -761,7 +796,7 @@ describe("literal generic source identity HTTP mappings", () => {
       }),
     );
     expect(
-      runPortfolioImportPipeline.mock.lastCall[0].customConfig,
+      runPortfolioImportPipeline.mock.lastCall![0].customConfig,
     ).not.toHaveProperty("format");
   });
   it("preserves the omitted mapping shape for old and blank requests", async () => {
@@ -771,7 +806,8 @@ describe("literal generic source identity HTTP mappings", () => {
     ]) {
       await runCustom({ ...minimalBody, ...optional }).expect(201);
       const mapping =
-        runPortfolioImportPipeline.mock.lastCall[0].customConfig.column_mapping;
+        runPortfolioImportPipeline.mock.lastCall![0].customConfig
+          .column_mapping;
       expect(mapping).not.toHaveProperty("source_id");
       expect(mapping).not.toHaveProperty("source_account");
     }

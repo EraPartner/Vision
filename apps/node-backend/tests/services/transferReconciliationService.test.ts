@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockTxConnection } from "../helpers/repoMocks.js";
+import { mockTxConnection } from "../helpers/repoMocks.ts";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../../src/database/connection.ts", () =>
@@ -86,7 +86,7 @@ describe("unmarkTransfer — sticky per-pair dismissal (ADR-083, migration 0070)
 describe("candidate pool — dismissed pairs are excluded, rows stay matchable", () => {
   it("loadCandidatePairs excludes exactly the dismissed pair (LEAST/GREATEST anti-join)", async () => {
     await getTransferSuggestions();
-    const candidateSql = query.mock.calls
+    const candidateSql = vi.mocked(query).mock.calls
       .map(([sql]) => sql)
       .find((s) => s.includes('AS "outId"'));
     expect(candidateSql).toBeTruthy();
@@ -126,7 +126,7 @@ describe("markTransfer — releases a stranded prior peer", () => {
 describe("releaseInvalidAutoPairs — reciprocity guard", () => {
   it("the release query requires the peer to point back (p.transfer_peer_id = t.id)", async () => {
     await reconcileTransfers();
-    const releaseSql = query.mock.calls
+    const releaseSql = vi.mocked(query).mock.calls
       .map(([sql]) => sql)
       .find(
         (s) =>
@@ -143,7 +143,7 @@ describe("releaseOrphans — single-sided system rows survive reconcile", () => 
     // guard is a positive allowlist for reconciler-owned sources, so those
     // current source values remain outside this mutation.
     await reconcileTransfers();
-    const orphanSql = query.mock.calls
+    const orphanSql = vi.mocked(query).mock.calls
       .map(([sql]) => sql)
       .find(
         (s) =>

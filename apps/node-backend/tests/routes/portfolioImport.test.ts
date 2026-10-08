@@ -6,7 +6,7 @@
  * (previously "-1"/"0"/"12abc" slipped through as NaN-tolerant parseInt).
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js), which also puts the router's own trailing error
+ * tests/helpers/routeApp.ts), which also puts the router's own trailing error
  * middleware (`router.use(csvUploadErrorTranslator)`, routes/
  * portfolioImportRoutes.js:494) on the tested path — the mock-router harness
  * dropped it entirely. multer is still stubbed to a pass-through (no real
@@ -15,21 +15,28 @@
  * for that, mirroring importValidationPins.test.js's pattern).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import type { IRoute } from "express";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("multer", () => {
   const multer = vi.fn(() => ({
-    single: vi.fn(() => (req, res, next) => next()),
+    single: vi.fn(
+      () => (req: unknown, res: unknown, next: () => void) => next(),
+    ),
   }));
-  multer.MulterError = class MulterError extends Error {
-    constructor(code) {
-      super(code);
-      this.code = code;
-    }
+  return {
+    default: Object.assign(multer, {
+      MulterError: class MulterError extends Error {
+        declare code: string;
+        constructor(code: string) {
+          super(code);
+          this.code = code;
+        }
+      },
+    }),
   };
-  return { default: multer };
 });
 
 vi.mock("fs", () => {
@@ -96,16 +103,37 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 import {
-  getBatch,
+  getBatch as rawGetBatch,
   getPortfolioImportBatchPreview,
-  listBatches,
-  createInvestmentForRow,
-  resolveInvestmentRows,
-  rollbackBatch,
+  listBatches as rawListBatches,
+  createInvestmentForRow as rawCreateInvestmentForRow,
+  resolveInvestmentRows as rawResolveInvestmentRows,
+  rollbackBatch as rawRollbackBatch,
 } from "../../src/services/portfolioImportBatchService.ts";
-import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.ts";
-import { previewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports as rawCommitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.ts";
+import { previewPortfolioImportReconciliation as rawPreviewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.ts";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
+
+const getBatch = vi.mocked(rawGetBatch);
+const listBatches = vi.mocked(rawListBatches);
+const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
+const resolveInvestmentRows = vi.mocked(rawResolveInvestmentRows);
+const rollbackBatch = vi.mocked(rawRollbackBatch);
+const commitReviewedPortfolioImports = vi.mocked(
+  rawCommitReviewedPortfolioImports,
+);
+const previewPortfolioImportReconciliation = vi.mocked(
+  rawPreviewPortfolioImportReconciliation,
+);
+
+/**
+ * The routes forward service results without reading most of their fields,
+ * so fixtures carry only the fields a test asserts on. `loose` casts one to
+ * the type the mocked service resolves with.
+ */
+function loose<T>(value: unknown): T {
+  return value as T;
+}
 
 const { default: portfolioImportRouter } =
   await import("../../src/routes/portfolioImportRoutes.ts");
@@ -116,10 +144,12 @@ const api = routeAgent(portfolioImportRouter, { mountPath: BASE });
 describe("Portfolio import reconciliation HTTP contract", () => {
   beforeEach(() => vi.clearAllMocks());
   it("accepts safe bigserial batch IDs above the account-ID range", async () => {
-    previewPortfolioImportReconciliation.mockResolvedValue({
-      ready: false,
-      blockers: [],
-    });
+    previewPortfolioImportReconciliation.mockResolvedValue(
+      loose({
+        ready: false,
+        blockers: [],
+      }),
+    );
     await api
       .post(`${BASE}/reconciliation/preview`)
       .send({ batch_ids: [2147483648, Number.MAX_SAFE_INTEGER] })
@@ -131,10 +161,12 @@ describe("Portfolio import reconciliation HTTP contract", () => {
     });
   });
   it("previews the requested complete scope and policy without committing", async () => {
-    previewPortfolioImportReconciliation.mockResolvedValue({
-      ready: false,
-      blockers: [],
-    });
+    previewPortfolioImportReconciliation.mockResolvedValue(
+      loose({
+        ready: false,
+        blockers: [],
+      }),
+    );
     await api
       .post(`${BASE}/reconciliation/preview`)
       .send({ batch_ids: [4, 7], adopt_policy: "preserve_existing" })
@@ -159,18 +191,20 @@ describe("Portfolio import reconciliation HTTP contract", () => {
         complete: false,
         deferredCounts: { dividend: 1, gift: 1 },
       };
-      previewPortfolioImportReconciliation.mockResolvedValue({
-        ...progress,
-        ready: true,
-        batchProgress: [
-          {
-            batchId: 7,
-            pending: 2,
-            complete: false,
-            deferredCounts: progress.deferredCounts,
-          },
-        ],
-      });
+      previewPortfolioImportReconciliation.mockResolvedValue(
+        loose({
+          ...progress,
+          ready: true,
+          batchProgress: [
+            {
+              batchId: 7,
+              pending: 2,
+              complete: false,
+              deferredCounts: progress.deferredCounts,
+            },
+          ],
+        }),
+      );
       const body = {
         batch_ids: [7],
         adopt_policy: policy,
@@ -187,13 +221,15 @@ describe("Portfolio import reconciliation HTTP contract", () => {
         batchPolicies: undefined,
         reconciliationScope: scope,
       });
-      commitReviewedPortfolioImports.mockResolvedValue({
-        ...progress,
-        imported: 0,
-        adopted: 1,
-        duplicates: 1,
-        batches: [{ batch_id: 7, ...progress }],
-      });
+      commitReviewedPortfolioImports.mockResolvedValue(
+        loose({
+          ...progress,
+          imported: 0,
+          adopted: 1,
+          duplicates: 1,
+          batches: [{ batch_id: 7, ...progress }],
+        }),
+      );
       const expected = "a".repeat(64);
       const committed = await api
         .post(`${BASE}/reconciliation/commit`)
@@ -210,10 +246,12 @@ describe("Portfolio import reconciliation HTTP contract", () => {
     },
   );
   it("passes explicit per-batch policies with the reviewed scope", async () => {
-    previewPortfolioImportReconciliation.mockResolvedValue({
-      ready: false,
-      blockers: [],
-    });
+    previewPortfolioImportReconciliation.mockResolvedValue(
+      loose({
+        ready: false,
+        blockers: [],
+      }),
+    );
     await api
       .post(`${BASE}/reconciliation/preview`)
       .send({
@@ -227,12 +265,14 @@ describe("Portfolio import reconciliation HTTP contract", () => {
       adoptPolicy: "preserve_existing",
       batchPolicies: [{ batchId: 7, adoptPolicy: "prefer_source" }],
     });
-    commitReviewedPortfolioImports.mockResolvedValue({
-      batches: [],
-      imported: 0,
-      adopted: 0,
-      duplicates: 0,
-    });
+    commitReviewedPortfolioImports.mockResolvedValue(
+      loose({
+        batches: [],
+        imported: 0,
+        adopted: 0,
+        duplicates: 0,
+      }),
+    );
     const hash = "b".repeat(64);
     await api
       .post(`${BASE}/reconciliation/commit`)
@@ -256,10 +296,12 @@ describe("Portfolio import reconciliation HTTP contract", () => {
       reconciliation_scope: "record_cash_only",
       cash_funding_policy: "own_account_transfer",
     };
-    previewPortfolioImportReconciliation.mockResolvedValue({
-      ready: true,
-      reconciliationScope: "record_cash_only",
-    });
+    previewPortfolioImportReconciliation.mockResolvedValue(
+      loose({
+        ready: true,
+        reconciliationScope: "record_cash_only",
+      }),
+    );
     await api.post(`${BASE}/reconciliation/preview`).send(body).expect(200);
     expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
       batchIds: [7],
@@ -268,11 +310,13 @@ describe("Portfolio import reconciliation HTTP contract", () => {
       reconciliationScope: "record_cash_only",
       cashFundingPolicy: "own_account_transfer",
     });
-    commitReviewedPortfolioImports.mockResolvedValue({
-      imported: 2,
-      recordedCash: 2,
-      batches: [{ batch_id: 7, imported: 2, recordedCash: 2 }],
-    });
+    commitReviewedPortfolioImports.mockResolvedValue(
+      loose({
+        imported: 2,
+        recordedCash: 2,
+        batches: [{ batch_id: 7, imported: 2, recordedCash: 2 }],
+      }),
+    );
     const expected = "a".repeat(64);
     await api
       .post(`${BASE}/reconciliation/commit`)
@@ -369,13 +413,20 @@ describe("Portfolio import reconciliation HTTP contract", () => {
   });
 });
 
-function routeHandler(method, path) {
+/** Express's Route keeps its verb map at runtime; @types/express omits it. */
+type RouteWithMethods = IRoute & { methods: Record<string, boolean> };
+
+/** A route's final handler, called directly with partial req/res stand-ins. */
+type DirectHandler = (req: object, res: object) => Promise<unknown>;
+
+function routeHandler(method: string, path: string): DirectHandler {
   const layer = portfolioImportRouter.stack.find(
     (candidate) =>
-      candidate.route?.path === path && candidate.route.methods[method],
+      candidate.route?.path === path &&
+      (candidate.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
-  return layer.route.stack.at(-1).handle;
+  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
 }
 
 describe("Portfolio Import Routes — batch/row id guards", () => {
@@ -421,7 +472,7 @@ describe("Portfolio Import Routes — collection response shape", () => {
 
   it("GET /batches returns the canonical { items, total, limit, offset } body", async () => {
     listBatches.mockResolvedValue({
-      batches: [{ id: 1, status: "complete" }],
+      batches: [loose({ id: 1, status: "complete" })],
       total: 1,
     });
 
@@ -448,8 +499,8 @@ describe("Portfolio Import Routes — batch detail and rollback parity (listener
 
   it("returns a batch and preserves the shared missing-batch error", async () => {
     getBatch
-      .mockResolvedValueOnce({ id: 4, status: "complete" })
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce(loose({ id: 4, status: "complete" }))
+      .mockResolvedValueOnce(loose(null));
     const res = { ok: vi.fn() };
 
     await detailHandler({ params: { id: "4" } }, res);
@@ -460,7 +511,7 @@ describe("Portfolio Import Routes — batch detail and rollback parity (listener
   });
 
   it("blocks pending before the portfolio rollback service", async () => {
-    getBatch.mockResolvedValue({ id: 4, status: "pending" });
+    getBatch.mockResolvedValue(loose({ id: 4, status: "pending" }));
     await expect(
       rollbackHandler({ params: { id: "4" } }, { ok: vi.fn() }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
@@ -473,7 +524,7 @@ describe("Portfolio Import Routes — batch detail and rollback parity (listener
   ])(
     "maps a service-coded %s rollback error",
     async (serviceCode, expectedCode) => {
-      getBatch.mockResolvedValue({ id: 4, status: "complete" });
+      getBatch.mockResolvedValue(loose({ id: 4, status: "complete" }));
       rollbackBatch.mockRejectedValue(
         Object.assign(new Error("locked recheck"), { code: serviceCode }),
       );
@@ -488,8 +539,10 @@ describe("Portfolio Import Routes — batch detail and rollback parity (listener
   );
 
   it("returns only the portfolio deleted count", async () => {
-    getBatch.mockResolvedValue({ id: 4, status: "complete" });
-    rollbackBatch.mockResolvedValue({ deleted: 3, recipientsRemoved: 99 });
+    getBatch.mockResolvedValue(loose({ id: 4, status: "complete" }));
+    rollbackBatch.mockResolvedValue(
+      loose({ deleted: 3, recipientsRemoved: 99 }),
+    );
     const res = { ok: vi.fn() };
 
     await rollbackHandler({ params: { id: "4" } }, res);

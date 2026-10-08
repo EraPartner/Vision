@@ -3,7 +3,7 @@
  * Mirrors: apps/backend/tests/test_info.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). `info.js` is a barrel over six sub-routers
+ * tests/helpers/routeApp.ts). `info.js` is a barrel over six sub-routers
  * (statistics/netWorth/rates/performance/portfolioSummary/maintenance); the
  * old mock-router harness flattened all of them into one handler map by
  * aliasing every nested `Router()` call to the same stub — which also meant
@@ -26,8 +26,8 @@
  * below, which already prove the routes exist and work.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
   default: {
@@ -114,12 +114,22 @@ vi.mock("../../src/services/insightDismissalService.ts", () => ({
   dismissInsight: mockDismissInsight,
 }));
 
-import infoRepository from "../../src/repositories/infoRepository.ts";
+import rawInfoRepository from "../../src/repositories/infoRepository.ts";
 import { logger } from "../../src/config/logger.ts";
 import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
 } from "../../src/services/info/cache.ts";
+const infoRepository = vi.mocked(rawInfoRepository);
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: Partial<NoInfer<T>>) => value as T;
+/**
+ * Stand-in whose shape the source has since outgrown (e.g. net-worth figures
+ * without `liabilities`); the routes under test only forward it.
+ */
+const loose = <T>(value: unknown) => value as T;
+
 const { default: infoRouter } = await import("../../src/routes/info.ts");
 const { warmInfoCaches } = await import("../../src/routes/info.ts");
 
@@ -233,13 +243,13 @@ describe("Info Routes", () => {
 
       // Registry-derived: one entry per non-generic adapter, keyed by name with
       // the adapter's bankName label. Adding an adapter exposes it automatically.
-      const keys = data.items.map((a) => a.key);
+      const keys = data.items.map((a: { key: string }) => a.key);
       expect(keys).toContain("bnp");
       expect(keys).toContain("wise");
       expect(keys).not.toContain("generic");
       expect(data.total).toBe(data.items.length);
       // bankName label, not a hardcoded display string / nonexistent class name.
-      const bnp = data.items.find((a) => a.key === "bnp");
+      const bnp = data.items.find((a: { key: string }) => a.key === "bnp");
       expect(bnp.name).toBe("BNP Paribas Fortis");
       expect(bnp.adapter_class).toBeUndefined();
     });
@@ -311,9 +321,11 @@ describe("Info Routes", () => {
 
   describe("GET /planned-expenses-next-month", () => {
     it("should return planned expenses", async () => {
-      infoRepository.getPlannedExpensesNextMonth.mockResolvedValue({
-        total: 500,
-      });
+      infoRepository.getPlannedExpensesNextMonth.mockResolvedValue(
+        loose({
+          total: 500,
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/planned-expenses-next-month`)
@@ -337,31 +349,33 @@ describe("Info Routes", () => {
 
   describe("GET /net-worth", () => {
     it("should return net worth data with snapshots", async () => {
-      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-        current: { liquid: 10000, investments: 5000, netWorth: 15000 },
-        monthlyChange: 500,
-        monthlyChangePercent: 3.45,
-        snapshots: [
-          {
-            date: "2026-03-01",
-            liquid: 9000,
-            investments: 4500,
-            netWorth: 13500,
-          },
-          {
-            date: "2026-03-02",
-            liquid: 9500,
-            investments: 5000,
-            netWorth: 14500,
-          },
-          {
-            date: "2026-03-03",
-            liquid: 10000,
-            investments: 5000,
-            netWorth: 15000,
-          },
-        ],
-      });
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+        loose({
+          current: { liquid: 10000, investments: 5000, netWorth: 15000 },
+          monthlyChange: 500,
+          monthlyChangePercent: 3.45,
+          snapshots: [
+            {
+              date: "2026-03-01",
+              liquid: 9000,
+              investments: 4500,
+              netWorth: 13500,
+            },
+            {
+              date: "2026-03-02",
+              liquid: 9500,
+              investments: 5000,
+              netWorth: 14500,
+            },
+            {
+              date: "2026-03-03",
+              liquid: 10000,
+              investments: 5000,
+              netWorth: 15000,
+            },
+          ],
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/net-worth`)
@@ -375,12 +389,14 @@ describe("Info Routes", () => {
     });
 
     it("should return empty data when no assets", async () => {
-      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-        current: { liquid: 0, investments: 0, netWorth: 0 },
-        monthlyChange: 0,
-        monthlyChangePercent: 0,
-        snapshots: [],
-      });
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+        loose({
+          current: { liquid: 0, investments: 0, netWorth: 0 },
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          snapshots: [],
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/net-worth`)
@@ -405,18 +421,20 @@ describe("Info Routes", () => {
     });
 
     it("should paginate snapshots newest-first when limit/offset supplied", async () => {
-      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-        current: { liquid: 10000, investments: 5000, netWorth: 15000 },
-        monthlyChange: 0,
-        monthlyChangePercent: 0,
-        snapshots: [
-          { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
-          { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
-          { date: "2026-03-03", liquid: 3, investments: 3, netWorth: 6 },
-          { date: "2026-03-04", liquid: 4, investments: 4, netWorth: 8 },
-          { date: "2026-03-05", liquid: 5, investments: 5, netWorth: 10 },
-        ],
-      });
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+        loose({
+          current: { liquid: 10000, investments: 5000, netWorth: 15000 },
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          snapshots: [
+            { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
+            { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
+            { date: "2026-03-03", liquid: 3, investments: 3, netWorth: 6 },
+            { date: "2026-03-04", liquid: 4, investments: 4, netWorth: 8 },
+            { date: "2026-03-05", liquid: 5, investments: 5, netWorth: 10 },
+          ],
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/net-worth`)
@@ -436,17 +454,19 @@ describe("Info Routes", () => {
     });
 
     it("should honor offset for pagination", async () => {
-      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-        current: { liquid: 0, investments: 0, netWorth: 0 },
-        monthlyChange: 0,
-        monthlyChangePercent: 0,
-        snapshots: [
-          { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
-          { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
-          { date: "2026-03-03", liquid: 3, investments: 3, netWorth: 6 },
-          { date: "2026-03-04", liquid: 4, investments: 4, netWorth: 8 },
-        ],
-      });
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+        loose({
+          current: { liquid: 0, investments: 0, netWorth: 0 },
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          snapshots: [
+            { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
+            { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
+            { date: "2026-03-03", liquid: 3, investments: 3, netWorth: 6 },
+            { date: "2026-03-04", liquid: 4, investments: 4, netWorth: 8 },
+          ],
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/net-worth`)
@@ -462,15 +482,17 @@ describe("Info Routes", () => {
     });
 
     it("should return full unpaginated history when no limit/offset params", async () => {
-      infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-        current: { liquid: 0, investments: 0, netWorth: 0 },
-        monthlyChange: 0,
-        monthlyChangePercent: 0,
-        snapshots: [
-          { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
-          { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
-        ],
-      });
+      infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+        loose({
+          current: { liquid: 0, investments: 0, netWorth: 0 },
+          monthlyChange: 0,
+          monthlyChangePercent: 0,
+          snapshots: [
+            { date: "2026-03-01", liquid: 1, investments: 1, netWorth: 2 },
+            { date: "2026-03-02", liquid: 2, investments: 2, netWorth: 4 },
+          ],
+        }),
+      );
 
       const res = await api
         .get(`${BASE}/net-worth`)
@@ -807,7 +829,7 @@ describe("Info Routes", () => {
           snapshots: [{ date: "2026-04-10", netWorth: 30 }],
         };
         infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
-          netWorthPayload,
+          loose(netWorthPayload),
         );
         mockGetSnapshots.mockResolvedValue([
           {
@@ -885,10 +907,12 @@ describe("Info Routes", () => {
       vi.useFakeTimers();
       try {
         vi.setSystemTime(new Date("2026-04-11T10:00:00.000Z"));
-        infoRepository.getNetWorthFromSnapshots.mockResolvedValue({
-          current: {},
-          snapshots: [],
-        });
+        infoRepository.getNetWorthFromSnapshots.mockResolvedValue(
+          loose({
+            current: {},
+            snapshots: [],
+          }),
+        );
         mockGetSnapshots.mockRejectedValueOnce(
           new Error("portfolio warm failed"),
         );

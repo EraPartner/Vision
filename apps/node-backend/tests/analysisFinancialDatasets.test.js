@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 import {

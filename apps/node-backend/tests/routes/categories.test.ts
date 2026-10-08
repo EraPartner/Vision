@@ -3,11 +3,11 @@
  * Mirrors: apps/backend/tests/test_categories.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
+ * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 // The route imports its repository through services/categoryService.js, which
 // re-exports the default from this module (`export { default } from
@@ -33,7 +33,14 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import categoryRepository from "../../src/repositories/categoryRepository.ts";
+import rawCategoryRepository from "../../src/repositories/categoryRepository.ts";
+import type { EnrichedCategoryRow } from "../../src/repositories/categoryRepository.ts";
+
+const categoryRepository = vi.mocked(rawCategoryRepository);
+
+/** Category fixture carrying only the columns a test sets. */
+const category = (fields: Partial<EnrichedCategoryRow>) =>
+  fields as EnrichedCategoryRow;
 
 const { default: categoriesRouter } =
   await import("../../src/routes/categories.ts");
@@ -60,8 +67,8 @@ describe("Category Routes", () => {
 
     it("should return categories with data", async () => {
       const categories = [
-        { id: 1, general: "GROCERIES", detail: "FOOD" },
-        { id: 2, general: "TRANSPORT", detail: "FUEL" },
+        category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
+        category({ id: 2, general: "TRANSPORT", detail: "FUEL" }),
       ];
       categoryRepository.getAll.mockResolvedValue(categories);
 
@@ -85,11 +92,13 @@ describe("Category Routes", () => {
     // send no limit/offset and must keep getting the complete list. 60 rows
     // pins the old silent truncation at the parsePagination default of 50.
     it("returns the full list (more than 50 rows) and no limit/offset when neither param is sent", async () => {
-      const rows = Array.from({ length: 60 }, (_, i) => ({
-        id: i + 1,
-        general: "G",
-        detail: `D${i + 1}`,
-      }));
+      const rows = Array.from({ length: 60 }, (_, i) =>
+        category({
+          id: i + 1,
+          general: "G",
+          detail: `D${i + 1}`,
+        }),
+      );
       categoryRepository.getAll.mockResolvedValue(rows);
 
       const res = await api.get(BASE).expect(200);
@@ -115,7 +124,7 @@ describe("Category Routes", () => {
 
     it("pages and reports the full total when limit/offset are supplied", async () => {
       categoryRepository.getAll.mockResolvedValue([
-        { id: 3, general: "G", detail: "D" },
+        category({ id: 3, general: "G", detail: "D" }),
       ]);
       categoryRepository.getCount.mockResolvedValue(12);
 
@@ -144,7 +153,7 @@ describe("Category Routes", () => {
   describe("POST /", () => {
     it("should create new category with 201", async () => {
       categoryRepository.createOrGet.mockResolvedValue({
-        category: { id: 1, general: "GROCERIES", detail: "FOOD" },
+        category: category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
         created: true,
       });
 
@@ -157,7 +166,7 @@ describe("Category Routes", () => {
 
     it("should return 200 for duplicate", async () => {
       categoryRepository.createOrGet.mockResolvedValue({
-        category: { id: 1, general: "GROCERIES", detail: "FOOD" },
+        category: category({ id: 1, general: "GROCERIES", detail: "FOOD" }),
         created: false,
       });
 
@@ -179,11 +188,13 @@ describe("Category Routes", () => {
 
   describe("GET /:id", () => {
     it("should return category by id", async () => {
-      categoryRepository.getById.mockResolvedValue({
-        id: 1,
-        general: "GROCERIES",
-        detail: "FOOD",
-      });
+      categoryRepository.getById.mockResolvedValue(
+        category({
+          id: 1,
+          general: "GROCERIES",
+          detail: "FOOD",
+        }),
+      );
 
       const res = await api.get(`${BASE}/1`).expect(200);
       expect(res.body.data.id).toBe(1);
@@ -207,10 +218,12 @@ describe("Category Routes", () => {
 
   describe("PATCH /:id", () => {
     it("should update category", async () => {
-      categoryRepository.update.mockResolvedValue({
-        id: 1,
-        general: "UPDATED",
-      });
+      categoryRepository.update.mockResolvedValue(
+        category({
+          id: 1,
+          general: "UPDATED",
+        }),
+      );
 
       const res = await api
         .patch(`${BASE}/1`)

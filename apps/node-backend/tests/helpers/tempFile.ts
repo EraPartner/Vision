@@ -7,7 +7,7 @@
  * registers an `afterEach` that deletes every file it created.
  *
  * Usage:
- *   import { useTempCSV } from '../helpers/tempFile.js';
+ *   import { useTempCSV } from '../helpers/tempFile.ts';
  *   const writeTempCSV = useTempCSV('revolut');
  *   const tmpPath = writeTempCSV(SAMPLE_CSV);
  */
@@ -17,14 +17,14 @@ import os from 'os';
 import path from 'path';
 
 /**
- * @param {string} prefix Filename prefix (e.g. the bank name).
- * @returns {(content: string) => string} writer returning the temp file path.
+ * @param prefix Filename prefix (e.g. the bank name).
+ * @returns writer returning the temp file path.
  */
-export function useTempCSV(prefix) {
-  const files = [];
+export function useTempCSV(prefix: string): (content: string) => string {
+  const files: string[] = [];
   afterEach(() => {
     while (files.length) {
-      const p = files.pop();
+      const p = files.pop() as string;
       try {
         if (fs.existsSync(p)) fs.unlinkSync(p);
       } catch {
@@ -32,7 +32,7 @@ export function useTempCSV(prefix) {
       }
     }
   });
-  return (content) => {
+  return (content: string) => {
     const tmpPath = path.join(os.tmpdir(), `test_${prefix}_${Date.now()}_${files.length}.csv`);
     fs.writeFileSync(tmpPath, content, 'utf-8');
     files.push(tmpPath);

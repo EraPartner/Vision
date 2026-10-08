@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./kinesisAdoptionScope.js";
+} from "./kinesisAdoptionScope.ts";
 export async function fullFixture(options = {}) {
   const source = await syntheticKinesisScope({
     ...options,
@@ -15,7 +15,7 @@ export async function fullFixture(options = {}) {
   });
   const first = source.rows.find(
     (row) => row.source_transaction_id === "TX-OLDER:units",
-  );
+  )!;
   const history = [
     {
       ...syntheticKinesisManual(first),

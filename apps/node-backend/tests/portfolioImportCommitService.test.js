@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
 const mocks = vi.hoisted(() => ({
   withTransaction: vi.fn(async (fn) => fn()),

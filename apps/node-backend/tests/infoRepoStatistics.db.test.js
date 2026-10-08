@@ -26,7 +26,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { statisticsRepository } from "../src/repositories/infoRepositoryStatistics.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { buildExclusionClauses } from "../src/lib/filterBuilder.ts";

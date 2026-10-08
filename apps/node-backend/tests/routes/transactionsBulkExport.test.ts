@@ -1,20 +1,20 @@
 /**
  * POST /bulk-export — id-mode + filter-mode streaming, format gate.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts), so the
  * streamed body and the download headers are read off a real response instead
  * of `res.write`/`res.setHeader` spies.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
   mockMaterializedViews,
   mockCurrencyConversion,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -42,16 +42,20 @@ const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
 import { getClient } from "../../src/database/connection.ts";
+import type { PgPoolClient } from "../../src/database/connection.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
-const bulkExport = (body) =>
+const bulkExport = (body: object) =>
   api.post("/api/transactions/bulk-export").send(body);
 
-function useClientResults(...results) {
+function useClientResults(...results: object[]) {
   const query = vi.fn();
   for (const result of results) query.mockResolvedValueOnce(result);
   const release = vi.fn();
-  getClient.mockResolvedValue({ query, release });
+  vi.mocked(getClient).mockResolvedValue({
+    query,
+    release,
+  } as unknown as PgPoolClient);
   return { query, release };
 }
 
@@ -105,7 +109,7 @@ describe("POST /bulk-export — CSV success", () => {
     expect(query.mock.calls[0][0]).toBe(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
     );
-    expect(query.mock.calls.at(-1)[0]).toBe("COMMIT");
+    expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -119,7 +123,7 @@ describe("POST /bulk-export — CSV success", () => {
 
     await bulkExport({ ids: [1], format: "csv" }).expect(404);
 
-    expect(query.mock.calls.at(-1)[0]).toBe("ROLLBACK");
+    expect(query.mock.calls.at(-1)![0]).toBe("ROLLBACK");
     expect(release).toHaveBeenCalledOnce();
   });
 });

@@ -10,11 +10,11 @@ import {
 import { writeFile, readFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { runGolden } from "./runGolden.js";
+import { runGolden } from "./runGolden.ts";
 
-let fixtureRoot;
+let fixtureRoot: string;
 
-async function writeFixture(relPath, body) {
+async function writeFixture(relPath: string, body: unknown) {
   const full = join(fixtureRoot, relPath);
   await mkdir(dirname(full), { recursive: true });
   await writeFile(full, JSON.stringify(body, null, 2), "utf8");
@@ -33,14 +33,22 @@ describe("runGolden harness", () => {
   it("passes when actual matches expected", async () => {
     await writeFixture("ok.input.json", { n: 2 });
     await writeFixture("ok.expected.json", { doubled: 4 });
-    await runGolden("ok", ({ n }) => ({ doubled: n * 2 }), fixtureRoot);
+    await runGolden(
+      "ok",
+      ({ n }: { n: number }) => ({ doubled: n * 2 }),
+      fixtureRoot,
+    );
   });
 
   it("fails when actual diverges from expected", async () => {
     await writeFixture("drift.input.json", { n: 2 });
     await writeFixture("drift.expected.json", { doubled: 4 });
     await expect(
-      runGolden("drift", ({ n }) => ({ doubled: n * 3 }), fixtureRoot),
+      runGolden(
+        "drift",
+        ({ n }: { n: number }) => ({ doubled: n * 3 }),
+        fixtureRoot,
+      ),
     ).rejects.toThrow();
   });
 

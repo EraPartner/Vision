@@ -9,7 +9,7 @@ import {
   retainedEvent,
   retainedReference,
   retainedEvidenceRow,
-} from "./fixtures/retainedPortfolioEvidence.js";
+} from "./fixtures/retainedPortfolioEvidence.ts";
 
 const source = (over = {}) => ({
   id: 1,

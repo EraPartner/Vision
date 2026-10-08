@@ -8,16 +8,26 @@
  */
 
 import { describe, it } from 'vitest';
-import { runGolden } from './runGolden.js';
+import { runGolden } from './runGolden.ts';
 import {
   __createTransactionHash as createTransactionHash,
   __createManualTransactionHash as createManualTransactionHash,
 } from '../../src/services/deduplication.ts';
+import type {
+  FieldHashInput,
+  ManualHashInput,
+} from '../../src/services/deduplication.ts';
 
-/**
- * @param {{ cases: Array<{ kind: 'transaction' | 'manual', label: string, args: any }> }} input
- */
-function computeHashes(input) {
+/** `dedup/hash-cases.input.json`: transaction cases carry `date` as an ISO string. */
+type HashCase =
+  | { kind: 'manual'; label: string; args: ManualHashInput }
+  | {
+      kind: 'transaction';
+      label: string;
+      args: Omit<FieldHashInput, 'date'> & { date: string };
+    };
+
+function computeHashes(input: { cases: HashCase[] }) {
   return {
     hashes: input.cases.map((c) => {
       if (c.kind === 'manual') {

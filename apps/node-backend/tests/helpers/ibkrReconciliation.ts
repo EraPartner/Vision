@@ -1,6 +1,7 @@
 /** Synthetic source context for IBKR planner and PostgreSQL checks. */
 import { createHash } from "node:crypto";
-const hash = (value) => createHash("sha256").update(value).digest("hex");
+const hash = (value: string) =>
+  createHash("sha256").update(value).digest("hex");
 const columns = [
   "Date",
   "Account",
@@ -16,8 +17,18 @@ const columns = [
   "Exchange Rate",
   "Transaction Fees",
 ];
-export function syntheticIbkrPlannerSource(overrides = {}) {
-  const values = {
+/**
+ * Overrides for the staged row; `literal` instead replaces cells of the
+ * synthetic statement record the row's `raw_data` is built from.
+ */
+export type IbkrPlannerSourceOverrides = {
+  literal?: Record<string, string>;
+} & Record<string, unknown>;
+
+export function syntheticIbkrPlannerSource(
+  overrides: IbkrPlannerSourceOverrides = {},
+) {
+  const values: Record<string, string> = {
     Date: "2026-01-01",
     Account: "SYNTHETIC-ACCOUNT",
     Description: "Synthetic statement trade",

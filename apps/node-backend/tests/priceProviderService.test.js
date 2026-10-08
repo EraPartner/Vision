@@ -3,8 +3,8 @@
  * Tests price fetching from Binance, Yahoo, Kinesis, and custom endpoints.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 const { mockYahooQuote, mockYahooChart } = vi.hoisted(() => ({
   mockYahooQuote: vi.fn(),

@@ -1,8 +1,53 @@
-const date = (value) => new Date(`${value}T00:00:00.000Z`);
-const timestamp = (value) => new Date(value);
+import type {
+  EnrichedTransactionRow,
+  HydratedPlannedTransactionRow,
+  ImportStagingRow,
+  InvestmentRow,
+  PortfolioImportStagingRow,
+  PortfolioTransactionRow,
+} from "../../src/types/rows.ts";
 
-export function makeTransactionRow(overrides = {}) {
-  return {
+/**
+ * A built row: the builder's defaults with each override replacing its key.
+ * Overrides are unconstrained on purpose — tests routinely pass projected or
+ * wire-shaped values (a 'YYYY-MM-DD' string for a DATE column, a numeric id
+ * for a BIGINT) and the result type follows what was passed.
+ */
+export type Built<Base, O> = Omit<Base, keyof O> & O;
+
+type Overrides = Record<string, unknown>;
+
+/** `transactions` row as the enriched list/detail reads return it, plus the legacy `tx_hash` column. */
+export type TransactionRowFixture = EnrichedTransactionRow & {
+  tx_hash: string | null;
+};
+
+export type PlannedTransactionRowFixture = HydratedPlannedTransactionRow;
+
+/**
+ * The builder predates `dividend_amount_convention`, so the default row does
+ * not carry it; pass it as an override when the code under test reads it.
+ */
+export type PortfolioTransactionRowFixture = Omit<
+  PortfolioTransactionRow,
+  "dividend_amount_convention"
+>;
+
+export type ImportStagingRowFixture = ImportStagingRow & {
+  tx_hash: string | null;
+};
+
+export type PortfolioImportStagingRowFixture = PortfolioImportStagingRow & {
+  tx_hash: string | null;
+};
+
+const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
+const timestamp = (value: string) => new Date(value);
+
+export function makeTransactionRow<O extends Overrides = Record<never, never>>(
+  overrides: O = {} as O,
+): Built<TransactionRowFixture, O> {
+  const base: TransactionRowFixture = {
     id: 1,
     date: date("2026-01-15"),
     amount: "-12.5000",
@@ -27,12 +72,14 @@ export function makeTransactionRow(overrides = {}) {
     tags: [],
     created_at: timestamp("2026-01-15T10:00:00.000Z"),
     updated_at: timestamp("2026-01-15T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
-export function makePlannedTransactionRow(overrides = {}) {
-  return {
+export function makePlannedTransactionRow<
+  O extends Overrides = Record<never, never>,
+>(overrides: O = {} as O): Built<PlannedTransactionRowFixture, O> {
+  const base: PlannedTransactionRowFixture = {
     id: 1,
     planned_date: date("2026-02-01"),
     amount: "-50.0000",
@@ -70,12 +117,14 @@ export function makePlannedTransactionRow(overrides = {}) {
     tags: [],
     created_at: timestamp("2026-01-01T10:00:00.000Z"),
     updated_at: timestamp("2026-01-01T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
-export function makeInvestmentRow(overrides = {}) {
-  return {
+export function makeInvestmentRow<O extends Overrides = Record<never, never>>(
+  overrides: O = {} as O,
+): Built<InvestmentRow, O> {
+  const base: InvestmentRow = {
     id: 1,
     name: "Test investment",
     symbol: "TEST",
@@ -103,12 +152,14 @@ export function makeInvestmentRow(overrides = {}) {
     show_in_ticker: true,
     created_at: timestamp("2026-01-01T10:00:00.000Z"),
     updated_at: timestamp("2026-01-01T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
-export function makePortfolioTransactionRow(overrides = {}) {
-  return {
+export function makePortfolioTransactionRow<
+  O extends Overrides = Record<never, never>,
+>(overrides: O = {} as O): Built<PortfolioTransactionRowFixture, O> {
+  const base: PortfolioTransactionRowFixture = {
     id: 1,
     investment_id: 1,
     type: "buy",
@@ -128,12 +179,14 @@ export function makePortfolioTransactionRow(overrides = {}) {
     import_batch_id: null,
     created_at: timestamp("2026-01-15T10:00:00.000Z"),
     updated_at: timestamp("2026-01-15T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
-export function makeImportStagingRow(overrides = {}) {
-  return {
+export function makeImportStagingRow<
+  O extends Overrides = Record<never, never>,
+>(overrides: O = {} as O): Built<ImportStagingRowFixture, O> {
+  const base: ImportStagingRowFixture = {
     id: "1",
     batch_id: "1",
     row_index: 0,
@@ -159,12 +212,14 @@ export function makeImportStagingRow(overrides = {}) {
     user_override_recipient_id: null,
     override_category_id: null,
     created_at: timestamp("2026-01-15T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }
 
-export function makePortfolioImportStagingRow(overrides = {}) {
-  return {
+export function makePortfolioImportStagingRow<
+  O extends Overrides = Record<never, never>,
+>(overrides: O = {} as O): Built<PortfolioImportStagingRowFixture, O> {
+  const base: PortfolioImportStagingRowFixture = {
     id: "1",
     batch_id: "1",
     row_index: 0,
@@ -192,6 +247,6 @@ export function makePortfolioImportStagingRow(overrides = {}) {
     error_message: null,
     route: "portfolio",
     created_at: timestamp("2026-01-15T10:00:00.000Z"),
-    ...overrides,
   };
+  return { ...base, ...overrides };
 }

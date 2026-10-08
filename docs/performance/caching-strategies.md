@@ -112,7 +112,7 @@ Code links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/re
 - Cache key includes query dimensions including `limit` to avoid cross-request collisions when callers request different result sizes.
 
 Regression coverage:
-- Differing-limit collision prevention is validated in [[apps/node-backend/tests/routes/investments.test.js]].
+- Differing-limit collision prevention is validated in [[apps/node-backend/tests/routes/investments.test.ts]].
 
 Code link: [[apps/node-backend/src/routes/investments.ts]]
 

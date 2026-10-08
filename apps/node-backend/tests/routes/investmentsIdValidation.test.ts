@@ -25,8 +25,8 @@
  * reading each other's cached payloads.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/investmentRepository.ts", () => ({
   default: {
@@ -40,7 +40,7 @@ vi.mock("../../src/repositories/investmentRepository.ts", () => ({
     updatePricesBulk: vi.fn(),
     hardDelete: vi.fn(),
   },
-  pickInvestmentCreateFields: (body) => body,
+  pickInvestmentCreateFields: (body: unknown) => body,
 }));
 
 vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
@@ -74,15 +74,21 @@ vi.mock("../../src/services/portfolio/fxResolve.ts", () => ({
 
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import investmentRepository from "../../src/repositories/investmentRepository.ts";
+import rawInvestmentRepository from "../../src/repositories/investmentRepository.ts";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
+import rawPortfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
+
+const investmentRepository = vi.mocked(rawInvestmentRepository);
+const portfolioTransactionService = vi.mocked(rawPortfolioTransactionService);
+
+/** Stand-in for a full row: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<Partial<T>>) => value as T;
 
 const { default: investmentsRouter } =
   await import("../../src/routes/investments.ts");
 
 const portfolioTransactionRepository = {
-  ...portfolioTransactionPersistence,
+  ...vi.mocked(portfolioTransactionPersistence),
   ...portfolioTransactionService,
 };
 
@@ -94,7 +100,7 @@ const RETARGETING = ["12abc", "12.5", "1e3", "0x10", "+7", " 7 ", "7.0"];
 // Forms that cleared the old guards and reached a repository or Postgres.
 const OUT_OF_RANGE = ["-1", "0"];
 
-const createBody = (extra) => ({
+const createBody = (extra: Record<string, unknown>) => ({
   type: "buy",
   date: "2026-01-15",
   amount: 1000,
@@ -105,24 +111,32 @@ const createBody = (extra) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  investmentRepository.getById.mockResolvedValue({
-    id: 1,
-    currency: "EUR",
-    asset_class: "stock",
-  });
-  portfolioTransactionRepository.getById.mockResolvedValue({
-    id: 12,
-    investment_id: 1,
-  });
+  investmentRepository.getById.mockResolvedValue(
+    partial({
+      id: 1,
+      currency: "EUR",
+      asset_class: "stock",
+    }),
+  );
+  portfolioTransactionRepository.getById.mockResolvedValue(
+    partial({
+      id: 12,
+      investment_id: 1,
+    }),
+  );
   portfolioTransactionService.remove.mockResolvedValue(true);
-  portfolioTransactionRepository.create.mockResolvedValue({
-    id: 1,
-    investment_id: 1,
-  });
-  portfolioTransactionRepository.update.mockResolvedValue({
-    id: 12,
-    investment_id: 1,
-  });
+  portfolioTransactionRepository.create.mockResolvedValue(
+    partial({
+      id: 1,
+      investment_id: 1,
+    }),
+  );
+  portfolioTransactionRepository.update.mockResolvedValue(
+    partial({
+      id: 12,
+      investment_id: 1,
+    }),
+  );
 });
 
 describe(":txnId — the two routes that had no id guard at all", () => {

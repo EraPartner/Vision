@@ -43,6 +43,9 @@ import {
   orderedMonthKeys,
 } from "../../src/services/calculations/forecast/months.ts";
 
+/** Category fixtures here omit `path_name`, which reconciliation never reads. */
+type CategoryForecastInput = Parameters<typeof reconcileCategoryForecasts>[0];
+
 // accuracyStore silently degrades to an in-memory Map when its table is missing
 // OR when Postgres is simply unreachable (ECONNREFUSED). The `accuracyStore`
 // cases below assert that in-memory behaviour — `_resetForTests()` clears only
@@ -55,7 +58,7 @@ import {
 // or not a database is reachable.
 vi.mock("../../src/repositories/cashflowForecastAccuracyRepository.ts", () => {
   const undefinedTable = () => {
-    const err = new Error(
+    const err: Error & { code?: string } = new Error(
       'relation "cashflow_forecast_accuracy" does not exist',
     );
     err.code = "42P01";
@@ -78,7 +81,13 @@ function syntheticHistory({
   noise = 0,
 } = {}) {
   const start = Date.UTC(
-    ...startIso.split("-").map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))),
+    ...(startIso
+      .split("-")
+      .map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))) as [
+      number,
+      number,
+      number,
+    ]),
   );
   const out = [];
   for (let i = 0; i < days; i++) {
@@ -95,7 +104,13 @@ function syntheticHistory({
 
 function futureDates({ startIso = "2026-04-25", days = 6 } = {}) {
   const start = Date.UTC(
-    ...startIso.split("-").map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))),
+    ...(startIso
+      .split("-")
+      .map((v, i) => (i === 1 ? Number(v) - 1 : Number(v))) as [
+      number,
+      number,
+      number,
+    ]),
   );
   const out = [];
   for (let i = 0; i < days; i++) {
@@ -421,7 +436,7 @@ describe("walkForwardBacktest", () => {
 describe("ensemble", () => {
   const dates = ["2026-04-25", "2026-04-26", "2026-04-27"];
 
-  const makeOutputs = (ids, values) =>
+  const makeOutputs = (ids: string[], values: number[]) =>
     ids.map((id, i) => ({
       id,
       series: dates.map((date) => ({ date, value: values[i] })),
@@ -448,7 +463,7 @@ describe("ensemble", () => {
       { methodId: "ewma", rmse: 1 },
     ];
     const w = ensemble.computeWeights(rows, ["simple_avg", "ewma"]);
-    expect(w.get("ewma")).toBeGreaterThan(w.get("simple_avg"));
+    expect(w.get("ewma")).toBeGreaterThan(w.get("simple_avg")!);
   });
 
   it("computeWeights (v2) trusts a low-RMSE method less when it has few backtest samples", () => {
@@ -469,7 +484,7 @@ describe("ensemble", () => {
     );
     // 'a' has the better RMSE in both, but with only 2 sample days its low RMSE
     // is shrunk toward the mean, so it earns less weight than when well-sampled.
-    expect(manySamples.get("a")).toBeGreaterThan(fewSamples.get("a"));
+    expect(manySamples.get("a")).toBeGreaterThan(fewSamples.get("a")!);
   });
 
   it("computeWeights (v2) blends toward uniform so the best method never takes all the weight", () => {
@@ -644,15 +659,15 @@ describe("orchestrator computeCashflowForecast", () => {
     expect(ids).toContain("monte_carlo_block_bootstrap");
     expect(ids).toContain("ensemble_imse");
 
-    const mc = env.data.methods.find((m) => m.id === "monte_carlo_parametric");
+    const mc = env.data.methods.find((m) => m.id === "monte_carlo_parametric")!;
     expect(mc.bands).toBeTruthy();
-    expect(mc.bands.p10).toBeDefined();
-    expect(mc.bands.p90).toBeDefined();
-    expect(mc.cumulative_bands.p10).toHaveLength(mc.daily.length);
-    expect(mc.cumulative_bands.p90).toHaveLength(mc.daily.length);
+    expect(mc.bands!.p10).toBeDefined();
+    expect(mc.bands!.p90).toBeDefined();
+    expect(mc.cumulative_bands!.p10).toHaveLength(mc.daily.length);
+    expect(mc.cumulative_bands!.p90).toHaveLength(mc.daily.length);
 
     expect(env.data.diagnostics).toBeTruthy();
-    expect(env.data.diagnostics.backtest.length).toBeGreaterThan(0);
+    expect(env.data.diagnostics!.backtest.length).toBeGreaterThan(0);
   });
 
   it("ensemble_imse present in methods output", async () => {
@@ -680,7 +695,7 @@ describe("orchestrator computeCashflowForecast", () => {
     });
     const ens = env.data.methods.find((m) => m.id === "ensemble_imse");
     expect(ens).toBeDefined();
-    expect(ens.error).toBeNull();
+    expect(ens!.error).toBeNull();
   });
 
   it("skips diagnostics when includeBacktest=false", async () => {
@@ -738,7 +753,7 @@ describe("reconcileCategoryForecasts", () => {
           { date: "2026-04-27", value: 6 },
         ],
       },
-    ];
+    ] as CategoryForecastInput;
 
     const result = reconcileCategoryForecasts(
       categoryForecasts,
@@ -762,7 +777,7 @@ describe("reconcileCategoryForecasts", () => {
         cat: { key: "a", category_id: null, general: "G", detail: "D" },
         series: [{ date: "2026-04-26", value: 0 }],
       },
-    ];
+    ] as CategoryForecastInput;
     const result = reconcileCategoryForecasts(
       categoryForecasts,
       ["2026-04-26"],
@@ -795,7 +810,7 @@ describe("reconcileCategoryForecasts", () => {
         },
         series: [{ date: "2026-04-26", value: -2990 }],
       },
-    ];
+    ] as CategoryForecastInput;
 
     const result = reconcileCategoryForecasts(
       categoryForecasts,
@@ -822,7 +837,7 @@ describe("reconcileCategoryForecasts", () => {
     };
     const categoryForecasts = [
       { cat, series: [{ date: "2026-04-26", value: 10 }] },
-    ];
+    ] as CategoryForecastInput;
     const result = reconcileCategoryForecasts(
       categoryForecasts,
       ["2026-04-26"],
@@ -1006,9 +1021,9 @@ describe("buildCategoryBreakdown", () => {
     });
     const income = result.find((r) => r.general === "Income");
     // actual day1=120, day2=50 → cum after day2=170
-    expect(income.actual[1].cumulative).toBe(170);
+    expect(income!.actual[1].cumulative).toBe(170);
     // cumulative[2] should be > 170 (actual_cum + forecast)
-    expect(income.cumulative[2].value).toBeGreaterThanOrEqual(170);
+    expect(income!.cumulative[2].value).toBeGreaterThanOrEqual(170);
   });
 
   it("adds scheduled category rows on their effective date", () => {
@@ -1039,8 +1054,8 @@ describe("buildCategoryBreakdown", () => {
       referenceDaily,
     }).find((r) => r.general === "Expense");
 
-    expect(expense.cumulative[2].value).toBe(
-      withoutScheduled.cumulative[2].value - 40,
+    expect(expense!.cumulative[2].value).toBe(
+      withoutScheduled!.cumulative[2].value - 40,
     );
   });
 

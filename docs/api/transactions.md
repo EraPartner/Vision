@@ -656,7 +656,7 @@ await apiClient.deleteTransaction(123);
 
 ## Testing Coverage Note (2026-04-16 Phase 5)
 
-Recent coverage in [[apps/node-backend/tests/routes/transactions.test.js]] verifies:
+Recent coverage in [[apps/node-backend/tests/routes/transactions.test.ts]] verifies:
 
 - CSV streaming chunked export via `res.write()` calls and accumulated running balance
 - Formula-neutralization of dangerous prefixes (`=`, `+`, `-`, `@`)

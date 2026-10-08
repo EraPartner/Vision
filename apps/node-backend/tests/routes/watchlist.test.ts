@@ -2,11 +2,11 @@
  * Watchlist route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — validateIdParam is no longer stubbed.
+ * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 // The route imports its repository through services/watchlistService.js, which
 // re-exports this named binding — mocking the repository here intercepts it.
@@ -24,7 +24,20 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { watchlistRepository } from "../../src/repositories/watchlistRepository.ts";
+import { watchlistRepository as rawWatchlistRepository } from "../../src/repositories/watchlistRepository.ts";
+
+const watchlistRepository = vi.mocked(rawWatchlistRepository);
+
+type DeepPartial<T> = T extends readonly (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
 
 const { default: watchlistRouter } =
   await import("../../src/routes/watchlist.ts");
@@ -39,10 +52,12 @@ describe("Watchlist Routes", () => {
 
   describe("GET /", () => {
     it("clamps pagination and forwards asset class filter", async () => {
-      watchlistRepository.getAllWithCount.mockResolvedValue({
-        rows: [{ id: 1 }],
-        total: 1,
-      });
+      watchlistRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [{ id: 1 }],
+          total: 1,
+        }),
+      );
 
       const res = await api
         .get(`${BASE}?limit=10000&offset=-15&asset_class=stocks`)
@@ -97,7 +112,9 @@ describe("Watchlist Routes", () => {
     });
 
     it("creates watchlist item", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 9, name: "ETF Idea" });
+      watchlistRepository.create.mockResolvedValue(
+        partial({ id: 9, name: "ETF Idea" }),
+      );
 
       const body = {
         name: "ETF Idea",
@@ -224,7 +241,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("normalises a lower-case currency to uppercase before the repository", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       await api
         .post(BASE)
         .send({ ...validBody, currency: "usd" })
@@ -243,7 +260,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("coerces numeric-string target_price before reaching the repository", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       await api
         .post(BASE)
         .send({ ...validBody, target_price: "123.45" })
@@ -254,7 +271,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("accepts boundary-length name (200) and symbol (20)", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       const name = "n".repeat(200);
       const symbol = "S".repeat(20);
       await api
@@ -267,7 +284,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("accepts target_price at the exact NUMERIC(18,6) cap and rejects one past it", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       const MAX_PRICE = 999_999_999_999;
 
       await api
@@ -292,7 +309,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("trims and uppercases a padded lower-case currency", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       await api
         .post(BASE)
         .send({ ...validBody, currency: " usd " })
@@ -310,7 +327,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("accepts the metals asset_class", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
       await api
         .post(BASE)
         .send({ ...validBody, asset_class: "metals" })
@@ -321,7 +338,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("accepts a zero added_price (only target_price has the >0 rule) and coerces strings", async () => {
-      watchlistRepository.create.mockResolvedValue({ id: 1 });
+      watchlistRepository.create.mockResolvedValue(partial({ id: 1 }));
 
       await api
         .post(BASE)
@@ -363,10 +380,12 @@ describe("Watchlist Routes", () => {
     });
 
     it("allows partial updates that omit typed fields", async () => {
-      watchlistRepository.update.mockResolvedValue({
-        id: 1,
-        notes: "watch earnings",
-      });
+      watchlistRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          notes: "watch earnings",
+        }),
+      );
       await api
         .patch(`${BASE}/1`)
         .send({ notes: "watch earnings" })
@@ -391,7 +410,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("coerces a numeric-string target_price on PATCH", async () => {
-      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ target_price: "50.5" }).expect(200);
       expect(watchlistRepository.update).toHaveBeenCalledWith(
         1,
@@ -404,7 +423,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("uppercases currency on PATCH", async () => {
-      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ currency: "gbp" }).expect(200);
       expect(watchlistRepository.update).toHaveBeenCalledWith(
         1,
@@ -427,7 +446,7 @@ describe("Watchlist Routes", () => {
     it("passes unvalidated fields through to the repository untouched", async () => {
       // The repository allow-list (not the route) is what drops unknown keys —
       // the route must forward them so notes/other allow-listed columns update.
-      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api
         .patch(`${BASE}/1`)
         .send({ notes: "hold", unknown_field: "kept" })
@@ -439,7 +458,7 @@ describe("Watchlist Routes", () => {
     });
 
     it("allows an explicit null added_price on PATCH (only non-null values are frozen)", async () => {
-      watchlistRepository.update.mockResolvedValue({ id: 1 });
+      watchlistRepository.update.mockResolvedValue(partial({ id: 1 }));
       await api.patch(`${BASE}/1`).send({ added_price: null }).expect(200);
       expect(watchlistRepository.update).toHaveBeenCalledWith(
         1,

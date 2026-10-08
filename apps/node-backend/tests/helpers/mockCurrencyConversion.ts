@@ -1,12 +1,18 @@
 import { vi } from "vitest";
 
+/** A row as handed to the conversion boundary: anything with an optional `amount`. */
+export interface ConvertibleRow {
+  amount?: unknown;
+  [column: string]: unknown;
+}
+
 /**
  * Fake for tests whose rows are already denominated in the requested target
  * currency. It performs no exchange-rate arithmetic; it only models the real
  * boundary's numeric `amount_eur` field.
  */
 export function mockRowsAlreadyInTargetCurrency() {
-  return vi.fn(async (rows) =>
+  return vi.fn(async <R extends ConvertibleRow>(rows: R[]) =>
     rows.map((row) => ({
       ...row,
       amount_eur: Number(row.amount ?? 0),
@@ -21,9 +27,10 @@ export function mockRowsAlreadyInTargetCurrency() {
  * converted values must prime explicit output rows instead of reimplementing
  * exchange-rate arithmetic in the mock.
  *
- * @param {Record<string, any>} [overrides]
  */
-export function mockCurrencyConversion(overrides = {}) {
+export function mockCurrencyConversion(
+  overrides: Record<string, unknown> = {},
+) {
   const module = {
     FALLBACK_RATES: { EUR: 1 },
     clearMemoryCache: vi.fn(),
@@ -31,7 +38,7 @@ export function mockCurrencyConversion(overrides = {}) {
     getHistoricalRateIndex: vi.fn(),
     listLatestStoredRates: vi.fn(),
     warmCache: vi.fn(),
-    convertRowsToEur: vi.fn(async (rows) => rows),
+    convertRowsToEur: vi.fn(async <R>(rows: R[]) => rows),
     convertToCurrency: vi.fn(),
     loadCurrentRates: vi.fn(),
     convertWithRates: vi.fn(),

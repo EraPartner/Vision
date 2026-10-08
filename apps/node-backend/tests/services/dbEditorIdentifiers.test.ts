@@ -8,14 +8,18 @@
  * the catalog must be rejected, never quoted-and-used.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import type { Mock } from "vitest";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/services/aggregationRefresh.ts", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 
-import { query, getClient } from "../../src/database/connection.ts";
+import {
+  query as rawQuery,
+  getClient as rawGetClient,
+} from "../../src/database/connection.ts";
 import {
   __clearDbEditorMetadataCacheForTests,
   getTableMeta,
@@ -23,11 +27,23 @@ import {
   applyMutations,
 } from "../../src/services/dbEditor.ts";
 
+/** The structural slice of pg's query surface these fakes implement. */
+type FakeQuery = (
+  sql: string,
+  params?: unknown[],
+) => Promise<{ rows: Record<string, unknown>[] }>;
+interface FakeClient {
+  query: Mock<FakeQuery>;
+  release: Mock;
+}
+
+const query = rawQuery as unknown as Mock<FakeQuery>;
+const getClient = rawGetClient as unknown as Mock<() => Promise<FakeClient>>;
+
 const CATALOG_TABLE = "transactions";
 const CATALOG_COLUMNS = ["id", "amount", "memo"];
 
-/** @param {string} name */
-function catalogColumnRow(name, ordinal) {
+function catalogColumnRow(name: string, ordinal: number) {
   return {
     column_name: name,
     data_type: "text",
@@ -41,14 +57,14 @@ function catalogColumnRow(name, ordinal) {
 }
 
 /** SQL statements seen by the pooled client during the last call. */
-let clientSql = [];
+let clientSql: string[] = [];
 
 beforeEach(() => {
   vi.clearAllMocks();
   __clearDbEditorMetadataCacheForTests();
   clientSql = [];
 
-  query.mockImplementation(async (sql) => {
+  query.mockImplementation(async (sql: string) => {
     if (sql.includes("pg_stat_user_tables")) {
       return { rows: [{ relname: CATALOG_TABLE }] };
     }
@@ -64,7 +80,7 @@ beforeEach(() => {
   });
 
   getClient.mockResolvedValue({
-    query: vi.fn(async (sql, params = []) => {
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
       clientSql.push(sql);
       if (sql.startsWith("SELECT count(")) return { rows: [{ total: "0" }] };
       if (/^SELECT \$\d+::bigint AS total$/.test(sql)) {
@@ -154,6 +170,7 @@ describe("sort identifiers", () => {
 describe("pagination", () => {
   it("coerces the limit and never emits count or offset queries", async () => {
     await readRows(CATALOG_TABLE, {
+      // @ts-expect-error -- a hostile string limit must be coerced at runtime
       limit: "10; DROP TABLE users",
     });
     const dataSql = clientSql.find((s) => s.startsWith("SELECT *"));
@@ -165,7 +182,7 @@ describe("pagination", () => {
 
   it("binds an opaque cursor to sort, filters, and a primary-key tie-breaker", async () => {
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql) => {
+      query: vi.fn(async (sql: string) => {
         clientSql.push(sql);
         if (sql.startsWith("SELECT *")) {
           return {
@@ -210,7 +227,7 @@ describe("pagination", () => {
     clientSql = [];
     await readRows(CATALOG_TABLE, {
       limit: 2,
-      cursor: page.nextCursor,
+      cursor: page.nextCursor!,
       orderBy: "amount",
       dir: "desc",
       filters: [{ column: "memo", op: "contains", value: "shop" }],
@@ -224,7 +241,7 @@ describe("pagination", () => {
 
     await expect(
       readRows(CATALOG_TABLE, {
-        cursor: page.nextCursor,
+        cursor: page.nextCursor!,
         orderBy: "id",
         dir: "desc",
       }),
@@ -234,7 +251,7 @@ describe("pagination", () => {
   it("uses exact PostgreSQL text projections for typed cursor values", async () => {
     const timestamp = new Date("2026-09-08T10:11:12.123Z");
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql) => {
+      query: vi.fn(async (sql: string) => {
         if (sql.startsWith("SELECT *")) {
           return {
             rows: [
@@ -264,9 +281,9 @@ describe("pagination", () => {
       orderBy: "amount",
     });
 
-    let selectParams = [];
+    let selectParams: unknown[] = [];
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql, params = []) => {
+      query: vi.fn(async (sql: string, params: unknown[] = []) => {
         if (sql.startsWith("SELECT *")) selectParams = params;
         return { rows: [] };
       }),
@@ -275,13 +292,13 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: timestampPage.nextCursor,
+      cursor: timestampPage.nextCursor!,
     });
     expect(selectParams).toContain("2026-09-08 10:11:12.123456+00");
     expect(selectParams).toContain("9");
 
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql) => {
+      query: vi.fn(async (sql: string) => {
         if (sql.startsWith("SELECT *")) {
           return {
             rows: [
@@ -312,7 +329,7 @@ describe("pagination", () => {
     });
     selectParams = [];
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql, params = []) => {
+      query: vi.fn(async (sql: string, params: unknown[] = []) => {
         if (sql.startsWith("SELECT *")) selectParams = params;
         return { rows: [] };
       }),
@@ -321,13 +338,13 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: byteaPage.nextCursor,
+      cursor: byteaPage.nextCursor!,
     });
     expect(selectParams).toContain("\\x00ff10");
   });
 
   it("uses a collision-free hidden ctid alias for a table without a primary key", async () => {
-    query.mockImplementation(async (sql) => {
+    query.mockImplementation(async (sql: string) => {
       if (sql.includes("pg_stat_user_tables")) {
         return { rows: [{ relname: CATALOG_TABLE }] };
       }
@@ -343,7 +360,7 @@ describe("pagination", () => {
       throw new Error(`unexpected catalog query: ${sql}`);
     });
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql) => {
+      query: vi.fn(async (sql: string) => {
         clientSql.push(sql);
         if (sql.startsWith("SELECT *")) {
           return {
@@ -377,14 +394,14 @@ describe("pagination", () => {
     );
 
     clientSql = [];
-    await readRows(CATALOG_TABLE, { limit: 1, cursor: page.nextCursor });
+    await readRows(CATALOG_TABLE, { limit: 1, cursor: page.nextCursor! });
     expect(clientSql.find((sql) => sql.startsWith("SELECT *"))).toContain(
       "ctid > $1::tid",
     );
   });
 
   it("continues from a null sort boundary through composite primary keys", async () => {
-    query.mockImplementation(async (sql) => {
+    query.mockImplementation(async (sql: string) => {
       if (sql.includes("pg_stat_user_tables")) {
         return { rows: [{ relname: CATALOG_TABLE }] };
       }
@@ -399,7 +416,7 @@ describe("pagination", () => {
       throw new Error(`unexpected catalog query: ${sql}`);
     });
     getClient.mockResolvedValueOnce({
-      query: vi.fn(async (sql) => {
+      query: vi.fn(async (sql: string) => {
         if (sql.startsWith("SELECT *")) {
           return {
             rows: [
@@ -434,7 +451,7 @@ describe("pagination", () => {
     await readRows(CATALOG_TABLE, {
       limit: 1,
       orderBy: "amount",
-      cursor: page.nextCursor,
+      cursor: page.nextCursor!,
     });
     const cursorSql = clientSql.find((sql) => sql.startsWith("SELECT *"));
     expect(cursorSql).toContain(
@@ -453,10 +470,10 @@ describe("mutation identifiers", () => {
       { dryRun: true },
     );
     expect(res.dryRun).toBe(true);
-    expect(res.statements[0].preview).toContain(
+    expect(res.statements![0].preview).toContain(
       'INSERT INTO "transactions" ("memo")',
     );
-    expect(res.statements[0].preview).not.toContain("VALUES (1)--");
+    expect(res.statements![0].preview).not.toContain("VALUES (1)--");
   });
 
   it("rejects a batch whose columns are all unknown", async () => {
@@ -475,9 +492,9 @@ describe("mutation identifiers", () => {
       [{ op: "update", pk: { id: 1 }, set: { memo: "x" } }],
       { dryRun: true },
     );
-    expect(res.statements[0].preview).toContain(
+    expect(res.statements![0].preview).toContain(
       'UPDATE "transactions" SET "memo"',
     );
-    expect(res.statements[0].preview).toContain('WHERE "id"');
+    expect(res.statements![0].preview).toContain('WHERE "id"');
   });
 });

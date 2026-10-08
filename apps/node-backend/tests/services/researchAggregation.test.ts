@@ -49,7 +49,7 @@ describe("capabilityMap", () => {
   });
 
   it("filters the chain by isUsable (drops unkeyed/exhausted providers)", () => {
-    const usable = new Set([PROVIDERS.yahoo, PROVIDERS.finnhub]);
+    const usable = new Set<string>([PROVIDERS.yahoo, PROVIDERS.finnhub]);
     expect(
       resolveProviderChain("quote", "stock", {
         isUsable: (p) => usable.has(p),
@@ -61,14 +61,14 @@ describe("capabilityMap", () => {
 // ─── quotaGovernor ─────────────────────────────────────────────────────────────
 
 const makeFakeStore = () => {
-  const counts = new Map();
-  const key = (p, dk) => `${p}:${dk}`;
+  const counts = new Map<string, number>();
+  const key = (p: string, dk: string) => `${p}:${dk}`;
   return {
     counts,
-    async getDayCount(p, dk) {
+    async getDayCount(p: string, dk: string) {
       return counts.get(key(p, dk)) ?? 0;
     },
-    async addDayCount(p, dk, delta) {
+    async addDayCount(p: string, dk: string, delta: number) {
       counts.set(key(p, dk), (counts.get(key(p, dk)) ?? 0) + delta);
     },
   };

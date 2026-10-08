@@ -20,16 +20,16 @@
  */
 
 import pg from "pg";
+import type { Pool as PgPool, PoolClient } from "pg";
 
 const { Pool } = pg;
 
-let cachedPool = null;
+let cachedPool: PgPool | null = null;
 
 /**
  * Return a shared Postgres pool if `TEST_DATABASE_URL` is set, else null.
- * @returns {import('pg').Pool | null}
  */
-export function getTestPool() {
+export function getTestPool(): PgPool | null {
   const url = process.env.TEST_DATABASE_URL;
   if (!url) return null;
   if (cachedPool) return cachedPool;
@@ -40,7 +40,7 @@ export function getTestPool() {
 /**
  * Close the shared pool if it was opened. Safe to call when no pool exists.
  */
-export async function closeTestPool() {
+export async function closeTestPool(): Promise<void> {
   if (!cachedPool) return;
   const pool = cachedPool;
   cachedPool = null;
@@ -49,9 +49,8 @@ export async function closeTestPool() {
 
 /**
  * Boolean convenience for `it.skipIf(!hasTestDatabase())`.
- * @returns {boolean}
  */
-export function hasTestDatabase() {
+export function hasTestDatabase(): boolean {
   return Boolean(process.env.TEST_DATABASE_URL);
 }
 
@@ -60,18 +59,19 @@ export function hasTestDatabase() {
  * restrictive self-reference intentionally rejects deleting a parent that
  * still has children; a broad single-statement DELETE is no longer valid.
  * Call only after other fixture tables that reference categories are cleared.
- * @param {import('pg').Pool | import('pg').PoolClient} pool
  */
-export async function deleteAllCategoryFixtures(pool) {
+export async function deleteAllCategoryFixtures(
+  pool: PgPool | PoolClient,
+): Promise<void> {
   await pool.query("DELETE FROM category_merge_aliases");
   await pool.query("DELETE FROM category_root_aliases");
-  let deleted;
+  let deleted: number | null;
   do {
     ({ rowCount: deleted } = await pool.query(`
       DELETE FROM categories c
       WHERE NOT EXISTS (SELECT 1 FROM categories child WHERE child.parent_id = c.id)
     `));
-  } while (deleted > 0);
+  } while (deleted !== null && deleted > 0);
 }
 
 // ── Cross-suite serialization ───────────────────────────────────────────────
@@ -88,11 +88,10 @@ export async function deleteAllCategoryFixtures(pool) {
 
 const DB_SUITE_LOCK_KEY = 715_001;
 
-/** @type {import('pg').PoolClient | null} */
-let lockClient = null;
+let lockClient: PoolClient | null = null;
 
 /** Block until this process holds the shared DB-suite advisory lock. */
-export async function acquireDbSuiteLock() {
+export async function acquireDbSuiteLock(): Promise<void> {
   const pool = getTestPool();
   if (!pool || lockClient) return;
   const client = await pool.connect();
@@ -106,7 +105,7 @@ export async function acquireDbSuiteLock() {
 }
 
 /** Release the advisory lock (safe to call when not held). */
-export async function releaseDbSuiteLock() {
+export async function releaseDbSuiteLock(): Promise<void> {
   if (!lockClient) return;
   const client = lockClient;
   lockClient = null;

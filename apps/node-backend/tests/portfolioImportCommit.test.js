@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
-import { makePortfolioImportStagingRow } from "./builders/domainRows.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { makePortfolioImportStagingRow } from "./builders/domainRows.ts";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),

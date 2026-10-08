@@ -19,15 +19,20 @@
  * the one case the finding named.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Mock } from "vitest";
 
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({ getClient: vi.fn() }),
 );
 
 const { resolveBulkSelection, __normalizeBulkFilter: normalizeBulkFilter } =
   await import("../../src/services/bulkSelection.ts");
-const { query: dbQuery } = await import("../../src/database/connection.ts");
+const { query: rawDbQuery } = await import("../../src/database/connection.ts");
+// Fixtures return only the `rows` the resolver reads.
+const dbQuery = rawDbQuery as unknown as Mock<
+  (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>
+>;
 const { ValidationError } =
   await import("../../src/middleware/errorHandler.ts");
 
@@ -137,6 +142,7 @@ describe("normalizeBulkFilter — rejects instead of silently ignoring", () => {
   });
 
   it("rejects an array body, which reached the builder as an empty filter", () => {
+    // @ts-expect-error -- an array body must be rejected at runtime
     expect(() => normalizeBulkFilter([1, 2])).toThrow(ValidationError);
   });
 

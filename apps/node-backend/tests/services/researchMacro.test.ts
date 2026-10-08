@@ -18,9 +18,15 @@ import {
 } from "../../src/services/research/adapters/macroCatalog.ts";
 import { __parseJsonStat as parseJsonStat } from "../../src/services/research/adapters/eurostatAdapter.ts";
 
-const monthly = (n, lastY, lastM) => {
+type AggregatorDeps = NonNullable<
+  Parameters<typeof createResearchAggregator>[0]
+>;
+/** Macro search items and series payloads are provider-defined (`unknown`). */
+type MacroItem = { provider: string };
+
+const monthly = (n: number, lastY: number, lastM: number) => {
   // n ascending monthly points ending at lastY-lastM (1-based month).
-  const pts = [];
+  const pts: { time: number; close: number }[] = [];
   for (let i = n - 1; i >= 0; i -= 1) {
     pts.push({ time: Date.UTC(lastY, lastM - 1 - i, 1), close: 100 + i });
   }
@@ -43,7 +49,7 @@ describe("macroRange", () => {
     // 6 months back from 2021-12 is 2021-06 → keeps Jun..Dec = 7 points.
     expect(out.length).toBe(7);
     expect(out[0].time).toBe(Date.UTC(2021, 5, 1));
-    expect(out.at(-1).time).toBe(Date.UTC(2021, 11, 1));
+    expect(out.at(-1)!.time).toBe(Date.UTC(2021, 11, 1));
   });
 
   it("trimToRange keeps everything for max / empty", () => {
@@ -145,19 +151,22 @@ describe("eurostat parseJsonStat", () => {
 
 // ── Aggregator macro orchestration ──────────────────────────────────────────
 
-const makeGovernor = (canSpend = () => true) => ({
-  canSpend: vi.fn(async (p) => canSpend(p)),
+const makeGovernor = (
+  canSpend: (provider: string) => boolean = () => true,
+) => ({
+  canSpend: vi.fn(async (p: string) => canSpend(p)),
   spend: vi.fn(async () => {}),
 });
 
-const build = (deps) =>
+// Fakes implement only what each case exercises, hence the single cast here.
+const build = (deps: Record<string, unknown>) =>
   createResearchAggregator({
     cache: createResearchCache(),
     isKeyed: () => true,
     recordSuccess: vi.fn(),
     recordError: vi.fn(),
     ...deps,
-  });
+  } as AggregatorDeps);
 
 const macroAdapters = (over = {}) => ({
   fred: {
@@ -197,7 +206,7 @@ describe("researchAggregator.searchMacro", () => {
     const agg = build({ adapters, governor: makeGovernor() });
     const out = await agg.searchMacro("cpi");
     expect(out.source).toBe("live");
-    expect(out.items.map((i) => i.provider).sort()).toEqual([
+    expect(out.items.map((i) => (i as MacroItem).provider).sort()).toEqual([
       "eurostat",
       "fred",
     ]);
@@ -208,10 +217,10 @@ describe("researchAggregator.searchMacro", () => {
     const agg = build({
       adapters,
       governor: makeGovernor(),
-      isKeyed: (p) => p !== "fred",
+      isKeyed: (p: string) => p !== "fred",
     });
     const out = await agg.searchMacro("cpi");
-    expect(out.items.map((i) => i.provider)).toEqual(["eurostat"]);
+    expect(out.items.map((i) => (i as MacroItem).provider)).toEqual(["eurostat"]);
     expect(adapters.fred.macroSearch).not.toHaveBeenCalled();
   });
 
@@ -237,7 +246,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
     });
     expect(out.source).toBe("live");
     expect(out.provider).toBe("eurostat");
-    expect(out.data.points).toEqual([{ time: 2, close: 2 }]);
+    expect((out.data as { points: unknown }).points).toEqual([{ time: 2, close: 2 }]);
     expect(adapters.eurostat.macroSeries).toHaveBeenCalledWith("x?geo=BE", {
       range: "1y",
     });
@@ -264,7 +273,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted[0]).toMatchObject({
+    expect(out.attempted![0]).toMatchObject({
       provider: "fred",
       skipped: "no_key",
     });
@@ -281,7 +290,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted[0]).toMatchObject({
+    expect(out.attempted![0]).toMatchObject({
       provider: "fred",
       skipped: "quota",
     });
@@ -302,7 +311,7 @@ describe("researchAggregator.fetchMacroSeries", () => {
       range: "1y",
     });
     expect(out.source).toBe("unavailable");
-    expect(out.attempted[0]).toMatchObject({
+    expect(out.attempted![0]).toMatchObject({
       provider: "eurostat",
       error: "boom",
     });

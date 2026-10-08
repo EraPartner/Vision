@@ -2,7 +2,7 @@
  * AI chat route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). `router.use(enforceAiChatEnabled)` (ai.js:~120)
+ * tests/helpers/routeApp.ts). `router.use(enforceAiChatEnabled)` (ai.js:~120)
  * was never reachable under the old mock-router harness — `router.use()` was
  * recorded but never invoked, so `/chat` and `/chat/stream` validation errors
  * were being asserted as rejected promises from a handler called directly,
@@ -22,8 +22,8 @@
  * suite cannot see; not exercised in either the old or new harness.
  */
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/services/aiChatService.ts", async () => {
   // Mirror the real class's hierarchy: AiChatServiceError extends AppError, so
@@ -31,7 +31,14 @@ vi.mock("../../src/services/aiChatService.ts", async () => {
   // behaves the same here as against the real service module.
   const { AppError } = await import("../../src/middleware/errorHandler.ts");
   class AiChatServiceError extends AppError {
-    constructor(message, { code, status, cause } = {}) {
+    constructor(
+      message: string,
+      {
+        code,
+        status,
+        cause,
+      }: { code?: string; status?: number; cause?: unknown } = {},
+    ) {
       super(message, {
         code: code || "AI_CHAT_ERROR",
         status: status || 500,
@@ -53,7 +60,8 @@ vi.mock("../../src/services/aiChatService.ts", async () => {
 
 vi.mock("../../src/integrations/ollama/client.ts", () => {
   class OllamaError extends Error {
-    constructor(message, { code } = {}) {
+    declare code: string;
+    constructor(message: string, { code }: { code?: string } = {}) {
       super(message);
       this.code = code || "OLLAMA_ERROR";
     }
@@ -80,14 +88,41 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 import {
   AiChatServiceError,
-  createEmptyConversation,
+  createEmptyConversation as rawCreateEmptyConversation,
   deleteConversation,
-  getConversationWithMessages,
-  listConversations,
-  renameConversation,
-  runChatTurn,
+  getConversationWithMessages as rawGetConversationWithMessages,
+  listConversations as rawListConversations,
+  renameConversation as rawRenameConversation,
+  runChatTurn as rawRunChatTurn,
 } from "../../src/services/aiChatService.ts";
+import type { ChatTurnResult } from "../../src/services/aiChatService.ts";
 import settings from "../../src/config/config.ts";
+
+const createEmptyConversation = vi.mocked(rawCreateEmptyConversation);
+const getConversationWithMessages = vi.mocked(rawGetConversationWithMessages);
+const listConversations = vi.mocked(rawListConversations);
+const renameConversation = vi.mocked(rawRenameConversation);
+const runChatTurn = vi.mocked(rawRunChatTurn);
+
+/**
+ * The route forwards service results and stream events verbatim, so fixtures
+ * carry only the fields a test asserts on. `loose` casts one to the type the
+ * mocked service resolves with.
+ */
+function loose<T>(value: object): T {
+  return value as T;
+}
+
+/** The `runChatTurn` arguments the stream fixtures use. */
+interface StreamTurnArgs {
+  signal: AbortSignal;
+  onEvent: (event: object) => void;
+}
+
+/** Install a `runChatTurn` stand-in that drives the stream with loose fixtures. */
+function mockTurn(impl: (args: StreamTurnArgs) => Promise<object>) {
+  runChatTurn.mockImplementation(impl as unknown as typeof rawRunChatTurn);
+}
 
 const { default: aiRouter } = await import("../../src/routes/ai.ts");
 
@@ -102,7 +137,7 @@ const UUID = "11111111-2222-4333-8444-555555555555";
  * SSE spec — used to flush the browser's buffering threshold) and any
  * heartbeat comments.
  */
-function parseSseFrames(rawText) {
+function parseSseFrames(rawText: string) {
   return rawText
     .split("\n\n")
     .filter((frame) => frame.startsWith("event:"))
@@ -167,7 +202,7 @@ describe("POST /api/ai/chat/stream", () => {
     };
     const conversation = { id: UUID, title: "hi", model: "llama3.2:3b" };
 
-    runChatTurn.mockImplementation(async ({ onEvent }) => {
+    mockTurn(async ({ onEvent }) => {
       onEvent({ type: "user_message", data: { message: userMsg } });
       onEvent({ type: "token", data: "Your " });
       onEvent({ type: "token", data: "top " });
@@ -228,19 +263,21 @@ describe("POST /api/ai/chat/stream", () => {
   });
 
   it("passes AbortSignal to runChatTurn and streams with streaming:true", async () => {
-    runChatTurn.mockResolvedValue({
-      conversation: { id: UUID },
-      userMessage: { id: "u1" },
-      toolMessages: [],
-      assistantMessage: { id: "a1", content: "ok" },
-      usage: {},
-      iterations: 1,
-    });
+    runChatTurn.mockResolvedValue(
+      loose({
+        conversation: { id: UUID },
+        userMessage: { id: "u1" },
+        toolMessages: [],
+        assistantMessage: { id: "a1", content: "ok" },
+        usage: {},
+        iterations: 1,
+      }),
+    );
 
     await api.post(`${BASE}/chat/stream`).send({ message: "hi" }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0][0];
+    const callArgs = runChatTurn.mock.calls[0][0]!;
     expect(callArgs.streaming).toBe(true);
     expect(callArgs.signal).toBeInstanceOf(AbortSignal);
     expect(typeof callArgs.onEvent).toBe("function");
@@ -262,7 +299,7 @@ describe("POST /api/ai/chat/stream", () => {
 
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
-    expect(errFrame.data).toEqual({
+    expect(errFrame!.data).toEqual({
       detail: "Model unavailable",
       code: "OLLAMA_UNREACHABLE",
     });
@@ -280,21 +317,21 @@ describe("POST /api/ai/chat/stream", () => {
     const frames = parseSseFrames(res.text);
     const errFrame = frames.find((f) => f.name === "error");
     expect(errFrame).toBeDefined();
-    expect(errFrame.data).toEqual({
+    expect(errFrame!.data).toEqual({
       detail: "Failed to stream AI chat message",
       code: "INTERNAL_SERVER_ERROR",
     });
-    expect(JSON.stringify(errFrame.data)).not.toContain("db exploded");
+    expect(JSON.stringify(errFrame!.data)).not.toContain("db exploded");
   });
 
   it("aborts runChatTurn and stops writing on client disconnect", async () => {
-    let capturedSignal;
-    let releaseTurn;
+    let capturedSignal: AbortSignal | undefined;
+    let releaseTurn: (value?: unknown) => void;
     const released = new Promise((resolve) => {
       releaseTurn = resolve;
     });
 
-    runChatTurn.mockImplementation(async ({ signal, onEvent }) => {
+    mockTurn(async ({ signal, onEvent }) => {
       capturedSignal = signal;
       onEvent({ type: "user_message", data: { id: "u1" } });
       onEvent({ type: "token", data: "hello" });
@@ -326,7 +363,7 @@ describe("POST /api/ai/chat/stream", () => {
   });
 
   it("passes the service's public event name through without a rename layer", async () => {
-    runChatTurn.mockImplementation(async ({ onEvent }) => {
+    mockTurn(async ({ onEvent }) => {
       onEvent({
         type: "tool_result",
         data: { message: { id: "t1", role: "tool", content: "" } },
@@ -382,7 +419,7 @@ describe("POST /api/ai/chat", () => {
       usage: { evalCount: 5 },
       iterations: 1,
     };
-    runChatTurn.mockResolvedValue(turn);
+    runChatTurn.mockResolvedValue(loose(turn));
 
     const res = await api
       .post(`${BASE}/chat`)
@@ -390,7 +427,7 @@ describe("POST /api/ai/chat", () => {
       .expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0][0];
+    const callArgs = runChatTurn.mock.calls[0][0]!;
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe("hi");
     expect(res.body).toEqual(
@@ -490,14 +527,14 @@ describe("AI chat disabled gate (router.use(enforceAiChatEnabled))", () => {
 describe("POST /api/ai/chat body validation", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const okTurn = {
+  const okTurn = loose<ChatTurnResult>({
     conversation: { id: UUID },
     userMessage: { id: "u1" },
     toolMessages: [],
     assistantMessage: { id: "a1" },
     usage: {},
     iterations: 1,
-  };
+  });
 
   it("accepts an UPPERCASE conversation UUID (regex is case-insensitive) and forwards it unchanged", async () => {
     runChatTurn.mockResolvedValue(okTurn);
@@ -638,7 +675,7 @@ describe("AI conversation routes validation", () => {
         { id: UUID, title: "One" },
         { id: UUID, title: "Two" },
       ];
-      listConversations.mockResolvedValue({ items: rows, total: 2 });
+      listConversations.mockResolvedValue(loose({ items: rows, total: 2 }));
 
       const res = await api.get(`${BASE}/conversations`).expect(200);
       expect(res.body).toEqual(
@@ -658,7 +695,7 @@ describe("AI conversation routes validation", () => {
 
     it("returns page metadata and forwards parsed limit/offset", async () => {
       const rows = [{ id: UUID, title: "Older" }];
-      listConversations.mockResolvedValue({ items: rows, total: 75 });
+      listConversations.mockResolvedValue(loose({ items: rows, total: 75 }));
 
       const res = await api
         .get(`${BASE}/conversations?limit=25&offset=50`)
@@ -673,7 +710,7 @@ describe("AI conversation routes validation", () => {
 
   describe("POST /conversations", () => {
     it("creates with optional title/model absent (even without a body)", async () => {
-      createEmptyConversation.mockResolvedValue({ id: UUID });
+      createEmptyConversation.mockResolvedValue(loose({ id: UUID }));
 
       await api.post(`${BASE}/conversations`).expect(201);
 
@@ -684,7 +721,7 @@ describe("AI conversation routes validation", () => {
     });
 
     it("accepts an empty-string title (only type and length are checked)", async () => {
-      createEmptyConversation.mockResolvedValue({ id: UUID });
+      createEmptyConversation.mockResolvedValue(loose({ id: UUID }));
 
       await api.post(`${BASE}/conversations`).send({ title: "" }).expect(201);
 
@@ -695,7 +732,7 @@ describe("AI conversation routes validation", () => {
     });
 
     it("accepts a title of exactly 200 chars and rejects 201", async () => {
-      createEmptyConversation.mockResolvedValue({ id: UUID });
+      createEmptyConversation.mockResolvedValue(loose({ id: UUID }));
 
       await api
         .post(`${BASE}/conversations`)
@@ -726,7 +763,7 @@ describe("AI conversation routes validation", () => {
 
   describe("PATCH /conversations/:id", () => {
     it("renames with the exact (untrimmed) title", async () => {
-      renameConversation.mockResolvedValue({ id: UUID, title: " Hi " });
+      renameConversation.mockResolvedValue(loose({ id: UUID, title: " Hi " }));
 
       await api
         .patch(`${BASE}/conversations/${UUID}`)
@@ -744,7 +781,7 @@ describe("AI conversation routes validation", () => {
     });
 
     it("accepts a title of exactly 200 chars and rejects 201", async () => {
-      renameConversation.mockResolvedValue({ id: UUID });
+      renameConversation.mockResolvedValue(loose({ id: UUID }));
 
       await api
         .patch(`${BASE}/conversations/${UUID}`)
@@ -769,10 +806,12 @@ describe("AI conversation routes validation", () => {
   describe("GET/DELETE /conversations/:id", () => {
     it("accepts an uppercase UUID id and passes it through unchanged", async () => {
       const upper = UUID.toUpperCase();
-      getConversationWithMessages.mockResolvedValue({
-        id: upper,
-        messages: [],
-      });
+      getConversationWithMessages.mockResolvedValue(
+        loose({
+          id: upper,
+          messages: [],
+        }),
+      );
 
       await api.get(`${BASE}/conversations/${upper}`).expect(200);
 

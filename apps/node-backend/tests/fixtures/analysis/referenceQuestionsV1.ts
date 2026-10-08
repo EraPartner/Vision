@@ -1,12 +1,76 @@
+import type {
+  AnalysisAssumption,
+  AnalysisCalculation,
+  AnalysisCoverageItem,
+  AnalysisCustomSqlSource,
+  AnalysisDefinition,
+  AnalysisExecutionResult,
+  AnalysisLineage,
+  AnalysisParameter,
+  AnalysisResultColumn,
+  AnalysisResultRow,
+  AnalysisScalar,
+  AnalysisSourceIdentity,
+  AnalysisUnit,
+  AnalysisValueType,
+  AnalysisVisualPlanSource,
+  AnalysisWorkspace,
+} from "@vision/types/analysis";
+import type { CostBasisTxnLike } from "@vision/shared-utils/portfolio";
+
+/** One acceptance question, before it is expanded into a definition and a result. */
+interface ReferenceCase {
+  id: string;
+  workspace: AnalysisWorkspace;
+  question: string;
+  datasets: string[];
+  columns: AnalysisResultColumn[];
+  calculations?: AnalysisCalculation[];
+  calculationValues?: Record<string, AnalysisScalar>;
+  parameters?: AnalysisParameter[];
+  assumptions?: AnalysisAssumption[];
+  dimensions?: AnalysisCoverageItem[];
+  rows: AnalysisResultRow[];
+  partial?: boolean;
+  presentationKind?: "bar";
+  visualFilters?: AnalysisVisualPlanSource["filters"];
+  sqlParameterIds?: string[];
+  customSql?: string;
+  canonicalPortfolioInput?: CostBasisTxnLike[];
+  canonicalPortfolioExpected?: Record<string, string>;
+}
+
+/** A completed (or partial) run: the result shape every fixture carries. */
+type CompletedResult = Extract<
+  AnalysisExecutionResult,
+  { status: "partial" | "completed" }
+>;
+
+export interface AnalysisReferenceQuestion {
+  id: string;
+  question: string;
+  definition: AnalysisDefinition;
+  result: CompletedResult;
+  canonicalPortfolioInput?: CostBasisTxnLike[];
+  canonicalPortfolioExpected?: Record<string, string>;
+  visualDefinition?: AnalysisDefinition;
+  visualResult?: CompletedResult;
+  nonConvertibleDefinition?: AnalysisDefinition;
+}
+
 const capturedAt = "2026-09-12T09:00:00.000Z";
-const reportingMoney = {
+const reportingMoney: AnalysisUnit = {
   kind: "money",
   currencyParameterId: "currency",
   scale: 2,
 };
-const ratio = { kind: "percentage", percentageBasis: "ratio", scale: 4 };
+const ratio: AnalysisUnit = {
+  kind: "percentage",
+  percentageBasis: "ratio",
+  scale: 4,
+};
 
-const reportingParameters = [
+const reportingParameters: AnalysisParameter[] = [
   {
     id: "currency",
     label: "Reporting currency",
@@ -41,17 +105,33 @@ const reportingParameters = [
   },
 ];
 
-function column(id, label, type = "string", extra = {}) {
+function column(
+  id: string,
+  label: string,
+  type: AnalysisValueType = "string",
+  extra: Partial<AnalysisResultColumn> = {},
+): AnalysisResultColumn {
   return { id, label, type, nullable: false, ...extra };
 }
-function records(datasetId, entity, ids, source) {
+function records(
+  datasetId: string,
+  entity: string,
+  ids: string[],
+  source?: AnalysisSourceIdentity,
+): AnalysisLineage {
   return {
     kind: "records",
     datasetId,
     records: ids.map((id) => ({ entity, id, ...(source ? { source } : {}) })),
   };
 }
-function metric(id, label, version, unit, dependencies = []) {
+function metric(
+  id: string,
+  label: string,
+  version: string,
+  unit?: AnalysisUnit,
+  dependencies: string[] = [],
+): AnalysisCalculation {
   return {
     id,
     label,
@@ -66,7 +146,12 @@ function metric(id, label, version, unit, dependencies = []) {
       : {}),
   };
 }
-function formula(id, label, unit, dependencies) {
+function formula(
+  id: string,
+  label: string,
+  unit: AnalysisUnit,
+  dependencies: string[],
+): AnalysisCalculation {
   return {
     id,
     label,
@@ -80,7 +165,7 @@ function formula(id, label, unit, dependencies) {
   };
 }
 
-const documentSource = {
+const documentSource: AnalysisSourceIdentity = {
   providerId: "sec-edgar",
   sourceId: "filing:2026-q2",
   sourceVersion: "2026-q2-amended",
@@ -90,7 +175,7 @@ const documentSource = {
   passageId: "risk-factors:p42",
 };
 
-const cases = [
+const cases: ReferenceCase[] = [
   {
     id: "budget-category-change-transfer-refund",
     workspace: "budgeting",
@@ -608,10 +693,10 @@ const cases = [
   },
 ];
 
-function makeDefinition(item) {
+function makeDefinition(item: ReferenceCase): AnalysisDefinition {
   const parameters = [...reportingParameters, ...(item.parameters ?? [])];
   const calculations = item.calculations ?? [];
-  const visualPlan = {
+  const visualPlan: AnalysisVisualPlanSource = {
     kind: "visual-plan",
     planVersion: 1,
     datasetId: item.datasets[0],
@@ -639,14 +724,15 @@ function makeDefinition(item) {
     groupBy: [],
     orderBy: [],
   };
-  const source = item.customSql
+  const customSql = item.customSql;
+  const source: AnalysisDefinition["source"] = customSql
     ? {
         kind: "custom-sql",
         dialect: "postgresql",
-        text: item.customSql,
+        text: customSql,
         datasetIds: item.datasets,
-        parameterBindings: item.sqlParameterIds.map((parameterId) => {
-          const start = item.customSql.indexOf(`:${parameterId}`);
+        parameterBindings: item.sqlParameterIds!.map((parameterId) => {
+          const start = customSql.indexOf(`:${parameterId}`);
           return {
             parameterId,
             startCodeUnit: start,
@@ -700,7 +786,10 @@ function makeDefinition(item) {
   };
 }
 
-function makeResult(item, definition) {
+function makeResult(
+  item: ReferenceCase,
+  definition: AnalysisDefinition,
+): CompletedResult {
   const partial = item.partial === true;
   return {
     contractVersion: 1,
@@ -755,11 +844,11 @@ function makeResult(item, definition) {
       kind: calculation.kind,
       version:
         calculation.kind === "metric"
-          ? calculation.metricVersion
+          ? calculation.metricVersion!
           : calculation.languageVersion,
       type: calculation.resultType,
       ...(calculation.unit ? { unit: calculation.unit } : {}),
-      value: item.calculationValues[calculation.id],
+      value: item.calculationValues![calculation.id],
     })),
     coverage: {
       status: partial ? "partial" : "complete",
@@ -774,7 +863,7 @@ function makeResult(item, definition) {
             {
               code: "incomplete-coverage",
               message: "Missing data remains explicit and is not renormalized",
-              affectedColumns: [item.columns.at(-1).id],
+              affectedColumns: [item.columns.at(-1)!.id],
             },
           ]
         : [],
@@ -793,68 +882,71 @@ function makeResult(item, definition) {
   };
 }
 
-export const ANALYSIS_REFERENCE_QUESTIONS_V1 = cases.map((item) => {
-  const definition = makeDefinition(item);
-  const result = makeResult(item, definition);
-  if (item.id !== "cross-mode-roundtrip")
+export const ANALYSIS_REFERENCE_QUESTIONS_V1: AnalysisReferenceQuestion[] =
+  cases.map((item): AnalysisReferenceQuestion => {
+    const definition = makeDefinition(item);
+    const result = makeResult(item, definition);
+    if (item.id !== "cross-mode-roundtrip")
+      return {
+        id: item.id,
+        question: item.question,
+        definition,
+        result,
+        ...(item.canonicalPortfolioInput
+          ? {
+              canonicalPortfolioInput: item.canonicalPortfolioInput,
+              canonicalPortfolioExpected: item.canonicalPortfolioExpected,
+            }
+          : {}),
+      };
+    // The cross-mode case is the custom-SQL one, so its source carries a visual origin.
+    const sqlSource = definition.source as AnalysisCustomSqlSource;
+    const visualDefinition: AnalysisDefinition = {
+      ...structuredClone(definition),
+      definitionVersion: 2,
+      source: structuredClone(sqlSource.visualOrigin!),
+    };
+    const visualResult: CompletedResult = {
+      ...structuredClone(result),
+      runId: "run:cross-mode-roundtrip:visual",
+      definitionRef: {
+        definitionId: visualDefinition.definitionId,
+        definitionVersion: visualDefinition.definitionVersion,
+      },
+      execution: {
+        ...structuredClone(result.execution),
+        queryMode: "visual-plan",
+      },
+    };
+    const advancedSql =
+      "-- preserve byte-for-byte; :comment is not a binding\nWITH ranked AS (\n  SELECT month, amount::numeric, row_number() OVER (ORDER BY month) AS n, $$:body$$ AS marker\n  FROM transactions_analysis\n  WHERE ':literal' = ':literal'\n)\nSELECT month, amount, amount * :multiplier AS adjusted_amount FROM ranked WHERE n > :minimum_rank\n";
+    const nonConvertibleDefinition: AnalysisDefinition = {
+      ...structuredClone(definition),
+      definitionVersion: 3,
+      source: {
+        ...structuredClone(sqlSource),
+        text: advancedSql,
+        parameterBindings: ["multiplier", "minimum_rank"].map((parameterId) => {
+          const start = advancedSql.indexOf(`:${parameterId}`);
+          return {
+            parameterId,
+            startCodeUnit: start,
+            endCodeUnit: start + parameterId.length + 1,
+          };
+        }),
+        visualConversion: {
+          status: "unsupported",
+          reasonCode: "window-function",
+        },
+      },
+    };
     return {
       id: item.id,
       question: item.question,
       definition,
       result,
-      ...(item.canonicalPortfolioInput
-        ? {
-            canonicalPortfolioInput: item.canonicalPortfolioInput,
-            canonicalPortfolioExpected: item.canonicalPortfolioExpected,
-          }
-        : {}),
+      visualDefinition,
+      visualResult,
+      nonConvertibleDefinition,
     };
-  const visualDefinition = {
-    ...structuredClone(definition),
-    definitionVersion: 2,
-    source: structuredClone(definition.source.visualOrigin),
-  };
-  const visualResult = {
-    ...structuredClone(result),
-    runId: "run:cross-mode-roundtrip:visual",
-    definitionRef: {
-      definitionId: visualDefinition.definitionId,
-      definitionVersion: visualDefinition.definitionVersion,
-    },
-    execution: {
-      ...structuredClone(result.execution),
-      queryMode: "visual-plan",
-    },
-  };
-  const advancedSql =
-    "-- preserve byte-for-byte; :comment is not a binding\nWITH ranked AS (\n  SELECT month, amount::numeric, row_number() OVER (ORDER BY month) AS n, $$:body$$ AS marker\n  FROM transactions_analysis\n  WHERE ':literal' = ':literal'\n)\nSELECT month, amount, amount * :multiplier AS adjusted_amount FROM ranked WHERE n > :minimum_rank\n";
-  const nonConvertibleDefinition = {
-    ...structuredClone(definition),
-    definitionVersion: 3,
-    source: {
-      ...structuredClone(definition.source),
-      text: advancedSql,
-      parameterBindings: ["multiplier", "minimum_rank"].map((parameterId) => {
-        const start = advancedSql.indexOf(`:${parameterId}`);
-        return {
-          parameterId,
-          startCodeUnit: start,
-          endCodeUnit: start + parameterId.length + 1,
-        };
-      }),
-      visualConversion: {
-        status: "unsupported",
-        reasonCode: "window-function",
-      },
-    },
-  };
-  return {
-    id: item.id,
-    question: item.question,
-    definition,
-    result,
-    visualDefinition,
-    visualResult,
-    nonConvertibleDefinition,
-  };
-});
+  });

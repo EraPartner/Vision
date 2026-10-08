@@ -736,7 +736,7 @@ Manually refresh materialized views.
 Security/performance notes:
 
 - Endpoint now uses `adminRateLimiter` to protect materialized-view refresh from abuse bursts.
-- Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.js]].
+- Route registration/behavior is covered by targeted tests in [[apps/node-backend/tests/routes/info.test.ts]].
 
 Code links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/middleware/rateLimiter.ts]]
 

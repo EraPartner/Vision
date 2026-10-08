@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/repositories/infoRepositoryHelpers.ts", () => ({
   getIncludeTransfers: vi.fn(),
 }));
 
-import { query } from "../../src/database/connection.ts";
-import { getIncludeTransfers } from "../../src/repositories/infoRepositoryHelpers.ts";
+import { query as rawQuery } from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+import { getIncludeTransfers as rawGetIncludeTransfers } from "../../src/repositories/infoRepositoryHelpers.ts";
 import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.ts";
+
+const query = vi.mocked(rawQuery);
+const getIncludeTransfers = vi.mocked(rawGetIncludeTransfers);
 
 beforeEach(() => {
   query.mockReset();
@@ -18,7 +22,9 @@ beforeEach(() => {
 
 describe("getSankeyAggregates", () => {
   it("owns grouped SQL, category identity, canonical exclusions, and transfer policy", async () => {
-    query.mockResolvedValueOnce({ rows: [{ category_id: null }] });
+    query.mockResolvedValueOnce({
+      rows: [{ category_id: null }],
+    } as PgQueryResult);
 
     const rows = await getSankeyAggregates({
       yearStart: "2025-01-01",
@@ -44,7 +50,7 @@ describe("getSankeyAggregates", () => {
 
   it("omits the transfer predicate only when requested", async () => {
     getIncludeTransfers.mockResolvedValueOnce(true);
-    query.mockResolvedValueOnce({ rows: [] });
+    query.mockResolvedValueOnce({ rows: [] } as PgQueryResult);
     await getSankeyAggregates({
       yearStart: "2025-01-01",
       yearEnd: "2025-12-31",

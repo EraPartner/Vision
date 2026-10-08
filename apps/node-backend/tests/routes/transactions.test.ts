@@ -3,13 +3,13 @@
  * Mirrors: apps/backend/tests/test_transactions.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — so the per-route middleware chain
+ * tests/helpers/routeApp.ts) — so the per-route middleware chain
  * (validateIdParam, the export rate limiters), Express query/body parsing, the
  * ADR-026 envelope middleware and the centralized error handler are all on the
  * tested path. Repositories/services are still mocked.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockTxConnection } from "../helpers/repoMocks.js";
+import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -17,9 +17,9 @@ import {
   mockCurrencyConversion,
   mockAttachmentRecordService,
   mockAttachmentService,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -64,16 +64,38 @@ vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.ts";
+import rawTransactionRepository from "../../src/repositories/transactionRepository.ts";
+import type { EnrichedTransactionRow } from "../../src/repositories/transactionRepository.ts";
 import {
   unmarkTransfer,
   scheduleReconcile,
 } from "../../src/services/transferReconciliationService.ts";
-import { query as dbQuery } from "../../src/database/connection.ts";
-import { isManualDuplicate } from "../../src/services/deduplication.ts";
-import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
-import { attachmentRepository } from "../../src/services/attachmentRecordService.ts";
+import { query as rawDbQuery } from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+import { isManualDuplicate as rawIsManualDuplicate } from "../../src/services/deduplication.ts";
+import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
+import type { ConvertedRow } from "../../src/services/currency/currencyConversionService.ts";
+import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
 import { removeAttachmentFile } from "../../src/services/attachmentService.ts";
+
+const transactionRepository = vi.mocked(rawTransactionRepository);
+const dbQuery = vi.mocked(rawDbQuery);
+const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
+const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const attachmentRepository = vi.mocked(rawAttachmentRepository);
+
+type ManualDuplicateResult = Awaited<ReturnType<typeof rawIsManualDuplicate>>;
+/**
+ * Transaction-row fixture carrying only the columns a test sets. Dates are the
+ * wire-format strings the route echoes, not the `Date` pg would return.
+ */
+type TxnFixture = Omit<Partial<EnrichedTransactionRow>, "date"> & {
+  date?: string;
+};
+const txnRow = (fields: TxnFixture) =>
+  fields as unknown as EnrichedTransactionRow;
+/** A pooled `query` result carrying only `rows`. */
+const pgResult = (result: { rows: unknown[] }) => result as PgQueryResult;
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
@@ -94,8 +116,12 @@ describe("Transaction Routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Re-arm the factory defaults that clearAllMocks wipes.
-    isManualDuplicate.mockResolvedValue({ isDuplicate: false });
-    convertRowsToEur.mockImplementation(async (rows) => rows);
+    isManualDuplicate.mockResolvedValue({
+      isDuplicate: false,
+    } as ManualDuplicateResult);
+    convertRowsToEur.mockImplementation(
+      async (rows) => rows as ConvertedRow[],
+    );
     attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   });
 
@@ -122,13 +148,13 @@ describe("Transaction Routes", () => {
     it("should return transactions with data", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
-          {
+          txnRow({
             id: 1,
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
             recipient_id: 1,
-          },
+          }),
         ],
         total: 1,
       });
@@ -170,13 +196,13 @@ describe("Transaction Routes", () => {
     it("should support filtering by transaction_id", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
-          {
+          txnRow({
             id: 42,
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
             recipient_id: 1,
-          },
+          }),
         ],
         total: 1,
       });
@@ -193,7 +219,7 @@ describe("Transaction Routes", () => {
 
     it("should normalize rows when normalize_to_eur is true", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
-        rows: [{ id: 1, date: "2026-01-15", amount: "10", currency: "USD" }],
+        rows: [txnRow({ id: 1, date: "2026-01-15", amount: "10", currency: "USD" })],
         total: 1,
       });
       convertRowsToEur.mockResolvedValue([
@@ -220,14 +246,14 @@ describe("Transaction Routes", () => {
     it("should thread include_balance to the repository and expose running_balance on rows (WP-B4)", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
-          {
+          txnRow({
             id: 1,
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "-25.50",
             recipient_id: 1,
             running_balance: "974.50",
-          },
+          }),
         ],
         total: 1,
       });
@@ -245,13 +271,13 @@ describe("Transaction Routes", () => {
     it("should omit the running_balance key entirely when include_balance is not set", async () => {
       transactionRepository.getAllWithCount.mockResolvedValue({
         rows: [
-          {
+          txnRow({
             id: 1,
             date: "2026-01-15",
             bank_account: "Chase",
             amount: "25.50",
             recipient_id: 1,
-          },
+          }),
         ],
         total: 1,
       });
@@ -281,12 +307,12 @@ describe("Transaction Routes", () => {
 
   describe("GET /:id", () => {
     it("should return transaction by id", async () => {
-      transactionRepository.getById.mockResolvedValue({
+      transactionRepository.getById.mockResolvedValue(txnRow({
         id: 1,
         date: "2026-01-15",
         amount: "50.00",
         bank_account: "Chase",
-      });
+      }));
 
       const res = await api.get("/api/transactions/1").expect(200);
 
@@ -322,7 +348,7 @@ describe("Transaction Routes", () => {
 
   describe("GET /export/csv", () => {
     it("should neutralize spreadsheet formula values in CSV export", async () => {
-      dbQuery.mockResolvedValue({
+      dbQuery.mockResolvedValue(pgResult({
         rows: [
           {
             date: "2026-01-15",
@@ -336,7 +362,7 @@ describe("Transaction Routes", () => {
             comment: "-comment",
           },
         ],
-      });
+      }));
 
       const res = await api.get("/api/transactions/export/csv").expect(200);
 
@@ -368,8 +394,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_type=expense filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_type=expense")
@@ -381,8 +407,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_type=income filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_type=income")
@@ -394,8 +420,8 @@ describe("Transaction Routes", () => {
 
     it("should apply recipient_id filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?recipient_id=42").expect(200);
 
@@ -405,8 +431,8 @@ describe("Transaction Routes", () => {
 
     it("should apply search filter as ILIKE pattern in export query", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?search=netflix").expect(200);
 
@@ -417,8 +443,8 @@ describe("Transaction Routes", () => {
 
     it("should apply transaction_id filter to export query", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api
         .get("/api/transactions/export/csv?transaction_id=7")
@@ -431,8 +457,8 @@ describe("Transaction Routes", () => {
 
     it("should join recipients/categories tables in probe SQL so recipient/search filters resolve", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api.get("/api/transactions/export/csv?search=foo").expect(200);
 
@@ -443,8 +469,8 @@ describe("Transaction Routes", () => {
 
     it("sets the streamed CSV download headers", async () => {
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [] }));
 
       const res = await api.get("/api/transactions/export/csv").expect(200);
 
@@ -472,8 +498,8 @@ describe("Transaction Routes", () => {
     it("should stream NDJSON with correct Content-Type", async () => {
       // probe returns a row; chunk has 1 row (< EXPORT_CHUNK_SIZE) → breaks after first chunk
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] }) // probe
-        .mockResolvedValueOnce({ rows: [sampleRow] }); // chunk (1 row < 1000 → break)
+        .mockResolvedValueOnce(pgResult({ rows: [{}] })) // probe
+        .mockResolvedValueOnce(pgResult({ rows: [sampleRow] })); // chunk (1 row < 1000 → break)
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
@@ -486,10 +512,10 @@ describe("Transaction Routes", () => {
     it("should emit one JSON object per transaction line", async () => {
       // 2 rows in chunk → still < EXPORT_CHUNK_SIZE → breaks after first chunk
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({
           rows: [sampleRow, { ...sampleRow, id: 2, amount: "-5.00" }],
-        });
+        }));
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
@@ -507,7 +533,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 404 when no transactions match filters", async () => {
-      dbQuery.mockResolvedValueOnce({ rows: [] }); // probe
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] })); // probe
 
       const res = await api
         .get("/api/transactions/export/json?start_date=2099-01-01")
@@ -527,8 +553,8 @@ describe("Transaction Routes", () => {
     it("should include all expected fields in output", async () => {
       // 1 row < EXPORT_CHUNK_SIZE → loop breaks after first chunk; only 2 DB calls needed
       dbQuery
-        .mockResolvedValueOnce({ rows: [{}] })
-        .mockResolvedValueOnce({ rows: [sampleRow] });
+        .mockResolvedValueOnce(pgResult({ rows: [{}] }))
+        .mockResolvedValueOnce(pgResult({ rows: [sampleRow] }));
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
@@ -553,13 +579,13 @@ describe("Transaction Routes", () => {
 
   describe("POST /", () => {
     it("should create transaction with 201", async () => {
-      transactionRepository.create.mockResolvedValue({
+      transactionRepository.create.mockResolvedValue(txnRow({
         id: 1,
         date: "2026-01-15",
         amount: "-50.00",
         bank_account: "Chase",
         recipient_id: 1,
-      });
+      }));
 
       const res = await api
         .post("/api/transactions/")
@@ -709,12 +735,12 @@ describe("Transaction Routes", () => {
 
   describe("PATCH /:id", () => {
     it("should update transaction", async () => {
-      transactionRepository.update.mockResolvedValue({
+      transactionRepository.update.mockResolvedValue(txnRow({
         id: 1,
         date: "2026-01-15",
         amount: "-75.00",
         bank_account: "Chase",
-      });
+      }));
 
       const res = await api
         .patch("/api/transactions/1")
@@ -754,7 +780,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 when recipient_name cannot be resolved", async () => {
-      dbQuery.mockResolvedValueOnce({ rows: [] });
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api
         .patch("/api/transactions/1")
@@ -765,7 +791,7 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 for invalid category_name format", async () => {
-      dbQuery.mockResolvedValueOnce({ rows: [] });
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
       await api
         .patch("/api/transactions/1")
         .send({ category_name: "INVALID" })
@@ -775,9 +801,9 @@ describe("Transaction Routes", () => {
     });
 
     it("should return 400 when category_name does not exist", async () => {
-      dbQuery.mockResolvedValueOnce({ rows: [{ id: 11 }] });
-      dbQuery.mockResolvedValueOnce({ rows: [] });
-      dbQuery.mockResolvedValueOnce({ rows: [] });
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [{ id: 11 }] }));
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
+      dbQuery.mockResolvedValueOnce(pgResult({ rows: [] }));
 
       await api
         .patch("/api/transactions/1")

@@ -3,7 +3,7 @@
  * Tests all CRUD endpoints for investments and portfolio transactions.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js) — validateIdParam (routes/investments.js:35-41)
+ * tests/helpers/routeApp.ts) — validateIdParam (routes/investments.js:35-41)
  * is no longer stubbed; it runs for real on every `/:id`-prefixed route. No
  * test here exercised an invalid id against one of those routes under the
  * old stub (all used valid numeric ids), so nothing was fake-passing —
@@ -14,8 +14,9 @@
  * reproduced here per the routeApp.js fidelity map.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import type { MockInstance } from "vitest";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/investmentRepository.ts", () => ({
   default: {
@@ -29,7 +30,7 @@ vi.mock("../../src/repositories/investmentRepository.ts", () => ({
     updatePricesBulk: vi.fn(),
     hardDelete: vi.fn(),
   },
-  pickInvestmentCreateFields: (body) => body,
+  pickInvestmentCreateFields: (body: unknown) => body,
 }));
 
 vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
@@ -80,26 +81,42 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import investmentRepository from "../../src/repositories/investmentRepository.ts";
+import rawInvestmentRepository from "../../src/repositories/investmentRepository.ts";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
+import rawPortfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
 import {
-  fetchHistoricalPrices,
-  fetchLivePricesDetailed,
+  fetchHistoricalPrices as rawFetchHistoricalPrices,
+  fetchLivePricesDetailed as rawFetchLivePricesDetailed,
 } from "../../src/services/priceProviderService.ts";
+
+const investmentRepository = vi.mocked(rawInvestmentRepository);
+const portfolioTransactionService = vi.mocked(rawPortfolioTransactionService);
+const fetchHistoricalPrices = vi.mocked(rawFetchHistoricalPrices);
+const fetchLivePricesDetailed = vi.mocked(rawFetchLivePricesDetailed);
+
+type DeepPartial<T> = T extends readonly (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
 
 const { default: investmentsRouter } =
   await import("../../src/routes/investments.ts");
 
 const portfolioTransactionRepository = {
-  ...portfolioTransactionPersistence,
+  ...vi.mocked(portfolioTransactionPersistence),
   ...portfolioTransactionService,
 };
 
 const BASE = "/api/investments";
 const api = routeAgent(investmentsRouter, { mountPath: BASE });
 
-let nowSpy;
+let nowSpy: MockInstance<() => number> | undefined;
 
 describe("Investment Routes", () => {
   beforeEach(() => {
@@ -117,8 +134,8 @@ describe("Investment Routes", () => {
       const repoResultB = [{ id: 202, amount: 2 }];
 
       portfolioTransactionRepository.getAllByInvestmentIds
-        .mockResolvedValueOnce(repoResultA)
-        .mockResolvedValueOnce(repoResultB);
+        .mockResolvedValueOnce(partial(repoResultA))
+        .mockResolvedValueOnce(partial(repoResultB));
       portfolioTransactionRepository.getCount.mockResolvedValue(2);
 
       const query10 = {
@@ -173,10 +190,12 @@ describe("Investment Routes", () => {
   // ── GET /api/investments ───────────────────────────────────
   describe("GET /", () => {
     it("should return investments list", async () => {
-      investmentRepository.getAllWithCount.mockResolvedValue({
-        rows: [{ id: 1, name: "Bitcoin", asset_class: "crypto" }],
-        total: 1,
-      });
+      investmentRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [{ id: 1, name: "Bitcoin", asset_class: "crypto" }],
+          total: 1,
+        }),
+      );
 
       const res = await api.get(`${BASE}/`).expect(200);
 
@@ -185,10 +204,12 @@ describe("Investment Routes", () => {
     });
 
     it("should return empty list", async () => {
-      investmentRepository.getAllWithCount.mockResolvedValue({
-        rows: [],
-        total: 0,
-      });
+      investmentRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [],
+          total: 0,
+        }),
+      );
 
       const res = await api.get(`${BASE}/`).expect(200);
 
@@ -196,10 +217,12 @@ describe("Investment Routes", () => {
     });
 
     it("should respect pagination and filters", async () => {
-      investmentRepository.getAllWithCount.mockResolvedValue({
-        rows: [],
-        total: 0,
-      });
+      investmentRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [],
+          total: 0,
+        }),
+      );
 
       await api
         .get(`${BASE}/`)
@@ -236,11 +259,13 @@ describe("Investment Routes", () => {
   // ── POST /api/investments ──────────────────────────────────
   describe("POST /", () => {
     it("should create investment with 201", async () => {
-      investmentRepository.create.mockResolvedValue({
-        id: 1,
-        name: "Bitcoin",
-        asset_class: "crypto",
-      });
+      investmentRepository.create.mockResolvedValue(
+        partial({
+          id: 1,
+          name: "Bitcoin",
+          asset_class: "crypto",
+        }),
+      );
 
       await api
         .post(`${BASE}/`)
@@ -291,11 +316,17 @@ describe("Investment Routes", () => {
   describe("POST /refresh-prices", () => {
     it("should refresh prices for investments with providers", async () => {
       investmentRepository.getAll.mockResolvedValue([
-        { id: 1, price_provider: "binance", price_provider_id: "BTCUSDT" },
+        partial({
+          id: 1,
+          price_provider: "binance",
+          price_provider_id: "BTCUSDT",
+        }),
       ]);
-      fetchLivePricesDetailed.mockResolvedValue({
-        1: { price: 50000, source: "live" },
-      });
+      fetchLivePricesDetailed.mockResolvedValue(
+        partial({
+          1: { price: 50000, source: "live" },
+        }),
+      );
       // Faithful stand-in for the real bulk update: one statement, N rows.
       investmentRepository.updatePricesBulk.mockImplementation(
         async (updates) => updates.length,
@@ -314,16 +345,18 @@ describe("Investment Routes", () => {
 
     it("should include cached source and skip DB update for cached fallback", async () => {
       investmentRepository.getAll.mockResolvedValue([
-        {
+        partial({
           id: 1,
           current_price: 123.45,
           price_provider: "yahoo",
           price_provider_id: "AAPL",
-        },
+        }),
       ]);
-      fetchLivePricesDetailed.mockResolvedValue({
-        1: { price: 123.45, source: "cached" },
-      });
+      fetchLivePricesDetailed.mockResolvedValue(
+        partial({
+          1: { price: 123.45, source: "cached" },
+        }),
+      );
       investmentRepository.updatePricesBulk.mockImplementation(
         async (updates) => updates.length,
       );
@@ -340,16 +373,18 @@ describe("Investment Routes", () => {
 
     it("should refresh yahoo investments when only symbol is configured", async () => {
       investmentRepository.getAll.mockResolvedValue([
-        {
+        partial({
           id: 1,
           symbol: "AAPL",
           price_provider: "yahoo",
           price_provider_id: null,
-        },
+        }),
       ]);
-      fetchLivePricesDetailed.mockResolvedValue({
-        1: { price: 188.4, source: "live" },
-      });
+      fetchLivePricesDetailed.mockResolvedValue(
+        partial({
+          1: { price: 188.4, source: "live" },
+        }),
+      );
       investmentRepository.updatePricesBulk.mockImplementation(
         async (updates) => updates.length,
       );
@@ -364,16 +399,18 @@ describe("Investment Routes", () => {
 
     it("should refresh kinesis investments when configured by mapped asset name", async () => {
       investmentRepository.getAll.mockResolvedValue([
-        {
+        partial({
           id: 1,
           name: "kaufen_gold",
           price_provider: "kinesis",
           price_provider_id: null,
-        },
+        }),
       ]);
-      fetchLivePricesDetailed.mockResolvedValue({
-        1: { price: 101.25, source: "live" },
-      });
+      fetchLivePricesDetailed.mockResolvedValue(
+        partial({
+          1: { price: 101.25, source: "live" },
+        }),
+      );
       investmentRepository.updatePricesBulk.mockImplementation(
         async (updates) => updates.length,
       );
@@ -390,7 +427,7 @@ describe("Investment Routes", () => {
 
     it("should return 0 updated when no providers configured", async () => {
       investmentRepository.getAll.mockResolvedValue([
-        { id: 1, price_provider: "manual", price_provider_id: null },
+        partial({ id: 1, price_provider: "manual", price_provider_id: null }),
       ]);
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
@@ -411,12 +448,14 @@ describe("Investment Routes", () => {
   // ── GET /api/investments/:id/price-history ─────────────────
   describe("GET /:id/price-history", () => {
     it("should return custom provider history", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 12,
-        price_provider: "custom",
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 12,
+          price_provider: "custom",
+        }),
+      );
       fetchHistoricalPrices.mockResolvedValue([
-        { timestampMs: 1700000000000, price: 700 },
+        partial({ timestampMs: 1700000000000, price: 700 }),
       ]);
 
       const res = await api
@@ -441,10 +480,12 @@ describe("Investment Routes", () => {
   // ── GET /api/investments/:id ───────────────────────────────
   describe("GET /:id", () => {
     it("should return investment by id", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        name: "Bitcoin",
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          name: "Bitcoin",
+        }),
+      );
 
       const res = await api.get(`${BASE}/1`).expect(200);
 
@@ -471,7 +512,9 @@ describe("Investment Routes", () => {
   // ── PATCH /api/investments/:id ─────────────────────────────
   describe("PATCH /:id", () => {
     it("should update investment", async () => {
-      investmentRepository.update.mockResolvedValue({ id: 1, name: "Updated" });
+      investmentRepository.update.mockResolvedValue(
+        partial({ id: 1, name: "Updated" }),
+      );
 
       const res = await api
         .patch(`${BASE}/1`)
@@ -504,8 +547,9 @@ describe("Investment Routes", () => {
     });
 
     it("should throw ValidationError for validation errors", async () => {
-      const err = new Error("symbol must be unique");
-      err.code = "VALIDATION_ERROR";
+      const err = Object.assign(new Error("symbol must be unique"), {
+        code: "VALIDATION_ERROR",
+      });
       investmentRepository.update.mockRejectedValue(err);
 
       const res = await api
@@ -546,10 +590,12 @@ describe("Investment Routes", () => {
   // ── GET /api/investments/:id/transactions ──────────────────
   describe("GET /:id/transactions", () => {
     it("should return portfolio transactions", async () => {
-      portfolioTransactionRepository.getAllWithCount.mockResolvedValue({
-        rows: [{ id: 1, type: "buy", amount: 1000 }],
-        total: 1,
-      });
+      portfolioTransactionRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [{ id: 1, type: "buy", amount: 1000 }],
+          total: 1,
+        }),
+      );
 
       const res = await api.get(`${BASE}/1/transactions`).expect(200);
 
@@ -558,10 +604,12 @@ describe("Investment Routes", () => {
     });
 
     it("should filter by type", async () => {
-      portfolioTransactionRepository.getAllWithCount.mockResolvedValue({
-        rows: [],
-        total: 0,
-      });
+      portfolioTransactionRepository.getAllWithCount.mockResolvedValue(
+        partial({
+          rows: [],
+          total: 0,
+        }),
+      );
 
       await api
         .get(`${BASE}/1/transactions`)
@@ -588,15 +636,19 @@ describe("Investment Routes", () => {
   // ── POST /api/investments/:id/transactions ─────────────────
   describe("POST /:id/transactions", () => {
     it("should create portfolio transaction with 201", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "EUR",
-      });
-      portfolioTransactionRepository.create.mockResolvedValue({
-        id: 1,
-        type: "buy",
-        amount: 1000,
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "EUR",
+        }),
+      );
+      portfolioTransactionRepository.create.mockResolvedValue(
+        partial({
+          id: 1,
+          type: "buy",
+          amount: 1000,
+        }),
+      );
 
       await api
         .post(`${BASE}/1/transactions`)
@@ -605,16 +657,20 @@ describe("Investment Routes", () => {
     });
 
     it("should pass fx_rate_to_eur to repository create", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "USD",
-      });
-      portfolioTransactionRepository.create.mockResolvedValue({
-        id: 1,
-        type: "buy",
-        amount: 1000,
-        fx_rate_to_eur: 0.92,
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "USD",
+        }),
+      );
+      portfolioTransactionRepository.create.mockResolvedValue(
+        partial({
+          id: 1,
+          type: "buy",
+          amount: 1000,
+          fx_rate_to_eur: 0.92,
+        }),
+      );
 
       await api
         .post(`${BASE}/1/transactions`)
@@ -645,10 +701,12 @@ describe("Investment Routes", () => {
     });
 
     it("should throw ValidationError for missing required fields", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "EUR",
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "EUR",
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/1/transactions`)
@@ -658,10 +716,12 @@ describe("Investment Routes", () => {
     });
 
     it("rejects malformed shared transaction fields before repository create", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "EUR",
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "EUR",
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/1/transactions`)
@@ -678,14 +738,18 @@ describe("Investment Routes", () => {
     });
 
     it("should throw ValidationError when repository raises validation error", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "EUR",
-      });
-      const err = new Error(
-        "For buy/sell transactions, provide at least two of amount, units, and price_per_unit",
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "EUR",
+        }),
       );
-      err.code = "VALIDATION_ERROR";
+      const err = Object.assign(
+        new Error(
+          "For buy/sell transactions, provide at least two of amount, units, and price_per_unit",
+        ),
+        { code: "VALIDATION_ERROR" },
+      );
       portfolioTransactionRepository.create.mockRejectedValue(err);
 
       const res = await api
@@ -696,10 +760,12 @@ describe("Investment Routes", () => {
     });
 
     it("should handle errors", async () => {
-      investmentRepository.getById.mockResolvedValue({
-        id: 1,
-        currency: "EUR",
-      });
+      investmentRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          currency: "EUR",
+        }),
+      );
       portfolioTransactionRepository.create.mockRejectedValue(
         new Error("DB error"),
       );
@@ -717,10 +783,12 @@ describe("Investment Routes", () => {
   // ── DELETE /api/investments/transactions/:txnId ────────────
   describe("DELETE /transactions/:txnId", () => {
     it("should delete portfolio transaction with 204", async () => {
-      portfolioTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        investment_id: 10,
-      });
+      portfolioTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          investment_id: 10,
+        }),
+      );
       portfolioTransactionService.remove.mockResolvedValue(true);
 
       await api.delete(`${BASE}/transactions/1`).expect(204);
@@ -737,10 +805,12 @@ describe("Investment Routes", () => {
     // happened to catch. '12abc' is the 🔺 case: it hard-deleted transaction 12
     // and answered 204. Full matrix in investmentsIdValidation.test.js.
     it("should throw ValidationError for invalid ID", async () => {
-      portfolioTransactionRepository.getById.mockResolvedValue({
-        id: 12,
-        investment_id: 10,
-      });
+      portfolioTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 12,
+          investment_id: 10,
+        }),
+      );
       portfolioTransactionService.remove.mockResolvedValue(true);
 
       for (const id of ["abc", "12abc"]) {
@@ -751,10 +821,12 @@ describe("Investment Routes", () => {
     });
 
     it("should handle errors", async () => {
-      portfolioTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        investment_id: 10,
-      });
+      portfolioTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          investment_id: 10,
+        }),
+      );
       portfolioTransactionService.remove.mockRejectedValue(
         new Error("DB error"),
       );
@@ -769,10 +841,12 @@ describe("Investment Routes", () => {
   // ── PATCH /api/investments/transactions/:txnId ────────────
   describe("PATCH /transactions/:txnId", () => {
     it("should update portfolio transaction", async () => {
-      portfolioTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        amount: 1200,
-      });
+      portfolioTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          amount: 1200,
+        }),
+      );
 
       const res = await api
         .patch(`${BASE}/transactions/1`)
@@ -821,8 +895,9 @@ describe("Investment Routes", () => {
     });
 
     it("should throw ValidationError for validation errors", async () => {
-      const err = new Error("Validation failed");
-      err.code = "VALIDATION_ERROR";
+      const err = Object.assign(new Error("Validation failed"), {
+        code: "VALIDATION_ERROR",
+      });
       portfolioTransactionRepository.update.mockRejectedValue(err);
 
       const res = await api
@@ -844,11 +919,13 @@ describe("Investment Routes", () => {
       }
       expect(portfolioTransactionRepository.update).not.toHaveBeenCalled();
 
-      portfolioTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        investment_id: 10,
-        currency: "USD",
-      });
+      portfolioTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          investment_id: 10,
+          currency: "USD",
+        }),
+      );
       // fx_rate_to_eur supplied explicitly → the fx recompute path is skipped.
       await api
         .patch(`${BASE}/transactions/1`)
@@ -883,10 +960,12 @@ describe("Investment Routes", () => {
     });
 
     it("normalizes valid shared fields and preserves PATCH clear semantics", async () => {
-      portfolioTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        investment_id: 10,
-      });
+      portfolioTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          investment_id: 10,
+        }),
+      );
 
       await api
         .patch(`${BASE}/transactions/1`)
@@ -919,7 +998,7 @@ describe("Investment Routes", () => {
   describe("GET /:id/summary", () => {
     it("should return investment summary", async () => {
       portfolioTransactionRepository.getSummary.mockResolvedValue([
-        { type: "buy", total_amount: 5000, count: 3 },
+        partial({ type: "buy", total_amount: 5000, count: 3 }),
       ]);
 
       const res = await api.get(`${BASE}/1/summary`).expect(200);

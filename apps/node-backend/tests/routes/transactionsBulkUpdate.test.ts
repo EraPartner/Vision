@@ -1,20 +1,20 @@
 /**
  * POST /bulk-update — field validation, FK pre-checks, single transaction.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts), so the
  * route's rate limiter, JSON body parsing and the centralized error handler are
  * all on the tested path.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockPooledTxConnection } from "../helpers/repoMocks.js";
+import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
   mockTransferReconciliation,
   mockCurrencyConversion,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -39,11 +39,17 @@ vi.mock("../../src/database/connection.ts", () => mockPooledTxConnection());
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
-import { getClient, query as dbQuery } from "../../src/database/connection.ts";
+import {
+  getClient as rawGetClient,
+  query as rawQuery,
+} from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
-const bulkUpdate = (body) =>
+const getClient = vi.mocked(rawGetClient);
+const dbQuery = vi.mocked(rawQuery);
+const bulkUpdate = (body: object) =>
   api.post("/api/transactions/bulk-update").send(body);
 
 describe("POST /bulk-update — field validation", () => {
@@ -82,8 +88,8 @@ describe("POST /bulk-update — field validation", () => {
     const updateCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
-    expect(updateCall[0]).toMatch(/category_id = \$2/);
-    expect(updateCall[1]).toEqual([[1], null]);
+    expect(updateCall![0]).toMatch(/category_id = \$2/);
+    expect(updateCall![1]).toEqual([[1], null]);
   });
 
   it("rejects null recipient_id (column is NOT NULL)", async () => {
@@ -99,7 +105,7 @@ describe("POST /bulk-update — FK pre-checks", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns 400 when category does not exist", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] }); // category lookup
+    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // category lookup
 
     await bulkUpdate({ ids: [1], fields: { category_id: 999 } }).expect(400);
 
@@ -107,7 +113,7 @@ describe("POST /bulk-update — FK pre-checks", () => {
   });
 
   it("returns 400 when recipient does not exist", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] }); // recipient lookup
+    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // recipient lookup
 
     await bulkUpdate({ ids: [1], fields: { recipient_id: 999 } }).expect(400);
 
@@ -119,7 +125,7 @@ describe("POST /bulk-update — success paths", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("updates a single field and schedules a refresh", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] }); // category exists
+    dbQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult); // category exists
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
@@ -141,8 +147,8 @@ describe("POST /bulk-update — success paths", () => {
 
   it("updates multiple fields in one statement", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // category exists
-      .mockResolvedValueOnce({ rows: [{ id: 99 }] }); // recipient exists
+      .mockResolvedValueOnce({ rows: [{ id: 7 }] } as PgQueryResult) // category exists
+      .mockResolvedValueOnce({ rows: [{ id: 99 }] } as PgQueryResult); // recipient exists
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})
@@ -162,10 +168,10 @@ describe("POST /bulk-update — success paths", () => {
     const updateCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
-    expect(updateCall[0]).toMatch(
+    expect(updateCall![0]).toMatch(
       /category_id = \$2.*recipient_id = \$3.*is_active = \$4.*updated_at = NOW\(\)/s,
     );
-    expect(updateCall[1]).toEqual([[5], 7, 99, false]);
+    expect(updateCall![1]).toEqual([[5], 7, 99, false]);
   });
 
   it("does not schedule a refresh when nothing was updated", async () => {
@@ -190,8 +196,8 @@ describe("POST /bulk-update — success paths", () => {
 
   it("reports filter selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 0 }] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

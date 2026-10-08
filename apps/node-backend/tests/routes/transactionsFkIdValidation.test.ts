@@ -20,15 +20,15 @@
  * registry resets.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockTxConnection } from '../helpers/repoMocks.js';
+import { mockTxConnection } from '../helpers/repoMocks.ts';
 import {
   mockTransactionRepository,
   mockDeduplication,
   mockTransferReconciliation,
   mockCurrencyConversion,
-} from '../helpers/transactionsRouteMocks.js';
-import { mockLogger } from '../helpers/mockLogger.js';
-import { routeAgent } from '../helpers/routeApp.js';
+} from '../helpers/transactionsRouteMocks.ts';
+import { mockLogger } from '../helpers/mockLogger.ts';
+import { routeAgent } from '../helpers/routeApp.ts';
 
 vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
 vi.mock('../../src/services/deduplication.ts', () => ({
@@ -47,15 +47,20 @@ vi.mock('../../src/services/plannedMatchService.ts', () => ({
   autoLinkTransactions: vi.fn(async () => ({ autoLinkedCount: 0, links: [] })),
 }));
 
-import transactionRepository from '../../src/repositories/transactionRepository.ts';
-import { isManualDuplicate } from '../../src/services/deduplication.ts';
+import rawTransactionRepository from '../../src/repositories/transactionRepository.ts';
+import type { EnrichedTransactionRow } from '../../src/repositories/transactionRepository.ts';
+import { isManualDuplicate as rawIsManualDuplicate } from '../../src/services/deduplication.ts';
+
+const transactionRepository = vi.mocked(rawTransactionRepository);
+const isManualDuplicate = vi.mocked(rawIsManualDuplicate);
+type ManualDuplicateResult = Awaited<ReturnType<typeof rawIsManualDuplicate>>;
 
 const { default: transactionsRouter } = await import('../../src/routes/transactions.ts');
 
 const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 
-const patch = (body) => api.patch('/api/transactions/1').send(body);
-const post = (body) => api.post('/api/transactions/').send({
+const patch = (body: object) => api.patch('/api/transactions/1').send(body);
+const post = (body: object) => api.post('/api/transactions/').send({
   transaction_date: '2026-01-15',
   account_id: 1,
   recipient_id: 1,
@@ -64,13 +69,13 @@ const post = (body) => api.post('/api/transactions/').send({
 });
 
 // Values a `Number()` coercion resolves to a DIFFERENT, perfectly valid id.
-const RETARGETING = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
+const RETARGETING: unknown[] = ['1e3', '0x10', '0o17', '0b11', true, [7], '+7', ' 7 ', '7.0'];
 
 beforeEach(() => {
   vi.clearAllMocks();
-  isManualDuplicate.mockResolvedValue({ isDuplicate: false });
-  transactionRepository.create.mockResolvedValue({ id: 1, amount: '-50', date: '2026-01-15' });
-  transactionRepository.update.mockResolvedValue({ id: 1, amount: '10', date: '2026-07-01' });
+  isManualDuplicate.mockResolvedValue({ isDuplicate: false } as ManualDuplicateResult);
+  transactionRepository.create.mockResolvedValue({ id: 1, amount: '-50', date: '2026-01-15' } as unknown as EnrichedTransactionRow);
+  transactionRepository.update.mockResolvedValue({ id: 1, amount: '10', date: '2026-07-01' } as unknown as EnrichedTransactionRow);
 });
 
 describe('PATCH /:id — FK ids reject instead of retargeting', () => {

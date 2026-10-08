@@ -1,12 +1,12 @@
 /**
  * POST /bulk-delete — id-mode, filter-mode, validation, atomicity.
  *
- * Driven over HTTP against the real router (tests/helpers/routeApp.js), so the
+ * Driven over HTTP against the real router (tests/helpers/routeApp.ts), so the
  * route's rate limiter, JSON body parsing and the centralized error handler are
  * all on the tested path.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockPooledTxConnection } from "../helpers/repoMocks.js";
+import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -14,9 +14,9 @@ import {
   mockCurrencyConversion,
   mockAttachmentRecordService,
   mockAttachmentService,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -49,11 +49,17 @@ vi.mock("../../src/services/attachmentService.ts", () =>
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
-import { getClient, query as dbQuery } from "../../src/database/connection.ts";
+import {
+  getClient as rawGetClient,
+  query as rawQuery,
+} from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
 import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
-const bulkDelete = (body) =>
+const getClient = vi.mocked(rawGetClient);
+const dbQuery = vi.mocked(rawQuery);
+const bulkDelete = (body: object) =>
   api.post("/api/transactions/bulk-delete").send(body);
 
 describe("POST /bulk-delete — input validation", () => {
@@ -127,7 +133,7 @@ describe("POST /bulk-delete — id-mode success", () => {
       sql.includes("DELETE FROM transactions"),
     );
     expect(deleteCall).toBeDefined();
-    expect(deleteCall[1]).toEqual([[1, 2, 3]]);
+    expect(deleteCall![1]).toEqual([[1, 2, 3]]);
   });
 
   it("does not schedule a refresh when nothing was deleted", async () => {
@@ -152,7 +158,7 @@ describe("POST /bulk-delete — filter-mode", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("rejects filter requests that exceed the cap", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [{ n: 6000 }] });
+    dbQuery.mockResolvedValueOnce({ rows: [{ n: 6000 }] } as PgQueryResult);
 
     await bulkDelete({
       filter: { search: "big" },
@@ -164,8 +170,10 @@ describe("POST /bulk-delete — filter-mode", () => {
 
   it("resolves filter to ids and deletes them", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 2 }] }) // count
-      .mockResolvedValueOnce({ rows: [{ id: 11 }, { id: 22 }] }); // ids
+      .mockResolvedValueOnce({ rows: [{ n: 2 }] } as PgQueryResult) // count
+      .mockResolvedValueOnce({
+        rows: [{ id: 11 }, { id: 22 }],
+      } as PgQueryResult); // ids
 
     const clientQuery = vi
       .fn()
@@ -186,13 +194,13 @@ describe("POST /bulk-delete — filter-mode", () => {
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("DELETE"),
     );
-    expect(deleteCall[1]).toEqual([[11, 22]]);
+    expect(deleteCall![1]).toEqual([[11, 22]]);
   });
 
   it("reports selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
-      .mockResolvedValueOnce({ rows: [{ n: 0 }] })
-      .mockResolvedValueOnce({ rows: [] });
+      .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
+      .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

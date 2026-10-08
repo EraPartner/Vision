@@ -4,13 +4,13 @@
  * grouping and totals, not database exclusions or currency conversion.
  */
 import { describe, expect, it, vi } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
 import { buildCategoryFromConvertedRows } from "../../src/repositories/infoRepositoryHelpers.ts";
 
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -60,8 +60,8 @@ describe("property: production category totals", () => {
         expect(category?.name).toBe(
           id === -1 ? "Uncategorized" : `Category ${id}`,
         );
-        expect(Math.round(category.total * 100)).toBe(Number(expectedCents));
-        expect(category.count).toBe(
+        expect(Math.round(category!.total * 100)).toBe(Number(expectedCents));
+        expect(category!.count).toBe(
           expectedEntries.reduce((total, entry) => total + entry.count, 0),
         );
       }

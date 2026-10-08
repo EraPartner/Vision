@@ -7,7 +7,7 @@
  * hoisted `vi.mock` factories (same convention as `mockLogger`).
  *
  * Usage:
- *   import { mockTransactionRepository } from '../helpers/transactionsRouteMocks.js';
+ *   import { mockTransactionRepository } from '../helpers/transactionsRouteMocks.ts';
  *   vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
  */
 import { vi } from "vitest";
@@ -52,7 +52,7 @@ export function mockMaterializedViews() {
   return { scheduleRefresh: vi.fn() };
 }
 
-export { mockCurrencyConversion } from "./mockCurrencyConversion.js";
+export { mockCurrencyConversion } from "./mockCurrencyConversion.ts";
 
 /** `services/attachmentRecordService.js`: no attachments on any transaction. */
 export function mockAttachmentRecordService() {

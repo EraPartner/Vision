@@ -22,7 +22,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Router } from 'express';
-import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
+import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
 
 vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
   default: {
@@ -35,7 +35,9 @@ vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
   },
 }));
 
-import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
+import rawCustomParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
+import type { FormattedCustomParserConfig } from '../../src/repositories/customParserConfigRepository.ts';
+const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
 const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.ts');
 
 // Mirrors main.ts's two mounts and each router's registerParserRoutes call.
@@ -44,10 +46,9 @@ const MOUNTS = [
   { label: 'portfolio', mountPath: '/api/portfolio/import', kind: 'portfolio' },
 ];
 
-/** @param {string} kind */
-function agentFor(kind, mountPath) {
+function agentFor(kind: string, mountPath: string) {
   const router = Router();
-  registerParserRoutes(router, { kind, normalizeConfig: (config) => /** @type {object} */ (config) });
+  registerParserRoutes(router, { kind, normalizeConfig: (config) => config as object });
   return routeAgent(router, { mountPath });
 }
 
@@ -87,7 +88,7 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
   it('still deletes and updates on a real id, including one with leading zeros', async () => {
     const api = agentFor(kind, mountPath);
     customParserConfigRepository.delete.mockResolvedValue(true);
-    customParserConfigRepository.update.mockResolvedValue({ id: 12, name: 'Renamed' });
+    customParserConfigRepository.update.mockResolvedValue({ id: 12, name: 'Renamed' } as FormattedCustomParserConfig);
 
     await api.delete(`${base}/12`).expect(204);
     await api.delete(`${base}/0012`).expect(204);
@@ -99,7 +100,7 @@ describe.each(MOUNTS)('$label parsers — :id shape', ({ mountPath, kind }) => {
 
   it('answers 400, not 500, to a create or update with no JSON body', async () => {
     const api = agentFor(kind, mountPath);
-    customParserConfigRepository.update.mockResolvedValue({ id: 12, name: 'Same' });
+    customParserConfigRepository.update.mockResolvedValue({ id: 12, name: 'Same' } as FormattedCustomParserConfig);
 
     const res = await api.post(base);
     expect(res.status).toBe(400);

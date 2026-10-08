@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
-import { hasTestDatabase } from "./setup/db.js";
+import { hasTestDatabase } from "./setup/db.ts";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(

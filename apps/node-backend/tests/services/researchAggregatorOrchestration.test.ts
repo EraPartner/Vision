@@ -4,11 +4,14 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 import { __createResearchAggregator as createResearchAggregator } from '../../src/services/research/researchAggregator.ts';
 import { createResearchCache } from '../../src/services/research/researchCache.ts';
 
-const makeGovernor = (canSpendImpl = () => true) => ({
-  canSpend: vi.fn(async (p) => canSpendImpl(p)),
+type AggregatorDeps = NonNullable<Parameters<typeof createResearchAggregator>[0]>;
+
+const makeGovernor = (canSpendImpl: (provider: string) => boolean = () => true) => ({
+  canSpend: vi.fn(async (p: string) => canSpendImpl(p)),
   spend: vi.fn(async () => {}),
 });
 
@@ -22,22 +25,23 @@ const makeAdapters = (overrides = {}) => ({
 
 const allKeyed = () => true;
 
-let recordSuccess;
-let recordError;
+let recordSuccess: Mock;
+let recordError: Mock;
 
 beforeEach(() => {
   recordSuccess = vi.fn();
   recordError = vi.fn();
 });
 
-const build = (deps) =>
+// Fakes implement only what each case exercises, hence the single cast here.
+const build = (deps: Record<string, unknown>) =>
   createResearchAggregator({
     cache: createResearchCache(),
     isKeyed: allKeyed,
     recordSuccess,
     recordError,
     ...deps,
-  });
+  } as AggregatorDeps);
 
 describe('researchAggregator.fetch', () => {
   it('returns the first usable provider in the chain and records the spend + health', async () => {
@@ -71,7 +75,7 @@ describe('researchAggregator.fetch', () => {
   });
 
   it('coalesces concurrent identical fetches into a single provider call (single-flight)', async () => {
-    let resolveQuote;
+    let resolveQuote!: () => void;
     const adapters = makeAdapters({
       yahoo: { quote: vi.fn(() => new Promise((r) => { resolveQuote = () => r({ price: 2, src: 'yahoo' }); })) },
     });
@@ -102,7 +106,7 @@ describe('researchAggregator.fetch', () => {
 
   it('skips a quota-exhausted provider and falls through to the next', async () => {
     const adapters = makeAdapters();
-    const governor = makeGovernor((p) => p !== 'yahoo'); // yahoo tapped out
+    const governor = makeGovernor((p: string) => p !== 'yahoo'); // yahoo tapped out
     const agg = build({ adapters, governor });
 
     const out = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
@@ -129,7 +133,7 @@ describe('researchAggregator.fetch', () => {
   it('drops unkeyed providers from the chain', async () => {
     const adapters = makeAdapters();
     const governor = makeGovernor();
-    const agg = build({ adapters, governor, isKeyed: (p) => p !== 'twelve_data' });
+    const agg = build({ adapters, governor, isKeyed: (p: string) => p !== 'twelve_data' });
 
     const out = await agg.fetch('quote', { symbol: 'AAPL', assetClass: 'stock' });
 
@@ -189,7 +193,7 @@ describe('researchAggregator.fetchFundamentals (FMP + Yahoo merge)', () => {
 
   it('falls back to Yahoo-only when FMP is unkeyed', async () => {
     const adapters = makeFundamentalsAdapters();
-    const agg = build({ adapters, governor: makeGovernor(), isKeyed: (p) => p !== 'fmp' });
+    const agg = build({ adapters, governor: makeGovernor(), isKeyed: (p: string) => p !== 'fmp' });
 
     const out = await agg.fetchFundamentals({ symbol: 'AAPL' });
 

@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
+import { runGolden } from '../golden/runGolden.ts';
 import { normalizeForMatching } from '../../src/lib/textNormalization.ts';
 
 /**

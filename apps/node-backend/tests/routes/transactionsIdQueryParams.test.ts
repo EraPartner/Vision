@@ -23,7 +23,7 @@
  * shipped caller emits for an empty filter. Pinned here so a later tightening
  * cannot take it away by accident.
  *
- * Runs against the REAL router on a throwaway Express app (helpers/routeApp.js),
+ * Runs against the REAL router on a throwaway Express app (helpers/routeApp.ts),
  * so the parse, the error handler and the ADR-026 envelope are all real; only
  * the repository / db client are mocked. Every rejection case additionally
  * asserts that the repository (or the db client, for the streamed exports) was
@@ -31,7 +31,7 @@
  * "answered with an unrequested row set".
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
 import {
   mockTransactionRepository,
   mockDeduplication,
@@ -39,9 +39,9 @@ import {
   mockCurrencyConversion,
   mockAttachmentRecordService,
   mockAttachmentService,
-} from "../helpers/transactionsRouteMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
+} from "../helpers/transactionsRouteMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
@@ -68,11 +68,19 @@ vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   unmarkTransfer: vi.fn(),
 }));
 
-import transactionRepository from "../../src/repositories/transactionRepository.ts";
+import rawTransactionRepository from "../../src/repositories/transactionRepository.ts";
+import type { TransactionFilters } from "../../src/repositories/transactionRepository.ts";
 import { markTransfer } from "../../src/services/transferReconciliationService.ts";
-import { query as dbQuery } from "../../src/database/connection.ts";
-import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
-import { attachmentRepository } from "../../src/services/attachmentRecordService.ts";
+import { query as rawDbQuery } from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
+import type { ConvertedRow } from "../../src/services/currency/currencyConversionService.ts";
+import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
+
+const transactionRepository = vi.mocked(rawTransactionRepository);
+const dbQuery = vi.mocked(rawDbQuery);
+const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const attachmentRepository = vi.mocked(rawAttachmentRepository);
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
@@ -85,20 +93,20 @@ const exportCsv = (query = "") =>
   api.get(`/api/transactions/export/csv${query ? `?${query}` : ""}`);
 
 /** Filter options the list handler passed to the repository. */
-const listOpts = () => transactionRepository.getAllWithCount.mock.calls[0][0];
+const listOpts = () => transactionRepository.getAllWithCount.mock.calls[0][0]!;
 /** WHERE SQL + params of the export's first (probe) query. */
 const exportQuery = () => dbQuery.mock.calls[0];
 
 /** The export streams: a row-probe query, then the chunked page query. */
 const armExport = () => {
   dbQuery
-    .mockResolvedValueOnce({ rows: [{}] })
-    .mockResolvedValueOnce({ rows: [] });
+    .mockResolvedValueOnce({ rows: [{}] } as PgQueryResult)
+    .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  convertRowsToEur.mockImplementation(async (rows) => rows);
+  convertRowsToEur.mockImplementation(async (rows) => rows as ConvertedRow[]);
   attachmentRepository.listPathsByTransactionIds.mockResolvedValue([]);
   transactionRepository.getAllWithCount.mockResolvedValue({
     rows: [],
@@ -110,7 +118,7 @@ beforeEach(() => {
  * The accept set is `validateId`'s, not a second rule: a plain base-10 digit
  * string (leading zeros allowed) or an integer number, 1..2^31-1.
  */
-const ACCEPTED = [
+const ACCEPTED: [string, number][] = [
   ["5", 5],
   ["007", 7],
   ["2147483647", 2147483647],
@@ -135,7 +143,7 @@ const REJECTED = [
 ];
 
 /** Scalar id filters on the list endpoint → the repository option they set. */
-const SCALAR_PARAMS = [
+const SCALAR_PARAMS: [string, keyof TransactionFilters][] = [
   ["transaction_id", "transactionId"],
   ["category_id", "categoryId"],
   ["recipient_id", "recipientId"],

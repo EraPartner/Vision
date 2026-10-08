@@ -8,7 +8,7 @@
  * amounts (and that signs survive).
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 import fs from "fs";
 import os from "os";
 import path from "path";

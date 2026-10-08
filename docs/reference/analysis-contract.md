@@ -2,7 +2,7 @@
 title: Analysis Definition and Result Contract Reference
 type: reference
 status: active
-date: 2026-10-07
+date: 2026-10-08
 tags: [reference, analysis, contract, lineage, versioning, datasets, money]
 description: Exact version-1 shapes, invariants, compatibility rules, and acceptance fixtures for shared Vision financial analyses.
 aliases:
@@ -14,7 +14,7 @@ aliases:
 related_code:
   - packages/types/src/analysis.ts
   - apps/node-backend/tests/analysisContract.test.js
-  - apps/node-backend/tests/fixtures/analysis/referenceQuestionsV1.js
+  - apps/node-backend/tests/fixtures/analysis/referenceQuestionsV1.ts
 ---
 
 # Analysis Definition and Result Contract Reference

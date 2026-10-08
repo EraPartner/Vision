@@ -13,6 +13,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 
 vi.mock("../../src/repositories/infoRepository.ts", () => {
   const api = {
@@ -38,6 +39,18 @@ import {
   bankBalancesResponseCache,
   invalidatePortfolioCaches,
 } from "../../src/services/info/cache.ts";
+import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
+
+/** The mocked repository spies; fixtures below are partial row shapes. */
+const repo = infoRepository as unknown as Record<
+  | "getMonthlyFinancialSummary"
+  | "getCategoryBreakdown"
+  | "getRecipientInsights"
+  | "getCashflowComparison"
+  | "getAverageVsCurrentSpending"
+  | "getBankBalances",
+  Mock
+>;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -46,7 +59,10 @@ beforeEach(() => {
   bankBalancesResponseCache.clear();
 });
 
-function expectEnvelope(envelope, { source }) {
+function expectEnvelope(
+  envelope: AggregationEnvelope<unknown>,
+  { source }: { source: string },
+) {
   expect(envelope).toHaveProperty("data");
   expect(envelope).toHaveProperty("meta");
   expect(envelope.meta).toHaveProperty("computedAt");
@@ -79,7 +95,7 @@ describe("buildEnvelope", () => {
 
 describe("computeMonthlySummary", () => {
   it("forwards currency + exclusions to the repository and tags source=mv when unfiltered", async () => {
-    infoRepository.getMonthlyFinancialSummary.mockResolvedValue({
+    repo.getMonthlyFinancialSummary.mockResolvedValue({
       monthly_data: [],
     });
     const env = await computeMonthlySummary({
@@ -99,7 +115,7 @@ describe("computeMonthlySummary", () => {
   });
 
   it("tags source=live when category exclusions are present", async () => {
-    infoRepository.getMonthlyFinancialSummary.mockResolvedValue({
+    repo.getMonthlyFinancialSummary.mockResolvedValue({
       monthly_data: [],
     });
     const env = await computeMonthlySummary({
@@ -118,7 +134,7 @@ describe("computeMonthlySummary", () => {
   });
 
   it("tags source=live when recipient exclusions are present", async () => {
-    infoRepository.getMonthlyFinancialSummary.mockResolvedValue({
+    repo.getMonthlyFinancialSummary.mockResolvedValue({
       monthly_data: [],
     });
     const env = await computeMonthlySummary({
@@ -138,7 +154,7 @@ describe("computeMonthlySummary", () => {
   });
 
   it("defaults to EUR + empty exclusions when called with no args", async () => {
-    infoRepository.getMonthlyFinancialSummary.mockResolvedValue({});
+    repo.getMonthlyFinancialSummary.mockResolvedValue({});
     await computeMonthlySummary();
     expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith(
       [],
@@ -151,7 +167,7 @@ describe("computeMonthlySummary", () => {
   });
 
   it("forwards an explicit range and tags the live path", async () => {
-    infoRepository.getMonthlyFinancialSummary.mockResolvedValue({ months: [] });
+    repo.getMonthlyFinancialSummary.mockResolvedValue({ months: [] });
     const env = await computeMonthlySummary({
       startDate: "2024-10-01",
       endDate: "2026-09-07",
@@ -170,7 +186,7 @@ describe("computeMonthlySummary", () => {
 
 describe("computeCategoryBreakdown", () => {
   it("returns mv-sourced envelope", async () => {
-    infoRepository.getCategoryBreakdown.mockResolvedValue([{ id: 1 }]);
+    repo.getCategoryBreakdown.mockResolvedValue([{ id: 1 }]);
     const env = await computeCategoryBreakdown({ targetCurrency: "EUR" });
     expect(infoRepository.getCategoryBreakdown).toHaveBeenCalledWith("EUR");
     expectEnvelope(env, { source: "mv" });
@@ -178,7 +194,7 @@ describe("computeCategoryBreakdown", () => {
   });
 
   it("requests one live ancestor rollup without changing the default path", async () => {
-    infoRepository.getCategoryBreakdown.mockResolvedValueOnce([
+    repo.getCategoryBreakdown.mockResolvedValueOnce([
       { id: 12, name: "Food", count: 3, total: -60 },
     ]);
     const env = await computeCategoryBreakdown({
@@ -195,7 +211,7 @@ describe("computeCategoryBreakdown", () => {
 
 describe("computeRecipientInsights", () => {
   it("returns a live-sourced envelope (getRecipientInsights is a live scan)", async () => {
-    infoRepository.getRecipientInsights.mockResolvedValue({
+    repo.getRecipientInsights.mockResolvedValue({
       top_recipients: [],
     });
     const env = await computeRecipientInsights({ targetCurrency: "EUR" });
@@ -209,7 +225,7 @@ describe("computeRecipientInsights", () => {
   });
 
   it("forwards the statistics date range", async () => {
-    infoRepository.getRecipientInsights.mockResolvedValue({
+    repo.getRecipientInsights.mockResolvedValue({
       topMerchants: [],
       monthOverMonth: [],
     });
@@ -229,7 +245,7 @@ describe("computeRecipientInsights", () => {
 
 describe("computeCashflowComparison", () => {
   it("tags source=mv when both exclusion lists are empty", async () => {
-    infoRepository.getCashflowComparison.mockResolvedValue({
+    repo.getCashflowComparison.mockResolvedValue({
       current: [],
       average: [],
     });
@@ -243,7 +259,7 @@ describe("computeCashflowComparison", () => {
   });
 
   it("tags source=live when category exclusions are present", async () => {
-    infoRepository.getCashflowComparison.mockResolvedValue({});
+    repo.getCashflowComparison.mockResolvedValue({});
     const env = await computeCashflowComparison({
       targetCurrency: "EUR",
       excludedCategoryIds: [5],
@@ -258,7 +274,7 @@ describe("computeCashflowComparison", () => {
   });
 
   it("tags source=live when recipient exclusions are present", async () => {
-    infoRepository.getCashflowComparison.mockResolvedValue({});
+    repo.getCashflowComparison.mockResolvedValue({});
     const env = await computeCashflowComparison({
       targetCurrency: "EUR",
       excludedCategoryIds: [],
@@ -275,7 +291,7 @@ describe("computeCashflowComparison", () => {
 
 describe("computeAverageVsCurrent", () => {
   it("always tags source=live (no MV backing in Phase 2)", async () => {
-    infoRepository.getAverageVsCurrentSpending.mockResolvedValue({
+    repo.getAverageVsCurrentSpending.mockResolvedValue({
       average: 0,
       current: 0,
     });
@@ -289,7 +305,7 @@ describe("computeAverageVsCurrent", () => {
 
 describe("computeBankBalances", () => {
   it("returns a live-sourced envelope (runs live SQL, not an MV read)", async () => {
-    infoRepository.getBankBalances.mockResolvedValue([
+    repo.getBankBalances.mockResolvedValue([
       { account: "A", balance: 100 },
     ]);
     const env = await computeBankBalances({ targetCurrency: "EUR" });
@@ -299,7 +315,7 @@ describe("computeBankBalances", () => {
   });
 
   it("caches: two calls hit the DB once, second is served from cache", async () => {
-    infoRepository.getBankBalances.mockResolvedValue([
+    repo.getBankBalances.mockResolvedValue([
       { account: "A", balance: 100 },
     ]);
     const first = await computeBankBalances({ targetCurrency: "EUR" });
@@ -310,7 +326,7 @@ describe("computeBankBalances", () => {
   });
 
   it("cache is busted by invalidatePortfolioCaches (shared net-worth seam)", async () => {
-    infoRepository.getBankBalances.mockResolvedValue([
+    repo.getBankBalances.mockResolvedValue([
       { account: "A", balance: 100 },
     ]);
     await computeBankBalances({ targetCurrency: "EUR" });

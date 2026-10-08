@@ -3,8 +3,8 @@
  * Mirrors: apps/backend/tests/test_currency_conversion_service.py
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 // Mock database
 vi.mock("../src/database/connection.ts", () => mockConnection());

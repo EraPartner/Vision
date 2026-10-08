@@ -34,7 +34,7 @@ describe("daily forecast completion requires acknowledged persistence", () => {
     ).rejects.toThrow("cache persistence failed");
   });
   it("awaits forced cache writes before returning success", async () => {
-    let finish;
+    let finish!: (value?: unknown) => void;
     let completed = false;
     mocks.upsert.mockImplementation(
       () =>

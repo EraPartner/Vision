@@ -15,6 +15,7 @@
  * connection between BEGIN and ROLLBACK, with the pool never touched.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
 
 /**
  * Load the real connection module against a mocked pg pool, so `withTransaction`
@@ -57,8 +58,11 @@ async function loadRealTransactionStack() {
 }
 
 /** BEGIN … ROLLBACK bracket + nothing on the pool: the rollback covered it all. */
-function expectRolledBackOnOneConnection(client, pool) {
-  const sqls = client.query.mock.calls.map(([sql]) => sql);
+function expectRolledBackOnOneConnection(
+  client: { query: Mock; release: Mock },
+  pool: { query: Mock },
+): string[] {
+  const sqls: string[] = client.query.mock.calls.map(([sql]) => sql);
   expect(sqls[0]).toBe("BEGIN");
   expect(sqls.at(-1)).toBe("ROLLBACK");
   expect(sqls).not.toContain("COMMIT");

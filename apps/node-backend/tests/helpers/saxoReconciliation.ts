@@ -1,15 +1,16 @@
 /** Synthetic retained XLSX records; never contains supplied account data. */
 import { createHash } from "node:crypto";
-import { syntheticSaxoWorkbook } from "./saxoWorkbook.js";
+import { syntheticSaxoWorkbook } from "./saxoWorkbook.ts";
+import type { SyntheticSheet } from "./saxoWorkbook.ts";
 
-export const saxoHash = (value) =>
+export const saxoHash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-const normalize = (value) => value.trim().replaceAll("\u00a0", " ");
+const normalize = (value: string) => value.trim().replaceAll("\u00a0", " ");
 
 export function syntheticSaxoPrimaryRawData(
   index = 0,
-  sheets = syntheticSaxoWorkbook(),
-) {
+  sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
+): string {
   const main = sheets[0].records[index];
   return JSON.stringify({
     format: "saxo_xlsx_v1",
@@ -41,7 +42,7 @@ export function syntheticSaxoPrimaryRawData(
   });
 }
 
-export function syntheticSaxoStaging(overrides = {}) {
+export function syntheticSaxoStaging(overrides: Record<string, unknown> = {}) {
   const raw = syntheticSaxoPrimaryRawData();
   return {
     id: 20,
@@ -76,10 +77,10 @@ export function syntheticSaxoStaging(overrides = {}) {
 
 export function syntheticSaxoCsvRecord(
   index = 0,
-  sheets = syntheticSaxoWorkbook(),
-) {
+  sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
+): { raw: string; headers: string[] } {
   const { headers, records } = sheets[0];
-  const quote = (value) => `"${String(value).replaceAll('"', '""')}"`;
+  const quote = (value: unknown) => `"${String(value).replaceAll('"', '""')}"`;
   const raw = headers
     .map((header) => {
       const value = records[index][normalize(header)] ?? "";
@@ -93,7 +94,10 @@ export function syntheticSaxoCsvRecord(
   return { raw, headers };
 }
 
-export function syntheticSaxoCsvStaging(index = 0, overrides = {}) {
+export function syntheticSaxoCsvStaging(
+  index = 0,
+  overrides: Record<string, unknown> = {},
+) {
   const { raw, headers } = syntheticSaxoCsvRecord(index);
   return syntheticSaxoStaging({
     id: 30 + index,

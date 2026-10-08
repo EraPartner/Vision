@@ -1,30 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const recipientPivotSpy = vi.fn(async () => ({ data: {}, meta: {} }));
-const tagPivotSpy = vi.fn(async () => ({ data: {}, meta: {} }));
+type PivotSpy = (...args: unknown[]) => Promise<{ data: object; meta: object }>;
+
+const recipientPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
+const tagPivotSpy = vi.fn<PivotSpy>(async () => ({ data: {}, meta: {} }));
 
 vi.mock(
   "../../src/services/calculations/aggregation/recipientPivot.ts",
   () => ({
-    computeRecipientPivot: (...args) => recipientPivotSpy(...args),
+    computeRecipientPivot: (...args: unknown[]) => recipientPivotSpy(...args),
   }),
 );
 vi.mock("../../src/services/calculations/aggregation/tagPivot.ts", () => ({
-  computeTagPivot: (...args) => tagPivotSpy(...args),
+  computeTagPivot: (...args: unknown[]) => tagPivotSpy(...args),
 }));
 
 const { default: aggregationsRouter } =
   await import("../../src/routes/aggregations.ts");
 
-function getHandler(path) {
+function getHandler(path: string) {
+  // Express's IRoute type omits the runtime `methods` map.
   const layer = aggregationsRouter.stack.find(
     (candidate) =>
-      candidate.route?.path === path && candidate.route.methods.get,
+      candidate.route?.path === path &&
+      (candidate.route as unknown as { methods: Record<string, boolean> })
+        .methods.get,
   );
-  return layer.route.stack.at(-1).handle;
+  return layer!.route!.stack.at(-1)!.handle as unknown as (
+    req: unknown,
+    res: unknown,
+  ) => Promise<void>;
 }
 
-const routes = [
+const routes: Array<[string, typeof recipientPivotSpy]> = [
   ["/recipient-pivot", recipientPivotSpy],
   ["/tag-pivot", tagPivotSpy],
 ];
@@ -36,7 +44,7 @@ beforeEach(() => {
 describe.each(routes)("GET %s date-range query params", (path, computeSpy) => {
   const handler = getHandler(path);
 
-  async function invoke(query) {
+  async function invoke(query: Record<string, string | undefined>) {
     const response = { ok: vi.fn() };
     await handler({ query }, response);
     return response;

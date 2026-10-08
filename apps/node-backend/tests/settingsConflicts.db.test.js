@@ -5,7 +5,7 @@ import {
   closeTestPool,
   getTestPool,
   hasTestDatabase,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { createDailyJob } from "../src/startup/dailyJobs.ts";
 import repo from "../src/repositories/settingsRepository.ts";

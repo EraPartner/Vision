@@ -3,7 +3,7 @@
  * Mirrors: apps/backend/tests/test_import.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js), which also puts the router's own trailing
+ * tests/helpers/routeApp.ts), which also puts the router's own trailing
  * error middleware (`router.use(csvUploadErrorTranslator)`,
  * routes/importRoutes.js:580) on the tested path, and the zod-validated
  * batch/row id parsing (parseBatchIdParam / parseBatchRowIdParams) — both
@@ -22,27 +22,48 @@
  * only ever inject a successful upload).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import type { IRoute } from "express";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
-const uploadState = vi.hoisted(() => ({ file: null, error: null }));
+/** The slice of multer's `req.file` the import routes read. */
+interface UploadedFile {
+  path: string;
+  originalname: string;
+  size: number;
+}
+
+const uploadState = vi.hoisted(() => ({
+  file: null as UploadedFile | null,
+  error: null as Error | null,
+}));
 
 vi.mock("multer", () => {
   const multer = vi.fn(() => ({
-    single: () => (req, _res, next) => {
-      if (uploadState.error) return next(uploadState.error);
-      req.file = uploadState.file ?? undefined;
-      next();
-    },
+    single:
+      () =>
+      (
+        req: { file?: UploadedFile },
+        _res: unknown,
+        next: (err?: unknown) => void,
+      ) => {
+        if (uploadState.error) return next(uploadState.error);
+        req.file = uploadState.file ?? undefined;
+        next();
+      },
   }));
-  multer.MulterError = class MulterError extends Error {
-    constructor(code) {
-      super(code);
-      this.code = code;
-    }
+  return {
+    default: Object.assign(multer, {
+      MulterError: class MulterError extends Error {
+        declare code: string;
+        constructor(code: string) {
+          super(code);
+          this.code = code;
+        }
+      },
+    }),
   };
-  return { default: multer };
 });
 
 vi.mock("fs", () => {
@@ -118,26 +139,47 @@ vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-import { runImportPipeline } from "../../src/services/importPipeline/index.ts";
+import { runImportPipeline as rawRunImportPipeline } from "../../src/services/importPipeline/index.ts";
 import {
-  importRecipientsCSV,
-  importCategoriesCSV,
+  importRecipientsCSV as rawImportRecipientsCSV,
+  importCategoriesCSV as rawImportCategoriesCSV,
 } from "../../src/services/dataImportService.ts";
 import {
-  listBatches,
-  getBatch,
-  rollbackBatch,
-  getPreviewRows,
+  listBatches as rawListBatches,
+  getBatch as rawGetBatch,
+  rollbackBatch as rawRollbackBatch,
+  getPreviewRows as rawGetPreviewRows,
   overrideRecipient,
-  overrideCategory,
-  categoryExists,
+  overrideCategory as rawOverrideCategory,
+  categoryExists as rawCategoryExists,
 } from "../../src/repositories/importBatchRepository.ts";
 import multer from "multer";
-import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
+import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 import {
-  clearForecastMcCaches,
+  clearForecastMcCaches as rawClearForecastMcCaches,
   scheduleMaterializedViewRefresh,
 } from "../../src/services/aggregationRefresh.ts";
+
+const runImportPipeline = vi.mocked(rawRunImportPipeline);
+const importRecipientsCSV = vi.mocked(rawImportRecipientsCSV);
+const importCategoriesCSV = vi.mocked(rawImportCategoriesCSV);
+const listBatches = vi.mocked(rawListBatches);
+const getBatch = vi.mocked(rawGetBatch);
+const rollbackBatch = vi.mocked(rawRollbackBatch);
+const getPreviewRows = vi.mocked(rawGetPreviewRows);
+const overrideCategory = vi.mocked(rawOverrideCategory);
+const categoryExists = vi.mocked(rawCategoryExists);
+const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
+const clearForecastMcCaches = vi.mocked(rawClearForecastMcCaches);
+
+/**
+ * The routes forward service and repository results without reading most of
+ * their columns, so fixtures carry only the fields a test asserts on. `loose`
+ * casts one to the type the mocked function resolves with.
+ */
+function loose<T>(value: unknown): T {
+  return value as T;
+}
 
 const { default: importRouter } =
   await import("../../src/routes/importRoutes.ts");
@@ -156,17 +198,24 @@ const apiProd = routeAgent(importRouter, {
 
 const FILE = { path: "/tmp/test.csv", originalname: "test.csv", size: 100 };
 
-function routeHandler(method, path) {
+/** Express's Route keeps its verb map at runtime; @types/express omits it. */
+type RouteWithMethods = IRoute & { methods: Record<string, boolean> };
+
+/** A route's final handler, called directly with partial req/res stand-ins. */
+type DirectHandler = (req: object, res: object) => Promise<unknown>;
+
+function routeHandler(method: string, path: string): DirectHandler {
   const layer = importRouter.stack.find(
     (candidate) =>
-      candidate.route?.path === path && candidate.route.methods[method],
+      candidate.route?.path === path &&
+      (candidate.route as RouteWithMethods).methods[method],
   );
   if (!layer) throw new Error(`Missing ${method.toUpperCase()} ${path}`);
-  return layer.route.stack.at(-1).handle;
+  return layer.route!.stack.at(-1)!.handle as unknown as DirectHandler;
 }
 
 /** Split a buffered `text/event-stream` body into `{ name, data }` frames. */
-function parseSseFrames(rawText) {
+function parseSseFrames(rawText: string) {
   return rawText
     .split("\n\n")
     .filter((frame) => frame.startsWith("event:"))
@@ -206,12 +255,14 @@ describe("Import Routes", () => {
     });
 
     it("should return 201 on successful import", async () => {
-      runImportPipeline.mockResolvedValue({
-        total: 5,
-        imported: 4,
-        duplicates: 1,
-        errors: 0,
-      });
+      runImportPipeline.mockResolvedValue(
+        loose({
+          total: 5,
+          imported: 4,
+          duplicates: 1,
+          errors: 0,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/csv`)
@@ -226,12 +277,14 @@ describe("Import Routes", () => {
     });
 
     it("should return completed_with_errors status", async () => {
-      runImportPipeline.mockResolvedValue({
-        total: 10,
-        imported: 8,
-        duplicates: 1,
-        errors: 1,
-      });
+      runImportPipeline.mockResolvedValue(
+        loose({
+          total: 10,
+          imported: 8,
+          duplicates: 1,
+          errors: 1,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/csv`)
@@ -371,12 +424,14 @@ describe("Import Routes", () => {
     });
 
     it("should return 201 on success", async () => {
-      runImportPipeline.mockResolvedValue({
-        total: 1,
-        imported: 1,
-        duplicates: 0,
-        errors: 0,
-      });
+      runImportPipeline.mockResolvedValue(
+        loose({
+          total: 1,
+          imported: 1,
+          duplicates: 0,
+          errors: 0,
+        }),
+      );
 
       await api
         .post(`${BASE}/csv/custom`)
@@ -451,16 +506,18 @@ describe("Import Routes", () => {
   describe("POST /csv/stream", () => {
     it("should stream progress and complete SSE events on success", async () => {
       runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await onProgress({
-          phase: "importing",
-          current: 1,
-          total: 2,
-          imported: 1,
-          duplicates: 0,
-          errors: 0,
-          percent: 50,
-        });
-        return { total: 2, imported: 2, duplicates: 0, errors: 0 };
+        await onProgress!(
+          loose({
+            phase: "importing",
+            current: 1,
+            total: 2,
+            imported: 1,
+            duplicates: 0,
+            errors: 0,
+            percent: 50,
+          }),
+        );
+        return loose({ total: 2, imported: 2, duplicates: 0, errors: 0 });
       });
 
       const res = await api
@@ -475,7 +532,7 @@ describe("Import Routes", () => {
       expect(names).toContain("complete");
 
       const complete = frames.find((f) => f.name === "complete");
-      expect(complete.data).toEqual(
+      expect(complete!.data).toEqual(
         expect.objectContaining({
           total_processed: 2,
           imported: 2,
@@ -508,7 +565,7 @@ describe("Import Routes", () => {
       // the raw 'adapter failed' message is deliberately not echoed to the
       // client (importProgress.js's streamImport). The stable code lets clients
       // distinguish an unexpected failure without exposing that raw detail.
-      expect(errFrame.data).toEqual({
+      expect(errFrame!.data).toEqual({
         detail: "Import failed",
         code: "INTERNAL_SERVER_ERROR",
       });
@@ -523,18 +580,20 @@ describe("Import Routes", () => {
     it("does not hang or throw when the client disconnects mid-stream", async () => {
       let pipelineSettled = false;
       runImportPipeline.mockImplementation(async ({ onProgress }) => {
-        await onProgress({
-          phase: "importing",
-          current: 1,
-          total: 2,
-          imported: 1,
-          duplicates: 0,
-          errors: 0,
-          percent: 50,
-        });
+        await onProgress!(
+          loose({
+            phase: "importing",
+            current: 1,
+            total: 2,
+            imported: 1,
+            duplicates: 0,
+            errors: 0,
+            percent: 50,
+          }),
+        );
         await new Promise((resolve) => setTimeout(resolve, 30));
         pipelineSettled = true;
-        return { total: 2, imported: 2, duplicates: 0, errors: 0 };
+        return loose({ total: 2, imported: 2, duplicates: 0, errors: 0 });
       });
 
       const test = api
@@ -554,12 +613,14 @@ describe("Import Routes", () => {
   // ──────────────────────────────────────────
   describe("POST /recipients", () => {
     it("should return 201 with completed status on successful import", async () => {
-      importRecipientsCSV.mockResolvedValue({
-        total_processed: 2,
-        imported: 2,
-        skipped: 0,
-        errors: 0,
-      });
+      importRecipientsCSV.mockResolvedValue(
+        loose({
+          total_processed: 2,
+          imported: 2,
+          skipped: 0,
+          errors: 0,
+        }),
+      );
 
       const res = await api.post(`${BASE}/recipients`).send({}).expect(201);
 
@@ -569,12 +630,14 @@ describe("Import Routes", () => {
     });
 
     it("should return 201 with completed_with_errors status when errors > 0", async () => {
-      importRecipientsCSV.mockResolvedValue({
-        total_processed: 2,
-        imported: 1,
-        skipped: 0,
-        errors: 1,
-      });
+      importRecipientsCSV.mockResolvedValue(
+        loose({
+          total_processed: 2,
+          imported: 1,
+          skipped: 0,
+          errors: 1,
+        }),
+      );
 
       const res = await api.post(`${BASE}/recipients`).send({}).expect(201);
 
@@ -668,12 +731,12 @@ describe("Import Routes", () => {
     it("returns paginated batch list with defaults", async () => {
       listBatches.mockResolvedValue({
         batches: [
-          {
+          loose({
             id: 1,
             adapter_name: "belfius",
             status: "complete",
             rows_imported: 10,
-          },
+          }),
         ],
         total: 1,
       });
@@ -729,13 +792,15 @@ describe("Import Routes", () => {
   // ──────────────────────────────────────────
   describe("GET /batches/:id", () => {
     it("returns batch for valid id", async () => {
-      getBatch.mockResolvedValue({
-        id: 7,
-        adapter_name: "kbc",
-        status: "complete",
-        rows_imported: 20,
-        transactions_remaining: 20,
-      });
+      getBatch.mockResolvedValue(
+        loose({
+          id: 7,
+          adapter_name: "kbc",
+          status: "complete",
+          rows_imported: 20,
+          transactions_remaining: 20,
+        }),
+      );
 
       const res = await api.get(`${BASE}/batches/7`).expect(200);
 
@@ -768,7 +833,7 @@ describe("Import Routes", () => {
   // ──────────────────────────────────────────
   describe("DELETE /batches/:id", () => {
     it("rolls back complete batch and returns deleted count", async () => {
-      getBatch.mockResolvedValue({ id: 3, status: "complete" });
+      getBatch.mockResolvedValue(loose({ id: 3, status: "complete" }));
       rollbackBatch.mockResolvedValue({ deleted: 15, recipientsRemoved: 2 });
 
       const res = await api.delete(`${BASE}/batches/3`).expect(200);
@@ -792,7 +857,7 @@ describe("Import Routes", () => {
     });
 
     it("throws ValidationError when batch already aborted", async () => {
-      getBatch.mockResolvedValue({ id: 5, status: "aborted" });
+      getBatch.mockResolvedValue(loose({ id: 5, status: "aborted" }));
 
       const res = await api.delete(`${BASE}/batches/5`).expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
@@ -802,7 +867,7 @@ describe("Import Routes", () => {
     it.each(["staging", "validating", "matching", "committing"])(
       "throws ValidationError when batch is in-progress (%s)",
       async (status) => {
-        getBatch.mockResolvedValue({ id: 6, status });
+        getBatch.mockResolvedValue(loose({ id: 6, status }));
 
         const res = await api.delete(`${BASE}/batches/6`).expect(400);
         expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
@@ -811,8 +876,8 @@ describe("Import Routes", () => {
     );
 
     it("returns deleted:0 when no transactions linked to batch", async () => {
-      getBatch.mockResolvedValue({ id: 8, status: "complete" });
-      rollbackBatch.mockResolvedValue({ deleted: 0 });
+      getBatch.mockResolvedValue(loose({ id: 8, status: "complete" }));
+      rollbackBatch.mockResolvedValue(loose({ deleted: 0 }));
 
       const res = await api.delete(`${BASE}/batches/8`).expect(200);
 
@@ -825,8 +890,8 @@ describe("Import Routes", () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      getBatch.mockResolvedValue({ id: 3, status: "complete" });
-      clearForecastMcCaches.mockResolvedValue(undefined);
+      getBatch.mockResolvedValue(loose({ id: 3, status: "complete" }));
+      clearForecastMcCaches.mockResolvedValue(loose(undefined));
     });
 
     it("refreshes aggregations when recipient cleanup is the only side effect", async () => {
@@ -931,7 +996,7 @@ describe("Import Routes", () => {
   // POST /api/import/batches/:id/rows/:rowId/category-override
   // ──────────────────────────────────────────
   describe("POST /batches/:id/rows/:rowId/category-override", () => {
-    const url = (id, rowId) =>
+    const url = (id: string, rowId: string) =>
       `${BASE}/batches/${id}/rows/${rowId}/category-override`;
 
     it("rejects non-numeric ids", async () => {
@@ -1013,7 +1078,7 @@ describe("Import Routes", () => {
   // ──────────────────────────────────────────
   describe("GET /batches/:id/preview category fields", () => {
     it("exposes recipient_default_category_id and current_category_label per group", async () => {
-      getBatch.mockResolvedValue({ id: 1, status: "awaiting_review" });
+      getBatch.mockResolvedValue(loose({ id: 1, status: "awaiting_review" }));
       getPreviewRows.mockResolvedValueOnce([
         {
           id: 100,
@@ -1053,7 +1118,7 @@ describe("Import Routes", () => {
     });
 
     it("per-row override beats recipient default in current_category fields", async () => {
-      getBatch.mockResolvedValue({ id: 1, status: "awaiting_review" });
+      getBatch.mockResolvedValue(loose({ id: 1, status: "awaiting_review" }));
       getPreviewRows.mockResolvedValueOnce([
         {
           id: 101,
@@ -1107,7 +1172,7 @@ describe("Saved custom parser routes", () => {
   describe("GET /parsers", () => {
     it("returns the list of saved parsers", async () => {
       const items = [{ id: 1, name: "My Bank", config: validConfig }];
-      customParserConfigRepository.getAll.mockResolvedValue(items);
+      customParserConfigRepository.getAll.mockResolvedValue(loose(items));
 
       const res = await api.get(`${BASE}/parsers`).expect(200);
       // Canonical collection shape: { items, total } (total = row count here).
@@ -1117,11 +1182,13 @@ describe("Saved custom parser routes", () => {
 
   describe("POST /parsers", () => {
     it("creates a parser and returns 201", async () => {
-      customParserConfigRepository.create.mockResolvedValue({
-        id: 7,
-        name: "My Bank",
-        config: validConfig,
-      });
+      customParserConfigRepository.create.mockResolvedValue(
+        loose({
+          id: 7,
+          name: "My Bank",
+          config: validConfig,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/parsers`)

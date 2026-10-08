@@ -1,8 +1,17 @@
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { networkSource } from "./kinesisNetwork.js";
-import { syntheticKinesisScope } from "./kinesisAdoptionScope.js";
+import { networkSource } from "./kinesisNetwork.ts";
+import { syntheticKinesisScope } from "./kinesisAdoptionScope.ts";
+
+export interface NetworkBindingOptions {
+  broker?: number;
+  wallet?: number;
+  investment?: number;
+  witnessInvestment?: number | null;
+  batchId?: number;
+  witnessBatchId?: number;
+}
 
 export async function networkBindingFixture({
   broker = 7,
@@ -11,7 +20,7 @@ export async function networkBindingFixture({
   witnessInvestment = null,
   batchId = 2,
   witnessBatchId = 3,
-} = {}) {
+}: NetworkBindingOptions = {}) {
   const witness = await networkSource({
       account: wallet,
       investment: witnessInvestment,

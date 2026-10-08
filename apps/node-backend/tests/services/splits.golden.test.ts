@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
+import { runGolden } from '../golden/runGolden.ts';
 import {
   computeBulkSplitAmount,
   computeOwedSummary,

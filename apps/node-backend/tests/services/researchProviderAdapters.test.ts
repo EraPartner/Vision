@@ -19,12 +19,13 @@ const ENV = {
 };
 
 // Resolve a mocked HTTP response by matching a route substring against the URL.
-function mockFetch(routes) {
-  globalThis.fetch = vi.fn(async (url) => {
+function mockFetch(routes: Array<[string, unknown]>) {
+  // Only `ok` and `text()` of a Response are read by the adapters.
+  globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
     const match = routes.find(([needle]) => String(url).includes(needle));
     if (!match) throw new Error(`unmocked URL: ${url}`);
     return { ok: true, text: async () => JSON.stringify(match[1]) };
-  });
+  }) as unknown as typeof fetch;
 }
 
 beforeEach(() => {
@@ -32,7 +33,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
-  delete globalThis.fetch;
+  delete (globalThis as { fetch?: typeof fetch }).fetch;
 });
 
 it.each([

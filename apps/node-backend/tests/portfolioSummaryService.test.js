@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 import {
   makeInvestmentRow,
   makePortfolioTransactionRow,
-} from "./builders/domainRows.js";
+} from "./builders/domainRows.ts";
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 vi.mock("../src/config/logger.ts", () => ({

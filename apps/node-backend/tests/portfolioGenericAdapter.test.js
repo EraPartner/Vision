@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "fs";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 vi.mock("fs", () => ({
   default: { promises: { readFile: vi.fn() } },
   promises: { readFile: vi.fn() },

@@ -6,18 +6,18 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { collectDbSkips, createDbSkipBannerReporter, formatDbSkipBanner } from './dbSkipBanner.js';
+import { collectDbSkips, createDbSkipBannerReporter, formatDbSkipBanner } from './dbSkipBanner.ts';
+import type { SkipCountModule } from './dbSkipBanner.ts';
 
-/**
- * Minimal stand-in for a vitest TestModule.
- * @param {string} moduleId
- * @param {{ skipped?: number, passed?: number }} counts
- */
-function fakeModule(moduleId, { skipped = 0, passed = 0 } = {}) {
+/** Minimal stand-in for a vitest TestModule. */
+function fakeModule(
+  moduleId: string,
+  { skipped = 0, passed = 0 }: { skipped?: number; passed?: number } = {},
+): SkipCountModule {
   return {
     moduleId,
     children: {
-      *allTests(state) {
+      *allTests(state?: string) {
         const total = state === 'skipped' ? skipped : skipped + passed;
         for (let i = 0; i < total; i += 1) yield { name: `${moduleId}#${i}` };
       },
@@ -25,7 +25,7 @@ function fakeModule(moduleId, { skipped = 0, passed = 0 } = {}) {
   };
 }
 
-const dbBacked = (moduleId) => moduleId.includes('.db.');
+const dbBacked = (moduleId: string) => moduleId.includes('.db.');
 
 describe('collectDbSkips', () => {
   it('counts only skipped cases that live behind the DB seam', () => {
@@ -49,9 +49,9 @@ describe('collectDbSkips', () => {
   });
 
   it('recognises the real seam by its import, not by the filename', () => {
-    // services/aggregationRefresh.test.js is DB-backed without a .db. in its name.
-    const real = new URL('../services/aggregationRefresh.test.js', import.meta.url).pathname;
-    const plain = new URL('./dbSkipBanner.test.js', import.meta.url).pathname;
+    // services/aggregationRefresh.test.ts is DB-backed without a .db. in its name.
+    const real = new URL('../services/aggregationRefresh.test.ts', import.meta.url).pathname;
+    const plain = new URL('./dbSkipBanner.test.ts', import.meta.url).pathname;
     const counts = collectDbSkips([
       fakeModule(real, { skipped: 6 }),
       fakeModule(plain, { skipped: 1 }),
@@ -81,8 +81,8 @@ describe('formatDbSkipBanner', () => {
 describe('createDbSkipBannerReporter', () => {
   const modules = [fakeModule('a.db.test.js', { skipped: 9 })];
 
-  function capture(env) {
-    const written = [];
+  function capture(env: NodeJS.ProcessEnv) {
+    const written: string[] = [];
     const reporter = createDbSkipBannerReporter({
       env,
       write: (text) => written.push(text),
@@ -94,7 +94,7 @@ describe('createDbSkipBannerReporter', () => {
 
   // Point the fake modules at a file that really imports the seam so the
   // reporter's own detection runs, rather than an injected predicate.
-  const seamPath = () => new URL('../services/aggregationRefresh.test.js', import.meta.url).pathname;
+  const seamPath = (_moduleId: string) => new URL('../services/aggregationRefresh.test.ts', import.meta.url).pathname;
 
   it('fires when TEST_DATABASE_URL is unset', () => {
     expect(capture({})).toContain('INCOMPLETE RUN -- 9 DB-backed tests');
@@ -105,7 +105,7 @@ describe('createDbSkipBannerReporter', () => {
   });
 
   it('stays silent when nothing DB-backed was skipped', () => {
-    const written = [];
+    const written: string[] = [];
     const reporter = createDbSkipBannerReporter({
       env: {},
       write: (text) => written.push(text),

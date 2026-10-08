@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.js";
+import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.ts";
 import { proveKinesisNativeGiftGroups } from "../src/services/portfolioKinesisNetworkProof.ts";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 const proof = (source) =>

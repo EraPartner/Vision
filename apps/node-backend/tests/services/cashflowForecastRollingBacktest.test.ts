@@ -8,16 +8,35 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
 import { walkForwardBacktestRolling } from "../../src/services/calculations/forecast/backtest.ts";
 import mcRollingCacheRepo from "../../src/repositories/cashflowForecastMcRollingRepository.ts";
 import { infoRepository } from "../../src/repositories/infoRepository.ts";
 import { __filterHash as filterHash } from "../../src/services/calculations/forecast/index.ts";
+import type {
+  DailyNetPoint,
+  DiagnosticsPayload,
+} from "../../src/services/calculations/forecast/index.ts";
+import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
+
+/** Rolling envelope `data` is typed `object` in src; these tests read diagnostics. */
+type DiagnosticsEnvelope = AggregationEnvelope<{
+  diagnostics: DiagnosticsPayload | null;
+}>;
+type RollingData = Awaited<
+  ReturnType<typeof infoRepository.getCashflowForecastDataRolling>
+>;
+
+const cacheGet = vi.mocked(mcRollingCacheRepo.get);
+const cacheIsFresh = vi.mocked(mcRollingCacheRepo.isFresh);
+const cacheUpsert = vi.mocked(mcRollingCacheRepo.upsert);
+const getRollingData = vi.mocked(infoRepository.getCashflowForecastDataRolling);
+const getIncludeTransfers = vi.mocked(infoRepository.getIncludeTransfers);
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 const buildHistory = ({ days = 300 } = {}) => {
-  const out = [];
+  const out: DailyNetPoint[] = [];
   const start = Date.UTC(2024, 0, 1);
   for (let i = 0; i < days; i++) {
     const ms = start + i * 86_400_000;
@@ -29,7 +48,7 @@ const buildHistory = ({ days = 300 } = {}) => {
   return out;
 };
 
-const isoOffset = (offsetDays) => {
+const isoOffset = (offsetDays: number) => {
   const now = new Date();
   const ms =
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) +
@@ -39,10 +58,10 @@ const isoOffset = (offsetDays) => {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-const stubMethod = (id) => ({
+const stubMethod = (id: string) => ({
   id,
   label: id,
-  forecast: ({ forecastDates }) =>
+  forecast: ({ forecastDates }: { forecastDates: string[] }) =>
     forecastDates.map((date) => ({ date, value: 1 })),
 });
 
@@ -53,7 +72,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
     // ADR-083 cache-key input (forecast/index.js filterHash).
     getIncludeTransfers: vi.fn(async () => false),
     getCashflowForecastDataRolling: vi.fn(
-      async (historyMonths, daysBack, daysForward) => ({
+      async (historyMonths: number, daysBack: number, daysForward: number) => ({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffset(-daysBack + i),
@@ -207,11 +226,12 @@ describe("walkForwardBacktestRolling", () => {
 describe("computeCashflowForecastRolling — MC cache", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mcRollingCacheRepo.get.mockResolvedValue(null);
-    mcRollingCacheRepo.isFresh.mockReturnValue(false);
-    mcRollingCacheRepo.upsert.mockResolvedValue(undefined);
-    infoRepository.getCashflowForecastDataRolling.mockImplementation(
-      async (historyMonths, daysBack, daysForward) => ({
+    cacheGet.mockResolvedValue(null);
+    cacheIsFresh.mockReturnValue(false);
+    cacheUpsert.mockResolvedValue(undefined);
+    getRollingData.mockImplementation(
+      async (historyMonths: number, daysBack: number, daysForward: number) =>
+        ({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffset(-daysBack + i),
@@ -219,7 +239,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
         })),
         plannedCurrent: [],
         historyMonths,
-      }),
+      }) as Partial<RollingData> as RollingData,
     );
   });
 
@@ -254,11 +274,11 @@ describe("computeCashflowForecastRolling — MC cache", () => {
       history_months: 36,
       include_planned: false,
     };
-    mcRollingCacheRepo.get.mockResolvedValue({
+    cacheGet.mockResolvedValue({
       payload: cachedPayload,
       computed_at: new Date(),
     });
-    mcRollingCacheRepo.isFresh.mockReturnValue(true);
+    cacheIsFresh.mockReturnValue(true);
 
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
@@ -305,19 +325,19 @@ describe("computeCashflowForecastRolling — MC cache", () => {
       userId: "u_tx",
     };
 
-    infoRepository.getIncludeTransfers.mockResolvedValue(false);
+    getIncludeTransfers.mockResolvedValue(false);
     await computeCashflowForecastRolling(args);
-    const hashOff = mcRollingCacheRepo.get.mock.calls.at(-1)[0].filterHash;
+    const hashOff = cacheGet.mock.calls.at(-1)![0].filterHash;
 
-    infoRepository.getIncludeTransfers.mockResolvedValue(true);
+    getIncludeTransfers.mockResolvedValue(true);
     await computeCashflowForecastRolling(args);
-    const hashOn = mcRollingCacheRepo.get.mock.calls.at(-1)[0].filterHash;
+    const hashOn = cacheGet.mock.calls.at(-1)![0].filterHash;
 
     expect(hashOff).not.toBe(hashOn);
     // Every other input is identical, so the difference is the toggle alone.
     expect(hashOff.replace(/\|t0$/, "")).toBe(hashOn.replace(/\|t1$/, ""));
 
-    infoRepository.getIncludeTransfers.mockResolvedValue(false);
+    getIncludeTransfers.mockResolvedValue(false);
   });
 
   it("effective app date changes the monthly cache identity at midnight", () => {
@@ -349,11 +369,12 @@ describe("computeCashflowForecastRolling — MC cache", () => {
 describe("computeCashflowForecastRolling — diagnostics", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mcRollingCacheRepo.get.mockResolvedValue(null);
-    mcRollingCacheRepo.isFresh.mockReturnValue(false);
-    mcRollingCacheRepo.upsert.mockResolvedValue(undefined);
-    infoRepository.getCashflowForecastDataRolling.mockImplementation(
-      async (historyMonths, daysBack, daysForward) => ({
+    cacheGet.mockResolvedValue(null);
+    cacheIsFresh.mockReturnValue(false);
+    cacheUpsert.mockResolvedValue(undefined);
+    getRollingData.mockImplementation(
+      async (historyMonths: number, daysBack: number, daysForward: number) =>
+        ({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffset(-daysBack + i),
@@ -361,38 +382,38 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
         })),
         plannedCurrent: [],
         historyMonths,
-      }),
+      }) as Partial<RollingData> as RollingData,
     );
   });
 
   it("includeBacktest=false → diagnostics is null", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const result = await computeCashflowForecastRolling({
+    const result = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       mcPaths: 50,
       includeBacktest: false,
       userId: "u_nodiag",
-    });
+    })) as DiagnosticsEnvelope;
     expect(result.data.diagnostics).toBeNull();
   });
 
   it("includeBacktest=true → diagnostics non-null with per-method backtest entries", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const result = await computeCashflowForecastRolling({
+    const result = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       mcPaths: 50,
       includeBacktest: true,
       userId: "u_diag",
-    });
+    })) as DiagnosticsEnvelope;
     const diag = result.data.diagnostics;
     expect(diag).not.toBeNull();
-    expect(Array.isArray(diag.backtest)).toBe(true);
-    expect(diag.backtest.length).toBeGreaterThan(0);
-    for (const entry of diag.backtest) {
+    expect(Array.isArray(diag!.backtest)).toBe(true);
+    expect(diag!.backtest.length).toBeGreaterThan(0);
+    for (const entry of diag!.backtest) {
       expect(typeof entry.method_id).toBe("string");
       expect(typeof entry.label).toBe("string");
       expect(typeof entry.mae).toBe("number");
@@ -406,14 +427,14 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
   it("includeBacktest=true → per_month entries have month (ISO), mae, rmse, mape, sample_days", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const result = await computeCashflowForecastRolling({
+    const result = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       mcPaths: 50,
       includeBacktest: true,
       userId: "u_diag2",
-    });
-    const entry = result.data.diagnostics.backtest[0];
+    })) as DiagnosticsEnvelope;
+    const entry = result.data.diagnostics!.backtest[0];
     if (entry.per_month.length === 0) return;
     const w = entry.per_month[0];
     expect(w.month).toMatch(/^\d{4}-\d{2}-\d{2}$/);

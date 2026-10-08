@@ -1,16 +1,25 @@
 import { createHash } from "node:crypto";
-import { syntheticIbkrPlannerSource } from "./ibkrReconciliation.js";
+import { syntheticIbkrPlannerSource } from "./ibkrReconciliation.ts";
 import { assignImportIdentities, portfolioIdentityBase } from "../../src/services/importIdentity.ts";
+import type { PortfolioIdentityRow } from "../../src/services/importIdentity.ts";
 
-const hash = (value) => createHash("sha256").update(value).digest("hex");
+export interface IbkrCashCorrectionOptions {
+  sourceAccount?: string;
+  nativeAccount?: string;
+  baseAmount?: string;
+  rate?: string;
+  kind?: "deposit" | "withdrawal";
+}
+
+const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const depositColumns = ["Request Date", "Reference Number", "Method", "Account ID", "Account Title", "Delivering Institution", "From Account Number",
   "Routing Number", "Date Received", "Date Available for Trading", "Date Available for Withdrawal - Original Bank",
   "Date Available for Withdrawal - Other Bank", "Amount", "Status"];
-function identity(row) {
+function identity<R extends PortfolioIdentityRow & { raw_data?: unknown }>(row: R) {
   const value = assignImportIdentities([row], (source) => portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }))[0];
   return { ...row, dedup_fingerprint: value.fingerprint, dedup_fingerprint_version: value.version, dedup_occurrence: value.occurrence };
 }
-export function syntheticIbkrCashCorrection({ sourceAccount = "U12345678", nativeAccount = sourceAccount, baseAmount = "80", rate = "0.8", kind = "deposit" } = {}) {
+export function syntheticIbkrCashCorrection({ sourceAccount = "U12345678", nativeAccount = sourceAccount, baseAmount = "80", rate = "0.8", kind = "deposit" }: IbkrCashCorrectionOptions = {}) {
   const typeRaw = kind === "withdrawal" ? "Withdrawal" : "Deposit";
   const signedBase = kind === "withdrawal" ? `-${baseAmount}` : baseAmount;
   const columns = kind === "withdrawal" ? ["Request Date", "Reference Number", "Method", "Account ID", "Account Title", "Receiving Institution", "Date Processed", "Amount", "Status"] : depositColumns;

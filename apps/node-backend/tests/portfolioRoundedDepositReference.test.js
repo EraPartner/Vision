@@ -10,7 +10,7 @@ import {
   retainedEvent,
   retainedReference,
   retainedEvidenceRow,
-} from "./fixtures/retainedPortfolioEvidence.js";
+} from "./fixtures/retainedPortfolioEvidence.ts";
 
 const columns =
   "DateTime,HIN,Currency_Code,Transaction_Type,Transaction_ID,Order_ID,Currency_Pair,Amount,Trade_Price,Total,Fee,Fee_Currency,Trade_Value,Trade_Value_Currency,Starting_Balance,Starting_Balance_Currency,Closing_Balance,Closing_Balance_Currency".split(

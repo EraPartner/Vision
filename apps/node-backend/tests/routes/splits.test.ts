@@ -2,15 +2,15 @@
  * Split route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). Mount is /api/splits (main.ts:296, no
+ * tests/helpers/routeApp.ts). Mount is /api/splits (main.ts:296, no
  * per-mount `before` middleware). validateIdParam
  * (routes/splits.js:168,178,193,247,263,271,285,299) now runs for real on
  * every id-bearing route — every test here already used a valid numeric id,
  * so nothing was fake-passing under the old bypass.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/services/splitService.ts", () => ({
   default: {
@@ -40,11 +40,29 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import splitService from "../../src/services/splitService.ts";
+import rawSplitService from "../../src/services/splitService.ts";
 import {
   ValidationError,
   NotFoundError,
 } from "../../src/middleware/errorHandler.ts";
+
+const splitService = vi.mocked(rawSplitService);
+
+type DeepPartial<T> = T extends readonly (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
+/**
+ * Stand-in whose fields do not match the declared result type (extra fields,
+ * or numbers where pg returns NUMERIC strings); the route only forwards it.
+ */
+const loose = <T>(value: unknown) => value as T;
 
 const { default: splitsRouter } = await import("../../src/routes/splits.ts");
 
@@ -57,7 +75,7 @@ describe("Splits Routes", () => {
   describe("GET /owed", () => {
     it("returns owed summary items", async () => {
       splitService.getOwedSummary.mockResolvedValue([
-        { recipient_id: 2, amount: 12.5 },
+        loose({ recipient_id: 2, amount: 12.5 }),
       ]);
 
       const res = await api.get(`${BASE}/owed`).expect(200);
@@ -71,9 +89,9 @@ describe("Splits Routes", () => {
     // `total` must still be the full group count, not the page length.
     it("slices the computed summary when limit/offset are supplied", async () => {
       splitService.getOwedSummary.mockResolvedValue([
-        { recipient_id: 1 },
-        { recipient_id: 2 },
-        { recipient_id: 3 },
+        partial({ recipient_id: 1 }),
+        partial({ recipient_id: 2 }),
+        partial({ recipient_id: 3 }),
       ]);
 
       const res = await api
@@ -104,7 +122,7 @@ describe("Splits Routes", () => {
   describe("GET /owed/:id", () => {
     it("returns owed items by recipient", async () => {
       splitService.getOwedByRecipient.mockResolvedValue([
-        { id: 1, split_id: 4 },
+        loose({ id: 1, split_id: 4 }),
       ]);
 
       const res = await api.get(`${BASE}/owed/7`).expect(200);
@@ -117,7 +135,7 @@ describe("Splits Routes", () => {
 
     it("pages owed detail when limit/offset are supplied", async () => {
       splitService.getOwedByRecipient.mockResolvedValue([
-        { id: 2, split_id: 5 },
+        loose({ id: 2, split_id: 5 }),
       ]);
       splitService.countOwedByRecipient.mockResolvedValue(31);
 
@@ -164,12 +182,14 @@ describe("Splits Routes", () => {
     });
 
     it("creates split when amount fits remaining total", async () => {
-      splitService.createSplitAtomic.mockResolvedValue({
-        id: 7,
-        transaction_id: 1,
-        recipient_id: 2,
-        amount: 20,
-      });
+      splitService.createSplitAtomic.mockResolvedValue(
+        partial({
+          id: 7,
+          transaction_id: 1,
+          recipient_id: 2,
+          amount: 20,
+        }),
+      );
       await api
         .post(`${BASE}/`)
         .send({ transaction_id: 1, recipient_id: 2, amount: 20 })
@@ -203,12 +223,14 @@ describe("Splits Routes", () => {
     });
 
     it("forwards a numeric-string amount and actor to the service", async () => {
-      splitService.createSplitAtomic.mockResolvedValue({
-        id: 7,
-        transaction_id: 1,
-        recipient_id: 2,
-        amount: 20,
-      });
+      splitService.createSplitAtomic.mockResolvedValue(
+        partial({
+          id: 7,
+          transaction_id: 1,
+          recipient_id: 2,
+          amount: 20,
+        }),
+      );
       await api
         .post(`${BASE}/`)
         .set("x-actor", "manual-entry")
@@ -292,7 +314,9 @@ describe("Splits Routes", () => {
     });
 
     it("creates batch with normalized splits", async () => {
-      splitService.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
+      splitService.createSplitsBatchAtomic.mockResolvedValue([
+        partial({ id: 1 }),
+      ]);
       const res = await api
         .post(`${BASE}/batch`)
         .send({
@@ -375,7 +399,9 @@ describe("Splits Routes", () => {
     });
 
     it("normalizes rows with strict id coercion and Number amount coercion", async () => {
-      splitService.createSplitsBatchAtomic.mockResolvedValue([{ id: 1 }]);
+      splitService.createSplitsBatchAtomic.mockResolvedValue([
+        partial({ id: 1 }),
+      ]);
       await api
         .post(`${BASE}/batch`)
         .send({
@@ -436,7 +462,9 @@ describe("Splits Routes", () => {
     };
 
     it("forwards validated ids, recipient, mode and actor to the service", async () => {
-      splitService.createBulkSplitsAtomic.mockResolvedValue(BULK_RESULT);
+      splitService.createBulkSplitsAtomic.mockResolvedValue(
+        partial(BULK_RESULT),
+      );
 
       const res = await api
         .post(`${BASE}/bulk`)
@@ -466,7 +494,9 @@ describe("Splits Routes", () => {
         .expect(400);
 
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(res.body.error.message).toMatch(/mode must be one of: equal, full/);
+      expect(res.body.error.message).toMatch(
+        /mode must be one of: equal, full/,
+      );
       expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
     });
 
@@ -518,7 +548,7 @@ describe("Splits Routes", () => {
   describe("GET /owed/:id/export/csv", () => {
     it("returns csv with remaining split amount rows", async () => {
       splitService.getOwedExportRowsByRecipient.mockResolvedValue([
-        {
+        loose({
           date: "2026-03-20",
           bank_account: "Main",
           recipient_name: "Coffee Shop",
@@ -528,7 +558,7 @@ describe("Splits Routes", () => {
           balance: 100,
           category_name: "FOOD:LUNCH",
           comment: "shared",
-        },
+        }),
       ]);
 
       const res = await api.get(`${BASE}/owed/7/export/csv`).expect(200);
@@ -554,7 +584,7 @@ describe("Splits Routes", () => {
   describe("GET /transaction/:id", () => {
     it("returns splits for transaction", async () => {
       splitService.getSplitsByTransaction.mockResolvedValue([
-        { id: 8, transaction_id: 2 },
+        partial({ id: 8, transaction_id: 2 }),
       ]);
 
       const res = await api.get(`${BASE}/transaction/2`).expect(200);
@@ -569,7 +599,7 @@ describe("Splits Routes", () => {
 
     it("slices and reports the full total when limit/offset are supplied", async () => {
       splitService.getSplitsByTransaction.mockResolvedValue([
-        { id: 9, transaction_id: 2 },
+        partial({ id: 9, transaction_id: 2 }),
       ]);
       splitService.countSplitsByTransaction.mockResolvedValue(7);
 
@@ -617,7 +647,9 @@ describe("Splits Routes", () => {
     });
 
     it("throws ValidationError for non-positive payment amount", async () => {
-      splitService.getSplitById.mockResolvedValue({ id: 5, amount: 100 });
+      splitService.getSplitById.mockResolvedValue(
+        partial({ id: 5, amount: 100 }),
+      );
       splitService.getAlreadyPaid.mockResolvedValue(0);
 
       const res = await api
@@ -629,13 +661,17 @@ describe("Splits Routes", () => {
     });
 
     it("records payment and returns 201", async () => {
-      splitService.getSplitById.mockResolvedValue({ id: 7, amount: 100 });
+      splitService.getSplitById.mockResolvedValue(
+        partial({ id: 7, amount: 100 }),
+      );
       splitService.getAlreadyPaid.mockResolvedValue(0);
-      splitService.addPayment.mockResolvedValue({
-        id: 5,
-        split_id: 7,
-        amount: 12,
-      });
+      splitService.addPayment.mockResolvedValue(
+        partial({
+          id: 5,
+          split_id: 7,
+          amount: 12,
+        }),
+      );
 
       const res = await api
         .post(`${BASE}/7/pay`)
@@ -653,13 +689,17 @@ describe("Splits Routes", () => {
     });
 
     it("propagates the caller-supplied actor header to the audit row", async () => {
-      splitService.getSplitById.mockResolvedValue({ id: 7, amount: 100 });
+      splitService.getSplitById.mockResolvedValue(
+        partial({ id: 7, amount: 100 }),
+      );
       splitService.getAlreadyPaid.mockResolvedValue(0);
-      splitService.addPayment.mockResolvedValue({
-        id: 5,
-        split_id: 7,
-        amount: 12,
-      });
+      splitService.addPayment.mockResolvedValue(
+        partial({
+          id: 5,
+          split_id: 7,
+          amount: 12,
+        }),
+      );
 
       await api
         .post(`${BASE}/7/pay`)
@@ -687,11 +727,13 @@ describe("Splits Routes", () => {
     });
 
     it("forwards a numeric-string payment amount raw to the repo", async () => {
-      splitService.addPayment.mockResolvedValue({
-        id: 5,
-        split_id: 7,
-        amount: 12,
-      });
+      splitService.addPayment.mockResolvedValue(
+        partial({
+          id: 5,
+          split_id: 7,
+          amount: 12,
+        }),
+      );
 
       await api.post(`${BASE}/7/pay`).send({ amount: "12" }).expect(201);
 
@@ -701,7 +743,9 @@ describe("Splits Routes", () => {
     });
 
     it("propagates error when recording payment fails", async () => {
-      splitService.getSplitById.mockResolvedValue({ id: 7, amount: 100 });
+      splitService.getSplitById.mockResolvedValue(
+        partial({ id: 7, amount: 100 }),
+      );
       splitService.getAlreadyPaid.mockResolvedValue(0);
       splitService.addPayment.mockRejectedValue(new Error("boom"));
 
@@ -718,7 +762,7 @@ describe("Splits Routes", () => {
   describe("GET /:id/payments", () => {
     it("returns split payments", async () => {
       splitService.getPayments.mockResolvedValue([
-        { id: 3, split_id: 7, amount: 6 },
+        partial({ id: 3, split_id: 7, amount: 6 }),
       ]);
 
       const res = await api.get(`${BASE}/7/payments`).expect(200);
@@ -731,7 +775,7 @@ describe("Splits Routes", () => {
 
     it("pages payments when limit/offset are supplied", async () => {
       splitService.getPayments.mockResolvedValue([
-        { id: 4, split_id: 7, amount: 2 },
+        partial({ id: 4, split_id: 7, amount: 2 }),
       ]);
       splitService.countPayments.mockResolvedValue(12);
 
@@ -773,7 +817,9 @@ describe("Splits Routes", () => {
     });
 
     it("returns settled split when found", async () => {
-      splitService.settleSplit.mockResolvedValue({ id: 9, settled: true });
+      splitService.settleSplit.mockResolvedValue(
+        loose({ id: 9, settled: true }),
+      );
       const res = await api.post(`${BASE}/9/settle`).expect(200);
 
       expect(splitService.settleSplit).toHaveBeenCalledWith(9, null);
@@ -792,9 +838,11 @@ describe("Splits Routes", () => {
 
   describe("POST /owed/:id/settle-all", () => {
     it("returns settle-all result", async () => {
-      splitService.settleAllByRecipient.mockResolvedValue({
-        settled_count: 2,
-      });
+      splitService.settleAllByRecipient.mockResolvedValue(
+        partial({
+          settled_count: 2,
+        }),
+      );
       const res = await api.post(`${BASE}/owed/12/settle-all`).expect(200);
 
       expect(splitService.settleAllByRecipient).toHaveBeenCalledWith(12, null);

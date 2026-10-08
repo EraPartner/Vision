@@ -16,7 +16,7 @@ import {
 
 const CENT = 0.01;
 
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -27,7 +27,7 @@ function seeded(seed) {
   };
 }
 
-function buildSplitWithPayments(rng) {
+function buildSplitWithPayments(rng: () => number) {
   const amount = roundToCents(10 + rng() * 990);
   const paymentCount = Math.floor(rng() * 6);
   const payments = [];

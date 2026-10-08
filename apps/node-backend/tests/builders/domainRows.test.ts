@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type {
+  PlannedExecutionRow,
+  TransactionTagRef,
+} from "../../src/types/rows.ts";
 import {
   makeImportStagingRow,
   makeInvestmentRow,
@@ -6,7 +10,7 @@ import {
   makePortfolioImportStagingRow,
   makePortfolioTransactionRow,
   makeTransactionRow,
-} from "./domainRows.js";
+} from "./domainRows.ts";
 
 describe("domain row builders", () => {
   it("preserves raw pg NUMERIC, BIGINT, and DATE representations", () => {
@@ -57,8 +61,9 @@ describe("domain row builders", () => {
   it("does not leak mutable arrays or dates between calls", () => {
     const first = makePlannedTransactionRow();
     const second = makePlannedTransactionRow();
-    first.tags.push({ id: 1 });
-    first.executions.push({ id: 1 });
+    // Partial placeholders: only identity matters for the aliasing check.
+    first.tags.push({ id: 1 } as TransactionTagRef);
+    first.executions.push({ id: 1 } as PlannedExecutionRow);
     first.planned_date.setUTCFullYear(2040);
 
     expect(second.tags).toEqual([]);

@@ -979,7 +979,7 @@ See [[docs/api/attachments|Attachments API]] for endpoint contracts and examples
 
 ### Phase C (April 2026)
 
-- [[apps/node-backend/tests/routes/import.test.js]]: Updated to mock `runImportPipeline` from the new orchestrator. Covers SSE stream behavior, recipients/categories route handling, multer middleware error paths, and backpressure scenarios.
+- [[apps/node-backend/tests/routes/import.test.ts]]: Updated to mock `runImportPipeline` from the new orchestrator. Covers SSE stream behavior, recipients/categories route handling, multer middleware error paths, and backpressure scenarios.
 - Removed: `importService.test.js`, `streamingImportService.test.js`, `rawTransactionImportService.test.js` — superseded by pipeline integration tests.
 
 ### Phase 5A (April 2026)

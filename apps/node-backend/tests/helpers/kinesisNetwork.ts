@@ -8,11 +8,62 @@ import {
   portfolioIdentityBase,
 } from "../../src/services/importIdentity.ts";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
+import type { ParsedPortfolioRow } from "../../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+
+export interface NetworkReceiptOptions {
+  kind?: string;
+  asset?: string;
+}
+
+export interface NetworkSourceOptions extends NetworkReceiptOptions {
+  batchId?: number;
+  account?: number;
+  investment?: number | null;
+  rowId?: number;
+}
+
+/** The staged row `networkSource` builds; identity columns are assigned after construction. */
+export interface NetworkSourceRow {
+  id: number;
+  batch_id: number;
+  row_index: number;
+  status: string;
+  route: string;
+  type: null;
+  type_raw: string;
+  tx_date: string | undefined;
+  symbol_raw: string;
+  investment_id: number | null;
+  account_id: number;
+  units: string;
+  amount: null;
+  price_per_unit: null;
+  fees: null;
+  taxes: null;
+  currency: string | null;
+  fx_rate_to_eur: null;
+  note: string;
+  raw_data: string;
+  source_record_hash: string;
+  source_transaction_id: string | null | undefined;
+  source_account_identity: string | null | undefined;
+  asset_transfer_details: ParsedPortfolioRow["assetTransfer"];
+  asset_adjustment_details: ParsedPortfolioRow["assetAdjustment"];
+  custom_config: typeof networkMapping & {
+    source_columns: string[] | undefined;
+  };
+  dedup_fingerprint?: string;
+  dedup_fingerprint_version?: number;
+  dedup_occurrence?: number;
+  /** Joined by the review reads; set by fixtures that model them. */
+  resolved_investment_id?: number | null;
+  user_override_investment_id?: number | null;
+}
 
 export function networkReceipt({
   kind = "asset_transfer_witness",
   asset = "KAG",
-} = {}) {
+}: NetworkReceiptOptions = {}) {
   const host = `https://${asset.toLowerCase()}-mainnet.kinesisgroup.io`,
     source = "SYNTHETIC-SENDER",
     destination = "SYNTHETIC-DESTINATION";
@@ -91,10 +142,12 @@ export function networkReceipt({
         },
       },
       { url: next, body: { _embedded: { records: [] } } },
-      ...[
-        [tx, op],
-        [opening, openOp],
-      ].map(([transaction, operation]) => ({
+      ...(
+        [
+          [tx, op],
+          [opening, openOp],
+        ] as const
+      ).map(([transaction, operation]) => ({
         url: `${host}/transactions/${transaction.hash}/operations`,
         body: { _embedded: { records: [operation] } },
       })),
@@ -115,7 +168,9 @@ export const networkMapping = {
     note: "Note",
   },
 };
-export const networkCsv = (receipt, kind) =>
+export type NetworkReceipt = ReturnType<typeof networkReceipt>;
+
+export const networkCsv = (receipt: NetworkReceipt, kind: string) =>
   [
     "Date,Type,Symbol,Units,Currency,Source_ID,Source_Account,Note,Receipt_JSON",
     [
@@ -139,7 +194,7 @@ export async function networkSource({
   account = 8,
   investment = 1,
   rowId = 90,
-} = {}) {
+}: NetworkSourceOptions = {}) {
   const receipt = networkReceipt({ kind, asset }),
     directory = await mkdtemp(join(tmpdir(), "vision-native-test-"));
   try {
@@ -148,7 +203,7 @@ export async function networkSource({
     const parsed = await parseWithConfig(path, networkMapping),
       item = parsed[0],
       config = { ...networkMapping, source_columns: parsed.sourceColumns };
-    const row = {
+    const row: NetworkSourceRow = {
       id: rowId,
       batch_id: batchId,
       row_index: 0,

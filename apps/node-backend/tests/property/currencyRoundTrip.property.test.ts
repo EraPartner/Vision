@@ -10,8 +10,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { mockConnection } from "../helpers/repoMocks.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { mockConnection } from "../helpers/repoMocks.ts";
 
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({
@@ -28,7 +28,7 @@ const { convertToCurrency, clearMemoryCache, FALLBACK_RATES } =
 const originalFetch = global.fetch;
 const EPSILON_RATIO = 1e-9; // 1 part per billion
 
-function seeded(seed) {
+function seeded(seed: number) {
   let t = seed >>> 0;
   return function next() {
     t = (t + 0x6d2b79f5) >>> 0;
@@ -50,7 +50,7 @@ describe("property: currency round-trip identity", () => {
 
   afterEach(() => {
     if (originalFetch) global.fetch = originalFetch;
-    else delete global.fetch;
+    else delete (global as { fetch?: typeof fetch }).fetch;
   });
 
   const CURRENCIES = Object.keys(FALLBACK_RATES).filter(

@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest';
-import { runGolden } from '../golden/runGolden.js';
+import { runGolden } from '../golden/runGolden.ts';
 import { __findTransferMatches as findTransferMatches } from '../../src/services/calculations/transfers.ts';
 
 /**
@@ -10,9 +10,11 @@ import { __findTransferMatches as findTransferMatches } from '../../src/services
  * cross-currency, and already-marked / manual rows.
  * Re-baseline with: UPDATE_GOLDENS=1 bun vitest run transfers.golden
  */
+type MatchArgs = Parameters<typeof findTransferMatches>;
+
 describe('transfer matching golden', () => {
   it('classifies auto-pairs vs ambiguous suggestions', async () => {
-    await runGolden('transfers/match-cases', (input) =>
+    await runGolden<{ transactions: MatchArgs[0]; options: MatchArgs[1] }>('transfers/match-cases', (input) =>
       findTransferMatches(input.transactions, input.options),
     );
   });

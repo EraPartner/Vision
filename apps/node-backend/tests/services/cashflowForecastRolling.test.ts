@@ -5,9 +5,31 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { AggregationEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
+import type {
+  ActualPoint,
+  DailyNetPoint,
+  DiagnosticsPayload,
+  MethodResult,
+} from "../../src/services/calculations/forecast/index.ts";
+
+/**
+ * The live rolling payload. computeCashflowForecastRolling types its envelope
+ * data as `object` (the cache column's type), so the test narrows it here.
+ */
+interface RollingPayload {
+  window_start: string;
+  window_end: string;
+  today: string;
+  actual: ActualPoint[];
+  scheduled_actual: DailyNetPoint[];
+  methods: MethodResult[];
+  diagnostics: DiagnosticsPayload | null;
+}
+type RollingEnvelope = AggregationEnvelope<RollingPayload>;
 
 const buildHistory = ({ days = 400 } = {}) => {
-  const out = [];
+  const out: DailyNetPoint[] = [];
   const start = Date.UTC(2024, 0, 1);
   for (let i = 0; i < days; i++) {
     const ms = start + i * 86_400_000;
@@ -26,7 +48,7 @@ const buildHistory = ({ days = 400 } = {}) => {
 // midnight and 01:00/02:00 Brussels).
 import { todayAppDateString, addDaysYmd } from "../../src/lib/timezone.ts";
 const todayIso = () => todayAppDateString();
-const isoOffsetFromToday = (offsetDays) =>
+const isoOffsetFromToday = (offsetDays: number) =>
   addDaysYmd(todayAppDateString(), offsetDays);
 
 vi.mock("../../src/repositories/infoRepository.ts", () => ({
@@ -34,7 +56,7 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
     // ADR-083 cache-key input (forecast/index.js filterHash).
     getIncludeTransfers: vi.fn(async () => false),
     getCashflowForecastDataRolling: vi.fn(
-      async (historyMonths, daysBack, daysForward) => ({
+      async (historyMonths: number, daysBack: number, daysForward: number) => ({
         history: buildHistory({ days: 400 }),
         currentActual: Array.from({ length: daysBack + 1 }, (_, i) => ({
           date: isoOffsetFromToday(-daysBack + i),
@@ -61,12 +83,12 @@ describe("computeCashflowForecastRolling", () => {
   it("returns shape with actual length === daysBack + 1 and forecast length === daysForward", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const env = await computeCashflowForecastRolling({
+    const env = (await computeCashflowForecastRolling({
       daysBack: 30,
       daysForward: 30,
       mcPaths: 50,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
 
     expect(env.data.actual).toHaveLength(61);
     expect(env.data.actual[0].date).toBe(isoOffsetFromToday(-30));
@@ -93,12 +115,12 @@ describe("computeCashflowForecastRolling", () => {
   it("cumulative anchor is window-relative (starts at the first actual net)", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const env = await computeCashflowForecastRolling({
+    const env = (await computeCashflowForecastRolling({
       daysBack: 7,
       daysForward: 7,
       mcPaths: 20,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     const first = env.data.actual[0];
     expect(first.cumulative).toBe(first.net);
   });
@@ -106,12 +128,12 @@ describe("computeCashflowForecastRolling", () => {
   it("actual entries past today have null net + cumulative", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const env = await computeCashflowForecastRolling({
+    const env = (await computeCashflowForecastRolling({
       daysBack: 5,
       daysForward: 5,
       mcPaths: 20,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     expect(
       env.data.actual.every((r, i) =>
         i <= 5 ? r.net !== null : r.net === null,
@@ -122,69 +144,69 @@ describe("computeCashflowForecastRolling", () => {
   it("same-day same-params calls return identical MC bands (determinism)", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const a = await computeCashflowForecastRolling({
+    const a = (await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 14,
       mcPaths: 40,
       userId: "u1",
-    });
-    const b = await computeCashflowForecastRolling({
+    })) as RollingEnvelope;
+    const b = (await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 14,
       mcPaths: 40,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     const aMc = a.data.methods.find((m) => m.id === "monte_carlo_parametric");
     const bMc = b.data.methods.find((m) => m.id === "monte_carlo_parametric");
-    expect(aMc.bands).toEqual(bMc.bands);
+    expect(aMc!.bands).toEqual(bMc!.bands);
   });
 
   it("different daysBack/daysForward changes seed → different MC bands", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const a = await computeCashflowForecastRolling({
+    const a = (await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 14,
       mcPaths: 40,
       userId: "u1",
-    });
-    const b = await computeCashflowForecastRolling({
+    })) as RollingEnvelope;
+    const b = (await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 21,
       mcPaths: 40,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     const aMc = a.data.methods.find((m) => m.id === "monte_carlo_parametric");
     const bMc = b.data.methods.find((m) => m.id === "monte_carlo_parametric");
     // p25 series will differ in length and values
-    expect(aMc.bands.p25.length).not.toBe(bMc.bands.p25.length);
+    expect(aMc!.bands!.p25.length).not.toBe(bMc!.bands!.p25.length);
   });
 
   it("include_planned=false leaves cumulative untouched by future planned", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const without = await computeCashflowForecastRolling({
+    const without = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       includePlanned: false,
       mcPaths: 20,
       userId: "u1",
-    });
-    const withp = await computeCashflowForecastRolling({
+    })) as RollingEnvelope;
+    const withp = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       includePlanned: true,
       mcPaths: 20,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     const withoutMethod = without.data.methods.find(
       (m) => m.id === "simple_avg",
     );
     const withMethod = withp.data.methods.find((m) => m.id === "simple_avg");
     const lastWithout =
-      withoutMethod.cumulative[withoutMethod.cumulative.length - 1].value;
+      withoutMethod!.cumulative[withoutMethod!.cumulative.length - 1].value;
     const lastWith =
-      withMethod.cumulative[withMethod.cumulative.length - 1].value;
+      withMethod!.cumulative[withMethod!.cumulative.length - 1].value;
     // Mock plants a -200 planned at offset 5 inside the 10-day forecast window.
     expect(Math.round(lastWith - lastWithout)).toBe(-200);
   });
@@ -192,24 +214,24 @@ describe("computeCashflowForecastRolling", () => {
   it("always applies scheduled ledger rows without requiring include_planned", async () => {
     const { computeCashflowForecastRolling } =
       await import("../../src/services/calculations/forecast/index.ts");
-    const env = await computeCashflowForecastRolling({
+    const env = (await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
       includePlanned: false,
       mcPaths: 20,
       userId: "u1",
-    });
+    })) as RollingEnvelope;
     const method = env.data.methods.find((m) => m.id === "simple_avg");
-    const scheduledDay = method.cumulative.find(
+    const scheduledDay = method!.cumulative.find(
       (point) => point.date === isoOffsetFromToday(3),
     );
-    const previousDay = method.cumulative.find(
+    const previousDay = method!.cumulative.find(
       (point) => point.date === isoOffsetFromToday(2),
     );
-    const dailyForecast = method.daily.find(
+    const dailyForecast = method!.daily.find(
       (point) => point.date === isoOffsetFromToday(3),
     )?.value;
 
-    expect(scheduledDay.value - previousDay.value - dailyForecast).toBe(-75);
+    expect(scheduledDay!.value - previousDay!.value - dailyForecast!).toBe(-75);
   });
 });

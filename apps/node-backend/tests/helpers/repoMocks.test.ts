@@ -13,7 +13,8 @@ import {
   mockConnection,
   mockPooledTxConnection,
   mockTxConnection,
-} from "./repoMocks.js";
+} from "./repoMocks.ts";
+import type { MockProcedure } from "./repoMocks.ts";
 
 const productionSurface = [
   "default",
@@ -44,7 +45,7 @@ describe("connection mock surface", () => {
   );
 
   it("applies explicit inert overrides after the defaults", async () => {
-    const query = vi.fn(async () => ({ rows: [{ id: 7 }] }));
+    const query = vi.fn(async (_sql: string) => ({ rows: [{ id: 7 }] }));
     const conn = mockConnection({ query, checkConnection: vi.fn(() => true) });
 
     await expect(conn.query("SELECT 7")).resolves.toEqual({
@@ -108,9 +109,9 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("models nested withTransaction calls on one client with unique savepoints", async () => {
-    const client = { query: vi.fn(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<MockProcedure>(async () => ({ rows: [] })) };
     const conn = mockTxConnection(client);
-    const callbackClients = [];
+    const callbackClients: unknown[] = [];
 
     await conn.withTransaction(async (outerClient) => {
       callbackClients.push(outerClient);
@@ -138,7 +139,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("rejects concurrent sibling nested transactions like production", async () => {
-    const client = { query: vi.fn(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<MockProcedure>(async () => ({ rows: [] })) };
     const conn = mockTxConnection(client);
 
     await expect(
@@ -224,7 +225,10 @@ describe("mockTxConnection — ambient transaction routing", () => {
     // client, repointing statements issued by a repository through module
     // query(), all observable in issue order on a single spy.
     const client = {
-      query: vi.fn(async () => ({ rows: [{ id: 2 }], rowCount: 1 })),
+      query: vi.fn<MockProcedure>(async () => ({
+        rows: [{ id: 2 }],
+        rowCount: 1,
+      })),
     };
     const conn = mockTxConnection(client);
 

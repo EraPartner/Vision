@@ -2,15 +2,15 @@
  * Saved Charts route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). Body validation in savedCharts.js is inline in
+ * tests/helpers/routeApp.ts). Body validation in savedCharts.js is inline in
  * the handlers (zod), while `:id` is guarded by the shared `validateIdParam`
  * middleware, so this migration is mechanical: `routeHandlers[...]` calls
  * become supertest requests and `.rejects.toBeInstanceOf(...)` assertions
  * become status-code + envelope assertions against the real error handler.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/savedChartsRepository.ts", () => ({
   default: {
@@ -26,7 +26,20 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import savedChartsRepository from "../../src/repositories/savedChartsRepository.ts";
+import rawSavedChartsRepository from "../../src/repositories/savedChartsRepository.ts";
+
+const savedChartsRepository = vi.mocked(rawSavedChartsRepository);
+
+type DeepPartial<T> = T extends readonly (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
 
 const { default: savedChartsRouter } =
   await import("../../src/routes/savedCharts.ts");
@@ -41,7 +54,7 @@ describe("Saved Charts Routes", () => {
 
   describe("GET /", () => {
     it("returns all saved charts", async () => {
-      savedChartsRepository.getAll.mockResolvedValue([{ id: 1 }]);
+      savedChartsRepository.getAll.mockResolvedValue([partial({ id: 1 })]);
 
       const res = await api.get(BASE).expect(200);
 
@@ -53,7 +66,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("pages and reports the full total when limit/offset are supplied", async () => {
-      savedChartsRepository.getAll.mockResolvedValue([{ id: 2 }]);
+      savedChartsRepository.getAll.mockResolvedValue([partial({ id: 2 })]);
       savedChartsRepository.getCount.mockResolvedValue(5);
 
       const res = await api
@@ -115,12 +128,14 @@ describe("Saved Charts Routes", () => {
     });
 
     it("creates chart with trimmed name and default chart type", async () => {
-      savedChartsRepository.create.mockResolvedValue({
-        id: 4,
-        name: "Main",
-        chart_type: "line",
-        category_ids: [1, 2],
-      });
+      savedChartsRepository.create.mockResolvedValue(
+        partial({
+          id: 4,
+          name: "Main",
+          chart_type: "line",
+          category_ids: [1, 2],
+        }),
+      );
 
       const res = await api
         .post(BASE)
@@ -151,11 +166,13 @@ describe("Saved Charts Routes", () => {
     });
 
     it("normalizes tagIds when provided", async () => {
-      savedChartsRepository.create.mockResolvedValue({
-        id: 5,
-        name: "Tagged",
-        tag_ids: [5, 6],
-      });
+      savedChartsRepository.create.mockResolvedValue(
+        partial({
+          id: 5,
+          name: "Tagged",
+          tag_ids: [5, 6],
+        }),
+      );
 
       await api
         .post(BASE)
@@ -175,10 +192,12 @@ describe("Saved Charts Routes", () => {
     });
 
     it("passes all-source flags through to the repository", async () => {
-      savedChartsRepository.create.mockResolvedValue({
-        id: 6,
-        name: "AllTags",
-      });
+      savedChartsRepository.create.mockResolvedValue(
+        partial({
+          id: 6,
+          name: "AllTags",
+        }),
+      );
 
       await api
         .post(BASE)
@@ -202,7 +221,9 @@ describe("Saved Charts Routes", () => {
     });
 
     it("accepts the ranked variant on a bar chart", async () => {
-      savedChartsRepository.create.mockResolvedValue({ id: 7, name: "Ranked" });
+      savedChartsRepository.create.mockResolvedValue(
+        partial({ id: 7, name: "Ranked" }),
+      );
 
       await api
         .post(BASE)
@@ -252,7 +273,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("wraps a scalar categoryIds into a one-element int array", async () => {
-      savedChartsRepository.create.mockResolvedValue({ id: 10 });
+      savedChartsRepository.create.mockResolvedValue(partial({ id: 10 }));
 
       await api
         .post(BASE)
@@ -265,7 +286,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("normalizes recipientIds and rejects invalid entries", async () => {
-      savedChartsRepository.create.mockResolvedValue({ id: 11 });
+      savedChartsRepository.create.mockResolvedValue(partial({ id: 11 }));
 
       await api
         .post(BASE)
@@ -303,7 +324,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("passes a yearly timeBucket through", async () => {
-      savedChartsRepository.create.mockResolvedValue({ id: 12 });
+      savedChartsRepository.create.mockResolvedValue(partial({ id: 12 }));
 
       await api
         .post(BASE)
@@ -350,7 +371,7 @@ describe("Saved Charts Routes", () => {
     ])(
       "accepts the legal combination %s:%s",
       async (chartType, chartVariant) => {
-        savedChartsRepository.create.mockResolvedValue({ id: 13 });
+        savedChartsRepository.create.mockResolvedValue(partial({ id: 13 }));
 
         await api
           .post(BASE)
@@ -371,7 +392,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("passes a valid dateRangeStart through unchanged and maps empty string to null", async () => {
-      savedChartsRepository.create.mockResolvedValue({ id: 14 });
+      savedChartsRepository.create.mockResolvedValue(partial({ id: 14 }));
 
       await api
         .post(BASE)
@@ -419,10 +440,12 @@ describe("Saved Charts Routes", () => {
     });
 
     it("updates chart and normalizes categoryIds when provided", async () => {
-      savedChartsRepository.update.mockResolvedValue({
-        id: 9,
-        name: "Updated",
-      });
+      savedChartsRepository.update.mockResolvedValue(
+        partial({
+          id: 9,
+          name: "Updated",
+        }),
+      );
 
       const res = await api
         .patch(`${BASE}/9`)
@@ -438,10 +461,12 @@ describe("Saved Charts Routes", () => {
     });
 
     it("normalizes tagIds when provided", async () => {
-      savedChartsRepository.update.mockResolvedValue({
-        id: 9,
-        name: "Updated",
-      });
+      savedChartsRepository.update.mockResolvedValue(
+        partial({
+          id: 9,
+          name: "Updated",
+        }),
+      );
 
       await api
         .patch(`${BASE}/9`)
@@ -462,7 +487,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("updates all-source flags when provided", async () => {
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ allRecipients: true }).expect(200);
 
@@ -477,7 +502,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("trims the name before updating", async () => {
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ name: "  Renamed  " }).expect(200);
 
@@ -510,7 +535,7 @@ describe("Saved Charts Routes", () => {
     it("allows chartType alone without cross-checking the stored variant", async () => {
       // The combination rule only fires when BOTH fields are in the PATCH body —
       // a lone chartType change never consults the persisted variant.
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ chartType: "line" }).expect(200);
 
@@ -521,7 +546,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("allows chartVariant alone without cross-checking the stored type", async () => {
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ chartVariant: "ranked" }).expect(200);
 
@@ -539,7 +564,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("maps an empty-string date to null (clear) on update", async () => {
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ dateRangeEnd: "" }).expect(200);
 
@@ -554,7 +579,7 @@ describe("Saved Charts Routes", () => {
     });
 
     it("passes null through to CLEAR a date range (was silently coerced to undefined)", async () => {
-      savedChartsRepository.update.mockResolvedValue({ id: 9 });
+      savedChartsRepository.update.mockResolvedValue(partial({ id: 9 }));
 
       await api.patch(`${BASE}/9`).send({ dateRangeStart: null }).expect(200);
 

@@ -8,7 +8,7 @@ import {
   portfolioIdentityBase,
 } from "../../src/services/importIdentity.ts";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
-import { syntheticKinesisManual } from "./kinesisAdoptionScope.js";
+import { syntheticKinesisManual } from "./kinesisAdoptionScope.ts";
 export async function nativeGiftFixture({
   account = 8,
   investment = 1,

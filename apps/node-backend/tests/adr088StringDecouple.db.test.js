@@ -21,7 +21,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.ts";
 import plannedTransactionService from "../src/services/plannedTransactionService.ts";

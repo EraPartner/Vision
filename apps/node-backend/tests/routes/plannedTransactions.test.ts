@@ -3,14 +3,14 @@
  * Mirrors: apps/backend/tests/test_planned_transactions.py
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). Notably `validateIdParam` is no longer stubbed —
+ * tests/helpers/routeApp.ts). Notably `validateIdParam` is no longer stubbed —
  * the guard that the old mock-router harness dropped from the chain now runs on
  * every `/:id` route here.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "../helpers/repoMocks.js";
-import { mockLogger } from "../helpers/mockLogger.js";
-import { routeAgent } from "../helpers/routeApp.js";
+import { mockConnection } from "../helpers/repoMocks.ts";
+import { mockLogger } from "../helpers/mockLogger.ts";
+import { routeAgent } from "../helpers/routeApp.ts";
 
 vi.mock("../../src/repositories/plannedTransactionRepository.ts", () => ({
   default: {
@@ -47,7 +47,7 @@ vi.mock("../../src/database/connection.ts", () => ({
 // and flaky as tests are added. The transactions suites exercise the real
 // limiter chain. Every OTHER middleware on the chain is real.
 vi.mock("../../src/middleware/rateLimiter.ts", () => ({
-  rateLimiter: () => (_req, _res, next) => next(),
+  rateLimiter: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 vi.mock("../../src/config/logger.ts", () => ({
@@ -61,7 +61,10 @@ vi.mock("../../src/config/logger.ts", () => ({
 vi.mock(
   "../../src/services/calculations/loanSchedule.ts",
   async (importOriginal) => {
-    const actual = await importOriginal();
+    const actual =
+      await importOriginal<
+        typeof import("../../src/services/calculations/loanSchedule.ts")
+      >();
     return {
       ...actual,
       generateLoanRepaymentSchedule: vi.fn(
@@ -71,9 +74,32 @@ vi.mock(
   },
 );
 
-import plannedTransactionService from "../../src/services/plannedTransactionService.ts";
-import { query as dbQuery } from "../../src/database/connection.ts";
-import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
+import rawPlannedTransactionService from "../../src/services/plannedTransactionService.ts";
+import { query as rawQuery } from "../../src/database/connection.ts";
+import type { PgQueryResult } from "../../src/database/connection.ts";
+import { generateLoanRepaymentSchedule as rawGenerateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
+
+const plannedTransactionService = vi.mocked(rawPlannedTransactionService);
+const dbQuery = vi.mocked(rawQuery);
+const generateLoanRepaymentSchedule = vi.mocked(
+  rawGenerateLoanRepaymentSchedule,
+);
+
+type DeepPartial<T> = T extends readonly (infer U)[]
+  ? DeepPartial<U>[]
+  : T extends Date
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: DeepPartial<T[K]> }
+      : T;
+
+/** Stand-in for a full result: the route reads only the fields given. */
+const partial = <T>(value: NoInfer<DeepPartial<T>>) => value as unknown as T;
+/**
+ * Stand-in typed the loose way the fixtures model pg values (numbers for
+ * NUMERIC columns, strings for DATE columns); the route accepts both.
+ */
+const loose = <T>(value: unknown) => value as T;
 
 const { default: plannedRouter } =
   await import("../../src/routes/plannedTransactions.ts");
@@ -87,19 +113,23 @@ const api = routeAgent(plannedRouter, {
 });
 
 const BASE = "/api/planned-transactions";
-const post = (body) => api.post(`${BASE}/`).send(body);
-const patch = (id, body) => api.patch(`${BASE}/${id}`).send(body);
-const execute = (id, body) => api.post(`${BASE}/${id}/execute`).send(body);
+const post = (body: object) => api.post(`${BASE}/`).send(body);
+const patch = (id: number | string, body: object) =>
+  api.patch(`${BASE}/${id}`).send(body);
+const execute = (id: number | string, body: object) =>
+  api.post(`${BASE}/${id}/execute`).send(body);
 
 describe("Planned Transaction Routes", () => {
   beforeEach(() => vi.clearAllMocks());
 
   describe("GET /", () => {
     it("forwards account_id as an exact account filter", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
 
       await api.get(`${BASE}/?account_id=7&bank_account=Cash`).expect(200);
 
@@ -109,10 +139,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should return empty list", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
 
       const res = await api.get(`${BASE}/`).expect(200);
 
@@ -123,18 +155,20 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should return planned transactions", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [
-          {
-            id: 1,
-            planned_date: "2026-03-15",
-            amount: "50.00",
-            is_recurring: false,
-            is_executed: false,
-          },
-        ],
-        total: 1,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        loose({
+          items: [
+            {
+              id: 1,
+              planned_date: "2026-03-15",
+              amount: "50.00",
+              is_recurring: false,
+              is_executed: false,
+            },
+          ],
+          total: 1,
+        }),
+      );
 
       const res = await api.get(`${BASE}/`).expect(200);
 
@@ -172,10 +206,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it('keeps absent and empty meaning "no filter"', async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
       for (const query of [
         "",
         "category_id=",
@@ -193,10 +229,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("passes a well-formed id through unchanged", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
       await api.get(`${BASE}/?category_id=7&recipient_id=99`).expect(200);
       expect(plannedTransactionRepository.getAll).toHaveBeenCalledWith(
         expect.objectContaining({ categoryId: 7, recipientId: 99 }),
@@ -204,10 +242,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should respect pagination", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 10,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 10,
+        }),
+      );
 
       const res = await api.get(`${BASE}/?limit=5&offset=2`).expect(200);
 
@@ -216,10 +256,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should filter by is_recurring", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
 
       await api.get(`${BASE}/?is_recurring=true`).expect(200);
 
@@ -229,10 +271,12 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should filter by is_executed", async () => {
-      plannedTransactionRepository.getAll.mockResolvedValue({
-        items: [],
-        total: 0,
-      });
+      plannedTransactionRepository.getAll.mockResolvedValue(
+        partial({
+          items: [],
+          total: 0,
+        }),
+      );
 
       await api.get(`${BASE}/?is_executed=false`).expect(200);
 
@@ -244,14 +288,16 @@ describe("Planned Transaction Routes", () => {
 
   describe("POST /", () => {
     it("should create with 201", async () => {
-      plannedTransactionRepository.create.mockResolvedValue({
-        id: 1,
-        planned_date: "2026-03-15",
-        amount: "50.00",
-        bank_account: "Chase",
-        is_recurring: false,
-        is_executed: false,
-      });
+      plannedTransactionRepository.create.mockResolvedValue(
+        loose({
+          id: 1,
+          planned_date: "2026-03-15",
+          amount: "50.00",
+          bank_account: "Chase",
+          is_recurring: false,
+          is_executed: false,
+        }),
+      );
 
       const res = await post({
         planned_date: "2026-03-15",
@@ -297,15 +343,17 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should create loan payment and overwrite amount/date from schedule", async () => {
-      plannedTransactionRepository.create.mockResolvedValue({
-        id: 2,
-        planned_date: "2026-04-01",
-        amount: "850.00",
-        bank_account: "Mortgage",
-        is_loan: true,
-        is_recurring: true,
-        is_executed: false,
-      });
+      plannedTransactionRepository.create.mockResolvedValue(
+        loose({
+          id: 2,
+          planned_date: "2026-04-01",
+          amount: "850.00",
+          bank_account: "Mortgage",
+          is_loan: true,
+          is_recurring: true,
+          is_executed: false,
+        }),
+      );
 
       await post({
         account_id: 8,
@@ -360,14 +408,16 @@ describe("Planned Transaction Routes", () => {
     });
 
     it('accepts an "every N days" recurrence_pattern', async () => {
-      plannedTransactionRepository.create.mockResolvedValue({
-        id: 9,
-        planned_date: "2026-03-15",
-        amount: "50.00",
-        bank_account: "Chase",
-        is_recurring: true,
-        is_executed: false,
-      });
+      plannedTransactionRepository.create.mockResolvedValue(
+        loose({
+          id: 9,
+          planned_date: "2026-03-15",
+          amount: "50.00",
+          bank_account: "Chase",
+          is_recurring: true,
+          is_executed: false,
+        }),
+      );
 
       await post({
         planned_date: "2026-03-15",
@@ -379,16 +429,18 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("stores a loan as a monthly recurrence so /execute advances it", async () => {
-      plannedTransactionRepository.create.mockResolvedValue({
-        id: 3,
-        planned_date: "2026-04-01",
-        amount: "850.00",
-        bank_account: "Mortgage",
-        is_loan: true,
-        is_recurring: true,
-        recurrence_pattern: "monthly",
-        is_executed: false,
-      });
+      plannedTransactionRepository.create.mockResolvedValue(
+        loose({
+          id: 3,
+          planned_date: "2026-04-01",
+          amount: "850.00",
+          bank_account: "Mortgage",
+          is_loan: true,
+          is_recurring: true,
+          recurrence_pattern: "monthly",
+          is_executed: false,
+        }),
+      );
 
       await post({
         account_id: 8,
@@ -466,16 +518,18 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("does not relabel a non-AppError fault raised by a PATCH regeneration either", async () => {
-      plannedTransactionRepository.getById.mockResolvedValueOnce({
-        id: 1,
-        is_loan: true,
-        loan_type: "amortizing",
-        loan_principal: 5000,
-        loan_annual_interest_rate: 3,
-        loan_term_months: 24,
-        loan_start_date: "2026-04-01",
-        loan_payment_day: 1,
-      });
+      plannedTransactionRepository.getById.mockResolvedValueOnce(
+        loose({
+          id: 1,
+          is_loan: true,
+          loan_type: "amortizing",
+          loan_principal: 5000,
+          loan_annual_interest_rate: 3,
+          loan_term_months: 24,
+          loan_start_date: "2026-04-01",
+          loan_payment_day: 1,
+        }),
+      );
       generateLoanRepaymentSchedule.mockImplementationOnce(() => {
         throw new TypeError("remaining.toFixed is not a function");
       });
@@ -499,14 +553,16 @@ describe("Planned Transaction Routes", () => {
     };
 
     beforeEach(() => {
-      plannedTransactionRepository.create.mockResolvedValue({
-        id: 1,
-        planned_date: "2026-03-15",
-        amount: "50.00",
-        bank_account: "Chase",
-        is_recurring: false,
-        is_executed: false,
-      });
+      plannedTransactionRepository.create.mockResolvedValue(
+        loose({
+          id: 1,
+          planned_date: "2026-03-15",
+          amount: "50.00",
+          bank_account: "Chase",
+          is_recurring: false,
+          is_executed: false,
+        }),
+      );
     });
 
     it("coerces a string amount to a number before the repository", async () => {
@@ -636,11 +692,13 @@ describe("Planned Transaction Routes", () => {
 
   describe("PATCH /:id validation pins", () => {
     beforeEach(() => {
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-      });
-      plannedTransactionRepository.update.mockResolvedValue({ id: 1 });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+        }),
+      );
+      plannedTransactionRepository.update.mockResolvedValue(partial({ id: 1 }));
     });
 
     it("coerces reminder_days_before and max_occurrences on update", async () => {
@@ -715,20 +773,24 @@ describe("Planned Transaction Routes", () => {
       // sibling); clearing the pattern on a recurring row recreated it.
       await patch(1, { is_recurring: true }).expect(400);
 
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-        is_recurring: true,
-        recurrence_pattern: "monthly",
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+          is_recurring: true,
+          recurrence_pattern: "monthly",
+        }),
+      );
       await patch(1, { recurrence_pattern: null }).expect(400);
       expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
 
       // Turning recurrence on WITH a valid pattern still passes.
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+        }),
+      );
       await patch(1, {
         is_recurring: true,
         recurrence_pattern: "monthly",
@@ -742,12 +804,14 @@ describe("Planned Transaction Routes", () => {
       );
 
       // An unrelated edit to a legacy broken row (recurring, no pattern) is NOT blocked.
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-        is_recurring: true,
-        recurrence_pattern: null,
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+          is_recurring: true,
+          recurrence_pattern: null,
+        }),
+      );
       await patch(1, { memo: "still editable" }).expect(200);
       expect(plannedTransactionRepository.update).toHaveBeenCalledWith(
         1,
@@ -774,11 +838,13 @@ describe("Planned Transaction Routes", () => {
 
   describe("GET /:id", () => {
     it("should return by id", async () => {
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        planned_date: "2026-03-15",
-        amount: "50.00",
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        loose({
+          id: 1,
+          planned_date: "2026-03-15",
+          amount: "50.00",
+        }),
+      );
 
       const res = await api.get(`${BASE}/1`).expect(200);
 
@@ -805,11 +871,15 @@ describe("Planned Transaction Routes", () => {
 
   describe("PATCH /:id", () => {
     it("should update", async () => {
-      plannedTransactionRepository.getById.mockResolvedValue({ id: 1 });
-      plannedTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        amount: "75.00",
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({ id: 1 }),
+      );
+      plannedTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          amount: "75.00",
+        }),
+      );
 
       const res = await patch(1, { amount: 75 }).expect(200);
 
@@ -823,18 +893,22 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should resolve recipient_name and category_name to IDs", async () => {
-      plannedTransactionRepository.getById.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-      });
-      plannedTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        recipient_id: 11,
-        category_id: 22,
-      });
+      plannedTransactionRepository.getById.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+        }),
+      );
+      plannedTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          recipient_id: 11,
+          category_id: 22,
+        }),
+      );
       dbQuery
-        .mockResolvedValueOnce({ rows: [{ id: 11 }] })
-        .mockResolvedValueOnce({ rows: [{ id: 22 }] });
+        .mockResolvedValueOnce({ rows: [{ id: 11 }] } as PgQueryResult)
+        .mockResolvedValueOnce({ rows: [{ id: 22 }] } as PgQueryResult);
 
       await patch(1, {
         recipient_name: "John",
@@ -868,11 +942,15 @@ describe("Planned Transaction Routes", () => {
     };
 
     it("re-derives amount from the regenerated schedule even when the client sends a stale amount", async () => {
-      plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
-      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({
-        id: 1,
-        is_loan: true,
-      });
+      plannedTransactionRepository.getById.mockResolvedValueOnce(
+        loose(existingLoan),
+      );
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: true,
+        }),
+      );
 
       // Client edits the principal but sends its stale (pre-regeneration) amount.
       await patch(1, {
@@ -895,14 +973,18 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("re-derives (and force-negates) amount on convert-to-loan even when the client sends a positive amount", async () => {
-      plannedTransactionRepository.getById.mockResolvedValueOnce({
-        id: 1,
-        is_loan: false,
-      });
-      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({
-        id: 1,
-        is_loan: true,
-      });
+      plannedTransactionRepository.getById.mockResolvedValueOnce(
+        partial({
+          id: 1,
+          is_loan: false,
+        }),
+      );
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: true,
+        }),
+      );
 
       await patch(1, {
         is_loan: true,
@@ -928,11 +1010,15 @@ describe("Planned Transaction Routes", () => {
       // No loan field changed and is_loan not re-asserted → the schedule is not
       // regenerated, so the client's amount passes through untouched (boundary
       // of the re-derivation rule).
-      plannedTransactionRepository.getById.mockResolvedValueOnce(existingLoan);
-      plannedTransactionRepository.update.mockResolvedValue({
-        id: 1,
-        is_loan: true,
-      });
+      plannedTransactionRepository.getById.mockResolvedValueOnce(
+        loose(existingLoan),
+      );
+      plannedTransactionRepository.update.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: true,
+        }),
+      );
 
       await patch(1, { memo: "note", amount: -123.45 }).expect(200);
 
@@ -946,21 +1032,25 @@ describe("Planned Transaction Routes", () => {
     });
 
     it("should clear loan fields and loan schedule atomically when toggled off", async () => {
-      plannedTransactionRepository.getById.mockResolvedValueOnce({
-        id: 1,
-        is_loan: true,
-        loan_type: "amortizing",
-        loan_principal: 10000,
-        loan_annual_interest_rate: 6,
-        loan_term_months: 12,
-        loan_start_date: "2026-04-01",
-        loan_payment_day: 1,
-      });
-      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue({
-        id: 1,
-        is_loan: false,
-        loan_schedule: [],
-      });
+      plannedTransactionRepository.getById.mockResolvedValueOnce(
+        loose({
+          id: 1,
+          is_loan: true,
+          loan_type: "amortizing",
+          loan_principal: 10000,
+          loan_annual_interest_rate: 6,
+          loan_term_months: 12,
+          loan_start_date: "2026-04-01",
+          loan_payment_day: 1,
+        }),
+      );
+      plannedTransactionRepository.updateWithLoanSchedule.mockResolvedValue(
+        partial({
+          id: 1,
+          is_loan: false,
+          loan_schedule: [],
+        }),
+      );
 
       await patch(1, { is_loan: false }).expect(200);
 
@@ -990,19 +1080,25 @@ describe("Planned Transaction Routes", () => {
   describe("POST /:id/execute", () => {
     it("should execute one-time transaction", async () => {
       plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_recurring: false,
-          is_executed: false,
-        })
-        .mockResolvedValueOnce({
-          id: 1,
-          is_executed: true,
-          last_executed_date: "2026-03-15",
-        });
-      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({
-        duplicate: false,
-      });
+        .mockResolvedValueOnce(
+          partial({
+            id: 1,
+            is_recurring: false,
+            is_executed: false,
+          }),
+        )
+        .mockResolvedValueOnce(
+          loose({
+            id: 1,
+            is_executed: true,
+            last_executed_date: "2026-03-15",
+          }),
+        );
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
+        partial({
+          duplicate: false,
+        }),
+      );
 
       const res = await execute(1, {
         executed_transaction_id: 10,
@@ -1014,72 +1110,86 @@ describe("Planned Transaction Routes", () => {
 
     it("should execute recurring and advance date", async () => {
       plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_recurring: true,
-          recurrence_pattern: "monthly",
-          planned_date: "2026-03-15",
-          is_executed: false,
-        })
-        .mockResolvedValueOnce({
-          id: 1,
-          is_executed: false,
-          planned_date: "2026-04-15",
-        });
-      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({
-        duplicate: false,
-      });
+        .mockResolvedValueOnce(
+          loose({
+            id: 1,
+            is_recurring: true,
+            recurrence_pattern: "monthly",
+            planned_date: "2026-03-15",
+            is_executed: false,
+          }),
+        )
+        .mockResolvedValueOnce(
+          loose({
+            id: 1,
+            is_executed: false,
+            planned_date: "2026-04-15",
+          }),
+        );
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
+        partial({
+          duplicate: false,
+        }),
+      );
 
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const call = plannedTransactionRepository.executeAndAdvance.mock.calls[0];
-      expect(call[3].is_executed).toBe(false);
+      expect(call[3]!.is_executed).toBe(false);
     });
 
     it("advances a monthly recurrence in APP_TIMEZONE without a UTC day-shift", async () => {
       // planned_date is Brussels-midnight 2026-01-31 (= 2026-01-30T23:00Z), the
       // shape node-postgres returns for a DATE column on the Brussels dev host.
       plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_recurring: true,
-          recurrence_pattern: "monthly",
-          planned_date: new Date("2026-01-30T23:00:00Z"),
-          is_executed: false,
-        })
-        .mockResolvedValueOnce({ id: 1 });
-      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({
-        duplicate: false,
-      });
+        .mockResolvedValueOnce(
+          partial({
+            id: 1,
+            is_recurring: true,
+            recurrence_pattern: "monthly",
+            planned_date: new Date("2026-01-30T23:00:00Z"),
+            is_executed: false,
+          }),
+        )
+        .mockResolvedValueOnce(partial({ id: 1 }));
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
+        partial({
+          duplicate: false,
+        }),
+      );
 
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const updateFields =
         plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
-      expect(updateFields.planned_date).toBe("2026-02-28"); // not 2026-02-27 (the UTC day)
+      expect(updateFields!.planned_date).toBe("2026-02-28"); // not 2026-02-27 (the UTC day)
     });
 
     it("keeps the clamped day on subsequent monthly advances (sticky clamp)", async () => {
       plannedTransactionRepository.getById
-        .mockResolvedValueOnce({
-          id: 1,
-          is_recurring: true,
-          recurrence_pattern: "monthly",
-          // pg reads a DATE as local midnight on any host; on the Brussels
-          // dev host this is the same instant as 2026-02-27T23:00:00Z.
-          planned_date: new Date(2026, 1, 28),
-          is_executed: false,
-        })
-        .mockResolvedValueOnce({ id: 1 });
-      plannedTransactionRepository.executeAndAdvance.mockResolvedValue({
-        duplicate: false,
-      });
+        .mockResolvedValueOnce(
+          partial({
+            id: 1,
+            is_recurring: true,
+            recurrence_pattern: "monthly",
+            // pg reads a DATE as local midnight on any host; on the Brussels
+            // dev host this is the same instant as 2026-02-27T23:00:00Z.
+            planned_date: new Date(2026, 1, 28),
+            is_executed: false,
+          }),
+        )
+        .mockResolvedValueOnce(partial({ id: 1 }));
+      plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
+        partial({
+          duplicate: false,
+        }),
+      );
 
       await execute(1, { executed_transaction_id: 11 }).expect(200);
 
       const updateFields =
         plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
-      expect(updateFields.planned_date).toBe("2026-03-28");
+      expect(updateFields!.planned_date).toBe("2026-03-28");
     });
 
     it("should return 400 without executed_transaction_id", async () => {

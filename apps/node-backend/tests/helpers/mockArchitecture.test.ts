@@ -8,26 +8,35 @@ const testsRoot = path.resolve(
   "..",
 );
 
-function testFiles(dir = testsRoot) {
+// The suite is mid-migration from JavaScript to TypeScript (ADR-192): scan
+// both, so a converted file cannot drop out of the architecture checks.
+const TEST_FILE = /\.test\.(?:js|ts)$/;
+
+function testFiles(dir: string = testsRoot): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const absolute = path.join(dir, entry.name);
     if (entry.isDirectory()) return testFiles(absolute);
-    return entry.name.endsWith(".test.js") ? [absolute] : [];
+    return TEST_FILE.test(entry.name) ? [absolute] : [];
   });
 }
 
-function relative(file) {
+function relative(file: string) {
   return path.relative(testsRoot, file);
 }
 
-function mockCalls(source) {
-  const calls = [];
+/** `relative(file)` without its `.js`/`.ts` extension, so allowlists survive a rename. */
+function relativeStem(file: string) {
+  return relative(file).replace(/\.(?:js|ts)$/, "");
+}
+
+function mockCalls(source: string) {
+  const calls: string[] = [];
   const startPattern = /vi\.(?:mock|doMock)\s*\(/g;
-  let match;
+  let match: RegExpExecArray | null;
 
   while ((match = startPattern.exec(source))) {
     let depth = 0;
-    let quote = null;
+    let quote: string | null = null;
     let escaped = false;
     let lineComment = false;
     let blockComment = false;
@@ -89,7 +98,11 @@ function mockCalls(source) {
   return calls;
 }
 
-function manualModuleMocks(source, moduleName, helpers) {
+function manualModuleMocks(
+  source: string,
+  moduleName: string,
+  helpers: string[],
+) {
   return mockCalls(source).filter(
     (call) =>
       call.includes(moduleName) &&
@@ -97,20 +110,24 @@ function manualModuleMocks(source, moduleName, helpers) {
   );
 }
 
+// Extension-free so the guard matches the module whether a suite mocks the
+// historical `.js` path or the converted `.ts` one.
+const CURRENCY_MODULE = "currency/currencyConversionService.";
+
 describe("shared database and currency mock architecture", () => {
   it("routes connection module mocks through repoMocks except partial-real DB instrumentation", () => {
     const allowedPartialReal = new Set([
-      "dataImport.db.test.js",
-      "portfolioImportRollback.db.test.js",
-      "portfolioKinesisCashScope.db.test.js",
+      "dataImport.db.test",
+      "portfolioImportRollback.db.test",
+      "portfolioKinesisCashScope.db.test",
     ]);
-    const offenders = [];
+    const offenders: string[] = [];
 
     for (const file of testFiles()) {
-      if (relative(file) === "helpers/mockArchitecture.test.js") continue;
+      if (relative(file) === "helpers/mockArchitecture.test.ts") continue;
       const source = readFileSync(file, "utf8");
       if (
-        !allowedPartialReal.has(relative(file)) &&
+        !allowedPartialReal.has(relativeStem(file)) &&
         manualModuleMocks(source, "database/connection.ts", [
           "mockConnection",
           "mockTxConnection",
@@ -125,13 +142,13 @@ describe("shared database and currency mock architecture", () => {
   });
 
   it("routes convertRowsToEur module mocks through the canonical currency fake", () => {
-    const offenders = [];
+    const offenders: string[] = [];
     for (const file of testFiles()) {
-      if (relative(file) === "helpers/mockArchitecture.test.js") continue;
+      if (relative(file) === "helpers/mockArchitecture.test.ts") continue;
       const source = readFileSync(file, "utf8");
       const manualMocks = manualModuleMocks(
         source,
-        "currencyConversionService.js",
+        CURRENCY_MODULE,
         ["mockCurrencyConversion"],
       ).filter((call) => call.includes("convertRowsToEur"));
       if (manualMocks.length > 0) {
@@ -148,7 +165,7 @@ describe("shared database and currency mock architecture", () => {
         () => ({ query: vi.fn() }),
       );
       const unrelated = mockConnection();
-      vi.doMock("../src/services/currency/currencyConversionService.js", () => ({
+      vi.doMock("../src/services/currency/currencyConversionService.ts", () => ({
         convertRowsToEur: vi.fn(),
       }));
       const alsoUnrelated = mockCurrencyConversion();
@@ -158,7 +175,7 @@ describe("shared database and currency mock architecture", () => {
       manualModuleMocks(source, "database/connection.ts", ["mockConnection"]),
     ).toHaveLength(1);
     expect(
-      manualModuleMocks(source, "currencyConversionService.js", [
+      manualModuleMocks(source, CURRENCY_MODULE, [
         "mockCurrencyConversion",
       ]),
     ).toHaveLength(1);
@@ -167,7 +184,7 @@ describe("shared database and currency mock architecture", () => {
   it("accepts only helpers invoked inside the matching mock factory", () => {
     const source = `
       vi.mock("../src/database/connection.ts", () => mockTxConnection());
-      vi.mock("../src/services/currency/currencyConversionService.js", () =>
+      vi.mock("../src/services/currency/currencyConversionService.ts", () =>
         mockCurrencyConversion(),
       );
     `;
@@ -179,7 +196,7 @@ describe("shared database and currency mock architecture", () => {
       ]),
     ).toEqual([]);
     expect(
-      manualModuleMocks(source, "currencyConversionService.js", [
+      manualModuleMocks(source, CURRENCY_MODULE, [
         "mockCurrencyConversion",
       ]),
     ).toEqual([]);

@@ -7,10 +7,10 @@
  * IGNORED, falling through to the model branch).
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js).
+ * tests/helpers/routeApp.ts).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
+import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
 
 vi.mock('../../src/services/crossWorkspaceDataService.ts', () => ({
   assembleRebalanceInputs: vi.fn(),
@@ -18,19 +18,21 @@ vi.mock('../../src/services/crossWorkspaceDataService.ts', () => ({
 
 import { assembleRebalanceInputs } from '../../src/services/crossWorkspaceDataService.ts';
 
+type RebalanceInputs = Awaited<ReturnType<typeof assembleRebalanceInputs>>;
+
 const { default: crossWorkspaceRouter } = await import('../../src/routes/crossWorkspace.ts');
 
 const api = routeAgent(crossWorkspaceRouter, { mountPath: '/api/cross-workspace' });
-const rebalance = (body) => api.post('/api/cross-workspace/rebalance').send(body);
+const rebalance = (body: object) => api.post('/api/cross-workspace/rebalance').send(body);
 
 describe('POST /rebalance validation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    assembleRebalanceInputs.mockResolvedValue({
+    vi.mocked(assembleRebalanceInputs).mockResolvedValue({
       actualValues: { stocks: 600, bonds: 400 },
       availableCash: 100,
       cashAccounts: [],
-    });
+    } as Partial<RebalanceInputs> as RebalanceInputs);
   });
 
   it('rejects a non-numeric or negative sleeve weight', async () => {

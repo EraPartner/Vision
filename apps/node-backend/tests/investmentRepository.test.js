@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
 import { query } from "../src/database/connection.ts";

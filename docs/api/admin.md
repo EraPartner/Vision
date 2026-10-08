@@ -871,4 +871,4 @@ Recent backend tests validate admin update behavior for:
 - `GET /api/admin/update/check`: GitHub releases response parsing, version resolution precedence (`APP_VERSION` then `APP_IMAGE_TAG`), no-release fallback payload, and invalid JSON path returning sanitized `500`.
 - `POST /api/admin/update/apply` and `POST /api/admin/update/apply-and-restart`: expected success response contracts.
 
-Code links: [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/src/routes/admin.ts]]
+Code links: [[apps/node-backend/tests/routes/admin.test.ts]], [[apps/node-backend/src/routes/admin.ts]]

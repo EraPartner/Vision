@@ -2,13 +2,18 @@
  * bulkSelection — id/filter resolver unit tests. No Express, no real DB.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
 
-import { mockConnection } from '../helpers/repoMocks.js';
+import { mockConnection } from '../helpers/repoMocks.ts';
 vi.mock('../../src/database/connection.ts', () => mockConnection({ getClient: vi.fn() }));
 
 const { resolveBulkSelection, __normalizeBulkFilter: normalizeBulkFilter, __BULK_SELECTION_DEFAULTS: BULK_SELECTION_DEFAULTS } =
   await import('../../src/services/bulkSelection.ts');
-const { query: dbQuery } = await import('../../src/database/connection.ts');
+const { query: rawDbQuery } = await import('../../src/database/connection.ts');
+// Fixtures return only the `rows` the resolver reads.
+const dbQuery = rawDbQuery as unknown as Mock<
+  (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>
+>;
 const { ValidationError } = await import('../../src/middleware/errorHandler.ts');
 
 describe('resolveBulkSelection — input validation', () => {
