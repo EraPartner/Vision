@@ -6,7 +6,8 @@
     "Creates a migration via bun run db:revision -- \"<description>\" rather than hand-writing an alembic file from scratch",
     "Does NOT run bun run db:upgrade against the user's database without being explicitly asked",
     "Includes or describes a rollback path (the downgrade side of the migration), not just the upgrade",
-    "Notes the change at verification tier 'high' (migration = high-risk) rather than treating it as a routine low-risk edit",
+    "Treats the migration as high-risk, with a tested rollback and a blast-radius note, rather than as a routine low-risk edit",
+    "Runs or instructs to run bun run db:check-destructive and the relevant backend tests",
     "Does not silently skip recording an ADR if the change reflects a real data-model decision worth capturing"
   ]
 }

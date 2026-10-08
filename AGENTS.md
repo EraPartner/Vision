@@ -154,8 +154,8 @@ maintenance unless the user asks for one.
 
 - Claude-specific project skills are exposed under `.claude/skills/`. Their required outcomes must
   stay aligned with the portable skills under `.agents/skills/`.
-- Path-scoped compatibility rules live in `.claude/rules/`. The canonical nested guidance remains
-  in `docs/AGENTS.md` and `packaging/AGENTS.md`.
+- `.claude/rules/` holds symlinks to the canonical nested guidance in `docs/AGENTS.md` and
+  `packaging/AGENTS.md`. They have no `paths:` scope, so Claude loads them in every session.
 - Host-specific Claude setup belongs in the gitignored `CLAUDE.local.md`.
 - Use Claude Code's built-in sandbox for agent execution. See `docs/guides/devcontainer.md` for the
   shared agent workflow.

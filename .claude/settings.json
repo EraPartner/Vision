@@ -3,7 +3,7 @@
     "allow": [
       "Bash(bun run lint)",
       "Bash(bun run validate-locales)",
-      "Bash(bun run vitest *)",
+      "Bash(bun vitest run *)",
       "mcp__plugin_playwright_playwright__browser_take_screenshot",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_wait_for",

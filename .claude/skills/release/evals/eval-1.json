@@ -1,11 +1,11 @@
 {
   "skills": ["release"],
-  "query": "I changed the packaged native attachment directory. What else do I need to verify before this ships?",
+  "query": "/release — this release changes the packaged native attachment directory. What do I need to verify before it ships?",
   "files": [],
   "expected_behavior": [
     "Identifies backup, restore, and upgrade compatibility for the existing attachment directory",
-    "Explicitly references the v1.0.2 data-loss precedent as the reason this sync matters, not just as a generic best practice",
+    "Keeps native database and attachment paths inside the application data directory",
     "Flags persistence compatibility as a release gate, not a one-time fix",
-    "Does not treat the path edit as sufficient without persistence verification"
+    "Runs or requires the full release build and native smoke checks before claiming the artifact works"
   ]
 }
