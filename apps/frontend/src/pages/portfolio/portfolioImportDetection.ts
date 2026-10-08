@@ -3,7 +3,7 @@ import type { Account } from "@/types/api";
 import { activeBrokerAccounts } from "@/features/portfolio/manualTradeBroker";
 
 export type PortfolioImportSource =
-    "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo";
+    "ibkr" | "kinesis" | "nexo" | "nexo_pro" | "saxo" | "native_receipts";
 
 export interface DetectedPortfolioImport {
     source: PortfolioImportSource;
@@ -14,7 +14,7 @@ export interface DetectedPortfolioImport {
 const MAX_STATEMENT_BYTES = 50 * 1024 * 1024;
 
 const HEADER_SIGNATURES: Record<
-    Exclude<PortfolioImportSource, "ibkr">,
+    Exclude<PortfolioImportSource, "ibkr" | "native_receipts">,
     string[]
 > = {
     kinesis: [
@@ -62,6 +62,19 @@ const HEADER_SIGNATURES: Record<
     ],
 };
 
+const NATIVE_RECEIPT_COLUMNS = [
+    "Date",
+    "Type",
+    "Symbol",
+    "Units",
+    "Amount",
+    "Currency",
+    "Source_ID",
+    "Source_Account",
+    "Receipt_JSON",
+    "Note",
+];
+
 function cell(value: unknown): string {
     return String(value ?? "")
         .replaceAll("\u00a0", " ")
@@ -74,6 +87,41 @@ export function detectPortfolioImportRecords(
     const matches: DetectedPortfolioImport[] = [];
     for (let index = 0; index < records.length; index++) {
         const header = records[index].map(cell);
+        if (
+            index === 0 &&
+            header.length === NATIVE_RECEIPT_COLUMNS.length &&
+            records[index].every((value, field) => value === header[field]) &&
+            new Set(header).size === header.length &&
+            NATIVE_RECEIPT_COLUMNS.every((field) => header.includes(field)) &&
+            records.length > 1 &&
+            records
+                .slice(1)
+                .every(
+                    (record) =>
+                        record.length === header.length &&
+                        [
+                            "gift",
+                            "asset_fee",
+                            "asset_transfer_witness",
+                        ].includes(cell(record[header.indexOf("Type")])) &&
+                        ["Source_ID", "Source_Account", "Receipt_JSON"].every(
+                            (field) => cell(record[header.indexOf(field)]),
+                        ),
+                )
+        ) {
+            matches.push({
+                source: "native_receipts",
+                sourceAccountIdentities: [
+                    ...new Set(
+                        records
+                            .slice(1)
+                            .map((record) =>
+                                cell(record[header.indexOf("Source_Account")]),
+                            ),
+                    ),
+                ],
+            });
+        }
         if (
             header[0] === "Transaction History" &&
             header[1] === "Header" &&
@@ -119,6 +167,17 @@ export function resolveDetectedPortfolioAccount(
     accounts: readonly Account[],
 ): number | undefined {
     const eligible = activeBrokerAccounts(accounts);
+    if (detected.source === "native_receipts") {
+        // Native receipt addresses can belong to several wallets in one logical
+        // account. They are evidence, not broker account aliases.
+        const wallets = eligible.filter((account) =>
+            [account.name, account.display_name].some(
+                (value) => value?.trim().toLowerCase() === "coolwallet",
+            ),
+        );
+        return wallets.length === 1 ? wallets[0].id : undefined;
+    }
+    const source = detected.source;
     const sourceIds = new Set(
         detected.sourceAccountIdentities.map((value) => value.toLowerCase()),
     );
@@ -130,7 +189,10 @@ export function resolveDetectedPortfolioAccount(
         ),
     );
     if (exact.length) return exact.length === 1 ? exact[0].id : undefined;
-    const aliases: Record<PortfolioImportSource, string[]> = {
+    const aliases: Record<
+        Exclude<PortfolioImportSource, "native_receipts">,
+        string[]
+    > = {
         ibkr: ["ibkr", "interactive brokers"],
         kinesis: ["kinesis", "kinesis money"],
         nexo: ["nexo"],
@@ -140,8 +202,7 @@ export function resolveDetectedPortfolioAccount(
     const byBroker = eligible.filter((account) =>
         [account.institution, account.name].some(
             (value) =>
-                value &&
-                aliases[detected.source].includes(value.trim().toLowerCase()),
+                value && aliases[source].includes(value.trim().toLowerCase()),
         ),
     );
     return byBroker.length === 1 ? byBroker[0].id : undefined;

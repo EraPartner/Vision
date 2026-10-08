@@ -62,9 +62,6 @@ vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
 vi.mock("../../src/services/portfolioImportReconciliationService.js", () => ({
   previewPortfolioImportReconciliation: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportReferenceService.js", () => ({
-  applyPortfolioImportReference: vi.fn(),
-}));
 
 vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
   listBatches: vi.fn(),
@@ -149,6 +146,69 @@ describe("Portfolio import reconciliation HTTP contract", () => {
     });
     expect(commitReviewedPortfolioImports).not.toHaveBeenCalled();
   });
+  it.each([
+    ["adopt_existing_only", "preserve_existing"],
+    ["correct_existing_only", "prefer_source"],
+  ])(
+    "passes the server-derived Kinesis %s scope through preview and commit with partial result metadata",
+    async (scope, policy) => {
+      const progress = {
+        reconciliationScope: scope,
+        selectedRowIds: [10],
+        pending: 2,
+        complete: false,
+        deferredCounts: { dividend: 1, gift: 1 },
+      };
+      previewPortfolioImportReconciliation.mockResolvedValue({
+        ...progress,
+        ready: true,
+        batchProgress: [
+          {
+            batchId: 7,
+            pending: 2,
+            complete: false,
+            deferredCounts: progress.deferredCounts,
+          },
+        ],
+      });
+      const body = {
+        batch_ids: [7],
+        adopt_policy: policy,
+        reconciliation_scope: scope,
+      };
+      const preview = await api
+        .post(`${BASE}/reconciliation/preview`)
+        .send(body)
+        .expect(200);
+      expect(preview.body.data).toMatchObject(progress);
+      expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
+        batchIds: [7],
+        adoptPolicy: policy,
+        batchPolicies: undefined,
+        reconciliationScope: scope,
+      });
+      commitReviewedPortfolioImports.mockResolvedValue({
+        ...progress,
+        imported: 0,
+        adopted: 1,
+        duplicates: 1,
+        batches: [{ batch_id: 7, ...progress }],
+      });
+      const expected = "a".repeat(64);
+      const committed = await api
+        .post(`${BASE}/reconciliation/commit`)
+        .send({ ...body, expected_plan_fingerprint: expected })
+        .expect(200);
+      expect(committed.body.data).toMatchObject(progress);
+      expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
+        batchIds: [7],
+        adoptPolicy: policy,
+        batchPolicies: undefined,
+        reconciliationScope: scope,
+        expectedPlanFingerprint: expected,
+      });
+    },
+  );
   it("passes explicit per-batch policies with the reviewed scope", async () => {
     previewPortfolioImportReconciliation.mockResolvedValue({
       ready: false,
@@ -189,6 +249,44 @@ describe("Portfolio import reconciliation HTTP contract", () => {
       expectedPlanFingerprint: hash,
     });
   });
+  it("passes source-bound cash funding confirmation without caller-selected rows", async () => {
+    const body = {
+      batch_ids: [7],
+      adopt_policy: "preserve_existing",
+      reconciliation_scope: "record_cash_only",
+      cash_funding_policy: "own_account_transfer",
+    };
+    previewPortfolioImportReconciliation.mockResolvedValue({
+      ready: true,
+      reconciliationScope: "record_cash_only",
+    });
+    await api.post(`${BASE}/reconciliation/preview`).send(body).expect(200);
+    expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
+      batchIds: [7],
+      adoptPolicy: "preserve_existing",
+      batchPolicies: undefined,
+      reconciliationScope: "record_cash_only",
+      cashFundingPolicy: "own_account_transfer",
+    });
+    commitReviewedPortfolioImports.mockResolvedValue({
+      imported: 2,
+      recordedCash: 2,
+      batches: [{ batch_id: 7, imported: 2, recordedCash: 2 }],
+    });
+    const expected = "a".repeat(64);
+    await api
+      .post(`${BASE}/reconciliation/commit`)
+      .send({ ...body, expected_plan_fingerprint: expected })
+      .expect(200);
+    expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
+      batchIds: [7],
+      adoptPolicy: "preserve_existing",
+      batchPolicies: undefined,
+      reconciliationScope: "record_cash_only",
+      cashFundingPolicy: "own_account_transfer",
+      expectedPlanFingerprint: expected,
+    });
+  });
   it.each([
     { batch_ids: [] },
     { batch_ids: ["7"] },
@@ -198,6 +296,27 @@ describe("Portfolio import reconciliation HTTP contract", () => {
     { batch_ids: Array.from({ length: 101 }, (_, i) => i + 1) },
     { batch_ids: [7], adopt_policy: "guess" },
     { batch_ids: [7], unknown_account: 8 },
+    { batch_ids: [7], reconciliation_scope: "adopt_some" },
+    {
+      batch_ids: [7],
+      reconciliation_scope: "record_cash_only",
+      cash_funding_policy: "guess",
+    },
+    {
+      batch_ids: [7],
+      reconciliation_scope: "record_cash_only",
+      cash_funding_policy: true,
+    },
+    {
+      batch_ids: [7],
+      reconciliation_scope: "record_cash_only",
+      selected_row_ids: [10],
+    },
+    {
+      batch_ids: [7],
+      reconciliation_scope: "adopt_existing_only",
+      selected_row_ids: [10],
+    },
     {
       batch_ids: [7],
       batch_policies: [{ batch_id: "7", adopt_policy: "prefer_source" }],

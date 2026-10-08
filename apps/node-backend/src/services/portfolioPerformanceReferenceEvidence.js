@@ -566,7 +566,7 @@ function literalKinesisAssetRecord(row) {
 }
 
 /** Literal negative asset balance must equal received units plus its same-asset fee. */
-export function verifiedKinesisWithdrawal(row) {
+export function __verifiedKinesisWithdrawal(row) {
   try {
     if (
       row.route !== "asset_transfer" ||

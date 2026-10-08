@@ -2,10 +2,10 @@
 title: Portfolio Summary API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
 tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates, per-account, byAccount, adr-091, adr-100]
-description: Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array. 2026-08-10 (ADR-108): byAccount carries full per-broker P&L from the partitioned lot engine, summaries carry fullyAssigned, Σ byAccount ≡ totals parity-tested under all cost-basis methods.
+description: "Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array. 2026-08-10 (ADR-108): byAccount carries full per-broker P&L from the partitioned lot engine, summaries carry fullyAssigned, Σ byAccount ≡ totals parity-tested under all cost-basis methods."
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
 related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
 ---
@@ -16,6 +16,21 @@ related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService
 > Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's _current_ investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
 >
 > **2026-06-11 (ADR-074) — FX attribution semantics change.** `totalInvested` / `totalBuyCost` / `gainLoss` / `realizedGain` / `unrealizedGain` / `avgCostBasis` / fees / taxes / income are now converted at **transaction-date** FX rates (invested is locked at purchase-date rates; it no longer drifts with today's FX). `gainLoss` **includes** the FX component and equals `assetGain + fxGain`. New additive fields carry the decomposition.
+
+## In-kind income subtotal
+
+`totals.totalInKindIncome` and each investment summary's `totalInKindIncome` retain proved literal
+income already represented by acquired units. They use the response reporting currency and normal
+transaction-date conversion. The amount stays separate from ordinary `totalIncome`, `totalDividends`
+and gain/return formulas; units, cost basis, sale proceeds and valuation are unchanged. Absence on
+older responses means zero. This additive subtotal does not infer tax treatment. Active canonical summaries supply it directly to the frontend.
+The additive `archivedInKindIncome` array contains `{ id, totalInKindIncome }` for archived holdings,
+converted from the literal income currency on its transaction date to the response currency. It is
+always present on current responses (empty when none); absent older metadata means unknown. The
+frontend overrides only the archived income subtotal, keeping archived ordinary gain/basis policy.
+Foreign income without canonical dated metadata is disclosed as unavailable rather than converted
+using the investment currency or current rate. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and
+[[docs/features/portfolio]].
 
 ## Endpoint Details
 
@@ -146,7 +161,6 @@ Content-Type: application/json
 Per-investment `totalUnits` preserves eight decimal places. Monetary fields retain their existing
 reporting-currency rounding. Active portfolio holdings use these canonical quantities and gains,
 including dated custody and unit adjustments; ordinary transaction lists remain editing data.
-
 
 **Top-level:**
 
@@ -438,7 +452,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 ### 2026-05-31 — Net Worth overlay extended single source of truth
 
 - The Net Worth endpoint (`GET /api/info/net-worth`) now reads `totals.totalPortfolioValue` from `portfolioSummaryCache` (this endpoint's cache) and overlays it onto the latest snapshot before computing the headline `current` value, last chart point, and latest table row.
-- New shared helper `apps/node-backend/src/routes/info/_liveSummary.js` exposes `resolveLiveSummary` and `resolveLivePortfolioValue` for use by both `netWorth.js` and the startup warmup path.
+- New shared helper `apps/node-backend/src/routes/info/_liveSummary.js` exposes `resolveLiveSummary` and `resolveLivePortfolioValue` for use by both `netWorth.ts` and the startup warmup path.
 - API response shape of `/api/info/net-worth` is UNCHANGED. No frontend changes.
 - This extends the "single source of truth" guarantee from Dashboard + Performance to all three portfolio pages. See [[docs/adr/064-net-worth-current-value-live-overlay|ADR-064]].
 

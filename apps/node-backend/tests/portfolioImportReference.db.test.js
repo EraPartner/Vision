@@ -1,6 +1,3 @@
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -12,23 +9,22 @@ import {
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
 import { createBatch } from "../src/services/portfolioImportPipeline/stage.js";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
-import { stagePortfolioReferenceRows } from "../src/repositories/portfolioImportReferenceRepository.ts";
-import { applyPortfolioImportReference } from "../src/services/portfolioImportReferenceService.js";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { readReconciliationSources } from "../src/repositories/portfolioImportReconciliationRepository.ts";
+import { toDecimal } from "../src/lib/money.ts";
 import {
-  portfolioPerformanceXml,
-  ppEvent,
-} from "./fixtures/portfolioPerformanceSynthetic.js";
+  retainedEvent,
+  retainedReference,
+  retainedEvidenceRow,
+  retainedReferenceConfiguration,
+} from "./fixtures/retainedPortfolioEvidence.js";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const owned = { accounts: [], investments: [], batches: [] };
 const hash = (value) => createHash("sha256").update(value).digest("hex");
-let directory;
 let counter = 0;
 async function fixture() {
   const account = (
@@ -46,10 +42,56 @@ async function fixture() {
   owned.investments.push(investment);
   return { account, investment };
 }
-async function xml(events = [], name = `reference-${++counter}.xml`) {
-  const path = join(directory, name);
-  await writeFile(path, portfolioPerformanceXml({ events }), { mode: 0o600 });
-  return path;
+async function storedEvidence(batchId, event) {
+  const rows = await readReconciliationSources([batchId]);
+  const row = rows[0];
+  const reference = retainedReference([event]);
+  const facts =
+    row.type === "gift"
+      ? {
+          amount: event.amount,
+          price_per_unit: toDecimal(event.amount).div(row.units).toFixed(6),
+          currency: event.currency,
+          fx_rate_to_eur: undefined,
+          asset_transfer_details: {
+            ...row.asset_transfer_details,
+            basisStatus: "recorded_reference",
+          },
+        }
+      : {};
+  const after = retainedEvidenceRow(
+    row,
+    reference,
+    event,
+    row.type === "gift" ? "recorded_native" : "primary_execution",
+    facts,
+  );
+  await pool.query(
+    "UPDATE portfolio_import_staging_rows SET raw_data=$2,amount=$3,price_per_unit=$4,currency=$5,fx_rate_to_eur=$6,asset_transfer_details=$7::jsonb WHERE id=$1",
+    [
+      row.id,
+      after.raw_data,
+      after.amount,
+      after.price_per_unit,
+      after.currency,
+      after.fx_rate_to_eur ?? null,
+      JSON.stringify(after.asset_transfer_details ?? null),
+    ],
+  );
+  const current = await readReconciliationSources([batchId]);
+  await pool.query(
+    "UPDATE portfolio_import_batches SET custom_config=custom_config || $2::jsonb WHERE id=$1",
+    [
+      batchId,
+      JSON.stringify({
+        portfolio_performance_reference: retainedReferenceConfiguration(
+          current,
+          "full",
+          reference,
+        ),
+      }),
+    ],
+  );
 }
 async function sourceBatch(
   fx,
@@ -146,19 +188,15 @@ async function cleanup() {
   for (const list of Object.values(owned)) list.length = 0;
 }
 
-describeDb("secondary reference staging and reviewed atomic adoption", () => {
-  beforeAll(async () => {
-    await acquireDbSuiteLock();
-    directory = await mkdtemp(join(tmpdir(), "vision-reference-test-"));
-  }, 180000);
+describeDb("retained JSON evidence and reviewed atomic adoption", () => {
+  beforeAll(acquireDbSuiteLock, 180000);
   afterEach(cleanup);
   afterAll(async () => {
     await closePool();
     await releaseDbSuiteLock();
     await closeTestPool();
-    if (directory) await rm(directory, { recursive: true, force: true });
   });
-  it("blocks a shifted rounded Pro sale before XML, then adopts its source date and fee without adding a copy", async () => {
+  it("blocks a shifted rounded Pro sale without retained proof, then adopts its source date and fee without adding a copy", async () => {
     const fx = await fixture();
     const acquisition = await manual(fx, {
       type: "buy",
@@ -226,19 +264,15 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
         )
       ).rows[0],
     ).toEqual({ fees: "0.0300", date: "2025-01-01" });
-    const result = await applyPortfolioImportReference({
-      batchIds: [id],
-      placeholderBasisPolicy: "zero",
-      referencePath: await xml([
-        ppEvent({
-          type: "SELL",
-          shares: "10",
-          amount: "19.99",
-          units: [{ type: "FEE", amount: { currency: "EUR", amount: "0.03" } }],
-        }),
-      ]),
-    });
-    expect(result.blockers).toEqual([]);
+    await storedEvidence(
+      id,
+      retainedEvent({
+        type: "SELL",
+        shares: "10",
+        amount: "19.99",
+        units: [{ type: "FEE", amount: { currency: "EUR", amount: "0.03" } }],
+      }),
+    );
     const plan = await previewPortfolioImportReconciliation({
       batchIds: [id],
       adoptPolicy: "prefer_source",
@@ -307,7 +341,7 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
       note: receipt.before_data.note,
     });
   });
-  it("restores a preserve-existing Pro receipt before fresh XML-backed native USD adoption without inventing FX", async () => {
+  it("restores a preserve-existing Pro receipt before fresh retained-proof native USD adoption without inventing FX", async () => {
     const fx = await fixture();
     const acquisition = await manual(fx, {
       type: "buy",
@@ -395,17 +429,10 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
     });
     const fresh = await sourceBatch(fx, "nexo_pro_spot_history", [source]);
     expect(fresh).not.toBe(first);
-    expect(
-      (
-        await applyPortfolioImportReference({
-          batchIds: [fresh],
-          placeholderBasisPolicy: "zero",
-          referencePath: await xml([
-            ppEvent({ type: "SELL", amount: "90", currency: "EUR" }),
-          ]),
-        })
-      ).blockers,
-    ).toEqual([]);
+    await storedEvidence(
+      fresh,
+      retainedEvent({ type: "SELL", amount: "90", currency: "EUR" }),
+    );
     const authoritative = await previewPortfolioImportReconciliation({
       batchIds: [fresh],
       adoptPolicy: "prefer_source",
@@ -479,37 +506,17 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
       },
     });
   });
-  it("changes staging only, deduplicates concurrent same reference, then adopts native basis and rolls back exact legacy", async () => {
+  it("reads retained native basis, adopts once and rolls back exact legacy", async () => {
     const fx = await fixture();
     const old = await manual(fx);
     const id = await sourceBatch(fx);
-    const path = await xml([ppEvent({ amount: "200", currency: "USD" })]);
     const before = (
       await pool.query(
         "SELECT row_to_json(pt) snapshot FROM portfolio_transactions pt WHERE id=$1",
         [old],
       )
     ).rows[0].snapshot;
-    const results = await Promise.all([
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: path,
-        placeholderBasisPolicy: "zero",
-      }),
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: path,
-        placeholderBasisPolicy: "zero",
-      }),
-    ]);
-    expect(results[0]).toEqual(results[1]);
-    expect(results[0]).toMatchObject({
-      batch_ids: [id],
-      matched_reference_rows: 1,
-      source_corrections: 1,
-      blockers: [],
-      replacement_batches: [],
-    });
+    await storedEvidence(id, retainedEvent({ amount: "200", currency: "USD" }));
     expect(
       (
         await pool.query(
@@ -560,15 +567,11 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
       note: before.note,
     });
   });
-  it("restores a unique unavailable zero legacy basis from literal native reference and rolls it back", async () => {
+  it("restores a unique unavailable zero legacy basis from retained literal native basis and rolls it back", async () => {
     const fx = await fixture();
     const old = await manual(fx, { amount: "0", price: "0" });
     const id = await sourceBatch(fx);
-    await applyPortfolioImportReference({
-      batchIds: [id],
-      referencePath: await xml([ppEvent({ amount: "200", currency: "USD" })]),
-      placeholderBasisPolicy: "zero",
-    });
+    await storedEvidence(id, retainedEvent({ amount: "200", currency: "USD" }));
     const plan = await previewPortfolioImportReconciliation({
       batchIds: [id],
       adoptPolicy: "prefer_source",
@@ -691,313 +694,5 @@ describeDb("secondary reference staging and reviewed atomic adoption", () => {
       account_id: null,
       note: "Original manual reference note",
     });
-  });
-  it("persists coverage blockers, refuses commit and changed XML reuse, and detects account routing changes", async () => {
-    const fx = await fixture();
-    await manual(fx);
-    const id = await sourceBatch(fx);
-    const first = await xml([
-      ppEvent({ amount: "200", currency: "USD" }),
-      ppEvent({ id: "old-uncovered", date: "2025-01-02", shares: "2" }),
-    ]);
-    const result = await applyPortfolioImportReference({
-      batchIds: [id],
-      referencePath: first,
-      placeholderBasisPolicy: "zero",
-    });
-    expect(result.blockers.map((x) => x.reason)).toContain(
-      "reference_unmatched_event",
-    );
-    const plan = await previewPortfolioImportReconciliation({
-      batchIds: [id],
-      adoptPolicy: "prefer_source",
-    });
-    expect(plan.ready).toBe(false);
-    expect(plan.blockers.map((x) => x.reason)).toContain(
-      "reference_unmatched_event",
-    );
-    await expect(
-      commitReviewedPortfolioImports({
-        batchIds: [id],
-        adoptPolicy: "prefer_source",
-        expectedPlanFingerprint: plan.planFingerprint,
-      }),
-    ).rejects.toThrow();
-    const changed = await xml([ppEvent({ amount: "201", currency: "USD" })]);
-    await expect(
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: changed,
-        placeholderBasisPolicy: "zero",
-      }),
-    ).rejects.toMatchObject({
-      details: { reason: "reference_requires_restaging" },
-    });
-    await pool.query(
-      "UPDATE portfolio_import_batches SET custom_config=custom_config||'{\"transfer_destination_account_id\":999}'::jsonb WHERE id=$1",
-      [id],
-    );
-    await expect(
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: first,
-        placeholderBasisPolicy: "zero",
-      }),
-    ).rejects.toMatchObject({ details: { reason: "reference_scope_changed" } });
-  });
-  it("creates a normal validated managed review from retained terminal IBKR, including a previously errored row, without rewriting original source", async () => {
-    const fx = await fixture();
-    const id = await createBatch({
-      adapterName: "ibkr_transaction_history",
-      customConfig: { format: "ibkr_transaction_history" },
-      defaultAssetClass: "crypto",
-      isBrokerage: true,
-      accountId: fx.account,
-    });
-    owned.batches.push(id);
-    const rawRows = [
-      {
-        tx_date: "2025-01-01",
-        type_raw: "Buy",
-        type: "buy",
-        route: "portfolio",
-        symbol_raw: "ETH",
-        investment_id: fx.investment,
-        units: "5",
-        price_per_unit: "100",
-        amount: "500",
-        fees: "0",
-        taxes: "0",
-        currency: "EUR",
-        raw_data: "synthetic retained IBKR buy",
-        source_transaction_id: "IBKR:synthetic:buy",
-      },
-      {
-        tx_date: "2025-01-02",
-        type_raw: "Sell",
-        type: "sell",
-        route: "portfolio",
-        symbol_raw: "ETH",
-        investment_id: fx.investment,
-        units: "1",
-        price_per_unit: "100",
-        amount: "100",
-        fees: "0",
-        taxes: "0",
-        currency: "EUR",
-        raw_data: "synthetic retained IBKR sell",
-        source_transaction_id: "IBKR:synthetic:sell",
-      },
-    ];
-    await stagePortfolioReferenceRows(id, rawRows, { status: "pending" });
-    await validateBatch({ batchId: id });
-    await matchBatch({ batchId: id });
-    const originalRows = (
-      await pool.query(
-        "SELECT * FROM portfolio_import_staging_rows WHERE batch_id=$1 ORDER BY row_index",
-        [id],
-      )
-    ).rows;
-    const imported = (
-      await pool.query(
-        `INSERT INTO portfolio_transactions(investment_id,type,date,units,price_per_unit,amount,currency,account_id,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version) VALUES($1,'buy','2025-01-01',5,100,500,'EUR',$2,$3,$4,$5,1) RETURNING id`,
-        [
-          fx.investment,
-          fx.account,
-          id,
-          originalRows[0].source_record_hash,
-          originalRows[0].dedup_fingerprint,
-        ],
-      )
-    ).rows[0].id;
-    await pool.query(
-      "UPDATE portfolio_import_staging_rows SET status=CASE WHEN row_index=0 THEN 'committed' ELSE 'error' END,committed_txn_id=CASE WHEN row_index=0 THEN $2::integer ELSE NULL END,error_message=CASE WHEN row_index=1 THEN 'sell units exceed available holdings (synthetic)' ELSE NULL END WHERE batch_id=$1",
-      [id, imported],
-    );
-    await pool.query(
-      "UPDATE portfolio_import_batches SET status='complete_with_errors',rows_imported=1,rows_error=1 WHERE id=$1",
-      [id],
-    );
-    const buy = await manual(fx, {
-      type: "buy",
-      units: "5",
-      amount: "500",
-      price: "100",
-    });
-    const sell = await manual(fx, {
-      type: "sell",
-      date: "2025-01-02",
-      units: "1",
-      amount: "100",
-      price: "100",
-    });
-    const originalBefore = (
-      await pool.query(
-        "SELECT row_to_json(s) snapshot FROM portfolio_import_staging_rows s WHERE batch_id=$1 ORDER BY row_index",
-        [id],
-      )
-    ).rows;
-    const firstPath = await xml();
-    const request = {
-      batchIds: [id],
-      referencePath: firstPath,
-      placeholderBasisPolicy: "zero",
-    };
-    const first = await applyPortfolioImportReference(request);
-    owned.batches.push(...first.batch_ids);
-    expect(first.replacement_batches).toEqual([
-      { original_batch_id: id, review_batch_id: first.batch_ids[0] },
-    ]);
-    expect(first.batch_ids).not.toContain(id);
-    expect(first.supplemental_batches[0]).toMatchObject({
-      adapter_name: "ibkr_transaction_history",
-      rows_total: 2,
-      status: "awaiting_review",
-    });
-    expect(
-      (
-        await pool.query(
-          "SELECT row_to_json(s) snapshot FROM portfolio_import_staging_rows s WHERE batch_id=$1 ORDER BY row_index",
-          [id],
-        )
-      ).rows,
-    ).toEqual(originalBefore);
-    expect(await applyPortfolioImportReference(request)).toEqual(first);
-    const review = await previewPortfolioImportReconciliation({
-      batchIds: first.batch_ids,
-      adoptPolicy: "preserve_existing",
-    });
-    expect(review.ready).toBe(true);
-    expect(review.summary).toMatchObject({ repair_duplicate: 1, adopt: 1 });
-    const committed = await commitReviewedPortfolioImports({
-      batchIds: first.batch_ids,
-      adoptPolicy: "preserve_existing",
-      expectedPlanFingerprint: review.planFingerprint,
-    });
-    expect(committed).toMatchObject({ imported: 0, adopted: 1, repaired: 1 });
-    expect(
-      await applyPortfolioImportReference({
-        ...request,
-        batchIds: first.batch_ids,
-      }),
-    ).toEqual(first);
-    expect(
-      (
-        await pool.query(
-          "SELECT id FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
-          [fx.investment],
-        )
-      ).rows.map((x) => x.id),
-    ).toEqual([buy, sell]);
-    await rollbackBatch(first.batch_ids[0]);
-    expect(
-      (
-        await pool.query(
-          "SELECT id FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
-          [fx.investment],
-        )
-      ).rows.map((x) => x.id),
-    ).toEqual([imported, buy, sell]);
-    const fresh = await sourceBatch(fx);
-    const second = await applyPortfolioImportReference({
-      batchIds: [id, fresh],
-      referencePath: await xml([ppEvent({ amount: "200", currency: "USD" })]),
-      placeholderBasisPolicy: "zero",
-    });
-    owned.batches.push(
-      ...second.batch_ids.filter((x) => !owned.batches.includes(x)),
-    );
-    expect(second.replacement_batches[0].review_batch_id).not.toBe(
-      first.batch_ids[0],
-    );
-  });
-  it("rejects retained source tampering before creating a managed clone", async () => {
-    const fx = await fixture();
-    const id = await sourceBatch(fx, "ibkr_transaction_history", [
-      {
-        type: "buy",
-        type_raw: "Buy",
-        units: "1",
-        amount: "200",
-        price_per_unit: "200",
-        currency: "EUR",
-      },
-    ]);
-    await pool.query(
-      "UPDATE portfolio_import_batches SET status='complete' WHERE id=$1",
-      [id],
-    );
-    await pool.query(
-      "UPDATE portfolio_import_staging_rows SET raw_data='changed source' WHERE batch_id=$1",
-      [id],
-    );
-    await expect(
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: await xml(),
-        placeholderBasisPolicy: "zero",
-      }),
-    ).rejects.toMatchObject({
-      details: { reason: "reference_retained_source_incomplete" },
-    });
-    expect(
-      (
-        await pool.query(
-          "SELECT count(*)::integer n FROM portfolio_import_batches WHERE account_id=$1",
-          [fx.account],
-        )
-      ).rows[0].n,
-    ).toBe(1);
-  });
-  it("invalidates reference cache and the main commit when investment resolution changes after enrichment", async () => {
-    const fx = await fixture();
-    const old = await manual(fx);
-    const id = await sourceBatch(fx);
-    const path = await xml([ppEvent({ amount: "200", currency: "USD" })]);
-    await applyPortfolioImportReference({
-      batchIds: [id],
-      referencePath: path,
-      placeholderBasisPolicy: "zero",
-    });
-    const other = (
-      await pool.query(
-        "INSERT INTO investments(name,symbol,asset_class,currency) VALUES('Synthetic Bitcoin','BTC','crypto','USD') RETURNING id",
-      )
-    ).rows[0].id;
-    owned.investments.push(other);
-    await pool.query(
-      "UPDATE portfolio_import_staging_rows SET user_override_investment_id=$2 WHERE batch_id=$1",
-      [id, other],
-    );
-    await expect(
-      applyPortfolioImportReference({
-        batchIds: [id],
-        referencePath: path,
-        placeholderBasisPolicy: "zero",
-      }),
-    ).rejects.toMatchObject({ details: { reason: "reference_scope_changed" } });
-    const plan = await previewPortfolioImportReconciliation({
-      batchIds: [id],
-      adoptPolicy: "preserve_existing",
-    });
-    expect(plan.ready).toBe(false);
-    expect(plan.blockers.map((x) => x.reason)).toContain(
-      "reference_scope_changed",
-    );
-    await expect(
-      commitReviewedPortfolioImports({
-        batchIds: [id],
-        adoptPolicy: "preserve_existing",
-        expectedPlanFingerprint: plan.planFingerprint,
-      }),
-    ).rejects.toThrow();
-    expect(
-      (
-        await pool.query(
-          "SELECT account_id,currency FROM portfolio_transactions WHERE id=$1",
-          [old],
-        )
-      ).rows[0],
-    ).toEqual({ account_id: null, currency: "EUR" });
   });
 });

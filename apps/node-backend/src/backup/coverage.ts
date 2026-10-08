@@ -77,6 +77,7 @@ const BACKUP_COVERED_TABLES = Object.freeze([
   "portfolio_fund_holdings_documents",
   "portfolio_import_batches",
   "portfolio_import_duplicate_repair_journal",
+  "portfolio_import_income_recognition_journal",
   "portfolio_import_reconciliation_journal",
   "portfolio_import_staging_rows",
   "portfolio_performance_snapshots",

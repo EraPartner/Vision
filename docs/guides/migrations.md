@@ -2,8 +2,8 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-07
-updated: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     guide,
@@ -64,6 +64,12 @@ refuse to discard live receipts or populated custody/adjustments; later edits, s
 may need to be resolved first. Adjustment source links are removed only by parent rollback cascade. Removing an empty/restored journal loses its historical receipts.
 A disposable database migration test is not approval to run against user data.
 
+Migration `0124_portfolio_income_recognition` adds the default `standard` accounting role and an
+empty immutable paired-income journal. It does not infer income or rewrite existing financial
+values or old receipt JSON. Guarded application rollback must release active income pairs before
+an acquisition can be changed or the migration downgraded. See
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and [[docs/reference/data-model]].
+
 ## How Migrations Work
 
 ### Configuration
@@ -85,12 +91,42 @@ catalog fingerprint. New audit history starts with one `baseline_installed`
 event. The old Alembic files remain available for upgrades and downgrade
 evidence; fresh installation no longer replays them.
 
-Existing installations normally stay at `0118_audit_retention_pruner` while
+Older installations at `0118_audit_retention_pruner` stay there while
 the `0119` bridge awaits a maintenance window. This is deliberate: the six
 guarded manual contracts mean revision `0118` alone cannot establish the
 maintained schema. The bridge revision contains no DDL or data rewrite and
 rejects an unknown schema fingerprint. A failed bridge leaves the previous
 revision and audit head unchanged.
+
+### Automatic reviewed successors (0120–0125)
+
+The normal guarded startup/`db:upgrade` path separately recognizes these exact current revisions:
+
+- `0120_portfolio_import_reconciliation`
+- `0121_portfolio_asset_transfers`
+- `0122_portfolio_import_duplicate_repair`
+- `0123_portfolio_asset_adjustments`
+- `0124_portfolio_income_recognition`
+- `0125_brokerage_cash_origin`
+
+Without enabling the maintenance bridge, these existing profiles advance only to the pinned
+`0125_brokerage_cash_origin` target. A retained legacy object does not require replay of
+0119 for this reviewed additive extension. Existing financial values, legacy objects and old
+receipt JSON remain unchanged; the new role defaults to `standard`, and its journal starts empty.
+A stale successful-head cache cannot skip the pending extension. A subsequent boot at 0125 stays
+there rather than requesting 0118. Migration 0125 extends brokerage cash origin and protects
+only typed source-owned cash envelopes. It creates no ledger entries or bank counterparts during
+upgrade; downgrade refuses remaining brokerage-origin rows until guarded import rollback. See
+[[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+
+The registration is exact, not a numerical revision range. An unknown or unregistered successor
+refuses automatic upgrade without changing its revision marker or domain history. Adding a future
+migration file does not widen the target for these profiles. Fresh installations still load the
+reviewed 0119 baseline and follow the current chain. Older 0118 bridge/conversion requirements
+remain deferred to approved maintenance; this extension does not authorize that work or deployment
+to user data. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]].
+
+### Approved bridge or conversion for older profiles
 
 For an installation already at the contracted `0118` shape, stop every writer,
 choose a new absolute path for the retained logical backup, and run the
@@ -193,8 +229,9 @@ repository's `db-migrations` skill for schema work.
 
 > [!danger] Migrations in `alembic/versions/` auto-apply on boot
 > Native startup runs `apps/node-backend/scripts/db-migrate.js`, which performs the
-> `VARCHAR(64)` preflight and then upgrades to head. A migration therefore reaches every
-> installation on its next start. There is no separate operator-controlled soak window.
+> `VARCHAR(64)` preflight and then follows the guarded target policy above. Ordinary migrations
+> can reach eligible installations on their next start; the deferred maintenance bridge and the
+> pinned successor registration are explicit exceptions. There is no separate soak window.
 
 This is not hypothetical. `0055_drop_bank_account_string` was written as a "gated, apply-after-soak" contract-phase migration and dropped `transactions.bank_account`, `planned_transactions.bank_account`, the dual-write trigger and `mv_bank_balances`. Because it sat in the chain, it applied immediately — without the coupled read/write code — and **crashed startup**. `0055` is now a no-op, `0056_restore_bank_account_after_premature_drop` is its recovery, and the doctrine is recorded in [[docs/adr/088-account-entity|ADR-088]].
 
@@ -254,14 +291,14 @@ There is no checker for this one — the cost of a statement is not visible to s
 > [!warning] The upgrade is on the critical path to a usable app
 > `main.js` awaits `runMigrations()` **before** `app.listen()`, so nothing answers `/health` until the whole pending chain has applied. The packaged Electron shell polls that endpoint with a 60 s budget and shows an error page when it runs out ([[packaging/electron/main.js|main.js]] `pollReady`). A cold or big-jump upgrade stacks every pending migration into that one window.
 
-The costs are paid **once**, on the first boot after an update (`migrate.js` caches "already at head" keyed on revision + a fingerprint of `alembic/versions/`, and skips the alembic invocation entirely on every later boot). That is not a reason to ignore them: the one boot that pays is the one the user is watching.
+The costs are paid **once**, on the first boot after an update (`migrate.ts` caches "already at head" keyed on revision + a fingerprint of `alembic/versions/`, and skips the alembic invocation entirely on every later boot). That is not a reason to ignore them: the one boot that pays is the one the user is watching.
 
 ### What the runner already gives you
 
 - **Per-migration transactions.** `alembic/env.py` passes `transaction_per_migration=True` on PostgreSQL, so each migration commits on its own. A kill mid-chain loses only the in-flight migration; the next boot resumes from the last committed revision instead of re-running everything.
-- **A 10-minute execFile budget, overridable.** `migrate.js` defaults to `600_000` ms and honours `VISION_MIGRATE_TIMEOUT_MS` (`0` disables it). Because progress is durable per-migration, a timeout mid-chain is a pause, not a rollback.
+- **A 10-minute execFile budget, overridable.** `migrate.ts` defaults to `600_000` ms and honours `VISION_MIGRATE_TIMEOUT_MS` (`0` disables it). Because progress is durable per-migration, a timeout mid-chain is a pause, not a rollback.
 - **`autocommit_block()`.** Since each migration owns its transaction, `op.get_context().autocommit_block()` can suspend it for statements PostgreSQL refuses to run transactionally — `CREATE INDEX CONCURRENTLY` above all. Everything inside such a block must be individually idempotent: it is already committed if a later statement fails.
-- **A post-migration `ANALYZE`.** After a real (non-cached) upgrade, `migrate.js` ANALYZEs `transactions` and `asset_price_history`, so a migration that rewrote either one does not hand the planner stale statistics. In a split-role install this and the startup analysis of ordinary `public` tables use the owner/migration connection; the application role is not granted broad maintenance rights. Any _other_ table you rewrite in full is yours to `ANALYZE`.
+- **A post-migration `ANALYZE`.** After a real (non-cached) upgrade, `migrate.ts` ANALYZEs `transactions` and `asset_price_history`, so a migration that rewrote either one does not hand the planner stale statistics. In a split-role install this and the startup analysis of ordinary `public` tables use the owner/migration connection; the application role is not granted broad maintenance rights. Any _other_ table you rewrite in full is yours to `ANALYZE`.
 - **Split-role privilege repair.** Owner-role default privileges grant the application role data access to tables and sequences created by later migrations. Startup also reapplies privileges to every current ordinary table and view individually. It skips objects already owned by the application role, including the runtime-managed materialized views, so one ownership exception cannot cause PostgreSQL to reject the entire current-table grant set.
 
 ### The expensive shapes, and what to write instead

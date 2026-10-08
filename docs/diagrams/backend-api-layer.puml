@@ -42,16 +42,11 @@ package "Middleware" {
     +readPortfolioWorkbook: bounded ZIP + typed provenance
   }
 
-  class PortfolioReferenceUpload {
-    +single XML, 10 MiB, two strict fields
-    +UTF-8; DTD/entity declarations forbidden
-    +bounded depth/nodes/references; temp cleanup
-  }
 
   class Security {
     +hostGuard: exact destination authority before CORS, body parsing, health and routes; SERVER_ALLOWED_HOSTS adds explicit hosts
-    +cors: middleware/cors.js (strict allowlist, replaces cors package)
-    +compression: middleware/compression.js (node:zlib, replaces compression package)
+    +cors: middleware/cors.ts (strict allowlist, replaces cors package)
+    +compression: middleware/compression.ts (node:zlib, replaces compression package)
     +securityHeaders: middleware (inline in main.js)
     +requestLogger: middleware (inline in main.js)
     +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
@@ -171,7 +166,6 @@ package "Routes" {
     +POST /batches/:id/rows/investment-override : resolve review group atomically
     +POST /batches/:id/rows/:rowId/investment-override : resolve unmatched row
     +POST /batches/:id/commit : atomic maintained reviewed commit
-    +POST /reconciliation/reference : bounded XML, staging-only effective scope
     +POST /reconciliation/preview : reviewed multi-batch plan
     +POST /reconciliation/commit : fingerprint-pinned atomic scope
   }
@@ -403,7 +397,6 @@ package "Services" {
   class PortfolioImportBatchService <<ADR-078>>
   class PortfolioImportCommitService
   class PortfolioImportReconciliationService
-  class PortfolioImportReferenceService
   class PortfolioExposureService <<ADR-150>>
   class AuditVerificationService <<ADR-157>>
   class AuditRetentionService <<ADR-162>>
@@ -430,7 +423,6 @@ Main --> InvestmentsRouter
 Main --> ImportRouter
 Main --> PortfolioImportRouter
 PortfolioImportRouter --> PortfolioUpload : upload + preflight before batch creation
-PortfolioImportRouter --> PortfolioReferenceUpload : separate XML evidence boundary
 Main --> SettingsRouter
 Main --> WatchlistRouter
 Main --> SavedChartsRouter
@@ -476,7 +468,6 @@ PortfolioImportRouter ..> ImportBatchRoutes : registers shared batch routes
 PortfolioImportRouter --> PortfolioImportBatchService
 PortfolioImportRouter --> PortfolioImportCommitService : reviewed atomic commit
 PortfolioImportRouter --> PortfolioImportReconciliationService : preview selected scope
-PortfolioImportRouter --> PortfolioImportReferenceService : explicit primary scope + XML policy
 SettingsRouter --> SR2
 WatchlistRouter --> WR
 SavedChartsRouter --> SCR

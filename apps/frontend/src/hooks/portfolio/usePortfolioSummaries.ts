@@ -61,6 +61,11 @@ function buildSummary(
         taxTransactions: conv(core.taxTxnAmount),
         totalDividends: conv(core.totalDividends),
         totalIncome: conv(core.totalIncome),
+        totalInKindIncome: localInKindIncome(
+            txns,
+            inv.currency || "EUR",
+            targetCurrency,
+        ),
         currentValue: conv(core.currentValue),
         currentPrice: Number(inv.current_price)
             ? conv(Number(inv.current_price))
@@ -84,10 +89,36 @@ function buildSummary(
     } as InvestmentSummary;
 }
 
+// Never apply the investment's currency or today's rate to literal income paid
+// in another currency. Same-currency amounts need no rate; foreign subtotals
+// wait for the canonical dated projection.
+function localInKindIncome(
+    txns: PortfolioTransaction[],
+    nativeCurrency: string,
+    targetCurrency: string,
+): number | undefined {
+    const income = txns.filter(
+        (tx) => tx.income_recognition_role === "included_in_units",
+    );
+    if (
+        income.some(
+            (tx) =>
+                (tx.currency || nativeCurrency).toUpperCase() !==
+                targetCurrency,
+        )
+    )
+        return undefined;
+    return toNumber(addAll(income.map((tx) => tx.amount)));
+}
+
 interface UsePortfolioSummariesInput {
     investments: Investment[];
     transactions: PortfolioTransaction[];
     canonicalSummaries?: PortfolioSummaryItem[];
+    canonicalArchivedInKindIncome?: Array<{
+        id: number;
+        totalInKindIncome: number;
+    }>;
     /** Hide active ordinary-only calculations while canonical data is unavailable. */
     requireCanonical?: boolean;
 }
@@ -100,6 +131,7 @@ export function usePortfolioSummaries({
     investments,
     transactions,
     canonicalSummaries,
+    canonicalArchivedInKindIncome,
     requireCanonical = false,
 }: UsePortfolioSummariesInput) {
     const { appSettings } = useAppSettings();
@@ -120,6 +152,15 @@ export function usePortfolioSummaries({
         const canonicalById = new Map(
             (canonicalSummaries ?? []).map((summary) => [summary.id, summary]),
         );
+        const archivedIncomeById =
+            canonicalArchivedInKindIncome === undefined
+                ? undefined
+                : new Map(
+                      canonicalArchivedInKindIncome.map((item) => [
+                          item.id,
+                          item.totalInKindIncome,
+                      ]),
+                  );
         return investments.flatMap((inv) => {
             const txns = txnsByInvestment.get(inv.id) ?? [];
             if (inv.is_active && (requireCanonical || canonicalSummaries)) {
@@ -129,6 +170,7 @@ export function usePortfolioSummaries({
                     {
                         ...inv,
                         ...canonical,
+                        totalInKindIncome: canonical.totalInKindIncome ?? 0,
                         assetClass: inv.asset_class,
                         asset_class: inv.asset_class,
                         price_provider: inv.price_provider,
@@ -138,17 +180,22 @@ export function usePortfolioSummaries({
                     },
                 ];
             }
-            return [
-                buildSummary(inv, txns, {
-                    costBasisMethod,
+            const local = buildSummary(inv, txns, {
+                costBasisMethod,
+                targetCurrency,
+                multiplier: multiplierFor(
+                    inv.currency || "EUR",
                     targetCurrency,
-                    multiplier: multiplierFor(
-                        inv.currency || "EUR",
-                        targetCurrency,
-                    ),
-                    today,
-                }),
-            ];
+                ),
+                today,
+            });
+            if (!inv.is_active) {
+                local.totalInKindIncome = archivedIncomeById
+                    ? (archivedIncomeById.get(inv.id) ?? 0)
+                    : (canonicalById.get(inv.id)?.totalInKindIncome ??
+                      local.totalInKindIncome);
+            }
+            return [local];
         });
     }, [
         investments,
@@ -157,6 +204,7 @@ export function usePortfolioSummaries({
         targetCurrency,
         multiplierFor,
         canonicalSummaries,
+        canonicalArchivedInKindIncome,
         requireCanonical,
     ]);
 

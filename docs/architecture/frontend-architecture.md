@@ -3,8 +3,8 @@ title: Frontend Architecture
 type: architecture
 status: active
 description: "React frontend architecture, design system, and diagrams with liquid-glass aesthetic, visx charts, Framer Motion, and Zustand store. May 2026 Tailwind v4 migration with unified CSS architecture. June 2026 Liquid Glass v2 — atmosphere layer, saturated blur tiers, CommandPalette, optimistic mutations, route preload. June 2026 Premium v3 — RollingNumber/Money/DeltaPill, chart scrub+sync, ChartSkeleton, PageTitleContext, palette v2, ShortcutsOverlay + go-to sequences, animated tabs, workspace aurora, ShaderAurora behind visual-effects tier model (ADR-075), per-widget dashboard hydration, optimistic create. 2026-06-24: --gain/--loss CSS semantic tokens unified app-wide (tokens.css baseline, skin-v2.css Okabe-Ito overrides); gain/loss Tailwind color utilities added; colorblindGainLoss default OFF/classic."
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags: [architecture, frontend, uml, plantuml, react, phase-4, phase-6, phase-9, liquid-glass, liquid-glass-v2, premium-v3, visx, framer-motion, statistics-refactoring, zustand, state-management, tailwind-v4, css-architecture, command-palette, optimistic-updates, route-preload, chart-scrub, chart-sync, shader-aurora, visual-effects-tiers, auto-adapt-display, fx-reduced, role-based-glass, glass-by-default, june-2026, gain-loss, css-tokens, skin-v2, tailwind-colors]
 aliases: [frontend architecture, react architecture, frontend design, design system]
 ---
@@ -38,12 +38,9 @@ file updates; stale detection cannot replace them. Each statement can configure 
 counterpart and adoption-policy override. Sequential POST SSE staging persists tab-scoped batch
 metadata without file bytes. The session previews a combined before/source plan and commits only
 its current ready fingerprint. Scope/configuration changes invalidate the review; confirmed
-success invalidates portfolio queries. A separate optional original XML input and explicit zero
-placeholder policy enrich staging after primary uploads; the same choice selects Kinesis zero
-yield basis. Existing imports enter scope only through explicit selection. Managed clones and
-supplemental metadata replace the effective review IDs, with original selection and policy
-retained. Scope/XML/policy changes require restaging and a fresh reference review. Server staging
-and financial history remain authoritative.
+success invalidates portfolio queries. Existing imports enter scope only through explicit selection.
+Queued broker batches keep their IDs and retained server proof without XML reattachment. The public
+XML reference upload workflow is unavailable. Server staging and financial history remain authoritative.
 See [[docs/features/portfolio-import]], [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
 and [[docs/architecture/index]] for the workflow and architecture catalogue.
 
@@ -743,7 +740,17 @@ AppLayout
 └── Routes (each page wrapped in per-widget skeleton pattern)
 ```
 
-### Related Documentation
+### Read-only income accounting role
+
+Transaction and edit dialogs disclose the read-only accounting role. Canonical active summaries
+and the additive archived income projection retain transaction-date conversion, while ordinary
+income, gain and tax calculations exclude income already represented by acquired units. The import
+session keeps bounded source metadata and validates fresh reviews after remount. There is no added
+income summary panel or public XML reference control. See
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/features/portfolio]] and
+[[docs/features/portfolio-import]].
+
+## Related Documentation
 
 - [[docs/adr/075-visual-effects-tiers-display-adaptation|ADR-075: Visual-Effects Tiers and Per-Display Auto-Adaptation]] (2026-06-12)
 - [[docs/adr/071-premium-v3-effects-toggle|ADR-071: Premium v3 — Numbers, Chart Interactions, and Enhanced-Effects Toggle]] (June 2026; enhancedEffects boolean superseded by ADR-075)

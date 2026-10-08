@@ -12,7 +12,10 @@
  * already numeric.
  */
 import type { AssetClass } from "@vision/types/assetClasses";
-import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
+import type {
+    PortfolioTxnType,
+    PortfolioIncomeRecognitionRole,
+} from "@vision/types/portfolioTxnTypes";
 import type { RecurrenceInterval } from "@vision/types/recurrence";
 import type { operations } from "./generated";
 
@@ -548,6 +551,8 @@ export interface PortfolioTransaction {
     fees?: number;
     taxes?: number;
     dividend_amount_convention?: DividendAmountConvention;
+    /** Absent in older responses means standard; assigned only by proved import. */
+    readonly income_recognition_role?: PortfolioIncomeRecognitionRole;
     currency: string;
     fx_rate_to_eur?: number;
     account_id?: number | null;

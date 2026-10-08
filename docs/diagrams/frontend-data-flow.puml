@@ -97,7 +97,7 @@ package "External Services" {
 ' Relationships
 Pages --> PortfolioImportSession
 PortfolioImportSession --> PortfolioImportDetection : complete CSV / Saxo XLSX detection
-PortfolioImportSession --> PortfolioImportsApi : sequential SSE; optional asset scope / XML / explicit zero; effective scope; preview/commit hash
+PortfolioImportSession --> PortfolioImportsApi : sequential SSE; optional asset scope; bounded zero policy; retained source scope; preview/commit hash
 PortfolioImportSession --> ImportSessionStorage : staged batch metadata only
 PortfolioImportsApi --> ApiClient : strict JSON reconciliation / multipart upload
 PortfolioImportSession --> QueryClient : invalidate confirmed committed scope

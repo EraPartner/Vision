@@ -18,7 +18,10 @@ import {
 import { toDecimal, roundMoney } from "../../lib/money.ts";
 import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
-import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
+import {
+  areLotsFullyAssigned,
+  projectAssetTransferPartitions,
+} from "@vision/shared-utils/portfolio";
 
 /** @typedef {import('decimal.js').default} Decimal */
 
@@ -112,16 +115,18 @@ import { areLotsFullyAssigned } from "@vision/shared-utils/portfolio";
 /**
  * One replayed transaction, coerced from {@link
  * import('../../types/rows.ts').PortfolioMathTxRow} for the day walk (numeric
- * strings parsed to number, `fx_rate_to_eur` collapsed to `undefined` when unset).
+ * amounts and units retained as Decimal, `fx_rate_to_eur` collapsed to
+ * `undefined` when unset).
  * @typedef {object} SnapshotTxEntry
  * @property {number} investmentId
+ * @property {number} id
  * @property {string} type
- * @property {number} amount
- * @property {number} units
+ * @property {Decimal} amount
+ * @property {Decimal} units
  * @property {number|null} accountId
  * @property {number|undefined} [sourceAccountId]
  * @property {number|undefined} [destinationAccountId]
- * @property {number} [feeUnits]
+ * @property {Decimal} [feeUnits]
  * @property {string} currency
  * @property {number|undefined} fxRateToEur
  */
@@ -381,21 +386,26 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
   }
 
   // { day: tx[] }
-  // Within a day, replay buys/gifts/splits before sells so a sell can never be
-  // applied against units its own-day buy hasn't established yet (which would
-  // clamp the buy away and mint phantom units — e.g. after an earlier buy was
-  // deleted). Mirrors the query's ORDER BY sell-last key; kept defensively in JS
-  // (per the same pattern as the price-history sort) so the day-walk stays
-  // correct regardless of raw row order.
+  // Histories without custody replay same-day acquisitions before sells, so
+  // legacy oversells cannot leave phantom units after a later buy. Custody
+  // histories retain the shared event-ID order required by the lot replay.
   /** @type {Record<string, SnapshotTxEntry[]>} */
   const txByDay = {};
+  const custodyInvestments = new Set(
+    allTxRows
+      .filter((row) =>
+        ["asset_transfer", "asset_adjustment"].includes(row.type),
+      )
+      .map((row) => Number(row.investment_id)),
+  );
   for (const row of allTxRows) {
     if (!txByDay[row.day]) txByDay[row.day] = [];
     txByDay[row.day].push({
       investmentId: Number(row.investment_id),
+      id: Number(row.id ?? 0),
       type: row.type,
-      amount: Number(row.amount) || 0,
-      units: Number(row.units) || 0,
+      amount: toDecimal(row.amount || 0),
+      units: toDecimal(row.units || 0),
       accountId: row.account_id == null ? null : Number(row.account_id),
       sourceAccountId:
         row.source_account_id == null
@@ -405,16 +415,21 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         row.destination_account_id == null
           ? undefined
           : Number(row.destination_account_id),
-      feeUnits: Number(row.fee_units) || 0,
+      feeUnits: toDecimal(row.fee_units || 0),
       currency: row.currency,
       fxRateToEur:
         row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined,
     });
   }
-  // Stable sort each day: non-sells (buy/gift/split/…) first, sells last.
+  // Custody events share trade IDs and must keep their original chronology.
+  // Histories without custody retain sell-last replay for legacy oversells.
   for (const dayTxs of Object.values(txByDay)) {
     dayTxs.sort(
-      (a, b) => (a.type === "sell" ? 1 : 0) - (b.type === "sell" ? 1 : 0),
+      (a, b) =>
+        a.investmentId - b.investmentId ||
+        (custodyInvestments.has(a.investmentId)
+          ? a.id - b.id
+          : (a.type === "sell" ? 1 : 0) - (b.type === "sell" ? 1 : 0)),
     );
   }
 
@@ -439,6 +454,27 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       )
       .map(([investmentId]) => investmentId),
   );
+  const adjustmentLegs = new Map();
+  for (const investmentId of custodyInvestments) {
+    if (!fullyAssignedUnitInvestments.has(investmentId))
+      throw new Error("Asset custody snapshot history is not fully assigned");
+    const originalRows = allTxRows
+      .filter((row) => Number(row.investment_id) === investmentId)
+      .map((row) => ({
+        ...row,
+        date: row.day,
+        fxMultiplier: convertAmount(
+          1,
+          row.currency,
+          row.fx_rate_to_eur == null ? undefined : Number(row.fx_rate_to_eur),
+          row.day,
+        ).toFixed(),
+      }));
+    for (const legs of projectAssetTransferPartitions(originalRows).values())
+      for (const leg of legs)
+        if (["asset_fee", "unit_reversal"].includes(leg.type))
+          adjustmentLegs.set(`${investmentId}:${Number(leg.id)}`, leg);
+  }
 
   // --- Day walk helpers ---
 
@@ -520,8 +556,8 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
   function txFallbackPrice(tx, invCurrency, asOfDay) {
     const from = (tx.currency || "EUR").toUpperCase();
     const to = (invCurrency || "EUR").toUpperCase();
-    const perUnit = tx.amount / tx.units;
-    if (from === to) return perUnit;
+    const perUnit = tx.amount.div(tx.units);
+    if (from === to) return perUnit.toNumber();
     const rateFrom =
       tx.fxRateToEur !== undefined &&
       Number.isFinite(tx.fxRateToEur) &&
@@ -580,9 +616,9 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
     allDays.push(epochMsToUtcYmd(d.getTime()));
   }
 
-  /** @type {Record<number, number>} */
+  /** @type {Record<number, Decimal>} */
   const unitsByInvestment = {};
-  /** @type {Map<number, Map<number|null, number>>} */
+  /** @type {Map<number, Map<number|null, Decimal>>} */
   const unitsByInvestmentPartition = new Map();
   // Cost-weighted average purchase-date FX multiplier per unit investment:
   // m̄ = Σ(buyAmount_i × m_i) / Σ(buyAmount_i), where m_i is the txn-date
@@ -606,7 +642,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
   const refreshTotalUnits = (investmentId) => {
     unitsByInvestment[investmentId] = [
       ...partitionUnits(investmentId).values(),
-    ].reduce((heldUnits, units) => heldUnits + units, 0);
+    ].reduce((heldUnits, units) => heldUnits.plus(units), toDecimal(0));
   };
   const neutralPartitions = (investmentId) => {
     let partitions = fxNeutralState.get(investmentId);
@@ -663,16 +699,19 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         addToSleeve(investedBySleeve, inv?.assetClass, converted);
         const key = partitionKey(tx);
         const partitionState = partitionUnits(tx.investmentId);
-        partitionState.set(key, (partitionState.get(key) || 0) + tx.units);
+        partitionState.set(
+          key,
+          (partitionState.get(key) ?? toDecimal(0)).plus(tx.units),
+        );
         refreshTotalUnits(tx.investmentId);
-        if (tx.units > 0 && tx.amount > 0)
+        if (tx.units.gt(0) && tx.amount.gt(0))
           lastKnownPrice[tx.investmentId] = txFallbackPrice(
             tx,
             inv?.currency,
             day,
           );
 
-        if (inv && tx.amount > 0) {
+        if (inv && tx.amount.gt(0)) {
           const states = neutralPartitions(tx.investmentId);
           const fxs = states.get(key) ?? {
             weight: toDecimal(0),
@@ -699,26 +738,21 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
             "Asset transfer snapshot history is not fully assigned",
           );
         const states = partitionUnits(tx.investmentId);
-        const sourceUnits = states.get(tx.sourceAccountId) || 0;
-        if (tx.units > sourceUnits)
+        const sourceUnits = states.get(tx.sourceAccountId) ?? toDecimal(0);
+        if (tx.units.gt(sourceUnits))
           throw new Error(
             "Asset transfer exceeds source holdings during snapshot replay",
           );
-        const received = toDecimal(tx.units).minus(tx.feeUnits);
-        states.set(
-          tx.sourceAccountId,
-          toDecimal(sourceUnits).minus(tx.units).toNumber(),
-        );
+        const received = tx.units.minus(tx.feeUnits);
+        states.set(tx.sourceAccountId, sourceUnits.minus(tx.units));
         states.set(
           tx.destinationAccountId,
-          toDecimal(states.get(tx.destinationAccountId) || 0)
-            .plus(received)
-            .toNumber(),
+          (states.get(tx.destinationAccountId) ?? toDecimal(0)).plus(received),
         );
         const neutral = neutralPartitions(tx.investmentId);
         const source = neutral.get(tx.sourceAccountId);
-        if (source && sourceUnits > 0) {
-          const grossRatio = toDecimal(tx.units).div(sourceUnits);
+        if (source && sourceUnits.gt(0)) {
+          const grossRatio = tx.units.div(sourceUnits);
           const netRatio = received.div(tx.units);
           const movedWeight = source.weight.times(grossRatio);
           const movedRate = source.weightedRate.times(grossRatio);
@@ -737,6 +771,39 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           neutral.set(tx.destinationAccountId, destination);
         }
         refreshTotalUnits(tx.investmentId);
+      } else if (tx.type === "asset_adjustment") {
+        const leg = adjustmentLegs.get(`${tx.investmentId}:${tx.id}`);
+        if (!leg) throw new Error("Asset adjustment allocation is unavailable");
+        const key = partitionKey(tx);
+        const states = partitionUnits(tx.investmentId);
+        const held = states.get(key) ?? toDecimal(0);
+        if (tx.units.gt(held))
+          throw new Error("Asset adjustment exceeds snapshot holdings");
+        states.set(key, held.minus(tx.units));
+        refreshTotalUnits(tx.investmentId);
+        const neutral = neutralPartitions(tx.investmentId).get(key);
+        if (neutral && leg.type === "asset_fee") {
+          // Snapshot FX weights use principal, while canonical lot basis also
+          // includes purchase fees/taxes. Remove each consumed original
+          // principal at its original FX, without creating a capital flow.
+          for (const lot of leg.consumedLots) {
+            const acquisition = allTxRows.find(
+              (row) => Number(row.id) === Number(lot.acquisitionId),
+            );
+            const originalCost = toDecimal(acquisition.amount || 0)
+              .plus(acquisition.fees || 0)
+              .plus(acquisition.taxes || 0);
+            const principalRatio = originalCost.gt(0)
+              ? toDecimal(acquisition.amount || 0).div(originalCost)
+              : toDecimal(0);
+            neutral.weight = neutral.weight.minus(
+              lot.costBasis.times(principalRatio),
+            );
+            neutral.weightedRate = neutral.weightedRate.minus(
+              lot.costBasisConv.times(principalRatio),
+            );
+          }
+        }
       } else if (tx.type === "sell") {
         // Clamp oversells to held units (mirrors calculateCostBasis's
         // min(units, totalUnits)) so a later buy isn't offset by a negative.
@@ -744,11 +811,11 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
         // apply that ratio to invested cash flow so snapshot gain stays aligned.
         const key = partitionKey(tx);
         const partitionState = partitionUnits(tx.investmentId);
-        const heldUnits = partitionState.get(key) || 0;
-        const consumedUnits = Math.min(heldUnits, tx.units);
+        const heldUnits = partitionState.get(key) ?? toDecimal(0);
+        const consumedUnits = heldUnits.lte(tx.units) ? heldUnits : tx.units;
         const effectiveConverted =
-          inv && tx.units > 0
-            ? converted.times(toDecimal(consumedUnits).div(tx.units))
+          inv && tx.units.gt(0)
+            ? converted.times(consumedUnits.div(tx.units))
             : converted;
         cumulativeInvested = cumulativeInvested.minus(effectiveConverted);
         addToSleeve(
@@ -756,9 +823,9 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           inv?.assetClass,
           effectiveConverted.negated(),
         );
-        partitionState.set(key, Math.max(0, heldUnits - tx.units));
+        partitionState.set(key, heldUnits.minus(consumedUnits));
         refreshTotalUnits(tx.investmentId);
-        if (tx.units > 0 && tx.amount > 0)
+        if (tx.units.gt(0) && tx.amount.gt(0))
           lastKnownPrice[tx.investmentId] = txFallbackPrice(
             tx,
             inv?.currency,
@@ -766,8 +833,8 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
           );
 
         const fxs = fxNeutralState.get(tx.investmentId)?.get(key);
-        if (fxs && heldUnits > 0 && tx.units > 0) {
-          const factor = toDecimal(heldUnits - consumedUnits).div(heldUnits);
+        if (fxs && heldUnits.gt(0) && tx.units.gt(0)) {
+          const factor = heldUnits.minus(consumedUnits).div(heldUnits);
           fxs.weight = fxs.weight.times(factor);
           fxs.weightedRate = fxs.weightedRate.times(factor);
         }
@@ -777,19 +844,19 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       } else if (tx.type === "split") {
         // units = new total post-split; invested/cost basis is unchanged
         // (mirrors calculateCostBasis). Only applies once units are held.
-        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
-        if (heldUnits > 0 && tx.units > 0) {
+        const heldUnits = unitsByInvestment[tx.investmentId] ?? toDecimal(0);
+        if (heldUnits.gt(0) && tx.units.gt(0)) {
           const partitions = partitionUnits(tx.investmentId);
-          const entries = [...partitions.entries()].filter(
-            ([, units]) => units > 0,
+          const entries = [...partitions.entries()].filter(([, units]) =>
+            units.gt(0),
           );
-          let allocated = 0;
+          let allocated = toDecimal(0);
           entries.forEach(([key, units], index) => {
             const nextUnits =
               index === entries.length - 1
-                ? tx.units - allocated
-                : (units / heldUnits) * tx.units;
-            allocated += nextUnits;
+                ? tx.units.minus(allocated)
+                : units.div(heldUnits).times(tx.units);
+            allocated = allocated.plus(nextUnits);
             partitions.set(key, nextUnits);
           });
           refreshTotalUnits(tx.investmentId);
@@ -797,8 +864,8 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       } else if (tx.type === "return_of_capital") {
         // Returns capital, reducing net invested (mirrors calculateCostBasis
         // reducing cost basis). Units are unchanged.
-        const heldUnits = unitsByInvestment[tx.investmentId] || 0;
-        if (heldUnits > 0) {
+        const heldUnits = unitsByInvestment[tx.investmentId] ?? toDecimal(0);
+        if (heldUnits.gt(0)) {
           cumulativeInvested = cumulativeInvested.minus(converted);
           addToSleeve(investedBySleeve, inv?.assetClass, converted.negated());
         } else if (nonUnitS) {
@@ -827,8 +894,8 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
     const isLatestDay = day === todayYmd;
 
     for (const inv of investmentsById.values()) {
-      const units = unitsByInvestment[inv.id] || 0;
-      if (units <= 0) continue;
+      const units = unitsByInvestment[inv.id] ?? toDecimal(0);
+      if (units.lte(0)) continue;
 
       // Latest day: use the live current_price so the headline snapshot value
       // always reconciles with /portfolio-summary, even if asset_price_history
@@ -864,7 +931,7 @@ export async function computeDailySnapshots(targetCurrency = "EUR") {
       if (fxs) {
         const heldPartitions = partitionUnits(inv.id);
         for (const [key, held] of heldPartitions) {
-          if (held <= 0) continue;
+          if (held.lte(0)) continue;
           const state = fxs.get(key);
           const nativePartValue = toDecimal(held).times(price);
           invValueNeutral = invValueNeutral.plus(

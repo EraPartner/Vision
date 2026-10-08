@@ -3,6 +3,7 @@ import { z } from "zod";
 import { Link } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,13 +22,11 @@ import {
     getPortfolioImportPreview,
     previewPortfolioImportReconciliation,
     commitReviewedPortfolioImports,
-    applyPortfolioImportReference,
-    portfolioReferenceResultSchema,
     listPortfolioImportBatches,
     type PortfolioReconciliationPlan,
     type PortfolioReconciliationPolicy,
+    type PortfolioReconciliationMode,
     type ReviewedPortfolioImportResult,
-    type PortfolioReferenceResult,
     type PortfolioImportBatchPage,
 } from "@/lib/api/portfolioImports";
 import type { Account } from "@/types/api";
@@ -40,7 +39,8 @@ import { portfolioImportPresetConfig } from "./portfolioImportPresets";
 import { PortfolioImportHistory } from "./PortfolioImportHistory";
 
 const STORAGE_KEY = "vision.portfolio-import.latest-session.v1";
-const REFERENCE_STORAGE_KEY = "vision.portfolio-import.latest-reference.v1";
+const SETTINGS_STORAGE_KEY =
+    "vision.portfolio-import.latest-review-settings.v1";
 const retainedIbkrConfigSchema = z.object({
     format: z.literal("ibkr_transaction_history"),
 });
@@ -71,6 +71,7 @@ const storedSessionSchema = z
                         "nexo",
                         "nexo_pro",
                         "saxo",
+                        "native_receipts",
                     ]),
                     sourceAccountIdentities: z.array(z.string()),
                 })
@@ -115,29 +116,6 @@ interface Statement {
     error?: string;
 }
 
-const storedReferenceSchema = z.object({
-    name: z.string().min(1),
-    placeholderBasisPolicy: z.literal("zero").optional(),
-    applied: portfolioReferenceResultSchema.optional(),
-});
-interface Reference {
-    name?: string;
-    file?: File;
-    placeholderBasisPolicy?: "zero";
-    applied?: PortfolioReferenceResult;
-}
-function readReference(): Reference {
-    try {
-        const stored: unknown = JSON.parse(
-            sessionStorage.getItem(REFERENCE_STORAGE_KEY) ?? "{}",
-        );
-        const parsed = storedReferenceSchema.safeParse(stored);
-        return parsed.success ? parsed.data : {};
-    } catch {
-        return {};
-    }
-}
-
 function readSession(): Statement[] {
     try {
         const stored: unknown = JSON.parse(
@@ -166,14 +144,68 @@ function persistSession(statements: Statement[]) {
     }
 }
 
+function sourceRoutingKey(statements: Statement[]) {
+    return JSON.stringify(
+        statements.map((item) => ({
+            id: item.id,
+            name: item.name,
+            kind: item.kind,
+            originalBatchId: item.originalBatchId,
+            source: item.detected?.source,
+            identities: item.detected?.sourceAccountIdentities,
+            accountId: item.accountId,
+            adoptPolicy: item.adoptPolicy,
+            includedSymbols: item.includedSymbols ?? "",
+            transferDestinationAccountId: item.transferDestinationAccountId,
+            transferOriginAccountId: item.transferOriginAccountId,
+        })),
+    );
+}
+const storedSettingsSchema = z.object({
+    sourceRoutingKey: z.string(),
+    batchIds: z.array(z.number().int().positive()).min(1).max(100),
+    reconciliationMode: z.enum([
+        "full",
+        "adopt_existing_only",
+        "correct_existing_only",
+        "record_in_kind_income_only",
+        "record_cash_only",
+    ]),
+    policy: z.enum(["auto", "preserve_existing", "prefer_source"]),
+    cashFundingPolicy: z.literal("own_account_transfer").optional(),
+});
+function readSettings(statements: Statement[]) {
+    try {
+        const parsed = storedSettingsSchema.safeParse(
+            JSON.parse(sessionStorage.getItem(SETTINGS_STORAGE_KEY) ?? "null"),
+        );
+        if (
+            parsed.success &&
+            parsed.data.sourceRoutingKey === sourceRoutingKey(statements) &&
+            JSON.stringify(parsed.data.batchIds) ===
+                JSON.stringify(
+                    statements
+                        .map((item) => item.batchId)
+                        .sort((a, b) => a! - b!),
+                )
+        )
+            return parsed.data;
+    } catch {
+        /* Old or unavailable checkpoints use the original full-history defaults. */
+    }
+    return undefined;
+}
+
 const sourceLabels = {
     ibkr: "portfolioImport.ibkrParser",
     kinesis: "portfolioImport.kinesisParser",
     nexo: "portfolioImport.nexoParser",
     nexo_pro: "portfolioImport.nexoProParser",
     saxo: "portfolioImport.saxoParser",
+    native_receipts: "importPage.csvFile",
 };
 const actions = [
+    "record_income",
     "insert",
     "adopt",
     "repair_duplicate",
@@ -198,6 +230,7 @@ const fields = [
     "currency",
     "fx_rate_to_eur",
     "dividend_amount_convention",
+    "income_recognition_role",
 ];
 const blockerKeys: Record<string, string> = {
     incomplete_source: "incomplete",
@@ -225,6 +258,7 @@ const blockerKeys: Record<string, string> = {
     missing_adjustment_identity: "identity",
     unresolved_zero_yield_policy: "zeroYield",
     projected_history_conflict: "projectedHistory",
+    cash_reconciliation_required: "cashScope",
 };
 
 interface Props {
@@ -235,16 +269,26 @@ export function PortfolioImportSession({ accounts }: Props) {
     const { t } = useLanguage();
     const queryClient = useQueryClient();
     const [statements, setStatements] = useState<Statement[]>(readSession);
+    const [initialSettings] = useState(() => readSettings(statements));
     const statementsRef = useRef(statements);
-    const [reference, setReference] = useState<Reference>(readReference);
-    const referenceRef = useRef(reference);
     const [existingBatches, setExistingBatches] =
         useState<PortfolioImportBatchPage>();
     const [existingBatchId, setExistingBatchId] = useState("");
     const [existingLoading, setExistingLoading] = useState(false);
     const [policy, setPolicy] = useState<
         "auto" | PortfolioReconciliationPolicy
-    >("auto");
+    >(initialSettings?.policy ?? "auto");
+    const [reconciliationMode, setReconciliationMode] =
+        useState<PortfolioReconciliationMode>(
+            initialSettings?.reconciliationMode ?? "full",
+        );
+    const [cashConfirmedSourceKey, setCashConfirmedSourceKey] = useState<
+        string | undefined
+    >(
+        initialSettings?.cashFundingPolicy
+            ? initialSettings.sourceRoutingKey
+            : undefined,
+    );
     const [operation, setOperation] = useState<
         "idle" | "staging" | "preview" | "commit" | "rollback"
     >("idle");
@@ -267,7 +311,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     useUnsavedChanges(
         statements.some(
             (item) => !["staged", "completed"].includes(item.status),
-        ) || Boolean(reference.name && !reference.applied),
+        ),
     );
 
     useEffect(() => {
@@ -287,102 +331,6 @@ export function PortfolioImportSession({ accounts }: Props) {
         },
         [],
     );
-    const updateReference = useCallback((next: Reference) => {
-        referenceRef.current = next;
-        try {
-            if (next.name) {
-                const { file: _file, ...stored } = next;
-                sessionStorage.setItem(
-                    REFERENCE_STORAGE_KEY,
-                    JSON.stringify(stored),
-                );
-            } else sessionStorage.removeItem(REFERENCE_STORAGE_KEY);
-        } catch {
-            /* Storage restrictions cannot prevent staging. */
-        }
-        if (mounted.current) setReference(next);
-    }, []);
-    const restageReferenceScope = (previous: Statement[]) =>
-        previous
-            .filter((item) => item.kind !== "reference" || item.originalBatchId)
-            .map((item, index): Statement => ({
-                ...item,
-                ...(item.originalBatchId
-                    ? {
-                          id: `existing-${item.originalBatchId}`,
-                          name: item.originalSourceName ?? item.name,
-                          kind: "existing" as const,
-                          originalBatchId: undefined,
-                          originalSourceName: undefined,
-                      }
-                    : {}),
-                batchId:
-                    item.originalBatchId ??
-                    (item.kind === "existing" ? item.batchId : undefined),
-                previousBatchIds: [
-                    ...new Set([
-                        ...(item.previousBatchIds ?? []),
-                        ...(item.batchId && item.kind !== "existing"
-                            ? [item.batchId]
-                            : []),
-                        ...(index === 0
-                            ? previous
-                                  .filter(
-                                      (row) =>
-                                          row.kind === "reference" &&
-                                          row.batchId,
-                                  )
-                                  .map((row) => row.batchId!)
-                            : []),
-                    ]),
-                ],
-                status:
-                    item.kind === "existing" || item.originalBatchId
-                        ? "ready"
-                        : item.file
-                          ? item.detected
-                              ? "ready"
-                              : "detecting"
-                          : "error",
-                rows: undefined,
-                sourceErrors: undefined,
-                error:
-                    item.kind === "existing" ||
-                    item.originalBatchId ||
-                    item.file
-                        ? undefined
-                        : t("portfolioImport.session.reference.reattach"),
-            }));
-    const invalidateReferenceScope = (previous: Statement[]) => {
-        if (!referenceRef.current.name) return previous;
-        updateReference({
-            ...referenceRef.current,
-            applied: undefined,
-        });
-        return restageReferenceScope(previous);
-    };
-    const changeReference = (file: File | undefined) => {
-        invalidate();
-        updateStatements((previous) => restageReferenceScope(previous));
-        updateReference(
-            file
-                ? {
-                      name: file.name,
-                      file,
-                      placeholderBasisPolicy: reference.placeholderBasisPolicy,
-                  }
-                : {},
-        );
-    };
-    const changePlaceholderPolicy = (value: string) => {
-        invalidate();
-        updateStatements((previous) => invalidateReferenceScope(previous));
-        updateReference({
-            ...referenceRef.current,
-            placeholderBasisPolicy: value === "zero" ? "zero" : undefined,
-            applied: undefined,
-        });
-    };
     const invalidate = useCallback(() => {
         revision.current++;
         setReview(undefined);
@@ -415,9 +363,50 @@ export function PortfolioImportSession({ accounts }: Props) {
         .filter((item) => item.status === "staged")
         .map((item) => item.batchId!)
         .sort((a, b) => a - b);
+    const kinesisOnly =
+        statements.length > 0 &&
+        statements.every(
+            (item) =>
+                !item.kind &&
+                item.detected?.source === "kinesis" &&
+                !item.includedSymbols?.trim(),
+        );
+    const attachmentEligible =
+        kinesisOnly &&
+        statements.every((item) => item.adoptPolicy !== "prefer_source");
+    const correctionEligible =
+        kinesisOnly &&
+        statements.every((item) => item.adoptPolicy !== "preserve_existing");
+    const attachmentOnly = reconciliationMode === "adopt_existing_only";
+    const correctionOnly = reconciliationMode === "correct_existing_only";
+    const incomeOnly = reconciliationMode === "record_in_kind_income_only";
+    const cashOnly = reconciliationMode === "record_cash_only";
+    const existingOnly =
+        attachmentOnly || correctionOnly || incomeOnly || cashOnly;
+    const routingKey = sourceRoutingKey(statements);
+    const cashFundingConfirmed = cashConfirmedSourceKey === routingKey;
+    useEffect(() => {
+        if (cashConfirmedSourceKey && cashConfirmedSourceKey !== routingKey)
+            setCashConfirmedSourceKey(undefined);
+    }, [cashConfirmedSourceKey, routingKey]);
+    const scopeValid =
+        (!attachmentOnly ||
+            (attachmentEligible && policy === "preserve_existing")) &&
+        (!correctionOnly ||
+            (correctionEligible && policy === "prefer_source")) &&
+        (!incomeOnly ||
+            (attachmentEligible && policy === "preserve_existing")) &&
+        (!cashOnly ||
+            (attachmentEligible &&
+                policy === "preserve_existing" &&
+                cashFundingConfirmed));
     const scope = {
         batchIds: ids,
+        ...(existingOnly ? { reconciliationScope: reconciliationMode } : {}),
         ...(policy === "auto" ? {} : { adoptPolicy: policy }),
+        ...(cashOnly && cashFundingConfirmed
+            ? { cashFundingPolicy: "own_account_transfer" as const }
+            : {}),
         ...(statements.some(
             (item) => item.status === "staged" && item.adoptPolicy,
         )
@@ -435,49 +424,63 @@ export function PortfolioImportSession({ accounts }: Props) {
               }
             : {}),
     };
-    const scopeKey = JSON.stringify(scope);
-    const referenceScopeVerified =
-        !reference.name ||
-        Boolean(
-            reference.applied &&
-            reference.placeholderBasisPolicy === "zero" &&
-            JSON.stringify(
-                [...reference.applied.batch_ids].sort((a, b) => a - b),
-            ) === JSON.stringify(ids),
-        );
+    const scopeKey = JSON.stringify({ scope, routingKey });
+    useEffect(() => {
+        try {
+            const checkpointIds = statements
+                .map((item) => item.batchId)
+                .filter((id): id is number => id !== undefined)
+                .sort((a, b) => a - b);
+            if (
+                !checkpointIds.length ||
+                statements.some((item) => item.status !== "staged")
+            ) {
+                sessionStorage.removeItem(SETTINGS_STORAGE_KEY);
+                return;
+            }
+            sessionStorage.setItem(
+                SETTINGS_STORAGE_KEY,
+                JSON.stringify({
+                    sourceRoutingKey: routingKey,
+                    batchIds: checkpointIds,
+                    reconciliationMode,
+                    policy,
+                    ...(cashFundingConfirmed
+                        ? { cashFundingPolicy: "own_account_transfer" }
+                        : {}),
+                }),
+            );
+        } catch {
+            /* Session storage restrictions cannot prevent import review. */
+        }
+    }, [
+        statements,
+        routingKey,
+        reconciliationMode,
+        policy,
+        cashFundingConfirmed,
+    ]);
     const allStaged =
         statements.length > 0 &&
-        statements.every((item) => item.status === "staged") &&
-        referenceScopeVerified;
+        statements.every((item) => item.status === "staged");
     const canStage =
+        scopeValid &&
         statements.length > 0 &&
-        (statements.some(
-            (item) => item.kind !== "existing" && item.status !== "staged",
-        ) ||
-            Boolean(reference.file && !reference.applied)) &&
-        (!reference.name ||
-            (Boolean(reference.file) &&
-                reference.placeholderBasisPolicy === "zero")) &&
+        statements.some((item) => item.status !== "staged") &&
         statements.every(
             (item) =>
                 item.status === "staged" ||
-                (item.kind === "existing" &&
-                    item.batchId &&
-                    reference.name &&
-                    accounts.some(
-                        (account) => account.id === item.accountId,
-                    )) ||
                 (item.file &&
                     item.detected &&
                     accounts.some((account) => account.id === item.accountId) &&
                     item.status !== "detecting"),
         );
     const canCommit =
+        scopeValid &&
         allStaged &&
         review?.key === scopeKey &&
         review.plan.ready &&
         review.plan.blockers.length === 0 &&
-        (!reference.applied || reference.applied.blockers.length === 0) &&
         review.plan.actions.every(
             (action) =>
                 actions.includes(action.action) &&
@@ -501,7 +504,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         updateStatements((previous) => [
             ...(previous.every((item) => item.status === "completed")
                 ? []
-                : invalidateReferenceScope(previous)),
+                : previous),
             ...entries,
         ]);
         for (const entry of entries) {
@@ -551,7 +554,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     const changeAccount = (id: string, value: string) => {
         invalidate();
         updateStatements((previous) =>
-            invalidateReferenceScope(previous).map((item) =>
+            previous.map((item) =>
                 item.id === id
                     ? {
                           ...item,
@@ -574,7 +577,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     const changeAssetScope = (id: string, value: string) => {
         invalidate();
         updateStatements((previous) =>
-            invalidateReferenceScope(previous).map((item) =>
+            previous.map((item) =>
                 item.id === id
                     ? {
                           ...item,
@@ -611,7 +614,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     const changeTransferAccount = (id: string, value: string) => {
         invalidate();
         updateStatements((previous) =>
-            invalidateReferenceScope(previous).map((item) =>
+            previous.map((item) =>
                 item.id === id
                     ? {
                           ...item,
@@ -677,7 +680,7 @@ export function PortfolioImportSession({ accounts }: Props) {
             return;
         invalidate();
         updateStatements((previous) => [
-            ...invalidateReferenceScope(previous),
+            ...previous,
             {
                 id: `existing-${batch.id}`,
                 kind: "existing",
@@ -686,7 +689,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     t("portfolioImport.session.batch", { id: batch.id }),
                 batchId: batch.id,
                 accountId: batch.account_id!,
-                status: "ready",
+                status: "staged",
                 rows: batch.rows_total,
                 sourceErrors: batch.rows_error,
             },
@@ -718,16 +721,14 @@ export function PortfolioImportSession({ accounts }: Props) {
                     transferDestinationAccountId:
                         item.transferDestinationAccountId,
                     transferOriginAccountId: item.transferOriginAccountId,
-                    ...(item.detected?.source === "kinesis" &&
-                    referenceRef.current.file &&
-                    referenceRef.current.placeholderBasisPolicy === "zero"
+                    ...(item.detected?.source === "kinesis"
                         ? { yieldBasisPolicy: "zero" as const }
                         : {}),
                 };
                 const pending = importPortfolioCSVWithProgress(
                     item.file!,
                     config,
-                    config.format!,
+                    config.format ?? "portfolio_generic",
                     () => {},
                     { isBrokerage: true, accountId: item.accountId },
                 );
@@ -793,94 +794,6 @@ export function PortfolioImportSession({ accounts }: Props) {
                 stopRequested.current = true;
             }
         }
-        const currentReference = referenceRef.current;
-        if (
-            !stopRequested.current &&
-            currentReference.file &&
-            currentReference.placeholderBasisPolicy === "zero" &&
-            !currentReference.applied &&
-            statementsRef.current.every(
-                (item) => item.status === "staged" || item.kind === "existing",
-            )
-        ) {
-            try {
-                const sourceStatements = statementsRef.current.filter(
-                    (item) => item.kind !== "reference",
-                );
-                const applied = await applyPortfolioImportReference({
-                    file: currentReference.file,
-                    batchIds: sourceStatements
-                        .map((item) => item.batchId!)
-                        .sort((a, b) => a - b),
-                    placeholderBasisPolicy: "zero",
-                });
-                const accountScope = new Set(
-                    sourceStatements
-                        .flatMap((item) => [
-                            item.accountId,
-                            item.transferOriginAccountId,
-                            item.transferDestinationAccountId,
-                        ])
-                        .filter((id): id is number => id !== undefined),
-                );
-                if (
-                    applied.supplemental_batches.some(
-                        (batch) => !accountScope.has(batch.account_id),
-                    )
-                ) {
-                    const failure = new Error(
-                        "Unverified portfolio reference account scope",
-                    );
-                    failure.name = "PortfolioImportResponseError";
-                    throw failure;
-                }
-                updateStatements((previous) => [
-                    ...previous.filter(
-                        (item) =>
-                            !applied.replacement_batches.some(
-                                (replacement) =>
-                                    replacement.original_batch_id ===
-                                    item.batchId,
-                            ),
-                    ),
-                    ...applied.supplemental_batches.map((batch): Statement => {
-                        const replacement = applied.replacement_batches.find(
-                            (entry) => entry.review_batch_id === batch.batch_id,
-                        );
-                        const original =
-                            replacement &&
-                            sourceStatements.find(
-                                (item) =>
-                                    item.batchId ===
-                                    replacement.original_batch_id,
-                            );
-                        return {
-                            id: `reference-${batch.batch_id}`,
-                            kind: "reference",
-                            name: batch.source_filename,
-                            accountId: batch.account_id,
-                            batchId: batch.batch_id,
-                            status: "staged",
-                            rows: batch.rows_total,
-                            originalBatchId: replacement?.original_batch_id,
-                            originalSourceName: original?.name,
-                            adoptPolicy: original?.adoptPolicy,
-                            previousBatchIds: original?.previousBatchIds,
-                        };
-                    }),
-                ]);
-                updateReference({ ...currentReference, applied });
-            } catch (failure) {
-                if (mounted.current)
-                    setError(
-                        failure instanceof Error &&
-                            failure.name === "PortfolioImportResponseError"
-                            ? t("portfolioImport.session.reference.unverified")
-                            : apiErrorToMessage(failure, t),
-                    );
-                stopRequested.current = true;
-            }
-        }
         if (mounted.current) {
             setOperation("idle");
             setStopped(stopRequested.current);
@@ -888,7 +801,7 @@ export function PortfolioImportSession({ accounts }: Props) {
     };
 
     const preview = async () => {
-        if (!allStaged || operation !== "idle") return;
+        if (!allStaged || !scopeValid || operation !== "idle") return;
         const currentRevision = ++revision.current;
         setReview(undefined);
         setError(undefined);
@@ -932,9 +845,19 @@ export function PortfolioImportSession({ accounts }: Props) {
             setResult(committed);
             setReview(undefined);
             updateStatements((previous) =>
-                previous.map((item) => ({ ...item, status: "completed" })),
+                previous.map((item) => ({
+                    ...item,
+                    // A partial commit keeps the whole reviewed source scope queued.
+                    status:
+                        committed.complete === false ? "staged" : "completed",
+                    sourceErrors:
+                        committed.complete === false
+                            ? item.sourceErrors
+                            : (committed.batches.find(
+                                  (batch) => batch.batch_id === item.batchId,
+                              )?.errors ?? item.sourceErrors),
+                })),
             );
-            updateReference({});
             await queryClient.invalidateQueries();
         } catch (failure) {
             setReview(undefined);
@@ -962,7 +885,9 @@ export function PortfolioImportSession({ accounts }: Props) {
     ) =>
         field === "dividend_amount_convention" && value != null
             ? t(`portfolioImport.session.convention.${value}`)
-            : String(value ?? "—");
+            : field === "income_recognition_role" && value != null
+              ? t(`portfolio.incomeRole.${value}`)
+              : String(value ?? "—");
     return (
         <Card>
             <CardHeader>
@@ -982,12 +907,10 @@ export function PortfolioImportSession({ accounts }: Props) {
                         setExistingBatches(undefined);
                         setExistingBatchId("");
                         updateStatements((previous) =>
-                            invalidateReferenceScope(
-                                previous.filter(
-                                    (item) =>
-                                        item.batchId !== batchId &&
-                                        item.originalBatchId !== batchId,
-                                ),
+                            previous.filter(
+                                (item) =>
+                                    item.batchId !== batchId &&
+                                    item.originalBatchId !== batchId,
                             ),
                         );
                     }}
@@ -1016,182 +939,6 @@ export function PortfolioImportSession({ accounts }: Props) {
                         }}
                     />
                 </div>
-                <details
-                    className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4"
-                    open={Boolean(reference.name)}
-                >
-                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
-                        {t("portfolioImport.session.reference.title")}
-                    </summary>
-                    <div className="mt-3 space-y-3">
-                        <p className="type-footnote text-label-secondary">
-                            {t("portfolioImport.session.reference.hint")}
-                        </p>
-                        <Label htmlFor="portfolio-session-reference">
-                            {t("portfolioImport.session.reference.file")}
-                        </Label>
-                        <Input
-                            id="portfolio-session-reference"
-                            type="file"
-                            accept=".xml"
-                            disabled={locked}
-                            onChange={(event) => {
-                                const file = event.target.files?.[0];
-                                if (file) changeReference(file);
-                                event.target.value = "";
-                            }}
-                        />
-                        {reference.name && (
-                            <>
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="break-words type-body">
-                                        {reference.name}
-                                    </p>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        disabled={locked}
-                                        onClick={() =>
-                                            changeReference(undefined)
-                                        }
-                                    >
-                                        {t(
-                                            "portfolioImport.session.reference.remove",
-                                        )}
-                                    </Button>
-                                </div>
-                                <Label htmlFor="portfolio-placeholder-policy">
-                                    {t(
-                                        "portfolioImport.session.reference.placeholderPolicy",
-                                    )}
-                                </Label>
-                                <select
-                                    id="portfolio-placeholder-policy"
-                                    className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
-                                    value={
-                                        reference.placeholderBasisPolicy ?? ""
-                                    }
-                                    disabled={locked}
-                                    onChange={(event) =>
-                                        changePlaceholderPolicy(
-                                            event.target.value,
-                                        )
-                                    }
-                                >
-                                    <option value="">
-                                        {t(
-                                            "portfolioImport.session.reference.choosePolicy",
-                                        )}
-                                    </option>
-                                    <option value="zero">
-                                        {t(
-                                            "portfolioImport.session.reference.zeroPolicy",
-                                        )}
-                                    </option>
-                                </select>
-                                <p className="type-caption text-label-secondary">
-                                    {t(
-                                        "portfolioImport.session.reference.zeroHint",
-                                    )}
-                                </p>
-                                {!reference.applied && !reference.file && (
-                                    <p
-                                        role="alert"
-                                        className="type-footnote text-destructive"
-                                    >
-                                        {t(
-                                            "portfolioImport.session.reference.reattach",
-                                        )}
-                                    </p>
-                                )}
-                                {operation === "staging" &&
-                                    statements.every(
-                                        (item) =>
-                                            item.status === "staged" ||
-                                            item.kind === "existing",
-                                    ) &&
-                                    !reference.applied && (
-                                        <p
-                                            role="status"
-                                            className="type-footnote text-label-secondary"
-                                        >
-                                            {t(
-                                                "portfolioImport.session.reference.staging",
-                                            )}
-                                        </p>
-                                    )}
-                                {reference.applied && (
-                                    <>
-                                        {!referenceScopeVerified && (
-                                            <p
-                                                role="alert"
-                                                className="type-footnote text-destructive"
-                                            >
-                                                {t(
-                                                    "portfolioImport.session.reference.unverified",
-                                                )}
-                                            </p>
-                                        )}
-                                        <p role="status" className="type-body">
-                                            {t(
-                                                "portfolioImport.session.reference.staged",
-                                                {
-                                                    matched:
-                                                        reference.applied
-                                                            .matched_reference_rows,
-                                                    corrections:
-                                                        reference.applied
-                                                            .source_corrections,
-                                                    batches:
-                                                        reference.applied
-                                                            .supplemental_batches
-                                                            .length,
-                                                },
-                                            )}
-                                        </p>
-                                        {reference.applied.blockers.length >
-                                            0 && (
-                                            <div
-                                                role="alert"
-                                                className="space-y-1 type-footnote text-destructive"
-                                            >
-                                                <p>
-                                                    {t(
-                                                        "portfolioImport.session.reference.blocked",
-                                                    )}
-                                                </p>
-                                                <ul>
-                                                    {reference.applied.blockers.map(
-                                                        (blocker, index) => (
-                                                            <li
-                                                                key={`${blocker.reason}-${index}`}
-                                                            >
-                                                                {blocker.rowOrdinal && (
-                                                                    <>
-                                                                        {t(
-                                                                            "portfolioImport.session.row",
-                                                                            {
-                                                                                n: blocker.rowOrdinal,
-                                                                            },
-                                                                        )}
-                                                                        :{" "}
-                                                                    </>
-                                                                )}
-                                                                {t(
-                                                                    `portfolioImport.session.blockers.${blockerKeys[blocker.reason] ?? "other"}`,
-                                                                )}
-                                                            </li>
-                                                        ),
-                                                    )}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </details>
                 <details className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4">
                     <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                         {t("portfolioImport.session.existing.title")}
@@ -1337,28 +1084,20 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             {item.name}
                                         </p>
                                         <p className="type-caption text-label-secondary">
-                                            {item.originalBatchId
+                                            {item.kind === "existing" ||
+                                            item.kind === "reference"
                                                 ? t(
-                                                      "portfolioImport.session.existing.managed",
+                                                      "portfolioImport.session.existing.source",
                                                   )
-                                                : item.kind === "existing"
+                                                : item.detected
                                                   ? t(
-                                                        "portfolioImport.session.existing.source",
+                                                        sourceLabels[
+                                                            item.detected.source
+                                                        ],
                                                     )
-                                                  : item.kind === "reference"
-                                                    ? t(
-                                                          "portfolioImport.session.reference.supplemental",
-                                                      )
-                                                    : item.detected
-                                                      ? t(
-                                                            sourceLabels[
-                                                                item.detected
-                                                                    .source
-                                                            ],
-                                                        )
-                                                      : t(
-                                                            "portfolioImport.session.detecting",
-                                                        )}
+                                                  : t(
+                                                        "portfolioImport.session.detecting",
+                                                    )}
                                         </p>
                                     </div>
                                     <Button
@@ -1372,9 +1111,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         onClick={() => {
                                             invalidate();
                                             updateStatements((previous) =>
-                                                invalidateReferenceScope(
-                                                    previous,
-                                                ).filter(
+                                                previous.filter(
                                                     (row) => row.id !== item.id,
                                                 ),
                                             );
@@ -1435,6 +1172,9 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             value={item.includedSymbols ?? ""}
                                             disabled={
                                                 locked ||
+                                                existingOnly ||
+                                                item.detected.source ===
+                                                    "native_receipts" ||
                                                 !item.file ||
                                                 item.status === "completed"
                                             }
@@ -1485,12 +1225,22 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 "portfolioImport.session.useSessionPolicy",
                                             )}
                                         </option>
-                                        <option value="preserve_existing">
+                                        <option
+                                            value="preserve_existing"
+                                            disabled={correctionOnly}
+                                        >
                                             {t(
                                                 "portfolioImport.session.preserve",
                                             )}
                                         </option>
-                                        <option value="prefer_source">
+                                        <option
+                                            value="prefer_source"
+                                            disabled={
+                                                attachmentOnly ||
+                                                incomeOnly ||
+                                                cashOnly
+                                            }
+                                        >
                                             {t(
                                                 "portfolioImport.session.source",
                                             )}
@@ -1641,6 +1391,118 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </ul>
                 )}
                 <div className="space-y-2">
+                    <Label htmlFor="portfolio-session-scope">
+                        {t("portfolioImport.session.scope")}
+                    </Label>
+                    <select
+                        id="portfolio-session-scope"
+                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
+                        value={reconciliationMode}
+                        disabled={locked}
+                        onChange={(event) => {
+                            invalidate();
+                            const next = event.target
+                                .value as PortfolioReconciliationMode;
+                            setReconciliationMode(next);
+                            if (
+                                next === "adopt_existing_only" ||
+                                next === "record_in_kind_income_only" ||
+                                next === "record_cash_only"
+                            )
+                                setPolicy("preserve_existing");
+                            if (next === "correct_existing_only")
+                                setPolicy("prefer_source");
+                        }}
+                    >
+                        <option value="full">
+                            {t("portfolioImport.session.fullHistory")}
+                        </option>
+                        <option
+                            value="record_cash_only"
+                            disabled={!attachmentEligible}
+                        >
+                            {t("portfolioImport.session.recordCash")}
+                        </option>
+                        <option
+                            value="record_in_kind_income_only"
+                            disabled={!attachmentEligible}
+                        >
+                            {t("portfolioImport.session.recordInKindIncome")}
+                        </option>
+                        <option
+                            value="correct_existing_only"
+                            disabled={!correctionEligible}
+                        >
+                            {t(
+                                "portfolioImport.session.correctExistingRecords",
+                            )}
+                        </option>
+                        <option
+                            value="adopt_existing_only"
+                            disabled={!attachmentEligible}
+                        >
+                            {t("portfolioImport.session.attachSourceRecords")}
+                        </option>
+                    </select>
+                    <p className="type-footnote text-label-secondary">
+                        {t(
+                            cashOnly
+                                ? "portfolioImport.session.cashHint"
+                                : incomeOnly
+                                  ? "portfolioImport.session.incomeHint"
+                                  : correctionOnly
+                                    ? "portfolioImport.session.correctionHint"
+                                    : attachmentOnly
+                                      ? "portfolioImport.session.attachmentHint"
+                                      : "portfolioImport.session.fullHistoryHint",
+                        )}
+                    </p>
+                    {cashOnly && (
+                        <div className="space-y-2 type-footnote">
+                            <div className="flex items-start gap-2">
+                                <Checkbox
+                                    id="portfolio-cash-funding-confirmation"
+                                    className="mt-0.5"
+                                    checked={cashFundingConfirmed}
+                                    disabled={locked}
+                                    onCheckedChange={(checked) => {
+                                        invalidate();
+                                        setCashConfirmedSourceKey(
+                                            checked === true
+                                                ? routingKey
+                                                : undefined,
+                                        );
+                                    }}
+                                />
+                                <Label
+                                    htmlFor="portfolio-cash-funding-confirmation"
+                                    className="cursor-pointer type-body font-normal leading-snug"
+                                >
+                                    {t(
+                                        "portfolioImport.session.cashFundingConfirmation",
+                                    )}
+                                </Label>
+                            </div>
+                            <p className="text-label-secondary">
+                                {t("portfolioImport.session.cashFundingHint")}
+                            </p>
+                        </div>
+                    )}
+                    {existingOnly && !scopeValid && (
+                        <p role="alert" className="type-footnote text-destructive">
+                            {t(
+                                cashOnly
+                                    ? "portfolioImport.session.cashUnavailable"
+                                    : incomeOnly
+                                      ? "portfolioImport.session.incomeUnavailable"
+                                      : correctionOnly
+                                        ? "portfolioImport.session.correctionUnavailable"
+                                        : "portfolioImport.session.attachmentUnavailable",
+                            )}
+                        </p>
+                    )}
+                </div>
+                <div className="space-y-2">
                     <Label htmlFor="portfolio-session-policy">
                         {t("portfolioImport.session.policy")}
                     </Label>
@@ -1648,7 +1510,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         id="portfolio-session-policy"
                         className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                         value={policy}
-                        disabled={locked}
+                        disabled={locked || existingOnly}
                         onChange={(event) => {
                             invalidate();
                             setPolicy(event.target.value as typeof policy);
@@ -1665,7 +1527,15 @@ export function PortfolioImportSession({ accounts }: Props) {
                         </option>
                     </select>
                     <p className="type-footnote text-label-secondary">
-                        {t(`portfolioImport.session.policyHint.${policy}`)}
+                        {t(
+                            cashOnly
+                                ? "portfolioImport.session.cashPolicyHint"
+                                : incomeOnly
+                                  ? "portfolioImport.session.incomePolicyHint"
+                                  : correctionOnly
+                                    ? "portfolioImport.session.correctionPolicyHint"
+                                    : `portfolioImport.session.policyHint.${policy}`,
+                        )}
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1688,7 +1558,9 @@ export function PortfolioImportSession({ accounts }: Props) {
                     <Button
                         variant="outline"
                         onClick={() => void preview()}
-                        disabled={!allStaged || operation !== "idle"}
+                        disabled={
+                            !allStaged || !scopeValid || operation !== "idle"
+                        }
                     >
                         {t("portfolioImport.session.preview")}
                     </Button>
@@ -1699,7 +1571,6 @@ export function PortfolioImportSession({ accounts }: Props) {
                             onClick={() => {
                                 invalidate();
                                 updateStatements(() => []);
-                                updateReference({});
                             }}
                         >
                             {t("portfolioImport.session.clear")}
@@ -1729,6 +1600,71 @@ export function PortfolioImportSession({ accounts }: Props) {
                         <h3 className="type-headline">
                             {t("portfolioImport.session.review")}
                         </h3>
+                        {existingOnly && (
+                            <p className="type-body">
+                                {t(
+                                    cashOnly
+                                        ? "portfolioImport.session.cashCounts"
+                                        : incomeOnly
+                                          ? "portfolioImport.session.incomeCounts"
+                                          : correctionOnly
+                                            ? "portfolioImport.session.correctionCounts"
+                                            : "portfolioImport.session.attachmentCounts",
+                                    {
+                                        adopted: review.plan.summary.adopt ?? 0,
+                                        events: review.plan.summary.cash ?? 0,
+                                        recorded:
+                                            (cashOnly
+                                                ? review.plan.actions
+                                                      .filter(
+                                                          (action) =>
+                                                              action.action ===
+                                                              "cash",
+                                                      )
+                                                      .reduce(
+                                                          (count, action) =>
+                                                              count +
+                                                              (action.cashProof
+                                                                  ?.componentCount ??
+                                                                  0),
+                                                          0,
+                                                      )
+                                                : review.plan.summary
+                                                      .record_income) ?? 0,
+                                        pending: review.plan.pending ?? 0,
+                                    },
+                                )}
+                            </p>
+                        )}
+                        {correctionOnly &&
+                            review.plan.actions.some(
+                                (action) => action.dateProof,
+                            ) && (
+                                <p className="type-footnote text-label-secondary">
+                                    {t(
+                                        "portfolioImport.session.groupDateCorrection",
+                                    )}
+                                </p>
+                            )}
+                        {(review.plan.pending ?? 0) > 0 && (
+                            <div className="space-y-2 type-footnote">
+                                <p>{t("portfolioImport.session.deferred")}</p>
+                                <ul className="space-y-1">
+                                    {Object.entries(
+                                        review.plan.deferredCounts ?? {},
+                                    )
+                                        .filter(([, count]) => count > 0)
+                                        .map(([reason, count]) => (
+                                            <li key={reason}>
+                                                {t(
+                                                    `portfolioImport.session.deferredKinds.${["dividend", "gift", "sell", "cash", "asset_transfer", "asset_adjustment"].includes(reason) ? reason : "unsupported"}`,
+                                                )}
+                                                : {count}
+                                            </li>
+                                        ))}
+                                </ul>
+                            </div>
+                        )}
                         <dl className="grid grid-cols-2 gap-3 type-body sm:grid-cols-3">
                             {actions
                                 .filter(
@@ -1812,6 +1748,90 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                         "portfolioImport.session.existingId",
                                                         {
                                                             id: action.existingTransactionId,
+                                                        },
+                                                    )}
+                                                </p>
+                                            )}
+                                            {action.cashProof && (
+                                                <p className="mt-1 type-caption text-label-secondary">
+                                                    {t(
+                                                        `portfolioImport.session.cashKinds.${action.cashProof.eventKind}`,
+                                                    )}
+                                                </p>
+                                            )}
+                                            {action.cashValues && (
+                                                <dl className="mt-2 grid grid-cols-2 gap-2 type-caption">
+                                                    <dt>
+                                                        {t(
+                                                            "portfolioImport.session.fields.date",
+                                                        )}
+                                                    </dt>
+                                                    <dd>
+                                                        {action.cashValues.date}
+                                                    </dd>
+                                                    <dt>
+                                                        {t(
+                                                            "portfolioImport.session.fields.amount",
+                                                        )}
+                                                    </dt>
+                                                    <dd>
+                                                        {
+                                                            action.cashValues
+                                                                .amount
+                                                        }{" "}
+                                                        {
+                                                            action.cashValues
+                                                                .currency
+                                                        }
+                                                    </dd>
+                                                    <dt>
+                                                        {t(
+                                                            "portfolioImport.session.cashAccount",
+                                                        )}
+                                                    </dt>
+                                                    <dd>
+                                                        {accountName(
+                                                            action.cashValues
+                                                                .accountId,
+                                                        )}
+                                                    </dd>
+                                                    <dt>
+                                                        {t(
+                                                            "portfolioImport.session.cashTreatment",
+                                                        )}
+                                                    </dt>
+                                                    <dd>
+                                                        {t(
+                                                            action.cashValues
+                                                                .isTransfer
+                                                                ? "portfolioImport.session.cashTransfer"
+                                                                : "portfolioImport.session.cashExpense",
+                                                        )}
+                                                    </dd>
+                                                </dl>
+                                            )}
+                                            {action.cashFeeValues && (
+                                                <p className="mt-2 type-caption">
+                                                    {t(
+                                                        "portfolioImport.session.cashFeeExpense",
+                                                        {
+                                                            amount: action
+                                                                .cashFeeValues
+                                                                .amount,
+                                                            currency:
+                                                                action
+                                                                    .cashFeeValues
+                                                                    .currency,
+                                                        },
+                                                    )}
+                                                </p>
+                                            )}
+                                            {action.existingCashFeeTransactionId && (
+                                                <p className="mt-1 type-caption text-label-secondary">
+                                                    {t(
+                                                        "portfolioImport.session.cashFeeExistingId",
+                                                        {
+                                                            id: action.existingCashFeeTransactionId,
                                                         },
                                                     )}
                                                 </p>
@@ -2093,13 +2113,33 @@ export function PortfolioImportSession({ accounts }: Props) {
                             )}
                         </details>
                         <p className="type-footnote text-label-secondary">
-                            {t("portfolioImport.session.atomic")}
+                            {t(
+                                cashOnly
+                                    ? "portfolioImport.session.cashAtomic"
+                                    : incomeOnly
+                                      ? "portfolioImport.session.incomeAtomic"
+                                      : correctionOnly
+                                        ? "portfolioImport.session.correctionAtomic"
+                                        : attachmentOnly
+                                          ? "portfolioImport.session.attachmentAtomic"
+                                          : "portfolioImport.session.atomic",
+                            )}
                         </p>
                         <Button
                             onClick={() => void commit()}
                             disabled={!canCommit || operation !== "idle"}
                         >
-                            {t("portfolioImport.session.commit")}
+                            {t(
+                                cashOnly
+                                    ? "portfolioImport.session.recordReviewedCash"
+                                    : incomeOnly
+                                      ? "portfolioImport.session.recordReviewedIncome"
+                                      : correctionOnly
+                                        ? "portfolioImport.session.correctReviewed"
+                                        : attachmentOnly
+                                          ? "portfolioImport.session.attachReviewed"
+                                          : "portfolioImport.session.commit",
+                            )}
                         </Button>
                     </section>
                 )}
@@ -2110,17 +2150,34 @@ export function PortfolioImportSession({ accounts }: Props) {
                 )}
                 {result && (
                     <p role="status" className="type-body">
-                        {t("portfolioImport.session.success", {
-                            imported: result.imported,
-                            adopted: result.adopted,
-                            repaired: result.repaired,
-                            duplicates: Math.max(
-                                0,
-                                result.duplicates -
-                                    result.adopted -
-                                    result.repaired,
-                            ),
-                        })}
+                        {t(
+                            result.reconciliationScope === "record_cash_only"
+                                ? result.complete === false
+                                    ? "portfolioImport.session.cashPartialSuccess"
+                                    : "portfolioImport.session.cashSuccess"
+                                : result.reconciliationScope ===
+                                    "record_in_kind_income_only"
+                                  ? result.complete === false
+                                      ? "portfolioImport.session.incomePartialSuccess"
+                                      : "portfolioImport.session.incomeSuccess"
+                                  : result.complete === false
+                                    ? "portfolioImport.session.partialSuccess"
+                                    : "portfolioImport.session.success",
+                            {
+                                imported: result.imported,
+                                adopted: result.adopted,
+                                repaired: result.repaired,
+                                pending: result.pending ?? 0,
+                                recordedIncome: result.recordedIncome ?? 0,
+                                recordedCash: result.recordedCash ?? 0,
+                                duplicates: Math.max(
+                                    0,
+                                    result.duplicates -
+                                        result.adopted -
+                                        result.repaired,
+                                ),
+                            },
+                        )}
                     </p>
                 )}
             </CardContent>

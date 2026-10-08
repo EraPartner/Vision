@@ -191,15 +191,22 @@ export async function lockBatchForUpdate(
 /**
  * Readiness is checked after review account repair, before any canonical write.
  * Returned ordinals deliberately omit source values and investment identities.
+ *
+ * `provedCompanionRowIds` are excluded because a proof already covers them;
+ * `selectedRowIds`, when given, limits the check to that adoption scope.
  */
 export async function getImportReadinessProblems(
   batchId: Id,
   accountId: number | null | undefined,
+  provedCompanionRowIds: Id[] = [],
+  selectedRowIds: Id[] | undefined = undefined,
 ): Promise<Array<{ row_index: number }>> {
   const { rows } = await query<{ row_index: number }>(
     `SELECT row_index
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1
+        AND ($4::bigint[] IS NULL OR id=ANY($4::bigint[]))
+        AND NOT (id=ANY($3::bigint[]))
         AND (
           status NOT IN ('matched', 'committed', 'duplicate')
           OR (status = 'matched' AND (
@@ -212,9 +219,26 @@ export async function getImportReadinessProblems(
           ))
         )
       ORDER BY row_index`,
-    [batchId, accountId ?? null],
+    [batchId, accountId ?? null, provedCompanionRowIds, selectedRowIds ?? null],
   );
   return rows;
+}
+
+/** Complete only the selected adoption scope; deferred source rows stay reviewable. */
+export async function finalizeAdoptionOnlyBatch(
+  batchId: Id,
+  pending: number,
+  complete: boolean,
+): Promise<{ id: number; status: string } | undefined> {
+  const { rows } = await query<{ id: number; status: string }>(
+    `UPDATE portfolio_import_batches b SET status=CASE WHEN $3::boolean THEN 'complete' ELSE 'awaiting_review' END,
+       completed_at=CASE WHEN $3::boolean THEN NOW() ELSE NULL END
+     WHERE b.id=$1 AND (SELECT count(*) FROM portfolio_import_staging_rows s
+       WHERE s.batch_id=b.id AND s.status NOT IN ('committed','duplicate'))=$2::integer
+     RETURNING id,status`,
+    [batchId, pending, complete],
+  );
+  return rows[0];
 }
 
 /**

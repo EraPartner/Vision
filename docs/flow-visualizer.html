@@ -1570,7 +1570,7 @@
             "sub": "money \u00b7 slugify \u00b7 downsample",
             "kind": "shared",
             "path": "packages/shared-utils/",
-            "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.js uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
+            "desc": "Bun workspace package for pure helpers shared between frontend and backend. money.ts uses ROUND_HALF_EVEN (banker's rounding). Both apps re-export via shims.",
             "x": 1120,
             "y": 260
           },
@@ -1580,7 +1580,7 @@
             "sub": "services/portfolioImportPipeline",
             "kind": "service",
             "path": "apps/node-backend/src/services/portfolioImportPipeline/",
-            "desc": "Portfolio CSV/Saxo XLSX pipeline stages, validates, and matches maintained sources. Reviewed reconciliation preserves original transaction IDs through immutable receipts and commits the selected scope atomically. Dated custody replay carries original acquisition lots and purchase FX; generic mapping keeps its existing behavior. Optional bounded XML reference enriches staging; primary broker execution facts retain precedence.",
+            "desc": "Portfolio CSV/Saxo XLSX pipeline stages, validates, and matches maintained sources. Reviewed reconciliation preserves original transaction IDs through immutable receipts and commits the selected scope atomically. Dated custody replay carries original acquisition lots and purchase FX; generic mapping keeps its existing behavior. Stored historical JSON proof remains readable for existing receipts; primary broker execution facts retain precedence.",
             "x": 40,
             "y": 740
           },
@@ -1862,16 +1862,6 @@
             "y": 1160,
             "path": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js",
             "desc": "Dated yield reversals consume only source-proven zero-basis yield lots. Asset fees consume original lots and purchase FX. Per-method allocations and restrictive source links retain evidence."
-          },
-          {
-            "id": "sv.portfolioreference",
-            "label": "XML history reference",
-            "sub": "staging evidence + managed scope",
-            "kind": "service",
-            "x": 40,
-            "y": 1260,
-            "path": "apps/node-backend/src/services/portfolioImportReferenceService.js",
-            "desc": "Bounded original Portfolio Performance XML enriches staging only with explicit zero-placeholder policy. Primary execution facts control; explicit terminal IBKR selection creates a managed review clone. Effective scope, metadata and blockers remain reviewable."
           }
         ],
         "baseEdges": [
@@ -1981,9 +1971,6 @@
           ["sv.portfoliocustody", "pkg.shared-utils"],
           ["sv.portfoliocustody", "be.repos"],
           ["sv.snapshot", "sv.portfoliocustody"],
-          ["be.routes", "sv.portfolioreference"],
-          ["sv.portfolioreference", "be.repos"],
-          ["sv.portfolioreference", "sv.portfolioimport"],
           ["sv.portfolioreconciliation", "sv.portfolioadjustment"],
           ["sv.portfolioimport", "sv.portfolioadjustment"],
           ["sv.portfolioadjustment", "be.repos"],
@@ -2664,7 +2651,7 @@
                 "from": "sv.portfolioexposure",
                 "to": "db.postgres",
                 "payload": "upsert portfolio_exposure_classifications and portfolio_fund_holdings_documents",
-                "annotation": "portfolioExposureRepository.js updates matching sources atomically and does not delete omitted sources."
+                "annotation": "portfolioExposureRepository.ts updates matching sources atomically and does not delete omitted sources."
               },
               {
                 "from": "sv.portfolioexposure",
@@ -3875,7 +3862,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "POST /api/import/parsers  \u00b7  body: { name, config }",
-                "annotation": "importRoutes.js validates name presence and required config columns (dateColumn, recipientColumn, amountColumn)."
+                "annotation": "importRoutes.ts validates name presence and required config columns (dateColumn, recipientColumn, amountColumn)."
               },
               {
                 "from": "be.routes",
@@ -3967,7 +3954,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.js retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Explicit included_symbols excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.js retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Fresh Kinesis staging also captures the full literal hash and ordered event context through services/portfolioKinesisAdoptionScope.js before any selection; all bounded Kinesis scopes reject filters or incomplete capture. Narrowed UI staging explicitly uses zero yield basis before review. Explicit included_symbols otherwise excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
               },
               {
                 "from": "sv.portfolioimport",
@@ -3995,32 +3982,14 @@
               },
               {
                 "from": "fe.apiclient",
-                "to": "sv.portfolioreference",
-                "payload": "optional POST /reconciliation/reference: XML + explicit batch_ids + placeholder_basis_policy=zero",
-                "annotation": "apps/node-backend/src/routes/portfolioImportRoutes.ts uses apps/node-backend/src/lib/portfolioReferenceUpload.ts for a separate 10 MiB XML boundary. apps/node-backend/src/services/portfolioPerformanceXmlParser.js requires UTF-8, forbids DTD/entity declarations, and bounds depth/nodes/reference chains. Initial Kinesis staging uses the same explicitly selected zero policy."
-              },
-              {
-                "from": "sv.portfolioreference",
-                "to": "be.repos",
-                "payload": "literal primary precedence; staging corrections; selected terminal IBKR managed review clone",
-                "annotation": "apps/node-backend/src/services/portfolioImportReferenceService.js requires resolved asset, quantity, date, native currency/basis and wallet context. apps/node-backend/src/repositories/portfolioImportReferenceRepository.ts changes staging/configuration only. Explicit terminal IBKR selection with complete retained source creates a review clone; original canonical rows remain unchanged."
-              },
-              {
-                "from": "sv.portfolioreference",
-                "to": "fe.pages",
-                "payload": "effective batch_ids + supplemental metadata + replacement relations + blockers + optional coverage",
-                "annotation": "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx validates and retains effective scope/reference metadata for resume. Scope/XML/policy changes restage uploaded primary sources and restore explicit original selection for a fresh clone. Same XML/scope/routing retries reuse the staged result; coverage is not proof of complete historical executions."
-              },
-              {
-                "from": "fe.apiclient",
                 "to": "sv.portfolioreconciliation",
-                "payload": "POST /reconciliation/preview {batch_ids, adopt_policy?, batch_policies?}",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js compares source identity and one-to-one nearby history. Complete staging, original basis, known custody accounts, proven economics, and required Pro companion trades must resolve. Preview returns actions, blockers, counts, and planFingerprint."
+                "payload": "POST /reconciliation/preview {batch_ids, adopt_policy?, batch_policies?, reconciliation_scope?, cash_funding_policy?}",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js classifies complete unfiltered Kinesis sources before every bounded selection. preserve_existing attachments retain all recorded fields. services/portfolioKinesisYieldGroups.js proves closed intervals through independent meaningful deposit receipts, same-file settled anchors and global unique eight-decimal pairing; every eligible member selects or blocks together. prefer_source permits financial corrections or typed dateProof date-only yield-group corrections to the literal broker payment date, preserving quantities/type/financials/notes/IDs; ordinary financial corrections retain dates. Literal fees replace stored fees; native gift basis/currency requires retained validated original-document proof and dated conversion readiness without invented FX. Selected counts and pending/deferred progress remain bound to planFingerprint. Attachment/correction leave paired income pending; record_in_kind_income_only selects literal paired income against proved existing zero-basis units, with typed incomeProof and separate recordedIncome counts. Full history binds a distinct selected zero-basis Gift insert/adoption/existing action through incomeProof.unitRowId; existing units and repeated income also identify unitTransactionId. Literal paired income retains included_in_units without a second acquisition or gain. Stored historical proof remains readable; the session has no XML upload. Normal historical cache warm requires stored date rates within seven days; unresolved income dates defer, rate evidence binds the fingerprint, and source FX stays null. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete original Kinesis cash balance chains and source-bound own_account_transfer confirmation in record_cash_only. Every group selects together through cashProof and signed cashValues; separately quoted funding-withdrawal cashFeeValues preserve fee spending. Typed one/two-component evidence retains brokerage origin and null peers, without portfolio/income/custody selection or reference upload."
               },
               {
                 "from": "sv.portfolioreconciliation",
                 "to": "be.repos",
-                "payload": "current history + canonical fingerprints; adopt / insert / duplicate / explicit repair_duplicate",
+                "payload": "current history + canonical fingerprints; adopt / insert / duplicate / explicit repair_duplicate / bounded record_income",
                 "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
               },
               {
@@ -4050,32 +4019,32 @@
               {
                 "from": "fe.apiclient",
                 "to": "sv.portfolioimport",
-                "payload": "POST /reconciliation/commit with current expected_plan_fingerprint and unchanged policies",
-                "annotation": "apps/node-backend/src/services/portfolioImportCommitService.js locks batches/accounts and trade/custody writers, reloads the plan, and rejects stale fingerprints. Events across selected batches run by date, batch ID, and source row order. portfolio/portfolioCustodyImportScope.js binds approved custody signatures to this transaction, allocates from persisted history through each event date, then validates complete persisted custody history before commit. Runtime row failure or final replay failure rolls back the outer scope."
+                "payload": "POST /reconciliation/commit with current expected_plan_fingerprint, unchanged policies, reconciliation_scope and confirmed cash_funding_policy",
+                "annotation": "apps/node-backend/src/services/portfolioImportCommitService.js locks batches/accounts and trade/custody writers, reloads the plan, and rejects stale fingerprints. Attachment and correction return before every general event drain with zero new financial records/repairs/cash/custody. record_in_kind_income_only writes only literal paired income under preserve_existing and zero yield policy, then returns before any acquisition/cash/custody/adjustment drain. Excluded rows remain unsettled, and all selected batches stay awaiting_review while any events are pending. Full-scope events run by date, batch ID and source row order. portfolio/portfolioCustodyImportScope.js binds approved custody signatures, allocates through each event date, then validates complete persisted history. Runtime row or final replay failure rolls back the outer scope. record_cash_only writes only proved cash components and returns before all other drains. recordedCash/imported counts components; source actions/duplicates count source events. Transfer components exclude trade quotes and confirmed own funding from ordinary flows; literal withdrawal fees and card spending remain expenses. No opposite bank transaction is invented. Successful new cash commit/rollback schedules existing statistics cache refresh; failures and no-op repeats do not. Every active routed-account ledger row must be a validated same-source main/fee component; unrelated dates, currencies or anchors block. Routed-account account_statement_balances readings, including zero readings, also block zero-opening source; their locked fingerprint prevents stale commit."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
-                "payload": "atomic adoption/repair receipts + missing trades/cash + dated custody/adjustments + source links/counters",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js stores manual/imported images and original staging/batch counters before removing a proven copy. apps/node-backend/src/services/portfolioImportPipeline/commit.js routes each new event once, including custody events with source identity and fee-basis allocations. New adjustment events count as imported; all writers lock trade, transfer and adjustment tables."
+                "payload": "atomic selected adoption receipts/source counters; full scope also writes repairs + missing trades/cash + dated custody/adjustments",
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. Attachment/correction scopes write only proven existing attachments, financial corrections or whole-group payment-date corrections and newly settled receipt-backed duplicates. The separate income scope records literal paired dividends with read-only included_in_units, incomeProof and recordedIncome counts; services/portfolioKinesisIncomePairs.js and repositories/portfolioIncomeRecognitionRepository.js retain complete pair proof and immutable record/restore receipts, without changing acquired units or gains. Group date actions change only date and retain distinct source/canonical identities; unchanged anchors are proof context, not correction counts. Pending progress does not declare remaining history complete. Existing immutable adoption/restore receipts verify full after-images before rollback, including original group dates. Full-scope duplicate repair retains dual images/counters; services/portfolioImportPipeline/commit.js routes each new event once. Full history records the Gift once, then verifies its actual canonical after-image before writing the paired income receipt; typed unitRowId and canonical identity are bound in the review fingerprint. recordedIncome/recordedCash are additive subsets of full imported totals, with exact owned repeats writing neither again. All writers share trade, transfer and adjustment locks. apps/node-backend/src/services/portfolioImportCashService.js orchestrates the selected writer/rollback and apps/node-backend/src/repositories/portfolioImportCashRepository.js owns signed main/fee persistence and image locks. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete source/account closure and retains typed immutable cash envelopes in source staging with primary and optional fee after-images. Brokerage origin prevents automatic re-pairing/orphan clearing; complete groups and component images are fingerprint-bound."
               },
               {
                 "from": "fe.hooks",
                 "to": "be.routes",
                 "payload": "GET /api/info/portfolio-summary?currency for canonical active holdings",
-                "annotation": "apps/frontend/src/hooks/usePortfolio.ts combines metadata and editable ordinary transactions with usePortfolioSummaryQuery. apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts uses server quantities, custody-aware gains and oversold state for active holdings; pending or failed canonical requests gate the display."
+                "annotation": "apps/frontend/src/hooks/usePortfolio.ts combines metadata and editable ordinary transactions with usePortfolioSummaryQuery. apps/frontend/src/hooks/portfolio/usePortfolioSummaries.ts uses server quantities, custody-aware gains, separate totalInKindIncome and oversold state for active holdings; pending or failed canonical requests gate the display."
               },
               {
                 "from": "be.routes",
                 "to": "fe.pages",
-                "payload": "eight-decimal quantities plus target-currency gains and assignment state",
-                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.js includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay."
+                "payload": "eight-decimal quantities plus target-currency gains, totalInKindIncome / archivedInKindIncome and assignment state",
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.js includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay. Archived included income alone uses archivedInKindIncome dated conversion; ordinary archived gains/basis remain local, and missing foreign dated income remains unavailable."
               },
               {
                 "from": "sv.portfolioreconciliation",
                 "to": "db.postgres",
                 "payload": "guarded batch rollback: remove owned rows; compare-and-set restore original adopted history",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js removes owned adjustments only after history checks; source links delete only by parent cascade."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. repositories/portfolioIncomeRecognitionRepository.js validates both paired after-images, restores income first and releases active acquisition dependencies. Migration 0124 omits standard from normalized old-receipt comparisons without rewriting receipts and guards downgrade. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js removes owned adjustments only after history checks; source links delete only by parent cascade. apps/node-backend/src/services/portfolioKinesisCashScope.js checks every owned cash component, including a quoted withdrawal fee, before atomic removal; typed source receipts remain immutable after rollback and a fresh complete capture can record again. apps/node-backend/src/startup/warmup.ts excludes typed receipt owners from batch pruning."
               }
             ],
             "docs": [
@@ -4090,6 +4059,10 @@
               {
                 "path": "adr/177-reviewed-history-reconciliation-and-custody-ledger.md",
                 "label": "Receipts and custody decision"
+              },
+              {
+                "path": "adr/188-proved-in-kind-income-recognition.md",
+                "label": "Separate in-kind income and pair receipts"
               }
             ],
             "takeaway": "Source fingerprints, reviewed adoption, and custody replay prevent different forms of double counting. Neither adapter support nor a ready structural plan proves that all historical executions were exported."
@@ -4258,7 +4231,7 @@
                 "from": "fe.apiclient",
                 "to": "be.routes",
                 "payload": "GET /api/admin/database/tables/:table/schema \u2014 Bearer + CSRF headers",
-                "annotation": "Admin middleware stack: csrfGuard \u2192 adminAuth (timing-safe Bearer when ADMIN_AUTH_TOKEN set) \u2192 adminRateLimiter \u2192 handler in admin.js."
+                "annotation": "Admin middleware stack: csrfGuard \u2192 adminAuth (timing-safe Bearer when ADMIN_AUTH_TOKEN set) \u2192 adminRateLimiter \u2192 handler in admin.ts."
               },
               {
                 "from": "be.routes",
@@ -4430,7 +4403,7 @@
                 "from": "sv.aireference",
                 "to": "db.postgres",
                 "payload": "15-minute scope + typed token + AES-256-GCM ciphertext, nonce, and tag",
-                "annotation": "aiReferenceRepository.js stores a random scope UUID and 18-byte CSPRNG token payloads. Scope, token, and type are authenticated additional data; AI_REFERENCE_MAPPING_KEY stays outside PostgreSQL and database backup."
+                "annotation": "aiReferenceRepository.ts stores a random scope UUID and 18-byte CSPRNG token payloads. Scope, token, and type are authenticated additional data; AI_REFERENCE_MAPPING_KEY stays outside PostgreSQL and database backup."
               },
               {
                 "from": "be.routes",
@@ -4580,7 +4553,7 @@
                 "from": "be.routes",
                 "to": "be.repos",
                 "payload": "list/create/update/merge/delete category node",
-                "annotation": "categoryHierarchyRepository.js uses transactions for edits, rejects inactive or missing parents, cycles, duplicate siblings and unsafe merges."
+                "annotation": "categoryHierarchyRepository.ts uses transactions for edits, rejects inactive or missing parents, cycles, duplicate siblings and unsafe merges."
               },
               {
                 "from": "be.repos",
@@ -4642,7 +4615,7 @@
                 "from": "sv.cashplanning",
                 "to": "be.repos",
                 "payload": "active unexecuted plans and spendable balances",
-                "annotation": "plannedTransactionRepository.js reads bill occurrences; crossWorkspaceDataService.js reads computed cash balances."
+                "annotation": "plannedTransactionRepository.ts reads bill occurrences; crossWorkspaceDataService.js reads computed cash balances."
               },
               {
                 "from": "sv.cashplanning",
@@ -4666,7 +4639,7 @@
                 "from": "be.routes",
                 "to": "fe.pages",
                 "payload": "buy-only deployment proposal",
-                "annotation": "crossWorkspace.js returns a plan without executing trades."
+                "annotation": "crossWorkspace.ts returns a plan without executing trades."
               }
             ],
             "docs": [
@@ -4874,7 +4847,7 @@
                 "from": "sv.codexsession",
                 "to": "sv.codexchild",
                 "payload": "private root, ephemeral auth, validated effective config",
-                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.ts runs the process under the Seatbelt profile in seatbelt.js."
+                "annotation": "apps/node-backend/src/integrations/codex/appServerTransport.ts runs the process under the Seatbelt profile in seatbelt.ts."
               },
               {
                 "from": "sv.codexchild",
@@ -5139,7 +5112,7 @@
                 "title": "Run guarded migrations",
                 "note": "Use the reviewed migration path before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.ts"
+                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120–0125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
               },
               {
                 "from": "db.alembic",

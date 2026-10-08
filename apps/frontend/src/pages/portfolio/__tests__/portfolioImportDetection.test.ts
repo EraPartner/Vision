@@ -39,6 +39,31 @@ const saxoHeaders = [
     "Instrumentvaluta",
 ];
 
+const nativeHeaders = [
+    "Date",
+    "Type",
+    "Symbol",
+    "Units",
+    "Amount",
+    "Currency",
+    "Source_ID",
+    "Source_Account",
+    "Note",
+    "Receipt_JSON",
+];
+const nativeRow = (identity: string, type = "gift") => [
+    "2025-01-01",
+    type,
+    "KAU",
+    "1",
+    "2",
+    "USD",
+    `synthetic-${identity}`,
+    identity,
+    "",
+    "{}",
+];
+
 function account(
     id: number,
     institution: string,
@@ -56,6 +81,86 @@ function account(
 }
 
 describe("automatic portfolio statement detection", () => {
+    it("detects the exact native receipt schema and retains multiple physical identities for one logical wallet", () => {
+        const detected = detectPortfolioImportRecords([
+            nativeHeaders,
+            nativeRow("SYNTHETIC-SENDER"),
+            nativeRow("SYNTHETIC-WALLET", "asset_fee"),
+        ]);
+        expect(detected).toEqual({
+            source: "native_receipts",
+            sourceAccountIdentities: ["SYNTHETIC-SENDER", "SYNTHETIC-WALLET"],
+        });
+        expect(
+            resolveDetectedPortfolioAccount(detected!, [
+                account(1, "Kinesis", "Kinesis"),
+                account(2, "Wallet", "CoolWallet"),
+            ]),
+        ).toBe(2);
+        expect(
+            resolveDetectedPortfolioAccount(detected!, [
+                account(1, "Wallet", "SYNTHETIC-SENDER"),
+            ]),
+        ).toBeUndefined();
+    });
+
+    it("requires explicit native wallet routing without one exact active logical alias", () => {
+        const detected = {
+            source: "native_receipts" as const,
+            sourceAccountIdentities: ["SYNTHETIC-ONE", "SYNTHETIC-TWO"],
+        };
+        expect(
+            resolveDetectedPortfolioAccount(detected, [
+                account(1, "CoolWallet", "Other wallet"),
+            ]),
+        ).toBeUndefined();
+        expect(
+            resolveDetectedPortfolioAccount(detected, [
+                account(1, "Wallet", "CoolWallet", { is_active: false }),
+            ]),
+        ).toBeUndefined();
+        expect(
+            resolveDetectedPortfolioAccount(detected, [
+                account(1, "Wallet", "CoolWallet"),
+                account(2, "Wallet", "CoolWallet"),
+            ]),
+        ).toBeUndefined();
+        expect(
+            resolveDetectedPortfolioAccount(detected, [
+                account(1, "Wallet", "Other", { display_name: " CoolWallet " }),
+            ]),
+        ).toBe(1);
+    });
+
+    it("rejects ordinary generic files, altered native headers and unsupported native event types", () => {
+        for (const records of [
+            [
+                nativeHeaders.map((field) => ` ${field} `),
+                nativeRow("SYNTHETIC"),
+            ],
+            [
+                ["Date", "Type", "Symbol", "Units", "Amount", "Currency"],
+                nativeRow("SYNTHETIC"),
+            ],
+            [
+                [...nativeHeaders, "Extra"],
+                [...nativeRow("SYNTHETIC"), "extra"],
+            ],
+            [[...nativeHeaders.slice(0, -1), "Note"], nativeRow("SYNTHETIC")],
+            [nativeHeaders, nativeRow("SYNTHETIC", "buy")],
+            [nativeHeaders],
+            [nativeHeaders, [...nativeRow("SYNTHETIC").slice(0, -1), ""]],
+        ])
+            expect(detectPortfolioImportRecords(records)).toBeUndefined();
+        const reordered = [...nativeHeaders].reverse();
+        const row = nativeRow("SYNTHETIC");
+        expect(
+            detectPortfolioImportRecords([
+                reordered,
+                reordered.map((field) => row[nativeHeaders.indexOf(field)]),
+            ])?.source,
+        ).toBe("native_receipts");
+    });
     it("detects Nexo Pro separately and resolves its unique Nexo account", () => {
         const detected = detectPortfolioImportRecords([
             [

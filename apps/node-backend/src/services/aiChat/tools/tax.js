@@ -132,6 +132,12 @@ export const getTaxableIncomeSummary = {
         from,
         to,
         grossTotal: roundMoney(grossTotal),
+        totalInKindIncome: roundMoney(
+          toDecimal(throughYear.totals.totalInKindIncome ?? 0).minus(
+            beforeYear.totals.totalInKindIncome ?? 0,
+          ),
+        ),
+        inKindIncomeTaxClassification: "unassigned",
         currency,
         disclaimer: DISCLAIMER_APPROX,
         renderAs: "bar",

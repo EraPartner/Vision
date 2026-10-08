@@ -189,6 +189,18 @@ async function writeHeadCache() {
 // the `revision` identifier in alembic/versions/0001_initial_database_schema.py.
 const BASELINE_REVISION = "0001_initial";
 
+// These reviewed additive successors need no replay of the maintenance bridge.
+// Pin the target so adding a later migration does not widen this registration.
+const MAINTAINED_ADDITIVE_TARGET = "0125_brokerage_cash_origin";
+const MAINTAINED_ADDITIVE_REVISIONS = new Set([
+  "0120_portfolio_import_reconciliation",
+  "0121_portfolio_asset_transfers",
+  "0122_portfolio_import_duplicate_repair",
+  "0123_portfolio_asset_adjustments",
+  "0124_portfolio_income_recognition",
+  MAINTAINED_ADDITIVE_TARGET,
+]);
+
 // Revisions that existed in the previous chain and were moved to
 // alembic/legacy_versions/ as part of ADR-027 squash. If a deployed DB is
 // stamped at any of these, we normalize it to BASELINE_REVISION so that
@@ -496,17 +508,40 @@ export async function runMigrations(options: RunMigrationsOptions = {}) {
     if (installed) logger.info("reviewed fresh database baseline installed");
   }
 
-  await stampBaselineIfLegacy();
+  const baselineState = await stampBaselineIfLegacy();
 
   const currentRevision =
     target === "head" ? await readCurrentRevision() : undefined;
   const bridgeApproved = process.env.VISION_BASELINE_BRIDGE_APPROVED === "1";
+  const additive =
+    target === "head" &&
+    !installed &&
+    !bridgeApproved &&
+    MAINTAINED_ADDITIVE_REVISIONS.has(currentRevision);
+  if (
+    target === "head" &&
+    !installed &&
+    !bridgeApproved &&
+    (baselineState.reason?.startsWith("unknown revision") ||
+      (Number.parseInt(currentRevision, 10) >= 119 &&
+        currentRevision !== FRESH_BASELINE_REVISION &&
+        !additive))
+  ) {
+    throw new Error(
+      `Revision ${currentRevision} is not registered for automatic additive upgrades`,
+    );
+  }
   const deferred =
     target === "head" &&
     !installed &&
     !bridgeApproved &&
-    currentRevision !== FRESH_BASELINE_REVISION;
-  const effectiveTarget = deferred ? "0118_audit_retention_pruner" : target;
+    currentRevision !== FRESH_BASELINE_REVISION &&
+    !additive;
+  const effectiveTarget = additive
+    ? MAINTAINED_ADDITIVE_TARGET
+    : deferred
+      ? "0118_audit_retention_pruner"
+      : target;
   if (deferred) {
     logger.warn(
       { currentRevision },
@@ -517,7 +552,12 @@ export async function runMigrations(options: RunMigrationsOptions = {}) {
     }
   }
 
-  if (!deferred && target === "head" && (await isAtHeadCached())) {
+  if (
+    !deferred &&
+    target === "head" &&
+    (!additive || currentRevision === MAINTAINED_ADDITIVE_TARGET) &&
+    (await isAtHeadCached())
+  ) {
     logger.info("alembic skip: cached head matches DB and versions/ unchanged");
     return { revision: target, deferred: false };
   }

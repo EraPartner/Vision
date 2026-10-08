@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-07
-last_modified: 2026-10-06
-updated: 2026-10-07
+date: 2026-10-08
+last_modified: 2026-10-08
+updated: 2026-10-08
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -253,6 +253,11 @@ Rules:
 
 When `fx_rate_to_eur` is left empty, portfolio FX conversion uses historical rates from `exchange_rates` by transaction date; missing historical rows are auto-backfilled from ECB historical data on startup, with nearest stored DB rate as fallback.
 
+Startup stamps a dated rate only onto transactions without import provenance. An import batch,
+source-record hash or duplicate fingerprint prevents canonical stamping. Source rows keep an absent
+literal FX rate empty while conversion resolves dated cached rates. The update repeats those guards
+after acquiring the row lock, so concurrent adoption cannot change an immutable receipt after-image.
+
 Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]
 
 ## Holdings Calculation
@@ -262,7 +267,7 @@ Portfolio calculates:
 - **Total Units**: Net units across buy/gift/sell transactions
 - **Average Cost**: Weighted average purchase price (displayed in investment native currency on Stocks/ETFs/Metals page)
 - **Current Value**: Units × Current Price (displayed in investment native currency on Stocks/ETFs/Metals page)
-- **Total Dividends**: Sum of all dividend transactions
+- **Total Dividends**: Sum of ordinary dividend transactions (`standard` accounting role)
 - **Total Fees**: Sum of all fees
 - **Gains/Losses**: Realized/Unrealized P&L is FX-aware using transaction `fx_rate_to_eur` when present, otherwise falling back to exchange-rate map conversion
 
@@ -325,6 +330,29 @@ The day-loop now processes `split` transaction types. A stock split resets the p
 `services/portfolio/portfolioTransactionRules.js` buy/sell/gift calculations use Decimal `roundMoney()`, `multiply()`, and `divide()` instead of native float arithmetic. This keeps portfolio transaction policy above the repository layer and avoids floating-point drift.
 
 Code links: [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]], [[apps/frontend/src/lib/portfolioUnitMath.ts]]
+
+### Custody and adjustment snapshots (October 2026)
+
+[[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] keeps replayed amounts, units,
+asset-fee units, and account unit balances in Decimal. Fractional transfers, splits, and sales do
+not lose residual units through binary floating-point arithmetic. Investments with custody or
+adjustments replay by calendar date and the shared trade/event ID within each date. A same-day
+sale therefore precedes a later-ID transfer even if the input rows arrive in another order.
+Histories without these events retain the legacy acquisitions-before-sales day ordering.
+
+Before the day walk, the shared weighted-average custody replay resolves adjustment legs and their
+consumed original lots. A zero-yield reversal removes only eligible proven zero-basis gifted units.
+An asset fee removes held units and their original purchase principal/FX from the FX-neutral
+weights. Canonical lot basis includes purchase fees and taxes; snapshot FX weights use its
+principal share. The event creates no artificial capital contribution, withdrawal, or sale, so
+snapshot invested cash flow remains unchanged by the adjustment.
+
+Custody history must be fully assigned and valid. Missing yield proof, invalid basis policy,
+insufficient dated source holdings, or an unavailable adjustment allocation rejects computation.
+`computeAndStoreSnapshots` completes that replay before deleting or inserting performance
+snapshots. Invalid history therefore leaves the existing stored series intact; a valid rebuild
+still replaces the series atomically. Regression cases are in
+[[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]].
 
 ### Portfolio Decimal Precision (May 2026 Audit)
 
@@ -980,8 +1008,10 @@ Code links: [[apps/frontend/src/features/accounts/CloseAccountDialog.tsx]], [[ap
 FIFO, LIFO, and weighted-average replay carries remaining original purchase lots, dates, native
 basis, and acquisition FX. Same-asset fees remove units and their allocated purchase basis;
 transfers create no fictional sale or cash proceeds. Live account summaries and historical
-snapshots consume that event history. Assignment corrections remain guarded by complete projected
-custody and partition validation.
+snapshots consume that event history. Snapshots keep Decimal units and same-day shared-ID ordering,
+with adjustment allocations validated before the stored series is replaced. See
+[[docs/features/portfolio#Custody and adjustment snapshots (October 2026)|snapshot replay guarantees]].
+Assignment corrections remain guarded by complete projected custody and partition validation.
 
 A multi-statement import can adopt a unique source-equivalent manual trade without adding units.
 The original ID and notes survive; immutable before/after receipts support guarded restoration.
@@ -1208,6 +1238,26 @@ The synthetic Demo includes an explicit Apple direct-plus-IWDA overlap, separate
 coverage, and an entirely uncovered VWCE position for manual walkthroughs.
 See [[docs/api/investments#GET /api/investments/exposure|Investments API]] and
 [[docs/reference/fund-holdings-import-contract|Fund Holdings Import Contract]].
+
+## Income already represented by acquired units (ADR-188)
+
+The read-only `income_recognition_role` distinguishes ordinary `standard` dividends from literal
+`included_in_units` income proved against an existing zero-basis acquisition. Amount, date, currency
+and source identity remain in transaction history. `totalInKindIncome` is a separate subtotal; it
+is excluded from `totalDividends`, `totalIncome`, gain and return formulas because the acquired
+units already represent that value. Existing units, basis, valuation and realized sale gains stay
+unchanged. Missing role on older responses or immutable snapshots means `standard`.
+
+Transaction rows and the edit dialog show the role as read-only. Optional summary panels are absent. Active and archived
+income subtotals use canonical transaction-date conversion from the literal
+income currency. Archived ordinary gain and basis retain their existing local policy; the additive
+`archivedInKindIncome` projection overrides only the new subtotal. Missing foreign dated income
+conversion is disclosed as unavailable rather than assigned the investment currency or current
+rate. Ordinary manual create/update requests cannot set the role. Paired income is recorded
+through the bounded Kinesis import scope, with
+immutable pair receipts and guarded rollback. The role does not determine tax treatment. See
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/features/portfolio-import]],
+[[docs/api/investments]], [[docs/api/portfolio-summary]] and [[docs/features/belgian-tax]].
 
 ## Related
 

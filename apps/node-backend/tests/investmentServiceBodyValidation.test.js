@@ -12,6 +12,14 @@ afterEach(() => {
 });
 
 describe("portfolio transaction request body validation", () => {
+  it.each(["standard", "included_in_units", "unknown", null])(
+    "rejects a public accounting role setter %s",
+    (role) => {
+      expect(() =>
+        parsePortfolioTransactionBody({ income_recognition_role: role }),
+      ).toThrow(/read-only/);
+    },
+  );
   it.each([
     [{ date: "" }, /date cannot be cleared/],
     [{ date: "not-a-date" }, /date must be in YYYY-MM-DD format/],

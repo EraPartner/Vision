@@ -85,6 +85,7 @@ const txnRow = (overrides = {}) =>
 describe("getPortfolioSummary", () => {
   beforeEach(() => {
     query.mockReset();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("returns empty totals when no investments exist", async () => {
@@ -103,6 +104,7 @@ describe("getPortfolioSummary", () => {
       totalUnrealizedGain: 0,
       totalGain: 0,
       totalIncome: 0,
+      totalInKindIncome: 0,
       totalFees: 0,
       totalTaxes: 0,
       totalAssetGain: 0,
@@ -646,6 +648,7 @@ describe("getPortfolioSummary", () => {
 describe("getBreakdownSummary (legacy compat)", () => {
   beforeEach(() => {
     query.mockReset();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("returns a narrow shape sourced from getPortfolioSummary", async () => {
@@ -684,6 +687,7 @@ describe("getBreakdownSummary (legacy compat)", () => {
     const summary = await getPortfolioSummary("EUR");
 
     query.mockReset();
+    query.mockResolvedValue({ rows: [] });
     query
       .mockResolvedValueOnce({
         rows: [investmentRow({ currency: "USD", current_price: 200 })],
@@ -705,6 +709,7 @@ describe("getBreakdownSummary (legacy compat)", () => {
 describe("asset-class formula coverage", () => {
   beforeEach(() => {
     query.mockReset();
+    query.mockResolvedValue({ rows: [] });
   });
 
   it("savings account computes accrued + projected interest", async () => {
@@ -1174,4 +1179,89 @@ describe("asset-class formula coverage", () => {
     const result = await getPortfolioSummary("EUR");
     expect(result.summaries[0].realizedGain).toBe(90); // weighted_avg
   });
+});
+
+it("canonical summary exposes dated descriptive income without raising ordinary income or gains", async () => {
+  query.mockReset();
+  query.mockResolvedValue({ rows: [] });
+  query
+    .mockResolvedValueOnce({
+      rows: [investmentRow({ id: 1, currency: "USD", current_price: 200 })],
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        txnRow({
+          investment_id: 1,
+          type: "gift",
+          units: 2,
+          amount: 0,
+          account_id: 7,
+        }),
+        txnRow({
+          investment_id: 1,
+          type: "dividend",
+          units: 0,
+          amount: 20,
+          account_id: 7,
+          income_recognition_role: "included_in_units",
+        }),
+      ],
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        { currency_code: "USD", rate_date: "2026-01-01", rate_to_eur: "0.8" },
+      ],
+    });
+  const result = await getPortfolioSummary("EUR");
+  expect(result.summaries[0]).toMatchObject({
+    totalIncome: 0,
+    totalDividends: 0,
+    totalInKindIncome: 16,
+    gainLoss: 360,
+  });
+  expect(result.totals).toMatchObject({
+    totalIncome: 0,
+    totalInKindIncome: 16,
+    totalGainLoss: 360,
+  });
+});
+
+it("converts archived included income at its own dated currency without changing active totals", async () => {
+  query.mockReset();
+  query.mockResolvedValue({ rows: [] });
+  query
+    .mockResolvedValueOnce({
+      rows: [investmentRow({ id: 1, currency: "EUR" })],
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        txnRow({ investment_id: 1, currency: "EUR", type: "gift", amount: 0 }),
+      ],
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        {
+          investment_id: 7,
+          amount: "20",
+          currency: "USD",
+          date: "2021-02-05",
+          fx_rate_to_eur: null,
+        },
+      ],
+    })
+    .mockResolvedValueOnce({
+      rows: [
+        { currency_code: "USD", rate_date: "2021-02-05", rate_to_eur: "0.8" },
+      ],
+    });
+  const result = await getPortfolioSummary("EUR");
+  expect(result.archivedInKindIncome).toEqual([
+    { id: 7, totalInKindIncome: 16 },
+  ]);
+  expect(result.totals.totalIncome).toBe(0);
+  expect(result.totals.totalInKindIncome).toBe(0);
+  expect(result.summaries.map((row) => row.id)).toEqual([1]);
+  expect(
+    query.mock.calls.find(([sql]) => sql.includes("i.is_active = false"))[0],
+  ).toContain("income_recognition_role = 'included_in_units'");
 });

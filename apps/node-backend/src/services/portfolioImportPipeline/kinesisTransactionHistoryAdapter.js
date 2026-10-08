@@ -436,6 +436,68 @@ export function parseKinesisSourceRecordForBasisPolicy(rawData, config) {
   }
 }
 
+/** Reparse a complete retained statement event set with its actual header.
+ * @param {string[]} rawRecords
+ * @param {{ sourceColumns: string[], yield_basis_policy?: 'zero' }} config
+ * @returns {import('./portfolioGenericAdapter.js').ParsedPortfolioRow[]|undefined}
+ */
+export function reparseKinesisSourceEvents(rawRecords, config) {
+  const columns = config.sourceColumns;
+  if (
+    !Array.isArray(columns) ||
+    columns.length !== REQUIRED_COLUMNS.length ||
+    new Set(columns).size !== columns.length ||
+    !REQUIRED_COLUMNS.every((column) => columns.includes(column))
+  )
+    return undefined;
+  try {
+    const records = [...new Set(rawRecords)].map((raw) => {
+      const parsed = parseCsvText(raw, {
+        columns,
+        skip_empty_lines: true,
+        relax_column_count: false,
+      });
+      if (parsed.length !== 1)
+        throw new Error("Expected one literal Kinesis record");
+      return parsed[0];
+    });
+    const result = [];
+    const orders = new Set();
+    for (const record of records) {
+      if (cleanCell(record.Transaction_Type) !== "Trade") {
+        const parsed = parseNonTrade(record, config);
+        if (!parsed) return undefined;
+        result.push(...parsed);
+        continue;
+      }
+      const order = cleanCell(record.Order_ID);
+      if (!order) return undefined;
+      if (orders.has(order)) continue;
+      orders.add(order);
+      const group = records.filter(
+        (item) =>
+          cleanCell(item.Transaction_Type) === "Trade" &&
+          cleanCell(item.Order_ID) === order,
+      );
+      if (
+        group.length !== 2 ||
+        group.some(
+          (item) =>
+            cleanCell(item.HIN) !== cleanCell(record.HIN) ||
+            cleanCell(item.DateTime) !== cleanCell(record.DateTime),
+        )
+      )
+        return undefined;
+      const parsed = parseTrade(group);
+      if (!parsed) return undefined;
+      result.push(...parsed);
+    }
+    return result;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * @param {string} filePath
  * @param {{ encoding?: string, yield_basis_policy?: 'zero' }} [config]

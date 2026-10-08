@@ -144,6 +144,70 @@ describe("portfolioImports API client", () => {
         expect(body?.get("number_format")).toBe("decimal_dot");
     });
 
+    it.each([false, true])(
+        "preserves generic receipt identity mappings without a specialized format (stream=%s)",
+        async (stream) => {
+            let body: FormData | undefined;
+            server.use(
+                http.post(
+                    `${API_BASE}/api/portfolio/import/csv/${stream ? "stream" : "custom"}`,
+                    async ({ request }) => {
+                        body = await request.formData();
+                        return stream
+                            ? new HttpResponse(
+                                  'event: complete\ndata: {"batch_id":2,"imported":0,"duplicates":0,"errors":0}\n\n',
+                                  {
+                                      headers: {
+                                          "Content-Type": "text/event-stream",
+                                      },
+                                  },
+                              )
+                            : ok({
+                                  batch_id: 2,
+                                  imported: 0,
+                                  duplicates: 0,
+                                  errors: 0,
+                              });
+                    },
+                ),
+            );
+            const text =
+                'Date,Type,Symbol,Units,Amount,Currency,Source_ID,Source_Account,Note,Receipt_JSON\n2025-01-01,gift,KAU,1,2,USD,SYNTHETIC-ID,SYNTHETIC-SENDER,note,"{""version"":1}"';
+            const file = new File([text], "receipts.csv");
+            const generic = {
+                ...config,
+                dateFormat: "%Y-%m-%d",
+                number_format: "decimal_dot" as const,
+                sourceIdColumn: "Source_ID",
+                sourceAccountColumn: "Source_Account",
+            };
+            if (stream)
+                await importPortfolioCSVWithProgress(
+                    file,
+                    generic,
+                    "portfolio_generic",
+                    () => {},
+                    { isBrokerage: true, accountId: 7 },
+                ).result;
+            else
+                await importPortfolioCSVCustom(
+                    file,
+                    generic,
+                    "portfolio_generic",
+                    { isBrokerage: true, accountId: 7 },
+                );
+            expect(body?.get("adapter_name")).toBe("portfolio_generic");
+            expect(body?.has("portfolio_format")).toBe(false);
+            expect(body?.get("source_id_column")).toBe("Source_ID");
+            expect(body?.get("source_account_column")).toBe("Source_Account");
+            expect(body?.get("date_format")).toBe("%Y-%m-%d");
+            expect(body?.get("number_format")).toBe("decimal_dot");
+            expect(body?.get("account_id")).toBe("7");
+            expect(body?.get("is_brokerage")).toBe("true");
+            expect(await (body?.get("file") as File).text()).toBe(text);
+        },
+    );
+
     it.each([
         "ibkr_transaction_history",
         "kinesis_transaction_history",

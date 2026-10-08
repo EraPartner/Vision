@@ -43,17 +43,33 @@ export function isMaintainedPortfolioImport(batch) {
  * ambient transaction. This is a preflight, not a reconciliation operation or
  * a guarantee against runtime errors caught by the existing row savepoints.
  *
- * @param {{ batchId: number, batch: {adapter_name?: string, custom_config?: object|string|null, account_id?: number|null}, accountId?: number|null, reconciliationPlanned?: boolean }} args
+ * @param {{ batchId: number, batch: {adapter_name?: string, custom_config?: object|string|null, account_id?: number|null}, accountId?: number|null, reconciliationPlanned?: boolean, provedCompanionRowIds?: number[],selectedRowIds?:number[] }} args
  */
 export async function assertPortfolioImportReadiness({
   batchId,
   batch,
   accountId = batch.account_id,
   reconciliationPlanned = false,
+  provedCompanionRowIds = [],
+  selectedRowIds = undefined,
 }) {
   if (!isMaintainedPortfolioImport(batch)) return;
 
-  const problems = await getImportReadinessProblems(batchId, accountId);
+  const problems =
+    selectedRowIds !== undefined && reconciliationPlanned
+      ? await getImportReadinessProblems(
+          batchId,
+          accountId,
+          provedCompanionRowIds,
+          selectedRowIds,
+        )
+      : provedCompanionRowIds.length > 0 && reconciliationPlanned
+        ? await getImportReadinessProblems(
+            batchId,
+            accountId,
+            provedCompanionRowIds,
+          )
+        : await getImportReadinessProblems(batchId, accountId);
   if (problems.length > 0) {
     throw new ConflictError(
       `Import needs repair: ${problems.length} source rows are incomplete or unresolved. No new transactions were imported.`,

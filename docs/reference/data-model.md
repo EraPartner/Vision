@@ -2,9 +2,9 @@
 title: Data Model Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-06
-last_modified: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
+last_modified: 2026-10-08
 tags:
   [
     reference,
@@ -90,8 +90,11 @@ related_code:
 # Data Model Reference
 
 Fresh PostgreSQL 18 installations load the reviewed `0119` baseline SQL in one transaction.
-Existing installations keep their current schema and revision until the guarded bridge verifies
-the contracted shape and a restored logical backup. The baseline and the historical Alembic graph
+Older 0118 installations wait for the guarded bridge to verify the contracted shape and a restored
+logical backup. Existing profiles at the exact registered 0120–0125 revisions can instead advance
+to pinned additive 0125 without replaying that maintenance bridge, retaining financial values,
+legacy objects and old receipt JSON. Unknown successor revisions refuse automatic upgrade.
+The baseline and the historical Alembic graph
 produce the same application objects; one PostgreSQL CHECK-expression rendering differs after dump
 restore. See [[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
 [[docs/guides/migrations|Database Migration Guide]].
@@ -130,7 +133,14 @@ restore. See [[docs/adr/165-reviewed-fresh-database-baseline|ADR-165]] and
 | `dedup_fingerprint_version` | SMALLINT      | NULLABLE, paired with fingerprint                                    | Fingerprint algorithm version; version 1 is defined by `importIdentity.js`                                                                                                                                                                                                                                                                                                 |
 | `is_transfer`               | BOOLEAN       | NOT NULL, DEFAULT false                                              | Internal transfer between own accounts — excluded from cash-flow aggregates by default (ADR-083, migration 0044)                                                                                                                                                                                                                                                           |
 | `transfer_peer_id`          | INTEGER       | FK → transactions ON DELETE SET NULL, NULLABLE                       | The matched transfer leg (self-referential pairing)                                                                                                                                                                                                                                                                                                                        |
-| `transfer_source`           | TEXT          | NULLABLE, CHECK `auto` \| `manual` \| `opening` \| `adjustment`      | Provenance for reconciled pairs and system balance rows; ADR-090's retired `trade` value was removed by migration 0102                                                                                                                                                                                                                                                     |
+| `transfer_source`           | TEXT          | NULLABLE, CHECK `auto` \| `manual` \| `opening` \| `adjustment` \| `brokerage`      | Provenance for reconciled pairs and system balance rows; ADR-090's retired `trade` value was removed by migration 0102                                                                                                                                                                                                                                                     |
+
+Migration 0125 adds source-owned `brokerage` origin without backfilling rows. Proved trade/funding
+movements have the transfer flag; card and separately quoted withdrawal fee expenses do not.
+All retain null peers; ordinary matching/orphan cleanup does not reclassify them. Typed version-one
+closed cash receipts in staging `raw_data` retain primary and optional fee after-images and are
+immutable. Guarded rollback verifies both before deleting owned components. Downgrade refuses
+remaining brokerage-origin rows. See [[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
 
 **Indexes:** `idx_transactions_date`, `idx_transactions_recipient`, `idx_transactions_category`, `idx_transactions_amount_date` (transfer matching), `idx_transactions_transfer_peer` (partial, peer lookups)
 
@@ -473,6 +483,12 @@ renormalized by the exposure service.
 | `recurrence_interval`        | TEXT               | NULLABLE, CHECK canonical cadence                          | `daily`, `weekly`, `biweekly`, `monthly`, `quarterly`, or `yearly`. Migration 0099 rewrites legacy `bi-weekly`; see [[docs/adr/130-canonical-biweekly-recurrence]].                                                                                                                             |
 | `recurrence_end_date`        | DATE               | NULLABLE                                                   | Optional final date for recurrence.                                                                                                                                                                                                                                                             |
 
+
+Migration 0124 adds `income_recognition_role` (TEXT, non-null, default `standard`). The check allows
+`standard` or `included_in_units`, with included income restricted to dividends. This read-only
+role retains literal income separately from ordinary income and gain; see
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and the paired journal below.
+
 ---
 
 ### Watchlist
@@ -781,7 +797,7 @@ Migration [[alembic/versions/0117_audit_chain.py|0117]] adds three tables and re
 | `audit_chain_entries`     | `sequence` PK, `version`, `previous_hash`, `entry_hash`, `payload` JSONB, `created_at`      | Stores versioned chain entries after the cutover. Index: `(created_at, sequence)`.                                    |
 | `audit_chain_checkpoints` | `id` PK, `sequence`, `head_hash`, `anchor_kind`, `receipt_id`, `receipt_hash`, `created_at` | Stores metadata for a separately persisted receipt. Unique `(anchor_kind, receipt_id)` and descending sequence index. |
 
-The migration blocks updates, deletes, and truncation of entries and checkpoint rows; it blocks deleting or truncating the head. A database administrator can still alter the schema or restore an older backup. `appendAuditEvent` in `auditChainRepository.js` locks the head and appends in the caller's transaction. All three tables are in `BACKUP_COVERED_TABLES`. A database-local checkpoint is not an independent witness. The later Electron receipt described in [[docs/adr/157-electron-local-audit-receipt|ADR-157]] binds the head and legacy cutover outside PostgreSQL for startup and restore checks, subject to the installation-local rollback and enrollment limits in [[docs/security/data-protection|Data Protection]]. Migration 0117 permits downgrade only with its sole matching deterministic 0117 upgrade entry, a matching head, unchanged legacy high-water IDs, and no checkpoint; any later entry or checkpoint refuses downgrade. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]].
+The migration blocks updates, deletes, and truncation of entries and checkpoint rows; it blocks deleting or truncating the head. A database administrator can still alter the schema or restore an older backup. `appendAuditEvent` in `auditChainRepository.ts` locks the head and appends in the caller's transaction. All three tables are in `BACKUP_COVERED_TABLES`. A database-local checkpoint is not an independent witness. The later Electron receipt described in [[docs/adr/157-electron-local-audit-receipt|ADR-157]] binds the head and legacy cutover outside PostgreSQL for startup and restore checks, subject to the installation-local rollback and enrollment limits in [[docs/security/data-protection|Data Protection]]. Migration 0117 permits downgrade only with its sole matching deterministic 0117 upgrade entry, a matching head, unchanged legacy high-water IDs, and no checkpoint; any later entry or checkpoint refuses downgrade. See [[docs/adr/156-forward-only-audit-chain-foundation|ADR-156]].
 
 Post-cutover editor, split, and broker retag chain entries bind the persisted domain row and its exact UTC microsecond `created_at`. The writers use values returned by PostgreSQL for the chain payload; broker retag also uses the returned, normalized UUID and receipt fields. Verification recomputes editor and split digests and compares the broker retag payload against stored rows, so changing a linked row or its timestamp breaks the domain link. This does not make the pre-cutover rows verified.
 
@@ -1445,6 +1461,36 @@ ordinary batch/staging pruning even though the staging-to-batch FK itself cascad
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]],
 [[alembic/versions/0121_portfolio_asset_transfers.py]].
 
+### PortfolioImportIncomeRecognitionJournal (migration 0124)
+
+**Purpose:** Immutable evidence for literal income paired with an already-proved existing zero-basis
+unit acquisition. `portfolio_import_income_recognition_journal` retains numeric income/unit canonical
+IDs without permanent financial foreign keys, complete source proof and both current after-images.
+
+| Field                                               | Type        | Constraints / meaning                                                    |
+| --------------------------------------------------- | ----------- | ------------------------------------------------------------------------ |
+| `id`                                                | BIGSERIAL   | Receipt primary key                                                      |
+| `batch_id`, `staging_row_id`, `unit_staging_row_id` | BIGINT      | Non-null source batch/rows; foreign keys restrict pruning                |
+| `income_transaction_id`, `unit_transaction_id`      | INTEGER     | Positive canonical IDs retained as evidence                              |
+| `action`                                            | TEXT        | `record` or `restore`                                                    |
+| `previous_entry_id`                                 | BIGINT      | Unique self-reference, required only for restoration; restricts deletion |
+| `income_data`, `unit_data`, `proof_data`            | JSONB       | Non-null object images and complete pair proof                           |
+| `created_at`                                        | TIMESTAMPTZ | Non-null immutable timestamp                                             |
+
+A source-income row and canonical income ID each have one record receipt. One active recognition
+may depend on a unit acquisition. Receipt insertion validates complete Kinesis source ownership,
+zero yield policy, matching current images and pair identity. Update/delete of journal rows is
+forbidden. Active pairs guard changes or deletion of both transactions; a deferred constraint
+requires every included income row to have an active receipt before commit.
+
+Batch rollback validates both after-images, appends the matching restore receipt and removes only
+owned income before releasing dependent acquisition restoration. Standard role is omitted from
+normalized snapshots and absent old role means standard, preserving old immutable receipts.
+Migration adds no inferred history. Downgrade refuses included income and active pairs, then removes
+the new column, triggers/functions and restored journal evidence. Applying this authored migration
+to user data requires explicit approval. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]],
+[[docs/features/portfolio-import]] and [[docs/api/portfolio-imports]].
+
 ### PortfolioImportReconciliationJournal (migration 0120)
 
 **Purpose:** Immutable before/after receipts for adopting existing real transactions and restoring
@@ -1512,6 +1558,7 @@ rows as errors with null route. See the blast-radius and recovery plan in
 [[docs/guides/migrations]], [[alembic/versions/0121_portfolio_asset_transfers.py]].
 
 ---
+
 ### PortfolioImportDuplicateRepairJournal (migration 0122)
 
 **Purpose:** Reversible explicit-policy repair of an imported copy that also overlaps one unique

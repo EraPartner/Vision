@@ -68,6 +68,8 @@ export function usePortfolio() {
             investments: allInvestments,
             transactions: allTransactions,
             canonicalSummaries: canonicalQuery.data?.summaries,
+            canonicalArchivedInKindIncome:
+                canonicalQuery.data?.archivedInKindIncome,
             requireCanonical: true,
         });
 

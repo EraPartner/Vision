@@ -82,7 +82,12 @@ describe("portfolioTransactionService.create", () => {
       "(investment_id, type, date, amount, units, price_per_unit, fees, taxes, dividend_amount_convention, currency, note, is_recurring, recurrence_interval, recurrence_end_date, fx_rate_to_eur, account_id)",
     );
     expect(insertSql).toContain("RETURNING *");
-    expect(result).toEqual({ id: 11, investment_id: 1, type: "buy" });
+    expect(result).toEqual({
+      id: 11,
+      investment_id: 1,
+      type: "buy",
+      income_recognition_role: "standard",
+    });
   });
 
   it("skips the investment lookup when asset class is preloaded", async () => {
@@ -121,7 +126,12 @@ describe("portfolioTransactionService.create", () => {
         null,
       ],
     );
-    expect(result).toEqual({ id: 12, investment_id: 2, type: "dividend" });
+    expect(result).toEqual({
+      id: 12,
+      investment_id: 2,
+      type: "dividend",
+      income_recognition_role: "standard",
+    });
   });
 
   it("calculates missing buy/sell field when two of three are provided", async () => {
@@ -170,6 +180,7 @@ describe("portfolioTransactionService.create", () => {
       ],
     );
     expect(result).toEqual({
+      income_recognition_role: "standard",
       id: 30,
       amount: 1000,
       units: 5,
@@ -228,7 +239,13 @@ describe("portfolioTransactionService.create", () => {
         null,
       ],
     );
-    expect(result).toEqual({ id: 40, type: "gift", amount: 0, units: 2 });
+    expect(result).toEqual({
+      id: 40,
+      type: "gift",
+      amount: 0,
+      units: 2,
+      income_recognition_role: "standard",
+    });
   });
 
   it("appends import_batch_id only when set and the column exists", async () => {
@@ -634,6 +651,7 @@ describe("portfolioTransactionRepository.update", () => {
       [6, 200, 1200, 0, 0, 8],
     );
     expect(result).toEqual({
+      income_recognition_role: "standard",
       id: 8,
       amount: 1200,
       units: 6,
@@ -690,7 +708,11 @@ describe("portfolioTransactionRepository.update", () => {
       "UPDATE portfolio_transactions SET amount = $1 WHERE id = $2 RETURNING *",
       [1200, 9],
     );
-    expect(result).toEqual({ id: 9, amount: 1200 });
+    expect(result).toEqual({
+      id: 9,
+      amount: 1200,
+      income_recognition_role: "standard",
+    });
   });
 
   it("preserves explicit null when clearing the stored FX rate", async () => {
@@ -731,6 +753,7 @@ describe("portfolioTransactionRepository.update", () => {
       [null, 11],
     );
     expect(result).toEqual({
+      income_recognition_role: "standard",
       id: 11,
       investment_id: 2,
       type: "dividend",
@@ -792,6 +815,7 @@ describe("portfolioTransactionRepository.update", () => {
     });
 
     expect(result).toEqual({
+      income_recognition_role: "standard",
       id: 21,
       investment_id: 1,
       type: "dividend",
@@ -866,7 +890,7 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
     expect(sql).toContain("LIMIT $4");
     expect(sql).toContain("OFFSET $5");
     expect(params).toEqual([[1, 2], 5000, "buy", 200000, 0]);
-    expect(rows).toEqual([{ id: 9 }]);
+    expect(rows).toEqual([{ id: 9, income_recognition_role: "standard" }]);
   });
 
   // The existing pins above only used values `Number.parseInt` also rejected
@@ -909,7 +933,7 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
     expect(sql).not.toContain(" LIMIT ");
     expect(sql).toContain("OFFSET $3");
     expect(params).toEqual([[44], 1000, 3]);
-    expect(rows).toEqual([{ id: 44 }]);
+    expect(rows).toEqual([{ id: 44, income_recognition_role: "standard" }]);
   });
 });
 

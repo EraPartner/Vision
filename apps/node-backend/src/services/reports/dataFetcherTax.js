@@ -69,6 +69,7 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   asset_class: string,
  *   type: string,
  *   dividend_amount_convention: 'gross'|'net'|'unknown',
+ *   income_recognition_role?: 'standard'|'included_in_units',
  *   amount: string,
  *   taxes: string,
  *   fees: string,
@@ -113,6 +114,8 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   otherTaxTotal: number,
  *   feesTotal: number,
  *   dividendsReceived: number,
+ *   totalInKindIncome: number,
+ *   inKindIncomeCount: number,
  *   grossDividendBase: number|null,
  *   netDividendResult: number|null,
  *   unknownDividendConventionCount: number,
@@ -144,6 +147,8 @@ const addMoney = (...values) => toNumber(addAll(values));
  *   otherTaxTotal: number,
  *   feesTotal: number,
  *   dividendsReceived: number,
+ *   totalInKindIncome: number,
+ *   inKindIncomeCount: number,
  *   grossDividendBase: number|null,
  *   netDividendResult: number|null,
  *   unknownDividendConventionCount: number,
@@ -260,7 +265,7 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
       i.symbol,
       i.asset_class,
       pt.type,
-      pt.dividend_amount_convention,
+      pt.dividend_amount_convention, pt.income_recognition_role,
       COALESCE(pt.amount, 0)  AS amount,
       COALESCE(pt.taxes,  0)  AS taxes,
       COALESCE(pt.fees,   0)  AS fees,
@@ -286,6 +291,8 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
   let otherTaxTotal = 0;
   let feesTotal = 0;
   let dividendsReceived = 0;
+  let totalInKindIncome = 0;
+  let inKindIncomeCount = 0;
   let grossDividendBase = 0;
   let netDividendResult = 0;
   let unknownDividendConventionCount = 0;
@@ -403,6 +410,12 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
         tobAmt = taxes;
         break;
       case "dividend":
+        if (row.income_recognition_role === "included_in_units") {
+          totalInKindIncome = addMoney(totalInKindIncome, amount);
+          inKindIncomeCount += 1;
+          otherAmt = taxes;
+          break;
+        }
         whtAmt = taxes;
         dividendsReceived = addMoney(dividendsReceived, amount);
         if (row.dividend_amount_convention === "gross") {
@@ -491,6 +504,8 @@ async function fetchTaxTransactions(targetCurrency, startDate, endDate) {
     otherTaxTotal,
     feesTotal,
     dividendsReceived,
+    totalInKindIncome,
+    inKindIncomeCount,
     grossDividendBase:
       unknownDividendConventionCount > 0 ? null : grossDividendBase,
     netDividendResult:
@@ -548,6 +563,8 @@ export async function fetchTaxData(
     otherTaxTotal: txns?.otherTaxTotal ?? 0,
     feesTotal: txns?.feesTotal ?? 0,
     dividendsReceived: txns?.dividendsReceived ?? 0,
+    totalInKindIncome: txns?.totalInKindIncome ?? 0,
+    inKindIncomeCount: txns?.inKindIncomeCount ?? 0,
     grossDividendBase: txns?.grossDividendBase ?? null,
     netDividendResult: txns?.netDividendResult ?? null,
     unknownDividendConventionCount: txns?.unknownDividendConventionCount ?? 0,

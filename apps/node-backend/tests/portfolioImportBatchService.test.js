@@ -241,7 +241,10 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
       details: { reason: "stale_reconciliation_plan" },
     });
     expect(lockBatchForUpdate.mock.calls.map(([id]) => id)).toEqual([5]);
-    expect(query).not.toHaveBeenCalled();
+    // Only the pre-lock scope reads may run; no lock or write reaches the DB.
+    expect(
+      query.mock.calls.filter(([sql]) => !/^\s*SELECT\b/i.test(sql)),
+    ).toEqual([]);
     expect(getCommittedRows).not.toHaveBeenCalled();
     expect(portfolioTransactionRepository.hardDelete).not.toHaveBeenCalled();
     expect(

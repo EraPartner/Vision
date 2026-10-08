@@ -198,15 +198,22 @@ const TransactionRow = memo(function TransactionRow({
                         {txn.note}
                     </p>
                 )}
+                {txn.income_recognition_role === "included_in_units" && (
+                    <p className="mt-1 type-caption text-label-secondary">
+                        {t("portfolio.inKindIncome")}
+                    </p>
+                )}
             </div>
 
             <div className="shrink-0 text-right">
                 <p
                     className={cn(
                         "type-body font-medium tabular-nums",
-                        ["buy", "fee", "tax"].includes(txn.type)
-                            ? "text-loss"
-                            : "text-gain",
+                        txn.income_recognition_role === "included_in_units"
+                            ? "text-label-secondary"
+                            : ["buy", "fee", "tax"].includes(txn.type)
+                              ? "text-loss"
+                              : "text-gain",
                     )}
                 >
                     <Money

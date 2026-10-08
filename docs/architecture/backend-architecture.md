@@ -3,8 +3,8 @@ title: Backend Architecture
 type: architecture
 status: active
 description: "Node.js backend architecture and diagrams. Phase 3: infoRepository split into 7 domain-specific sub-modules. Phase 9: Decimal.js enforcement on all monetary paths. Phase E: Forecast cache materialization with 6-hour TTL and nightly job. May 2026: Transaction tags as orthogonal dimension (ADR-052). June 2026: Route→service boundary enforced (ADR-067, 14 new thin seams); global API rate limiter + trusted-proxy XFF + VISION_DEV fail-safe (ADR security); mv_recipient_monthly dropped (ADR-068); @vision/shared-utils package + banker's rounding canonical (ADR-069). September 2026: transaction ownership uses the ADR-088 Account entity and canonical account_id foreign keys."
-date: 2026-10-07
-last_modified: 2026-10-04
+date: 2026-10-08
+last_modified: 2026-10-08
 tags: [architecture, backend, uml, plantuml, phase-3, phase-6, phase-9, phase-e, decimal, money, precision, caching, materialization, nightly-job, startup, dependency-ordering, db-polling, graceful-shutdown, signal-handling, offline-resilience, network-reachability, tags, tagging, orthogonal-dimension, route-service-boundary, thin-seams, global-rate-limiter, trusted-proxies, vision-dev, mv-recipient-monthly-drop, shared-utils, banker-rounding]
 aliases: [backend architecture, node architecture, server design]
 ---
@@ -27,15 +27,31 @@ images plus original staging/batch counters and restores them under strict check
 repositories store dated gross units and asset fees.
 `portfolioAssetAdjustmentService.js` adds immutable dated yield reversals/asset fees with original
 lot allocation receipts and restrictive links to yield evidence. `portfolioHistoryWriteService.js`
-serializes manual mutations against trade, custody, and adjustment tables. The separate
-`lib/portfolioReferenceUpload.ts` and bounded `portfolioPerformanceXmlParser.js` accept optional
-secondary XML. `portfolioImportReferenceService.js` changes staging only, preserves primary broker
-facts, and creates explicit managed IBKR review clones/supplemental batches with effective scope
-metadata. Canonical commit remains a later reviewed operation.
-The shared `portfolioCustody.js` replay carries original acquisition lots and purchase FX into
+serializes manual mutations against trade, custody, and adjustment tables.
+Public XML reference upload/application is unavailable. Previously retained original-document
+proof remains read-only for strict historical matching, repeat and rollback checks.
+The shared `portfolioCustody.ts` replay carries original acquisition lots and purchase FX into
 summaries and snapshots. Budgeting uploads retain their CSV boundary. See
 [[docs/features/portfolio-import]], [[docs/api/portfolio-imports]], and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger]] for contracts and recovery.
+
+The bounded cash scope uses `portfolioKinesisCashScope.js` for complete original-source/account
+closure and typed one/two-component proof. `portfolioImportCashService.js` owns selected writer and
+rollback orchestration; `portfolioImportCashRepository.js` owns ledger persistence and image locks.
+Repositories do not import source-proof services.
+Successful new cash commit/rollback schedules the existing statistics cache refresh; failed
+operations and no-op repeats do not. Typed source receipts remain in existing staging,
+and warmup pruning preserves their owning batches. No new holdings, counterpart bank leg or generic
+portfolio drain runs. See [[docs/adr/189-proved-brokerage-cash-history|ADR-189]] and
+[[docs/api/portfolio-imports]].
+
+The bounded in-kind income writer uses `portfolioKinesisIncomePairs.js` to reprove each literal
+income against an existing zero-basis acquisition. `portfolioIncomeRecognitionRepository.js`
+retains immutable paired record/restore receipts. Active-pair database guards protect both canonical
+after-images; guarded rollback releases income before dependent acquisition restoration. Shared
+portfolio math and reports expose `totalInKindIncome` separately from ordinary income and gains.
+No acquisition or cash/custody drain runs in this scope. See
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and [[docs/reference/data-model]].
 
 ![[docs/diagrams/backend-api-layer.puml]]
 
@@ -65,7 +81,9 @@ Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node
 Once DB is ready, initialization respects dependency ordering to prevent cache and snapshot jobs from running before FX data is populated:
 
 1. **Database connection** — `checkConnection()` poll (40 attempts, exponential backoff)
-2. **Database migrations** — Alembic schema upgrade via JS runner
+2. **Database migrations** — Alembic schema upgrade via JS runner. Exact registered 0120–0125
+   profiles advance to pinned additive 0125; older 0118 maintenance stays deferred, and unknown
+   successor revisions fail closed. See [[docs/guides/migrations|Migration target policy]].
 3. **Materialized-view warmup** — after Express starts listening, create, index, and refresh the two runtime-managed views. Each phase has its own boot trace mark; failures degrade `/health/detailed` and reads fall back to live SQL.
 4. **Network reachability probe** — Single `isInternetReachable()` call via [[apps/node-backend/src/lib/network.ts]]
    - TCP probe to 1.1.1.1:443 with 1.5s timeout (manual timer for SYN bind-off)
@@ -73,7 +91,7 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
    - If offline: skips all external data fetches; snapshots/info use DB/cache only
    - If online: proceeds with external warmups as normal
 5. **Exchange rate cache warmup** — `warmExchangeRateCache()` (online only; captured as promise)
-6. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise)
+6. **Portfolio historical FX backfill** — `backfillPortfolioHistoricalRates()` (online only; captured as promise). Cache backfill includes source-provenance records, but canonical rate stamping only updates rows without an import batch, source hash or duplicate fingerprint. Selection and locked update both check those guards to preserve immutable reconciliation after-images.
 7. **Snapshot computation** — `computeAndStoreSnapshots` waits via `Promise.all([exchangeRateWarmPromise, fxBackfillPromise])` before proceeding
 8. **Live price refresh** — Investment prices refreshed after snapshots (online only)
 9. **Info caches** — `warmInfoCaches` runs after snapshot completion
@@ -361,7 +379,7 @@ skinparam nodesep 40
 skinparam ranksep 60
 
 package "Database" {
-  class "connection.js" as DB {
+  class "connection.ts" as DB {
     +query(sql, params)
     +getClient()
   }
@@ -1038,7 +1056,7 @@ Desktop --> PostgresDev
 The application startup is orchestrated to respect critical dependencies between warming caches and backfilling data:
 
 1. **Database connection** — exponential backoff with up to 40 attempts (max 1 second each)
-2. **Alembic migrations** — all schema DDL (single source of truth)
+2. **Alembic migrations** — schema DDL through the guarded target policy above
 3. **Materialized views** — create, index, and refresh after schema is ready
 4. **Express server listening** — immediately accept connections on configured port/host
 5. **Exchange rate warm (captured promise) + FX backfill (captured promise)** — both run concurrently but promises are captured

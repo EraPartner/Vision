@@ -43,11 +43,6 @@ import {
   commitReviewedPortfolioImports,
 } from "../services/portfolioImportCommitService.js";
 import { previewPortfolioImportReconciliation } from "../services/portfolioImportReconciliationService.js";
-import { applyPortfolioImportReference } from "../services/portfolioImportReferenceService.js";
-import {
-  portfolioReferenceUpload,
-  portfolioReferenceUploadErrorTranslator,
-} from "../lib/portfolioReferenceUpload.ts";
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import {
   CSV_NUMBER_FORMATS,
@@ -251,6 +246,18 @@ const portfolioImportConfigSchema = z
     currency_column: trimOrEmptyField,
     fx_rate_column: trimOrEmptyField,
     note_column: trimOrEmptyField,
+    source_id_column: z
+      .string()
+      .trim()
+      .max(200)
+      .optional()
+      .transform((value) => value || undefined),
+    source_account_column: z
+      .string()
+      .trim()
+      .max(200)
+      .optional()
+      .transform((value) => value || undefined),
     default_asset_class: z.enum([...VALID_ASSET_CLASSES], {
       error: "default_asset_class is required and must be a valid asset class",
     }),
@@ -392,6 +399,12 @@ const portfolioImportConfigSchema = z
         currency: data.currency_column,
         fx_rate: data.fx_rate_column,
         note: data.note_column,
+        ...(data.source_id_column !== undefined
+          ? { source_id: data.source_id_column }
+          : {}),
+        ...(data.source_account_column !== undefined
+          ? { source_account: data.source_account_column }
+          : {}),
       },
     },
     defaultAssetClass: data.default_asset_class,
@@ -769,6 +782,16 @@ const reconciliationScopeSchema = z.strictObject({
     .min(1)
     .max(100),
   adopt_policy: z.enum(["preserve_existing", "prefer_source"]).optional(),
+  reconciliation_scope: z
+    .enum([
+      "full",
+      "adopt_existing_only",
+      "correct_existing_only",
+      "record_in_kind_income_only",
+      "record_cash_only",
+    ])
+    .optional(),
+  cash_funding_policy: z.enum(["own_account_transfer"]).optional(),
   batch_policies: z
     .array(
       z.strictObject({
@@ -783,59 +806,18 @@ const reconciliationCommitSchema = reconciliationScopeSchema.extend({
   expected_plan_fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
 });
 
-const reconciliationReferenceSchema = z.strictObject({
-  batch_ids: z
-    .string()
-    .transform((value, context) => {
-      try {
-        return JSON.parse(value);
-      } catch {
-        context.addIssue({
-          code: "custom",
-          message: "batch_ids must be a JSON array",
-        });
-        return z.NEVER;
-      }
-    })
-    .pipe(reconciliationScopeSchema.shape.batch_ids),
-  placeholder_basis_policy: z.literal("zero"),
-});
-
-router.post(
-  "/reconciliation/reference",
-  portfolioReferenceUpload.single("file"),
-  portfolioReferenceUploadErrorTranslator,
-  // The error-handler argument above defeats Express's contextual typing of
-  // the handlers that follow it; these structural slices (not express's own
-  // types, which the legacy checkJs program cannot resolve) cover what it reads.
-  async (
-    req: { body: unknown; file?: { path: string } },
-    res: { ok(data: unknown): unknown },
-  ) => {
-    if (!req.file) throw new ValidationError("No reference file uploaded.");
-    try {
-      const input = parseImportInput(reconciliationReferenceSchema, req.body);
-      res.ok(
-        await applyPortfolioImportReference({
-          batchIds: input.batch_ids,
-          referencePath: req.file.path,
-          placeholderBasisPolicy: input.placeholder_basis_policy,
-        }),
-      );
-    } finally {
-      cleanup(req.file.path);
-    }
-  },
-);
-
 router.post("/reconciliation/preview", async (req, res) => {
   const input = parseImportInput(reconciliationScopeSchema, req.body);
   res.ok(
     await previewPortfolioImportReconciliation({
       batchIds: input.batch_ids,
       adoptPolicy: input.adopt_policy,
-      // The JS service has no @param types, so tsc infers its `batchPolicies = []`
-      // default as never[]; these zod-validated policies are the shape it reads.
+      reconciliationScope: input.reconciliation_scope,
+      // The JS service has no @param types, so tsc infers its
+      // `cashFundingPolicy = undefined` default as undefined and its
+      // `batchPolicies = []` default as never[]; these zod-validated values are
+      // the shapes it reads.
+      cashFundingPolicy: input.cash_funding_policy as undefined,
       batchPolicies: input.batch_policies?.map((policy) => ({
         batchId: policy.batch_id,
         adoptPolicy: policy.adopt_policy,
@@ -849,7 +831,9 @@ router.post("/reconciliation/commit", async (req, res) => {
   const result = await commitReviewedPortfolioImports({
     batchIds: input.batch_ids,
     adoptPolicy: input.adopt_policy,
-    // Same never[] inference as the preview call above.
+    reconciliationScope: input.reconciliation_scope,
+    // Same undefined and never[] inference as the preview call above.
+    cashFundingPolicy: input.cash_funding_policy as undefined,
     batchPolicies: input.batch_policies?.map((policy) => ({
       batchId: policy.batch_id,
       adoptPolicy: policy.adopt_policy,

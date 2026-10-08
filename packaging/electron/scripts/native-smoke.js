@@ -60,6 +60,55 @@ function syntheticAuditOptions() {
   };
 }
 
+function createSmokeRestoreRuntime(runtime, expectedStats) {
+  let validateNextStart = false;
+  return {
+    ...runtime,
+    async activateRestoredDatabase(...args) {
+      validateNextStart = false;
+      const restored = await runtime.activateRestoredDatabase(...args);
+      // Let the transport retain its rollback token before checking the
+      // stopped database. Startup may then write provider/cache telemetry.
+      validateNextStart = true;
+      return restored;
+    },
+    async start(...args) {
+      if (validateNextStart) {
+        validateNextStart = false;
+        const restoredStats = await runtime.getDatabaseStats();
+        try {
+          assertDatabaseStatsEqual(expectedStats, restoredStats);
+        } catch (error) {
+          if (error.code === "DATABASE_COUNT_MISMATCH") {
+            console.error(
+              "Synthetic smoke count mismatch:",
+              Object.keys(expectedStats.tableCounts)
+                .filter(
+                  (table) =>
+                    expectedStats.tableCounts[table] !==
+                    restoredStats.tableCounts[table],
+                )
+                .map((table) => ({
+                  table,
+                  before: expectedStats.tableCounts[table],
+                  after: restoredStats.tableCounts[table],
+                })),
+            );
+          }
+          throw error;
+        }
+      }
+      return runtime.start(...args);
+    },
+    async rollbackDatabaseSwitch(...args) {
+      // Attachment replacement can fail before the one-shot start check.
+      // Restarting the original database must never compare it to the bundle.
+      validateNextStart = false;
+      return runtime.rollbackDatabaseSwitch(...args);
+    },
+  };
+}
+
 function requestJson(port, method, route, payload) {
   return new Promise((resolve, reject) => {
     const body = payload === undefined ? undefined : JSON.stringify(payload);
@@ -278,7 +327,13 @@ async function main() {
     if (auditAtStart.status !== "verified")
       throw new Error("Synthetic native audit enrollment failed");
     await verifyFrontendAssets(port);
+    const initialServices = await requestJson(
+      port,
+      "GET",
+      "/api/settings/services_settings",
+    );
     await requestJson(port, "PUT", "/api/settings/services_settings", {
+      expected: initialServices?.data?.expected,
       value: { keepServicesOnQuit: false },
     });
     const readBack = await requestJson(
@@ -367,6 +422,7 @@ async function main() {
     await runtime.start();
     await runtime.waitUntilReady({ detailed: true });
     await requestJson(port, "PUT", "/api/settings/services_settings", {
+      expected: readBack?.data?.expected,
       value: { keepServicesOnQuit: true },
     });
     await requestJson(port, "PATCH", `/api/accounts/${accountId}`, {
@@ -386,7 +442,7 @@ async function main() {
         JSON.stringify(opened.frontendState) !== JSON.stringify(frontendState)
       )
         throw new Error("Native bundle frontend state changed");
-      await restoreNativeBundle(runtime, {
+      await restoreNativeBundle(createSmokeRestoreRuntime(runtime, before), {
         dbSqlPath: opened.dbSqlPath,
         attachmentsDir: opened.attachmentsDir,
         expectedSchemaHead: opened.metadata.schemaHead,
@@ -396,25 +452,6 @@ async function main() {
     }
 
     const after = await runtime.getDatabaseStats();
-    try {
-      assertDatabaseStatsEqual(before, after);
-    } catch (error) {
-      if (error.code === "DATABASE_COUNT_MISMATCH") {
-        console.error(
-          "Synthetic smoke count mismatch:",
-          Object.keys(before.tableCounts)
-            .filter(
-              (table) => before.tableCounts[table] !== after.tableCounts[table],
-            )
-            .map((table) => ({
-              table,
-              before: before.tableCounts[table],
-              after: after.tableCounts[table],
-            })),
-        );
-      }
-      throw error;
-    }
     assertStableDatabaseStatsEqual(before, after);
     const restoredSettings = await requestJson(
       port,
@@ -611,6 +648,7 @@ if (require.main === module) {
 
 module.exports = {
   cleanupSmokeUserData,
+  createSmokeRestoreRuntime,
   decodeFrontendBody,
   main,
   parseSmokeArgs,

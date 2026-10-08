@@ -94,6 +94,7 @@ async function resolveCostBasisMethod() {
  *   totals: ReturnType<typeof aggregateTotals>,
  *   summaries: ReturnType<typeof buildInvestmentSummary>['summary'][],
  *   byAccount: ReturnType<typeof aggregateByAccount>,
+ *   archivedInKindIncome: {id:number,totalInKindIncome:number}[],
  *   brokerSnapshotParity?: { totalValue: string, partitionValue: string },
  * }>}
  */
@@ -195,12 +196,78 @@ export async function getPortfolioSummary(
     perInvestment.flatMap((r) => r.accountContributions),
   );
 
+  // Archived descriptive income must use its transaction currency and date.
+  // The active holding totals keep their existing scope and replay behavior.
+  let archivedInKindIncome;
+  if (activeInvestmentsOnly) {
+    const archivedRows = /** @type {AnnotatedTxRow[]} */ (
+      (
+        await query(
+          `
+        SELECT pt.investment_id, pt.amount, pt.currency,
+               to_char(pt.date, 'YYYY-MM-DD') AS date, pt.fx_rate_to_eur
+        FROM portfolio_transactions pt
+        JOIN investments i ON i.id = pt.investment_id
+        WHERE i.is_active = false
+          AND pt.income_recognition_role = 'included_in_units'
+          ${throughDate ? "AND pt.date <= $1::date" : ""}
+        ORDER BY pt.investment_id, pt.date, pt.id
+      `,
+          throughDate ? [throughDate] : [],
+        )
+      ).rows
+    );
+    const archiveCurrencies = [
+      ...new Set(archivedRows.map((row) => row.currency || "EUR")),
+    ];
+    const archiveMultipliers = new Map();
+    for (const currency of archiveCurrencies)
+      archiveMultipliers.set(
+        currency,
+        currency === target ? 1 : await convertToCurrency(1, currency, target),
+      );
+    annotateTransactionFxMultipliers(
+      archivedRows,
+      target,
+      await loadHistoricalRateIndex(archiveCurrencies, target),
+      archiveMultipliers,
+    );
+    const archiveTotals = new Map();
+    for (const row of archivedRows) {
+      const id = Number(row.investment_id);
+      archiveTotals.set(
+        id,
+        addAll([
+          archiveTotals.get(id) ?? 0,
+          multiply(row.amount ?? 0, row.fxMultiplier ?? 1),
+        ]),
+      );
+    }
+    archivedInKindIncome = [...archiveTotals].map(([id, amount]) => ({
+      id,
+      totalInKindIncome: round2(amount),
+    }));
+  } else {
+    const archivedIds = new Set(
+      investmentsResult.rows
+        .filter((row) => !row.is_active)
+        .map((row) => Number(row.id)),
+    );
+    archivedInKindIncome = summaries
+      .filter((row) => archivedIds.has(Number(row.id)))
+      .map((row) => ({
+        id: Number(row.id),
+        totalInKindIncome: row.totalInKindIncome,
+      }));
+  }
+
   return {
     currency: target,
     computed_at: new Date().toISOString(),
     totals,
     summaries,
     byAccount,
+    archivedInKindIncome,
     // Snapshot parity must compare the same unrounded valuation tracks. Public
     // totals sum individually rounded investments; account rows round once.
     ...(includeBrokerSnapshotParity
@@ -489,6 +556,7 @@ function buildInvestmentSummary(
     totalTaxes: round2(convertedTotalTaxes),
     totalDividends: round2(convertedTotalDividends),
     totalIncome: round2(convertedTotalIncome),
+    totalInKindIncome: round2(cv.totalInKindIncome),
 
     avgCostBasis: round2(convertedAvgCostBasis),
     realizedGain: round2(convertedRealizedGain),
@@ -547,6 +615,7 @@ function aggregateTotals(summaries) {
     totalUnrealizedGain: addAll(summaries.map((s) => s.unrealizedGain)),
     totalGain: addAll(summaries.map((s) => s.totalGain)),
     totalIncome: addAll(summaries.map((s) => s.totalIncome)),
+    totalInKindIncome: addAll(summaries.map((s) => s.totalInKindIncome)),
     totalFees: addAll(summaries.map((s) => s.totalFees)),
     totalTaxes: addAll(summaries.map((s) => s.totalTaxes)),
     totalAssetGain: addAll(summaries.map((s) => s.assetGain)),
@@ -565,6 +634,7 @@ function aggregateTotals(summaries) {
     totalUnrealizedGain: round2(acc.totalUnrealizedGain),
     totalGain: round2(acc.totalGain),
     totalIncome: round2(acc.totalIncome),
+    totalInKindIncome: round2(acc.totalInKindIncome),
     totalFees: round2(acc.totalFees),
     totalTaxes: round2(acc.totalTaxes),
     totalAssetGain: round2(acc.totalAssetGain),

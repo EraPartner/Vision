@@ -1,32 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { toDecimal } from "../src/lib/money.ts";
 import { __computeSourceRecordHash } from "../src/services/importIdentity.js";
-import { parsePortfolioPerformanceXml } from "../src/services/portfolioPerformanceXmlParser.js";
-import { planPortfolioImportReference } from "../src/services/portfolioImportReferenceService.js";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
 import {
   portfolioPerformanceRoundedDepositIdentifiesLegacy,
-  verifiedKinesisWithdrawal,
+  __verifiedKinesisWithdrawal as verifiedKinesisWithdrawal,
 } from "../src/services/portfolioPerformanceReferenceEvidence.js";
 import {
-  portfolioPerformanceXml,
-  ppEvent,
-} from "./fixtures/portfolioPerformanceSynthetic.js";
+  retainedEvent,
+  retainedReference,
+  retainedEvidenceRow,
+} from "./fixtures/retainedPortfolioEvidence.js";
 
 const columns =
   "DateTime,HIN,Currency_Code,Transaction_Type,Transaction_ID,Order_ID,Currency_Pair,Amount,Trade_Price,Total,Fee,Fee_Currency,Trade_Value,Trade_Value_Currency,Starting_Balance,Starting_Balance_Currency,Closing_Balance,Closing_Balance_Currency".split(
     ",",
   );
-const investments = [
-  {
-    id: 1,
-    symbol: "BTC-EUR",
-    name: "Synthetic Bitcoin",
-    asset_class: "crypto",
-    currency: "EUR",
-    price_provider_id: "BTC-EUR",
-  },
-];
 
 function source() {
   const raw =
@@ -85,34 +74,24 @@ const legacy = (over = {}) => ({
 });
 
 function enriched(currency = "EUR", amount = "250") {
-  const reference = parsePortfolioPerformanceXml(
-    portfolioPerformanceXml({
-      securities: [
-        {
-          id: "security-btc",
-          ticker: "BTC",
-          name: "Synthetic Bitcoin",
-          currency,
-        },
-      ],
-      events: [
-        ppEvent({
-          securityId: "security-btc",
-          date: "2025-02-01",
-          shares: "0.01234539",
-          currency,
-          amount,
-        }),
-      ],
-    }),
-  );
-  const planned = planPortfolioImportReference({
-    reference,
-    rows: [source()],
-    investments,
+  const event = retainedEvent({
+    securityId: "security-btc",
+    date: "2025-02-01",
+    shares: "0.01234539",
+    currency,
+    amount,
   });
-  expect(planned.blockers).toEqual([]);
-  return planned.corrections[0].after;
+  const reference = retainedReference([event]);
+  return retainedEvidenceRow(source(), reference, event, "recorded_native", {
+    currency,
+    amount,
+    price_per_unit: toDecimal(amount).div("0.01234539").toFixed(6),
+    fx_rate_to_eur: undefined,
+    asset_transfer_details: {
+      direction: "in",
+      basisStatus: "recorded_reference",
+    },
+  });
 }
 function plan(row, history = [legacy()], policy = "prefer_source") {
   return buildPortfolioImportReconciliationPlan({

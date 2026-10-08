@@ -7,7 +7,7 @@ skinparam nodesep 60
 skinparam ranksep 80
 
 package "Database" {
-  class "connection.js" as DB {
+  class "connection.ts" as DB {
     +query(sql, params): Promise
     +getClient(): Promise
     +checkConnection(): Promise<boolean>
@@ -112,6 +112,19 @@ package "Repositories" {
     +getActiveAdoptionReceipts(batchId)
   }
 
+  class PortfolioImportCashRepository <<ADR-189>> {
+    +readKinesisCashContext()
+    +lockKinesisCashLedger()
+    +insertKinesisCash(component)
+    +readCashImagesForUpdate(ids)
+  }
+  class PortfolioIncomeRecognitionRepository <<ADR-188>> {
+    +readKinesisIncomeUnitContext(history)
+    +readIncomeRecognitionContext(history)
+    +recordPairedPortfolioIncome(pair)
+    +restorePairedPortfolioIncomeForBatch(batchId)
+    +readPairedIncomeRollbackBatchIds(batchId)
+  }
   class PortfolioImportDuplicateRepairRepository <<ADR-177>> {
     +readDuplicateRepairContext(history)
     +readFullRepairTransaction(id)
@@ -137,12 +150,6 @@ package "Repositories" {
     +deleteAssetAdjustmentsForBatch(batchId)
   }
 
-  class PortfolioImportReferenceRepository <<ADR-177>> {
-    +lockPortfolioReferenceScope(batchIds)
-    +lockPortfolioReferenceRows(batchIds)
-    +updatePortfolioReferenceRow(row, after)
-    +savePortfolioReferenceConfiguration(batchId, config)
-  }
 
   class WatchlistRepository {
     +getAll(opts): Promise<Watchlist[]>
@@ -384,9 +391,10 @@ DB <.. RecipientBankAccountRepository
 DB <.. InvestmentRepository
 DB <.. PortfolioTransactionRepository
 DB <.. PortfolioImportReconciliationRepository
+DB <.. PortfolioIncomeRecognitionRepository
+DB <.. PortfolioImportCashRepository
 DB <.. PortfolioAssetTransferRepository
 DB <.. PortfolioAssetAdjustmentRepository
-DB <.. PortfolioImportReferenceRepository
 DB <.. PortfolioImportDuplicateRepairRepository
 DB <.. WatchlistRepository
 DB <.. SplitRepository
@@ -408,11 +416,15 @@ DB <.. CashflowForecastAccuracyRepository
 DB <.. CustomParserConfigRepository
 
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : snapshots + receipts
+PortfolioImportReconciliationService --> PortfolioIncomeRecognitionRepository : paired income + guarded restore
+PortfolioImportReconciliationService --> PortfolioImportCashService : bounded cash orchestration
+PortfolioImportCashService --> PortfolioImportCashRepository : signed main/fee images
+PortfolioImportCashService --> PortfolioImportReconciliationRepository : immutable source settlement
+
 PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : dual images + guarded copy restore
 PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit reviewed repair
 PortfolioAssetTransferService --> PortfolioAssetTransferRepository : canonical custody events
 PortfolioAssetAdjustmentService --> PortfolioAssetAdjustmentRepository : unit removals + pinned yield evidence
-PortfolioImportReferenceService --> PortfolioImportReferenceRepository : staging only; effective scope
 PortfolioImportReconciliationService --> PortfolioAssetAdjustmentService : projected adjustment validation
 PortfolioImportCommitService --> PortfolioImportReconciliationService : locked plan + adoption
 PortfolioImportReconciliationService --> PortfolioAssetTransferService : projected custody validation

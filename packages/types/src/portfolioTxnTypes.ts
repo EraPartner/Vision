@@ -27,3 +27,12 @@ export const PORTFOLIO_TXN_TYPES = [
 ] as const;
 
 export type PortfolioTxnType = (typeof PORTFOLIO_TXN_TYPES)[number];
+
+/** Read-only accounting role; it does not classify the income's tax treatment. */
+export const PORTFOLIO_INCOME_RECOGNITION_ROLES = [
+  "standard",
+  "included_in_units",
+] as const;
+
+export type PortfolioIncomeRecognitionRole =
+  (typeof PORTFOLIO_INCOME_RECOGNITION_ROLES)[number];

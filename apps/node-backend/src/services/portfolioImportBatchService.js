@@ -1,3 +1,14 @@
+import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.js";
+import { validateKinesisCashRollback } from "./portfolioImportCashService.js";
+import { scheduleRefresh } from "./materializedViewService.js";
+import {
+  proveKinesisNetworkBindings,
+  proveKinesisNativeGiftGroups,
+} from "./portfolioKinesisNetworkProof.js";
+import {
+  restorePairedPortfolioIncomeForBatch,
+  readPairedIncomeRollbackBatchIds,
+} from "../repositories/portfolioIncomeRecognitionRepository.js";
 /**
  * Portfolio import batch service — the route-facing seam over
  * portfolioImportBatchRepository (eslint vision-local/no-repo-direct-from-route).
@@ -26,6 +37,11 @@ import {
   getActiveAdoptionReceipts,
   lockReconciliationAccountsAndHistory,
   readReconciliationSources,
+  readReconciliationBatchScope,
+  assertNoActiveKinesisNetworkConsumers,
+  readReconciliationHistory,
+  readKinesisNetworkContext,
+  readKinesisNativeGiftContext,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import {
   getRowForInvestmentCreation,
@@ -410,13 +426,24 @@ export async function resolveInvestmentRows({
  */
 export async function rollbackBatch(batchId) {
   const repairScope = await getActiveDuplicateRepairReceipts(batchId);
+  const pairedScope = await readPairedIncomeRollbackBatchIds(batchId);
+  const nativeScope = await readReconciliationSources([batchId]);
+  const nativeBatchIds = nativeScope
+    .map((row) =>
+      Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
+    )
+    .filter(Boolean);
+  let deletedCash = 0;
   return withTransaction(async () => {
+    deletedCash = 0;
     // Share the batch-first lock order with review resolution. This closes the
     // route pre-check race and prevents resolution from creating a holding while
     // rollback already owns staging rows (the opposite order could deadlock).
     const lockIds = [
       ...new Set([
         batchId,
+        ...pairedScope,
+        ...nativeBatchIds,
         ...repairScope.map((receipt) =>
           Number(receipt.original_import_batch_id),
         ),
@@ -460,6 +487,14 @@ export async function rollbackBatch(batchId) {
         "Duplicate repair provenance changed. Refresh the import before undoing it.",
         { details: { reason: "stale_reconciliation_plan" } },
       );
+    if (
+      (await readPairedIncomeRollbackBatchIds(batchId)).some(
+        (id) => !lockIds.includes(id),
+      )
+    )
+      throw new ConflictError("Paired income provenance changed", {
+        details: { reason: "stale_reconciliation_plan" },
+      });
     const rows = await getCommittedRows(batchId);
     const activeAdoptions = await getActiveAdoptionReceipts(batchId);
     const custodySourceRows = await readReconciliationSources([batchId]);
@@ -471,6 +506,11 @@ export async function rollbackBatch(batchId) {
               ...custodySourceRows.map(
                 (row) => row.asset_adjustment_details?.accountId,
               ),
+              ...custodySourceRows.flatMap((row) => [
+                row.asset_transfer_details?.networkBinding?.originAccountId,
+                row.asset_transfer_details?.networkBinding
+                  ?.destinationAccountId,
+              ]),
               ...activeAdoptions.flatMap((receipt) => [
                 receipt.before_data.account_id,
                 receipt.after_data.account_id,
@@ -490,6 +530,54 @@ export async function rollbackBatch(batchId) {
           ),
         ].sort((a, b) => a - b),
       );
+
+    await assertNoActiveKinesisNetworkConsumers(batchId);
+    if (
+      custodySourceRows.some(
+        (row) =>
+          row.asset_transfer_details?.networkBinding ||
+          row.asset_transfer_details?.networkReceipt ||
+          row.asset_transfer_details?.nativeGiftGroupReceipt ||
+          row.asset_adjustment_details?.networkReceipt,
+      )
+    ) {
+      const nativeHistory = await readReconciliationHistory([
+        ...new Set(
+          custodySourceRows
+            .map((row) => Number(row.investment_id))
+            .filter(Boolean),
+        ),
+      ]);
+      const nativeContext = await readKinesisNetworkContext(nativeHistory);
+      const nativeBatches = await readReconciliationBatchScope([batchId]);
+      if (
+        custodySourceRows.some(
+          (row) =>
+            row.asset_transfer_details?.networkBinding &&
+            !lockIds.includes(
+              Number(row.asset_transfer_details.networkBinding.witnessBatchId),
+            ),
+        ) ||
+        proveKinesisNetworkBindings(
+          custodySourceRows,
+          nativeBatches,
+          nativeHistory,
+          nativeContext,
+        ).blockers.length ||
+        proveKinesisNativeGiftGroups(
+          custodySourceRows,
+          nativeBatches,
+          nativeHistory,
+          await readKinesisNativeGiftContext(nativeHistory),
+        ).blockers.length
+      )
+        throw new ConflictError(
+          "Native wallet source evidence changed. Refresh before undoing this import.",
+          { details: { reason: "network_receipt_changed" } },
+        );
+    }
+    await lockKinesisCashLedger();
+    const ownedCashIds = await validateKinesisCashRollback(batchId);
 
     // Brokerage flag for the route guard (see docstring). Committed cash rows
     // can only exist on a brokerage batch (resolveAndCheck writes route='cash'
@@ -529,6 +617,8 @@ export async function rollbackBatch(batchId) {
         portfolioRows,
       );
 
+    await restorePairedPortfolioIncomeForBatch(batchId);
+
     // 1. Trades stamped with this batch — one statement.
     const bulkDeletedIds =
       await portfolioTransactionRepository.hardDeleteByImportBatch(batchId);
@@ -539,7 +629,14 @@ export async function rollbackBatch(batchId) {
 
     // 2. Cash rows → the ledger, never the portfolio table (brokerage only).
     const cashIds = isBrokerage
-      ? rows.filter((r) => r.route === "cash" && r.id != null).map((r) => r.id)
+      ? [
+          ...new Set([
+            ...rows
+              .filter((r) => r.route === "cash" && r.id != null)
+              .map((r) => r.id),
+            ...ownedCashIds,
+          ]),
+        ]
       : [];
     if (cashIds.length > 0) {
       const r = await query(
@@ -547,6 +644,7 @@ export async function rollbackBatch(batchId) {
         [cashIds],
       );
       deleted += r.rowCount ?? 0;
+      deletedCash += r.rowCount ?? 0;
     }
 
     // 3. Pre-0086 trades the stamp cannot reach. On a non-brokerage batch this
@@ -577,5 +675,8 @@ export async function rollbackBatch(batchId) {
           }
         : {}),
     };
+  }).then((result) => {
+    if (deletedCash > 0) scheduleRefresh();
+    return result;
   });
 }

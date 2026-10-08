@@ -240,6 +240,10 @@ export default function StocksPage({
                     holding.totalDividends,
                     holding.currency,
                 );
+                acc.totalInKindIncome += convertToTarget(
+                    holding.totalInKindIncome ?? 0,
+                    holding.currency,
+                );
                 acc.totalFees += convertToTarget(
                     holding.totalFees,
                     holding.currency,
@@ -255,6 +259,7 @@ export default function StocksPage({
                 totalRealizedGain: 0,
                 totalUnrealizedGain: 0,
                 totalDividends: 0,
+                totalInKindIncome: 0,
                 totalFees: 0,
                 totalTaxes: 0,
             },

@@ -24,6 +24,8 @@ import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapt
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.js";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.js";
 import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.js";
+import { verifyKinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.js";
+import { parsedDateToYmd } from "../../lib/importDates.ts";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -130,7 +132,7 @@ function rowToParsed(row, config, rowNumber) {
   const currency = colMap.currency ? cell(row, colMap.currency) || null : null;
   const fxRaw = magnitude(colMap.fx_rate);
 
-  return {
+  const parsed = {
     date,
     typeRaw: cell(row, colMap.type),
     symbolRaw: cell(row, colMap.symbol),
@@ -147,6 +149,48 @@ function rowToParsed(row, config, rowNumber) {
     sourceAccountIdentity: cell(row, colMap.source_account) || null,
     sourceId: cell(row, colMap.source_id) || null,
   };
+  if (["asset_fee", "asset_transfer_witness"].includes(parsed.typeRaw)) {
+    try {
+      const receipt = JSON.parse(row.Receipt_JSON);
+      const proof = verifyKinesisNetworkReceipt(receipt, parsed.typeRaw);
+      if (
+        parsed.currency !== proof.asset ||
+        parsedDateToYmd(parsed.date) !== proof.date ||
+        parsed.symbolRaw !== proof.asset ||
+        parsed.sourceId !== proof.hash ||
+        parsed.sourceAccountIdentity !== proof.sourceAddress ||
+        Number(parsed.units) !== Number(proof.units) ||
+        [
+          parsed.amount,
+          parsed.pricePerUnit,
+          parsed.fees,
+          parsed.taxes,
+          parsed.fxRateToEur,
+        ].some((value) => value != null && value !== 0)
+      )
+        throw new Error("network source fields");
+      if (parsed.typeRaw === "asset_fee") {
+        parsed.typeRaw = "AssetAdjustment";
+        parsed.assetAdjustment = {
+          kind: "asset_fee",
+          basisPolicy: "carried",
+          networkReceipt: receipt,
+        };
+      } else {
+        parsed.typeRaw = "InternalMovement";
+        parsed.assetTransfer = {
+          direction: "internal",
+          basisStatus: "not_applicable",
+          networkReceipt: receipt,
+        };
+      }
+    } catch {
+      throw new ValidationError(
+        "Native wallet receipt or mapped source fields could not be verified",
+      );
+    }
+  }
+  return parsed;
 }
 
 /**
@@ -205,6 +249,7 @@ export async function parseWithConfig(filePath, config) {
   }
 
   rows.skipped = skipped;
+  rows.sourceColumns = Object.keys(records[0] ?? {});
   logger.info(`Portfolio CSV parsed: ${rows.length} rows, ${skipped} skipped`);
   return rows;
 }

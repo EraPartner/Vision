@@ -49,6 +49,7 @@ export interface PortfolioTxnLike {
   amount?: TxnNumeric;
   fees?: TxnNumeric;
   taxes?: TxnNumeric;
+  income_recognition_role?: "standard" | "included_in_units";
 }
 
 /**
@@ -117,6 +118,7 @@ export interface ConvertedTrack {
   totalFees: Decimal;
   totalTaxes: Decimal;
   totalDividends: Decimal;
+  totalInKindIncome: Decimal;
   totalIncome: Decimal;
 }
 
@@ -137,6 +139,7 @@ export interface InvestmentSummaryCore {
   feeTxnAmount: Decimal;
   taxTxnAmount: Decimal;
   totalDividends: Decimal;
+  totalInKindIncome: Decimal;
   totalInterestPaid: Decimal;
   totalRent: Decimal;
   totalAppreciation: Decimal;
@@ -675,6 +678,7 @@ export function buildInvestmentSummaryCore(
   // All running sums are kept as Decimal — IEEE-754 drift on money paths
   // compounds across many transactions before the caller's round-on-emit.
   let totalDividends = ZERO;
+  let totalInKindIncome = ZERO;
   let totalInterestPaid = ZERO;
   let totalRent = ZERO;
   let totalAppreciation = ZERO;
@@ -690,6 +694,7 @@ export function buildInvestmentSummaryCore(
 
   // Converted (transaction-date rate) twins of the sums above.
   let totalDividendsC = ZERO;
+  let totalInKindIncomeC = ZERO;
   let totalInterestPaidC = ZERO;
   let totalRentC = ZERO;
   let totalBuyAmountC = ZERO;
@@ -703,6 +708,14 @@ export function buildInvestmentSummaryCore(
   let nonBasisExpensesC = ZERO;
 
   for (const txn of txns) {
+    const incomeRole = txn.income_recognition_role ?? "standard";
+    if (!["standard", "included_in_units"].includes(incomeRole))
+      throw new Error("Unsupported portfolio income recognition role");
+    if (
+      incomeRole === "included_in_units" &&
+      (txn.type !== "dividend" || !isUnitBased)
+    )
+      throw new Error("In-kind income requires a unit-based dividend");
     const amount = toDecimal(txn.amount);
     const fx = txnFx(txn);
     feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees));
@@ -739,8 +752,13 @@ export function buildInvestmentSummaryCore(
         taxTxnAmountC = taxTxnAmountC.plus(amount.times(fx));
         break;
       case "dividend":
-        totalDividends = totalDividends.plus(amount);
-        totalDividendsC = totalDividendsC.plus(amount.times(fx));
+        if (incomeRole === "included_in_units") {
+          totalInKindIncome = totalInKindIncome.plus(amount);
+          totalInKindIncomeC = totalInKindIncomeC.plus(amount.times(fx));
+        } else {
+          totalDividends = totalDividends.plus(amount);
+          totalDividendsC = totalDividendsC.plus(amount.times(fx));
+        }
         break;
       case "interest":
         totalInterestPaid = totalInterestPaid.plus(amount);
@@ -935,6 +953,7 @@ export function buildInvestmentSummaryCore(
     feeTxnAmount,
     taxTxnAmount,
     totalDividends,
+    totalInKindIncome,
     totalInterestPaid,
     totalRent,
     totalAppreciation,
@@ -958,6 +977,7 @@ export function buildInvestmentSummaryCore(
       totalFees: totalFeesC,
       totalTaxes: totalTaxesC,
       totalDividends: totalDividendsC,
+      totalInKindIncome: totalInKindIncomeC,
       totalIncome: totalIncomeC,
     },
   };
@@ -1190,6 +1210,7 @@ const ADDITIVE_CORE_FIELDS = [
   "feeTxnAmount",
   "taxTxnAmount",
   "totalDividends",
+  "totalInKindIncome",
   "totalInterestPaid",
   "totalRent",
   "totalAppreciation",
@@ -1211,6 +1232,7 @@ const ADDITIVE_CONVERTED_FIELDS = [
   "totalFees",
   "totalTaxes",
   "totalDividends",
+  "totalInKindIncome",
   "totalIncome",
 ] as const satisfies readonly (keyof ConvertedTrack)[];
 type AdditiveCoreField = (typeof ADDITIVE_CORE_FIELDS)[number];
