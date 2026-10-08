@@ -80,7 +80,7 @@ boot graph by explicit product decision.
 ## PostgreSQL measurement evidence
 
 The opt-in
-[[apps/node-backend/tests/transactionPerformanceMeasurements.db.test.js|measurement harness]]
+[[apps/node-backend/tests/transactionPerformanceMeasurements.db.test.ts|measurement harness]]
 creates a disposable corpus and runs the exact production query shapes with
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`, and rolls back both the data and the temporary index
 drop. It is intentionally excluded from ordinary test runs because it inserts 120,000 rows and is
@@ -88,7 +88,7 @@ a measurement rather than a stable wall-clock gate.
 
 ```bash
 VISION_RUN_PERFORMANCE_PROBES=1 bun run test:db \
-  tests/transactionPerformanceMeasurements.db.test.js --reporter=verbose
+  tests/transactionPerformanceMeasurements.db.test.ts --reporter=verbose
 ```
 
 The 2026-09-08 run used PostgreSQL 18.6 on an Apple M1 host. The corpus contained 120,000

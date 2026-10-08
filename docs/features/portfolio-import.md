@@ -262,7 +262,7 @@ Incomplete conversions and inconsistent lifecycle events remain review errors.
 The synthetic fixture was cross-checked against a sanitized real export and preserves its 11
 headers, currency-decorated USD values, decimal precision, event kinds, UTC timestamps, signs,
 linked-row structure, and fee-currency cases without retaining transaction data. Regression
-coverage is in [[apps/node-backend/tests/nexoTransactionHistoryAdapter.test.js]].
+coverage is in [[apps/node-backend/tests/nexoTransactionHistoryAdapter.test.ts]].
 
 The Nexo Pro adapter accepts the exact ordered 14-column spot order-history export. It retains
 each literal record and uses the immutable `orderId`, `filledAmount`, `executedPrice`, and explicit
@@ -334,8 +334,8 @@ CSV trades retain their instrument-currency units and quoted prices, with accoun
 when needed. A CSV cash dividend has only a net booking amount and is therefore an explicit review
 error directing the user to the detailed workbook. It is not imported as gross income. Unknown
 corporate actions and workbook booking kinds also remain review errors. Synthetic regression
-coverage is in [[apps/node-backend/tests/saxoTransactionHistoryAdapter.test.js]] and
-[[apps/node-backend/tests/portfolioWorkbook.test.js]].
+coverage is in [[apps/node-backend/tests/saxoTransactionHistoryAdapter.test.ts]] and
+[[apps/node-backend/tests/portfolioWorkbook.test.ts]].
 
 When both Saxo files are selected, a uniquely proved CSV counterpart instead becomes
 `duplicate_source` evidence for the detailed workbook event. Proof reparses the literal CSV with
@@ -815,7 +815,7 @@ The routing is deterministic from the row and decided at validate time; a statem
 
 **Rollback** treats D6 rows exactly like other cash rows: `route` travels with `committed_txn_id`, so `rollbackBatch` deletes them from `transactions` (never the portfolio table) and resets staging to `matched`.
 
-Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, signs, configured categories, rollback, non-brokerage unchanged), `tests/brokerageRouting.test.js` (D6 classification), `tests/portfolioImportCommit.test.js` (pinned cash INSERT SQL + D6 sign/configured-active-category params).
+Tests: `tests/portfolioImportInstrumentlessCash.db.test.ts` (full pipeline, signs, configured categories, rollback, non-brokerage unchanged), `tests/brokerageRouting.test.ts` (D6 classification), `tests/portfolioImportCommit.test.ts` (pinned cash INSERT SQL + D6 sign/configured-active-category params).
 
 ---
 

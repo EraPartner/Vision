@@ -8,7 +8,7 @@
  * pass-through semantics — so the swap cannot change the wire.
  *
  * Driven over HTTP against the real router (tests/helpers/routeApp.ts),
- * mirroring importValidationPins.test.js: multer is stubbed to a pass-through
+ * mirroring importValidationPins.test.ts: multer is stubbed to a pass-through
  * (no real multipart parsing) and the uploaded file is injected by a `before`
  * middleware, the same per-mount slot main.ts uses (main.ts:285 mounts
  * importRateLimiter there for this router).
@@ -664,7 +664,7 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
 
 /**
  * `:id` on the portfolio half of the parser CRUD. The shape matrix lives in
- * parserConfigIdValidation.test.js — this pins that THIS router carries the
+ * parserConfigIdValidation.test.ts — this pins that THIS router carries the
  * guard, since the two routers register the shared handlers independently and
  * a regression could reach one and not the other. `DELETE /parsers/22abc` used
  * to answer 204 having deleted parser 22.
@@ -702,7 +702,7 @@ describe("parser :id shape (PATCH/DELETE /parsers/:id)", () => {
  * re-reads the id off the URL through `coercedIdSchema`. `createBatch` used to
  * hand back node-postgres's BIGSERIAL STRING, so the two responses typed the
  * same JSON field differently. NUMBER is now the single wire type (normalized at
- * the stage boundary; pinned by tests/importPipeline.stage.test.js).
+ * the stage boundary; pinned by tests/importPipeline.stage.test.ts).
  */
 describe("batch_id wire type", () => {
   const BATCH_ID = 12;

@@ -154,7 +154,7 @@ Report theme tokens (e.g. `primary`, `surface`, `text`) are passed from the fron
 
 2. **Sink-level guard (`themeCss.js`):** The same regex is re-applied in `buildThemeCss()` before interpolation. Invalid tokens silently fall back to the mode default (light or dark) rather than propagating the raw value. The fallback palette comes from `@vision/types/reportThemeDefaults`, which is also used by the frontend's default theme. This keeps a partial or rejected report palette aligned with the application's default light and dark palettes.
 
-Both guards are exported (`HSL_COMPONENT_RE`) and covered by [[apps/node-backend/tests/themeCss.test.js]].
+Both guards are exported (`HSL_COMPONENT_RE`) and covered by [[apps/node-backend/tests/themeCss.test.ts]].
 
 ## Base URL
 

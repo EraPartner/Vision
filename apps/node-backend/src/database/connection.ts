@@ -165,7 +165,7 @@ export async function query<R = any>(
         logger.warn(
           `Transient DB error (attempt ${attempt}/${maxRetries}), retrying in ${backoff}ms: ${err.message}`,
         );
-        // Global setTimeout, not node:timers/promises: connection.test.js
+        // Global setTimeout, not node:timers/promises: connection.test.ts
         // drives this backoff with vi.useFakeTimers(), which cannot fake
         // timers/promises.
         await new Promise((r) => setTimeout(r, backoff));

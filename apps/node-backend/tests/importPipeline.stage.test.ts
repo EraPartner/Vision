@@ -1,0 +1,266 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Mock } from "vitest";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { loose } from "./helpers/partial.ts";
+
+const {
+  clientQuery,
+  getAdapter,
+  genericParseWithConfig,
+  portfolioParseWithConfig,
+} = vi.hoisted(() => ({
+  clientQuery: vi.fn().mockResolvedValue({ rows: [] }),
+  getAdapter: vi.fn(),
+  genericParseWithConfig: vi.fn().mockResolvedValue([]),
+  portfolioParseWithConfig: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock("../src/database/connection.ts", () =>
+  mockTxConnection(
+    { query: clientQuery },
+    { query: vi.fn().mockResolvedValue({ rows: [] }) },
+  ),
+);
+
+vi.mock("../src/config/logger.ts", () => ({
+  logger: mockLogger(),
+}));
+
+vi.mock("../src/services/importPipeline/adapters/index.ts", () => ({
+  getAdapter: (...args: unknown[]) => getAdapter(...args),
+}));
+
+vi.mock("../src/services/importPipeline/adapters/generic.ts", () => ({
+  default: {
+    name: "generic",
+    parseWithConfig: (...args: unknown[]) => genericParseWithConfig(...args),
+  },
+}));
+
+vi.mock(
+  "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts",
+  () => ({
+    parseWithConfig: (...args: unknown[]) => portfolioParseWithConfig(...args),
+  }),
+);
+
+import {
+  stageBatch,
+  createBatch,
+} from "../src/services/importPipeline/stage.ts";
+import {
+  createBatch as createPortfolioBatch,
+  stageBatch as stagePortfolioBatch,
+} from "../src/services/portfolioImportPipeline/stage.ts";
+import { query as rawQuery } from "../src/database/connection.ts";
+import type { PgQueryResult } from "../src/database/connection.ts";
+import type { CustomTransactionParserConfig } from "../src/services/importPipeline/adapters/generic.ts";
+import type { PortfolioParserConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
+
+const query = rawQuery as unknown as Mock<
+  (
+    sql: string,
+    params?: readonly unknown[],
+  ) => Promise<Partial<PgQueryResult<unknown>>>
+>;
+
+/** Parsed rows as an adapter returns them: the array carries its skip count. */
+type ParsedRows<T> = T[] & { skipped?: number };
+
+// loose: an opaque placeholder. Both parsers are mocked, so the tests only
+// check that the config is forwarded untouched, not that it is well formed.
+const CONFIG = loose<CustomTransactionParserConfig & PortfolioParserConfig>({
+  dateColumn: "D",
+  recipientColumn: "R",
+  amountColumn: "A",
+});
+
+/**
+ * The single boundary where a batch id enters the application. `import_batches.id`
+ * is BIGSERIAL and node-postgres emits BIGINT as a STRING, so without this
+ * normalization POST /api/import/csv answered `batch_id: "12"` while the
+ * review-commit route (routes/importRoutes.js:570), which reads the id back off
+ * the URL through `coercedIdSchema`, answered `batch_id: 12`.
+ */
+describe("createBatch normalizes the BIGSERIAL id to a number", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("returns a NUMBER even though pg hands back a string", async () => {
+    query.mockResolvedValue({ rows: [{ id: "12" }] });
+
+    const id = await createBatch({ adapterName: "vision" });
+
+    expect(id).toBe(12);
+    expect(typeof id).toBe("number");
+  });
+
+  it("does the same in the portfolio pipeline, so both agree on the wire", async () => {
+    query.mockResolvedValue({ rows: [{ id: "12" }] });
+
+    const id = await createPortfolioBatch({ adapterName: "generic" });
+
+    expect(id).toBe(12);
+    expect(typeof id).toBe("number");
+  });
+
+  it("is exact for ids up to Number.MAX_SAFE_INTEGER (the documented ceiling)", async () => {
+    query.mockResolvedValue({
+      rows: [{ id: String(Number.MAX_SAFE_INTEGER) }],
+    });
+
+    expect(await createBatch({ adapterName: "vision" })).toBe(
+      Number.MAX_SAFE_INTEGER,
+    );
+  });
+});
+
+describe("stageBatch adapter resolution", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    genericParseWithConfig.mockResolvedValue([]);
+    portfolioParseWithConfig.mockResolvedValue([]);
+  });
+
+  it("falls back to the generic adapter when a named custom adapter is not in the registry", async () => {
+    getAdapter.mockReturnValue(null); // "My Bank" is not a registered adapter
+
+    await stageBatch({
+      batchId: 1,
+      filePath: "/tmp/x.csv",
+      adapterName: "My Bank",
+      customConfig: CONFIG,
+    });
+
+    expect(genericParseWithConfig).toHaveBeenCalledWith("/tmp/x.csv", CONFIG);
+  });
+
+  it("uses a registered adapter's parseWithConfig when the name resolves", async () => {
+    const adapterParseWithConfig = vi.fn().mockResolvedValue([]);
+    getAdapter.mockReturnValue({
+      name: "vision",
+      parseWithConfig: adapterParseWithConfig,
+      parse: vi.fn(),
+    });
+
+    await stageBatch({
+      batchId: 2,
+      filePath: "/tmp/y.csv",
+      adapterName: "vision",
+      customConfig: CONFIG,
+    });
+
+    expect(adapterParseWithConfig).toHaveBeenCalledWith("/tmp/y.csv", CONFIG);
+    expect(genericParseWithConfig).not.toHaveBeenCalled();
+  });
+
+  it("throws for an unknown adapter when no customConfig is supplied", async () => {
+    getAdapter.mockReturnValue(null);
+
+    await expect(
+      stageBatch({ batchId: 3, filePath: "/tmp/z.csv", adapterName: "Nope" }),
+    ).rejects.toThrow(/Unknown adapter/);
+  });
+
+  it("shares zero-row and 500-row chunk progress across both stage pipelines", async () => {
+    const bankRows: ParsedRows<{
+      date: Date;
+      amount: number;
+      currency: string;
+    }> = Array.from({ length: 501 }, (_, index) => ({
+      date: new Date("2026-01-01T00:00:00Z"),
+      amount: index + 1,
+      currency: "EUR",
+    }));
+    bankRows.skipped = 2;
+    getAdapter.mockReturnValue({ parse: vi.fn().mockResolvedValue(bankRows) });
+    const bankProgress: unknown[] = [];
+
+    const bankResult = await stageBatch({
+      batchId: 3,
+      filePath: "/tmp/bank.csv",
+      adapterName: "vision",
+      onProgress: (event) => bankProgress.push(event.current),
+    });
+
+    expect(bankResult).toEqual({ rowsTotal: 501, rowsSkipped: 2 });
+    expect(bankProgress).toEqual([0, 500, 501]);
+    expect(clientQuery).toHaveBeenCalledTimes(2);
+
+    clientQuery.mockClear();
+    const portfolioRows: ParsedRows<{
+      date: Date;
+      amount: number;
+      currency: string;
+    }> = Array.from({ length: 501 }, (_, index) => ({
+      date: new Date("2026-01-01T00:00:00Z"),
+      amount: index + 1,
+      currency: "EUR",
+    }));
+    portfolioRows.skipped = 3;
+    portfolioParseWithConfig.mockResolvedValue(portfolioRows);
+    const portfolioProgress: unknown[] = [];
+
+    const portfolioResult = await stagePortfolioBatch({
+      batchId: 4,
+      filePath: "/tmp/portfolio.csv",
+      customConfig: CONFIG,
+      onProgress: (event) => portfolioProgress.push(event.current),
+    });
+
+    expect(portfolioResult).toEqual({ rowsTotal: 501, rowsSkipped: 3 });
+    expect(portfolioProgress).toEqual([0, 500, 501]);
+    expect(clientQuery).toHaveBeenCalledTimes(2);
+  });
+
+  it("persists and reports the zero-row lifecycle without opening a chunk transaction", async () => {
+    const emptyBankRows: ParsedRows<unknown> = [];
+    emptyBankRows.skipped = 7;
+    getAdapter.mockReturnValue({
+      parse: vi.fn().mockResolvedValue(emptyBankRows),
+    });
+    const bankProgress: unknown[] = [];
+
+    const bankResult = await stageBatch({
+      batchId: 5,
+      filePath: "/tmp/empty-bank.csv",
+      adapterName: "vision",
+      onProgress: (event) => bankProgress.push(event),
+    });
+
+    expect(bankResult).toEqual({ rowsTotal: 0, rowsSkipped: 7 });
+    expect(bankProgress).toEqual([{ phase: "staging", current: 0, total: 0 }]);
+    expect(clientQuery).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(
+        ([sql, params]) =>
+          /UPDATE import_batches SET rows_total/.test(sql) && params![0] === 0,
+      ),
+    ).toBe(true);
+
+    vi.clearAllMocks();
+    const emptyPortfolioRows: ParsedRows<unknown> = [];
+    emptyPortfolioRows.skipped = 8;
+    portfolioParseWithConfig.mockResolvedValue(emptyPortfolioRows);
+    const portfolioProgress: unknown[] = [];
+    const portfolioResult = await stagePortfolioBatch({
+      batchId: 6,
+      filePath: "/tmp/empty-portfolio.csv",
+      customConfig: CONFIG,
+      onProgress: (event) => portfolioProgress.push(event),
+    });
+
+    expect(portfolioResult).toEqual({ rowsTotal: 0, rowsSkipped: 8 });
+    expect(portfolioProgress).toEqual([
+      { phase: "staging", current: 0, total: 0 },
+    ]);
+    expect(clientQuery).not.toHaveBeenCalled();
+    expect(
+      query.mock.calls.some(
+        ([sql, params]) =>
+          /UPDATE portfolio_import_batches SET rows_total/.test(sql) &&
+          params![0] === 0,
+      ),
+    ).toBe(true);
+  });
+});

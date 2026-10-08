@@ -22,6 +22,7 @@ import type {
   SeekAnalysisGoalInput,
 } from "./analysisExtensions.ts";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.ts";
+import type { AnalysisAssumption } from "@vision/types/analysis";
 import type {
   AnalysisFormulaEvaluation,
   AnalysisFormulaInput,
@@ -42,6 +43,7 @@ export interface AnalysisResultWindow {
 export interface AnalysisResultCoverage {
   complete?: boolean;
   status?: string;
+  unavailableRows?: number;
 }
 
 /** The result shape shared by SQL, financial and workbench analysis runs. */
@@ -66,11 +68,7 @@ export interface AnalysisWorkbench {
 
 export interface AnalysisFormulaModel {
   formulas?: AnalysisFormulaInput[];
-  assumptions?: Array<{
-    id: string;
-    defaultValue?: unknown;
-    unit?: FormulaUnitInput;
-  }>;
+  assumptions?: AnalysisAssumption[];
   assumptionValues?: Record<string, unknown>;
 }
 

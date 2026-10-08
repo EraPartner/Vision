@@ -762,7 +762,7 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
  * relay `pipelineResult.batchId` straight from `createBatch`, while the
  * review-commit route re-reads the id off the URL through `coercedIdSchema`.
  * Those two producers disagreed until `createBatch` was normalized
- * (services/importPipeline/stage.js — pinned by tests/importPipeline.stage.test.js),
+ * (services/importPipeline/stage.js — pinned by tests/importPipeline.stage.test.ts),
  * so `batch_id` was a string on one response and a number on the other and a
  * client doing `a.batch_id === b.batch_id` across them always saw false.
  * NUMBER is the single wire type; these pin every response that carries the field.

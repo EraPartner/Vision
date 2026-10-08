@@ -1,0 +1,38 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
+
+vi.mock("../src/database/connection.ts", () => mockConnection());
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
+  mockCurrencyConversion(),
+);
+
+import { query as rawQuery } from "../src/database/connection.ts";
+import type { PgQueryResult } from "../src/database/connection.ts";
+import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
+import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
+import { partial } from "./helpers/partial.ts";
+
+const query = vi.mocked(rawQuery);
+const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+
+beforeEach(() => vi.clearAllMocks());
+
+describe("tagInsightsRepository.getTagPivot id validation", () => {
+  it("rejects a malformed selection before querying", async () => {
+    await expect(
+      // @ts-expect-error -- deliberately invalid id to exercise runtime validation
+      tagInsightsRepository.getTagPivot({ tagIds: [5, "evil"] }),
+    ).rejects.toThrow(/tagIds contains invalid value/);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("retains a selected tag at the int4 ceiling", async () => {
+    query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
+    convertRowsToEur.mockResolvedValueOnce([]);
+
+    await tagInsightsRepository.getTagPivot({ tagIds: [2147483647] });
+
+    expect(query.mock.calls[0][1]).toEqual([[2147483647]]);
+  });
+});

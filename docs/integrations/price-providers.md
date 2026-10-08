@@ -50,7 +50,7 @@ related_code:
     [apps/node-backend/src/services/priceProviderService.ts],
     [apps/node-backend/src/services/quoteBackfillService.ts],
     [apps/node-backend/src/services/prices/priceProviderRegistry.ts],
-    [apps/node-backend/tests/priceProviderRegistry.test.js],
+    [apps/node-backend/tests/priceProviderRegistry.test.ts],
     [apps/node-backend/src/lib/network.ts],
   ]
 ---

@@ -4,7 +4,7 @@
  * Single source of truth for every persistence surface that the Vision
  * backup system must capture.  Imported by:
  *   - packaging/electron/backup/bundle.js  (runtime assertion before dump)
- *   - apps/node-backend/tests/backup-coverage.test.js (CI enforcement)
+ *   - apps/node-backend/tests/backup-coverage.test.ts (CI enforcement)
  *
  * ADDING A TABLE? Add it here first, then update the backup bundle logic.
  * The coverage test will fail in CI until both are done.

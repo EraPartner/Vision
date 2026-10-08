@@ -13,7 +13,7 @@ aliases:
   ]
 related_code:
   - packages/types/src/analysis.ts
-  - apps/node-backend/tests/analysisContract.test.js
+  - apps/node-backend/tests/analysisContract.test.ts
   - apps/node-backend/tests/fixtures/analysis/referenceQuestionsV1.ts
 ---
 

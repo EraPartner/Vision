@@ -228,7 +228,7 @@ Unassigned row and its global math stays the flat replay. A legacy partition def
 readable with `oversold: true`; writes reject a new or worsened deficit but allow unchanged or
 improving repair edits.
 
-**Parity invariant (locked by `tests/portfolioSummaryPartitionParity.db.test.js` under weighted_avg/fifo/lifo, per ADR-061 discipline):**
+**Parity invariant (locked by `tests/portfolioSummaryPartitionParity.db.test.ts` under weighted_avg/fifo/lifo, per ADR-061 discipline):**
 
 ```
 Σ byAccount[].currentValue    === totals.totalPortfolioValue

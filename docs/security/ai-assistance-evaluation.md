@@ -2,7 +2,7 @@
 title: AI Assistance Evaluation
 type: security
 status: active
-date: 2026-09-20
+date: 2026-10-08
 updated: 2026-09-25
 tags:
   [
@@ -132,7 +132,7 @@ The report marks utility as unevaluated. Comparing three fixed, identical plan l
 only test the literals, so route utility requires actual outputs from local-only, cloud-plan,
 and approved-summary runs on the same synthetic financial tasks.
 
-`openAiProductionTrafficEvaluation.test.js` uses the production `disclosurePayload` serializer and
+`openAiProductionTrafficEvaluation.test.ts` uses the production `disclosurePayload` serializer and
 `executeBrokerRequest` helper with an injected inspection fetch. Its synthetic public question,
 selected summary, and selected evidence each produce one request whose captured bytes equal the
 disclosure preview exactly. The captured destination is the Responses API, the authorization
@@ -142,7 +142,7 @@ separate timeout case confirms the helper aborts its single request. These tests
 connection or use a real credential. They do not test the production child-process sandbox or prove
 that a live provider honors the request policy.
 
-`openAiBrokerChildPrivacy.test.js` starts the unmodified production egress helper as a separate
+`openAiBrokerChildPrivacy.test.ts` starts the unmodified production egress helper as a separate
 Node process with the same serialized synthetic disclosures. A preload replaces `fetch` before the
 helper starts, records the exact request bytes and headers, and blocks all external traffic. The
 three disclosure modes produce one approved request each. A fourth case observes the abort signal

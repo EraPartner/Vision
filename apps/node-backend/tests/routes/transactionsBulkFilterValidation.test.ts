@@ -12,7 +12,7 @@
  * them (`{category_ids: '<catId>'}`, a string where the array was expected),
  * response `{"deleted": 4}`.
  *
- * A separate file rather than more cases in transactionsBulkDelete.test.js:
+ * A separate file rather than more cases in transactionsBulkDelete.test.ts:
  * that suite runs against the route's REAL 30-requests/minute limiter and is
  * already close to it, so these ~25 extra requests would make it self-throttle.
  * Each file gets its own module registry, hence its own limiter counter.

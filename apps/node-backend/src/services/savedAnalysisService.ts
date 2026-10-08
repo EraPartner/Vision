@@ -20,7 +20,10 @@ import {
   analysisScenarioModelSchema,
   validateScenarioBindings,
 } from "./analysisScenarioInputs.ts";
-import type { AnalysisDefinition } from "@vision/types/analysis";
+import type {
+  AnalysisAssumption,
+  AnalysisDefinition,
+} from "@vision/types/analysis";
 import type { FinancialAnalysisPlan } from "./analysisFinancialDatasets.ts";
 import type {
   AnalysisFormulaModel,
@@ -60,11 +63,9 @@ export type SavedAnalysisFormula = AnalysisFormulaInput & {
   rounding?: { mode: string; scale: number };
 };
 
-export type SavedAnalysisAssumption = {
-  id: string;
-  defaultValue?: unknown;
-  unit?: FormulaUnitInput;
-};
+// buildDefinition parses assumptions with the strict contract schema, so the
+// input carries the full contract shape, not just the formula-model fields.
+export type SavedAnalysisAssumption = AnalysisAssumption;
 
 export type SavedAnalysisQuerySpec =
   | { mode: "visual"; plan: VisualAnalysisPlan }

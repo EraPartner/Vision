@@ -215,7 +215,7 @@ Array of saved custom portfolio rebalancing plans. Stored and retrieved via `GET
 | Any weight value is negative                  | `400`    |
 | `cashCap` present and negative                | `400`    |
 
-Code links: [[apps/node-backend/src/routes/settings.ts]] (`assertRebalancePlansValue`), [[apps/node-backend/tests/settingsStorage.test.js]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]]
+Code links: [[apps/node-backend/src/routes/settings.ts]] (`assertRebalancePlansValue`), [[apps/node-backend/tests/settingsStorage.test.ts]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]]
 
 ### `app_settings` shape (frontend)
 
@@ -346,6 +346,6 @@ writers. Conditional APIs do not make administrative restore transactional with 
 - [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog]] - Settings UI component (Phase 3 refactor)
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
 - [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
-- Coverage code links: [[apps/node-backend/tests/routes/settings.test.ts]], [[apps/node-backend/tests/validation.test.js]]
+- Coverage code links: [[apps/node-backend/tests/routes/settings.test.ts]], [[apps/node-backend/tests/validation.test.ts]]
 - Coverage follow-up (2026-04-11): settings route tests now also cover GET all/key behavior, known-default fallback, unknown-key `404`, and success/error branches for single PUT, bulk PUT, and DELETE.
 - Coverage follow-up (2026-04-20): settings route tests now also cover `theme_settings` variant/mode/schedule validation and persistence.

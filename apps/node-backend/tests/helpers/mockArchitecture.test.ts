@@ -8,8 +8,8 @@ const testsRoot = path.resolve(
   "..",
 );
 
-// The suite is mid-migration from JavaScript to TypeScript (ADR-192): scan
-// both, so a converted file cannot drop out of the architecture checks.
+// Tests are TypeScript (ADR-192); scan .js too so a stray JavaScript test
+// cannot slip past the architecture checks.
 const TEST_FILE = /\.test\.(?:js|ts)$/;
 
 function testFiles(dir: string = testsRoot): string[] {

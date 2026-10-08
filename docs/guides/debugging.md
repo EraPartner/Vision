@@ -2,7 +2,7 @@
 title: Error Handling & Debugging Guide
 type: guide
 status: active
-date: 2026-10-07
+date: 2026-10-08
 tags: [debugging, error-handling, troubleshooting, developer-guide]
 description: Comprehensive guide to error handling patterns, debugging techniques, and common failure modes in Vision
 aliases:
@@ -149,8 +149,8 @@ logger.error("Database error", { error: err.message });
 
 ```bash
 # Run specific service tests
-bun vitest run src/tests/currencyConversionService.test.js
-bun vitest run src/tests/deduplication.test.js
+bun vitest run tests/currencyConversionService.test.ts
+bun vitest run tests/deduplication.test.ts
 ```
 
 #### 4. Check PostgreSQL Connection

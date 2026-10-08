@@ -11,8 +11,8 @@ The production-connected properties exercise `buildMonthlySummary` and
 oracles. They cover already aggregated/converted row totals, not SQL grouping,
 exclusions, FX lookup, or monthly/yearly SQL parity.
 
-[Monthly repository database tests](../../../infoRepoMonthly.db.test.js) and
-[statistics repository database tests](../../../infoRepoStatistics.db.test.js)
+[Monthly repository database tests](../../../infoRepoMonthly.db.test.ts) and
+[statistics repository database tests](../../../infoRepoStatistics.db.test.ts)
 exercise real rows, including stored historical rates and applicable filters.
 They require `TEST_DATABASE_URL`; their skip state must remain visible. Retired
 shadow middleware is not a current test layer or registration requirement.

@@ -224,13 +224,13 @@ bun vitest run src/path/to/test.test.js
 ## Coverage Update (2026-04-11)
 
 - Targeted backend coverage was added for currency conversion fallback behavior and planned/transaction route patch validation branches.
-- Tests: [[apps/node-backend/tests/currencyConversionService.test.js]], [[apps/node-backend/tests/routes/plannedTransactions.test.ts]], [[apps/node-backend/tests/routes/transactions.test.ts]]
+- Tests: [[apps/node-backend/tests/currencyConversionService.test.ts]], [[apps/node-backend/tests/routes/plannedTransactions.test.ts]], [[apps/node-backend/tests/routes/transactions.test.ts]]
 - Details: [[docs/testing/testing|Testing Documentation]] and [[docs/testing/test-inventory|Test Inventory]]
 
 ### Coverage update addendum (2026-04-11)
 
 - Additional backend coverage was added for repository-level regressions (category upsert/get semantics and planned-transaction pagination query paths).
-- Tests: [[apps/node-backend/tests/categoryRepository.test.js]], [[apps/node-backend/tests/plannedTransactionRepository.test.js]]
+- Tests: [[apps/node-backend/tests/categoryRepository.test.ts]], [[apps/node-backend/tests/plannedTransactionRepository.test.ts]]
 - Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]
 
 > [!note] Schema initialization test archived
@@ -242,7 +242,7 @@ bun vitest run src/path/to/test.test.js
 > The raw transaction import service tests have been refactored as part of the Phase C consolidation into the unified `importPipeline` orchestrator. See import route tests and Feature: CSV Import for current implementation.
 
 - Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus import orchestration paths.
-- Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.ts]] (Phase C)
+- Tests: [[apps/node-backend/tests/wiseAdapter.test.ts]], [[apps/node-backend/tests/sabbAdapter.test.ts]], [[apps/node-backend/tests/visionAdapter.test.ts]], [[apps/node-backend/tests/routes/import.test.ts]] (Phase C)
 - Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
@@ -264,14 +264,14 @@ bun vitest run src/path/to/test.test.js
 ### Coverage update addendum (2026-04-11, portfolio transaction repository)
 
 - Added targeted backend repository coverage for portfolio transaction query/filter branches and grouped summary return paths.
-- Test: [[apps/node-backend/tests/portfolioTransactionRepository.test.js]]
+- Test: [[apps/node-backend/tests/portfolioTransactionRepository.test.ts]]
 - Related source: [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]]
-- Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.js` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
+- Validation + coverage snapshot: `bun vitest run tests/portfolioTransactionRepository.test.ts` (25 tests); `npm test -- --coverage` (827 tests); overall `81.81/67.61/85.42/85.25`; repositories bucket `68.47/63.45/67.02/72.66`; `portfolioTransactionRepository.js` `78.73/71.5/84.84/82.95` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ## Mock Isolation Fix (2026-04-25)
 
-Fixed critical Bun/Vitest v1.3.13 mock bleed issue in [[apps/node-backend/tests/aiChatTools.test.js]]:
+Fixed critical Bun/Vitest v1.3.13 mock bleed issue in [[apps/node-backend/tests/aiChatTools.test.ts]]:
 
 - **Issue:** `vi.resetAllMocks()` does NOT clear `mockResolvedValueOnce` queues, causing unconsumed mock stubs to persist across tests and corrupt subsequent test execution.
 - **Root Cause:** Vitest v1.3.13 queue clearing bug under Bun's context model.

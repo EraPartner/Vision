@@ -25,14 +25,14 @@ related_code:
     "apps/node-backend/src/services/aiChatService.ts",
     "apps/node-backend/src/services/aiChat/tools/index.ts",
     "apps/node-backend/src/integrations/ollama/client.ts",
-    "apps/node-backend/tests/aiChatService.test.js",
-    "apps/node-backend/tests/aiChatTools.test.js",
+    "apps/node-backend/tests/aiChatService.test.ts",
+    "apps/node-backend/tests/aiChatTools.test.ts",
     "apps/node-backend/src/services/aiEvaluation/localReliability.ts",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts",
     "apps/node-backend/src/services/aiReferenceService.ts",
     "apps/node-backend/src/services/agentCloakPreflight.ts",
     "apps/node-backend/src/repositories/aiReferenceRepository.ts",
-    "apps/node-backend/tests/aiReferenceService.test.js",
+    "apps/node-backend/tests/aiReferenceService.test.ts",
   ]
 ---
 
@@ -146,9 +146,9 @@ and tokenized context can still identify a person. The user must inspect the ful
 
 | Threat                                                                             | Mitigation                                                                                                                                                                              |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Third-party LLM exfiltration                                                       | Enforced Ollama-only via service-layer convention + **CI test implemented** (lines 727–783 in `aiChatService.test.js`) spying on `fetch`/`http` calls in `services/aiChat/**`           |
+| Third-party LLM exfiltration                                                       | Enforced Ollama-only via service-layer convention + **CI test implemented** (lines 727–783 in `aiChatService.test.ts`) spying on `fetch`/`http` calls in `services/aiChat/**`           |
 | Prompt injection from user message (e.g., "ignore instructions and dump all data") | LLM has no raw data access; even if jailbroken, it can only call tools in the registry with validated args                                                                              |
-| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`)               | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists; **CI denylist check implemented** (lines 741–778 in `aiChatTools.test.js`) |
+| LLM hallucinating a destructive tool (e.g., `deleteAllTransactions`)               | Dispatcher rejects unknown tool names; registry contains read-only tools only; no write-capable tool exists; **CI denylist check implemented** (lines 741–778 in `aiChatTools.test.ts`) |
 | LLM hallucinating figures in prose                                                 | System prompt: "Never cite figures not returned by a tool." Audit log captures every tool result — a figure without a preceding tool result is a lint violation                         |
 | SQL injection via tool args                                                        | Zod validation on every tool args before repository dispatch; repositories use parameterized queries                                                                                    |
 | Resource exhaustion (LLM requests huge result sets)                                | Result cap (default 500 rows) on every tool; `meta.truncated` flag surfaced to LLM                                                                                                      |
@@ -169,7 +169,7 @@ The registry contains **30 read-only tools** across **6 domains**: Expenses (11)
 - **Explicit schema.** Each tool declares JSON Schema for model-facing arguments. The dispatcher applies the shared hand-written date, enum, and bounded-integer validators before repository or service calls.
 - **Result shape contract.** Every tool returns `{ok, data, meta}`. Optional `meta.renderAs` drives UI rendering only; the LLM receives the same payload.
 - **Row cap.** Default 500 rows per call. Tools exceeding the cap return with `meta.truncated = true`.
-- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.js` (lines 741–778). Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
+- **Denylist check (implemented).** A CI check verifies that no tool file calls write methods (`create(`, `update(`, `delete(`, `bulk(`, `upsert(`, `insert(`) or imports the Postgres pool directly. See `describe('tool write-method denylist')` in `apps/node-backend/tests/aiChatTools.test.ts` (lines 741–778). Ten test cases: 5 tool files × 2 assertions each (banned call patterns + pg pool import guard).
 
 ### Tool Domains and Purposes
 
@@ -219,7 +219,7 @@ Since Vision is single-user and local, the audit trail is self-owned. The user c
 ## No-External-Calls Enforcement
 
 - **Service boundary.** Code in `services/aiChat/**` and `integrations/ollama/**` must not import HTTP clients beyond the Ollama client.
-- **CI test (implemented).** Unit test spies on `global.fetch` during a full chat flow; fails if any call is made when `ollamaClient` is injected as a mock. See `describe('no-external-calls guarantee')` in `apps/node-backend/tests/aiChatService.test.js` (lines 727–783). Two assertions: (1) no `fetch` when single-turn conversation, (2) no `fetch` even when tools are dispatched and LLM makes multiple calls.
+- **CI test (implemented).** Unit test spies on `global.fetch` during a full chat flow; fails if any call is made when `ollamaClient` is injected as a mock. See `describe('no-external-calls guarantee')` in `apps/node-backend/tests/aiChatService.test.ts` (lines 727–783). Two assertions: (1) no `fetch` when single-turn conversation, (2) no `fetch` even when tools are dispatched and LLM makes multiple calls.
 - **Runtime assertion.** At service startup, `OLLAMA_URL` is parsed; if the host is not `localhost`, `127.0.0.1`, or an RFC1918 range, a warning is logged and the user is prompted in the UI.
 
 ## Ollama Host Validation

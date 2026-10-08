@@ -516,7 +516,7 @@ The snapshot builder mirrors `portfolioSummaryService` formulas so that:
 snapshot[todayYmd].value ≈ portfolioSummary.totals.currentValue
 ```
 
-This invariant is verified by regression tests in `portfolioPerformanceSnapshotService.test.js`.
+This invariant is verified by regression tests in `portfolioPerformanceSnapshotService.test.ts`.
 
 #### Live Overlay at Read Time (2026-05-31, ADR-064)
 

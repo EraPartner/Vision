@@ -14,7 +14,7 @@
  * means "clear the FK" / "uncategorized" — the inline row editor's clear
  * action. Pinned here so a later tightening cannot take that away by accident.
  *
- * Lives in its own file rather than in transactionsValidationPins.test.js
+ * Lives in its own file rather than in transactionsValidationPins.test.ts
  * because the reject matrix needs ~30 PATCHes and the route carries its own
  * 30-requests-per-minute limiter (routes/transactions.js), which a fresh module
  * registry resets.
@@ -122,7 +122,7 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
 
 describe('POST / — FK ids reject instead of retargeting', () => {
   // recipient_id's reject matrix lives with the other POST body pins in
-  // transactionsValidationPins.test.js.
+  // transactionsValidationPins.test.ts.
   //
   // category_id used to be excluded here on purpose, because POST validated
   // recipient_id and amount and forwarded every other field raw — a *missing*

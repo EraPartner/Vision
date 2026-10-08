@@ -1,0 +1,699 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Mock } from "vitest";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
+
+vi.mock("../src/config/logger.ts", () => ({
+  logger: mockLogger(),
+}));
+
+vi.mock("../src/services/materializedViewService.ts", () => ({
+  scheduleRefresh: vi.fn(),
+  refreshMaterializedViews: vi.fn(),
+}));
+
+vi.mock("../src/database/connection.ts", () => mockConnection());
+vi.mock("../src/repositories/auditChainRepository.ts", () => ({
+  appendAuditEvent: vi.fn(),
+}));
+
+import {
+  query as rawQuery,
+  getClient as rawGetClient,
+} from "../src/database/connection.ts";
+import { appendAuditEvent as rawAppendAuditEvent } from "../src/repositories/auditChainRepository.ts";
+import { scheduleRefresh } from "../src/services/materializedViewService.ts";
+import {
+  getTableMeta,
+  readRows,
+  applyMutations,
+} from "../src/services/dbEditor.ts";
+
+// The fakes return plain (non-promise) result objects and partial clients.
+const query = rawQuery as unknown as Mock<(sql: string) => unknown>;
+const getClient = rawGetClient as unknown as Mock<() => Promise<unknown>>;
+const appendAuditEvent = vi.mocked(rawAppendAuditEvent);
+
+/** A pg driver error as dbEditor's mapDbError reads it. */
+type PgError = Error & { code?: string; constraint?: string; column?: string };
+/** `[sql substring, canned result or result factory]` for `makeClient`. */
+type ClientHandler = [
+  needle: string,
+  value: object | ((sql: string, params: unknown[]) => unknown),
+];
+
+// ── Catalog fixtures ────────────────────────────────────────────────────────
+
+const ALLOWED_TABLES = [
+  "transactions",
+  "recipients",
+  "tags",
+  "kv_settings",
+  "accounts",
+];
+
+const COLUMNS = {
+  transactions: [
+    {
+      column_name: "id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "NO",
+      column_default: "nextval('x')",
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 1,
+    },
+    {
+      column_name: "amount",
+      data_type: "numeric",
+      udt_name: "numeric",
+      is_nullable: "NO",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 2,
+    },
+    {
+      column_name: "currency",
+      data_type: "text",
+      udt_name: "text",
+      is_nullable: "NO",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 3,
+    },
+    {
+      column_name: "is_active",
+      data_type: "boolean",
+      udt_name: "bool",
+      is_nullable: "NO",
+      column_default: "true",
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 4,
+    },
+  ],
+  tags: [
+    {
+      column_name: "id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "NO",
+      column_default: "nextval('x')",
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 1,
+    },
+    {
+      column_name: "slug",
+      data_type: "text",
+      udt_name: "text",
+      is_nullable: "NO",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 2,
+    },
+  ],
+  accounts: [
+    {
+      column_name: "id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "NO",
+      column_default: "nextval('x')",
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 1,
+    },
+    {
+      column_name: "funding_account_id",
+      data_type: "integer",
+      udt_name: "int4",
+      is_nullable: "YES",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 2,
+    },
+  ],
+  // A table with no primary key (read-only for writes).
+  kv_settings: [
+    {
+      column_name: "k",
+      data_type: "text",
+      udt_name: "text",
+      is_nullable: "NO",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 1,
+    },
+    {
+      column_name: "v",
+      data_type: "text",
+      udt_name: "text",
+      is_nullable: "YES",
+      column_default: null,
+      is_generated: "NEVER",
+      is_identity: "NO",
+      ordinal_position: 2,
+    },
+  ],
+};
+
+const PRIMARY_KEYS = {
+  transactions: [{ column_name: "id" }],
+  tags: [{ column_name: "id" }],
+  accounts: [{ column_name: "id" }],
+  kv_settings: [],
+};
+
+/** Route a top-level query() call to the right catalog fixture. */
+function catalogRouter(table: string) {
+  return (sql: string) => {
+    if (sql.includes("pg_stat_user_tables")) {
+      return { rows: ALLOWED_TABLES.map((relname) => ({ relname })) };
+    }
+    if (sql.includes("information_schema.columns")) {
+      return { rows: COLUMNS[table as keyof typeof COLUMNS] ?? [] };
+    }
+    if (sql.includes("pg_index")) {
+      return { rows: PRIMARY_KEYS[table as keyof typeof PRIMARY_KEYS] ?? [] };
+    }
+    return { rows: [] };
+  };
+}
+
+function makeClient(handlers: ClientHandler[]) {
+  const calls: { sql: string; params: unknown[] }[] = [];
+  const client = {
+    query: vi.fn(async (sql: string, params: unknown[]) => {
+      calls.push({ sql, params });
+      if (sql.includes("INSERT INTO db_editor_audit")) {
+        return {
+          rows: [
+            {
+              id: "42",
+              pk_text: JSON.stringify(params[2] ?? null),
+              before_text: JSON.stringify(params[3] ?? null),
+              after_text: JSON.stringify(params[4] ?? null),
+              statement: params[5],
+              occurred_at: "2026-09-20T00:00:00.123456Z",
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      for (const [needle, value] of handlers) {
+        if (sql.includes(needle))
+          return typeof value === "function" ? value(sql, params) : value;
+      }
+      return { rows: [], rowCount: 0 };
+    }),
+    release: vi.fn(),
+  };
+  return { client, calls };
+}
+
+beforeEach(() => vi.clearAllMocks());
+
+// ── Introspection ───────────────────────────────────────────────────────────
+
+describe("getTableMeta", () => {
+  it("does not expose audit history through the generic table browser", async () => {
+    for (const table of [
+      "audit_chain_head",
+      "audit_chain_entries",
+      "audit_chain_checkpoints",
+      "db_editor_audit",
+      "split_audit",
+      "portfolio_retag_audit",
+    ]) {
+      await expect(getTableMeta(table)).rejects.toMatchObject({ status: 403 });
+      await expect(readRows(table)).rejects.toMatchObject({ status: 403 });
+    }
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("returns columns and primary key for a known table", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const meta = await getTableMeta("transactions");
+    expect(meta.primaryKey).toEqual(["id"]);
+    expect(meta.columns.map((c) => c.name)).toEqual([
+      "id",
+      "amount",
+      "currency",
+      "is_active",
+    ]);
+    expect(meta.columns.every((c) => c.writable)).toBe(true);
+  });
+
+  it("rejects an unknown table with 404", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    await expect(
+      getTableMeta('robert"; DROP TABLE x;--'),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+// ── Reads ───────────────────────────────────────────────────────────────────
+
+describe("readRows", () => {
+  it("runs inside a READ ONLY transaction and returns a bounded row page", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client } = makeClient([
+      [
+        "SELECT *",
+        {
+          rows: [
+            {
+              id: 1,
+              amount: "10",
+              currency: "EUR",
+              is_active: true,
+              __xmin: "500",
+            },
+          ],
+        },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    const result = await readRows("transactions", { limit: 25 });
+
+    expect(result.total).toBe(1);
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+    expect(result.rows[0].__xmin).toBe("500");
+    const issued = client.query.mock.calls.map((c) => c[0]);
+    expect(issued).toContain("SET TRANSACTION READ ONLY");
+    expect(issued.some((s) => s.includes("xmin::text AS __xmin"))).toBe(true);
+    expect(issued.some((s) => s.includes("LIMIT 26"))).toBe(true);
+    expect(issued.some((s) => s.includes("count(*)"))).toBe(false);
+  });
+
+  it("uses a short first page as the exact total without running COUNT(*)", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const rows = [
+      { id: 1, amount: "10", currency: "EUR", is_active: true, __xmin: "500" },
+      { id: 2, amount: "20", currency: "EUR", is_active: true, __xmin: "501" },
+    ];
+    const { client } = makeClient([["SELECT *", { rows }]]);
+    getClient.mockResolvedValue(client);
+
+    const result = await readRows("transactions", { limit: 25 });
+
+    expect(result.total).toBe(2);
+    expect(
+      client.query.mock.calls.some(([sql]) => sql.includes("count(*)")),
+    ).toBe(false);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        sql.includes("::bigint AS total"),
+      ),
+    ).toBe(false);
+    expect(client.query.mock.calls.some(([sql]) => sql === "COMMIT")).toBe(
+      true,
+    );
+  });
+
+  it("fetches one extra row instead of counting when a page is full", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const rows = Array.from({ length: 3 }, (_, index) => ({
+      id: index + 1,
+      __vision_cursor_value_1: String(index + 1),
+    }));
+    const { client } = makeClient([["SELECT *", { rows }]]);
+    getClient.mockResolvedValue(client);
+
+    const result = await readRows("transactions", { limit: 2 });
+
+    expect(result.total).toBeUndefined();
+    expect(result.rows).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextCursor).toEqual(expect.any(String));
+    expect(
+      client.query.mock.calls.filter(([sql]) => sql.includes("count(*)")),
+    ).toHaveLength(0);
+  });
+
+  it("uses a filtered short first page as the exact filtered total", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client } = makeClient([
+      ["SELECT *", { rows: [{ id: 1, currency: "EUR" }] }],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    const result = await readRows("transactions", {
+      limit: 25,
+      filters: [{ column: "currency", op: "eq", value: "EUR" }],
+    });
+
+    expect(result.total).toBe(1);
+    expect(
+      client.query.mock.calls.some(([sql]) => sql.includes("count(*)")),
+    ).toBe(false);
+    expect(
+      client.query.mock.calls.some(([sql]) =>
+        sql.includes("::bigint AS total"),
+      ),
+    ).toBe(false);
+    const dataCall = client.query.mock.calls.find(([sql]) =>
+      sql.includes("SELECT *"),
+    )!;
+    expect(dataCall[1]).toEqual(["EUR"]);
+  });
+
+  it("rejects any raw WHERE parameter (escape hatch removed — SQLi oracle)", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    getClient.mockResolvedValue(makeClient([]).client);
+    // Even a benign-looking clause is refused: the structured filters[] path
+    // is the only way to filter now.
+    await expect(
+      readRows("transactions", { where: "amount > 0" }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      readRows("transactions", { where: "1=1; DROP TABLE transactions" }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("does not run any SQL when a raw WHERE is supplied (rejected before query)", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client, calls } = makeClient([]);
+    getClient.mockResolvedValue(client);
+    await expect(
+      readRows("transactions", { where: "pg_sleep(5)" }),
+    ).rejects.toMatchObject({ status: 400 });
+    expect(calls.some((c) => c.sql.includes("SELECT *"))).toBe(false);
+  });
+
+  it("rejects sorting by an unknown column", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    getClient.mockResolvedValue(makeClient([]).client);
+    await expect(
+      readRows("transactions", { orderBy: "evil" }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("parameterizes structured filters", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client } = makeClient([
+      ["count(*)", { rows: [{ total: "1" }] }],
+      ["SELECT *", { rows: [] }],
+      [
+        "::bigint AS total",
+        (_sql, params) => ({ rows: [{ total: params.at(-1) }] }),
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await readRows("transactions", {
+      filters: [{ column: "currency", op: "eq", value: "EUR" }],
+    });
+    const dataCall = client.query.mock.calls.find((c) =>
+      c[0].includes("SELECT *"),
+    )!;
+    expect(dataCall[0]).toContain('"currency" = $1');
+    expect(dataCall[1]).toEqual(["EUR"]);
+  });
+});
+
+// ── Mutations — dry run ─────────────────────────────────────────────────────
+
+describe("applyMutations (dryRun)", () => {
+  it("previews an UPDATE with inlined literals without touching the DB", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const result = await applyMutations(
+      "transactions",
+      [{ op: "update", pk: { id: 5 }, xmin: "500", set: { amount: "20" } }],
+      { dryRun: true },
+    );
+    expect(getClient).not.toHaveBeenCalled();
+    expect(result.statements![0].preview).toBe(
+      'UPDATE "transactions" SET "amount" = \'20\' WHERE "id" = 5 RETURNING *',
+    );
+  });
+
+  it("refuses to edit a primary-key column", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    await expect(
+      applyMutations(
+        "transactions",
+        [{ op: "update", pk: { id: 5 }, set: { id: 9 } }],
+        { dryRun: true },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("refuses to edit a table with no primary key", async () => {
+    query.mockImplementation(catalogRouter("kv_settings"));
+    await expect(
+      applyMutations(
+        "kv_settings",
+        [{ op: "update", pk: {}, set: { v: "x" } }],
+        { dryRun: true },
+      ),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+});
+
+// ── Mutations — execution ───────────────────────────────────────────────────
+
+describe("applyMutations (execute)", () => {
+  it("takes the funding-graph lock before any account row lock", async () => {
+    query.mockImplementation(catalogRouter("accounts"));
+    const { client, calls } = makeClient([
+      ["pg_advisory_xact_lock", { rows: [{ pg_advisory_xact_lock: "" }] }],
+      [
+        "FOR UPDATE",
+        {
+          rowCount: 1,
+          rows: [{ id: 5, funding_account_id: null, __xmin: "500" }],
+        },
+      ],
+      ["UPDATE", { rows: [{ id: 5, funding_account_id: 8 }], rowCount: 1 }],
+      ["db_editor_audit", { rows: [], rowCount: 0 }],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await applyMutations("accounts", [
+      {
+        op: "update",
+        pk: { id: 5 },
+        xmin: "500",
+        set: { funding_account_id: 8 },
+      },
+    ]);
+
+    const graphLockIndex = calls.findIndex((call) =>
+      call.sql.includes("pg_advisory_xact_lock"),
+    );
+    const rowLockIndex = calls.findIndex((call) =>
+      call.sql.includes("FOR UPDATE"),
+    );
+    expect(graphLockIndex).toBeGreaterThan(
+      calls.findIndex((call) => call.sql.includes("statement_timeout")),
+    );
+    expect(rowLockIndex).toBeGreaterThan(graphLockIndex);
+    expect(calls[graphLockIndex].params).toEqual([0x56495349, 1]);
+  });
+
+  it("locks, checks version, updates, audits, and schedules a view refresh", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client, calls } = makeClient([
+      ["db_editor_audit", { rows: [], rowCount: 0 }],
+      [
+        "FOR UPDATE",
+        {
+          rowCount: 1,
+          rows: [
+            {
+              id: 5,
+              amount: "10",
+              currency: "EUR",
+              is_active: true,
+              __xmin: "500",
+            },
+          ],
+        },
+      ],
+      [
+        "UPDATE",
+        { rows: [{ id: 5, amount: "20", currency: "EUR", is_active: true }] },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    const result = await applyMutations("transactions", [
+      { op: "update", pk: { id: 5 }, xmin: "500", set: { amount: "20" } },
+    ]);
+
+    expect(result.applied).toBe(1);
+    expect(result.refreshScheduled).toBe(true);
+    expect(scheduleRefresh).toHaveBeenCalledOnce();
+    expect(calls.some((c) => c.sql.includes("db_editor_audit"))).toBe(true);
+    expect(appendAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "db_editor",
+        event: "update",
+        auditRowId: "42",
+        table: "transactions",
+      }),
+      client,
+    );
+    expect(calls.findIndex((c) => c.sql === "COMMIT")).toBeGreaterThan(
+      calls.findIndex((c) => c.sql.includes("db_editor_audit")),
+    );
+    expect(calls.some((c) => c.sql === "COMMIT")).toBe(true);
+    expect(calls.some((c) => c.sql.includes("pg_advisory_xact_lock"))).toBe(
+      false,
+    );
+  });
+
+  it("returns a 409 conflict when the row version changed", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client, calls } = makeClient([
+      [
+        "FOR UPDATE",
+        { rowCount: 1, rows: [{ id: 5, amount: "10", __xmin: "999" }] },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await expect(
+      applyMutations("transactions", [
+        { op: "update", pk: { id: 5 }, xmin: "500", set: { amount: "20" } },
+      ]),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(calls.some((c) => c.sql === "ROLLBACK")).toBe(true);
+  });
+
+  it("returns a 409 conflict when the row was deleted", async () => {
+    query.mockImplementation(catalogRouter("transactions"));
+    const { client } = makeClient([["FOR UPDATE", { rowCount: 0, rows: [] }]]);
+    getClient.mockResolvedValue(client);
+
+    await expect(
+      applyMutations("transactions", [
+        { op: "delete", pk: { id: 5 }, xmin: "500" },
+      ]),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("does not schedule a refresh for non-matview tables", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client } = makeClient([
+      ["db_editor_audit", { rows: [] }],
+      ['INSERT INTO "tags"', { rows: [{ id: 7, slug: "new" }] }],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    const result = await applyMutations("tags", [
+      { op: "insert", values: { slug: "new" } },
+    ]);
+    expect(result.applied).toBe(1);
+    expect(result.refreshScheduled).toBe(false);
+    expect(scheduleRefresh).not.toHaveBeenCalled();
+  });
+
+  it("refuses to edit audit tables, including dry runs", async () => {
+    for (const table of [
+      "audit_chain_head",
+      "audit_chain_entries",
+      "audit_chain_checkpoints",
+      "db_editor_audit",
+      "split_audit",
+      "portfolio_retag_audit",
+    ]) {
+      await expect(
+        applyMutations(table, [{ op: "delete", pk: { id: 1 } }], {
+          dryRun: true,
+        }),
+      ).rejects.toMatchObject({ status: 403 });
+    }
+    expect(getClient).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the mutation if the audit chain append fails", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client, calls } = makeClient([
+      ['INSERT INTO "tags"', { rows: [{ id: 7, slug: "new" }] }],
+    ]);
+    getClient.mockResolvedValue(client);
+    appendAuditEvent.mockRejectedValueOnce(new Error("chain unavailable"));
+
+    await expect(
+      applyMutations("tags", [{ op: "insert", values: { slug: "new" } }]),
+    ).rejects.toThrow("chain unavailable");
+    expect(calls.some((c) => c.sql === "ROLLBACK")).toBe(true);
+    expect(calls.some((c) => c.sql === "COMMIT")).toBe(false);
+  });
+});
+
+// ── Constraint-error mapping ────────────────────────────────────────────────
+
+describe("mapDbError (via applyMutations)", () => {
+  it("maps a unique violation to a 409 conflict", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client } = makeClient([
+      [
+        'INSERT INTO "tags"',
+        () => {
+          const e: PgError = new Error("dup");
+          e.code = "23505";
+          e.constraint = "tags_slug_key";
+          throw e;
+        },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await expect(
+      applyMutations("tags", [{ op: "insert", values: { slug: "dup" } }]),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("maps a not-null violation to a 400 validation error", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client } = makeClient([
+      [
+        'INSERT INTO "tags"',
+        () => {
+          const e: PgError = new Error("null");
+          e.code = "23502";
+          e.column = "slug";
+          throw e;
+        },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await expect(
+      applyMutations("tags", [{ op: "insert", values: { slug: "" } }]),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it("does not leak raw driver text for syntax/undefined-object errors", async () => {
+    query.mockImplementation(catalogRouter("tags"));
+    const { client } = makeClient([
+      [
+        'INSERT INTO "tags"',
+        () => {
+          const e: PgError = new Error(
+            'column "secret_internal_col" does not exist',
+          );
+          e.code = "42703";
+          throw e;
+        },
+      ],
+    ]);
+    getClient.mockResolvedValue(client);
+
+    await expect(
+      applyMutations("tags", [{ op: "insert", values: { slug: "x" } }]),
+    ).rejects.toMatchObject({ status: 400, message: "Invalid query" });
+  });
+});

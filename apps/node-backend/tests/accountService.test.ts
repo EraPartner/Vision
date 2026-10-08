@@ -1,0 +1,694 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.ts";
+
+vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
+  loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),
+  convertWithRates: vi.fn((amount, from, to) =>
+    from === to ? amount : Number(amount) * 0.5,
+  ),
+}));
+
+vi.mock("../src/database/connection.ts", () =>
+  mockConnection({ withTransaction: vi.fn(async (fn) => fn()) }),
+);
+
+vi.mock("../src/repositories/accountRepository.ts", () => {
+  const repo = {
+    getAll: vi.fn(),
+    getCount: vi.fn(),
+    getById: vi.fn(),
+    getByName: vi.fn(),
+    lockFundingGraphForMutation: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    upsertStatementBalance: vi.fn(),
+    deleteStatementBalance: vi.fn(),
+    resolveOrCreateByName: vi.fn(),
+  };
+  return { default: repo, accountRepository: repo };
+});
+
+import rawAccountRepository from "../src/repositories/accountRepository.ts";
+import type {
+  AccountBalanceQueryRow,
+  AccountRow,
+} from "../src/repositories/accountRepository.ts";
+import { accountService } from "../src/services/accountService.ts";
+import {
+  ValidationError,
+  NotFoundError,
+  ConflictError,
+} from "../src/middleware/errorHandler.ts";
+import { loose, partial } from "./helpers/partial.ts";
+
+const accountRepository = vi.mocked(rawAccountRepository);
+
+const pgErr = (code: string) => Object.assign(new Error(code), { code });
+const emptyBalanceAccount = (id: number) => ({
+  id,
+  computed_balance: 0,
+  balance_parts: [],
+  balance_incomplete: false,
+  unconverted_currencies: [],
+  reconcilable_balance: 0,
+  reconcilable_currency: "EUR",
+  drift: null,
+  statement_balances: [],
+  anchor_date: undefined,
+  post_anchor_count: undefined,
+});
+
+beforeEach(() => vi.clearAllMocks());
+
+describe("accountService.create", () => {
+  it("rejects a missing name", async () => {
+    await expect(accountService.create({})).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown type enum", async () => {
+    await expect(
+      accountService.create({ name: "X", type: "wallet_typo" }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("rejects a malformed currency", async () => {
+    await expect(
+      accountService.create({ name: "X", currency: "euro" }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("trims name, uppercases currency, and forwards only provided fields", async () => {
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1, name: "KBC" }),
+    );
+    await accountService.create({
+      name: "  KBC  ",
+      currency: "eur",
+      type: "checking",
+      owner: "me",
+    });
+    expect(accountRepository.create).toHaveBeenCalledWith({
+      name: "KBC",
+      currency: "EUR",
+      type: "checking",
+      owner: "me",
+    });
+  });
+
+  it("maps a unique-violation (23505) to ConflictError", async () => {
+    accountRepository.create.mockRejectedValueOnce(pgErr("23505"));
+    await expect(accountService.create({ name: "KBC" })).rejects.toThrow(
+      ConflictError,
+    );
+  });
+
+  it("rejects retired scalar statement fields", async () => {
+    await expect(
+      accountService.create({ name: "KBC", statement_balance: 120.5 }),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      accountService.create({
+        name: "KBC",
+        statement_balance: 120.5,
+        statement_balance_date: "2026-07-01",
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a funding_account_id pointing at a nonexistent account with 400, not 500", async () => {
+    accountRepository.getById.mockResolvedValueOnce(undefined); // referenced account missing
+    await expect(
+      accountService.create({ name: "KBC", funding_account_id: 999 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a funding_account_id that references an existing account", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7, name: "Funder" }),
+    );
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.create({ name: "KBC", funding_account_id: 7 });
+    expect(accountRepository.create).toHaveBeenCalled();
+  });
+
+  it("maps a FK violation (23503) on create to a ValidationError (400)", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7 }),
+    ); // passes the existence pre-check
+    accountRepository.create.mockRejectedValueOnce(pgErr("23503")); // lost a race with a delete
+    await expect(
+      accountService.create({ name: "KBC", funding_account_id: 7 }),
+    ).rejects.toThrow(ValidationError);
+  });
+});
+
+describe("accountService statement balances", () => {
+  it("validates and stores a reading in the requested currency", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7 }),
+    );
+    accountRepository.upsertStatementBalance.mockResolvedValueOnce({
+      account_id: 7,
+      currency: "USD",
+      balance: "12.3400",
+      balance_date: "2026-09-04",
+    });
+    await accountService.setStatementBalance(7, "usd", {
+      balance: "12.34",
+      date: "2026-09-04",
+    });
+    expect(accountRepository.upsertStatementBalance).toHaveBeenCalledWith(
+      7,
+      "USD",
+      12.34,
+      "2026-09-04",
+    );
+  });
+
+  it("rejects a malformed date before writing", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7 }),
+    );
+    await expect(
+      accountService.setStatementBalance(7, "USD", {
+        balance: 12,
+        date: "04/09/2026",
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.upsertStatementBalance).not.toHaveBeenCalled();
+  });
+
+  it.each(["2026-02-29", "2026-02-31", "2026-13-01", "2026-00-10"])(
+    "rejects calendar-invalid date %s before writing",
+    async (date) => {
+      accountRepository.getById.mockResolvedValueOnce(
+        partial<AccountRow>({ id: 7 }),
+      );
+      await expect(
+        accountService.setStatementBalance(7, "USD", {
+          balance: 12,
+          date,
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(accountRepository.upsertStatementBalance).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deletes the exact currency row", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7 }),
+    );
+    accountRepository.deleteStatementBalance.mockResolvedValueOnce(1);
+    await expect(
+      accountService.removeStatementBalance(7, "usd"),
+    ).resolves.toEqual({ account_id: 7, currency: "USD" });
+  });
+});
+
+describe("accountService.update", () => {
+  it("throws NotFound when the row does not exist", async () => {
+    accountRepository.update.mockResolvedValueOnce(undefined);
+    await expect(
+      accountService.update(9, { display_name: "x" }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("rejects a non-boolean flag", async () => {
+    await expect(
+      accountService.update(1, { in_net_worth: "yes" }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("rejects a self-referencing funding_account_id with 400", async () => {
+    await expect(
+      accountService.update(5, { funding_account_id: 5 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a funding_account_id pointing at a nonexistent account with 400, not 500", async () => {
+    accountRepository.getById.mockResolvedValueOnce(undefined);
+    await expect(
+      accountService.update(1, { funding_account_id: 999 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("forwards explicit null as SQL NULL for clearable metadata fields", async () => {
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, {
+      display_name: null,
+      institution: null,
+      funding_account_id: null,
+    });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+      display_name: null,
+      institution: null,
+      funding_account_id: null,
+    });
+  });
+
+  it("still drops omitted fields (undefined never reaches the repository)", async () => {
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { display_name: "Main" });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+      display_name: "Main",
+    });
+  });
+
+  it("rejects retired scalar statement fields on update", async () => {
+    await expect(
+      accountService.update(1, { statement_balance: 99 }),
+    ).rejects.toThrow(ValidationError);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+    await expect(
+      accountService.update(1, { statement_balance_date: null }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("stamps closed_at when archiving an active account (lifecycle D5)", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1, is_active: true }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.is_active).toBe(false);
+    expect(fields.closed_at).toBeInstanceOf(Date);
+  });
+
+  it("closing also sets in_net_worth=false so the account leaves every aggregate (§1 F3)", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({
+        id: 1,
+        is_active: true,
+        in_net_worth: true,
+      }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.is_active).toBe(false);
+    expect(fields.in_net_worth).toBe(false);
+  });
+
+  it("an explicit in_net_worth in the same close PATCH wins over the close default", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({
+        id: 1,
+        is_active: true,
+        in_net_worth: true,
+      }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: false, in_net_worth: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.in_net_worth).toBe(true); // explicit intent respected
+  });
+
+  it("reactivating does NOT auto-restore in_net_worth (explicit user control)", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({
+        id: 1,
+        is_active: false,
+        in_net_worth: false,
+      }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect("in_net_worth" in fields).toBe(false);
+  });
+
+  it("keeps the original closed_at on a redundant re-archive", async () => {
+    // closed_at as the wire string, not the row type's Date.
+    accountRepository.getById.mockResolvedValueOnce(
+      loose<AccountRow>({
+        id: 1,
+        is_active: false,
+        closed_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: false });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect("closed_at" in fields).toBe(false);
+  });
+
+  it("clears closed_at when reactivating", async () => {
+    // closed_at as the wire string, not the row type's Date.
+    accountRepository.getById.mockResolvedValueOnce(
+      loose<AccountRow>({
+        id: 1,
+        is_active: false,
+        closed_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { is_active: true });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect(fields.closed_at).toBeNull();
+  });
+
+  it("never accepts closed_at from the request body", async () => {
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, {
+      display_name: "X",
+      closed_at: "2020-01-01T00:00:00Z",
+    });
+    const fields = accountRepository.update.mock.calls[0][1];
+    expect("closed_at" in fields).toBe(false);
+  });
+});
+
+// funding_account_id must not close a loop. Self-reference was already rejected;
+// these pin the multi-hop ancestor walk (A→B→A and longer), its termination on
+// data that is ALREADY cyclic, and that create skips the walk entirely.
+describe("accountService — funding chain cycles", () => {
+  // Mock the accounts graph: id → funding_account_id (undefined = chain ends).
+  const graph = (edges: Record<number, number | undefined>) => {
+    accountRepository.getById.mockImplementation(async (id) =>
+      id in edges
+        ? partial<AccountRow>({
+            id: Number(id),
+            funding_account_id: edges[id] ?? null,
+          })
+        : undefined,
+    );
+  };
+
+  // clearAllMocks() keeps implementations, so drop the graph explicitly —
+  // otherwise it would answer getById for every later test in this file.
+  afterEach(() => accountRepository.getById.mockReset());
+
+  it("rejects a two-hop cycle (A funds B, then B funds A)", async () => {
+    graph({ 2: 1 }); // account 2 is already funded by account 1
+    await expect(
+      accountService.update(1, { funding_account_id: 2 }),
+    ).rejects.toThrow(/funding cycle/);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a longer chain closing back on the edited account (A→B→C→D→A)", async () => {
+    graph({ 2: 3, 3: 4, 4: 1 });
+    await expect(
+      accountService.update(1, { funding_account_id: 2 }),
+    ).rejects.toThrow(/funding cycle/);
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("accepts a funding chain that terminates without reaching the edited account", async () => {
+    graph({ 2: 3, 3: undefined });
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { funding_account_id: 2 });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+      funding_account_id: 2,
+    });
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.update.mock.invocationCallOrder[0]);
+  });
+
+  // The pre-existing-cycle case: this guard did not exist before, so the stored
+  // graph may already loop. The walk must stop instead of hanging the request.
+  it("terminates on a pre-existing upstream cycle that does not involve the edited account", async () => {
+    graph({ 2: 3, 3: 2 }); // 2 ↔ 3 already loop, account 1 is outside it
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { funding_account_id: 2 });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {
+      funding_account_id: 2,
+    });
+    // Bounded by the visited set: id 2 (existence check) then id 3, then stop.
+    expect(accountRepository.getById).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not walk on create — a not-yet-existing account cannot be an ancestor", async () => {
+    graph({ 2: 3, 3: 2 }); // would loop forever if the walk ran
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 9 }),
+    );
+    await accountService.create({ name: "New", funding_account_id: 2 });
+    expect(accountRepository.create).toHaveBeenCalledWith({
+      name: "New",
+      funding_account_id: 2,
+    });
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.create.mock.invocationCallOrder[0]);
+    expect(accountRepository.getById).toHaveBeenCalledTimes(1); // existence check only
+  });
+});
+
+// Pins for the Zod-backed account metadata contract. Statement readings use
+// the dedicated currency-scoped endpoint and are rejected here.
+describe("accountService — sanitize pins (create)", () => {
+  it("rejects every legacy scalar statement payload", async () => {
+    for (const statement_balance of [1e12, -1e12, "123.45", null]) {
+      await expect(
+        accountService.create({
+          name: "A",
+          statement_balance,
+          statement_balance_date: "2026-07-01",
+        }),
+      ).rejects.toThrow(ValidationError);
+    }
+    expect(accountRepository.create).not.toHaveBeenCalled();
+  });
+
+  // The reject half of this pin only listed values a `Number()` coercion fails
+  // on. The forms it accepts were the damaging ones and went untested: '1e3'
+  // arrived as the real account 1000, so assertFundingAccountValid's existence
+  // check passed and the account was funded from one nobody named.
+  it("coerces a numeric-string funding_account_id and rejects zero/fractional/retargeting ids", async () => {
+    accountRepository.getById.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 7 }),
+    );
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.create({ name: "A", funding_account_id: "7" });
+    expect(accountRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ funding_account_id: 7 }),
+    );
+    for (const funding_account_id of [
+      0,
+      1.5,
+      -1,
+      "abc",
+      "12abc",
+      "1e3",
+      "0x10",
+      "0o17",
+      "0b11",
+      true,
+      [7],
+      "+7",
+      " 7 ",
+      "7.0",
+    ]) {
+      await expect(
+        accountService.create({ name: "A", funding_account_id }),
+        `expected ${JSON.stringify(funding_account_id)} to be rejected`,
+      ).rejects.toThrow(ValidationError);
+    }
+  });
+
+  it("rejects non-string and whitespace-only names", async () => {
+    await expect(accountService.create({ name: 123 })).rejects.toThrow(
+      ValidationError,
+    );
+    await expect(accountService.create({ name: "   " })).rejects.toThrow(
+      ValidationError,
+    );
+  });
+
+  it("rejects a non-string display_name / institution and trims string ones", async () => {
+    await expect(
+      accountService.create({ name: "A", display_name: 42 }),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      accountService.create({ name: "A", institution: {} }),
+    ).rejects.toThrow(ValidationError);
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.create({
+      name: "A",
+      display_name: "  Main  ",
+      institution: " KBC ",
+    });
+    expect(accountRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({ display_name: "Main", institution: "KBC" }),
+    );
+  });
+
+  it("rejects an explicit null/empty currency (an explicit key must carry a real code)", async () => {
+    await expect(
+      accountService.create({ name: "A", currency: null }),
+    ).rejects.toThrow(ValidationError);
+    await expect(
+      accountService.create({ name: "A", currency: "" }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("rejects unknown enum values for every enum field", async () => {
+    for (const [key, bad] of [
+      ["liquidity_class", "frozen"],
+      ["tax_wrapper", "offshore"],
+      ["owner", "them"],
+    ]) {
+      await expect(
+        accountService.create({ name: "A", [key]: bad }),
+      ).rejects.toThrow(ValidationError);
+    }
+  });
+
+  it("rejects truthy non-boolean flags (1 is not true)", async () => {
+    await expect(
+      accountService.create({ name: "A", spendable: 1 }),
+    ).rejects.toThrow(ValidationError);
+  });
+
+  it("strips unknown body fields entirely (allowlist semantics)", async () => {
+    accountRepository.create.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.create({
+      name: "A",
+      evil_column: "x; DROP TABLE",
+      balance: 999,
+    });
+    expect(accountRepository.create).toHaveBeenCalledWith({ name: "A" });
+  });
+});
+
+describe("accountService — sanitize pins (update)", () => {
+  it("rejects an explicit null name on update (name is not clearable)", async () => {
+    await expect(accountService.update(1, { name: null })).rejects.toThrow(
+      ValidationError,
+    );
+    expect(accountRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("trims an updated name", async () => {
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, { name: "  New  " });
+    expect(accountRepository.update).toHaveBeenCalledWith(1, { name: "New" });
+  });
+
+  it("forwards an empty PATCH body as an empty field set", async () => {
+    accountRepository.update.mockResolvedValueOnce(
+      partial<AccountRow>({ id: 1 }),
+    );
+    await accountService.update(1, {});
+    expect(accountRepository.update).toHaveBeenCalledWith(1, {});
+  });
+});
+
+describe("accountService.remove", () => {
+  it("maps a FK violation (23503) to ConflictError (archive instead)", async () => {
+    accountRepository.remove.mockRejectedValueOnce(pgErr("23503"));
+    await expect(accountService.remove(1)).rejects.toThrow(ConflictError);
+  });
+
+  it("throws NotFound when nothing was deleted", async () => {
+    accountRepository.remove.mockResolvedValueOnce(undefined);
+    await expect(accountService.remove(1)).rejects.toThrow(NotFoundError);
+  });
+
+  it("returns the id on success", async () => {
+    accountRepository.remove.mockResolvedValueOnce(7);
+    await expect(accountService.remove(7)).resolves.toBe(7);
+    expect(
+      accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
+    ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]);
+  });
+});
+
+describe("accountService.list / get", () => {
+  it("passes the active filter through", async () => {
+    accountRepository.getAll.mockResolvedValueOnce(
+      partial<AccountBalanceQueryRow[]>([]),
+    );
+    await accountService.list({ active: false });
+    expect(accountRepository.getAll).toHaveBeenCalledWith({
+      active: false,
+      limit: null,
+      offset: 0,
+    });
+  });
+
+  // Absent pagination keeps the pre-pagination contract: the query is
+  // unbounded, so the rows returned ARE the total and no COUNT is issued.
+  it("lists every account and derives total from the rows when unpaginated", async () => {
+    accountRepository.getAll.mockResolvedValueOnce(
+      partial<AccountBalanceQueryRow[]>([{ id: 1 }, { id: 2 }]),
+    );
+    const result = await accountService.list();
+    expect(result).toEqual({
+      items: [emptyBalanceAccount(1), emptyBalanceAccount(2)],
+      total: 2,
+    });
+    expect(accountRepository.getCount).not.toHaveBeenCalled();
+  });
+
+  it("counts separately when a page is requested, so total is the full match count", async () => {
+    accountRepository.getAll.mockResolvedValueOnce(
+      partial<AccountBalanceQueryRow[]>([{ id: 1 }]),
+    );
+    accountRepository.getCount.mockResolvedValueOnce(9);
+    const result = await accountService.list({
+      active: true,
+      limit: 1,
+      offset: 2,
+    });
+    expect(accountRepository.getAll).toHaveBeenCalledWith({
+      active: true,
+      limit: 1,
+      offset: 2,
+    });
+    expect(accountRepository.getCount).toHaveBeenCalledWith({ active: true });
+    expect(result).toEqual({ items: [emptyBalanceAccount(1)], total: 9 });
+  });
+
+  it("throws NotFound for a missing account", async () => {
+    accountRepository.getById.mockResolvedValueOnce(undefined);
+    await expect(accountService.get(123)).rejects.toThrow(NotFoundError);
+  });
+});

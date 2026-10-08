@@ -17,7 +17,7 @@
  *    month M+1 (so it treated M as the last complete month and counted it in
  *    the historical-average divisor) while the SQL windows still ended at the
  *    start of M (so M's rows never reached the numerator). Same-clock is the
- *    invariant; see the pins in tests/infoRepoForecast(.db).test.js, which fix
+ *    invariant; see the pins in tests/infoRepoForecast(.db).test.ts, which fix
  *    the clock at exactly that instant.
  *
  * 2. NO INTERPOLATED VALUES. Every runtime value reaching the SQL — the anchor

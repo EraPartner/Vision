@@ -235,7 +235,7 @@ Implementation:
 - The execution insert uses `ON CONFLICT DO NOTHING`; an existing pair returns `{ duplicate: true }` without advancing the parent or copying tags.
 - Route checks for `duplicate` flag and sets the `Idempotent-Replay` header before responding.
 - `todayAppDateString()` supplies a missing execution date in the shared service.
-- Mocked service and route tests cover bounds and response behavior. [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.js]] verifies persisted concurrent advancement on disposable PostgreSQL; its live run remains pending in [[TODO]].
+- Mocked service and route tests cover bounds and response behavior. [[apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts]] verifies persisted concurrent advancement on disposable PostgreSQL; its live run remains pending in [[TODO]].
 
 ### DELETE /api/planned-transactions/:id
 
