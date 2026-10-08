@@ -157,7 +157,7 @@ async function cleanup() {
   owned.accounts = [];
 }
 describeDb("native gift cardinality persistence", () => {
-  beforeAll(async () => acquireDbSuiteLock(pool));
+  beforeAll(async () => acquireDbSuiteLock(pool), 180_000);
   afterEach(cleanup);
   afterAll(async () => {
     await closePool();

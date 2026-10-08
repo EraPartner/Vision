@@ -171,7 +171,7 @@ async function cleanup() {
   owned.accounts = [];
 }
 describeDb("native wallet proof full import lifecycle", () => {
-  beforeAll(async () => acquireDbSuiteLock(pool));
+  beforeAll(async () => acquireDbSuiteLock(pool), 180_000);
   afterEach(cleanup);
   afterAll(async () => {
     await closePool();

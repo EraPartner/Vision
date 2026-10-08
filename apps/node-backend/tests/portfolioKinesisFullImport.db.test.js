@@ -170,7 +170,7 @@ async function cleanup() {
   owned.investments = [];
 }
 describeDb("full paired Kinesis import atomicity", () => {
-  beforeAll(async () => acquireDbSuiteLock(pool));
+  beforeAll(async () => acquireDbSuiteLock(pool), 180_000);
   afterEach(cleanup);
   afterAll(async () => {
     await closePool();

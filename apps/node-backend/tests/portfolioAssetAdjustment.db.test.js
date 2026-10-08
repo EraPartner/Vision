@@ -537,6 +537,11 @@ describe.skipIf(!hasTestDatabase())(
         expect(`${refused.stdout}${refused.stderr}`).toContain(
           "Roll back their imports before downgrade",
         );
+        // Alembic commits each preceding downgrade before a guarded older
+        // step, so the refusal at 0123 leaves the shared database without the
+        // 0124/0125 schema. Restore head before touching it again; otherwise
+        // every later DB suite runs against a partially downgraded database.
+        expect(migrate("upgrade", "head").status).toBe(0);
         await pool.query(
           "UPDATE portfolio_import_batches SET status='complete' WHERE id=$1",
           [adjustment.batch.id],
