@@ -4,12 +4,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
 import {
   mockCurrencyConversion,
   mockRowsAlreadyInTargetCurrency,
-} from "./helpers/mockCurrencyConversion.js";
+} from "./helpers/mockCurrencyConversion.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 vi.mock("../src/services/currency/currencyConversionService.ts", () =>

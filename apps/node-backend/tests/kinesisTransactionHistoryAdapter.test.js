@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 

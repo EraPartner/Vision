@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 // Domain tests isolate the writer boundary; disposable PG tests verify locks.
 vi.mock("../src/services/portfolio/portfolioHistoryWriteService.ts", () => ({
@@ -898,7 +898,7 @@ describe("portfolioTransactionRepository.getAllByInvestmentIds", () => {
   // the layer retarget: parseInt took the leading digits, so a malformed entry
   // did not drop out, it named a real investment nobody asked for. The route
   // now 400s on them before this runs (routes are pinned in
-  // routes/investmentsIdValidation.test.js); here they must drop, not resolve.
+  // routes/investmentsIdValidation.test.ts); here they must drop, not resolve.
   it("drops ids the old parseInt truncated into a different investment", async () => {
     const rows = await portfolioTransactionRepository.getAllByInvestmentIds({
       investmentIds: ["12abc", "1e3", "12.5", "0x10", " 7 ", "+7"],

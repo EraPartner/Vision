@@ -34,6 +34,33 @@ const REVIEWED_HOOKS = new Map([
     "bc2fb5676aa1e7bd7a7cdbbee5c40d429d6ea60def1dad7590d2876209410de0",
   ],
 ]);
+// External tarball sources admitted after review, pinned by exact URL and the
+// lockfile's sha512 integrity. SheetJS publishes xlsx only on its own CDN; the
+// npm registry copy stops at 0.18.5, which has unpatched advisories.
+const REVIEWED_EXTERNAL_SOURCES = new Map([
+  [
+    "xlsx",
+    {
+      url: "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+      integrity:
+        "sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==",
+    },
+  ],
+]);
+
+function isReviewedExternalSpecifier(dependency, specifier) {
+  return REVIEWED_EXTERNAL_SOURCES.get(dependency)?.url === specifier;
+}
+
+function isReviewedExternalLockRecord(name, record) {
+  const reviewed = REVIEWED_EXTERNAL_SOURCES.get(name);
+  return (
+    reviewed !== undefined &&
+    record[0] === `${name}@${reviewed.url}` &&
+    record[2] === reviewed.integrity
+  );
+}
+
 const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
@@ -94,7 +121,8 @@ function checkBoundaries(manifests, rootLock, electronLock) {
       )) {
         if (
           typeof specifier !== "string" ||
-          /^(?:https?:|git\+|github:|file:|link:)/i.test(specifier)
+          (/^(?:https?:|git\+|github:|file:|link:)/i.test(specifier) &&
+            !isReviewedExternalSpecifier(dependency, specifier))
         )
           errors.push(
             `${pathname}: unreviewed external dependency source ${dependency}`,
@@ -157,8 +185,9 @@ function checkBoundaries(manifests, rootLock, electronLock) {
     for (const [name, record] of Object.entries(lock.packages || {})) {
       if (Array.isArray(record) && !String(record[0]).includes("@workspace:")) {
         if (
-          !/^(@[^/]+\/)?[^@]+@\d/.test(record[0]) ||
-          !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(record[3] || "")
+          !isReviewedExternalLockRecord(name, record) &&
+          (!/^(@[^/]+\/)?[^@]+@\d/.test(record[0]) ||
+            !/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(record[3] || ""))
         )
           errors.push(
             `${lockName}: ${name} has an unreviewed source or missing integrity digest`,

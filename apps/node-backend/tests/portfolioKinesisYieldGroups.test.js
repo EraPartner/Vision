@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
-import { syntheticKinesisYieldGroup } from "./helpers/kinesisYieldGroups.js";
+import { syntheticKinesisYieldGroup } from "./helpers/kinesisYieldGroups.ts";
 
 const build = (source) =>
   buildPortfolioImportReconciliationPlan({

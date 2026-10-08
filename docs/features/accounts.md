@@ -185,7 +185,7 @@ The Transactions page's actions bar has an **Account** combobox (`AccountFilterC
 - `apps/frontend/src/pages/__tests__/AccountDetailPage.integration.test.tsx` — header/balance/provenance, running-balance column, header menu verbs, drift chip → Reconcile, live broker holdings/P&L states, holdings-only suppression, `?since=` narrowing + clear, not-found state.
 - `apps/frontend/src/pages/__tests__/AccountsPage.integration.test.tsx` — grouped hub, current broker holdings/P&L/cash composition and subtotal states, row→route navigation, reduced row menu, and retired `?account=` query behavior.
 - `apps/frontend/src/pages/__tests__/TransactionsPage.integration.test.tsx` — Account filter sets/clears `account_id`.
-- `apps/node-backend/tests/routes/transactions.test.js` — `include_balance` threading + `running_balance` on/off the wire.
+- `apps/node-backend/tests/routes/transactions.test.ts` — `include_balance` threading + `running_balance` on/off the wire.
 - `apps/frontend/src/features/accounts/__tests__/groupAccounts.test.ts` — grouping/subtotal/Net-cash math.
 - `apps/frontend/src/features/accounts/__tests__/brokerAccountMetrics.test.ts` — position-only holdings value, complete broker P&L, and oversold aggregation from the portfolio-summary partition.
 

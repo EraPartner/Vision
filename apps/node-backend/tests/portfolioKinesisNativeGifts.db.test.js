@@ -5,10 +5,10 @@ import {
   getTestPool,
   closeTestPool,
   hasTestDatabase,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
-import { fullFixture } from "./helpers/kinesisFullImport.js";
-import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.js";
+import { fullFixture } from "./helpers/kinesisFullImport.ts";
+import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { readReconciliationHistory } from "../src/repositories/portfolioImportReconciliationRepository.ts";

@@ -5,7 +5,7 @@ import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { reconcileAccount } from "../src/services/reconcileService.ts";
-import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.js";
+import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.ts";
 
 const describeDb =
   hasTestDatabase() && process.env.VISION_TEST_DB_TASK === "statement-contract"

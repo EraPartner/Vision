@@ -4,7 +4,7 @@ import {
   closeTestPool,
   getTestPool,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 import { verifyAuditHistory } from "../src/services/auditVerificationService.ts";
 import {

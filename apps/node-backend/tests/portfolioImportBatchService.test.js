@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 const portfolioRemovalMocks = vi.hoisted(() => ({
   remove: vi.fn().mockResolvedValue(true),

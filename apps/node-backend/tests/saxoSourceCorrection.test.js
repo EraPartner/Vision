@@ -4,14 +4,14 @@ import {
   getSaxoWorkbookReconciliationEvidence,
 } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
-import { syntheticSaxoWorkbook } from "./helpers/saxoWorkbook.js";
+import { syntheticSaxoWorkbook } from "./helpers/saxoWorkbook.ts";
 import {
   saxoHash,
   syntheticSaxoPrimaryRawData,
   syntheticSaxoStaging,
   syntheticSaxoCsvRecord,
   syntheticSaxoCsvStaging,
-} from "./helpers/saxoReconciliation.js";
+} from "./helpers/saxoReconciliation.ts";
 
 function correctionFixture() {
   const row = syntheticSaxoStaging();

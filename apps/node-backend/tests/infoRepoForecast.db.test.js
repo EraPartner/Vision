@@ -42,7 +42,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import {
   getCashflowComparison,
   getCashflowForecastData,

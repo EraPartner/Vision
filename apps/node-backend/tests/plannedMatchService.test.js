@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 const mockListActiveUnexecuted = vi.fn();
 const mockListRecentUnlinked = vi.fn();
 const mockGetClusterRootMap = vi.fn();

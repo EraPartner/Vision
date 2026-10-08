@@ -10,7 +10,7 @@ import {
   detectBank,
 } from "../src/services/importPipeline/adapters/index.ts";
 
-import { useTempCSV } from "./helpers/tempFile.js";
+import { useTempCSV } from "./helpers/tempFile.ts";
 
 const writeTempCSV = useTempCSV("factory");
 

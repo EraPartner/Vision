@@ -8,7 +8,7 @@ import { buildPortfolioImportReconciliationPlan } from "../src/services/portfoli
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./helpers/kinesisAdoptionScope.js";
+} from "./helpers/kinesisAdoptionScope.ts";
 
 const build = (fixture, extra = {}) =>
   buildPortfolioImportReconciliationPlan({

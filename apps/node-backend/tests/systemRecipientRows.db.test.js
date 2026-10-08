@@ -22,7 +22,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { accountService } from "../src/services/accountService.ts";
 
 const listAccounts = async () => (await accountService.list()).items;

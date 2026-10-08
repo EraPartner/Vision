@@ -11,7 +11,7 @@
  * alias recipients and inactive rows mixed in. Account writes use account_id
  * so the suite also runs after the retired bank_account column is dropped.
  *
- * Isolation strategy (per the setup/db.js contract): per-test targeted DELETEs
+ * Isolation strategy (per the setup/db.ts contract): per-test targeted DELETEs
  * rather than a wrapping transaction — create()/update() open their own
  * withTransaction, which would nest, against a corpus each test fully owns.
  */
@@ -32,7 +32,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import transactionRepository, {
   clearTransactionCountCache,
 } from "../src/repositories/transactionRepository.ts";

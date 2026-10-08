@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 // Future-dated portfolio rows used to pass validation and commit silently: a
 // typo'd year or a settlement date ahead of today would skew every time-based
 // portfolio calc. validate.js now rejects tx_date > today (app calendar).

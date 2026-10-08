@@ -20,7 +20,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 
 const ROW_COUNT = 120_000;
 const ACCOUNT_COUNT = 20;

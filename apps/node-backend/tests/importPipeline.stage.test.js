@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 const {
   clientQuery,

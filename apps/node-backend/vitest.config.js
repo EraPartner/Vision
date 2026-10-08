@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-import { createDbSkipBannerReporter } from "./tests/setup/dbSkipBanner.js";
+import { createDbSkipBannerReporter } from "./tests/setup/dbSkipBanner.ts";
 
 // Append the DB-skip banner reporter instead of declaring `test.reporters`.
 // Declaring that key would replace vitest's own choice of default reporter
@@ -19,7 +19,7 @@ function dbSkipBannerPlugin() {
       if (!Array.isArray(reporters)) {
         process.stdout.write(
           "[db-skip-banner] could not attach to vitest reporters -- " +
-            "DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.js.\n",
+            "DB-backed skips will NOT be announced. Fix tests/setup/dbSkipBanner.ts.\n",
         );
         return;
       }
@@ -37,8 +37,7 @@ export default defineConfig({
     environment: "node",
     include: [
       "src/**/*.test.{js,ts}",
-      "tests/**/*.test.js",
-      "tests/**/**/*.test.js",
+      "tests/**/*.test.{js,ts}",
     ],
     coverage: {
       provider: "v8",
@@ -71,7 +70,7 @@ export default defineConfig({
       // minus 2).
       //
       // Coverage now depends on whether TEST_DATABASE_URL is set: the DB-backed
-      // suites (tests/setup/db.js seam) skip without it, so a plain local run
+      // suites (tests/setup/db.ts seam) skip without it, so a plain local run
       // measures LOWER than CI, which always has the Postgres service. Always
       // set these thresholds from the no-DB figure — deriving them from a CI
       // number would leave `bun vitest run --coverage` failing on any machine

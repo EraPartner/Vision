@@ -44,10 +44,10 @@ stage and keeps a stable branch-protection name. A skipped path-filtered job is 
 an absent or failed required result is not treated as green.
 
 The frontend build is followed by `size:check`. Its measured gzip limits are 468 KB for the
-initial preload graph and 1180 KB for all route assets. Each limit includes about five percent
-headroom over a production build: the preload limit over the 2026-09-24 build, and the total
-limit over the 2026-10-06 build, after the owner approved raising it for growth in lazy route
-and locale chunks. The checker reads the generated `index.html` and assets to catch new eager
+initial preload graph and 1340 KB for all route assets. The preload limit includes about five
+percent headroom over the 2026-09-24 build. The owner raised the total limit to 1180 KB on
+2026-10-06 for growth in lazy route and locale chunks, and to 1340 KB on 2026-10-08 after the
+lazily loaded `xlsx` chunk for the IBKR funding import brought the total to 1310.71 KB. The checker reads the generated `index.html` and assets to catch new eager
 imports and total bundle growth.
 
 Python is checked by `mypy --strict` from `config/mypy.ini` (Alembic env and migrations,
@@ -59,8 +59,9 @@ The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/t
 the `Type Check (Backend)` job and in the release workflow; see
 [[docs/adr/186-backend-strict-typescript|ADR-186]] and
 [[docs/adr/191-retire-backend-checkjs|ADR-191]]. The earlier checkJs program and its
-`noImplicitAny` ratchet were retired once the last JavaScript source file converted. Backend tests
-are still JavaScript and are not type-checked.
+`noImplicitAny` ratchet were retired once the last JavaScript source file converted. Converted backend tests (`tests/**/*.ts`) are checked by the strict
+`apps/node-backend/tsconfig.tests.json` in a second step of the same job; tests still in
+JavaScript are not checked ([[docs/adr/192-backend-tests-strict-typescript|ADR-192]]).
 
 ### Dependency and workflow admission
 
@@ -73,8 +74,9 @@ using `bunx` fallback downloads.
 reviewed and `private: true`. It rejects an internal `@vision/*` dependency that does not use a
 reviewed workspace and an internal name in either Bun lockfile that resolves from a registry.
 It also checks manifest and lockfile dependency agreement, requires integrity digests for registry
-packages, rejects direct external package sources, and admits only the two reviewed project install
-hooks. The pull-request-only GitHub dependency review job rejects new high or critical severity
+packages, and rejects direct external package sources except reviewed tarballs pinned by URL and
+sha512 integrity (today only SheetJS `xlsx` 0.20.3 from `cdn.sheetjs.com`, which SheetJS no longer
+publishes to npm). It admits only the two reviewed project install hooks. The pull-request-only GitHub dependency review job rejects new high or critical severity
 vulnerabilities in ecosystems GitHub supports, and `quality-gate` requires that job to succeed on
 every pull request. GitHub does not currently list `bun.lock` as a supported dependency graph
 format, so this check must not be treated as review of transitive Bun lockfile changes. The shared

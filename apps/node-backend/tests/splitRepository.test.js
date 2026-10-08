@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 // Owed-detail / owed-export used to LEFT JOIN a whole-table
 // `SELECT split_id, SUM(amount) ... GROUP BY split_id` aggregate of
 // split_payments on every call. These tests pin the rewrite to a per-split

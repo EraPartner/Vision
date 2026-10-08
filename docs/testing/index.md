@@ -224,7 +224,7 @@ bun vitest run src/path/to/test.test.js
 ## Coverage Update (2026-04-11)
 
 - Targeted backend coverage was added for currency conversion fallback behavior and planned/transaction route patch validation branches.
-- Tests: [[apps/node-backend/tests/currencyConversionService.test.js]], [[apps/node-backend/tests/routes/plannedTransactions.test.js]], [[apps/node-backend/tests/routes/transactions.test.js]]
+- Tests: [[apps/node-backend/tests/currencyConversionService.test.js]], [[apps/node-backend/tests/routes/plannedTransactions.test.ts]], [[apps/node-backend/tests/routes/transactions.test.ts]]
 - Details: [[docs/testing/testing|Testing Documentation]] and [[docs/testing/test-inventory|Test Inventory]]
 
 ### Coverage update addendum (2026-04-11)
@@ -242,16 +242,16 @@ bun vitest run src/path/to/test.test.js
 > The raw transaction import service tests have been refactored as part of the Phase C consolidation into the unified `importPipeline` orchestrator. See import route tests and Feature: CSV Import for current implementation.
 
 - Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus import orchestration paths.
-- Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.js]] (Phase C)
+- Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.ts]] (Phase C)
 - Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ### Coverage update addendum (2026-04-11, info route dependency branches)
 
 - Added targeted backend coverage for info-route dependency orchestration, stale FX refresh branching, recurring-pattern fallback semantics, and cache prewarm failure isolation.
-- Tests: [[apps/node-backend/tests/routes/info.test.js]]
+- Tests: [[apps/node-backend/tests/routes/info.test.ts]]
 - Related source: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.ts]], [[apps/node-backend/src/services/materializedViewService.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]
-- Validation + coverage snapshot: `bun vitest run tests/routes/info.test.js`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
+- Validation + coverage snapshot: `bun vitest run tests/routes/info.test.ts`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ### 2026-04-17 Phase 8 — Property tests + Calculation Inventory lock

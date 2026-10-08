@@ -17,7 +17,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { toDecimal } from "../src/lib/money.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "../src/repositories/portfolioImportReconciliationRepository.ts";
@@ -30,18 +30,18 @@ import {
   syntheticSaxoStaging,
   syntheticSaxoPrimaryRawData,
   saxoHash,
-} from "./helpers/saxoReconciliation.js";
-import { syntheticIbkrPlannerSource } from "./helpers/ibkrReconciliation.js";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
+} from "./helpers/saxoReconciliation.ts";
+import { syntheticIbkrPlannerSource } from "./helpers/ibkrReconciliation.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./helpers/kinesisAdoptionScope.js";
+} from "./helpers/kinesisAdoptionScope.ts";
 import {
   syntheticKinesisYieldGroup,
   attachKinesisYieldReference,
   retainedKinesisYieldEvidence,
-} from "./helpers/kinesisYieldGroups.js";
+} from "./helpers/kinesisYieldGroups.ts";
 import { readReconciliationSources } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
@@ -57,7 +57,7 @@ import {
   retainedReference,
   retainedEvidenceRow,
   retainedReferenceConfiguration,
-} from "./fixtures/retainedPortfolioEvidence.js";
+} from "./fixtures/retainedPortfolioEvidence.ts";
 
 const historicalWarm = vi.hoisted(() => vi.fn());
 vi.mock(

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { mockLogger } from './helpers/mockLogger.js';
+import { mockLogger } from './helpers/mockLogger.ts';
 // Per-holding work remains concurrent, with a bounded number of active requests.
 
 vi.mock('../src/config/logger.ts', () => ({

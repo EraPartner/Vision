@@ -850,7 +850,7 @@ bun run test
 Backend tests are located in `apps/node-backend/src/` alongside source files as `*.test.js` files.
 
 - `apps/node-backend/tests/connection.test.js` covers pool and retry utilities plus ambient transaction routing, unique nested savepoints, caught-inner rollback, rollback-error preservation, and released-client invalidation.
-- `apps/node-backend/tests/helpers/repoMocks.test.js` pins parity for the shared ambient transaction mock used by repository and service tests.
+- `apps/node-backend/tests/helpers/repoMocks.test.ts` pins parity for the shared ambient transaction mock used by repository and service tests.
 
 ### Backend Unit Tests — Calculation & Pipeline (2026-05-05)
 
@@ -898,8 +898,8 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | `apps/node-backend/tests/filterBuilder.test.js`                | Filter builder                 | Fixed assertion in `buildTransactionWhere — tagSlugs > produces no clause when tagSlugs is empty`: changed `expect(sql).toBe('')` to `expect(sql).not.toContain('transaction_tags')` (filterBuilder always initializes clauses with `['1=1']`) |
 | `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction repository | Added `mockResolvedValueOnce({ rows: [] })` for new tag queries in `getAll`, `getById`, `create`, and `update`; updated `toHaveBeenCalledTimes` from 3→4 in getAll/getById/update-loan tests, 2→3 in update-no-fields test                     |
 | `apps/node-backend/src/backup/coverage.ts`                     | Backup coverage                | Added `planned_transaction_tags`, `tags`, `transaction_tags` (alphabetically) to `BACKUP_COVERED_TABLES`                                                                                                                                       |
-| `apps/node-backend/tests/routes/transactions.test.js`          | Transactions route             | Added `'tags'` to expected fields array in NDJSON export test                                                                                                                                                                                  |
-| `apps/node-backend/tests/routes/tags.test.js`                  | Tags route                     | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file                                                                                                                                       |
+| `apps/node-backend/tests/routes/transactions.test.ts`          | Transactions route             | Added `'tags'` to expected fields array in NDJSON export test                                                                                                                                                                                  |
+| `apps/node-backend/tests/routes/tags.test.ts`                  | Tags route                     | Removed TypeScript non-null assertion syntax (`]!` → `]`) that was causing parse failure in a `.js` file                                                                                                                                       |
 
 **Related documentation:**
 
@@ -922,11 +922,11 @@ The Transaction Tags feature test suite is now **complete and passing**. All tes
 | File                                                  | Area                   | Coverage Added                                        |
 | ----------------------------------------------------- | ---------------------- | ----------------------------------------------------- |
 | `apps/node-backend/tests/config.test.js`              | Config/security        | `ADMIN_AUTH_TOKEN` mapping + trim behavior            |
-| `apps/node-backend/tests/routes/investments.test.js`  | Performance/regression | Bulk transactions cache-key includes `limit`          |
-| `apps/node-backend/tests/routes/transactions.test.js` | Security               | CSV formula neutralization + sanitized route errors   |
-| `apps/node-backend/tests/routes/import.test.js`       | Security               | Sanitized import errors and stream error expectations |
-| `apps/node-backend/tests/routes/admin.test.js`        | Security               | Sanitized admin errors and auth behavior assertions   |
-| `apps/node-backend/tests/routes/info.test.js`         | Security/perf          | `/api/info/refresh-views` route + limiter assertions  |
+| `apps/node-backend/tests/routes/investments.test.ts`  | Performance/regression | Bulk transactions cache-key includes `limit`          |
+| `apps/node-backend/tests/routes/transactions.test.ts` | Security               | CSV formula neutralization + sanitized route errors   |
+| `apps/node-backend/tests/routes/import.test.ts`       | Security               | Sanitized import errors and stream error expectations |
+| `apps/node-backend/tests/routes/admin.test.ts`        | Security               | Sanitized admin errors and auth behavior assertions   |
+| `apps/node-backend/tests/routes/info.test.ts`         | Security/perf          | `/api/info/refresh-views` route + limiter assertions  |
 
 ## Coverage Gaps
 
@@ -994,18 +994,18 @@ bun vitest run --test-name-pattern="testName"
 | File                                                  | Area                | Coverage Added                                                                                                                                                                           |
 | ----------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/node-backend/tests/rateLimiter.test.js`         | Middleware/security | Factory allow/deny behavior, window reset, IP fallback precedence, `adminRateLimiter` (500/min), `adminMutateLimiter` (30/min), `importRateLimiter` (20/min)                             |
-| `apps/node-backend/tests/routes/admin.test.js`        | Admin API           | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
-| `apps/node-backend/tests/routes/marketLookup.test.js` | Market API          | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance                                                                      |
+| `apps/node-backend/tests/routes/admin.test.ts`        | Admin API           | `GET /api/admin/update/check` release parsing + version resolution + no-release + invalid-JSON sanitized 500; `POST /api/admin/update/apply`; `POST /api/admin/update/apply-and-restart` |
+| `apps/node-backend/tests/routes/marketLookup.test.ts` | Market API          | Quote input validation + mapping + failure fallback; news dedup, thumbnail normalization, partial-failure tolerance                                                                      |
 
 ### Backend coverage additions (2026-04-11)
 
 | File                                                           | Area                        | Coverage Added                                                                                                                     |
 | -------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | [[apps/node-backend/tests/currencyConversionService.test.js]]  | Currency conversion service | Unsupported-currency fallback, `warmCache` dual-API failure fallback, ECB 90-day historical backfill                               |
-| [[apps/node-backend/tests/routes/plannedTransactions.test.js]] | Planned transactions route  | Loan term bounds validation, patch `recipient_name`/`category_name` name-to-id resolution, loan toggle-off schedule/field clearing |
-| [[apps/node-backend/tests/routes/transactions.test.js]]        | Transactions route          | `normalize_to_eur` conversion path, duplicate detection `409`, unresolved recipient/category validation branches in patch flow     |
+| [[apps/node-backend/tests/routes/plannedTransactions.test.ts]] | Planned transactions route  | Loan term bounds validation, patch `recipient_name`/`category_name` name-to-id resolution, loan toggle-off schedule/field clearing |
+| [[apps/node-backend/tests/routes/transactions.test.ts]]        | Transactions route          | `normalize_to_eur` conversion path, duplicate detection `409`, unresolved recipient/category validation branches in patch flow     |
 
-Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
+Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.ts tests/routes/transactions.test.ts`; `npm test -- --coverage`
 
 Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
@@ -1013,7 +1013,7 @@ Related code: [[apps/node-backend/src/services/currency/currencyConversionServic
 
 | File                                              | Area       | Changes                                                                                                                                                                                                                      |
 | ------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/routes/import.test.js]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
+| [[apps/node-backend/tests/routes/import.test.ts]] | Import API | Updated to ADR-026 envelope pattern — validation errors assert `.rejects.toBeInstanceOf(ValidationError)`, success responses check `body.data.xxx` instead of `body.xxx`, mock response includes `res.ok(data, meta)` method |
 | [[apps/node-backend/src/routes/marketLookup.ts]]  | Market API | `symbols.split()` operation moved inside try-catch block (line 86), so malformed string parameters now throw `AppError(502)` instead of raw TypeError                                                                        |
 
 Related docs: [[docs/adr/026-unified-api-response-envelope|ADR-026]], [[docs/testing/testing#Envelope-Aware Route Testing (ADR-026)|Envelope-Aware Route Testing pattern]]
@@ -1061,7 +1061,7 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[ap
 | [[apps/node-backend/tests/wiseAdapter.test.js]]   | Bank adapters           | Wise adapter parsing/normalization paths                                                             |
 | [[apps/node-backend/tests/sabbAdapter.test.js]]   | Bank adapters           | SABB adapter parsing/normalization paths                                                             |
 | [[apps/node-backend/tests/visionAdapter.test.js]] | Bank adapters           | Vision adapter parsing/normalization paths                                                           |
-| [[apps/node-backend/tests/routes/import.test.js]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
+| [[apps/node-backend/tests/routes/import.test.ts]] | Import routes (Phase C) | Orchestrator integration, SSE backpressure, recipients/categories bulk import, multer error handling |
 
 Removed tests (2026-05-29):
 
@@ -1076,11 +1076,11 @@ Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]
 
 | File                                            | Area                                   | Coverage Added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ----------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [[apps/node-backend/tests/routes/info.test.js]] | Info routes + cache warm orchestration | Route-level dependency mocks (DB, recurring detection, materialized views, FX cache helpers, portfolio snapshots); `GET /recurring-patterns` fallback semantics; `GET /exchange-rates` stale/current refresh branching + warm-failure warning + DB `500`; `POST /exchange-rates/refresh` success/error; `POST /refresh-views` success/failure; `GET /portfolio-performance` mapping/default date range/invalid-currency EUR fallback/error `500`; `warmInfoCaches` prewarm + failure-isolation/logging |
+| [[apps/node-backend/tests/routes/info.test.ts]] | Info routes + cache warm orchestration | Route-level dependency mocks (DB, recurring detection, materialized views, FX cache helpers, portfolio snapshots); `GET /recurring-patterns` fallback semantics; `GET /exchange-rates` stale/current refresh branching + warm-failure warning + DB `500`; `POST /exchange-rates/refresh` success/error; `POST /refresh-views` success/failure; `GET /portfolio-performance` mapping/default date range/invalid-currency EUR fallback/error `500`; `warmInfoCaches` prewarm + failure-isolation/logging |
 
 Validation runs (passed):
 
-- `bun vitest run tests/routes/info.test.js`
+- `bun vitest run tests/routes/info.test.ts`
 - `npm test -- --coverage`
 
 Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
@@ -1112,10 +1112,10 @@ Related source links: [[apps/node-backend/src/repositories/portfolioTransactionR
 
 | File                                                                    | Area                                   | Coverage Added                                                               |
 | ----------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------------------------- |
-| [[apps/node-backend/tests/routes/marketLookup.test.js]]                 | Market lookup routes                   | Expanded quote/news route branch and response-shape coverage                 |
+| [[apps/node-backend/tests/routes/marketLookup.test.ts]]                 | Market lookup routes                   | Expanded quote/news route branch and response-shape coverage                 |
 | [[apps/node-backend/tests/priceProviderService.test.js]]                | Price provider service                 | Expanded provider-resolution and price-history handling branches             |
 | [[apps/node-backend/tests/investmentRepository.test.js]]                | Investment repository                  | Expanded repository compatibility and query-path coverage                    |
-| [[apps/node-backend/tests/routes/import.test.js]]                       | Import routes (Phase C)                | Streaming import backpressure, orchestrator integration, error-path coverage |
+| [[apps/node-backend/tests/routes/import.test.ts]]                       | Import routes (Phase C)                | Streaming import backpressure, orchestrator integration, error-path coverage |
 | [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]] | Portfolio performance snapshot service | Expanded snapshot generation and edge-case branch coverage                   |
 | [[apps/node-backend/tests/infoRepository.test.js]]                      | Info repository                        | Expanded aggregation and conversion-path coverage                            |
 | [[apps/node-backend/tests/materializedViewService.test.js]]             | Materialized view service              | Expanded refresh/coalescing and failure-path coverage                        |

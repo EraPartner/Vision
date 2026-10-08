@@ -6,9 +6,9 @@
  * and server lifecycle.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 
 // ── Mock dependencies before importing main ──────────────────
 

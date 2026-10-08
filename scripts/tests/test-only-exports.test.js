@@ -37,6 +37,22 @@ test("rejects an unmarked named export imported only by a test", () => {
   assert.match(result.stderr, /seam -> __seam/);
 });
 
+test("ignores type-only re-exports used only by typed tests", () => {
+  const root = fixture();
+  write(
+    root,
+    "src/helper.ts",
+    "interface Row { id: string }\ntype Alias = Row;\nexport type { Row };\nexport { type Alias };\n",
+  );
+  write(
+    root,
+    "tests/helper.test.ts",
+    "import type { Row, Alias } from '../src/helper.ts';\nconst row: Row | Alias = { id: '1' };\nvoid row;\n",
+  );
+  const result = check(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("recognizes dynamic test imports and accepts the __ marker", () => {
   const root = fixture();
   write(

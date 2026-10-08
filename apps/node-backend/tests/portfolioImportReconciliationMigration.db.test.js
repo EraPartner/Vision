@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { installFreshBaseline } from "../src/database/freshBaseline.ts";
-import { hasTestDatabase } from "./setup/db.js";
+import { hasTestDatabase } from "./setup/db.ts";
 
 const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(

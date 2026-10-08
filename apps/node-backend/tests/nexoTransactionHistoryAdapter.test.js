@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 

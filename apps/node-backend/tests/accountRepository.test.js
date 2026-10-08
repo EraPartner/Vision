@@ -3,8 +3,8 @@
  * params and the row shaping the repository performs.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockConvertWithRates: vi.fn((amount, from, to) => {

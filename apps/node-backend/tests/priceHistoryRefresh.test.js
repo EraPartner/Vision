@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 const { chart, loadHistory, saveHistory } = vi.hoisted(() => ({
   chart: vi.fn(),

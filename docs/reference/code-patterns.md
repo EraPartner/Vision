@@ -1744,7 +1744,7 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 
 ## Golden-Fixture Pattern
 
-**Source:** [[apps/node-backend/tests/golden/runGolden.js|runGolden.js]]
+**Source:** [[apps/node-backend/tests/golden/runGolden.ts|runGolden.js]]
 
 Regression testing for non-trivial calculations (loan amortization, recurrence expansion, etc.). Input + expected output stored as JSON fixtures. Paired with pure calculation services in `services/calculations/`.
 

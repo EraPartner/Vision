@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 // Ambient-aware connection mock: transactional SQL lands on `mockClient` whether
 // the service threads the client through explicitly or a repository issues it
 // via module-level query() inside withTransaction (see repoMocks.js).

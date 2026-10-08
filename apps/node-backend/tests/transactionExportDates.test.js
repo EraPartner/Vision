@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { makeTransactionRow } from "./builders/domainRows.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { makeTransactionRow } from "./builders/domainRows.ts";
 // Export date serialization (TODO E11): the CSV column was String(pg Date)
 // ("Wed Jul 01 2026 00:00:00 GMT+0200 …" — unusable in Excel, a day off on
 // cross-TZ re-import) and buildNdjsonRow went through JSON.stringify's

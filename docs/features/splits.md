@@ -168,7 +168,7 @@ Overpayment protection operates at three layers:
 > service path. See [[docs/adr/112-retire-legacy-split-overpayment-trigger|ADR-112]].
 
 > [!info] Locked contracts (Phase 8)
-> The split allocation and payment-cap invariants are pinned by property tests in [[apps/node-backend/tests/property/splits.property.test.js]]. The migration 0088 database suite adds sub-cent cases at the exact four-decimal storage boundary. Any change to the calculation surface must keep both suites green. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/moneyPrecisionAlignment.db.test.js|Money precision migration tests]].
+> The split allocation and payment-cap invariants are pinned by property tests in [[apps/node-backend/tests/property/splits.property.test.ts]]. The migration 0088 database suite adds sub-cent cases at the exact four-decimal storage boundary. Any change to the calculation surface must keep both suites green. See [[docs/testing/testing#property-test-pattern-phase-8|Property Test Pattern]] and [[apps/node-backend/tests/moneyPrecisionAlignment.db.test.js|Money precision migration tests]].
 
 ---
 

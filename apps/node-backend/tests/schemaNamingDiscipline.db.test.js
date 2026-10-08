@@ -32,7 +32,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { __getSupportedPatterns as getSupportedPatterns } from "../src/lib/calculations/recurrence.ts";
 
 const pool = getTestPool();
