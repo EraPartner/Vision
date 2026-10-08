@@ -30,7 +30,7 @@ export function DeltaPill({ value, label, invert = false, className }: DeltaPill
     return (
         <span
             className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ring-1 ring-inset",
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 type-footnote font-medium tabular-nums ring-1 ring-inset",
                 tone,
                 className,
             )}

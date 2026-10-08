@@ -612,7 +612,7 @@ function Inner<Datum>({
                       return (
                           <div
                               className={cn(
-                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 text-xs font-semibold tabular-nums shadow-sm",
+                                  "pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/60 bg-card px-2.5 py-1 type-footnote font-medium tabular-nums shadow-elevation-1",
                                   rising
                                       ? "text-gain"
                                       : b - a < 0

@@ -4,6 +4,8 @@ import {
 } from "@/lib/devtools/queryMetrics";
 import { clearApiRequestLog } from "@/lib/devtools/apiRequestLog";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 function StatCard({
@@ -18,20 +20,22 @@ function StatCard({
     warn?: boolean;
 }) {
     return (
-        <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-            <p className="text-2xs text-muted-foreground mb-0.5">{label}</p>
-            <p
-                className={cn(
-                    "text-lg font-mono font-semibold tabular-nums leading-none",
-                    warn && "text-warning",
+        <Card>
+            <CardContent variant="compact" className="px-3 py-2">
+                <p className="mb-0.5 type-caption text-label-secondary">{label}</p>
+                <p
+                    className={cn(
+                        "font-mono type-title-3 tabular-nums text-foreground",
+                        warn && "text-warning",
+                    )}
+                >
+                    {value}
+                </p>
+                {sub && (
+                    <p className="mt-0.5 type-caption text-label-secondary">{sub}</p>
                 )}
-            >
-                {value}
-            </p>
-            {sub && (
-                <p className="text-2xs text-muted-foreground mt-0.5">{sub}</p>
-            )}
-        </div>
+            </CardContent>
+        </Card>
     );
 }
 
@@ -78,16 +82,16 @@ export function MetricsPanel() {
 
             {metrics.slowRequests.length > 0 && (
                 <div>
-                    <p className="text-2xs font-semibold text-warning mb-1.5">
+                    <p className="mb-1.5 type-caption font-medium text-warning">
                         Slow requests (&gt;1 s) — {metrics.slowRequests.length}
                     </p>
                     <div className="space-y-0.5">
                         {metrics.slowRequests.slice(0, 10).map((req) => (
                             <div
                                 key={req.id}
-                                className="flex items-center gap-2 text-2xs font-mono"
+                                className="flex items-center gap-2 font-mono type-caption"
                             >
-                                <span className="text-muted-foreground w-12 shrink-0">
+                                <span className="w-12 shrink-0 text-label-secondary">
                                     {req.method}
                                 </span>
                                 <span className="flex-1 truncate text-foreground">
@@ -104,19 +108,19 @@ export function MetricsPanel() {
 
             {metrics.topEndpoints.length > 0 && (
                 <div>
-                    <p className="text-2xs font-semibold text-muted-foreground mb-1.5">
+                    <p className="mb-1.5 type-caption font-medium text-label-secondary">
                         Top endpoints by call count
                     </p>
                     <div className="space-y-0.5">
                         {metrics.topEndpoints.slice(0, 10).map((ep) => (
                             <div
                                 key={ep.endpoint}
-                                className="flex items-center gap-2 text-2xs font-mono"
+                                className="flex items-center gap-2 font-mono type-caption"
                             >
                                 <span className="flex-1 truncate text-foreground">
                                     {ep.endpoint}
                                 </span>
-                                <span className="shrink-0 text-muted-foreground tabular-nums w-6 text-right">
+                                <span className="w-6 shrink-0 text-right tabular-nums text-label-secondary">
                                     {ep.count}×
                                 </span>
                                 <span
@@ -124,7 +128,7 @@ export function MetricsPanel() {
                                         "shrink-0 tabular-nums w-16 text-right",
                                         ep.p95 >= 1000
                                             ? "text-warning"
-                                            : "text-muted-foreground",
+                                            : "text-label-secondary",
                                     )}
                                 >
                                     p95:{ep.p95.toFixed(0)}ms
@@ -140,14 +144,16 @@ export function MetricsPanel() {
                 </div>
             )}
 
-            <div className="mt-auto pt-2 border-t border-border">
-                <button
+            <div className="mt-auto border-t border-border/50 pt-2">
+                <Button
                     type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={handleReset}
-                    className="text-2xs text-muted-foreground hover:text-foreground transition-colors"
+                    className="-mx-2 h-7 px-2 type-footnote text-label-secondary hover:text-foreground"
                 >
                     Reset all metrics
-                </button>
+                </Button>
             </div>
         </div>
     );

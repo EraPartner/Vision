@@ -97,15 +97,15 @@ export function SimpleImportCard<R extends SimpleImportResult>({
         <CsvDropzone file={file} onFileSelect={(f) => { setFile(f); setResult(null); }} compact />
 
         {result && !loading && (
-          <div className="flex items-center gap-3 p-3 rounded-lg border border-success/30 bg-success/10">
+          <div className="flex items-center gap-3 rounded-card corner-continuous border border-success/30 bg-success/10 p-3">
             <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-            <p className="text-sm text-success">
+            <p className="type-body text-success">
               {t('importPage.resultSummary', { imported: result.imported, skipped: result.skipped, errors: result.errors })}
             </p>
           </div>
         )}
 
-        <Button onClick={handleImport} disabled={!file || loading} className="w-full h-11" size="lg">
+        <Button onClick={handleImport} disabled={!file || loading} className="w-full" size="lg">
           {loading ? (
             <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t(importingLabelKey)}</>
           ) : (

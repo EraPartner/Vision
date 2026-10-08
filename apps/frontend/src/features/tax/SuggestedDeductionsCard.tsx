@@ -1,11 +1,35 @@
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExternalLink } from "lucide-react";
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { getTaxTable } from "@/lib/belgianTax";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { TaxProfileDialog } from "./TaxProfileDialog";
+
+const PWC_DEDUCTIONS_URL =
+    "https://taxsummaries.pwc.com/belgium/individual/deductions";
+
+function PwcGuideLink() {
+    const { t } = useLanguage();
+    return (
+        <a
+            className="inline-flex items-center gap-1 rounded-chip type-callout text-primary hover:underline focus-ring"
+            href={PWC_DEDUCTIONS_URL}
+            target="_blank"
+            rel="noreferrer"
+        >
+            {t("tax.suggestions.pwcLink")}
+            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+        </a>
+    );
+}
 
 export function SuggestedDeductionsCard() {
     const { profile, calculation } = useBelgianTaxProfile((state) => ({
@@ -254,21 +278,14 @@ export function SuggestedDeductionsCard() {
                 <CardHeader>
                     <CardTitle>{t("tax.suggestions.title")}</CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <p className="text-sm text-muted-foreground">
+                <CardContent className="space-y-2">
+                    <p className="type-body text-label-secondary">
                         {t("tax.suggestions.none")}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="type-footnote text-label-secondary">
                         {t("tax.suggestions.regionalNote")}
                     </p>
-                    <a
-                        className="text-sm text-primary mt-2 inline-block"
-                        href="https://taxsummaries.pwc.com/belgium/individual/deductions"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {t("tax.suggestions.pwcLink")}
-                    </a>
+                    <PwcGuideLink />
                 </CardContent>
             </Card>
         );
@@ -279,66 +296,63 @@ export function SuggestedDeductionsCard() {
             <CardHeader>
                 <CardTitle>{t("tax.suggestions.title")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-                {suggestions.map((s) => (
-                    <div
-                        key={s.id}
-                        className="flex items-center justify-between"
-                    >
-                        <div>
-                            <p className="text-sm font-medium">{s.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                                {s.desc}
-                            </p>
-                            {s.note && (
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    {s.note}
+            <CardContent>
+                <ul className="divide-y divide-border/50">
+                    {suggestions.map((s) => (
+                        <li
+                            key={s.id}
+                            className="flex items-start justify-between gap-4 py-3 first:pt-0"
+                        >
+                            <div className="min-w-0 space-y-0.5">
+                                <p className="type-body font-medium text-foreground">
+                                    {s.title}
                                 </p>
-                            )}
-                        </div>
-                        <div className="text-right">
-                            {typeof s.estimate === "number" &&
-                            s.estimate > 0 ? (
-                                <p className="font-semibold">
-                                    {fmt(s.estimate)}
+                                <p className="type-footnote text-label-secondary">
+                                    {s.desc}
                                 </p>
-                            ) : (
-                                <p className="text-xs text-muted-foreground">
-                                    {t("tax.suggestions.estimateNote")}
-                                </p>
-                            )}
-                            <div className="mt-2 flex justify-end">
+                                {s.note && (
+                                    <p className="type-footnote text-label-secondary">
+                                        {s.note}
+                                    </p>
+                                )}
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+                                {typeof s.estimate === "number" &&
+                                s.estimate > 0 ? (
+                                    <p className="type-headline tabular-nums text-gain">
+                                        {fmt(s.estimate)}
+                                    </p>
+                                ) : (
+                                    <p className="type-footnote text-label-secondary">
+                                        {t("tax.suggestions.estimateNote")}
+                                    </p>
+                                )}
                                 <TaxProfileDialog
                                     trigger={
-                                        <Button size="sm">
+                                        <Button size="sm" variant="outline">
                                             {t("tax.suggestions.cta")}
                                         </Button>
                                     }
                                     initialStep={"exemptions"}
                                 />
                             </div>
-                        </div>
-                    </div>
-                ))}
+                        </li>
+                    ))}
+                </ul>
 
-                <div className="pt-2 border-t mt-2">
-                    <p className="text-sm font-semibold">
+                <div className="mt-3 space-y-1 border-t border-border/60 pt-4">
+                    <p className="type-headline text-foreground">
                         {t("tax.suggestions.regionalTitle")}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("tax.suggestions.regionalDesc")}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-2">
+                    <p className="type-footnote text-label-secondary">
                         {t("tax.suggestions.multipleResidencesNote")}
                     </p>
-                    <a
-                        className="text-sm text-primary mt-2 inline-block"
-                        href="https://taxsummaries.pwc.com/belgium/individual/deductions"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {t("tax.suggestions.pwcLink")}
-                    </a>
+                    <div className="pt-1">
+                        <PwcGuideLink />
+                    </div>
                 </div>
             </CardContent>
         </Card>

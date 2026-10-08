@@ -3,10 +3,10 @@
  *
  * The budget-tax overview's computation, composed the way the Belgian
  * assessment notice (aanslagbiljet) composes it: one column read top to bottom,
- * gross → deductions → taxable income → PIT → municipal surcharge → burden →
- * net. It replaces the parallel, same-weight KPI tiles that used to sit here
- * ("summaryCards" widget); a chain of derivations was being drawn as a grid of
- * unrelated facts.
+ * gross → deductions → taxable income → income tax → municipal surcharge →
+ * burden → net. It replaces the parallel, same-weight KPI tiles that used to
+ * sit here ("summaryCards" widget); a chain of derivations was being drawn as
+ * a grid of unrelated facts.
  *
  * Every figure is a pass-through read of `BelgianTaxCalculation` — nothing is
  * computed, rounded or re-derived in this component. The signed operation rows
@@ -27,6 +27,7 @@ import {
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { RollingNumber } from "@/components/shared/RollingNumber";
+import { Badge } from "@/components/ui/badge";
 import {
     Card,
     CardContent,
@@ -36,6 +37,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { BelgianTaxCalculation } from "@/lib/belgianTax";
+import { KeyValueRows } from "./KeyValueRows";
 
 interface FlowOperation {
     label: string;
@@ -53,7 +55,7 @@ interface FlowStage {
     id: string;
     label: string;
     value: number;
-    /** Tailwind colour class for the figure — carried over from the tiles this replaces. */
+    /** Colour role for the figure — carried over from the tiles this replaces. */
     tone: string;
     note?: string;
     chip?: ReactNode;
@@ -80,10 +82,10 @@ function isProse(group: FlowOperationGroup): boolean {
     );
 }
 
-const FIGURE_SIZE: Record<0 | 1 | 2, string> = {
-    0: "text-xl sm:text-2xl",
-    1: "text-2xl sm:text-3xl",
-    2: "text-3xl sm:text-4xl",
+const FIGURE_TYPE: Record<0 | 1 | 2, string> = {
+    0: "type-title-3",
+    1: "type-title-2",
+    2: "type-title-1",
 };
 
 export function TaxComputationFlow({
@@ -200,27 +202,27 @@ export function TaxComputationFlow({
 
     const coda = [
         {
+            key: "portfolioTaxes",
             label: t("tax.pit.row.portfolioTaxesYear", {
                 year: String(viewedYear),
             }),
-            value: portfolioTaxesForYear,
+            value: fmt(portfolioTaxesForYear),
             tone: "text-loss",
         },
         {
+            key: "inclPortfolio",
             label: t("tax.pit.row.totalTaxInclPortfolio"),
-            value: totalTaxIncludingPortfolio,
+            value: fmt(totalTaxIncludingPortfolio),
             tone: "text-primary",
         },
         {
+            key: "inclProperty",
             label: t("tax.pit.row.totalWithPropertyEstimate"),
-            value: totalTaxIncludingPropertyEstimate,
+            value: fmt(totalTaxIncludingPropertyEstimate),
             tone: "text-primary",
         },
     ];
 
-    // The card keeps the default `glass-regular` material: ADR-105 reserves
-    // `glass-elevated` for the page's hero, which here is the masthead. This
-    // card's prominence comes from its type scale, not from its shadow.
     return (
         <Card className="overflow-hidden">
             <CardHeader>
@@ -245,12 +247,12 @@ export function TaxComputationFlow({
                                 <div className="relative flex w-4 shrink-0 justify-center">
                                     {!isLast && (
                                         <span
-                                            aria-hidden
-                                            className="absolute top-3 bottom-0 w-px bg-gradient-to-b from-primary/35 via-border to-border"
+                                            aria-hidden="true"
+                                            className="absolute bottom-0 top-3 w-px bg-border"
                                         />
                                     )}
                                     <span
-                                        aria-hidden
+                                        aria-hidden="true"
                                         className={cn(
                                             "absolute top-1.5 h-3 w-3 rounded-full border bg-background",
                                             weight === 0
@@ -270,18 +272,18 @@ export function TaxComputationFlow({
                                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                                         <p
                                             className={cn(
-                                                "font-semibold text-foreground",
                                                 weight === 2
-                                                    ? "text-base"
-                                                    : "text-sm",
+                                                    ? "type-headline"
+                                                    : "type-body font-medium",
+                                                "text-foreground",
                                             )}
                                         >
                                             {stage.label}
                                         </p>
                                         <p
                                             className={cn(
-                                                "font-display font-semibold leading-none tracking-tight tabular-nums",
-                                                FIGURE_SIZE[weight],
+                                                "tabular-nums",
+                                                FIGURE_TYPE[weight],
                                                 stage.tone,
                                             )}
                                         >
@@ -293,14 +295,18 @@ export function TaxComputationFlow({
                                     {(stage.note || stage.chip) && (
                                         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                                             {stage.note && (
-                                                <span className="text-xs text-muted-foreground">
+                                                <span className="type-footnote text-label-secondary">
                                                     {stage.note}
                                                 </span>
                                             )}
                                             {stage.chip && (
-                                                <span className="inline-flex items-center rounded-full border border-border/70 bg-secondary/50 px-2 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
+                                                <Badge
+                                                    variant="muted"
+                                                    size="sm"
+                                                    className="tabular-nums"
+                                                >
                                                     {stage.chip}
-                                                </span>
+                                                </Badge>
                                             )}
                                         </div>
                                     )}
@@ -310,13 +316,13 @@ export function TaxComputationFlow({
                                         amount stays unboxed — it is the document's
                                         connective tissue, not a line item. */}
                                     {stage.then && isProse(stage.then) ? (
-                                        <p className="mt-2.5 text-xs italic leading-relaxed text-muted-foreground">
+                                        <p className="mt-2.5 type-footnote italic leading-relaxed text-label-secondary">
                                             {stage.then.items[0].label}
                                         </p>
                                     ) : stage.then ? (
-                                        <div className="mt-3 rounded-[0.5rem] border border-border/50 bg-muted/25 px-3 py-2">
+                                        <div className="mt-3 rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2">
                                             {stage.then.heading && (
-                                                <p className="mb-1.5 eyebrow">
+                                                <p className="mb-1.5 type-caption text-label-tertiary">
                                                     {stage.then.heading}
                                                 </p>
                                             )}
@@ -324,9 +330,9 @@ export function TaxComputationFlow({
                                                 {stage.then.items.map((op) => (
                                                     <li
                                                         key={op.label}
-                                                        className="flex items-baseline justify-between gap-4 text-xs"
+                                                        className="flex items-baseline justify-between gap-4 type-footnote"
                                                     >
-                                                        <span className="text-muted-foreground">
+                                                        <span className="text-label-secondary">
                                                             {op.label}
                                                         </span>
                                                         {op.value !==
@@ -349,27 +355,10 @@ export function TaxComputationFlow({
 
                 {/* Coda: figures that sit outside the personal-income-tax chain. */}
                 <div className="mt-5 border-t border-border/60 pt-4">
-                    <p className="eyebrow">{t("tax.flow.coda.title")}</p>
-                    <ul className="mt-2 space-y-1.5">
-                        {coda.map((row) => (
-                            <li
-                                key={row.label}
-                                className="flex items-baseline justify-between gap-4 text-sm"
-                            >
-                                <span className="text-muted-foreground">
-                                    {row.label}
-                                </span>
-                                <span
-                                    className={cn(
-                                        "shrink-0 font-semibold tabular-nums",
-                                        row.tone,
-                                    )}
-                                >
-                                    {fmt(row.value)}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
+                    <p className="type-caption text-label-tertiary">
+                        {t("tax.flow.coda.title")}
+                    </p>
+                    <KeyValueRows rows={coda} className="mt-1" />
                 </div>
             </CardContent>
         </Card>

@@ -85,7 +85,7 @@ describe("shareable page URL state", () => {
         ).toHaveAttribute("data-state", "active");
         expect(
             await screen.findByRole("button", { name: /sort by p\/e/i }),
-        ).toHaveClass("font-semibold");
+        ).toHaveAttribute("aria-pressed", "true");
     });
 
     it("updates Research Compare performance percentages when number format changes", async () => {

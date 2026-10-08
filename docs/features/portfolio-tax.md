@@ -2,8 +2,8 @@
 title: Portfolio Tax Feature
 type: feature
 status: active
-date: 2026-09-27
-updated: 2026-09-27
+date: 2026-10-07
+updated: 2026-10-07
 tags: [feature, portfolio, tax, belgian, frontend, investments, audit-2026-05-11, etf-structure, reynders-override, tax-classifications, portfolio-tax-pure-module, decimal-migration, url-state]
 description: Portfolio-level tax tracking with recorded taxes, manual adjustments, per-investment breakdowns, and Belgian tax rule integration. May 2026: Added per-investment ETF structure (accumulating/distributing) and Reynders routing override metadata. 2026-05-29: Portfolio-tax estimators extracted to portfolioTax.ts (pure, tested, Decimal-accumulating); PortfolioTaxPage now calls shared functions instead of inlining math.
 aliases: [portfolio taxation, investment tax, capital gains tax, TOB]
@@ -70,15 +70,19 @@ Uses `useWidgetVisibility` with 7 configurable widgets:
 
 | Widget ID             | Label Key                        | Default | Description                                                                          |
 | --------------------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------ |
-| `summaryCards`        | `tax.widget.summaryCards`        | Visible | 3 primary cost cards and 3 supporting metrics (effective rate, total with PIT, manual adjustments) |
+| `summaryCards`        | `tax.widget.summaryCards`        | Visible | One hero (total costs) with a `dl` of taxes, fees, effective rate, total with PIT and manual adjustments |
 | `taxByAssetClass`     | `tax.widget.taxByAssetClass`     | Visible | Bar chart of taxes/fees by asset class                                               |
 | `taxTypes`            | `tax.widget.taxTypes`            | Visible | Breakdown by tax type (capital gains, dividend withholding, transaction tax, other)  |
 | `yearlyTaxFeeTrend`   | `tax.widget.yearlyTaxFeeTrend`   | Visible | Monthly stacked bar chart of taxes + fees                                            |
-| `investmentBreakdown` | `tax.widget.investmentBreakdown` | Visible | Per-investment detail cards                                                          |
+| `investmentBreakdown` | `tax.widget.investmentBreakdown` | Visible | Per-investment `List` rows                                                           |
 | `profileInputs`       | `tax.widget.profileInputs`       | Visible | Current Belgian tax profile inputs                                                   |
 | `belgianRules`        | `tax.widget.belgianRules`        | Visible | Belgian-specific tax rules and estimates                                             |
 
-### Summary Cards
+### Page header and actions
+
+`PageHeader` carries the year switcher, the shared `YearActionsMenu` ••• menu (freeze, mark as filed, history, CSV, plus _Set up_ / _Edit tax profile_ and _Customize_) and the primary _Manual adjustments_ button. `TaxProfileDialog` and `PortfolioTaxAdjustmentsDialog` are driven in controlled mode from the menu and button, and the Estimates heading repeats a profile button. With no data the page shows an `EmptyState` whose action links to `/portfolio` ([[docs/adr/187-completeness-sweep|ADR-187]]).
+
+### Summary hero
 
 1. **Total Taxes Paid**: Across all investments for the tax year
 2. **Total Fees Paid**: Broker and management fees
@@ -249,4 +253,4 @@ The page relies on `usePortfolio()` for investment summaries rather than a dedic
 
 ## Task-focused guidance and hierarchy
 
-Portfolio costs and Tax estimates and assumptions are separate named sections. The three main cost figures retain prominent cards; effective rate, combined personal-income-tax estimate, and manual adjustments remain in a quieter supporting row. Profile inputs and budget estimates sit with Belgian estimates. Duplicate header totals are removed; editing an existing profile is secondary, while first-time setup stays primary. No metrics, widget identifiers, calculation caveats, or historical-year controls are removed.
+Portfolio costs and Tax estimates and assumptions are separate named sections. `PortfolioTaxSummaryCards` renders one hero for total costs, with taxes, fees, effective rate, combined personal-income-tax estimate and manual adjustments as a quieter `dl` inside it (the former six cards and `TaxSummaryCard.tsx` are gone). Profile inputs and budget estimates sit with Belgian estimates. Duplicate header totals are removed; editing an existing profile sits in the ••• menu, while _Manual adjustments_ is the page's primary action. No metrics, widget identifiers, calculation caveats, or historical-year controls are removed.

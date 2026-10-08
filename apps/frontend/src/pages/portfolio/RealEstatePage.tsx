@@ -7,29 +7,19 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { StatCard } from "@/components/shared/StatCard";
-import { RollingNumber } from "@/components/shared/RollingNumber";
-import {
-    useCurrencyPartsFormatter,
-    usePercentFormatter,
-} from "@/hooks/useCurrencyFormatter";
-import { Button } from "@/components/ui/button";
-import {
-    Building2,
-    Trash2,
-    Eye,
-    TrendingUp,
-    Banknote,
-    Home,
-    MapPin,
-    Percent,
-} from "lucide-react";
+import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
+import { Banknote, Building2, MapPin } from "lucide-react";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
-import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
-import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
-import { cn } from "@/lib/utils";
-import { useConfirmDialog } from "@/hooks/useConfirmDialog";
+import {
+    AssetPageActions,
+    FactRow,
+    Figure,
+} from "@/features/portfolio/assetPageParts";
+import {
+    toneClass,
+    useHoldingActions,
+} from "@/features/portfolio/useHoldingActions";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -43,6 +33,8 @@ import { DeltaPill } from "@/components/shared/DeltaPill";
 import { Money } from "@/components/shared/Money";
 import { PageShell } from "@/components/shared/PageShell";
 
+const PageIcon = PAGE_ICONS["/portfolio/real-estate"];
+
 export default function RealEstatePage() {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
@@ -50,19 +42,15 @@ export default function RealEstatePage() {
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const targetCurrency = appSettings.defaultCurrency || "EUR";
-    const {
-        byAssetClass,
-        deleteInvestment,
-        isLoading,
-        isError,
-        error,
-        refetch,
-    } = usePortfolio();
-    const { confirm, ConfirmDialog } = useConfirmDialog();
+    const { byAssetClass, isLoading, isError, error, refetch } =
+        usePortfolio();
+    const { dialogs, renderMenu } = useHoldingActions({
+        deleteTitleKey: "realestate.deleteProperty",
+        deleteDescriptionKey: "realestate.deletePropertyDesc",
+    });
     const properties = byAssetClass("real_estate");
 
     const { convertToTarget } = useCurrencyConverter(targetCurrency);
-    const fmtParts = useCurrencyPartsFormatter(targetCurrency);
 
     // One Intl.NumberFormat per (locale, decimals) instead of one per formatted
     // value (~50-200µs a piece) — the memoized-formatter pattern NetWorthPage
@@ -122,25 +110,23 @@ export default function RealEstatePage() {
         totalAppreciation + totalRentIncome - totalFees - totalTaxes;
     const roi = totalCost > 0 ? (totalReturn / totalCost) * 100 : 0;
 
+    const headerActions = (
+        <AssetPageActions allowedAssetClasses={["real_estate"]} />
+    );
+
     if (isLoading) {
         return (
             <PageShell {...loadingSurfaceProps} className="">
-                <PageHeader
-                    title={t("realestate.title")}
-                    icon={PAGE_ICONS["/portfolio/real-estate"]}
-                />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-64 w-full" />
+                <PageHeader title={t("realestate.title")} icon={PageIcon} />
+                <Skeleton className="h-40 w-full rounded-card" />
+                <Skeleton className="h-64 w-full rounded-card" />
             </PageShell>
         );
     }
     if (isError) {
         return (
             <PageShell className="">
-                <PageHeader
-                    title={t("realestate.title")}
-                    icon={PAGE_ICONS["/portfolio/real-estate"]}
-                />
+                <PageHeader title={t("realestate.title")} icon={PageIcon} />
                 <PageError
                     title={t("realestate.pageErrorTitle")}
                     message={error?.message ?? t("common.error")}
@@ -155,17 +141,13 @@ export default function RealEstatePage() {
             <PageShell className="">
                 <PageHeader
                     title={t("realestate.title")}
-                    icon={PAGE_ICONS["/portfolio/real-estate"]}
-                    actions={
-                        <AddInvestmentDialog
-                            allowedAssetClasses={["real_estate"]}
-                        />
-                    }
+                    icon={PageIcon}
+                    actions={headerActions}
                 />
-                <Card className="group relative overflow-hidden">
-                    <CardContent>
+                <Card>
+                    <CardContent variant="state">
                         <EmptyState
-                            icon={PAGE_ICONS["/portfolio/real-estate"]}
+                            icon={PageIcon}
                             title={t("realestate.noProperties")}
                             description={t("realestate.noPropertiesDesc")}
                             action={
@@ -185,107 +167,102 @@ export default function RealEstatePage() {
             <PageShell className="">
                 <PageHeader
                     title={t("realestate.title")}
-                    icon={PAGE_ICONS["/portfolio/real-estate"]}
-                    actions={
-                        <AddInvestmentDialog
-                            allowedAssetClasses={["real_estate"]}
-                        />
-                    }
+                    icon={PageIcon}
+                    actions={headerActions}
                 />
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3">
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.totalValue")}
-                        emphasis="primary"
-                        value={<RollingNumber parts={fmtParts(totalValue)} />}
-                        icon={Banknote}
-                        valueClassName="text-primary"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.totalCost")}
-                        value={<RollingNumber parts={fmtParts(totalCost)} />}
-                        icon={Home}
-                        valueClassName="text-muted-foreground"
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.appreciation")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalAppreciation, {
-                                    signed: true,
-                                })}
-                            />
-                        }
-                        icon={TrendingUp}
-                        trend={totalAppreciation >= 0 ? "income" : "expense"}
-                        valueClassName={
-                            totalAppreciation >= 0 ? "text-gain" : "text-loss"
-                        }
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.rentalIncome")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalRentIncome, {
-                                    signed: true,
-                                })}
-                            />
-                        }
-                        trend="income"
-                        valueClassName="text-gain"
-                        subtitle={
-                            <>
-                                <span aria-hidden="true">~</span>
+                <Card className="overflow-hidden">
+                    <CardContent
+                        variant="headerless"
+                        className="grid gap-6 lg:grid-cols-5"
+                    >
+                        <div className="space-y-2 lg:col-span-2">
+                            <p className="eyebrow flex items-center gap-1.5">
+                                <Banknote className="h-3.5 w-3.5" aria-hidden />
+                                {t("portfolio.totalValue")}
+                            </p>
+                            <p className="type-large-title tabular-nums text-foreground">
                                 <Money
-                                    amount={estimatedMonthlyRent}
+                                    amount={totalValue}
                                     currency={targetCurrency}
                                 />
-                                {t("realestate.perMonth")}
-                            </>
-                        }
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.yield")}
-                        value={formatPercent(annualYield, { digits: 1 })}
-                        icon={Percent}
-                        subtitle={t("portfolio.annual")}
-                    />
-                    <StatCard
-                        size="compact"
-                        title={t("portfolio.totalReturn")}
-                        value={
-                            <RollingNumber
-                                parts={fmtParts(totalReturn, { signed: true })}
-                            />
-                        }
-                        trend={totalReturn >= 0 ? "income" : "expense"}
-                        valueClassName={
-                            totalReturn >= 0 ? "text-gain" : "text-loss"
-                        }
-                    >
-                        <div className="mt-1 flex items-center gap-1.5">
-                            <DeltaPill
-                                value={roi}
-                                label={formatPercent(roi, {
-                                    digits: 1,
-                                    signed: true,
-                                })}
-                            />
-                            <span className="text-xs text-muted-foreground">
-                                {t("portfolio.totalROI")}
-                            </span>
+                            </p>
+                            <p className="type-footnote tabular-nums text-label-secondary">
+                                {t("portfolio.totalCost")}{" "}
+                                <Money
+                                    amount={totalCost}
+                                    currency={targetCurrency}
+                                />
+                            </p>
                         </div>
-                    </StatCard>
-                </div>
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-2 lg:col-span-3">
+                            <Figure
+                                label={t("portfolio.appreciation")}
+                                tone={toneClass(totalAppreciation)}
+                                value={
+                                    <Money
+                                        amount={totalAppreciation}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                            />
+                            <Figure
+                                label={t("portfolio.rentalIncome")}
+                                tone={toneClass(totalRentIncome)}
+                                value={
+                                    <Money
+                                        amount={totalRentIncome}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                                detail={
+                                    <>
+                                        <span aria-hidden="true">~</span>
+                                        <Money
+                                            amount={estimatedMonthlyRent}
+                                            currency={targetCurrency}
+                                        />
+                                        {t("realestate.perMonth")}
+                                    </>
+                                }
+                            />
+                            <Figure
+                                label={t("portfolio.yield")}
+                                value={formatPercent(annualYield, {
+                                    digits: 1,
+                                })}
+                                detail={t("portfolio.annual")}
+                            />
+                            <Figure
+                                label={t("portfolio.totalReturn")}
+                                tone={toneClass(totalReturn)}
+                                value={
+                                    <Money
+                                        amount={totalReturn}
+                                        currency={targetCurrency}
+                                        signed
+                                    />
+                                }
+                                detail={
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <DeltaPill
+                                            value={roi}
+                                            label={formatPercent(roi, {
+                                                digits: 1,
+                                                signed: true,
+                                            })}
+                                        />
+                                        {t("portfolio.totalROI")}
+                                    </span>
+                                }
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
 
-                {/* Property Cards */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                     {properties.map((p) => {
                         const propertyCost = convertToTarget(
                             p.totalBuyCost,
@@ -317,209 +294,93 @@ export default function RealEstatePage() {
                                 ? ((monthlyRent * 12) / currentValueInTarget) *
                                   100
                                 : 0;
+                        const appreciation = convertToTarget(
+                            p.totalAppreciation,
+                            p.currency,
+                        );
+                        const hasCadastral =
+                            p.cadastral_income !== undefined &&
+                            p.cadastral_income !== null;
+                        const hasTaxRate =
+                            p.municipality_tax_rate !== undefined &&
+                            p.municipality_tax_rate !== null;
 
                         return (
-                            <Card key={p.id} className="overflow-hidden">
-                                <CardHeader className="bg-muted/30">
-                                    <div className="flex items-start justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                <Building2 className="h-6 w-6 text-primary" />
-                                            </div>
-                                            <div>
-                                                <CardTitle variant="sm">
-                                                    {p.name}
-                                                </CardTitle>
-                                                {p.location && (
-                                                    <CardDescription className="flex items-center gap-1 mt-0.5">
-                                                        <MapPin className="h-3 w-3" />{" "}
-                                                        {p.location}
-                                                    </CardDescription>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <InvestmentDetailDialog
-                                                investment={p}
-                                                trigger={
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="icon-touch-target"
-                                                        aria-label={t(
-                                                            "portfolio.viewDetails",
-                                                        )}
-                                                        title={t(
-                                                            "portfolio.viewDetails",
-                                                        )}
-                                                    >
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                }
+                            <Card key={p.id}>
+                                <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control corner-continuous bg-primary/12 text-primary">
+                                            <Building2
+                                                className="h-5 w-5"
+                                                aria-hidden
                                             />
-                                            <AddPortfolioTxnDialog
-                                                investment={p}
-                                            />
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="icon-touch-target text-muted-foreground hover:text-destructive"
-                                                aria-label={t(
-                                                    "realestate.deleteProperty",
-                                                )}
-                                                title={t(
-                                                    "realestate.deleteProperty",
-                                                )}
-                                                onClick={async () => {
-                                                    const ok = await confirm({
-                                                        title: t(
-                                                            "realestate.deleteProperty",
-                                                        ),
-                                                        description: t(
-                                                            "realestate.deletePropertyDesc",
-                                                            { name: p.name },
-                                                        ),
-                                                        confirmLabel:
-                                                            t("common.delete"),
-                                                        variant: "destructive",
-                                                    });
-                                                    if (ok)
-                                                        deleteInvestment(p.id);
-                                                }}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <CardTitle
+                                                variant="sm"
+                                                level={3}
+                                                className="truncate"
                                             >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                                {p.name}
+                                            </CardTitle>
+                                            {p.location && (
+                                                <CardDescription className="flex items-center gap-1">
+                                                    <MapPin
+                                                        className="h-3 w-3 shrink-0"
+                                                        aria-hidden
+                                                    />
+                                                    <span className="truncate">
+                                                        {p.location}
+                                                    </span>
+                                                </CardDescription>
+                                            )}
                                         </div>
                                     </div>
+                                    {renderMenu(p, "-mr-2 -mt-1")}
                                 </CardHeader>
 
-                                <CardContent className="pt-4 space-y-4">
-                                    {/* Value Summary */}
+                                <CardContent className="space-y-3">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <p className="text-xs text-muted-foreground mb-1">
+                                            <p className="type-caption text-label-tertiary">
                                                 {t("portfolio.purchasePrice")}
                                             </p>
-                                            <p className="text-xl font-bold tabular-nums">
+                                            <p className="type-title-2 tabular-nums">
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        p.totalBuyCost,
-                                                        p.currency,
-                                                    )}
+                                                    amount={propertyCost}
                                                     currency={targetCurrency}
                                                 />
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-xs text-muted-foreground mb-1">
+                                            <p className="type-caption text-label-tertiary">
                                                 {t("portfolio.currentValue")}
                                             </p>
-                                            <p className="text-xl font-bold text-primary tabular-nums">
+                                            <p className="type-title-2 tabular-nums text-primary">
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        p.currentValue,
-                                                        p.currency,
-                                                    )}
+                                                    amount={currentValueInTarget}
                                                     currency={targetCurrency}
                                                 />
                                             </p>
                                         </div>
                                     </div>
 
-                                    {/* Returns Breakdown */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-3 rounded-lg bg-muted/50">
-                                            <p className="text-xs text-muted-foreground mb-1">
-                                                {t("portfolio.appreciation")}
-                                            </p>
-                                            <p
-                                                className={cn(
-                                                    "text-lg font-bold tabular-nums",
-                                                    p.totalAppreciation >= 0
-                                                        ? "text-gain"
-                                                        : "text-loss",
-                                                )}
-                                            >
+                                    <dl className="divide-y divide-border/50 border-t border-border/50">
+                                        <FactRow
+                                            label={t("portfolio.appreciation")}
+                                            tone={toneClass(appreciation)}
+                                            value={
                                                 <Money
-                                                    amount={convertToTarget(
-                                                        p.totalAppreciation,
-                                                        p.currency,
-                                                    )}
+                                                    amount={appreciation}
                                                     currency={targetCurrency}
                                                     signed
                                                 />
-                                            </p>
-                                        </div>
-
-                                        {/* Municipality / cadastral info for real estate */}
-                                        {(p.municipality ||
-                                            p.cadastral_income ||
-                                            p.cadastral_income === 0 ||
-                                            p.municipality_tax_rate ||
-                                            p.municipality_tax_rate === 0) && (
-                                            <div className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                                                {p.municipality && (
-                                                    <div className="p-2 rounded-lg bg-muted/50">
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.municipality",
-                                                            )}
-                                                        </p>
-                                                        <p className="font-medium truncate">
-                                                            {p.municipality}
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {(p.cadastral_income ||
-                                                    p.cadastral_income ===
-                                                        0) && (
-                                                    <div className="p-2 rounded-lg bg-muted/50">
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.cadastralIncome",
-                                                            )}
-                                                        </p>
-                                                        <p className="font-medium tabular-nums">
-                                                            <Money
-                                                                amount={convertToTarget(
-                                                                    p.cadastral_income ||
-                                                                        0,
-                                                                    p.currency,
-                                                                )}
-                                                                currency={
-                                                                    targetCurrency
-                                                                }
-                                                            />
-                                                        </p>
-                                                    </div>
-                                                )}
-
-                                                {(p.municipality_tax_rate ||
-                                                    p.municipality_tax_rate ===
-                                                        0) && (
-                                                    <div className="p-2 rounded-lg bg-muted/50">
-                                                        <p className="text-xs text-muted-foreground">
-                                                            {t(
-                                                                "invDetail.municipalityTaxRate",
-                                                            )}
-                                                        </p>
-                                                        <p className="font-medium tabular-nums">
-                                                            {fmtNum(
-                                                                p.municipality_tax_rate ||
-                                                                    0,
-                                                            )}
-                                                            %
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                        <div className="p-3 rounded-lg bg-muted/50">
-                                            <p className="text-xs text-muted-foreground mb-1">
-                                                {t("portfolio.rentalIncome")}
-                                            </p>
-                                            <p className="text-lg font-bold text-gain tabular-nums">
+                                            }
+                                        />
+                                        <FactRow
+                                            label={t("portfolio.rentalIncome")}
+                                            tone={toneClass(p.totalIncome)}
+                                            value={
                                                 <Money
                                                     amount={convertToTarget(
                                                         p.totalIncome,
@@ -528,88 +389,122 @@ export default function RealEstatePage() {
                                                     currency={targetCurrency}
                                                     signed
                                                 />
-                                            </p>
-                                            {monthlyRent > 0 && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    <span aria-hidden="true">
-                                                        ~
-                                                    </span>
+                                            }
+                                            detail={
+                                                monthlyRent > 0 ? (
+                                                    <>
+                                                        <span aria-hidden="true">
+                                                            ~
+                                                        </span>
+                                                        <Money
+                                                            amount={monthlyRent}
+                                                            currency={
+                                                                targetCurrency
+                                                            }
+                                                        />
+                                                        {t(
+                                                            "realestate.perMonth",
+                                                        )}
+                                                    </>
+                                                ) : undefined
+                                            }
+                                        />
+                                        {p.municipality && (
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.municipality",
+                                                )}
+                                                value={p.municipality}
+                                            />
+                                        )}
+                                        {hasCadastral && (
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.cadastralIncome",
+                                                )}
+                                                value={
                                                     <Money
-                                                        amount={monthlyRent}
+                                                        amount={convertToTarget(
+                                                            p.cadastral_income ||
+                                                                0,
+                                                            p.currency,
+                                                        )}
                                                         currency={
                                                             targetCurrency
                                                         }
                                                     />
-                                                    {t("realestate.perMonth")}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Yield & ROI */}
-                                    <div className="flex items-center justify-between py-3 border-t border-border">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">
-                                                {t("portfolio.yield")}
-                                            </p>
-                                            <p className="text-sm font-medium">
-                                                {formatPercent(propertyYield, {
-                                                    digits: 1,
-                                                })}{" "}
-                                                {t("portfolio.annual")}
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1">
-                                            <p className="text-xs text-muted-foreground">
-                                                {t("portfolio.totalROI")}
-                                            </p>
-                                            <DeltaPill
-                                                value={propertyROI}
-                                                label={formatPercent(
-                                                    propertyROI,
-                                                    { digits: 1, signed: true },
-                                                )}
+                                                }
                                             />
-                                        </div>
-                                    </div>
-
-                                    {/* Expenses */}
-                                    {(p.totalFees > 0 || p.totalTaxes > 0) && (
-                                        <div className="flex justify-between text-sm border-t border-border pt-3">
-                                            <span className="text-muted-foreground">
-                                                {t("portfolio.feesAndTaxes")}
-                                            </span>
-                                            <span className="font-medium text-loss">
-                                                <Money
-                                                    amount={
-                                                        -convertToTarget(
-                                                            p.totalFees +
-                                                                p.totalTaxes,
-                                                            p.currency,
-                                                        )
-                                                    }
-                                                    currency={targetCurrency}
-                                                    signed
+                                        )}
+                                        {hasTaxRate && (
+                                            <FactRow
+                                                label={t(
+                                                    "invDetail.municipalityTaxRate",
+                                                )}
+                                                value={`${fmtNum(
+                                                    p.municipality_tax_rate ||
+                                                        0,
+                                                )}%`}
+                                            />
+                                        )}
+                                        <FactRow
+                                            label={t("portfolio.yield")}
+                                            value={`${formatPercent(
+                                                propertyYield,
+                                                { digits: 1 },
+                                            )} ${t("portfolio.annual")}`}
+                                        />
+                                        <FactRow
+                                            label={t("portfolio.totalROI")}
+                                            value={
+                                                <DeltaPill
+                                                    value={propertyROI}
+                                                    label={formatPercent(
+                                                        propertyROI,
+                                                        {
+                                                            digits: 1,
+                                                            signed: true,
+                                                        },
+                                                    )}
                                                 />
-                                            </span>
-                                        </div>
-                                    )}
+                                            }
+                                        />
+                                        {(p.totalFees > 0 ||
+                                            p.totalTaxes > 0) && (
+                                            <FactRow
+                                                label={t(
+                                                    "portfolio.feesAndTaxes",
+                                                )}
+                                                tone="text-loss"
+                                                value={
+                                                    <Money
+                                                        amount={
+                                                            -convertToTarget(
+                                                                p.totalFees +
+                                                                    p.totalTaxes,
+                                                                p.currency,
+                                                            )
+                                                        }
+                                                        currency={
+                                                            targetCurrency
+                                                        }
+                                                        signed
+                                                    />
+                                                }
+                                            />
+                                        )}
+                                    </dl>
                                 </CardContent>
                             </Card>
                         );
                     })}
                 </div>
 
-                {/* Info Card */}
-                <Card className="bg-muted/30 !border-dashed">
-                    <CardContent variant="row">
-                        <p className="text-sm text-muted-foreground">
-                            {t("realestate.howItWorks")}
-                        </p>
-                    </CardContent>
-                </Card>
+                <p className="type-footnote text-label-secondary">
+                    {t("realestate.howItWorks")}
+                </p>
             </PageShell>
-            <ConfirmDialog />
+            {dialogs}
         </>
     );
 }

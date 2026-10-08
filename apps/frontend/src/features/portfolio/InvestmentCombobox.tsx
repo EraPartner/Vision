@@ -62,10 +62,7 @@ export function InvestmentCombobox({
                     role="combobox"
                     aria-expanded={open}
                     disabled={disabled}
-                    className={cn(
-                        "justify-between font-normal h-8 text-sm",
-                        className,
-                    )}
+                    className={cn("h-8 justify-between font-normal", className)}
                 >
                     <span className="truncate">{displayLabel}</span>
                     <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />

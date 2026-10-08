@@ -402,10 +402,20 @@ describe("TableDataEditorPage (integration)", () => {
         await screen.findByText("EUR");
         await user.click(screen.getByRole("button", { name: /add row/i }));
 
+        // The new row is the first body row; its ••• menu holds "Discard new row".
         const newRow = screen
-            .getByRole("button", { name: /discard new row/i })
+            .getAllByRole("button", { name: /actions for this row/i })[0]
             .closest("tr");
         expect(newRow).not.toBeNull();
+        await user.click(
+            within(newRow as HTMLElement).getByRole("button", {
+                name: /actions for this row/i,
+            }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: /discard new row/i }),
+        ).toBeInTheDocument();
+        await user.keyboard("{Escape}");
         const currencyCell = within(newRow as HTMLElement).getAllByRole(
             "cell",
         )[3];

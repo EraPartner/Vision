@@ -166,7 +166,7 @@ describe("VirtualDataTable — rendering", () => {
         renderTable({ data: [] });
         expect(
             screen.getByRole("heading", { name: "No data to display" }),
-        ).toHaveClass("font-semibold");
+        ).toHaveClass("type-headline");
     });
 
     it("renders first results in the same commit as the new data", () => {

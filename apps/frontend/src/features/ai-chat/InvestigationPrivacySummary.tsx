@@ -1,4 +1,5 @@
 import { Cloud, HardDrive, Search, ShieldCheck } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface InvestigationPrivacySummaryProps {
@@ -66,93 +67,95 @@ export function InvestigationPrivacySummary({
             : researchProfiles[researchMode];
     const ModelIcon = local ? ShieldCheck : Cloud;
     return (
-        <section
-            aria-label={t("aiResearch.summary.title")}
-            className="mt-4 rounded-xl border bg-muted/20 p-3 sm:p-4"
-        >
-            <div className="grid gap-4 sm:grid-cols-3">
-                {[
-                    {
-                        Icon: ModelIcon,
-                        title: modelCopy[0],
-                        body: modelCopy[1],
-                    },
-                    {
-                        Icon: Search,
-                        title: researchCopy[0],
-                        body: researchCopy[1],
-                    },
-                    {
-                        Icon: HardDrive,
-                        title: "aiResearch.summary.savedTitle",
-                        body: local
-                            ? "aiResearch.summary.savedLocal"
-                            : "aiResearch.summary.savedCloud",
-                    },
-                ].map(({ Icon, title, body }) => (
-                    <div key={title} className="flex items-start gap-2.5">
-                        <Icon
-                            aria-hidden="true"
-                            className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                        />
-                        <div>
-                            <p className="text-xs font-semibold">{t(title)}</p>
-                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                                {t(body)}
-                            </p>
-                        </div>
+        <Card asChild>
+            <section aria-label={t("aiResearch.summary.title")}>
+                <CardContent variant="compact">
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        {[
+                            {
+                                Icon: ModelIcon,
+                                title: modelCopy[0],
+                                body: modelCopy[1],
+                            },
+                            {
+                                Icon: Search,
+                                title: researchCopy[0],
+                                body: researchCopy[1],
+                            },
+                            {
+                                Icon: HardDrive,
+                                title: "aiResearch.summary.savedTitle",
+                                body: local
+                                    ? "aiResearch.summary.savedLocal"
+                                    : "aiResearch.summary.savedCloud",
+                            },
+                        ].map(({ Icon, title, body }) => (
+                            <div key={title} className="flex items-start gap-2.5">
+                                <Icon
+                                    aria-hidden="true"
+                                    className="mt-0.5 h-4 w-4 shrink-0 text-primary"
+                                />
+                                <div>
+                                    <p className="type-headline">{t(title)}</p>
+                                    <p className="mt-1 type-footnote text-label-secondary">
+                                        {t(body)}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
-            <details className="mt-3 border-t pt-3 text-xs">
-                <summary className="w-fit cursor-pointer rounded-sm text-muted-foreground focus-ring">
-                    {t("aiResearch.modeGuideTitle")}
-                </summary>
-                <dl className="mt-3 space-y-3 leading-relaxed text-muted-foreground">
-                    <div>
-                        <dt className="font-semibold text-foreground">
-                            {t("aiResearch.route")}
-                        </dt>
-                        <dd>{t(modelCopy[2])}</dd>
-                    </div>
-                    {(local ||
-                        disclosureMode !== "cloud-synthesis-selected") && (
-                        <div>
-                            <dt className="font-semibold text-foreground">
-                                {t("aiResearch.researchProfilesTitle")}
-                            </dt>
-                            <dd>{t(researchCopy[2])}</dd>
-                        </div>
-                    )}
-                    <div>
-                        <dt className="font-semibold text-foreground">
-                            {t("aiResearch.depthProfilesTitle")}
-                        </dt>
-                        <dd>
-                            {t(
-                                depth === "quick"
-                                    ? "aiResearch.quickProfile"
-                                    : "aiResearch.detailedProfile",
+                    <details className="mt-3 border-t border-border/50 pt-3 type-footnote">
+                        <summary className="w-fit cursor-pointer rounded-chip text-label-secondary focus-ring">
+                            {t("aiResearch.modeGuideTitle")}
+                        </summary>
+                        <dl className="mt-3 space-y-3 text-label-secondary">
+                            <div>
+                                <dt className="type-footnote font-medium text-foreground">
+                                    {t("aiResearch.route")}
+                                </dt>
+                                <dd>{t(modelCopy[2])}</dd>
+                            </div>
+                            {(local ||
+                                disclosureMode !==
+                                    "cloud-synthesis-selected") && (
+                                <div>
+                                    <dt className="type-footnote font-medium text-foreground">
+                                        {t("aiResearch.researchProfilesTitle")}
+                                    </dt>
+                                    <dd>{t(researchCopy[2])}</dd>
+                                </div>
                             )}
-                        </dd>
-                    </div>
-                    {!local && (
-                        <div>
-                            <dt className="font-semibold text-foreground">
-                                {t("aiResearch.summary.savedTitle")}
-                            </dt>
-                            <dd>
-                                {t(
-                                    disclosureMode ===
-                                        "cloud-synthesis-selected"
-                                        ? "aiResearch.cloudSynthesisWarning"
-                                        : "aiResearch.cloudRetention",
-                                )}
-                            </dd>
-                        </div>
-                    )}
-                </dl>
-            </details>
-        </section>
+                            <div>
+                                <dt className="type-footnote font-medium text-foreground">
+                                    {t("aiResearch.depthProfilesTitle")}
+                                </dt>
+                                <dd>
+                                    {t(
+                                        depth === "quick"
+                                            ? "aiResearch.quickProfile"
+                                            : "aiResearch.detailedProfile",
+                                    )}
+                                </dd>
+                            </div>
+                            {!local && (
+                                <div>
+                                    <dt className="type-footnote font-medium text-foreground">
+                                        {t("aiResearch.summary.savedTitle")}
+                                    </dt>
+                                    <dd>
+                                        {t(
+                                            disclosureMode ===
+                                                "cloud-synthesis-selected"
+                                                ? "aiResearch.cloudSynthesisWarning"
+                                                : "aiResearch.cloudRetention",
+                                        )}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                    </details>
+                </CardContent>
+            </section>
+        </Card>
     );
 }

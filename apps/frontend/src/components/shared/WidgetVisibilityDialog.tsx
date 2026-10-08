@@ -4,7 +4,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { List, ListRow } from '@/components/ui/list';
 import { LayoutGrid, RotateCcw } from 'lucide-react';
 import type { WidgetDefinition } from '@/hooks/useWidgetVisibility';
 import { useLanguage } from '@/stores/hydration/LanguageHydration';
@@ -37,10 +37,10 @@ export function WidgetVisibilityDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             {!controlled && (
                 <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                        <LayoutGrid className="h-4 w-4" />
+                    <Button variant="outline" size="sm">
+                        <LayoutGrid aria-hidden="true" />
                         {t('widgets.button')}
-                        <span className="text-xs text-muted-foreground">
+                        <span className="type-footnote tabular-nums text-label-secondary">
                             {visibleCount}/{widgets.length}
                         </span>
                     </Button>
@@ -53,30 +53,30 @@ export function WidgetVisibilityDialog({
                         {t('widgets.description')}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-1 py-2">
-                    {widgets.map((widget) => (
-                        <div
-                            key={widget.id}
-                            className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/50 transition-colors"
-                        >
-                            <div className="space-y-0.5">
-                                <Label htmlFor={`widget-${widget.id}`} className="text-sm font-medium cursor-pointer">
-                                    {widget.labelKey ? t(widget.labelKey) : widget.label}
-                                </Label>
-                                {widget.description && (
-                                    <p className="text-xs text-muted-foreground">{widget.description}</p>
-                                )}
-                            </div>
-                            <Switch
-                                id={`widget-${widget.id}`}
-                                checked={isVisible(widget.id)}
-                                onCheckedChange={(checked) => setWidgetVisible(widget.id, checked)}
+                <List className="max-h-[60vh] overflow-y-auto">
+                    {widgets.map((widget) => {
+                        const id = `widget-${widget.id}`;
+                        return (
+                            <ListRow
+                                key={widget.id}
+                                title={
+                                    <Label htmlFor={id} className="cursor-pointer font-normal">
+                                        {widget.labelKey ? t(widget.labelKey) : widget.label}
+                                    </Label>
+                                }
+                                subtitle={widget.description}
+                                trailing={
+                                    <Switch
+                                        id={id}
+                                        checked={isVisible(widget.id)}
+                                        onCheckedChange={(checked) => setWidgetVisible(widget.id, checked)}
+                                    />
+                                }
                             />
-                        </div>
-                    ))}
-                </div>
-                <Separator />
-                <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+                        );
+                    })}
+                </List>
+                <DialogFooter className="flex-row flex-wrap justify-between gap-2 sm:justify-between">
                     <div className="flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => setAllVisible(true)}>
                             {t('widgets.showAll')}
@@ -85,8 +85,8 @@ export function WidgetVisibilityDialog({
                             {t('widgets.hideAll')}
                         </Button>
                     </div>
-                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={resetToDefaults}>
-                        <RotateCcw className="h-3.5 w-3.5" />
+                    <Button variant="ghost" size="sm" onClick={resetToDefaults}>
+                        <RotateCcw aria-hidden="true" />
                         {t('widgets.reset')}
                     </Button>
                 </DialogFooter>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -9,6 +9,27 @@ import { err, ok } from "@/test/msw/handlers";
 import RecipientsPage from "@/pages/RecipientsPage";
 
 const API_BASE = "http://localhost:3002";
+
+type User = ReturnType<typeof userEvent.setup>;
+
+async function openViewMenu(user: User) {
+    await user.click(await screen.findByRole("button", { name: /^view$/i }));
+    return screen.findByRole("menu");
+}
+
+async function openPageMenu(user: User) {
+    await user.click(
+        await screen.findByRole("button", { name: "More actions" }),
+    );
+    return screen.findByRole("menu");
+}
+
+async function openRowMenu(user: User, name: string) {
+    await user.click(
+        await screen.findByRole("button", { name: `Actions for ${name}` }),
+    );
+    return screen.findByRole("menu");
+}
 
 describe("RecipientsPage (integration)", () => {
     it("recovers the recipient list through Retry", async () => {
@@ -35,30 +56,33 @@ describe("RecipientsPage (integration)", () => {
     });
 
     it("hydrates show-all, uncategorized, and search state from the URL", async () => {
+        const user = userEvent.setup();
         renderWithApp(<RecipientsPage />, {
             initialEntries: [
                 "/recipients?show_all=true&uncategorized=true&search=coffee",
             ],
         });
 
+        expect(await screen.findByPlaceholderText(/^search…$/i)).toHaveValue(
+            "coffee",
+        );
+        const menu = await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            within(menu).getByRole("menuitemcheckbox", {
                 name: /show inactive/i,
                 checked: true,
             }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("switch", {
+            within(menu).getByRole("menuitemcheckbox", {
                 name: /uncategorized only/i,
                 checked: true,
             }),
         ).toBeInTheDocument();
-        expect(screen.getByPlaceholderText(/^search…$/i)).toHaveValue(
-            "coffee",
-        );
     });
 
     it("renders page heading", async () => {
+        const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
         const headings = await screen.findAllByRole("heading", {
             name: /all payees/i,
@@ -67,11 +91,10 @@ describe("RecipientsPage (integration)", () => {
         expect(
             await screen.findByRole("button", { name: /add payee/i }),
         ).toBeInTheDocument();
+        expect(screen.getByPlaceholderText(/^search…$/i)).toBeInTheDocument();
+        const menu = await openPageMenu(user);
         expect(
-            screen.getByRole("button", { name: /merge payees/i }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByPlaceholderText(/^search…$/i),
+            within(menu).getByRole("menuitem", { name: /merge payees/i }),
         ).toBeInTheDocument();
     });
 
@@ -111,10 +134,12 @@ describe("RecipientsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Merge Recipients button", async () => {
+    it("offers Merge payees in the page menu", async () => {
+        const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
+        const menu = await openPageMenu(user);
         expect(
-            await screen.findByRole("button", { name: /merge payees/i }),
+            within(menu).getByRole("menuitem", { name: /merge payees/i }),
         ).toBeInTheDocument();
     });
 
@@ -137,10 +162,10 @@ describe("RecipientsPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const mergeBtn = await screen.findByRole("button", {
-            name: /merge payees/i,
-        });
-        await user.click(mergeBtn);
+        const menu = await openPageMenu(user);
+        await user.click(
+            within(menu).getByRole("menuitem", { name: /merge payees/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
@@ -184,11 +209,12 @@ describe("RecipientsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Active Only filter button", async () => {
+    it("offers the Show inactive filter in the View menu", async () => {
+        const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
-        // recipientsPage.activeOnly = "Active Only"
+        const menu = await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            within(menu).getByRole("menuitemcheckbox", {
                 name: /show inactive/i,
                 checked: false,
             }),
@@ -251,26 +277,27 @@ describe("RecipientsPage (integration)", () => {
         expect(target.querySelector("span")).toHaveClass("truncate");
 
         const name = "A very long recipient name";
-        const patterns = screen.getByRole("button", {
-            name: `Rules for ${name}`,
-        });
         expect(
-            screen.getByRole("button", { name: `Unmerge ${name}` }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("button", { name: `Delete ${name}` }),
-        ).toBeInTheDocument();
-        expect(
-            screen.getByRole("button", { name: `Active: ${name}` }),
-        ).toHaveAttribute("title", `Deactivate ${name}`);
+            recipientLink.closest("[role='row']") ?? document.body,
+        ).toHaveTextContent("Active");
         const user = userEvent.setup();
-        act(() => patterns.focus());
+        const menu = await openRowMenu(user, name);
         expect(
-            await screen.findByRole("tooltip", {
-                name: `Rules for ${name}`,
-            }),
+            within(menu).getByRole("menuitem", { name: /^match rules$/i }),
+        ).toBeInTheDocument();
+        expect(
+            within(menu).getByRole("menuitem", { name: /^unmerge$/i }),
+        ).toBeInTheDocument();
+        expect(
+            within(menu).getByRole("menuitem", { name: /^mark inactive$/i }),
+        ).toBeInTheDocument();
+        expect(
+            within(menu).getByRole("menuitem", { name: /^delete$/i }),
         ).toBeInTheDocument();
         await user.keyboard("{Escape}");
+        await waitFor(() =>
+            expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
+        );
         await user.click(screen.getByRole("button", { name: `Edit: ${name}` }));
         const recipientInput = screen.getByRole("textbox", {
             name: `Payee: ${name}`,
@@ -368,11 +395,12 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        // Each icon action identifies the recipient in its accessible name.
-        const patternsBtn = await screen.findByRole("button", {
-            name: /^rules for /i,
-        });
-        await user.click(patternsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /^actions for /i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^match rules$/i }),
+        );
 
         // recipientPatterns.title = "Match Patterns"
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
@@ -436,10 +464,12 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        const patternsBtn = await screen.findByRole("button", {
-            name: /^rules for /i,
-        });
-        await user.click(patternsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /^actions for /i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^match rules$/i }),
+        );
 
         await screen.findByRole("dialog");
 
@@ -460,19 +490,21 @@ describe("RecipientsPage (integration)", () => {
             );
     });
 
-    it("clicking Active Only toggles to Showing All mode", async () => {
+    it("toggling Show inactive from the View menu switches to showing all", async () => {
         const user = userEvent.setup();
         renderWithApp(<RecipientsPage />);
 
-        const activeOnlyBtn = await screen.findByRole("switch", {
-            name: /show inactive/i,
-            checked: false,
-        });
-        await user.click(activeOnlyBtn);
+        const menu = await openViewMenu(user);
+        await user.click(
+            within(menu).getByRole("menuitemcheckbox", {
+                name: /show inactive/i,
+                checked: false,
+            }),
+        );
 
-        // recipientsPage.showingAll = "Showing All"
+        const reopened = await openViewMenu(user);
         expect(
-            await screen.findByRole("switch", {
+            within(reopened).getByRole("menuitemcheckbox", {
                 name: /show inactive/i,
                 checked: true,
             }),
@@ -523,9 +555,9 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        // Open Merge dialog
+        const menu = await openPageMenu(user);
         await user.click(
-            await screen.findByRole("button", { name: /merge payees/i }),
+            within(menu).getByRole("menuitem", { name: /merge payees/i }),
         );
         await screen.findByRole("dialog");
 
@@ -573,9 +605,11 @@ describe("RecipientsPage (integration)", () => {
         await user.type(nameInput, "Bob");
 
         // recipients.createButton = "Add payee"
-        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+        await user.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
                 name: /^add payee$/i,
-            }));
+            }),
+        );
 
         expect(postCalled).toBe(true);
     });
@@ -621,10 +655,9 @@ describe("RecipientsPage (integration)", () => {
         );
 
         renderWithApp(<RecipientsPage />);
+        const menu = await openRowMenu(user, "Northwind Market");
         await user.click(
-            await screen.findByRole("button", {
-                name: "Delete Northwind Market",
-            }),
+            within(menu).getByRole("menuitem", { name: /^delete$/i }),
         );
 
         const dialog = await screen.findByRole("alertdialog");
@@ -635,7 +668,9 @@ describe("RecipientsPage (integration)", () => {
         expect(dialog).toHaveTextContent(/reassign or merge them first/i);
         expect(deletedId).toBeUndefined();
 
-        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await user.click(
+            within(dialog).getByRole("button", { name: /^delete$/i }),
+        );
         await waitFor(() => expect(deletedId).toBe("9"));
 
         if (heightDescriptor)
@@ -694,10 +729,12 @@ describe("RecipientsPage (integration)", () => {
 
         renderWithApp(<RecipientsPage />);
 
-        const patternsBtn = await screen.findByRole("button", {
-            name: /^rules for /i,
-        });
-        await user.click(patternsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /^actions for /i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^match rules$/i }),
+        );
 
         await screen.findByRole("dialog");
 
@@ -802,9 +839,11 @@ describe("RecipientsPage (integration)", () => {
         );
         await screen.findByRole("dialog");
         await user.type(screen.getByLabelText(/^name$/i), "Test Recipient");
-        await user.click(within(screen.getByRole("dialog")).getByRole("button", {
+        await user.click(
+            within(screen.getByRole("dialog")).getByRole("button", {
                 name: /^add payee$/i,
-            }));
+            }),
+        );
         await waitFor(() =>
             expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
         );

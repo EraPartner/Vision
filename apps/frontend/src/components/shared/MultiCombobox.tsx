@@ -87,7 +87,7 @@ export function MultiCombobox<T, V extends string | number>({
                     aria-labelledby={ariaLabelledBy}
                     disabled={disabled}
                     className={cn(
-                        "justify-between font-normal h-8 text-sm",
+                        "justify-between font-normal h-8",
                         className,
                     )}
                 >

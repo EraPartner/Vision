@@ -28,6 +28,12 @@ counterparty, *excluded* for a transaction left out of totals, *income tax* inst
 
 ## Current screen redesign decision
 
+[[docs/adr/187-completeness-sweep|ADR-187]] closes the redesign roadmap: every remaining screen
+and dialog (money pages, taxes, portfolio assets and imports, research, analysis, AI chat, admin
+and shared components) adopts PageHeader with one primary action and a ••• menu, List rows with
+row menus, SegmentedControl and Select, Alert and EmptyState, and undo or confirm per action,
+without cutting any action. Navigation labels read in sentence case.
+
 [[docs/adr/183-remaining-screens-redesign|ADR-183]] merges the Portfolio overview and the
 Performance page into one Portfolio screen and moves Net worth, Insights (formerly Statistics),
 Import, Planned and the Settings window onto the design system without cutting any action.
@@ -231,6 +237,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-10-07: Every remaining screen and dialog adopts the design system
+
+[[docs/adr/187-completeness-sweep|ADR-187]] finishes the redesign roadmap by moving the money,
+tax, portfolio asset, research, analysis, AI chat, admin and shared surfaces onto the design
+system with one primary action and a ••• menu per page, row menus, segmented controls and
+selects, consistent states, undo or confirm per action, and sentence-case navigation labels.
 
 ### 2026-10-07: Backend source moves to strict TypeScript by directory
 

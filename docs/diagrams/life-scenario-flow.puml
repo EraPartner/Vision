@@ -18,4 +18,14 @@ Forecast -> Projection: Simulate each request with live portfolio inputs
 Projection --> Panel: Two distributions and optional goal probabilities
 Panel -> Panel: Compare returned inputs; hide result if draft changes
 Panel --> User: Approximate median difference and goal probability
+
+group Delete a saved scenario (ADR-187)
+  User -> Panel: Delete (no confirmation)
+  Panel -> Settings: PUT /api/settings/life_scenarios {value: list without the scenario}
+  Settings -> DB: Validate and store JSONB settings
+  Panel --> User: Undo toast
+  User -> Panel: Undo (optional)
+  Panel -> Settings: PUT /api/settings/life_scenarios {value: previous list kept in memory}
+  Panel --> User: Scenario restored in the editor
+end
 @enduml

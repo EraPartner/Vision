@@ -186,21 +186,21 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
                 >
                     {interactive ? (
                         <TouchDisclosure label={e.name} content={e.name}>
-                            <span className="font-mono text-sm font-bold tracking-tight">
+                            <span className="font-mono type-body font-medium">
                                 {e.symbol}
                             </span>
                         </TouchDisclosure>
                     ) : (
-                        <span className="font-mono text-sm font-bold tracking-tight">
+                        <span className="font-mono type-body font-medium">
                             {e.symbol}
                         </span>
                     )}
-                    <span className="text-sm tabular-nums text-muted-foreground">
+                    <span className="type-body tabular-nums text-label-secondary">
                         {e.priceLabel}
                     </span>
                     <span
                         className={cn(
-                            "flex items-center gap-0.5 text-sm font-semibold tabular-nums",
+                            "flex items-center gap-0.5 type-body font-medium tabular-nums",
                             e.up ? "text-gain" : "text-loss",
                         )}
                     >
@@ -256,7 +256,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
             : undefined;
 
     return (
-        <div className="relative flex w-full items-stretch overflow-hidden rounded-xl border border-border/60 liquid-glass">
+        <div className="relative flex w-full items-stretch overflow-hidden rounded-card corner-continuous border border-border/60 liquid-glass">
             <div
                 ref={containerRef}
                 data-active={active}
@@ -265,7 +265,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
                 aria-label={t("portfolio.ticker.aria")}
             >
                 {track ?? (
-                    <span className="px-5 text-sm text-muted-foreground">
+                    <span className="px-5 type-footnote text-label-secondary">
                         {placeholder}
                     </span>
                 )}
@@ -332,7 +332,7 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    className="h-8 w-8 text-label-secondary hover:text-foreground"
                     aria-label={t("portfolio.ticker.manage")}
                     title={t("portfolio.ticker.manage")}
                 >
@@ -341,10 +341,10 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-0">
                 <div className="border-b border-border/60 px-3 py-2.5">
-                    <p className="text-sm font-medium">
+                    <p className="type-body font-medium">
                         {t("portfolio.ticker.manageTitle")}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-caption text-label-secondary">
                         {t("portfolio.ticker.manageCount", {
                             shown: String(shownCount),
                             total: String(holdings.length),
@@ -357,15 +357,15 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
                     {holdings.map((h) => (
                         <div
                             key={h.id}
-                            className="flex items-center justify-between gap-3 rounded-md px-2 py-2 hover:bg-muted/50"
+                            className="flex items-center justify-between gap-3 rounded-control px-2 py-2 hover:bg-foreground/[0.04]"
                         >
                             <span className="flex min-w-0 items-center gap-2">
                                 {h.symbol && (
-                                    <span className="font-mono text-xs font-bold">
+                                    <span className="font-mono type-caption font-medium">
                                         {h.symbol}
                                     </span>
                                 )}
-                                <span className="truncate text-sm text-muted-foreground">
+                                <span className="truncate type-footnote text-label-secondary">
                                     {h.name}
                                 </span>
                             </span>

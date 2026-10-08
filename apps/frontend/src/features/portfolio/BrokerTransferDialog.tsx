@@ -15,6 +15,7 @@ import {
 } from "@/features/portfolio/PortfolioLotRetagChoice";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
     Dialog,
     DialogContent,
@@ -127,64 +128,72 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
                 </DialogHeader>
 
                 {receipt ? (
-                    <div className="space-y-2 rounded-md border border-gain/30 bg-gain/5 p-3 text-sm">
-                        <p className="font-medium">
-                            {t("portfolio.brokerTransfer.receipt")}
-                        </p>
-                        <p>
-                            {t("portfolio.brokerTransfer.receiptCount", {
-                                count: String(receipt.changed_count),
-                            })}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                            {t("portfolio.brokerTransfer.receiptId", {
-                                id: String(receipt.receipt_id),
-                            })}
-                        </p>
-                    </div>
+                    <Alert variant="success">
+                        <AlertDescription className="space-y-1">
+                            <p className="font-medium">
+                                {t("portfolio.brokerTransfer.receipt")}
+                            </p>
+                            <p>
+                                {t("portfolio.brokerTransfer.receiptCount", {
+                                    count: String(receipt.changed_count),
+                                })}
+                            </p>
+                            <p className="type-caption text-label-secondary">
+                                {t("portfolio.brokerTransfer.receiptId", {
+                                    id: String(receipt.receipt_id),
+                                })}
+                            </p>
+                        </AlertDescription>
+                    </Alert>
                 ) : preview.isLoading ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center gap-2 type-footnote text-label-secondary">
+                        <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden="true"
+                        />
                         {t("portfolio.brokerTransfer.loading")}
                     </div>
                 ) : preview.isError ? (
-                    <div
-                        className="space-y-2 text-sm text-warning"
-                        role="alert"
-                    >
-                        <p>{t("portfolio.brokerTransfer.unavailable")}</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={preview.isFetching}
-                            onClick={() => void preview.refetch()}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="warning">
+                        <AlertDescription className="space-y-2">
+                            <p>{t("portfolio.brokerTransfer.unavailable")}</p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={preview.isFetching}
+                                onClick={() => void preview.refetch()}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 ) : preview.data?.eligible_count === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("portfolio.brokerTransfer.empty")}
                     </p>
                 ) : accountsQuery.isPending ? (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
                         {t("portfolio.brokerTransfer.accountsLoading")}
                     </p>
                 ) : accountsQuery.isError ? (
-                    <div
-                        role="alert"
-                        className="space-y-2 text-sm text-warning"
-                    >
-                        <p>{t("portfolio.brokerTransfer.accountsFailed")}</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={accountsQuery.isFetching}
-                            onClick={() => void accountsQuery.refetch()}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="warning">
+                        <AlertDescription className="space-y-2">
+                            <p>
+                                {t("portfolio.brokerTransfer.accountsFailed")}
+                            </p>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={accountsQuery.isFetching}
+                                onClick={() => void accountsQuery.refetch()}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 ) : (
                     <>
                         <PortfolioLotRetagChoice
@@ -199,7 +208,7 @@ export function BrokerTransferDialog({ account, open, onOpenChange }: Props) {
                             disabled={overLimit}
                         />
                         {overLimit && (
-                            <p className="text-xs text-warning">
+                            <p className="type-caption text-warning">
                                 {t("portfolio.brokerTransfer.overLimit", {
                                     limit: String(preview.data?.limit ?? 500),
                                 })}

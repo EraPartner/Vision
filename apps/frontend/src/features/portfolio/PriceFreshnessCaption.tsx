@@ -70,7 +70,7 @@ export function PriceFreshnessCaption({
     return (
         <span
             className={cn(
-                "inline-flex items-center gap-1 text-xs font-normal text-muted-foreground",
+                "inline-flex items-center gap-1 type-caption font-normal text-label-secondary",
                 className,
             )}
         >

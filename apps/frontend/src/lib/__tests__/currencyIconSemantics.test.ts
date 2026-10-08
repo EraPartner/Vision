@@ -9,7 +9,6 @@ const VALUE_SURFACES = [
     "src/pages/portfolio/SavingsPage.tsx",
     "src/features/dashboard/NetSummaryCard.tsx",
     "src/features/portfolio/InvestmentDetailDialog.tsx",
-    "src/features/portfolio/TotalValueCard.tsx",
     "src/features/statistics/RecipientInsightsTab.tsx",
 ] as const;
 

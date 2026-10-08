@@ -1,11 +1,14 @@
+import { useState } from "react";
+import { Link } from "react-router";
+import { LayoutGrid, SlidersHorizontal } from "lucide-react";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { Calculator } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { usePortfolioTaxData } from "@/hooks/usePortfolioTaxData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
 import { type InvestmentSummary } from "@/types/portfolio";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { Button } from "@/components/ui/button";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 import { TaxYearSwitcher } from "@/features/tax/TaxYearSwitcher";
 import { HistoricalYearBannerSection } from "@/features/tax/HistoricalYearBannerSection";
@@ -72,6 +75,27 @@ function getPortfolioTaxWidgets(
     ];
 }
 
+interface SectionHeadingProps {
+    title: string;
+    description: string;
+    action?: React.ReactNode;
+}
+
+/** Title and one-line help for a page section, with an optional action. */
+function SectionHeading({ title, description, action }: SectionHeadingProps) {
+    return (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-1">
+                <h2 className="type-title-2 text-foreground">{title}</h2>
+                <p className="max-w-prose type-body text-label-secondary">
+                    {description}
+                </p>
+            </div>
+            {action && <div className="shrink-0">{action}</div>}
+        </div>
+    );
+}
+
 export default function PortfolioTaxPage() {
     const { t } = useLanguage();
     // Keeps the viewed income year in `?year=` so reload/share preserves it.
@@ -126,6 +150,13 @@ export default function PortfolioTaxPage() {
         resetToDefaults,
         widgets: widgetDefs,
     } = useWidgetVisibility("portfolioTax", WIDGETS);
+    const [adjustmentsOpen, setAdjustmentsOpen] = useState(false);
+    const [profileOpen, setProfileOpen] = useState(false);
+    const [customizeOpen, setCustomizeOpen] = useState(false);
+
+    const profileLabel = hasProfile
+        ? t("tax.profile.edit")
+        : t("tax.profile.setup");
 
     return (
         <PageShell className="">
@@ -135,25 +166,46 @@ export default function PortfolioTaxPage() {
                 icon={PAGE_ICONS["/portfolio/tax"]}
                 actions={
                     <>
+                        <TaxYearSwitcher />
+                        <YearActionsMenu
+                            year={viewedYear}
+                            pageItems={
+                                <>
+                                    <DropdownMenuItem
+                                        onSelect={() => setProfileOpen(true)}
+                                    >
+                                        <SlidersHorizontal className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {hasProfile
+                                            ? t("tax.menu.editProfile")
+                                            : t("tax.menu.setupProfile")}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        onSelect={() => setCustomizeOpen(true)}
+                                    >
+                                        <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                                        {t("tax.menu.customize")}
+                                    </DropdownMenuItem>
+                                </>
+                            }
+                        />
+                        <Button onClick={() => setAdjustmentsOpen(true)}>
+                            <SlidersHorizontal aria-hidden="true" />
+                            {t("tax.manualAdjustments")}
+                        </Button>
                         <TaxProfileDialog
                             targetYear={viewedYear}
-                            trigger={
-                                <Button
-                                    variant={hasProfile ? "outline" : "default"}
-                                    size="sm"
-                                    className="gap-2"
-                                >
-                                    <Calculator className="h-4 w-4" />
-                                    {hasProfile
-                                        ? t("tax.profile.edit")
-                                        : t("tax.profile.setup")}
-                                </Button>
-                            }
+                            trigger={null}
+                            open={profileOpen}
+                            onOpenChange={setProfileOpen}
                         />
                         <PortfolioTaxAdjustmentsDialog
                             investments={summaries as InvestmentSummary[]}
+                            open={adjustmentsOpen}
+                            onOpenChange={setAdjustmentsOpen}
                         />
                         <WidgetVisibilityDialog
+                            open={customizeOpen}
+                            onOpenChange={setCustomizeOpen}
                             widgets={widgetDefs}
                             isVisible={isVisible}
                             setWidgetVisible={setWidgetVisible}
@@ -163,11 +215,6 @@ export default function PortfolioTaxPage() {
                     </>
                 }
             />
-
-            <div className="flex items-center gap-2 -mt-2 text-xs text-muted-foreground flex-wrap">
-                <TaxYearSwitcher />
-                <YearActionsMenu year={viewedYear} />
-            </div>
 
             <HistoricalYearBannerSection />
 
@@ -183,17 +230,18 @@ export default function PortfolioTaxPage() {
                     icon={PAGE_ICONS["/portfolio/tax"]}
                     title={t("tax.noData")}
                     description={t("tax.noDataDesc")}
+                    action={
+                        <Button variant="outline" asChild>
+                            <Link to="/portfolio">{t("tax.noDataCta")}</Link>
+                        </Button>
+                    }
                 />
             ) : (
                 <>
-                    <div className="space-y-2">
-                        <h2 className="font-display text-xl font-semibold">
-                            {t("tax.costsSection")}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            {t("tax.costsHelp")}
-                        </p>
-                    </div>
+                    <SectionHeading
+                        title={t("tax.costsSection")}
+                        description={t("tax.costsHelp")}
+                    />
                     {isVisible("summaryCards") && (
                         <PortfolioTaxSummaryCards
                             totalTaxes={totalTaxes}
@@ -207,7 +255,7 @@ export default function PortfolioTaxPage() {
                         />
                     )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         {isVisible("taxByAssetClass") &&
                             taxByAssetClass.length > 0 && (
                                 <AssetClassTaxChart
@@ -227,6 +275,14 @@ export default function PortfolioTaxPage() {
                                     totalUnrealizedGain={totalUnrealizedGain}
                                 />
                             )}
+
+                        <RecordedVsManualCard
+                            totalRecordedTaxes={totalRecordedTaxes}
+                            totalRecordedFees={totalRecordedFees}
+                            totalManualTaxes={totalManualTaxes}
+                            totalManualFees={totalManualFees}
+                            totalTaxesAndFees={totalTaxesAndFees}
+                        />
                     </div>
 
                     {isVisible("yearlyTaxFeeTrend") &&
@@ -237,16 +293,6 @@ export default function PortfolioTaxPage() {
                             />
                         )}
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <RecordedVsManualCard
-                            totalRecordedTaxes={totalRecordedTaxes}
-                            totalRecordedFees={totalRecordedFees}
-                            totalManualTaxes={totalManualTaxes}
-                            totalManualFees={totalManualFees}
-                            totalTaxesAndFees={totalTaxesAndFees}
-                        />
-                    </div>
-
                     {isVisible("investmentBreakdown") &&
                         investmentBreakdown.length > 0 && (
                             <InvestmentTaxBreakdownTable
@@ -256,15 +302,24 @@ export default function PortfolioTaxPage() {
                             />
                         )}
 
-                    <div className="space-y-2 border-t border-border/50 pt-6">
-                        <h2 className="font-display text-xl font-semibold">
-                            {t("tax.estimatesSection")}
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                            {t("tax.estimatesHelp")}
-                        </p>
+                    <div className="border-t border-border/50 pt-6">
+                        <SectionHeading
+                            title={t("tax.estimatesSection")}
+                            description={t("tax.estimatesHelp")}
+                            action={
+                                <TaxProfileDialog
+                                    targetYear={viewedYear}
+                                    trigger={
+                                        <Button variant="outline">
+                                            <SlidersHorizontal aria-hidden="true" />
+                                            {profileLabel}
+                                        </Button>
+                                    }
+                                />
+                            }
+                        />
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         <PortfolioBudgetCard
                             totalPIT={calculation.totalPIT}
                             totalTaxes={totalTaxes}

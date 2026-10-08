@@ -21,7 +21,7 @@ interface YearlyTaxChartCardProps {
     viewedYear: number;
 }
 
-/** Yearly net-vs-PIT chart of the overview page ("yearlyOverview" widget). */
+/** Yearly net-vs-income-tax chart of the overview page ("yearlyOverview" widget). */
 export function YearlyTaxChartCard({
     data,
     isLoading,
@@ -75,8 +75,11 @@ export function YearlyTaxChartCard({
                             }
                         />
                         {data.some((y) => y.isApproximated) && (
-                            <p className="text-2xs text-muted-foreground mt-2 flex items-start gap-1.5">
-                                <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                            <p className="mt-3 flex items-start gap-1.5 type-footnote text-label-secondary">
+                                <Info
+                                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                                    aria-hidden="true"
+                                />
                                 {t("tax.yearly.approximatedNote")}
                             </p>
                         )}

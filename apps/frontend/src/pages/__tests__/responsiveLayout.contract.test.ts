@@ -42,7 +42,6 @@ const FIELD_GRID_CONTRACTS: FieldGridContract[] = [
     {
         file: "src/features/reports/ExportDialog.tsx",
         responsiveCount: 1,
-        allowedFixed: ["grid grid-cols-3 gap-2"],
     },
     { file: "src/features/accounts/ReconcileDialog.tsx", responsiveCount: 1 },
     {

@@ -34,7 +34,7 @@ describe("PortfolioForecastPage locale inputs", () => {
             "aria-checked",
             "true",
         );
-        await user.click(screen.getByRole("tab", { name: /blended/i }));
+        await user.click(screen.getByRole("radio", { name: /blended/i }));
         const slider = screen.getByRole("slider", { name: "Return blend" });
         expect(slider).toHaveAttribute(
             "aria-valuetext",
@@ -70,11 +70,11 @@ describe("PortfolioForecastPage locale inputs", () => {
         expect(screen.getByLabelText(/target value/i)).toBeVisible();
         expect(summary).toHaveTextContent("Historical");
         await user.click(heading);
-        await user.click(screen.getByRole("tab", { name: /blended/i }));
+        await user.click(screen.getByRole("radio", { name: /blended/i }));
         const slider = screen.getByRole("slider", { name: "Return blend" });
         slider.focus();
         await user.keyboard("{ArrowRight}");
-        await user.click(screen.getByRole("tab", { name: /bootstrap/i }));
+        await user.click(screen.getByRole("radio", { name: /bootstrap/i }));
         await user.click(screen.getByRole("radio", { name: "2000" }));
         await user.click(heading);
         expect(disclosure).not.toHaveAttribute("open");

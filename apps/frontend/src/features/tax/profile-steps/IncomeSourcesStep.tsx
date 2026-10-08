@@ -1,25 +1,30 @@
-import { useMemo } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { useMemo, useState } from "react";
+import { Info, ListChecks, Search } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { List, ListRow } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Info } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/shared/EmptyState";
+import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { useState } from "react";
 import type { StepProps } from "./types";
 import { useTaxIncomeCategories } from "../useTaxProfileQueries";
+import { StepIntro } from "./ProfileRows";
 
 /**
  * Tax income source step.
  *
  * Lets the user mark which transaction categories count as taxable income for the
  * Tax Overview graphs. Without this, the graphs would treat every positive-amount
- * transaction (refunds, transfers, gifts) as salary and run PIT on it.
+ * transaction (refunds, transfers, gifts) as salary and run income tax on it.
  */
 export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
+    const loadingSurfaceProps = useLoadingSurfaceProps();
     const [filter, setFilter] = useState("");
 
     const categoriesQuery = useTaxIncomeCategories();
@@ -52,44 +57,38 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
 
     return (
         <div className="space-y-5">
-            <div>
-                <p className="text-sm font-semibold text-foreground mb-1">
-                    {t("tax.profile.section.incomeSources.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                    {t("tax.profile.section.incomeSources.desc")}
-                </p>
-                <div className="flex items-start gap-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
-                    <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                    <p className="text-xs text-foreground">
-                        {t("tax.profile.section.incomeSources.note")}
-                    </p>
-                </div>
-            </div>
+            <StepIntro
+                title={t("tax.profile.section.incomeSources.title")}
+                description={t("tax.profile.section.incomeSources.desc")}
+            />
+            <Alert>
+                <Info className="h-4 w-4" aria-hidden="true" />
+                <AlertDescription>
+                    {t("tax.profile.section.incomeSources.note")}
+                </AlertDescription>
+            </Alert>
 
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium">
-                        {t("tax.profile.section.incomeSources.categoriesLabel")}{" "}
-                        <Badge variant="outline" className="text-2xs ml-1">
+            <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 type-headline text-foreground">
+                        {t("tax.profile.section.incomeSources.categoriesLabel")}
+                        <Badge variant="outline" size="sm">
                             {selected.length}{" "}
                             {t("tax.profile.section.incomeSources.selected")}
                         </Badge>
                     </p>
                     {selected.length > 0 && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={clearAll}
-                            className="text-xs"
-                        >
+                        <Button variant="ghost" size="sm" onClick={clearAll}>
                             {t("common.clear")}
                         </Button>
                     )}
                 </div>
 
                 <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search
+                        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-label-tertiary"
+                        aria-hidden="true"
+                    />
                     <Input
                         aria-label={t(
                             "tax.profile.section.incomeSources.searchPlaceholder",
@@ -100,40 +99,43 @@ export function IncomeSourcesStep({ profile, updateProfile }: StepProps) {
                         )}
                         value={filter}
                         onChange={(e) => setFilter(e.target.value)}
-                        className="pl-8 h-8 text-sm"
+                        className="pl-9"
                     />
                 </div>
 
-                <Separator />
-
                 {categoriesQuery.isLoading ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">
-                        {t("common.loading")}
-                    </p>
+                    <div {...loadingSurfaceProps} className="space-y-2">
+                        <Skeleton className="h-11 w-full" />
+                        <Skeleton className="h-11 w-full" />
+                        <Skeleton className="h-11 w-full" />
+                    </div>
                 ) : filtered.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-8">
-                        {t("tax.profile.section.incomeSources.empty")}
-                    </p>
+                    <EmptyState
+                        size="compact"
+                        headingLevel={4}
+                        icon={ListChecks}
+                        title={t("tax.profile.section.incomeSources.empty")}
+                    />
                 ) : (
-                    <ScrollArea className="h-[260px] pr-3">
-                        <div className="space-y-1">
+                    <ScrollArea className="h-[260px]">
+                        <List>
                             {filtered.map((c) => (
-                                <label
+                                <ListRow
                                     key={c.id}
-                                    htmlFor={`tax-income-cat-${c.id}`}
-                                    className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/40 cursor-pointer transition-colors"
+                                    asChild
+                                    leading={
+                                        <Checkbox
+                                            id={`tax-income-cat-${c.id}`}
+                                            checked={selected.includes(c.id)}
+                                            onCheckedChange={() => toggle(c.id)}
+                                        />
+                                    }
+                                    title={c.label}
                                 >
-                                    <Checkbox
-                                        id={`tax-income-cat-${c.id}`}
-                                        checked={selected.includes(c.id)}
-                                        onCheckedChange={() => toggle(c.id)}
-                                    />
-                                    <span className="text-sm text-foreground">
-                                        {c.label}
-                                    </span>
-                                </label>
+                                    <label htmlFor={`tax-income-cat-${c.id}`} />
+                                </ListRow>
                             ))}
-                        </div>
+                        </List>
                     </ScrollArea>
                 )}
             </div>

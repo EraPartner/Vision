@@ -130,17 +130,17 @@ describe("CustomChartBuilderModal", () => {
             screen.getByRole("combobox", { name: "Chart type" }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("combobox", { name: "Granularity" }),
+            screen.getByRole("radiogroup", { name: "Granularity" }),
         ).toBeInTheDocument();
-        expect(screen.getByLabelText("From")).toHaveAttribute("type", "date");
-        expect(screen.getByLabelText("To")).toHaveAttribute("type", "date");
+        expect(screen.getByLabelText("From")).toBeInTheDocument();
+        expect(screen.getByLabelText("To")).toBeInTheDocument();
         await user.click(
             screen.getByRole("button", { name: "Remove FOOD:GROCERIES" }),
         );
         expect(
             screen.queryByRole("button", { name: "Remove FOOD:GROCERIES" }),
         ).not.toBeInTheDocument();
-        expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+        expect(screen.getByRole("button", { name: "Save chart" })).toBeDisabled();
     });
 
     it("names chart actions and identifies their chart", async () => {
@@ -155,20 +155,19 @@ describe("CustomChartBuilderModal", () => {
                 onDelete={onDelete}
             />,
         );
+        const menuTrigger = await screen.findByRole("button", {
+            name: "Actions for My chart",
+        });
+        await user.click(menuTrigger);
         await user.click(
-            await screen.findByRole("button", { name: "Edit My chart" }),
+            await screen.findByRole("menuitem", { name: "Edit My chart" }),
         );
-        expect(onEdit).toHaveBeenCalledWith(
-            SAVED_CHART,
-            screen.getByRole("button", { name: "Edit My chart" }),
-        );
+        expect(onEdit).toHaveBeenCalledWith(SAVED_CHART, menuTrigger);
+        await user.click(menuTrigger);
         await user.click(
-            screen.getByRole("button", { name: "Delete My chart" }),
+            await screen.findByRole("menuitem", { name: "Delete My chart" }),
         );
-        expect(onDelete).toHaveBeenCalledWith(
-            SAVED_CHART,
-            screen.getByRole("button", { name: "Delete My chart" }),
-        );
+        expect(onDelete).toHaveBeenCalledWith(SAVED_CHART, menuTrigger);
     });
 
     it("renders dialog when open=true", async () => {
@@ -198,7 +197,7 @@ describe("CustomChartBuilderModal", () => {
         );
 
         // Assert — no name entered, no categories selected
-        const saveBtn = await screen.findByRole("button", { name: "Save" });
+        const saveBtn = await screen.findByRole("button", { name: "Save chart" });
         expect(saveBtn).toBeDisabled();
     });
 
@@ -221,7 +220,7 @@ describe("CustomChartBuilderModal", () => {
         await user.type(nameInput, "My chart");
 
         // Assert
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         expect(saveBtn).toBeDisabled();
     });
 
@@ -243,17 +242,17 @@ describe("CustomChartBuilderModal", () => {
         );
         await user.type(nameInput, "My chart");
 
-        // Act — open category combobox (index 2: after chart-type[0] and time-bucket[1])
-        const combos = screen.getAllByRole("combobox");
-        const catTrigger = combos[2];
-        await user.click(catTrigger);
+        // Act — open the category combobox
+        await user.click(
+            screen.getByRole("combobox", { name: /add category/i }),
+        );
         const categoryOption = await screen.findByRole("option", {
             name: /FOOD:GROCERIES/i,
         });
         await user.click(categoryOption);
 
         // Assert
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         expect(saveBtn).not.toBeDisabled();
     });
 
@@ -284,10 +283,10 @@ describe("CustomChartBuilderModal", () => {
         );
         await user.type(nameInput, "My chart");
 
-        // Act — select a category (index 2: after chart-type[0] and time-bucket[1])
-        const combos = screen.getAllByRole("combobox");
-        const catTrigger = combos[2];
-        await user.click(catTrigger);
+        // Act — select a category
+        await user.click(
+            screen.getByRole("combobox", { name: /add category/i }),
+        );
         const categoryOption = await screen.findByRole("option", {
             name: /FOOD:GROCERIES/i,
         });
@@ -295,7 +294,7 @@ describe("CustomChartBuilderModal", () => {
 
         // Act — close popover by pressing Escape, then save
         await user.keyboard("{Escape}");
-        const saveBtn = screen.getByRole("button", { name: "Save" });
+        const saveBtn = screen.getByRole("button", { name: "Save chart" });
         await user.click(saveBtn);
 
         // Assert
@@ -404,9 +403,9 @@ describe("CustomChartBuilderModal", () => {
             "e.g. Groceries over time",
         );
         expect(nameInput2).toBeInTheDocument(); // wait for i18n
-        const combos = screen.getAllByRole("combobox");
-        const recTrigger = combos[3];
-        await user.click(recTrigger);
+        await user.click(
+            screen.getByRole("combobox", { name: /add payee/i }),
+        );
 
         // Assert — loaded recipient name appears in the list
         expect(await screen.findByText("Alice")).toBeInTheDocument();
@@ -465,16 +464,16 @@ describe("CustomChartBuilderModal", () => {
         );
         await user.type(nameInput, "My chart");
 
-        const combos = screen.getAllByRole("combobox");
-        const catTrigger = combos[2];
-        await user.click(catTrigger);
+        await user.click(
+            screen.getByRole("combobox", { name: /add category/i }),
+        );
         const categoryOption = await screen.findByRole("option", {
             name: /FOOD:GROCERIES/i,
         });
         await user.click(categoryOption);
 
         await user.keyboard("{Escape}");
-        await user.click(screen.getByRole("button", { name: "Save" }));
+        await user.click(screen.getByRole("button", { name: "Save chart" }));
 
         // Wait for the failed mutation to settle
         await new Promise((r) => setTimeout(r, 400));

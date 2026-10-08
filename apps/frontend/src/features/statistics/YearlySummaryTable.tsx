@@ -74,7 +74,7 @@ export function YearlySummaryTable({ data }: YearlySummaryTableProps) {
                                     </td>
                                     <td
                                         className={cn(
-                                            "text-right py-2 px-3 font-semibold tabular-nums",
+                                            "text-right py-2 px-3 font-medium tabular-nums",
                                             y.net >= 0
                                                 ? "text-gain"
                                                 : "text-loss",

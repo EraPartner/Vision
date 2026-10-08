@@ -136,7 +136,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                         <p
                             id="cat-general-error"
                             role="alert"
-                            className="text-sm text-destructive"
+                            className="type-footnote text-destructive"
                         >
                             {t("form.nameRequired")}
                         </p>
@@ -166,7 +166,7 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                         <p
                             id="cat-detail-error"
                             role="alert"
-                            className="text-sm text-destructive"
+                            className="type-footnote text-destructive"
                         >
                             {t("form.nameRequired")}
                         </p>
@@ -199,9 +199,14 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
                     </Button>
                     <Button type="submit" disabled={isPending}>
                         {isPending && (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            <Loader2
+                                className="animate-spin"
+                                aria-hidden="true"
+                            />
                         )}
-                        {isEditMode ? t("common.save") : t("categories.createButton")}
+                        {isEditMode
+                            ? t("common.save")
+                            : t("categories.createButton")}
                     </Button>
                 </DialogFooter>
             </form>
@@ -219,8 +224,9 @@ export function AddCategoryDialog(props: AddCategoryDialogProps = {}) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t("form.addCategory.title")}
+                <Button>
+                    <Plus aria-hidden="true" />
+                    {t("form.addCategory.title")}
                 </Button>
             </DialogTrigger>
             {dialogContent}

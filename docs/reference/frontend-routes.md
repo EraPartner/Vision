@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-07
+updated: 2026-10-07
 tags: [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -153,6 +153,7 @@ const lazyAppRoutes = appRouteManifest.map(({ path, loader, admin }) => ({
 The three sidebar workspaces and their switcher were replaced by one labelled sidebar
 ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). `lib/navigation.ts` maps routes to sidebar sections: the top items (Home, Transactions, Accounts, Planned Payments), **Money**, **Wealth**, **Research** (hidden until the user shows it) and **Admin** (admin mode only). The route groups above are page groupings, not modes; no route derives or persists a workspace. A registry test (`lib/__tests__/navigation.test.ts`) asserts that every parameterless route in `appRouteManifest` has exactly one navigation entry and that admin routes appear only in the Admin section.
 
+- Navigation labels and their page titles use sentence case ([[docs/adr/187-completeness-sweep|ADR-187]]): *AI chat*, *Chart builder*, *Database maintenance*, *Exchange rates*, *Market lookup*, *Real estate*, *Research home*, *Savings & bonds* and *Who owes you*. The labels live in the `nav.*` keys of `i18n/source/en.json`.
 - Landing on a page inside a hidden section shows that section and persists the choice (`vision.sidebar.hiddenSections`).
 - `G` then a key jumps to a page (Home is `G H`, previously `G D`); `[` and `]` cycle Home (`/`), Portfolio (`/portfolio`) and Research (`/research`).
 - `data-tint` on the canvas is `wealth` under `/portfolio`, otherwise `money`.
@@ -162,5 +163,6 @@ The three sidebar workspaces and their switcher were replaced by one labelled si
 - [[docs/features/views\|Views & Pages]] - Detailed page documentation
 - [[docs/components/layout\|Layout Components]] - AppLayout and AppSidebar
 - [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180: Sidebar sections replace workspaces]]
+- [[docs/adr/187-completeness-sweep\|ADR-187: Every remaining screen and dialog adopts the design system]]
 - [[docs/architecture/frontend-architecture\|Frontend Architecture]] - Routes diagram
 - [[docs/adr/136-same-release-http-import-and-navigation-contract\|ADR-136: Same-Release HTTP, Import, and Navigation Contract]]

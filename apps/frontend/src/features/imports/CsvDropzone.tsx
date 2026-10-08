@@ -62,7 +62,11 @@ export function CsvDropzone({
 
     return (
         <div className="space-y-2">
-            {label && <p className="text-sm font-semibold">{label}</p>}
+            {label && (
+                <p className="type-body font-medium text-label-primary">
+                    {label}
+                </p>
+            )}
             <div
                 data-dropzone
                 role="button"
@@ -90,30 +94,31 @@ export function CsvDropzone({
                 }}
                 onDragLeave={() => setDragOver(false)}
                 className={cn(
-                    "relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed",
+                    "relative flex flex-col items-center justify-center gap-3 rounded-card corner-continuous border-2 border-dashed",
                     pad,
                     "cursor-pointer transition-colors duration-fast",
                     "focus-ring",
                     dragOver
                         ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50 hover:bg-muted/50",
+                        : "border-border hover:border-primary/50 hover:bg-foreground/[0.03]",
                 )}
             >
                 <input
                     ref={inputRef}
                     type="file"
                     accept={allowWorkbook ? ".csv,.xlsx" : ".csv"}
-                    className="hidden"
+                    className="sr-only"
+                    tabIndex={-1}
                     onChange={(e) => accept(e.target.files?.[0] ?? null)}
                 />
                 {file ? (
                     <>
                         <FileIcon className={cn(iconSize, "text-primary")} />
                         <div className="text-center">
-                            <p className="font-medium text-foreground">
+                            <p className="type-body font-medium text-foreground">
                                 {file.name}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-footnote text-label-secondary">
                                 {(file.size / 1024).toFixed(1)} {t("common.kb")}
                             </p>
                         </div>
@@ -126,33 +131,33 @@ export function CsvDropzone({
                                 onFileSelect(null);
                             }}
                         >
-                            <Trash2 className="h-4 w-4 mr-1" />{" "}
+                            <Trash2 />
                             {t("importPage.remove")}
                         </Button>
                     </>
                 ) : compact ? (
                     <>
                         <CloudUpload
-                            className={cn(iconSize, "text-muted-foreground")}
+                            className={cn(iconSize, "text-label-tertiary")}
                         />
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-callout text-label-secondary">
                             {t("importPage.dropzoneSmall")}
                         </p>
                     </>
                 ) : (
                     <>
                         <CloudUpload
-                            className={cn(iconSize, "text-muted-foreground")}
+                            className={cn(iconSize, "text-label-tertiary")}
                         />
                         <div className="text-center">
-                            <p className="font-medium text-foreground">
+                            <p className="type-body font-medium text-foreground">
                                 {t(
                                     allowWorkbook
                                         ? "portfolioImport.dropzone"
                                         : "importPage.dropzone",
                                 )}
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="type-callout text-label-secondary">
                                 {t("importPage.dropzoneOr")}
                             </p>
                         </div>

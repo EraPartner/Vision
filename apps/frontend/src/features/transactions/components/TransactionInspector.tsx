@@ -368,7 +368,7 @@ function InspectorContent({
                                             onChange={(d) =>
                                                 setEditingValue(d ? toYmd(d) : "")
                                             }
-                                            buttonClassName="h-8 w-36 text-sm"
+                                            buttonClassName="h-8 w-36"
                                         />
                                     ) : field.editField === "bank" ? (
                                         <AccountCombobox
@@ -390,7 +390,7 @@ function InspectorContent({
                                                     void saveEdit();
                                                 }
                                             }}
-                                            className="min-h-0 w-40 text-sm"
+                                            className="min-h-0 w-40"
                                         />
                                     ) : (
                                         <Input

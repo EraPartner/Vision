@@ -993,7 +993,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     }}
                 />
                 <div
-                    className="rounded-lg border border-dashed p-4"
+                    className="rounded-card corner-continuous border border-dashed border-border/60 p-4"
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => {
                         event.preventDefault();
@@ -1017,14 +1017,14 @@ export function PortfolioImportSession({ accounts }: Props) {
                     />
                 </div>
                 <details
-                    className="rounded-lg border p-4"
+                    className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4"
                     open={Boolean(reference.name)}
                 >
-                    <summary className="cursor-pointer text-sm font-medium">
+                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                         {t("portfolioImport.session.reference.title")}
                     </summary>
                     <div className="mt-3 space-y-3">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("portfolioImport.session.reference.hint")}
                         </p>
                         <Label htmlFor="portfolio-session-reference">
@@ -1044,7 +1044,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         {reference.name && (
                             <>
                                 <div className="flex items-center justify-between gap-3">
-                                    <p className="break-words text-sm">
+                                    <p className="break-words type-body">
                                         {reference.name}
                                     </p>
                                     <Button
@@ -1067,7 +1067,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </Label>
                                 <select
                                     id="portfolio-placeholder-policy"
-                                    className="h-9 w-full rounded-control border bg-background px-3 text-sm"
+                                    className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                                     value={
                                         reference.placeholderBasisPolicy ?? ""
                                     }
@@ -1089,7 +1089,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         )}
                                     </option>
                                 </select>
-                                <p className="text-xs text-muted-foreground">
+                                <p className="type-caption text-label-secondary">
                                     {t(
                                         "portfolioImport.session.reference.zeroHint",
                                     )}
@@ -1097,7 +1097,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 {!reference.applied && !reference.file && (
                                     <p
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {t(
                                             "portfolioImport.session.reference.reattach",
@@ -1113,7 +1113,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                     !reference.applied && (
                                         <p
                                             role="status"
-                                            className="text-sm text-muted-foreground"
+                                            className="type-footnote text-label-secondary"
                                         >
                                             {t(
                                                 "portfolioImport.session.reference.staging",
@@ -1125,14 +1125,14 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         {!referenceScopeVerified && (
                                             <p
                                                 role="alert"
-                                                className="text-sm text-destructive"
+                                                className="type-footnote text-destructive"
                                             >
                                                 {t(
                                                     "portfolioImport.session.reference.unverified",
                                                 )}
                                             </p>
                                         )}
-                                        <p role="status" className="text-sm">
+                                        <p role="status" className="type-body">
                                             {t(
                                                 "portfolioImport.session.reference.staged",
                                                 {
@@ -1153,7 +1153,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             0 && (
                                             <div
                                                 role="alert"
-                                                className="space-y-1 text-sm text-destructive"
+                                                className="space-y-1 type-footnote text-destructive"
                                             >
                                                 <p>
                                                     {t(
@@ -1192,12 +1192,12 @@ export function PortfolioImportSession({ accounts }: Props) {
                         )}
                     </div>
                 </details>
-                <details className="rounded-lg border p-4">
-                    <summary className="cursor-pointer text-sm font-medium">
+                <details className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4">
+                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                         {t("portfolioImport.session.existing.title")}
                     </summary>
                     <div className="mt-3 space-y-3">
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("portfolioImport.session.existing.hint")}
                         </p>
                         <Button
@@ -1216,7 +1216,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </Label>
                                 <select
                                     id="portfolio-existing-batch"
-                                    className="h-9 w-full rounded-control border bg-background px-3 text-sm"
+                                    className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                                     value={existingBatchId}
                                     disabled={locked || existingLoading}
                                     onChange={(event) =>
@@ -1328,15 +1328,15 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </div>
                 </details>
                 {statements.length > 0 && (
-                    <ul className="divide-y rounded-lg border">
+                    <ul className="divide-y divide-border/50 rounded-card corner-continuous border border-border/60">
                         {statements.map((item) => (
                             <li key={item.id} className="space-y-3 p-4">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                        <p className="break-words text-sm font-medium">
+                                        <p className="break-words type-body font-medium">
                                             {item.name}
                                         </p>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="type-caption text-label-secondary">
                                             {item.originalBatchId
                                                 ? t(
                                                       "portfolioImport.session.existing.managed",
@@ -1414,7 +1414,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 {item.detected && !item.accountId && (
                                     <p
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {t(
                                             "portfolioImport.session.accountRequired",
@@ -1448,7 +1448,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 )
                                             }
                                         />
-                                        <p className="text-sm text-muted-foreground">
+                                        <p className="type-footnote text-label-secondary">
                                             {t(
                                                 "portfolioImport.session.assetScopeHelp",
                                             )}
@@ -1467,7 +1467,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             "portfolioImport.session.policyForFile",
                                             { name: item.name },
                                         )}
-                                        className="h-9 w-full rounded-control border bg-background px-3 text-sm"
+                                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                                         value={item.adoptPolicy ?? ""}
                                         disabled={
                                             locked ||
@@ -1514,7 +1514,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             </Label>
                                             <select
                                                 id={`transfer-${item.id}`}
-                                                className="h-9 w-full rounded-control border bg-background px-3 text-sm"
+                                                className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                                                 value={
                                                     item.detected.source !==
                                                         "nexo" ||
@@ -1560,7 +1560,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                         </option>
                                                     ))}
                                             </select>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="type-caption text-label-secondary">
                                                 {t(
                                                     item.detected.source ===
                                                         "nexo"
@@ -1573,13 +1573,13 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 {item.status === "staging" && (
                                     <p
                                         role="status"
-                                        className="text-sm text-muted-foreground"
+                                        className="type-footnote text-label-secondary"
                                     >
                                         {t("portfolioImport.session.staging")}
                                     </p>
                                 )}
                                 {item.batchId && (
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="type-footnote text-label-secondary">
                                         <Link
                                             className="underline"
                                             to={`/portfolio/import/${item.batchId}/review`}
@@ -1594,7 +1594,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                     </p>
                                 )}
                                 {item.originalBatchId && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="type-caption text-label-secondary">
                                         {t(
                                             "portfolioImport.session.existing.readonly",
                                         )}{" "}
@@ -1612,7 +1612,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 {item.previousBatchIds?.map((batchId) => (
                                     <p
                                         key={batchId}
-                                        className="text-xs text-muted-foreground"
+                                        className="type-caption text-label-secondary"
                                     >
                                         {t(
                                             "portfolioImport.session.previousPending",
@@ -1631,7 +1631,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 {item.error && (
                                     <p
                                         role="alert"
-                                        className="text-sm text-destructive"
+                                        className="type-footnote text-destructive"
                                     >
                                         {item.error}
                                     </p>
@@ -1646,7 +1646,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </Label>
                     <select
                         id="portfolio-session-policy"
-                        className="h-9 w-full rounded-control border bg-background px-3 text-sm"
+                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
                         value={policy}
                         disabled={locked}
                         onChange={(event) => {
@@ -1664,7 +1664,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                             {t("portfolioImport.session.source")}
                         </option>
                     </select>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t(`portfolioImport.session.policyHint.${policy}`)}
                     </p>
                 </div>
@@ -1707,41 +1707,41 @@ export function PortfolioImportSession({ accounts }: Props) {
                     )}
                 </div>
                 {stopped && (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="type-footnote text-label-secondary">
                         {t("portfolioImport.session.stopped")}
                     </p>
                 )}
                 {operation === "preview" && (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="type-footnote text-label-secondary">
                         {t("portfolioImport.session.previewing")}
                     </p>
                 )}
                 {error && (
-                    <p role="alert" className="text-sm text-destructive">
+                    <p role="alert" className="type-footnote text-destructive">
                         {error}
                     </p>
                 )}
                 {review && (
                     <section
                         aria-label={t("portfolioImport.session.review")}
-                        className="space-y-4 rounded-lg border p-4"
+                        className="space-y-4 rounded-card corner-continuous border border-border/60 bg-card/70 p-4"
                     >
-                        <h3 className="font-medium">
+                        <h3 className="type-headline">
                             {t("portfolioImport.session.review")}
                         </h3>
-                        <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                        <dl className="grid grid-cols-2 gap-3 type-body sm:grid-cols-3">
                             {actions
                                 .filter(
                                     (action) => review.plan.summary[action] > 0,
                                 )
                                 .map((action) => (
                                     <div key={action}>
-                                        <dt className="text-muted-foreground">
+                                        <dt className="type-caption text-label-tertiary">
                                             {t(
                                                 `portfolioImport.session.actions.${action}`,
                                             )}
                                         </dt>
-                                        <dd className="text-lg font-semibold">
+                                        <dd className="type-title-3 tabular-nums">
                                             {review.plan.summary[action]}
                                         </dd>
                                     </div>
@@ -1750,7 +1750,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                         {review.plan.blockers.length > 0 && (
                             <div
                                 role="alert"
-                                className="space-y-2 text-sm text-destructive"
+                                className="space-y-2 type-footnote text-destructive"
                             >
                                 <p>{t("portfolioImport.session.blocked")}</p>
                                 <ul className="space-y-1">
@@ -1783,7 +1783,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                             </div>
                         )}
                         <details>
-                            <summary className="cursor-pointer text-sm font-medium">
+                            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                                 {t("portfolioImport.session.evidence")}
                             </summary>
                             <div className="mt-3 space-y-3">
@@ -1792,7 +1792,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                     .map((action) => (
                                         <article
                                             key={`${action.batchId}-${action.rowId}`}
-                                            className="rounded-md border p-3 text-sm"
+                                            className="rounded-card corner-continuous border border-border/60 p-3 type-body"
                                         >
                                             <p className="font-medium">
                                                 {statementName(action.batchId)}{" "}
@@ -1807,7 +1807,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 )}
                                             </p>
                                             {action.existingTransactionId && (
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.existingId",
                                                         {
@@ -1818,7 +1818,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             )}
                                             {action.action ===
                                                 "repair_duplicate" && (
-                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                <p className="mt-1 type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.repairHint",
                                                         {
@@ -1832,7 +1832,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 </p>
                                             )}
                                             {action.policy && (
-                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                <p className="mt-1 type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.appliedPolicy",
                                                         {
@@ -1845,14 +1845,14 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             )}
                                             {action.action ===
                                                 "internal_annotation" && (
-                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                <p className="mt-1 type-caption text-label-secondary">
                                                     {t(
                                                         "portfolioImport.session.annotationHint",
                                                     )}
                                                 </p>
                                             )}
                                             {action.transfer && (
-                                                <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                                <dl className="mt-2 grid grid-cols-2 gap-2 type-caption">
                                                     <dt>
                                                         {t(
                                                             "portfolioImport.session.fields.date",
@@ -1916,7 +1916,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                 </dl>
                                             )}
                                             {action.adjustment && (
-                                                <dl className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                                <dl className="mt-2 grid grid-cols-2 gap-2 type-caption">
                                                     <dt>
                                                         {t(
                                                             "portfolioImport.session.fields.date",
@@ -1971,7 +1971,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             )}
                                             {action.source && (
                                                 <div className="mt-2 overflow-x-auto">
-                                                    <table className="w-full text-left text-xs">
+                                                    <table className="w-full text-left type-caption">
                                                         <thead>
                                                             <tr>
                                                                 <th className="p-1">
@@ -2030,7 +2030,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                                 action.corrections?.includes(
                                                                                     field,
                                                                                 )
-                                                                                    ? "bg-muted/60"
+                                                                                    ? "bg-foreground/[0.06]"
                                                                                     : undefined
                                                                             }
                                                                         >
@@ -2092,7 +2092,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </Button>
                             )}
                         </details>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("portfolioImport.session.atomic")}
                         </p>
                         <Button
@@ -2104,12 +2104,12 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </section>
                 )}
                 {operation === "commit" && (
-                    <p role="status" className="text-sm text-muted-foreground">
+                    <p role="status" className="type-footnote text-label-secondary">
                         {t("portfolioImport.session.committing")}
                     </p>
                 )}
                 {result && (
-                    <p role="status" className="text-sm">
+                    <p role="status" className="type-body">
                         {t("portfolioImport.session.success", {
                             imported: result.imported,
                             adopted: result.adopted,

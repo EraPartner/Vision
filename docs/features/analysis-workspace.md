@@ -3,7 +3,7 @@ title: Analysis Workspace
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-01
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -60,8 +60,7 @@ columns, measures, filter count and row limit. Run remains visible. Focus moves 
 which reveals the full editable plan. Blank starts, saved-analysis loads and failed runs open the
 editor. Export and scenario-file options use their own disclosure. Templates do not create a special
 execution mode or lock fields.
-The SQL editor and run-preference overrides live under progressive advanced controls; loading,
-failure, and empty catalog states are explicit.
+The Visual builder | SQL editor switch is a `SegmentedControl` inside the Edit configuration disclosure; the former *Advanced controls* disclosure that hid the SQL button is gone ([[docs/adr/187-completeness-sweep|ADR-187]]). Loading, failure, and empty catalog states are explicit.
 
 ## Guided calculations and repeatable preparation
 
@@ -214,7 +213,7 @@ holdings.
 The library is filtered by Budgeting, Portfolio, Research, or explicit cross-workspace scope. Save
 stores the strict ADR-137 definition, scalar parameters, chart binding, source references, refresh
 mode, and a new immutable version. Refresh records a run and either advances the last-successful-run
-pointer or retains the old result with a failure state. Delete removes only that saved analysis and
+pointer or retains the old result with a failure state. A saved analysis opens from its name button; Refresh and Delete are in its row ••• menu. Delete asks for confirmation through `useConfirmDialog` because there is no restore path. Delete removes only that saved analysis and
 its private versions and runs.
 
 Definition versions also snapshot their formula model, scenario values, chart bindings, source
@@ -294,7 +293,7 @@ Apply controls; entered configuration remains mounted when tools are collapsed.
 A query-input signature marks displayed results as needing an update after the query changes. The warning remains through a failed rerun and clears after a successful run for the current query. Calculation and preparation edits also mark exports as needing a new run. Unsaved analysis
 metadata alone does not change the calculation result.
 
-The workspace provides task guidance alongside its templates. Advanced SQL controls use a disclosure that stays open while SQL mode is active; full editing remains available.
+The workspace provides task guidance alongside its templates. The SQL editor is reached through the Visual builder | SQL editor segmented switch and stays open while SQL mode is active; full editing remains available.
 
 
 ## Presentation controls

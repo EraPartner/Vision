@@ -25,8 +25,8 @@ export function IncomeSourcesEmptyState({ viewedYear }: IncomeSourcesEmptyStateP
         initialStep="incomeSources"
         targetYear={viewedYear}
         trigger={
-          <Button size="sm" variant="outline" className="gap-2">
-            <ListChecks className="h-4 w-4" />
+          <Button size="sm" variant="outline">
+            <ListChecks aria-hidden="true" />
             {t('tax.incomeBreakdown.emptyCta')}
           </Button>
         }

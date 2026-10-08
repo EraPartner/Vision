@@ -71,11 +71,8 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
     );
 
     return (
-        <div className="space-y-3 pt-2 border-t border-border">
-            <Label
-                htmlFor={`${idPrefix}-price-provider`}
-                className="text-sm font-medium"
-            >
+        <div className="space-y-3 border-t border-border/50 pt-3">
+            <Label htmlFor={`${idPrefix}-price-provider`}>
                 {t("addInv.label.priceProvider")}
             </Label>
             <Select
@@ -95,7 +92,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                     {priceProviders.map((p) => (
                         <SelectItem key={p.key} value={p.key}>
                             <span className="font-medium">{p.name}</span>
-                            <span className="text-muted-foreground ml-2 text-xs">
+                            <span className="ml-2 type-caption text-label-secondary">
                                 — {p.hint}
                             </span>
                         </SelectItem>
@@ -106,10 +103,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
             {form.priceProvider !== "manual" &&
                 form.priceProvider !== "custom" && (
                     <div className="space-y-2">
-                        <Label
-                            htmlFor={`${idPrefix}-provider-id`}
-                            className="text-xs"
-                        >
+                        <Label htmlFor={`${idPrefix}-provider-id`}>
                             {t("addInv.label.providerId")}
                         </Label>
                         <Input
@@ -123,14 +117,14 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                 }))
                             }
                             maxLength={200}
-                            className="font-mono text-sm"
+                            className="font-mono"
                         />
                     </div>
                 )}
 
             {showManualPrice && form.priceProvider === "manual" && (
                 <div className="space-y-2">
-                    <Label htmlFor={`${idPrefix}-price`} className="text-xs">
+                    <Label htmlFor={`${idPrefix}-price`}>
                         {t("addInv.label.currentPrice")}
                     </Label>
                     <Input
@@ -158,7 +152,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                         <p
                             id={`${idPrefix}-price-error`}
                             role="alert"
-                            className="text-sm text-destructive"
+                            className="type-footnote text-destructive"
                         >
                             {currentPriceError}
                         </p>
@@ -169,10 +163,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
             {form.priceProvider === "custom" && (
                 <div className="space-y-3">
                     <div className="space-y-2">
-                        <Label
-                            htmlFor={`${idPrefix}-provider-latest-url`}
-                            className="text-xs"
-                        >
+                        <Label htmlFor={`${idPrefix}-provider-latest-url`}>
                             {t("addInv.label.latestJsonEndpoint")}
                         </Label>
                         <Input
@@ -187,14 +178,11 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                 }))
                             }
                             maxLength={500}
-                            className="font-mono text-sm"
+                            className="font-mono"
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label
-                            htmlFor={`${idPrefix}-provider-latest-path`}
-                            className="text-xs"
-                        >
+                        <Label htmlFor={`${idPrefix}-provider-latest-path`}>
                             {t("addInv.label.latestJsonPath")}
                         </Label>
                         <Input
@@ -208,14 +196,11 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                 }))
                             }
                             maxLength={300}
-                            className="font-mono text-sm"
+                            className="font-mono"
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label
-                            htmlFor={`${idPrefix}-provider-history-url`}
-                            className="text-xs"
-                        >
+                        <Label htmlFor={`${idPrefix}-provider-history-url`}>
                             {t("addInv.label.historyJsonEndpoint")}
                         </Label>
                         <Input
@@ -230,14 +215,11 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                 }))
                             }
                             maxLength={500}
-                            className="font-mono text-sm"
+                            className="font-mono"
                         />
                     </div>
                     <div className="space-y-2">
-                        <Label
-                            htmlFor={`${idPrefix}-provider-history-path`}
-                            className="text-xs"
-                        >
+                        <Label htmlFor={`${idPrefix}-provider-history-path`}>
                             {t("addInv.label.historyArrayPath")}
                         </Label>
                         <Input
@@ -251,15 +233,12 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                 }))
                             }
                             maxLength={300}
-                            className="font-mono text-sm"
+                            className="font-mono"
                         />
                     </div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-2">
-                            <Label
-                                htmlFor={`${idPrefix}-provider-history-ts`}
-                                className="text-xs"
-                            >
+                            <Label htmlFor={`${idPrefix}-provider-history-ts`}>
                                 {t("addInv.label.historyTimestampPath")}
                             </Label>
                             <Input
@@ -274,13 +253,12 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                     }))
                                 }
                                 maxLength={300}
-                                className="font-mono text-sm"
+                                className="font-mono"
                             />
                         </div>
                         <div className="space-y-2">
                             <Label
                                 htmlFor={`${idPrefix}-provider-history-price`}
-                                className="text-xs"
                             >
                                 {t("addInv.label.historyPricePath")}
                             </Label>
@@ -296,7 +274,7 @@ export function PriceProviderFields<F extends PriceProviderFormShape>({
                                     }))
                                 }
                                 maxLength={300}
-                                className="font-mono text-sm"
+                                className="font-mono"
                             />
                         </div>
                     </div>

@@ -3,7 +3,7 @@ title: Form Dialogs
 type: component
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases:
@@ -327,6 +327,7 @@ interface SplitTransactionDialogProps {
 
 ### Features
 
+- **Split type**: a two-option `SegmentedControl` (_Equal split_ | _Custom amounts_)
 - **Equal split mode**: Divides amount equally among all participants (user + selected recipients)
 - **Custom amount mode**: Allows specifying individual amounts per recipient
 - **Existing split awareness**: Shows existing splits and prevents exceeding transaction total
@@ -349,7 +350,7 @@ import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog
 
 ## TaxProfileDialog
 
-Multi-step sheet/dialog for configuring the user's Belgian tax profile.
+Multi-step right-hand `Sheet` for configuring the user's Belgian tax profile.
 
 Numeric profile fields use a shared local-draft control. Stored zero values render as `0`, while
 transitional decimal input such as `12.` remains visible during editing instead of being replaced
@@ -362,9 +363,11 @@ blur normalizes the display, and external profile changes resynchronize fields t
 
 ```typescript
 interface TaxProfileDialogProps {
-  trigger?: ReactNode;
+  trigger?: ReactNode | null; // null renders no trigger; drive the sheet through open
   initialStep?: Step; // 'employment' | 'income' | 'incomeSources' | 'exemptions' | 'region'
   targetYear?: number; // defaults to the live profile year
+  open?: boolean; // controlled open state; leave undefined to let the trigger own it
+  onOpenChange?: (open: boolean) => void;
 }
 ```
 
@@ -393,7 +396,8 @@ import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 
 - Uses `BelgianTaxProfileContext` for profile state management
 - Sets `profileConfigured: true` on completion
-- Each step navigates independently via the step progress bar
+- Each step navigates independently via a `SegmentedControl` step picker, with a "Step n of m" progress line (`tax.profile.stepProgress`) and a Back / Next / _Save tax profile_ footer
+- Taxes mounts it with its primary _Set up_ / _Edit tax profile_ trigger button; Portfolio taxes drives it from its ••• menu in controlled mode (`trigger={null}` with `open`/`onOpenChange`). Step bodies are built on the `ProfileRows` helpers in `profile-steps/ProfileRows.tsx` ([[docs/adr/187-completeness-sweep|ADR-187]])
 
 ---
 

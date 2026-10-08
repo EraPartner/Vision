@@ -1,5 +1,6 @@
 import { safeHref } from "@/utils/safeHref";
 import { Skeleton } from "@/components/ui/skeleton";
+import { List, ListRow } from "@/components/ui/list";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { ExternalLink } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -27,7 +28,7 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
             <div {...loadingSurfaceProps} className="space-y-3">
                 {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex gap-3">
-                        <Skeleton className="h-16 w-24 rounded shrink-0" />
+                        <Skeleton className="h-16 w-24 shrink-0" />
                         <div className="flex-1 space-y-2">
                             <Skeleton className="h-4 w-full" />
                             <Skeleton className="h-3 w-2/3" />
@@ -45,7 +46,7 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
     const articles = result?.data.articles ?? [];
     if (articles.length === 0) {
         return (
-            <p className="text-sm text-muted-foreground py-4 text-center">
+            <p className="py-4 text-center type-callout text-label-secondary">
                 {t("market.noNews")}
             </p>
         );
@@ -56,68 +57,61 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
             <div className="flex justify-end">
                 <ProvenanceBadge meta={result?.meta} />
             </div>
-            {articles.map((article) => {
-                // A rejected link yields an inert, unfocusable anchor — render a plain
-                // container for it rather than a row that keeps the hover treatment
-                // while doing nothing on click. Working links are unchanged.
-                const href = safeHref(article.link);
-                const linkProps = href
-                    ? ({
-                          href,
-                          target: "_blank",
-                          rel: "noopener noreferrer",
-                      } as const)
-                    : {};
-                const Wrapper = href ? "a" : "div";
-                return (
-                    <Wrapper
-                        key={article.link}
-                        {...linkProps}
-                        className={`flex gap-3 p-2 -mx-2 rounded-md${
-                            href
-                                ? " hover:bg-muted/70 transition-colors group"
-                                : ""
-                        }`}
-                    >
-                        {article.thumbnail && (
-                            <RemoteNewsImage
-                                src={article.thumbnail}
-                                alt={article.title}
-                                className="h-16 w-24 rounded shrink-0"
-                                fallbackClassName="hidden"
-                            />
-                        )}
-                        <div className="flex-1 min-w-0">
-                            <p
-                                className={`text-sm font-medium text-foreground line-clamp-2${
-                                    href
-                                        ? " group-hover:text-primary transition-colors"
-                                        : ""
-                                }`}
-                            >
-                                {article.title}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                                <span>{article.publisher}</span>
-                                {article.publishedAt && (
-                                    <>
-                                        <span>·</span>
-                                        <span>
-                                            {formatDateWithAppSettings(
-                                                new Date(article.publishedAt),
-                                                appSettings.dateFormat,
-                                            )}
-                                        </span>
-                                    </>
-                                )}
-                                {href && (
-                                    <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
-                                )}
-                            </div>
-                        </div>
-                    </Wrapper>
-                );
-            })}
+            <List>
+                {articles.map((article) => {
+                    // A rejected link yields an inert row: the same content, but no
+                    // activation and no external-link affordance.
+                    const href = safeHref(article.link);
+                    const meta = [
+                        article.publisher,
+                        article.publishedAt
+                            ? formatDateWithAppSettings(
+                                  new Date(article.publishedAt),
+                                  appSettings.dateFormat,
+                              )
+                            : undefined,
+                    ]
+                        .filter(Boolean)
+                        .join(" · ");
+                    const leading = article.thumbnail ? (
+                        <RemoteNewsImage
+                            src={article.thumbnail}
+                            alt=""
+                            className="h-7 w-7 rounded-chip object-cover"
+                            fallbackClassName="hidden"
+                        />
+                    ) : undefined;
+                    const title = (
+                        <span className="whitespace-normal line-clamp-2 type-body text-foreground">
+                            {article.title}
+                        </span>
+                    );
+                    return href ? (
+                        <ListRow
+                            key={article.link}
+                            asChild
+                            leading={leading}
+                            title={title}
+                            subtitle={meta}
+                            trailing={
+                                <ExternalLink
+                                    className="h-4 w-4 text-label-tertiary"
+                                    aria-hidden="true"
+                                />
+                            }
+                        >
+                            <a href={href} target="_blank" rel="noopener noreferrer" />
+                        </ListRow>
+                    ) : (
+                        <ListRow
+                            key={article.link}
+                            leading={leading}
+                            title={title}
+                            subtitle={meta}
+                        />
+                    );
+                })}
+            </List>
         </div>
     );
 }

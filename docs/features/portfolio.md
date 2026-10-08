@@ -4,7 +4,7 @@ type: feature
 status: active
 date: 2026-10-07
 last_modified: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-07
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -596,9 +596,9 @@ The performance architecture was significantly refactored to move heavy computat
 ### Canonical portfolio-value hero
 
 Since the 2026-10-06 merge the single Portfolio page owns the value hero (see
-"Merged Portfolio page" above). `features/portfolio/TotalValueCard.tsx` is no
-longer rendered by a page; it remains in the tree with its unit test until a
-follow-up removes it.
+"Merged Portfolio page" above). The unused `features/portfolio/TotalValueCard.tsx`
+and `netContributionSparkline.ts`, with their tests, were removed by
+[[docs/adr/187-completeness-sweep|ADR-187]].
 
 **Performance impact:**
 
@@ -1254,6 +1254,10 @@ See [[docs/api/investments#GET /api/investments/exposure|Investments API]] and
 ## Overview hierarchy and asset entry
 
 The portfolio summary precedes the exposure breakdown. Add investment is restricted to savings and bonds on Savings, and to real estate on Real Estate, in both populated and empty states.
+
+### Asset page actions (ADR-187)
+
+Stocks, Crypto, Metals, Real estate and Savings share `features/portfolio/assetPageParts.tsx` and `useHoldingActions.tsx` ([[docs/components/portfolio|Portfolio components]]). The header has the primary _Add investment_ and a ••• menu with _Export PDF_ (hidden on Crypto, which passes `showEmptyStateExport={false}` to `StocksPage`) and _Import history_. Holding rows (and the Real estate and Savings cards) carry a ••• menu with Details, Add transaction, Archive (confirmed, same as the Portfolio page) and Delete (confirmed). Rebalance's cash-cap option is a `Switch`. Empty states offer one Add action.
 
 ### Investment form feedback and transfer recovery
 

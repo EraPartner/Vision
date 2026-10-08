@@ -221,11 +221,12 @@ describe("RecipientPatternsDialog", () => {
         // Wait for pattern row to appear
         await screen.findByText("RENT*");
 
-        // Act — click the edit (pencil) button; the button has sr-only text "Edit"
-        const editButton = await screen.findByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButton);
+        await user.click(
+            screen.getByRole("button", { name: "Actions for rule RENT*" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^edit$/i }),
+        );
 
         // Assert — inline form appears pre-populated with the existing pattern value
         const patternInput = await screen.findByRole("textbox", {
@@ -254,10 +255,12 @@ describe("RecipientPatternsDialog", () => {
 
         // Act — open edit form, clear input, type new value, save
         await screen.findByText("RENT*");
-        const editButton = await screen.findByRole("button", {
-            name: /^edit$/i,
-        });
-        await user.click(editButton);
+        await user.click(
+            screen.getByRole("button", { name: "Actions for rule RENT*" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^edit$/i }),
+        );
         const patternInput = await screen.findByRole("textbox", {
             name: /pattern/i,
         });
@@ -287,20 +290,18 @@ describe("RecipientPatternsDialog", () => {
         const user = userEvent.setup();
         renderDialog();
 
-        // Act — wait for pattern row, click trash button (icon-only, no accessible name)
         await screen.findByText("RENT*");
-        const patternRow = screen
-            .getByText("RENT*")
-            .closest(".rounded-lg") as HTMLElement;
-        // Pattern row buttons (role=button, Switch is role=switch): [Edit, Trash]
-        const [, trashBtn] = within(patternRow).getAllByRole("button");
-        await user.click(trashBtn);
+        await user.click(
+            screen.getByRole("button", { name: "Actions for rule RENT*" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^delete$/i }),
+        );
 
-        // Confirm dialog should appear (AlertDialog)
-        const confirmButton = await screen.findByRole("button", {
-            name: /delete/i,
-        });
-        await user.click(confirmButton);
+        const confirmDialog = await screen.findByRole("alertdialog");
+        await user.click(
+            within(confirmDialog).getByRole("button", { name: /^delete$/i }),
+        );
 
         // Assert — DELETE was called
         await waitFor(() => expect(deleted).toBe(true));

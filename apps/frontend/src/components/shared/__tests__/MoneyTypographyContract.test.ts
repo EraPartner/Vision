@@ -21,7 +21,6 @@ const SIGNED_MONEY_SURFACES = [
     "src/features/portfolio/FxPnlCell.tsx",
     "src/features/portfolio/InvestmentDetailDialog.tsx",
     "src/features/portfolio/PerformanceBreakdown.tsx",
-    "src/features/portfolio/TotalValueCard.tsx",
     "src/features/statistics/MonthlyRhythm.tsx",
     "src/features/tax/PitBreakdownCard.tsx",
     "src/features/tax/TaxTypesBreakdownCard.tsx",

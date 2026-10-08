@@ -207,11 +207,9 @@ describe("TaxProfileDialog", () => {
         await screen.findByText("Income details");
         await fillGrossIncome(user);
 
-        // Step indicator buttons render the translated step label on sm+ screens;
-        // use the visible text "Region" in the indicator nav area
-        const stepButtons = await screen.findAllByRole("button", { name: /region/i });
-        // The first match is the step indicator (the trigger is "Tax Profile", not "Region")
-        await user.click(stepButtons[0]);
+        // The step picker is a segmented control; each step is a radio named
+        // after its translated step label.
+        await user.click(screen.getByRole("radio", { name: "Region" }));
 
         // Assert — jumps directly to region step
         expect(await screen.findByText("Region & communal surcharge")).toBeInTheDocument();
@@ -227,8 +225,7 @@ describe("TaxProfileDialog", () => {
         // dialog lands the user on the incomplete income step instead.
         await openSheet(user);
         await screen.findByText("Employment type");
-        const stepButtons = await screen.findAllByRole("button", { name: /region/i });
-        await user.click(stepButtons[0]);
+        await user.click(screen.getByRole("radio", { name: "Region" }));
 
         // Assert — redirected to income, not region
         expect(await screen.findByText("Income details")).toBeInTheDocument();

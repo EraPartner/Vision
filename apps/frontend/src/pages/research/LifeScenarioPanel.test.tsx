@@ -5,11 +5,14 @@ import userEvent from "@testing-library/user-event";
 import { renderWithApp } from "@/test/renderWithApp";
 import LifeScenarioPanel from "./LifeScenarioPanel";
 
-const { getSetting, saveSetting, getPortfolioForecast } = vi.hoisted(() => ({
-    getSetting: vi.fn(),
-    saveSetting: vi.fn(),
-    getPortfolioForecast: vi.fn(),
-}));
+const { getSetting, saveSetting, getPortfolioForecast, undoToast } = vi.hoisted(
+    () => ({
+        getSetting: vi.fn(),
+        saveSetting: vi.fn(),
+        getPortfolioForecast: vi.fn(),
+        undoToast: vi.fn(),
+    }),
+);
 
 vi.mock("@/lib/api/settings", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/lib/api/settings")>()),
@@ -20,6 +23,7 @@ vi.mock("@/lib/api/research", async (importOriginal) => ({
     ...(await importOriginal<typeof import("@/lib/api/research")>()),
     getPortfolioForecast,
 }));
+vi.mock("@/lib/undoToast", () => ({ undoToast }));
 
 describe("LifeScenarioPanel", () => {
     beforeEach(() => {
@@ -220,8 +224,12 @@ describe("LifeScenarioPanel", () => {
                 numberFormat="eu"
             />,
         );
-        await screen.findByRole("option", { name: "Decimal scenario" });
-        await user.selectOptions(screen.getByRole("combobox"), saved.id);
+        await user.click(
+            await screen.findByRole("combobox", { name: "Saved scenarios" }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Decimal scenario" }),
+        );
         expect(screen.getByLabelText("Baseline monthly surplus")).toHaveValue(
             "900,75",
         );
@@ -303,5 +311,57 @@ describe("LifeScenarioPanel", () => {
             "900",
         );
         expect(saveSetting).not.toHaveBeenCalled();
+    });
+
+    it("deletes a saved scenario at once and restores it through Undo", async () => {
+        const user = userEvent.setup();
+        const saved = {
+            id: "scenario-1",
+            name: "Income gap",
+            kind: "income_interruption",
+            interruptionMonths: 3,
+            monthlySurplus: 900,
+            monthlyIncomeLoss: 700,
+            monthlyContribution: 500,
+        };
+        getSetting.mockResolvedValue({ key: "life_scenarios", value: [saved] });
+        renderWithApp(
+            <LifeScenarioPanel
+                forecastInput={{ horizonMonths: 12, currency: "EUR" }}
+                currency="EUR"
+                locale="en-US"
+                numberFormat="us"
+            />,
+        );
+        await user.click(
+            await screen.findByRole("combobox", { name: "Saved scenarios" }),
+        );
+        await user.click(
+            await screen.findByRole("option", { name: "Income gap" }),
+        );
+        expect(screen.getByLabelText("Scenario name")).toHaveValue(
+            "Income gap",
+        );
+        await user.click(
+            screen.getByRole("button", { name: "Delete scenario" }),
+        );
+        await waitFor(() =>
+            expect(saveSetting).toHaveBeenCalledWith("life_scenarios", []),
+        );
+        expect(screen.getByLabelText("Scenario name")).toHaveValue("");
+        expect(undoToast).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: "Scenario deleted",
+                undoLabel: "Undo",
+            }),
+        );
+
+        await undoToast.mock.calls[0][0].undo();
+        expect(saveSetting).toHaveBeenLastCalledWith("life_scenarios", [saved]);
+        await waitFor(() =>
+            expect(screen.getByLabelText("Scenario name")).toHaveValue(
+                "Income gap",
+            ),
+        );
     });
 });

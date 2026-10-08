@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { List, ListRow } from "@/components/ui/list";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -212,7 +213,7 @@ export function ResearchFundamentalsTab({
 
     if (!f) {
         return (
-            <p className="py-4 text-center text-sm text-muted-foreground">
+            <p className="py-4 text-center type-callout text-label-secondary">
                 {t("research.fundamentals.none")}
             </p>
         );
@@ -221,10 +222,10 @@ export function ResearchFundamentalsTab({
     const scorecard = result.data.scorecard;
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-6">
             <div className="flex items-center justify-between gap-2">
                 {f.sector ? (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="type-footnote text-label-secondary">
                         {f.sector}
                     </span>
                 ) : (
@@ -234,45 +235,56 @@ export function ResearchFundamentalsTab({
             </div>
 
             {/* Heuristic scorecard */}
-            <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
-                <h3 className="mb-3 text-sm font-semibold">
+            <section className="space-y-3">
+                <h3 className="type-headline text-foreground">
                     {t("research.scorecard.title")}
                 </h3>
                 <ScorecardPanel scorecard={scorecard} />
-            </div>
+            </section>
 
             {/* Grouped metrics */}
-            {METRIC_GROUPS.map((group) => {
-                const visible = group.metrics.filter((m) => {
-                    const v = f[m.key];
-                    return v != null && !(typeof v === "number" && isNaN(v));
-                });
-                if (visible.length === 0) return null;
-                return (
-                    <div key={group.titleKey} className="space-y-1">
-                        <h4 className="eyebrow">{t(group.titleKey)}</h4>
-                        <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
-                            {visible.map((m) => (
-                                <div
-                                    key={String(m.key)}
-                                    className="flex items-center justify-between border-b border-border/50 py-1.5"
-                                >
-                                    <span className="text-sm text-muted-foreground">
-                                        {t(m.labelKey)}
-                                    </span>
-                                    <span className="text-sm font-medium tabular-nums text-foreground">
-                                        {fmt(
-                                            m.format,
-                                            f[m.key] as
-                                                number | null | undefined,
-                                        )}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
-            })}
+            <div className="grid gap-6 lg:grid-cols-2">
+                {METRIC_GROUPS.map((group) => {
+                    const visible = group.metrics.filter((m) => {
+                        const v = f[m.key];
+                        return (
+                            v != null && !(typeof v === "number" && isNaN(v))
+                        );
+                    });
+                    if (visible.length === 0) return null;
+                    return (
+                        <section key={group.titleKey} className="space-y-2">
+                            <h3 className="type-headline text-foreground">
+                                {t(group.titleKey)}
+                            </h3>
+                            <List>
+                                {visible.map((m) => (
+                                    <ListRow
+                                        key={String(m.key)}
+                                        className="min-h-10"
+                                        title={
+                                            <span className="text-label-secondary">
+                                                {t(m.labelKey)}
+                                            </span>
+                                        }
+                                        trailing={
+                                            <span className="text-foreground">
+                                                {fmt(
+                                                    m.format,
+                                                    f[m.key] as
+                                                        | number
+                                                        | null
+                                                        | undefined,
+                                                )}
+                                            </span>
+                                        }
+                                    />
+                                ))}
+                            </List>
+                        </section>
+                    );
+                })}
+            </div>
         </div>
     );
 }

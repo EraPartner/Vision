@@ -31,7 +31,7 @@ group View aliases
 end
 
 group Merge action
-  User -> Page : Select Aliases + Click "Merge Selected"
+  User -> Page : Header ••• > "Merge payees", pick primary + aliases, click Merge
   Page -> Hook : mergeRecipients(primaryId, aliasIds)
   Hook -> API : POST /api/recipients/:id/merge
 
@@ -57,7 +57,7 @@ group Merge action
 end
 
 group Unmerge action
-  User -> Page : Click "Unmerge"
+  User -> Page : Row ••• > "Unmerge"
   Page -> Hook : unmergeRecipient(aliasId)
   Hook -> API : POST /api/recipients/:aliasId/unmerge
 

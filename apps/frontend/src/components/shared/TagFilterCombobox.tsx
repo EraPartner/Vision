@@ -23,7 +23,7 @@ function renderTag(tag: Tag) {
         : {};
     return (
         <span
-            className="rounded-full px-2 py-0.5 text-xs border"
+            className="rounded-full border px-2 py-0.5 type-footnote"
             style={chipStyle}
         >
             {tag.slug}

@@ -17,7 +17,7 @@ const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const itemBase =
-    "relative flex cursor-default select-none items-center rounded-md px-2 py-1.5 type-body outline-none transition-colors duration-fast data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-primary/10 focus:text-foreground data-[state=open]:bg-primary/10";
+    "relative flex cursor-default select-none items-center rounded-[calc(var(--radius-card)-0.375rem)] px-2 py-1.5 type-body outline-none transition-colors duration-fast data-[disabled]:pointer-events-none data-[disabled]:opacity-50 focus:bg-primary/10 focus:text-foreground data-[state=open]:bg-primary/10";
 
 const DropdownMenuSubTrigger = React.forwardRef<
     React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,

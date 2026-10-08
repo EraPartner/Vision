@@ -8,8 +8,15 @@ import {
     formatDateWithAppSettings,
     formatDateTimeWithAppSettings,
 } from "@/lib/dateUtils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { correlationHeatStyle } from "./marketHeat";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -536,34 +543,43 @@ export default function ResearchComparePage() {
 
             {/* Symbol picker */}
             <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
+                <ul
+                    aria-label={t("research.compare.selected")}
+                    className="m-0 flex list-none flex-wrap items-center gap-2 p-0"
+                >
                     {symbols.map((s, i) => (
-                        <Badge
-                            key={s}
-                            variant="secondary"
-                            className="gap-1.5 py-1 pl-2.5 pr-1.5"
-                        >
-                            <span
-                                className="h-2 w-2 rounded-full"
-                                style={{ background: getChartColor(i) }}
-                            />
-                            <span className="font-mono">{s}</span>
-                            <button
-                                onClick={() => removeSymbol(s)}
-                                aria-label={t("research.compare.removeSymbol", {
-                                    symbol: s,
-                                })}
+                        <li key={s}>
+                            <Badge
+                                variant="secondary"
+                                className="gap-1.5 py-0.5 pl-2.5 pr-0.5"
                             >
-                                <X className="h-3 w-3 hover:text-destructive" />
-                            </button>
-                        </Badge>
+                                <span
+                                    aria-hidden="true"
+                                    className="h-2 w-2 rounded-full"
+                                    style={{ background: getChartColor(i) }}
+                                />
+                                <span className="font-mono">{s}</span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 rounded-full text-label-secondary hover:text-destructive"
+                                    onClick={() => removeSymbol(s)}
+                                    aria-label={t(
+                                        "research.compare.removeSymbol",
+                                        { symbol: s },
+                                    )}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                </Button>
+                            </Badge>
+                        </li>
                     ))}
                     {symbols.length === 0 && (
-                        <span className="text-sm text-muted-foreground">
+                        <li className="type-callout text-label-secondary">
                             {t("research.compare.empty")}
-                        </span>
+                        </li>
                     )}
-                </div>
+                </ul>
 
                 {symbols.length < MAX_COMPARE_SYMBOLS && (
                     <SymbolSearchBox
@@ -578,7 +594,7 @@ export default function ResearchComparePage() {
                         {!isSearching && searchItems.length === 0 && (
                             <p
                                 role="status"
-                                className="px-3 py-3 text-sm text-muted-foreground"
+                                className="px-3 py-3 type-callout text-label-secondary"
                             >
                                 {t(
                                     searchFailed ||
@@ -595,7 +611,7 @@ export default function ResearchComparePage() {
                                 item={item}
                                 onSelect={(it) => addSymbol(it.symbol)}
                                 leadingIcon={
-                                    <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                    <Plus className="h-3.5 w-3.5 shrink-0 text-label-secondary" />
                                 }
                             />
                         ))}
@@ -604,11 +620,15 @@ export default function ResearchComparePage() {
             </div>
 
             {symbols.length === 0 ? (
-                <EmptyState
-                    icon={PAGE_ICONS["/research/compare"]}
-                    title={t("research.compare.startTitle")}
-                    description={t("research.compare.startHint")}
-                />
+                <Card>
+                    <CardContent variant="state">
+                        <EmptyState
+                            icon={PAGE_ICONS["/research/compare"]}
+                            title={t("research.compare.startTitle")}
+                            description={t("research.compare.startHint")}
+                        />
+                    </CardContent>
+                </Card>
             ) : (
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                     <TabsList>
@@ -634,15 +654,15 @@ export default function ResearchComparePage() {
                                         onChange={setSelectedRange}
                                     />
                                 </div>
-                                <p className="text-sm text-muted-foreground">
+                                <CardDescription>
                                     {t("research.compare.rebasedHint")}
-                                </p>
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {isLoading ? (
                                     <Skeleton
                                         {...loadingSurfaceProps}
-                                        className="h-[340px] w-full rounded-lg"
+                                        className="h-[340px] w-full"
                                     />
                                 ) : chartData.length > 0 ? (
                                     <LineChart
@@ -675,7 +695,7 @@ export default function ResearchComparePage() {
                                         tooltipValueFormat={(v) => v.toFixed(2)}
                                     />
                                 ) : (
-                                    <div className="h-[340px] flex items-center justify-center text-sm text-muted-foreground">
+                                    <div className="flex h-[340px] items-center justify-center type-callout text-label-secondary">
                                         {t("market.noChartData")}
                                     </div>
                                 )}
@@ -688,9 +708,9 @@ export default function ResearchComparePage() {
                                 <CardTitle variant="sm">
                                     {t("research.compare.metrics")}
                                 </CardTitle>
-                                <p className="text-xs text-muted-foreground">
+                                <CardDescription>
                                     {t("research.compare.historyHint")}
-                                </p>
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <Table>
@@ -720,6 +740,7 @@ export default function ResearchComparePage() {
                                                 <TableCell className="font-medium">
                                                     <span className="inline-flex items-center gap-2">
                                                         <span
+                                                            aria-hidden="true"
                                                             className="h-2.5 w-2.5 rounded-full"
                                                             style={{
                                                                 background:
@@ -736,7 +757,7 @@ export default function ResearchComparePage() {
                                                         Number.isFinite(
                                                             row.lastTime,
                                                         ) && (
-                                                            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                                            <span className="mt-1 block type-footnote font-normal text-label-secondary">
                                                                 {t(
                                                                     "research.compare.historyRange",
                                                                     {
@@ -791,19 +812,19 @@ export default function ResearchComparePage() {
                                     <CardTitle variant="sm">
                                         {t("research.compare.correlation")}
                                     </CardTitle>
-                                    <p className="text-xs text-muted-foreground">
+                                    <CardDescription>
                                         {t("research.compare.correlationHint")}
-                                    </p>
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     {isLoading ? (
                                         <Skeleton
                                             {...loadingSurfaceProps}
-                                            className="h-40 w-full rounded-lg"
+                                            className="h-40 w-full"
                                         />
                                     ) : (
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-sm border-separate border-spacing-1">
+                                            <table className="w-full border-separate border-spacing-1 type-body">
                                                 <thead>
                                                     <tr>
                                                         <th className="p-1.5" />
@@ -811,7 +832,8 @@ export default function ResearchComparePage() {
                                                             (s, i) => (
                                                                 <th
                                                                     key={s}
-                                                                    className="p-1.5 text-center font-mono text-xs"
+                                                                    scope="col"
+                                                                    className="p-1.5 text-center font-mono type-footnote font-medium text-label-secondary"
                                                                 >
                                                                     <span className="inline-flex items-center gap-1.5">
                                                                         <span
@@ -834,7 +856,10 @@ export default function ResearchComparePage() {
                                                     {correlation.symbols.map(
                                                         (rowSym, i) => (
                                                             <tr key={rowSym}>
-                                                                <th className="p-1.5 text-left font-mono text-xs whitespace-nowrap">
+                                                                <th
+                                                                    scope="row"
+                                                                    className="whitespace-nowrap p-1.5 text-left font-mono type-footnote font-medium text-label-secondary"
+                                                                >
                                                                     <span className="inline-flex items-center gap-1.5">
                                                                         <span
                                                                             className="h-2 w-2 rounded-full"
@@ -857,7 +882,7 @@ export default function ResearchComparePage() {
                                                                     ) => (
                                                                         <td
                                                                             key={`${rowSym}-${correlation.symbols[j]}`}
-                                                                            className="p-1.5 text-center tabular-nums rounded-md"
+                                                                            className="rounded-chip p-1.5 text-center tabular-nums"
                                                                             style={correlationHeatStyle(
                                                                                 value,
                                                                             )}
@@ -892,15 +917,15 @@ export default function ResearchComparePage() {
                                 <CardTitle variant="sm">
                                     {t("research.compare.tabFundamentals")}
                                 </CardTitle>
-                                <p className="text-xs text-muted-foreground">
+                                <CardDescription>
                                     {t("research.compare.fundamentalsHint")}
-                                </p>
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {fundamentalsLoading ? (
                                     <Skeleton
                                         {...loadingSurfaceProps}
-                                        className="h-48 w-full rounded-lg"
+                                        className="h-48 w-full"
                                     />
                                 ) : (
                                     <div className="overflow-x-auto">
@@ -923,20 +948,26 @@ export default function ResearchComparePage() {
                                                                 key={m.key}
                                                                 className="text-right whitespace-nowrap p-0"
                                                             >
-                                                                <button
+                                                                <Button
                                                                     type="button"
+                                                                    variant="ghost"
+                                                                    size="sm"
                                                                     onClick={() =>
                                                                         toggleSort(
                                                                             m.key,
                                                                         )
                                                                     }
                                                                     className={cn(
-                                                                        "inline-flex items-center gap-1 px-3 py-2 w-full justify-end hover:text-foreground transition-colors",
+                                                                        "w-full justify-end gap-1 rounded-none px-3 type-footnote",
                                                                         sortMetric ===
                                                                             m.key
-                                                                            ? "text-foreground font-semibold"
-                                                                            : "text-muted-foreground",
+                                                                            ? "font-medium text-foreground"
+                                                                            : "text-label-secondary",
                                                                     )}
+                                                                    aria-pressed={
+                                                                        sortMetric ===
+                                                                        m.key
+                                                                    }
                                                                     aria-label={t(
                                                                         "research.compare.sortBy",
                                                                         {
@@ -956,7 +987,7 @@ export default function ResearchComparePage() {
                                                                         ) : (
                                                                             <ArrowUp className="h-3 w-3" />
                                                                         ))}
-                                                                </button>
+                                                                </Button>
                                                             </TableHead>
                                                         ),
                                                     )}
@@ -968,6 +999,7 @@ export default function ResearchComparePage() {
                                                         <TableCell className="font-medium whitespace-nowrap">
                                                             <span className="inline-flex items-center gap-2">
                                                                 <span
+                                                                    aria-hidden="true"
                                                                     className="h-2.5 w-2.5 rounded-full"
                                                                     style={{
                                                                         background:
@@ -979,8 +1011,8 @@ export default function ResearchComparePage() {
                                                                 </span>
                                                                 {row.unavailable ? (
                                                                     <Badge
-                                                                        variant="outline"
-                                                                        className="text-2xs border-warning/40 text-warning"
+                                                                        variant="warning"
+                                                                        size="sm"
                                                                     >
                                                                         {t(
                                                                             "research.unavailable",
@@ -1006,7 +1038,7 @@ export default function ResearchComparePage() {
                                                                     }
                                                                 />
                                                             ) : (
-                                                                <span className="text-muted-foreground">
+                                                                <span className="text-label-tertiary">
                                                                     —
                                                                 </span>
                                                             )}
@@ -1040,7 +1072,7 @@ export default function ResearchComparePage() {
                                                                                 ],
                                                                             sortMetric ===
                                                                                 m.key &&
-                                                                                "bg-muted/40 font-medium",
+                                                                                "bg-foreground/[0.04] font-medium",
                                                                         )}
                                                                     >
                                                                         {row.unavailable

@@ -8,6 +8,7 @@ import {
     waitFor,
     within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { AnalysisResult } from "@/lib/api/analysis";
 import { evaluateAnalysisExtension } from "@/lib/api/analysis";
 import {
@@ -21,6 +22,13 @@ vi.mock("@/stores/hydration/AppSettingsHydration", () => ({
     useAppSettings: () => ({ appSettings: { numberFormat: "eu" } }),
 }));
 vi.mock("@/lib/api/analysis", () => ({ evaluateAnalysisExtension: vi.fn() }));
+const pick = async (label: string, option: string) => {
+    const user = userEvent.setup();
+    await user.click(screen.getByLabelText(label));
+    await user.click(await screen.findByRole("option", { name: option }));
+};
+const choose = (option: string) =>
+    fireEvent.click(screen.getByRole("radio", { name: option }));
 const result = {
     rows: [{ date: "2026-09-01", amount: "12" }],
     columns: [
@@ -133,10 +141,7 @@ describe("guided analysis workbench", () => {
         expect(
             screen.getByText("analysis.ext.workbench.compareTime"),
         ).toBeDisabled();
-        fireEvent.change(
-            screen.getByLabelText("analysis.ext.workbench.scenarioTask"),
-            { target: { value: "explore" } },
-        );
+        choose("analysis.ext.workbench.option.explore");
         expect(
             screen.getByText("analysis.ext.workbench.sensitivity"),
         ).toBeDisabled();
@@ -144,14 +149,11 @@ describe("guided analysis workbench", () => {
     it("carries structured assumption units to evaluation and exposes financial functions", async () => {
         render(<Harness />);
         fireEvent.click(screen.getByText("analysis.ext.workbench.assumptions"));
-        fireEvent.change(
-            screen.getByLabelText("analysis.ext.workbench.unitKind"),
-            { target: { value: "percentage" } },
+        await pick(
+            "analysis.ext.workbench.unitKind",
+            "analysis.ext.workbench.option.percentage",
         );
-        fireEvent.change(
-            screen.getByLabelText("analysis.ext.workbench.percentageBasis"),
-            { target: { value: "percent" } },
-        );
+        choose("analysis.ext.workbench.option.percent");
         fireEvent.click(
             screen.getByText("analysis.ext.workbench.applyFormulas"),
         );
@@ -170,8 +172,11 @@ describe("guided analysis workbench", () => {
         fireEvent.click(
             screen.getByText("analysis.ext.workbench.functionsHelp"),
         );
+        await userEvent
+            .setup()
+            .click(screen.getByLabelText("analysis.ext.workbench.function"));
         expect(
-            screen.getByRole("option", { name: "MEDIAN" }),
+            await screen.findByRole("option", { name: "MEDIAN" }),
         ).toBeInTheDocument();
         expect(screen.getByRole("option", { name: "PMT" })).toBeInTheDocument();
     });
@@ -319,16 +324,14 @@ it("applies preparation through the complete calculation pipeline", async () => 
     );
 });
 
-it("keeps preparation task-driven and prevents adding an incomplete conversion", () => {
+it("keeps preparation task-driven and prevents adding an incomplete conversion", async () => {
     render(<Harness />);
     expect(
         screen.queryByLabelText("analysis.ext.workbench.column"),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("analysis.ext.workbench.newStep"));
     expect(screen.getByText("analysis.ext.workbench.addStep")).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("analysis.ext.workbench.column"), {
-        target: { value: "amount" },
-    });
+    await pick("analysis.ext.workbench.column", "amount");
     fireEvent.click(screen.getByText("analysis.ext.workbench.addStep"));
     expect(
         screen.getByText(
@@ -344,20 +347,14 @@ it("shows only the selected scenario task and only one value list without a seco
     expect(
         screen.queryByLabelText("analysis.ext.workbench.target"),
     ).not.toBeInTheDocument();
-    fireEvent.change(
-        screen.getByLabelText("analysis.ext.workbench.scenarioTask"),
-        { target: { value: "explore" } },
-    );
+    choose("analysis.ext.workbench.option.explore");
     expect(
         screen.getAllByLabelText("analysis.ext.workbench.grid"),
     ).toHaveLength(1);
     expect(
         screen.queryByLabelText("analysis.ext.workbench.name"),
     ).not.toBeInTheDocument();
-    fireEvent.change(
-        screen.getByLabelText("analysis.ext.workbench.scenarioTask"),
-        { target: { value: "seek" } },
-    );
+    choose("analysis.ext.workbench.option.seek");
     expect(
         screen.getByLabelText("analysis.ext.workbench.target"),
     ).toBeInTheDocument();
@@ -400,9 +397,10 @@ it("formats scenario summary decimals without changing the exact value", async (
 it("queues unpivot with a new value column name and retains the pivot source selector", async () => {
     render(<Harness />);
     fireEvent.click(screen.getByText("analysis.ext.workbench.newStep"));
-    fireEvent.change(screen.getByLabelText("analysis.ext.workbench.step"), {
-        target: { value: "unpivot" },
-    });
+    await pick(
+        "analysis.ext.workbench.step",
+        "analysis.ext.workbench.option.unpivot",
+    );
     fireEvent.click(
         within(
             screen.getAllByRole("group", {
@@ -435,9 +433,10 @@ it("queues unpivot with a new value column name and retains the pivot source sel
         ),
     );
     fireEvent.click(screen.getByText("analysis.ext.workbench.newStep"));
-    fireEvent.change(screen.getByLabelText("analysis.ext.workbench.step"), {
-        target: { value: "pivot" },
-    });
+    await pick(
+        "analysis.ext.workbench.step",
+        "analysis.ext.workbench.option.pivot",
+    );
     expect(
         screen.getByRole("combobox", {
             name: "analysis.ext.workbench.valueColumn",
@@ -445,24 +444,26 @@ it("queues unpivot with a new value column name and retains the pivot source sel
     ).toBeInTheDocument();
 });
 
-it("shows contextual preparation guidance and explains conflicting output names", () => {
+it("shows contextual preparation guidance and explains conflicting output names", async () => {
     render(<Harness />);
     fireEvent.click(screen.getByText("analysis.ext.workbench.newStep"));
     expect(
         screen.getByText("analysis.ext.workbench.stepHelp.convert"),
     ).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("analysis.ext.workbench.step"), {
-        target: { value: "lookup" },
-    });
+    await pick(
+        "analysis.ext.workbench.step",
+        "analysis.ext.workbench.option.lookup",
+    );
     expect(
         screen.getByText("analysis.ext.workbench.attachmentRequired"),
     ).toBeInTheDocument();
     expect(
         screen.queryByText("analysis.ext.workbench.stepHelp.convert"),
     ).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("analysis.ext.workbench.step"), {
-        target: { value: "unpivot" },
-    });
+    await pick(
+        "analysis.ext.workbench.step",
+        "analysis.ext.workbench.option.unpivot",
+    );
     fireEvent.change(
         screen.getByRole("textbox", {
             name: "analysis.ext.workbench.valueColumn",

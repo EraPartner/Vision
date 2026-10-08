@@ -1,5 +1,11 @@
 import { useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { DonutChart, ChartLegend } from "@/components/charts";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -65,7 +71,7 @@ export function CategoryPieChart({
 
     if (!data || data.length === 0) {
         const emptyContent = (
-            <div className="flex h-72 items-center justify-center text-muted-foreground">
+            <div className="flex h-72 items-center justify-center type-callout text-label-secondary">
                 {t("categoryPie.noData")}
             </div>
         );
@@ -78,9 +84,7 @@ export function CategoryPieChart({
             <Card className="relative overflow-hidden">
                 <CardHeader>
                     <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                        {t("categoryPie.desc")}
-                    </p>
+                    <CardDescription>{t("categoryPie.desc")}</CardDescription>
                 </CardHeader>
                 <CardContent>{emptyContent}</CardContent>
             </Card>
@@ -95,9 +99,7 @@ export function CategoryPieChart({
         <Card className="relative overflow-hidden">
             <CardHeader>
                 <CardTitle variant="sm">{t("categoryPie.title")}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    {t("categoryPie.desc")}
-                </p>
+                <CardDescription>{t("categoryPie.desc")}</CardDescription>
             </CardHeader>
             <CardContent>{chartContent}</CardContent>
         </Card>

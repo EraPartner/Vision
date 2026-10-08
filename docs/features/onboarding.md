@@ -2,8 +2,8 @@
 title: Feature - Onboarding
 type: feature
 status: active
-date: 2026-04-19
-updated: 2026-08-27
+date: 2026-10-07
+updated: 2026-10-07
 tags:
   [
     feature,
@@ -56,7 +56,7 @@ A multi-step wizard (`STEP_KEYS` in `OnboardingWizard.tsx`) that covers, in orde
 6. **Feature Tour** — Clickable feature tiles that end onboarding at the chosen page
 7. **Backup** — Set a backup location, or restore from an existing backup
 
-The bank cards are native toggle buttons. Their `aria-pressed` state exposes the selected adapter to assistive technology as well as through the visible border treatment.
+The bank cards and feature tiles are design-system `Button` toggles ([[docs/adr/187-completeness-sweep|ADR-187]]). The bank cards' `aria-pressed` state exposes the selected adapter to assistive technology as well as through the visible border treatment.
 
 Categories deliberately run _before_ the import step: a first import lands on the
 review page (every recipient is new on an empty database), and the review page is
@@ -113,7 +113,7 @@ The **RestoreFromBackupCard** in the onboarding wizard now supports encrypted ba
 
 - **File selection**: User picks a `.visionbak` or `.visionbak.enc` file to restore
 - **Encryption detection**: System inspects the file header to determine if encryption is needed
-- **Passphrase modal**: If encrypted, a modal prompts for the backup passphrase before restore begins
+- **Passphrase modal**: If encrypted, a modal prompts for the backup passphrase before restore begins; its show/hide control is a ghost icon `Button` with localized labels (`settings.restore.showPassphrase` / `hidePassphrase`)
 - **Error recovery**: Wrong passphrase shows an error message with prompt to retry; network errors show informative toast
 - **Fallback passphrases**: Respects `VISION_BACKUP_PASSPHRASE` env var and OS keychain (Electron safeStorage) if available
 - **No friction for unencrypted**: Unencrypted backups restore immediately without modal

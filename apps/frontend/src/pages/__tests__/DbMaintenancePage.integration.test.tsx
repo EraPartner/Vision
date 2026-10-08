@@ -37,16 +37,16 @@ describe("DbMaintenancePage (integration)", () => {
     it("renders page heading", async () => {
         server.use(http.get(`${API_BASE}/api/admin/database/stats`, () => ok(emptyStats)));
         renderWithApp(<DbMaintenancePage />);
-        // dbMaintenance.title = "DB Maintenance"
+        // dbMaintenance.title = "Database maintenance"
         expect(
-            await screen.findByRole("heading", { name: /db maintenance/i }),
+            await screen.findByRole("heading", { name: /database maintenance/i }),
         ).toBeInTheDocument();
     });
 
     it("renders without crashing when table list is empty", async () => {
         server.use(http.get(`${API_BASE}/api/admin/database/stats`, () => ok(emptyStats)));
         renderWithApp(<DbMaintenancePage />);
-        await screen.findByRole("heading", { name: /db maintenance/i });
+        await screen.findByRole("heading", { name: /database maintenance/i });
     });
 
     it("shows Refresh button", async () => {
@@ -105,14 +105,19 @@ describe("DbMaintenancePage (integration)", () => {
         expect(await screen.findByText("14 MB")).toBeInTheDocument();
     });
 
-    it("shows table row with VACUUM button when tables exist", async () => {
+    it("shows a Run vacuum action in each table row menu", async () => {
         server.use(http.get(`${API_BASE}/api/admin/database/stats`, () => ok(statsWithTable)));
         renderWithApp(<DbMaintenancePage />);
+        const user = userEvent.setup();
         // Table name appears
         expect(await screen.findByText("transactions")).toBeInTheDocument();
-        // Each row has a VACUUM button (dbMaintenance.vacuumTable = "VACUUM")
-        const vacuumBtns = await screen.findAllByRole("button", { name: /^vacuum$/i });
-        expect(vacuumBtns.length).toBeGreaterThan(0);
+        // Each row has a menu holding "Run vacuum" (dbMaintenance.vacuumTable)
+        await user.click(
+            screen.getByRole("button", { name: /actions for transactions/i }),
+        );
+        expect(
+            await screen.findByRole("menuitem", { name: /run vacuum/i }),
+        ).toBeInTheDocument();
     });
 
     it("calls vacuum API when VACUUM All button is clicked", async () => {
@@ -134,7 +139,7 @@ describe("DbMaintenancePage (integration)", () => {
         expect(vacuumCalled).toBe(true);
     });
 
-    it("calls vacuum API when per-row VACUUM button is clicked", async () => {
+    it("calls vacuum API when the row menu Run vacuum item is clicked", async () => {
         const user = userEvent.setup();
         let vacuumedTable: string | null = null;
 
@@ -150,8 +155,12 @@ describe("DbMaintenancePage (integration)", () => {
         renderWithApp(<DbMaintenancePage />);
         // Wait for row to appear
         await screen.findByText("transactions");
-        const [rowVacuumBtn] = await screen.findAllByRole("button", { name: /^vacuum$/i });
-        await user.click(rowVacuumBtn);
+        await user.click(
+            screen.getByRole("button", { name: /actions for transactions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /run vacuum/i }),
+        );
 
         expect(vacuumedTable).toBe("transactions");
     });

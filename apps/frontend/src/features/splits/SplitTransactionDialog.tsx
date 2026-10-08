@@ -14,11 +14,16 @@ import {
     TooltipContent,
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { RecipientCombobox } from "@/components/shared/RecipientCombobox";
 import { useCreateSplits, useSplitsByTransaction } from "@/hooks/useSplits";
-import { Split, Plus, Trash2, Users } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import { parseDecimal } from "@/lib/decimal";
@@ -193,12 +198,12 @@ export function SplitTransactionDialog({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="icon-touch-target text-muted-foreground hover:text-primary"
+                                className="icon-touch-target text-label-secondary hover:text-primary"
                                 aria-label={
                                     triggerLabel ?? t("splitDialog.buttonTitle")
                                 }
                             >
-                                <Users className="h-4 w-4" />
+                                <Users aria-hidden />
                             </Button>
                         </DialogTrigger>
                     </TooltipTrigger>
@@ -211,10 +216,7 @@ export function SplitTransactionDialog({
                 {/* Portal target: dropdowns render here (inside dialog DOM) so the dialog focus trap covers them */}
                 <div ref={setPortalContainer} />
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Split className="h-5 w-5" />
-                        {t("splitDialog.buttonTitle")}
-                    </DialogTitle>
+                    <DialogTitle>{t("splitDialog.buttonTitle")}</DialogTitle>
                     <DialogDescription>
                         {t("splitDialog.total", {
                             amount: formatCurrency(absAmount, {
@@ -238,7 +240,7 @@ export function SplitTransactionDialog({
                                           )
                                         : t("splitDialog.notSplitYet")}
                                     {existingRecipientNames && (
-                                        <span className="block mt-1 text-xs text-muted-foreground">
+                                        <span className="mt-1 block type-footnote text-label-secondary">
                                             {t(
                                                 "splitDialog.existingRecipients",
                                                 {
@@ -249,7 +251,7 @@ export function SplitTransactionDialog({
                                         </span>
                                     )}
                                     {existingSplits.length > 0 && (
-                                        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                        <ul className="mt-2 space-y-1 type-footnote text-label-secondary">
                                             {existingSplits.map((split) => (
                                                 <li key={split.id}>
                                                     {t(
@@ -294,112 +296,105 @@ export function SplitTransactionDialog({
                                 </Alert>
                             )}
 
-                        {/* Split type toggle */}
-                        <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant={
-                                    splitType === "equal"
-                                        ? "default"
-                                        : "outline"
-                                }
-                                size="sm"
-                                onClick={() => setSplitType("equal")}
-                            >
+                        <SegmentedControl
+                            value={splitType}
+                            onValueChange={(value) => {
+                                if (value === "equal" || value === "custom")
+                                    setSplitType(value);
+                            }}
+                            aria-label={t("splitDialog.splitType")}
+                        >
+                            <SegmentedControlItem value="equal">
                                 {t("splitDialog.equalSplit")}
-                            </Button>
-                            <Button
-                                type="button"
-                                variant={
-                                    splitType === "custom"
-                                        ? "default"
-                                        : "outline"
-                                }
-                                size="sm"
-                                onClick={() => setSplitType("custom")}
-                            >
+                            </SegmentedControlItem>
+                            <SegmentedControlItem value="custom">
                                 {t("splitDialog.customAmounts")}
-                            </Button>
-                        </div>
+                            </SegmentedControlItem>
+                        </SegmentedControl>
 
                         {splitType === "equal" && validEntries.length > 0 && (
-                            <div className="text-sm text-muted-foreground rounded-md bg-muted p-3">
+                            <p className="type-callout text-label-secondary">
                                 {t("splitDialog.eachPays", {
                                     amount: formatCurrency(equalShare, {
                                         currency: transactionCurrency,
                                     }),
                                     n: totalPeople,
                                 })}
-                            </div>
+                            </p>
                         )}
 
-                        {/* Entries */}
-                        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        <div className="max-h-[300px] space-y-3 overflow-y-auto">
                             {entries.map((entry, idx) => (
-                                <div
-                                    key={entry.uid}
-                                    className="flex items-start gap-2 p-3 rounded-md border bg-card"
-                                >
-                                    <div className="flex-1 space-y-2">
-                                        <RecipientCombobox
-                                            aria-label={`${t("recipientsPage.col.recipient")} ${idx + 1}`}
-                                            value={entry.recipient_id}
-                                            onSelect={(id) =>
-                                                updateEntry(
-                                                    idx,
-                                                    "recipient_id",
-                                                    id,
-                                                )
-                                            }
-                                            className="w-full"
-                                            portalContainer={portalContainer}
-                                        />
-                                        {splitType === "custom" && (
+                                <Card key={entry.uid}>
+                                    <CardContent
+                                        variant="compact"
+                                        className="flex items-start gap-2"
+                                    >
+                                        <div className="flex-1 space-y-2">
+                                            <RecipientCombobox
+                                                aria-label={`${t("recipientsPage.col.recipient")} ${idx + 1}`}
+                                                value={entry.recipient_id}
+                                                onSelect={(id) =>
+                                                    updateEntry(
+                                                        idx,
+                                                        "recipient_id",
+                                                        id,
+                                                    )
+                                                }
+                                                className="w-full"
+                                                portalContainer={
+                                                    portalContainer
+                                                }
+                                            />
+                                            {splitType === "custom" && (
+                                                <Input
+                                                    aria-label={`${t("splitDialog.amountOwed")} ${idx + 1}`}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    placeholder={t(
+                                                        "splitDialog.amountOwed",
+                                                    )}
+                                                    value={entry.amount}
+                                                    onChange={(e) =>
+                                                        updateEntry(
+                                                            idx,
+                                                            "amount",
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                />
+                                            )}
                                             <Input
-                                                aria-label={`${t("splitDialog.amountOwed")} ${idx + 1}`}
-                                                type="text"
-                                                inputMode="decimal"
+                                                aria-label={`${t("splitDialog.noteOptional")} ${idx + 1}`}
                                                 placeholder={t(
-                                                    "splitDialog.amountOwed",
+                                                    "splitDialog.noteOptional",
                                                 )}
-                                                value={entry.amount}
+                                                value={entry.note}
                                                 onChange={(e) =>
                                                     updateEntry(
                                                         idx,
-                                                        "amount",
+                                                        "note",
                                                         e.target.value,
                                                     )
                                                 }
                                             />
+                                        </div>
+                                        {entries.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="icon"
+                                                className="shrink-0 text-label-secondary hover:text-destructive"
+                                                aria-label={t(
+                                                    "aria.removeEntry",
+                                                )}
+                                                onClick={() => removeEntry(idx)}
+                                            >
+                                                <Trash2 aria-hidden />
+                                            </Button>
                                         )}
-                                        <Input
-                                            aria-label={`${t("splitDialog.noteOptional")} ${idx + 1}`}
-                                            placeholder={t(
-                                                "splitDialog.noteOptional",
-                                            )}
-                                            value={entry.note}
-                                            onChange={(e) =>
-                                                updateEntry(
-                                                    idx,
-                                                    "note",
-                                                    e.target.value,
-                                                )
-                                            }
-                                        />
-                                    </div>
-                                    {entries.length > 1 && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target text-muted-foreground hover:text-destructive shrink-0"
-                                            aria-label={t("aria.removeEntry")}
-                                            onClick={() => removeEntry(idx)}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    )}
-                                </div>
+                                    </CardContent>
+                                </Card>
                             ))}
                         </div>
 
@@ -408,14 +403,13 @@ export function SplitTransactionDialog({
                             variant="outline"
                             size="sm"
                             onClick={addEntry}
-                            className="gap-1.5"
                         >
-                            <Plus className="h-4 w-4" />{" "}
+                            <Plus aria-hidden />
                             {t("splitDialog.addPerson")}
                         </Button>
 
                         {splitType === "custom" && validEntries.length > 0 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="type-callout text-label-secondary">
                                 {t("splitDialog.othersOwe", {
                                     x: formatCurrency(customTotal, {
                                         currency: transactionCurrency,

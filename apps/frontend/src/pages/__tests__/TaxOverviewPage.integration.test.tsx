@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -69,19 +69,28 @@ describe("TaxOverviewPage (integration)", () => {
         expect(screen.queryByRole("radio", { name: /^employee/i })).not.toBeInTheDocument();
     });
 
-    it("shows Widgets button in page header", async () => {
+    it("offers Customize… from the ••• menu in the page header", async () => {
+        const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        const menu = await screen.findByRole("menu");
         expect(
-            await screen.findByRole("button", { name: /customize/i }),
+            within(menu).getByRole("menuitem", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
-    it("opens Manage Widgets dialog when Widgets button is clicked", async () => {
+    it("opens Manage Widgets dialog from the ••• menu", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /customize/i });
-        await user.click(widgetsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /customize/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
@@ -137,11 +146,17 @@ describe("TaxOverviewPage (integration)", () => {
         expect(await screen.findByText(/^live estimate$/i)).toBeInTheDocument();
     });
 
-    it("shows Export PDF button", async () => {
+    it("opens the Export PDF dialog from the ••• menu", async () => {
+        const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
-        // ExportDialog trigger: export.openDialog = "Export PDF"
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /export pdf/i }),
+        );
         expect(
-            await screen.findByRole("button", { name: /export pdf/i }),
+            await screen.findByRole("heading", { name: /export pdf report/i }),
         ).toBeInTheDocument();
     });
 
@@ -168,8 +183,12 @@ describe("TaxOverviewPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
-        const widgetsBtn = await screen.findByRole("button", { name: /customize/i });
-        await user.click(widgetsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /customize/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");

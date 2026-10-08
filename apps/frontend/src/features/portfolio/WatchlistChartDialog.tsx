@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
@@ -154,12 +155,10 @@ export function WatchlistChartDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                     <div className="flex items-center gap-3">
-                        <DialogTitle className="text-xl">
-                            {item.name}
-                        </DialogTitle>
+                        <DialogTitle>{item.name}</DialogTitle>
                         {item.symbol && (
                             <Badge variant="outline" className="font-mono">
                                 {item.symbol}
@@ -174,9 +173,12 @@ export function WatchlistChartDialog({
                 <div className="space-y-6">
                     {/* Price Summary */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-muted/50 rounded-lg p-4">
-                            <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
-                                <Target className="h-4 w-4" />
+                        <div className="rounded-card corner-continuous bg-foreground/[0.04] p-4">
+                            <div className="mb-1 flex items-center gap-2 type-caption text-label-secondary">
+                                <Target
+                                    className="h-4 w-4"
+                                    aria-hidden="true"
+                                />
                                 {t("watchlistChart.targetPrice")}
                             </div>
                             {editingPrice ? (
@@ -226,8 +228,9 @@ export function WatchlistChartDialog({
                             ) : (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <button
+                                        <Button
                                             type="button"
+                                            variant="link"
                                             aria-label={`${t("common.edit")}: ${t("watchlistChart.targetPrice")}, ${item.name} (${item.symbol}), ${formatDisplayCurrency(targetPrice, { currency: item.currency })}`}
                                             onClick={() => {
                                                 setNewTargetPrice(
@@ -238,7 +241,7 @@ export function WatchlistChartDialog({
                                                 );
                                                 setEditingPrice(true);
                                             }}
-                                            className="rounded-sm text-2xl font-bold text-primary hover:underline text-left focus-ring"
+                                            className="h-auto p-0 text-left type-title-1 tabular-nums"
                                         >
                                             {formatDisplayCurrency(
                                                 targetPrice,
@@ -246,20 +249,20 @@ export function WatchlistChartDialog({
                                                     currency: item.currency,
                                                 },
                                             )}
-                                        </button>
+                                        </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>{`${t("common.edit")}: ${t("watchlistChart.targetPrice")}, ${item.name} (${item.symbol})`}</TooltipContent>
                                 </Tooltip>
                             )}
                         </div>
 
-                        <div className="bg-muted/50 rounded-lg p-4">
-                            <p className="text-muted-foreground text-sm mb-1">
+                        <div className="rounded-card corner-continuous bg-foreground/[0.04] p-4">
+                            <p className="mb-1 type-caption text-label-secondary">
                                 {t("watchlistChart.currentPrice")}
                             </p>
                             {currentPrice != null ? (
                                 <>
-                                    <p className="text-2xl font-bold">
+                                    <p className="type-title-1 tabular-nums">
                                         {formatDisplayCurrency(currentPrice, {
                                             currency: item.currency,
                                         })}
@@ -267,7 +270,7 @@ export function WatchlistChartDialog({
                                     {priceDiff != null && (
                                         <div
                                             className={cn(
-                                                "flex items-center gap-1 text-sm mt-1",
+                                                "mt-1 flex items-center gap-1 type-footnote tabular-nums",
                                                 priceDiff > 0
                                                     ? "text-loss"
                                                     : "text-gain",
@@ -302,9 +305,11 @@ export function WatchlistChartDialog({
                     </div>
 
                     {isBelowTarget && (
-                        <div className="bg-success/10 border border-success/30 text-success rounded-lg p-3 text-center font-medium">
-                            {t("watchlistChart.atTarget")}
-                        </div>
+                        <Alert variant="success">
+                            <AlertDescription className="text-center font-medium">
+                                {t("watchlistChart.atTarget")}
+                            </AlertDescription>
+                        </Alert>
                     )}
 
                     {/* Range selector */}
@@ -392,18 +397,18 @@ export function WatchlistChartDialog({
                                 }}
                             />
                         ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                            <div className="flex h-full items-center justify-center type-footnote text-label-secondary">
                                 {t("watchlistChart.noData")}
                             </div>
                         )}
                     </div>
 
                     {item.notes && (
-                        <div className="bg-muted/30 rounded-lg p-4">
-                            <p className="text-muted-foreground text-xs font-medium">
+                        <div className="rounded-card corner-continuous bg-foreground/[0.04] p-4">
+                            <p className="type-caption font-medium text-label-secondary">
                                 {t("watchlistChart.notes")}
                             </p>
-                            <p className="mt-1 text-sm">{item.notes}</p>
+                            <p className="mt-1 type-body">{item.notes}</p>
                         </div>
                     )}
                 </div>

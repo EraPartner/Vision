@@ -405,7 +405,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                             (col.render ? undefined : rawTitle)
                         }
                         className={cn(
-                            "px-4 py-2 text-sm flex-1 min-w-0",
+                            "min-w-0 flex-1 px-4 py-2 type-body",
                             col.wrap === "anywhere"
                                 ? "whitespace-normal break-words [overflow-wrap:anywhere]"
                                 : "truncate",
@@ -445,7 +445,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                                     : "",
                                             }))
                                         }
-                                        buttonClassName="h-8 text-sm w-full"
+                                        buttonClassName="h-8 w-full"
                                     />
                                 </div>
                             ) : (
@@ -491,7 +491,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                             cancelEditing();
                                         }
                                     }}
-                                    className="h-8 text-sm"
+                                    className="h-8"
                                 />
                             )
                         ) : col.render ? (
@@ -1261,7 +1261,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 <CardTitle variant="sm">{title}</CardTitle>
                             )}
                             {subtitle && (
-                                <p className="text-sm text-muted-foreground mt-1">
+                                <p className="mt-1 type-body text-label-secondary">
                                     {subtitle}
                                 </p>
                             )}
@@ -1323,11 +1323,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         variant="ghost"
                         size="sm"
                         onClick={clearAllFilters}
-                        className="text-xs text-muted-foreground hover:text-destructive shrink-0 gap-1"
+                        className="shrink-0 gap-1 text-label-secondary hover:text-destructive"
                     >
-                        <X className="h-3 w-3" /> {t("table.clearAll")}
+                        <X aria-hidden="true" className="h-3 w-3" /> {t("table.clearAll")}
                         {activeFilterCount > 0 && (
-                            <span className="ml-1 bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-2xs font-bold">
+                            <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 type-caption font-medium tabular-nums text-primary">
                                 {activeFilterCount}
                             </span>
                         )}
@@ -1343,9 +1343,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         return (
                             <span
                                 key={key}
-                                className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded-md"
+                                className="inline-flex items-center gap-1 rounded-chip bg-primary/10 px-2 py-1 type-footnote font-medium text-primary"
                             >
-                                <Filter className="h-3 w-3" />
+                                <Filter aria-hidden="true" className="h-3 w-3" />
                                 {col?.header || key}: {val}
                                 <button
                                     type="button"
@@ -1356,9 +1356,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 : key,
                                     })}
                                     onClick={() => setColumnFilter(key, "")}
-                                    className="-m-3.5 ml-0.5 rounded-sm p-3.5 hover:text-destructive focus-ring"
+                                    className="-m-3.5 ml-0.5 rounded-chip p-3.5 hover:text-destructive focus-ring"
                                 >
-                                    <X className="h-3 w-3" />
+                                    <X aria-hidden="true" className="h-3 w-3" />
                                 </button>
                             </span>
                         );
@@ -1405,7 +1405,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                     role="columnheader"
                                     aria-sort={ariaSort}
                                     className={cn(
-                                        "px-4 py-2 font-semibold text-muted-foreground text-sm relative select-none group flex-1 min-w-0 whitespace-nowrap",
+                                        "group relative min-w-0 flex-1 select-none whitespace-nowrap px-4 py-2 type-footnote font-medium text-label-secondary",
                                         col.className || "",
                                     )}
                                     style={
@@ -1420,10 +1420,11 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                     <div className="flex items-center gap-1">
                                         {isSortable ? (
                                             <button
+                                                type="button"
                                                 onClick={() =>
                                                     handleSort(col.key)
                                                 }
-                                                className="flex items-center gap-1 hover:text-foreground transition-colors text-left"
+                                                className="flex items-center gap-1 rounded-chip text-left transition-colors duration-fast hover:text-foreground focus-ring"
                                             >
                                                 <span className="pr-0.5">
                                                     {col.header}
@@ -1459,10 +1460,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                             },
                                                         )}
                                                         className={cn(
-                                                            "icon-touch-target rounded transition-colors",
+                                                            "icon-touch-target rounded-chip transition-colors duration-fast focus-ring",
                                                             hasFilter
                                                                 ? "text-primary"
-                                                                : "text-muted-foreground/40 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
+                                                                : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",
                                                         )}
                                                     >
                                                         <Filter className="h-3 w-3" />
@@ -1570,7 +1571,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         {hasEditableColumns && (
                             <div
                                 role="columnheader"
-                                className="px-2 py-2 text-right font-semibold text-muted-foreground text-sm"
+                                className="px-2 py-2 text-right type-footnote font-medium text-label-secondary"
                                 style={{ width: "40px", flex: "none" }}
                             >
                                 {t("table.edit")}
@@ -1729,9 +1730,9 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
 
                     {/* Loading more indicator */}
                     {isFetchingMore && (
-                        <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm">
+                        <div className="flex items-center justify-center gap-2 py-4 text-label-secondary">
+                            <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                            <span className="type-body">
                                 {t("table.loadingMore")}
                             </span>
                         </div>
@@ -1739,8 +1740,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 </div>
 
                 {/* Footer: count */}
-                <div className="flex items-center justify-between border-t px-6 py-3">
-                    <p className="text-sm text-muted-foreground">
+                <div className="flex items-center justify-between border-t border-border/50 px-6 py-3">
+                    <p className="type-footnote text-label-secondary">
                         {processedRows.length !== deferredData.length
                             ? t("table.shownOfFiltered", {
                                   shown: processedRows.length.toString(),

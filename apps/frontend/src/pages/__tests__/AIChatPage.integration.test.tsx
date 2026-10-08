@@ -38,14 +38,14 @@ describe("AIChatPage (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />);
         expect(
-            await screen.findByRole("tab", { name: "Chat", selected: true }),
+            await screen.findByRole("radio", { name: "Chat", checked: true }),
         ).toBeInTheDocument();
         expect(
             screen.queryByRole("textbox", {
                 name: /ask a financial or research question/i,
             }),
         ).not.toBeInTheDocument();
-        await user.click(screen.getByRole("tab", { name: "Investigation" }));
+        await user.click(screen.getByRole("radio", { name: "Investigation" }));
         const question = screen.getByRole("textbox", {
             name: /ask a financial or research question/i,
         });
@@ -53,8 +53,8 @@ describe("AIChatPage (integration)", () => {
         expect(
             screen.queryByRole("textbox", { name: /ask about your spending/i }),
         ).not.toBeInTheDocument();
-        await user.click(screen.getByRole("tab", { name: "Chat" }));
-        await user.click(screen.getByRole("tab", { name: "Investigation" }));
+        await user.click(screen.getByRole("radio", { name: "Chat" }));
+        await user.click(screen.getByRole("radio", { name: "Investigation" }));
         expect(
             screen.getByRole("textbox", {
                 name: /ask a financial or research question/i,
@@ -67,16 +67,19 @@ describe("AIChatPage (integration)", () => {
         renderWithApp(<AIChatPage />, {
             initialEntries: ["/ai-chat?mode=investigation"],
         });
-        const tab = await screen.findByRole("tab", {
+        const segment = await screen.findByRole("radio", {
             name: "Investigation",
-            selected: true,
+            checked: true,
         });
-        tab.focus();
-        await user.keyboard("{ArrowLeft}");
+        segment.focus();
+        await user.keyboard("{ArrowLeft}{Enter}");
         expect(
-            await screen.findByRole("tab", { name: "Chat", selected: true }),
+            await screen.findByRole("radio", { name: "Chat", checked: true }),
         ).toHaveFocus();
-        expect(screen.getByRole("tabpanel", { name: "Chat" })).toBeVisible();
+        expect(screen.getByRole("region", { name: "Chat" })).toBeVisible();
+        expect(
+            screen.getByPlaceholderText(/ask about your spending/i),
+        ).toBeVisible();
     });
 
     it("preserves an unsent chat draft across investigation mode", async () => {
@@ -97,8 +100,8 @@ describe("AIChatPage (integration)", () => {
         );
         await waitFor(() => expect(composer).not.toBeDisabled());
         await user.type(composer, "How did spending change?");
-        await user.click(screen.getByRole("tab", { name: "Investigation" }));
-        await user.click(screen.getByRole("tab", { name: "Chat" }));
+        await user.click(screen.getByRole("radio", { name: "Investigation" }));
+        await user.click(screen.getByRole("radio", { name: "Chat" }));
         expect(composer).toHaveValue("How did spending change?");
     });
 
@@ -310,7 +313,7 @@ describe("AIChatPage (integration)", () => {
         // After click, header title updates to the new conversation title
         expect(
             await screen.findByRole("heading", { name: /new conversation/i }),
-        ).toHaveClass("text-lg");
+        ).toHaveClass("type-title-3");
     });
 
     it("clicking insights digest quick action sends the fixed prompt with tools forced on and insightsPreCall", async () => {

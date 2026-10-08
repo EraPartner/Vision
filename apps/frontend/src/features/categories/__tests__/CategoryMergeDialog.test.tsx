@@ -29,7 +29,10 @@ it("identifies the full source and selected destination paths before merging", a
         />,
     );
     expect(screen.getByText("Expenses / Travel")).toBeInTheDocument();
-    await user.selectOptions(screen.getByRole("combobox"), "2");
+    await user.click(screen.getByRole("combobox"));
+    await user.click(
+        await screen.findByRole("option", { name: "Expenses / Holidays" }),
+    );
     expect(
         screen.getByText(
             /Merge 'Expenses \/ Travel' into 'Expenses \/ Holidays'/,

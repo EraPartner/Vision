@@ -202,7 +202,7 @@ export function SankeyChart({ data, height = 420 }: SankeyChartProps) {
 
     if (!data.nodes.length) {
         return (
-            <div className="flex items-center justify-center h-40 text-sm text-muted-foreground">
+            <div className="flex h-40 items-center justify-center type-callout text-label-secondary">
                 {t("statsPage.sankey.noData")}
             </div>
         );

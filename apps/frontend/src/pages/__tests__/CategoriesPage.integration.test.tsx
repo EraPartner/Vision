@@ -10,6 +10,27 @@ import { err, noContent, ok, ok201 } from "@/test/msw/handlers";
 import CategoriesPage from "@/pages/CategoriesPage";
 
 const API_BASE = "http://localhost:3002";
+
+type User = ReturnType<typeof userEvent.setup>;
+
+async function expandAll(user: User) {
+    await user.click(screen.getByRole("button", { name: /^view$/i }));
+    await user.click(
+        await screen.findByRole("menuitem", { name: /^expand all$/i }),
+    );
+}
+
+async function openRowMenu(user: User, path: string) {
+    await user.click(
+        screen.getByRole("button", { name: `Actions for ${path}` }),
+    );
+}
+
+async function chooseOption(user: User, combobox: HTMLElement, name: string) {
+    await user.click(combobox);
+    await user.click(await screen.findByRole("option", { name }));
+}
+
 const nodes = [
     {
         id: 1,
@@ -62,7 +83,7 @@ const nodes = [
 ];
 
 describe("CategoriesPage hierarchy", () => {
-    it("names category activity toggles and exposes their current state", async () => {
+    it("marks inactive categories and offers the opposite status in the row menu", async () => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
                 ok({
@@ -73,24 +94,73 @@ describe("CategoriesPage hierarchy", () => {
         );
         const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
+        const foodLink = await screen.findByRole("link", { name: "FOOD" });
+        expect(foodLink.closest("li")).toHaveTextContent("Inactive");
+        await openRowMenu(user, "FOOD");
         expect(
-            await screen.findByRole("button", {
-                name: "Inactive: FOOD",
-                pressed: false,
-            }),
+            await screen.findByRole("menuitem", { name: /^mark active$/i }),
         ).toBeInTheDocument();
-        await user.click(screen.getByRole("button", { name: /^expand all$/i }));
+        await user.keyboard("{Escape}");
+        await expandAll(user);
+        await openRowMenu(user, "FOOD / GROCERIES");
         expect(
-            screen.getByRole("button", {
-                name: "Active: FOOD / GROCERIES",
-                pressed: true,
-            }),
+            await screen.findByRole("menuitem", { name: /^mark inactive$/i }),
         ).toBeInTheDocument();
     });
 
-    it.each(["Edit", "Merge category", "Delete category"])(
-        "returns keyboard focus after cancelling %s",
-        async (action) => {
+    it("toggles a category's status at once and offers undo", async () => {
+        const user = userEvent.setup();
+        const success = vi
+            .spyOn(toast, "success")
+            .mockReturnValue("t" as never);
+        const patches: unknown[] = [];
+        server.use(
+            http.get(`${API_BASE}/api/categories/tree`, () =>
+                ok({ items: nodes, total: nodes.length }),
+            ),
+            http.patch(
+                `${API_BASE}/api/categories/tree/:id`,
+                async ({ request }) => {
+                    patches.push(await request.json());
+                    return ok({ ...nodes[0], is_active: false });
+                },
+            ),
+        );
+        renderWithApp(<CategoriesPage />);
+        await screen.findByRole("link", { name: "FOOD" });
+        await openRowMenu(user, "FOOD");
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^mark inactive$/i }),
+        );
+        await waitFor(() => expect(patches).toEqual([{ is_active: false }]));
+        await waitFor(() =>
+            expect(success).toHaveBeenCalledWith(
+                "FOOD marked inactive",
+                expect.objectContaining({
+                    action: expect.objectContaining({ label: "Undo" }),
+                }),
+            ),
+        );
+        const undo = success.mock.calls.at(-1)?.[1] as unknown as {
+            action: { onClick: () => void };
+        };
+        undo.action.onClick();
+        await waitFor(() =>
+            expect(patches).toEqual([
+                { is_active: false },
+                { is_active: true },
+            ]),
+        );
+        success.mockRestore();
+    });
+
+    it.each([
+        ["Edit", /^edit$/i],
+        ["Merge category", /^merge category$/i],
+        ["Delete", /^delete$/i],
+    ])(
+        "returns keyboard focus to the row menu after cancelling %s",
+        async (_action, item) => {
             server.use(
                 http.get(`${API_BASE}/api/categories/tree`, () =>
                     ok({ items: nodes, total: nodes.length }),
@@ -99,14 +169,15 @@ describe("CategoriesPage hierarchy", () => {
             const user = userEvent.setup();
             renderWithApp(<CategoriesPage />);
             await screen.findByRole("link", { name: "FOOD" });
-            await user.click(
-                screen.getByRole("button", { name: /^expand all$/i }),
-            );
+            await expandAll(user);
             const opener = screen.getByRole("button", {
-                name: `${action} FOOD / GROCERIES / ORGANIC / FRUIT`,
+                name: "Actions for FOOD / GROCERIES / ORGANIC / FRUIT",
             });
             opener.focus();
             await user.keyboard("{Enter}");
+            await user.click(
+                await screen.findByRole("menuitem", { name: item }),
+            );
             await user.click(
                 await screen.findByRole("button", { name: /^cancel$/i }),
             );
@@ -133,7 +204,7 @@ describe("CategoriesPage hierarchy", () => {
         );
         renderWithApp(<CategoriesPage />);
         await screen.findByRole("link", { name: "FOOD" });
-        await user.click(screen.getByRole("button", { name: /^expand all$/i }));
+        await expandAll(user);
         expect(screen.getByRole("link", { name: "FRUIT" })).toHaveAttribute(
             "href",
             "/transactions?category_id=4&filter_label=FOOD%20%2F%20GROCERIES%20%2F%20ORGANIC%20%2F%20FRUIT",
@@ -164,11 +235,14 @@ describe("CategoriesPage hierarchy", () => {
             await screen.findByRole("button", { name: /add category/i }),
         );
         await user.type(screen.getByLabelText(/^name$/i), "fruit");
-        await user.selectOptions(
+        await chooseOption(
+            user,
             screen.getByLabelText(/parent category/i),
-            "3",
+            "FOOD / GROCERIES / ORGANIC",
         );
-        await user.click(screen.getByRole("button", { name: /^add category$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^add category$/i }),
+        );
         await waitFor(() =>
             expect(body).toMatchObject({ name: "fruit", parentId: 3 }),
         );
@@ -190,17 +264,21 @@ describe("CategoriesPage hierarchy", () => {
             ),
         );
         renderWithApp(<CategoriesPage />);
+        await screen.findByRole("link", { name: "FOOD" });
+        await expandAll(user);
+        await openRowMenu(user, "FOOD / GROCERIES / ORGANIC");
         await user.click(
-            await screen.findByRole("button", { name: /^expand all$/i }),
+            await screen.findByRole("menuitem", { name: /^edit$/i }),
         );
-        await user.click(
-            screen.getByRole("button", {
-                name: "Edit FOOD / GROCERIES / ORGANIC",
+        const select = await screen.findByLabelText(/parent category/i);
+        await user.click(select);
+        await screen.findByRole("option", { name: "FOOD" });
+        expect(
+            screen.queryByRole("option", {
+                name: "FOOD / GROCERIES / ORGANIC / FRUIT",
             }),
-        );
-        const select = screen.getByLabelText(/parent category/i);
-        expect(select.querySelector('option[value="4"]')).toBeNull();
-        await user.selectOptions(select, "1");
+        ).toBeNull();
+        await user.click(screen.getByRole("option", { name: "FOOD" }));
         await user.click(screen.getByRole("button", { name: /^save$/i }));
         await waitFor(() => expect(body).toMatchObject({ parentId: 1 }));
     });
@@ -211,10 +289,15 @@ describe("CategoriesPage hierarchy", () => {
                 ok({ items: nodes, total: nodes.length }),
             ),
         );
+        const user = userEvent.setup();
         renderWithApp(<CategoriesPage />);
-        expect(
-            await screen.findByRole("button", { name: "Delete category FOOD" }),
-        ).toBeDisabled();
+        await screen.findByRole("link", { name: "FOOD" });
+        await openRowMenu(user, "FOOD");
+        const item = await screen.findByRole("menuitem", { name: /^delete/i });
+        expect(item).toHaveAttribute("aria-disabled", "true");
+        expect(item).toHaveTextContent(
+            /move or delete child categories first/i,
+        );
     });
 
     it("merges a branch into an active target outside its subtree", async () => {
@@ -236,18 +319,26 @@ describe("CategoriesPage hierarchy", () => {
             ),
         );
         renderWithApp(<CategoriesPage />);
+        await screen.findByRole("link", { name: "FOOD" });
+        await expandAll(user);
+        await openRowMenu(user, "FOOD / GROCERIES");
         await user.click(
-            await screen.findByRole("button", { name: /^expand all$/i }),
+            await screen.findByRole("menuitem", { name: /^merge category$/i }),
         );
-        await user.click(
-            screen.getByRole("button", {
-                name: "Merge category FOOD / GROCERIES",
+        const target = await screen.findByLabelText(/merge into/i);
+        await user.click(target);
+        await screen.findByRole("option", { name: "FOOD" });
+        expect(
+            screen.queryByRole("option", {
+                name: "FOOD / GROCERIES / ORGANIC",
             }),
-        );
-        const target = screen.getByLabelText(/merge into/i);
-        expect(target.querySelector('option[value="3"]')).toBeNull();
-        expect(target.querySelector('option[value="4"]')).toBeNull();
-        await user.selectOptions(target, "1");
+        ).toBeNull();
+        expect(
+            screen.queryByRole("option", {
+                name: "FOOD / GROCERIES / ORGANIC / FRUIT",
+            }),
+        ).toBeNull();
+        await user.click(screen.getByRole("option", { name: "FOOD" }));
         await user.click(screen.getByRole("button", { name: /^merge$/i }));
         await waitFor(() =>
             expect(merged).toEqual({ sourceId: "2", body: { targetId: 1 } }),
@@ -267,9 +358,7 @@ describe("CategoriesPage hierarchy", () => {
         expect(
             await screen.findByRole("link", { name: "FOOD" }),
         ).toBeInTheDocument();
-        await userEvent
-            .setup()
-            .click(screen.getByRole("button", { name: /^expand all$/i }));
+        await expandAll(userEvent.setup());
         expect(
             screen.getByRole("link", { name: "GROCERIES" }),
         ).toBeInTheDocument();
@@ -305,17 +394,17 @@ describe("CategoriesPage hierarchy", () => {
             }),
         );
         renderWithApp(<CategoriesPage />);
+        await screen.findByRole("link", { name: "FOOD" });
+        await expandAll(user);
+        await openRowMenu(user, "FOOD / GROCERIES / ORGANIC / FRUIT");
         await user.click(
-            await screen.findByRole("button", { name: /^expand all$/i }),
-        );
-        await user.click(
-            screen.getByRole("button", {
-                name: "Delete category FOOD / GROCERIES / ORGANIC / FRUIT",
-            }),
+            await screen.findByRole("menuitem", { name: /^delete$/i }),
         );
         expect(deleted).toBe(false);
         expect(success).not.toHaveBeenCalled();
-        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^delete$/i }),
+        );
         await waitFor(() => expect(deleted).toBe(true));
         await waitFor(() => {
             expect(success).toHaveBeenCalledWith("Category deleted");

@@ -14,7 +14,7 @@ function Skeleton({className, ...props}: React.HTMLAttributes<HTMLDivElement>) {
         <div
             aria-hidden="true"
             className={cn(
-                "relative overflow-hidden rounded-md bg-foreground/[0.06]",
+                "relative overflow-hidden rounded-chip bg-foreground/[0.06]",
                 className,
             )}
             {...props}

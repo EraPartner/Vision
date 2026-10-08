@@ -1,6 +1,6 @@
 import { Link } from "react-router";
-import { KeyRound } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { AlertTriangle, KeyRound } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { ApiClientError } from "@/lib/api/client";
@@ -34,26 +34,16 @@ export function AdminErrorState({
 
     if (isAdminAuthError(error)) {
         return (
-            <Card className="!border-destructive/60 bg-destructive/5">
-                <CardContent variant="headerless" className="space-y-3">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/5">
-                            <KeyRound className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-semibold">
-                                {t("admin.authError.title")}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                                {t("admin.authError.description")}
-                            </p>
-                        </div>
-                    </div>
+            <Alert variant="destructive" role="alert">
+                <KeyRound className="h-4 w-4" aria-hidden="true" />
+                <AlertTitle>{t("admin.authError.title")}</AlertTitle>
+                <AlertDescription className="space-y-3">
+                    <p>{t("admin.authError.description")}</p>
                     <Button asChild variant="outline" size="sm">
                         <Link to="/admin">{t("admin.authError.action")}</Link>
                     </Button>
-                </CardContent>
-            </Card>
+                </AlertDescription>
+            </Alert>
         );
     }
 
@@ -61,12 +51,10 @@ export function AdminErrorState({
     // browser's "Failed to fetch" or a transport sentinel is noise to a user.
     const message = apiErrorToMessage(error, t);
     return (
-        <Card className="!border-destructive/60 bg-destructive/5">
-            <CardContent variant="headerless">
-                <p className="text-sm text-destructive">
-                    {fallbackMessage}: {message}
-                </p>
-            </CardContent>
-        </Card>
+        <Alert variant="destructive" role="alert">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            <AlertTitle>{fallbackMessage}</AlertTitle>
+            <AlertDescription>{message}</AlertDescription>
+        </Alert>
     );
 }

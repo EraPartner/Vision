@@ -1,5 +1,28 @@
+import { useId } from "react";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { getChartColor } from "@/components/charts";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { formatAnalysisValue } from "./analysisPresentation";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -9,6 +32,10 @@ import {
     analysisChartData,
     type AnalysisChartSpec,
 } from "./analysisChartModel";
+
+const NO_AXIS = "__none__";
+const statusClass = "type-callout text-label-secondary";
+
 export function AnalysisChartPanel({
     result,
     spec,
@@ -20,6 +47,8 @@ export function AnalysisChartPanel({
 }) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const typeLabelId = useId();
+    const xAxisId = useId();
     const tickFormat = new Intl.NumberFormat(
         numberFormatToLocale(appSettings.numberFormat),
         { maximumSignificantDigits: 5 },
@@ -125,22 +154,26 @@ export function AnalysisChartPanel({
                       .join(" ");
         return `${label} (${scope})`;
     };
-    const colors = ["#2563eb", "#db2777", "#059669", "#d97706", "#7c3aed"];
+    const colors = [0, 1, 2, 3, 4].map(getChartColor);
+    const gain = "hsl(var(--gain))";
+    const loss = "hsl(var(--loss))";
     return (
         <div className="min-w-0 space-y-3">
             <div className="grid items-start gap-4 sm:grid-cols-2">
-                <label className="grid gap-2 text-sm font-medium">
-                    {t("analysis.ext.chart.type")}
-                    <select
-                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 text-sm focus-ring"
+                <div className="min-w-0 space-y-1.5 sm:col-span-2">
+                    <Label id={typeLabelId}>
+                        {t("analysis.ext.chart.type")}
+                    </Label>
+                    <SegmentedControl
+                        aria-labelledby={typeLabelId}
                         value={spec.kind}
-                        onChange={(e) =>
+                        onValueChange={(kind) =>
                             onChange({
                                 ...spec,
-                                kind: e.target
-                                    .value as AnalysisChartSpec["kind"],
+                                kind: kind as AnalysisChartSpec["kind"],
                             })
                         }
+                        className="w-full"
                     >
                         {(
                             [
@@ -151,38 +184,45 @@ export function AnalysisChartPanel({
                                 "waterfall",
                             ] as const
                         ).map((k) => (
-                            <option key={k} value={k}>
+                            <SegmentedControlItem key={k} value={k}>
                                 {t(`analysis.ext.chart.${k}`)}
-                            </option>
+                            </SegmentedControlItem>
                         ))}
-                    </select>
-                </label>
-                <label className="grid gap-2 text-sm font-medium">
-                    {t("analysis.ext.chart.x")}
-                    <select
-                        className="h-9 w-full min-w-0 rounded-control border border-input bg-background px-3 text-sm focus-ring"
-                        value={spec.x}
-                        onChange={(e) =>
-                            onChange({ ...spec, x: e.target.value })
+                    </SegmentedControl>
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                    <Label htmlFor={xAxisId}>{t("analysis.ext.chart.x")}</Label>
+                    <Select
+                        value={spec.x || NO_AXIS}
+                        onValueChange={(value) =>
+                            onChange({
+                                ...spec,
+                                x: value === NO_AXIS ? "" : value,
+                            })
                         }
                     >
-                        <option value="">—</option>
-                        {columns.map((c) => (
-                            <option key={c.id} value={c.id}>
-                                {String("label" in c ? c.label : c.id)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                        <SelectTrigger id={xAxisId}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NO_AXIS}>—</SelectItem>
+                            {columns.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                    {String("label" in c ? c.label : c.id)}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <fieldset className="min-w-0 sm:col-span-2">
-                    <legend className="mb-2 text-sm font-medium">
+                    <legend className="mb-2 type-body font-medium">
                         {t("analysis.ext.chart.series")}
                     </legend>
                     <div className="flex flex-wrap gap-2">
                         {numeric.map((c) => (
                             <label
                                 key={c.id}
-                                className="flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-md px-2 text-sm [overflow-wrap:anywhere]"
+                                className="flex min-h-9 min-w-0 max-w-full items-center gap-2 rounded-chip border border-border/60 bg-card/70 px-3 type-callout [overflow-wrap:anywhere]"
                             >
                                 <Checkbox
                                     checked={spec.y.includes(c.id)}
@@ -205,31 +245,32 @@ export function AnalysisChartPanel({
                 </fieldset>
             </div>
             {!data.complete ? (
-                <p role="status" className="text-sm text-muted-foreground">
+                <p role="status" className={statusClass}>
                     {t("analysis.ext.chart.complete")}
                 </p>
             ) : data.incompatible ? (
-                <p role="status" className="text-sm text-muted-foreground">
+                <p role="status" className={statusClass}>
                     {t("analysis.ext.chart.units")}
                 </p>
             ) : !spec.x || !spec.y.length ? (
-                <p>{t("analysis.ext.chart.select")}</p>
+                <p className={statusClass}>{t("analysis.ext.chart.select")}</p>
             ) : spec.kind === "waterfall" && data.omitted > 0 ? (
-                <p role="status" className="text-sm text-muted-foreground">
+                <p role="status" className={statusClass}>
                     {t("analysis.ext.chart.waterfallMissing")}
                 </p>
             ) : spec.kind === "waterfall" && spec.y.length !== 1 ? (
-                <p>{t("analysis.ext.chart.oneSeries")}</p>
-            ) : !data.rows.length ? (
-                <p
-                    role="status"
-                    className="rounded-lg bg-muted/30 p-4 text-sm text-muted-foreground"
-                >
-                    {t("analysis.ext.chart.empty")}
+                <p className={statusClass}>
+                    {t("analysis.ext.chart.oneSeries")}
                 </p>
+            ) : !data.rows.length ? (
+                <Alert role="status">
+                    <AlertDescription>
+                        {t("analysis.ext.chart.empty")}
+                    </AlertDescription>
+                </Alert>
             ) : (
                 <>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("analysis.ext.chart.coverage", {
                             rows: data.rows.length,
                             missing: data.omitted,
@@ -377,8 +418,8 @@ export function AnalysisChartPanel({
                                                           spec.kind ===
                                                           "waterfall"
                                                               ? v < 0
-                                                                  ? "#dc2626"
-                                                                  : "#059669"
+                                                                  ? loss
+                                                                  : gain
                                                               : colors[
                                                                     s %
                                                                         colors.length
@@ -424,57 +465,60 @@ export function AnalysisChartPanel({
                                 </text>
                             ))}
                     </svg>
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                    <ul className="flex flex-wrap gap-x-4 gap-y-2 type-callout">
                         {spec.y.map((id, s) => (
-                            <span
-                                key={id}
-                                style={{ color: colors[s % colors.length] }}
-                            >
+                            <li key={id} className="flex items-center gap-2">
+                                <span
+                                    aria-hidden="true"
+                                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                    style={{
+                                        backgroundColor:
+                                            colors[s % colors.length],
+                                    }}
+                                />
                                 {seriesLabel(id)}
-                            </span>
+                            </li>
                         ))}
-                    </div>
-                    <details>
-                        <summary>{t("analysis.ext.chart.table")}</summary>
-                        <div className="overflow-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr>
-                                        <th className="p-2 text-left">
-                                            {seriesLabel(spec.x)}
-                                        </th>
-                                        {spec.y.map((id) => (
-                                            <th
-                                                key={id}
-                                                className="p-2 text-right"
-                                            >
-                                                {seriesLabel(id)}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.rows.map((r) => (
-                                        <tr key={r.index}>
-                                            <th className="p-2 text-left font-normal">
-                                                {displayValue(r.label, spec.x)}
-                                            </th>
-                                            {r.values.map((_v, s) => (
-                                                <td
-                                                    key={s}
-                                                    className="p-2 text-right tabular-nums"
-                                                >
-                                                    {displayValue(
-                                                        r.rawValues[s],
-                                                        spec.y[s],
-                                                    )}
-                                                </td>
-                                            ))}
-                                        </tr>
+                    </ul>
+                    <details className="rounded-card corner-continuous border border-border/60">
+                        <summary className="cursor-pointer rounded-card px-4 py-2.5 type-headline focus-ring">
+                            {t("analysis.ext.chart.table")}
+                        </summary>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>{seriesLabel(spec.x)}</TableHead>
+                                    {spec.y.map((id) => (
+                                        <TableHead
+                                            key={id}
+                                            className="text-right"
+                                        >
+                                            {seriesLabel(id)}
+                                        </TableHead>
                                     ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {data.rows.map((r) => (
+                                    <TableRow key={r.index}>
+                                        <TableCell className="py-2">
+                                            {displayValue(r.label, spec.x)}
+                                        </TableCell>
+                                        {r.values.map((_v, s) => (
+                                            <TableCell
+                                                key={s}
+                                                className="py-2 text-right tabular-nums"
+                                            >
+                                                {displayValue(
+                                                    r.rawValues[s],
+                                                    spec.y[s],
+                                                )}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </details>
                 </>
             )}

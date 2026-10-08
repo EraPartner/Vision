@@ -13,6 +13,7 @@ import type {
     BelgianTaxCalculation,
     BelgianTaxProfile,
 } from "@/lib/belgianTax";
+import { KeyValueRows, type KeyValueRow } from "./KeyValueRows";
 
 type ProfileRow =
     | "employmentType"
@@ -28,6 +29,8 @@ interface TaxProfileInputsCardProps {
     calculation: BelgianTaxCalculation;
     description: string;
     variant: "overview" | "portfolio";
+    /** Extra rows appended below the profile inputs (derived figures). */
+    extraRows?: KeyValueRow[];
     children?: ReactNode;
 }
 
@@ -55,55 +58,42 @@ export function TaxProfileInputsCard({
     calculation,
     description,
     variant,
+    extraRows = [],
     children,
 }: TaxProfileInputsCardProps) {
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
-    const rows =
+    const rowKeys =
         variant === "overview" ? OVERVIEW_PROFILE_ROWS : PORTFOLIO_PROFILE_ROWS;
 
     const values: Record<ProfileRow, ReactNode> = {
         employmentType: (
             <Badge variant="secondary">
-                {profile.employmentType.replaceAll("_", " ")}
+                {t(`tax.profile.employment.${profile.employmentType}.label`)}
             </Badge>
         ),
-        grossAnnualIncome: (
-            <span className="font-semibold tabular-nums">
-                {fmt(profile.grossAnnualIncome)}
-            </span>
-        ),
-        otherTaxableIncome: (
-            <span className="font-semibold tabular-nums">
-                {fmt(profile.otherTaxableIncome)}
-            </span>
-        ),
-        professionalExpenses: (
-            <span className="font-semibold tabular-nums">
-                {profile.professionalExpenseMethod === "lump_sum"
-                    ? t("tax.profile.field.professionalExpenses.lump")
-                    : fmt(profile.actualProfessionalExpenses)}
-            </span>
-        ),
-        dependents: (
-            <span className="font-semibold">
-                {profile.dependentChildren} {t("tax.profile.field.children")} /{" "}
-                {profile.dependentOtherPersons} {t("tax.profile.field.others")}
-            </span>
-        ),
-        personalExemption: (
-            <span className="font-semibold tabular-nums">
-                {fmt(calculation.personalExemptionAmount)}
-            </span>
-        ),
-        disabilityExemptions: (
-            <span className="font-semibold">
-                {profile.isDisabled || profile.isSpouseDisabled
-                    ? t("common.applied")
-                    : t("common.none")}
-            </span>
-        ),
+        grossAnnualIncome: fmt(profile.grossAnnualIncome),
+        otherTaxableIncome: fmt(profile.otherTaxableIncome),
+        professionalExpenses:
+            profile.professionalExpenseMethod === "lump_sum"
+                ? t("tax.profile.field.professionalExpenses.lump")
+                : fmt(profile.actualProfessionalExpenses),
+        dependents: `${profile.dependentChildren} ${t("tax.profile.field.children")} / ${profile.dependentOtherPersons} ${t("tax.profile.field.others")}`,
+        personalExemption: fmt(calculation.personalExemptionAmount),
+        disabilityExemptions:
+            profile.isDisabled || profile.isSpouseDisabled
+                ? t("common.applied")
+                : t("common.none"),
     };
+
+    const rows: KeyValueRow[] = [
+        ...rowKeys.map((row) => ({
+            key: row,
+            label: t(`tax.profile.field.${row}`),
+            value: values[row],
+        })),
+        ...extraRows,
+    ];
 
     return (
         <Card>
@@ -111,18 +101,8 @@ export function TaxProfileInputsCard({
                 <CardTitle>{t("tax.profile.currentInputs")}</CardTitle>
                 <CardDescription>{description}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-                {rows.map((row) => (
-                    <div
-                        key={row}
-                        className="flex items-center justify-between text-sm"
-                    >
-                        <span className="text-muted-foreground">
-                            {t(`tax.profile.field.${row}`)}
-                        </span>
-                        {values[row]}
-                    </div>
-                ))}
+            <CardContent>
+                <KeyValueRows rows={rows} />
                 {children}
             </CardContent>
         </Card>

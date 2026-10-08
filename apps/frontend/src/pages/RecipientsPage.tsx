@@ -1,28 +1,34 @@
-import { ListFilterToggle } from "@/components/shared/ListFilterToggle";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import logger from "@/lib/logger";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-    Tooltip,
-    TooltipTrigger,
-    TooltipContent,
-} from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
-    ToggleLeft,
-    ToggleRight,
-    Trash2,
+    Eye,
+    EyeOff,
     Link2,
+    MoreHorizontal,
+    Regex,
+    SlidersHorizontal,
+    Trash2,
     Unlink,
     Users,
-    Regex,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
     useUpdateRecipient,
@@ -39,7 +45,8 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { recipientKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import type { Recipient } from "@/lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { undoToast } from "@/lib/undoToast";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { parseCategoryName } from "@vision/shared-utils";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -239,11 +246,43 @@ export default function RecipientsPage() {
         });
     };
 
+    const statusMutation = useMutation({
+        mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) =>
+            apiClient.updateRecipient(id, { is_active }),
+        onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: recipientKeys.all }),
+    });
+    const { mutateAsync: setStatus } = statusMutation;
+
     const toggleActive = useCallback(
-        (id: number, currentActive: boolean) => {
-            updateMutation.mutate({ id, data: { is_active: !currentActive } });
+        async (row: TableRecipient) => {
+            const nextActive = !row.is_active;
+            try {
+                await setStatus({ id: row.id, is_active: nextActive });
+                undoToast({
+                    message: t(
+                        nextActive
+                            ? "recipientsPage.toast.active"
+                            : "recipientsPage.toast.inactive",
+                        { name: row.name },
+                    ),
+                    undoLabel: t("common.undo"),
+                    undo: async () => {
+                        try {
+                            await setStatus({
+                                id: row.id,
+                                is_active: !nextActive,
+                            });
+                        } catch {
+                            toast.error(t("recipientsPage.toggleFailed"));
+                        }
+                    },
+                });
+            } catch {
+                toast.error(t("recipientsPage.toggleFailed"));
+            }
         },
-        [updateMutation],
+        [setStatus, t],
     );
 
     const recipients: TableRecipient[] = useMemo(
@@ -286,26 +325,31 @@ export default function RecipientsPage() {
                         <TouchDisclosure
                             label={row.name}
                             content={row.name}
-                            className="shrink-0 px-1 text-xs text-muted-foreground"
+                            className="shrink-0 px-1 type-footnote text-label-secondary"
                         >
                             …
                         </TouchDisclosure>
                         {(row.alias_count ?? 0) > 0 && (
                             <Badge
                                 variant="secondary"
-                                className="shrink-0 text-xs gap-1"
+                                size="sm"
+                                className="shrink-0 gap-1"
                             >
-                                <Users className="h-3 w-3" />
+                                <Users className="h-3 w-3" aria-hidden />
                                 {row.alias_count}
                             </Badge>
                         )}
                         {row.primary_recipient_id && (
                             <Badge
                                 variant="outline"
-                                className="min-w-0 gap-1 text-xs text-muted-foreground"
+                                size="sm"
+                                className="min-w-0 gap-1 text-label-secondary"
                                 title={row.primary_recipient_name ?? undefined}
                             >
-                                <Link2 className="h-3 w-3 shrink-0" />
+                                <Link2
+                                    className="h-3 w-3 shrink-0"
+                                    aria-hidden
+                                />
                                 <span className="truncate">
                                     → {row.primary_recipient_name}
                                 </span>
@@ -321,7 +365,7 @@ export default function RecipientsPage() {
                 render: (row: TableRecipient) => (
                     <span
                         className={cn(
-                            "text-muted-foreground font-mono text-sm",
+                            "font-mono type-callout text-label-secondary",
                             !row.is_active && "line-through",
                         )}
                     >
@@ -399,7 +443,7 @@ export default function RecipientsPage() {
                 render: (row: TableRecipient) => (
                     <span
                         className={cn(
-                            "text-sm text-muted-foreground",
+                            "type-callout text-label-secondary",
                             !row.is_active && "line-through",
                         )}
                     >
@@ -412,127 +456,93 @@ export default function RecipientsPage() {
                 header: t("recipientsPage.col.status"),
                 editable: false,
                 render: (row: TableRecipient) => (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className={cn(
-                                    "gap-1.5",
-                                    row.is_active
-                                        ? "text-accent hover:text-accent"
-                                        : "text-muted-foreground hover:text-muted-foreground opacity-50",
-                                )}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleActive(row.id, row.is_active);
-                                }}
-                                disabled={updateMutation.isPending}
-                                aria-label={t(
-                                    row.is_active
-                                        ? "recipientsPage.activeFor"
-                                        : "recipientsPage.inactiveFor",
-                                    { name: row.name },
-                                )}
-                                title={t(
-                                    row.is_active
-                                        ? "recipientsPage.deactivateFor"
-                                        : "recipientsPage.activateFor",
-                                    { name: row.name },
-                                )}
-                            >
-                                {row.is_active ? (
-                                    <ToggleRight className="h-4 w-4" />
-                                ) : (
-                                    <ToggleLeft className="h-4 w-4" />
-                                )}
-                                {row.is_active
-                                    ? t("recipientsPage.statusActive")
-                                    : t("recipientsPage.statusInactive")}
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            {t(
-                                row.is_active
-                                    ? "recipientsPage.deactivateFor"
-                                    : "recipientsPage.activateFor",
-                                { name: row.name },
-                            )}
-                        </TooltipContent>
-                    </Tooltip>
+                    <Badge
+                        variant={row.is_active ? "success" : "muted"}
+                        size="sm"
+                    >
+                        {row.is_active
+                            ? t("recipientsPage.statusActive")
+                            : t("recipientsPage.statusInactive")}
+                    </Badge>
                 ),
             },
             {
                 key: "actions",
                 header: "",
-                className: "w-32",
+                className: "w-12",
                 editable: false,
                 render: (row: TableRecipient) => (
-                    <div className="flex items-center gap-1">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
+                    <div className="flex justify-end">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                    aria-label={t(
-                                        "recipientsPage.patternsFor",
-                                        { name: row.name },
-                                    )}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
+                                    className="h-8 w-8 text-label-secondary"
+                                    aria-label={t("recipientsPage.rowMenu", {
+                                        name: row.name,
+                                    })}
+                                    onClick={(event) => event.stopPropagation()}
+                                >
+                                    <MoreHorizontal aria-hidden />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                                align="end"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <DropdownMenuItem
+                                    onSelect={() =>
                                         setPatternsDialogRecipient({
                                             id: row.id,
                                             name: row.name,
-                                        });
-                                    }}
+                                        })
+                                    }
                                 >
-                                    <Regex className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                {t("recipientsPage.patternsFor", {
-                                    name: row.name,
-                                })}
-                            </TooltipContent>
-                        </Tooltip>
-                        {row.primary_recipient_id && (
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="icon-touch-target text-muted-foreground hover:text-foreground"
-                                        aria-label={t(
-                                            "recipientsPage.unmergeFor",
-                                            { name: row.name },
-                                        )}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            unmergeMutation.mutate(row.id);
-                                        }}
+                                    <Regex
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("recipientPatterns.title")}
+                                </DropdownMenuItem>
+                                {row.primary_recipient_id && (
+                                    <DropdownMenuItem
                                         disabled={unmergeMutation.isPending}
+                                        onSelect={() =>
+                                            unmergeMutation.mutate(row.id)
+                                        }
                                     >
-                                        <Unlink className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    {t("recipientsPage.unmergeFor", {
-                                        name: row.name,
-                                    })}
-                                </TooltipContent>
-                            </Tooltip>
-                        )}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="icon-touch-target text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                    aria-label={t("recipientsPage.deleteFor", {
-                                        name: row.name,
-                                    })}
-                                    onClick={async () => {
+                                        <Unlink
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                        {t("recipientsPage.unmerge")}
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                    disabled={statusMutation.isPending}
+                                    onSelect={() => void toggleActive(row)}
+                                >
+                                    {row.is_active ? (
+                                        <EyeOff
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                    ) : (
+                                        <Eye
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                    )}
+                                    {row.is_active
+                                        ? t("recipientsPage.markInactive")
+                                        : t("recipientsPage.markActive")}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    disabled={deleteMutation.isPending}
+                                    onSelect={async () => {
                                         const ok = await confirm({
                                             title: t(
                                                 "recipientsPage.delete.title",
@@ -548,17 +558,15 @@ export default function RecipientsPage() {
                                         });
                                         if (ok) deleteMutation.mutate(row.id);
                                     }}
-                                    disabled={deleteMutation.isPending}
                                 >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                {t("recipientsPage.deleteFor", {
-                                    name: row.name,
-                                })}
-                            </TooltipContent>
-                        </Tooltip>
+                                    <Trash2
+                                        className="mr-2 h-4 w-4"
+                                        aria-hidden
+                                    />
+                                    {t("common.delete")}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 ),
             },
@@ -566,6 +574,7 @@ export default function RecipientsPage() {
         [
             t,
             toggleActive,
+            statusMutation.isPending,
             queryClient,
             cancelEditingRef,
             updateMutation,
@@ -603,43 +612,69 @@ export default function RecipientsPage() {
                     title={t("recipientsPage.tableTitle")}
                     icon={PAGE_ICONS["/recipients"]}
                 />
-                <Card>
-                    <CardContent>
-                        <PageError
-                            onRetry={() => void refetch()}
-                            message={t("recipientsPage.error", {
-                                msg: apiErrorToMessage(error, t),
-                            })}
-                        />
-                    </CardContent>
-                </Card>
+                <PageError
+                    onRetry={() => void refetch()}
+                    message={t("recipientsPage.error", {
+                        msg: apiErrorToMessage(error, t),
+                    })}
+                />
             </PageShell>
         );
     }
 
-    const tableActions = (
-        <div className="flex flex-wrap items-center gap-2">
-            <ListFilterToggle
-                checked={showAll}
-                onCheckedChange={setShowAll}
-                label={t("common.includeInactive")}
-            />
-            <ListFilterToggle
-                checked={showUncategorized}
-                onCheckedChange={setShowUncategorized}
-                label={t("recipients.uncategorizedOnly")}
-            />
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMergeDialogOpen(true)}
-                className="gap-1.5"
-            >
-                <Link2 className="h-4 w-4" />
-                {t("merge.title")}
-            </Button>
+    const headerActions = (
+        <>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="outline"
+                        aria-label={t("txPage.view.menu")}
+                    >
+                        <SlidersHorizontal className="h-4 w-4" aria-hidden />
+                        {t("txPage.view.menu")}
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuCheckboxItem
+                        checked={showAll}
+                        onCheckedChange={(checked) =>
+                            setShowAll(checked === true)
+                        }
+                    >
+                        {t("common.includeInactive")}
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem
+                        checked={showUncategorized}
+                        onCheckedChange={(checked) =>
+                            setShowUncategorized(checked === true)
+                        }
+                    >
+                        {t("recipients.uncategorizedOnly")}
+                    </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={t("recipientsPage.menu")}
+                    >
+                        <MoreHorizontal className="h-4 w-4" aria-hidden />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setMergeDialogOpen(true)}>
+                        <Link2
+                            className="mr-2 h-4 w-4 text-label-secondary"
+                            aria-hidden
+                        />
+                        {t("merge.title")}
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
             <AddRecipientDialog />
-        </div>
+        </>
     );
 
     return (
@@ -651,6 +686,7 @@ export default function RecipientsPage() {
                         n: totalItems,
                     })}
                     icon={PAGE_ICONS["/recipients"]}
+                    actions={headerActions}
                 />
 
                 <VirtualDataTable
@@ -681,26 +717,24 @@ export default function RecipientsPage() {
                             hasMore: hasMoreRef.current,
                         },
                     }}
-                    actions={tableActions}
                     maxHeight={700}
                     cancelEditingRef={cancelEditingRef}
                 />
 
                 {loadMoreFailed && (
-                    <div
-                        role="alert"
-                        className="flex flex-wrap items-center gap-3 text-sm"
-                    >
-                        <p>{t("recipientsPage.loadMoreFailed")}</p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isFetchingMore}
-                            onClick={() => void loadMore()}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription className="flex flex-wrap items-center gap-3">
+                            <span>{t("recipientsPage.loadMoreFailed")}</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isFetchingMore}
+                                onClick={() => void loadMore()}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 <MergeRecipientsDialog

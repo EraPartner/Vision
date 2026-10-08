@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { ApiRequestEvent } from '@/lib/devtools/apiEventBus';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 
 interface Props {
     events: ApiRequestEvent[];
@@ -34,36 +35,37 @@ function RequestRow({
         <button
             type="button"
             onClick={onClick}
+            aria-pressed={isSelected}
             className={cn(
-                'w-full flex items-center gap-2 px-3 py-1.5 text-left',
-                'hover:bg-accent/50 transition-colors',
-                isSelected && 'bg-accent',
+                'flex h-full w-full items-center gap-2 px-3 py-1.5 text-left',
+                'transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04] focus-ring focus-visible:outline-offset-[-3px]',
+                isSelected && 'bg-primary/[0.08]',
             )}
         >
             <span
                 className={cn(
-                    'w-14 shrink-0 text-2xs font-mono font-semibold',
-                    METHOD_COLOR[event.method] ?? 'text-muted-foreground',
+                    'w-14 shrink-0 font-mono type-caption font-medium',
+                    METHOD_COLOR[event.method] ?? 'text-label-secondary',
                 )}
             >
                 {event.method}
             </span>
             <span
                 className={cn(
-                    'flex-1 text-2xs font-mono truncate',
+                    'flex-1 truncate font-mono type-caption',
                     isError ? 'text-destructive' : 'text-foreground',
                 )}
             >
                 {event.endpoint}
             </span>
             {isInFlight ? (
-                <span className="shrink-0 text-2xs text-warning animate-pulse">…</span>
+                <span className="shrink-0 animate-pulse type-caption text-warning">…</span>
             ) : (
                 <>
                     {event.status && (
                         <span
                             className={cn(
-                                'shrink-0 text-2xs font-mono tabular-nums',
+                                'shrink-0 font-mono type-caption tabular-nums',
                                 isError ? 'text-destructive' : 'text-success',
                             )}
                         >
@@ -73,8 +75,8 @@ function RequestRow({
                     {event.durationMs !== undefined && (
                         <span
                             className={cn(
-                                'shrink-0 text-2xs tabular-nums',
-                                event.durationMs >= 1000 ? 'text-warning' : 'text-muted-foreground',
+                                'shrink-0 type-caption tabular-nums',
+                                event.durationMs >= 1000 ? 'text-warning' : 'text-label-secondary',
                             )}
                         >
                             {event.durationMs < 1000
@@ -116,16 +118,17 @@ export function RequestList({ events, inFlight, onSelect, selectedId }: Props) {
     return (
         <div className="flex flex-col h-full">
             <div className="px-2 py-1.5 border-b border-border shrink-0">
-                <input
+                <Input
                     type="text"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                     placeholder="Filter by endpoint or method…"
-                    className="w-full text-xs font-mono bg-muted/40 border border-border rounded px-2 py-1 text-foreground placeholder:text-muted-foreground focus:outline-none focus-ring"
+                    aria-label="Filter by endpoint or method"
+                    className="h-8 font-mono type-footnote"
                 />
             </div>
             {filtered.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
+                <div className="flex flex-1 items-center justify-center type-footnote text-label-secondary">
                     No requests yet
                 </div>
             ) : (

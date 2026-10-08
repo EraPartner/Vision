@@ -258,8 +258,8 @@ export function AddPortfolioTxnDialog({
             {!controlled && (
                 <DialogTrigger asChild>
                     {trigger ?? (
-                        <Button size="sm" variant="outline" className="gap-1.5">
-                            <Plus className="h-4 w-4" />{" "}
+                        <Button size="sm" variant="outline">
+                            <Plus aria-hidden="true" />{" "}
                             {t("form.addTransaction.title")}
                         </Button>
                     )}
@@ -361,7 +361,10 @@ export function AddPortfolioTxnDialog({
                         </Button>
                         <Button type="submit" disabled={isAddingTransaction}>
                             {isAddingTransaction && (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2
+                                    aria-hidden="true"
+                                    className="animate-spin"
+                                />
                             )}
                             {t("addPortTxn.record")}
                         </Button>

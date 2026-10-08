@@ -1,6 +1,16 @@
 import { lazy, memo, Suspense, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { logger } from "@/lib/logger";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { numberFormatToLocale } from "@/utils/currency";
@@ -88,11 +98,11 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
 
     if (!result.ok) {
         return (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                <p className="text-xs font-medium text-destructive">
+            <Alert variant="destructive" className="px-3 py-2">
+                <AlertDescription className="type-footnote font-medium">
                     {t(toolErrorTranslationKey(result.error))}
-                </p>
-            </div>
+                </AlertDescription>
+            </Alert>
         );
     }
 
@@ -105,12 +115,7 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
                 renderAs === "bar" ||
                 renderAs === "pie") && (
                 <Suspense
-                    fallback={
-                        <div
-                            className="h-56 w-full animate-pulse rounded-lg bg-muted/35"
-                            aria-hidden="true"
-                        />
-                    }
+                    fallback={<Skeleton className="h-56 w-full rounded-card" />}
                 >
                     <ToolResultChart
                         kind={renderAs}
@@ -127,66 +132,64 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
 }
 
 function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
+    const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
     const cols = inferColumns(rows, columns);
     if (cols.length === 0 || rows.length === 0) {
-        return <p className="text-xs text-muted-foreground">No rows.</p>;
+        return (
+            <p className="type-footnote text-label-secondary">
+                {t("aiChat.noRows")}
+            </p>
+        );
     }
     return (
-        <div className="max-h-72 overflow-auto rounded-lg border border-border/40 bg-background/60">
-            <table className="w-full border-collapse text-2xs">
-                <thead className="sticky top-0 bg-card text-muted-foreground">
-                    <tr>
+        <div className="max-h-72 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60">
+            <Table>
+                <TableHeader className="sticky top-0 bg-card">
+                    <TableRow>
                         {cols.map((col) => (
-                            <th
-                                key={col}
-                                className="border-b border-border/40 px-2 py-1.5 text-left eyebrow"
-                            >
+                            <TableHead key={col} className="h-8 px-2">
                                 {col}
-                            </th>
+                            </TableHead>
                         ))}
-                    </tr>
-                </thead>
-                <tbody>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
                     {rows.map((row, idx) => (
-                        <tr
+                        <TableRow
                             key={`${idx}-${cols
                                 .map((c) => String(row[c] ?? ""))
                                 .join("|")
                                 .slice(0, 80)}`}
-                            className={cn(
-                                "border-b border-border/20 last:border-b-0",
-                                idx % 2 === 1 && "bg-muted/20",
-                            )}
                         >
                             {cols.map((col) => {
                                 const val = row[col];
                                 const numeric = typeof val === "number";
                                 return (
-                                    <td
+                                    <TableCell
                                         key={col}
                                         className={cn(
-                                            "px-2 py-1 text-foreground/90",
+                                            "px-2 py-1.5 type-footnote",
                                             numeric &&
                                                 "text-right tabular-nums",
                                         )}
                                     >
                                         {formatCell(val, locale)}
-                                    </td>
+                                    </TableCell>
                                 );
                             })}
-                        </tr>
+                        </TableRow>
                     ))}
-                </tbody>
-            </table>
+                </TableBody>
+            </Table>
         </div>
     );
 }
 
 function JsonView({ data }: { data: unknown }) {
     return (
-        <pre className="max-h-64 overflow-auto rounded-md border border-border/40 bg-background/60 p-2 text-2xs leading-snug text-foreground/80">
+        <pre className="max-h-64 overflow-auto rounded-control border border-border/50 bg-background/60 p-2 type-footnote leading-snug text-foreground/80">
             {JSON.stringify(data, null, 2)}
         </pre>
     );
@@ -199,14 +202,15 @@ function Footer({
     meta?: ToolResultPayload["meta"];
     rowCount: number;
 }) {
+    const { t, tc } = useLanguage();
     const total = typeof meta?.total === "number" ? meta.total : undefined;
     if (total === undefined && rowCount === 0) return null;
     const shown = rowCount;
     const label =
         total !== undefined && total !== shown
-            ? `Showing ${shown} of ${total}`
-            : `${shown} row${shown === 1 ? "" : "s"}`;
-    return <p className="eyebrow">{label}</p>;
+            ? t("aiChat.rowsShown", { shown, total })
+            : tc("aiChat.rowCount", shown);
+    return <p className="type-caption text-label-tertiary">{label}</p>;
 }
 
 // Memoized: for completed tool messages the props (toolName/result) are stable

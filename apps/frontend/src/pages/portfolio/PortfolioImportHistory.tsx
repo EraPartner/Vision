@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -79,43 +80,69 @@ export function PortfolioImportHistory({
     };
     return (
         <details
-            className="rounded-lg border p-4"
+            className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4"
             onToggle={(event) => setOpen(event.currentTarget.open)}
         >
-            <summary className="cursor-pointer text-sm font-medium">
+            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
                 {t("portfolioImport.session.history.title")}
             </summary>
             {open && (
                 <div className="mt-3 space-y-3">
-                    {error && <p role="alert">{apiErrorToMessage(error, t)}</p>}
-                    {isFetching && <p role="status">{t("common.loading")}</p>}
-                    {data?.items.map((batch) => (
-                        <div
-                            key={batch.id}
-                            className="flex items-center justify-between gap-3 text-sm"
+                    {error && (
+                        <Alert variant="destructive">
+                            <AlertDescription>
+                                {apiErrorToMessage(error, t)}
+                            </AlertDescription>
+                        </Alert>
+                    )}
+                    {isFetching && (
+                        <p
+                            role="status"
+                            className="type-footnote text-label-secondary"
                         >
-                            <span className="min-w-0 break-words">
-                                {batch.source_filename ?? batch.adapter_name} ·{" "}
-                                {t("portfolioImport.session.batch", {
-                                    id: batch.id,
-                                })}
-                            </span>
-                            {["complete", "complete_with_errors"].includes(
-                                batch.status,
-                            ) && (
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={disabled || busy}
-                                    onClick={() => void rollback(batch)}
+                            {t("common.loading")}
+                        </p>
+                    )}
+                    {data && data.items.length > 0 && (
+                        <ul className="m-0 list-none divide-y divide-border/50 p-0">
+                            {data.items.map((batch) => (
+                                <li
+                                    key={batch.id}
+                                    className="flex items-center justify-between gap-3 py-2"
                                 >
-                                    {t(
-                                        "portfolioImport.session.history.rollback",
+                                    <span className="flex min-w-0 flex-col">
+                                        <span className="truncate type-body">
+                                            {batch.source_filename ??
+                                                batch.adapter_name}
+                                        </span>
+                                        <span className="type-footnote text-label-secondary">
+                                            {t(
+                                                "portfolioImport.session.batch",
+                                                {
+                                                    id: batch.id,
+                                                },
+                                            )}
+                                        </span>
+                                    </span>
+                                    {[
+                                        "complete",
+                                        "complete_with_errors",
+                                    ].includes(batch.status) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={disabled || busy}
+                                            onClick={() => void rollback(batch)}
+                                        >
+                                            {t(
+                                                "portfolioImport.session.history.rollback",
+                                            )}
+                                        </Button>
                                     )}
-                                </Button>
-                            )}
-                        </div>
-                    ))}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     {data && data.total > PAGE_SIZE && (
                         <div className="flex gap-2">
                             <Button

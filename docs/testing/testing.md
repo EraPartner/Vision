@@ -3,8 +3,8 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-10-07
-updated: 2026-10-06
-last-updated: 2026-10-06
+updated: 2026-10-07
+last-updated: 2026-10-07
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
@@ -1677,27 +1677,27 @@ await waitFor(() =>
 **Multi-Step Form with Step Navigation:**
 
 ```typescript
-// TaxProfileDialog uses step indicator buttons to jump steps
+// TaxProfileDialog's step picker is a SegmentedControl: each step is a radio
+// named after its translated label. Jumping past an incomplete step is blocked.
 renderWithApp(<TaxProfileDialog />);
 const triggerBtn = screen.getByRole("button", { name: /tax profile/i });
 await user.click(triggerBtn);
 
-// Navigate to step 2 (income)
-const incomStepBtn = screen.getByRole("button", { name: /income/i });
-await user.click(incomStepBtn);
-expect(screen.getByText(/household income/i)).toBeInTheDocument();
+// Jump to the region step
+await user.click(screen.getByRole("radio", { name: "Region" }));
+expect(await screen.findByText("Region & communal surcharge")).toBeInTheDocument();
 ```
 
 **Confirm Dialogs within Dialogs (RecipientPatternsDialog):**
 
 ```typescript
-// RecipientPatternsDialog has delete patterns with confirm modal
-const deleteBtn = within(patternRow).getAllByRole("button")[1]; // Trash icon
-await user.click(deleteBtn);
+// RecipientPatternsDialog rows keep every action in a row ••• menu; delete confirms
+await user.click(screen.getByRole("button", { name: "Actions for rule RENT*" }));
+await user.click(await screen.findByRole("menuitem", { name: /^delete$/i }));
 
 // Confirm dialog appears
-const confirmBtn = screen.getByRole("button", { name: /confirm/i });
-expect(server.use).toHaveBeenCalled(); // Verify DELETE was called
+const confirmDialog = await screen.findByRole("alertdialog");
+await user.click(within(confirmDialog).getByRole("button", { name: /^delete$/i }));
 ```
 
 **Test File Header and Infrastructure:**

@@ -18,15 +18,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { List } from "@/components/ui/list";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import type {
     SnapshotAuditEntry,
     SnapshotAuditEntryKind,
 } from "@/lib/belgianTax";
-import { cn } from "@/lib/utils";
 
 interface SnapshotHistoryDialogProps {
     trigger?: ReactNode;
@@ -35,13 +36,16 @@ interface SnapshotHistoryDialogProps {
 
 const EMPTY_HISTORY: SnapshotAuditEntry[] = [];
 
-const KIND_VARIANT: Record<SnapshotAuditEntryKind, string> = {
-    created: "bg-primary/15 text-primary border-primary/30",
-    patched: "bg-warning/10 text-warning border-warning/30",
-    frozen: "bg-info/10 text-info border-info/30",
-    unfrozen: "bg-muted text-muted-foreground border-border",
-    filed: "bg-success/10 text-success border-success/30",
-    unfiled: "bg-muted text-muted-foreground border-border",
+const KIND_BADGE: Record<
+    SnapshotAuditEntryKind,
+    { variant: BadgeProps["variant"]; className?: string }
+> = {
+    created: { variant: "default" },
+    patched: { variant: "warning" },
+    frozen: { variant: "outline", className: "text-info" },
+    unfrozen: { variant: "muted" },
+    filed: { variant: "success" },
+    unfiled: { variant: "muted" },
 };
 
 function formatTimestamp(iso: string, locale: string): string {
@@ -93,8 +97,7 @@ export function SnapshotHistoryDialog({
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <History className="h-4 w-4 text-muted-foreground" />
+                    <DialogTitle>
                         {t("tax.history.title", { year: String(year) })}
                     </DialogTitle>
                     <DialogDescription>
@@ -103,51 +106,56 @@ export function SnapshotHistoryDialog({
                 </DialogHeader>
 
                 {ordered.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                        {t("tax.history.empty")}
-                    </p>
+                    <EmptyState
+                        size="compact"
+                        headingLevel={3}
+                        icon={History}
+                        title={t("tax.history.empty")}
+                    />
                 ) : (
                     <ScrollArea className="max-h-[60vh] pr-3">
-                        <ol className="space-y-3">
-                            {ordered.map((entry, idx) => (
-                                <li
-                                    key={`${entry.at}-${idx}`}
-                                    className="flex flex-col gap-1 rounded-md border border-border bg-card/50 px-3 py-2"
-                                >
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge
-                                            variant="outline"
-                                            className={cn(
-                                                "eyebrow ",
-                                                KIND_VARIANT[entry.kind],
-                                            )}
-                                        >
-                                            {t(
-                                                `tax.history.kind.${entry.kind}`,
-                                            )}
-                                        </Badge>
-                                        <span className="text-xs text-muted-foreground tabular-nums">
-                                            {formatTimestamp(
-                                                entry.at,
-                                                language,
-                                            )}
-                                        </span>
-                                        {entry.reference && (
-                                            <span className="text-xs font-medium text-warning">
-                                                ({entry.reference})
+                        <List>
+                            {ordered.map((entry, idx) => {
+                                const badge = KIND_BADGE[entry.kind];
+                                const summary = entry.changes
+                                    ? summarizePatch(entry.changes)
+                                    : "";
+                                return (
+                                    <li
+                                        key={`${entry.at}-${idx}`}
+                                        className="flex flex-col gap-1 px-4 py-3"
+                                    >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge
+                                                variant={badge.variant}
+                                                size="sm"
+                                                className={badge.className}
+                                            >
+                                                {t(
+                                                    `tax.history.kind.${entry.kind}`,
+                                                )}
+                                            </Badge>
+                                            <span className="type-footnote tabular-nums text-label-secondary">
+                                                {formatTimestamp(
+                                                    entry.at,
+                                                    language,
+                                                )}
                                             </span>
-                                        )}
-                                    </div>
-                                    {entry.changes &&
-                                        Object.keys(entry.changes).length >
-                                            0 && (
-                                            <p className="text-xs text-muted-foreground break-words">
-                                                {summarizePatch(entry.changes)}
+                                            {entry.reference && (
+                                                <span className="type-footnote font-medium text-warning">
+                                                    ({entry.reference})
+                                                </span>
+                                            )}
+                                        </div>
+                                        {summary && (
+                                            <p className="break-words type-footnote text-label-secondary">
+                                                {summary}
                                             </p>
                                         )}
-                                </li>
-                            ))}
-                        </ol>
+                                    </li>
+                                );
+                            })}
+                        </List>
                     </ScrollArea>
                 )}
             </DialogContent>

@@ -1,5 +1,11 @@
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/shared/Money";
 import { TagChip } from "@/components/shared/TagInput";
@@ -20,12 +26,20 @@ interface TransactionQuickLookProps {
  * a focused table row (Finder behavior — Space closes it again). Editing
  * lives in TransactionInspector; this stays glanceable.
  */
-export function TransactionQuickLook({ transaction, onClose }: TransactionQuickLookProps) {
+export function TransactionQuickLook({
+    transaction,
+    onClose,
+}: TransactionQuickLookProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
 
     return (
-        <Dialog open={!!transaction} onOpenChange={(open) => { if (!open) onClose(); }}>
+        <Dialog
+            open={!!transaction}
+            onOpenChange={(open) => {
+                if (!open) onClose();
+            }}
+        >
             <DialogContent
                 className="max-w-sm"
                 onKeyDown={(e) => {
@@ -36,31 +50,60 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                 }}
             >
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                    <DialogTitle className="flex items-center gap-2">
                         <Eye className="h-4 w-4" />
-                        {t('quickLook.title')}
+                        {t("quickLook.title")}
                     </DialogTitle>
-                    <DialogDescription className="sr-only">{t('quickLook.title')}</DialogDescription>
+                    <DialogDescription className="sr-only">
+                        {t("quickLook.title")}
+                    </DialogDescription>
                 </DialogHeader>
                 {transaction && (
                     <div className="space-y-4">
                         <div className="space-y-1.5 text-center">
-                            <div className={cn("text-4xl font-semibold tracking-tight", transaction.amount >= 0 ? 'text-gain' : 'text-loss', !transaction.is_active && 'opacity-50')}>
-                                <Money signed amount={transaction.amount} currency={transaction.currency} />
+                            <div
+                                className={cn(
+                                    "type-large-title tabular-nums",
+                                    transaction.amount >= 0
+                                        ? "text-gain"
+                                        : "text-foreground",
+                                    !transaction.is_active && "opacity-50",
+                                )}
+                            >
+                                <Money
+                                    signed
+                                    amount={transaction.amount}
+                                    currency={transaction.currency}
+                                />
                             </div>
-                            <div className="text-base font-medium">{transaction.recipient}</div>
-                            <div className="text-sm text-muted-foreground">
-                                {transaction.date ? formatDateStringWithAppSettings(transaction.date, appSettings.dateFormat) : '—'}
-                                {transaction.bank ? ` · ${transaction.bank}` : ''}
+                            <div className="type-headline text-foreground">
+                                {transaction.recipient}
+                            </div>
+                            <div className="type-callout text-label-secondary">
+                                {transaction.date
+                                    ? formatDateStringWithAppSettings(
+                                          transaction.date,
+                                          appSettings.dateFormat,
+                                      )
+                                    : "—"}
+                                {transaction.bank
+                                    ? ` · ${transaction.bank}`
+                                    : ""}
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center justify-center gap-1.5">
-                            <Badge variant="outline" className={cn("font-medium", getCategoryColor(transaction.category))}>
+                            <Badge
+                                variant="outline"
+                                className={cn(
+                                    "font-medium",
+                                    getCategoryColor(transaction.category),
+                                )}
+                            >
                                 {transaction.category}
                             </Badge>
                             {!transaction.is_active && (
-                                <Badge variant="outline" className="text-muted-foreground">
-                                    {t('txPage.statusInactive')}
+                                <Badge variant="muted">
+                                    {t("txPage.statusInactive")}
                                 </Badge>
                             )}
                             {transaction.tags?.map((tag) => (
@@ -68,12 +111,22 @@ export function TransactionQuickLook({ transaction, onClose }: TransactionQuickL
                             ))}
                         </div>
                         {(transaction.memo || transaction.comment) && (
-                            <div className="space-y-1 rounded-xl bg-muted/40 px-3 py-2.5 text-sm">
-                                {transaction.memo && <p className="text-foreground/90 break-words">{transaction.memo}</p>}
-                                {transaction.comment && <p className="text-muted-foreground break-words">{transaction.comment}</p>}
+                            <div className="space-y-1 rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2.5 type-body">
+                                {transaction.memo && (
+                                    <p className="break-words text-foreground">
+                                        {transaction.memo}
+                                    </p>
+                                )}
+                                {transaction.comment && (
+                                    <p className="break-words text-label-secondary">
+                                        {transaction.comment}
+                                    </p>
+                                )}
                             </div>
                         )}
-                        <p className="text-center text-2xs text-muted-foreground/70">{t('quickLook.hint')}</p>
+                        <p className="text-center type-caption text-label-tertiary">
+                            {t("quickLook.hint")}
+                        </p>
                     </div>
                 )}
             </DialogContent>

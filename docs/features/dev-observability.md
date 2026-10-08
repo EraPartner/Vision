@@ -2,7 +2,7 @@
 title: Observability Layer (API Inspector)
 type: feature
 status: active
-date: 2026-06-18
+date: 2026-10-07
 tags:
   [
     feature,
@@ -133,7 +133,7 @@ Floating 520×480px panel (z-index 9999) with two tabs:
 **Request List:** `[[apps/frontend/src/components/devtools/RequestList.tsx]]`
 
 - Virtualized list (@tanstack/react-virtual) for smooth scrolling of hundreds of requests
-- Filter input (by endpoint, method)
+- Filter `Input` (by endpoint, method)
 - Columns: Method (color-coded), Endpoint, Status, Duration
 - In-flight entries show `…` animation
 - Clicking a row updates detail pane
@@ -165,6 +165,8 @@ Bottom-right floating button:
 - Shows in-flight request count with amber pulse animation
 - Highlights when inspector is open
 - Click to toggle inspector visibility
+
+The inspector, toggle, request list, request detail and metrics panel use the design-system `Button`, `Input`, `Badge` and `Tabs` primitives; the virtualized request row stays a raw button. Their copy stays English because they are development-only ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 ## Integration with API Client
 

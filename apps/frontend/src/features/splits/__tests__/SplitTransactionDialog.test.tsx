@@ -85,8 +85,8 @@ describe("SplitTransactionDialog", () => {
         const user = userEvent.setup();
         renderDialog();
         await openDialog(user);
-        expect(await screen.findByRole("button", { name: /equal split/i })).toBeInTheDocument();
-        expect(screen.getByRole("button", { name: /custom amounts/i })).toBeInTheDocument();
+        expect(await screen.findByRole("radio", { name: /equal split/i })).toBeChecked();
+        expect(screen.getByRole("radio", { name: /custom amounts/i })).not.toBeChecked();
     });
 
     it("shows Add Person button", async () => {
@@ -117,7 +117,7 @@ describe("SplitTransactionDialog", () => {
         const user = userEvent.setup();
         renderDialog();
         await openDialog(user);
-        await user.click(await screen.findByRole("button", { name: /custom amounts/i }));
+        await user.click(await screen.findByRole("radio", { name: /custom amounts/i }));
         expect(screen.getByPlaceholderText(/amount owed/i)).toBeInTheDocument();
     });
 

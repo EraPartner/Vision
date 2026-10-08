@@ -1,5 +1,6 @@
 import { Database, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiClient } from "@/lib/api";
 import { useRestoreBackup } from "@/hooks/useRestoreBackup";
@@ -43,7 +44,7 @@ export function RestoreFromBackupCard({
             description: (
                 <>
                     {t("settings.restore.confirmDesc")}
-                    <span className="block mt-1 font-medium text-foreground truncate">
+                    <span className="mt-1 block truncate font-medium text-foreground">
                         {filePath.split("/").pop()}
                     </span>
                 </>
@@ -56,62 +57,57 @@ export function RestoreFromBackupCard({
 
     return (
         <>
-            <div
-                className={
-                    compact
-                        ? "flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30"
-                        : "flex items-start gap-4 p-4 rounded-xl border border-border bg-muted/30"
-                }
-            >
-                <div
-                    className={cn(
-                        compact ? "h-8 w-8" : "h-10 w-10",
-                        "rounded-md bg-success/10 flex items-center justify-center shrink-0",
-                    )}
+            <Card className="text-left">
+                <CardContent
+                    variant={compact ? "compact" : "headerless"}
+                    className="flex items-start gap-3"
                 >
-                    <Database
+                    <div
+                        aria-hidden="true"
                         className={cn(
-                            compact ? "h-4 w-4" : "h-5 w-5",
-                            "text-success",
+                            compact ? "h-8 w-8" : "h-10 w-10",
+                            "flex shrink-0 items-center justify-center rounded-control bg-success/12 text-success",
                         )}
-                    />
-                </div>
+                    >
+                        <Database className={compact ? "h-4 w-4" : "h-5 w-5"} />
+                    </div>
 
-                <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                    <p
-                        className={cn(
-                            compact ? "text-sm" : "text-base",
-                            "font-medium text-foreground",
-                        )}
-                    >
-                        {t("onboarding.restore.title")}
-                    </p>
-                    <p
-                        className={cn(
-                            compact ? "text-xs" : "text-sm",
-                            "text-muted-foreground leading-relaxed",
-                        )}
-                    >
-                        {t("onboarding.restore.desc")}
-                    </p>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-1 gap-1.5 self-start"
-                        disabled={running}
-                        onClick={handleSelectFile}
-                    >
-                        {running ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                            <Upload className="h-3.5 w-3.5" />
-                        )}
-                        {running
-                            ? t("settings.restore.running")
-                            : t("onboarding.restore.button")}
-                    </Button>
-                </div>
-            </div>
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                        <p
+                            className={cn(
+                                compact ? "type-headline" : "type-title-3",
+                                "text-foreground",
+                            )}
+                        >
+                            {t("onboarding.restore.title")}
+                        </p>
+                        <p
+                            className={cn(
+                                compact ? "type-footnote" : "type-callout",
+                                "text-label-secondary",
+                            )}
+                        >
+                            {t("onboarding.restore.desc")}
+                        </p>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-1 self-start"
+                            disabled={running}
+                            onClick={handleSelectFile}
+                        >
+                            {running ? (
+                                <Loader2 className="animate-spin" aria-hidden="true" />
+                            ) : (
+                                <Upload aria-hidden="true" />
+                            )}
+                            {running
+                                ? t("settings.restore.running")
+                                : t("onboarding.restore.button")}
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
 
             <ConfirmDialog />
 

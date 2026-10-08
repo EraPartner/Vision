@@ -56,24 +56,24 @@ export function TaxRulesCard() {
             </CardHeader>
             <CardContent className="space-y-3">
                 {taxRuleCards.map((rule) => (
-                    <div
+                    <section
                         key={rule.title}
-                        className="p-3 rounded-lg border border-border bg-card/50"
+                        className="rounded-card corner-continuous bg-foreground/[0.04] p-4"
                     >
-                        <p className="text-sm font-semibold text-foreground mb-2">
+                        <h3 className="type-headline text-foreground">
                             {rule.title}
-                        </p>
-                        <ul className="space-y-1">
+                        </h3>
+                        <ul className="mt-2 list-disc space-y-1 pl-4">
                             {rule.items.map((item) => (
                                 <li
                                     key={item}
-                                    className="text-xs text-muted-foreground leading-relaxed"
+                                    className="type-footnote leading-relaxed text-label-secondary"
                                 >
-                                    - {item}
+                                    {item}
                                 </li>
                             ))}
                         </ul>
-                    </div>
+                    </section>
                 ))}
             </CardContent>
         </Card>

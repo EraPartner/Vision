@@ -57,8 +57,9 @@ export function AddRecipientDialog() {
             }}
         >
             <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t("form.addRecipient.title")}
+                <Button>
+                    <Plus aria-hidden="true" />
+                    {t("form.addRecipient.title")}
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md">
@@ -93,7 +94,7 @@ export function AddRecipientDialog() {
                             <p
                                 id="recipient-name-error"
                                 role="alert"
-                                className="text-sm text-destructive"
+                                className="type-footnote text-destructive"
                             >
                                 {t("form.nameRequired")}
                             </p>
@@ -129,7 +130,10 @@ export function AddRecipientDialog() {
                             disabled={createMutation.isPending}
                         >
                             {createMutation.isPending && (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2
+                                    className="animate-spin"
+                                    aria-hidden="true"
+                                />
                             )}
                             {t("recipients.createButton")}
                         </Button>

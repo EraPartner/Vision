@@ -29,7 +29,11 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { List } from "@/components/ui/list";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { todayYmd } from "@/lib/timezone";
@@ -280,21 +284,23 @@ export function ExportDialog({
 
     const allChecked = allSectionsEnabled(sections, sectionDefs);
     const someChecked = sections.size > 0 && !allChecked;
+    const optionRowClass =
+        "flex cursor-pointer items-center gap-3 px-4 py-2.5 type-body text-foreground transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04]";
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             {trigger !== null && (
                 <DialogTrigger asChild>
                     {trigger ?? (
-                        <Button variant="outline" size="sm" className="gap-1.5">
-                            <FileDown className="h-4 w-4" />
+                        <Button variant="outline">
+                            <FileDown />
                             {t("export.openDialog")}
                         </Button>
                     )}
                 </DialogTrigger>
             )}
 
-            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{t("export.title")}</DialogTitle>
                     <DialogDescription>
@@ -305,90 +311,83 @@ export function ExportDialog({
                 {/* Real <form> so Enter (e.g. in the year field) downloads. grid gap-5
             mirrors DialogContent's layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleDownload} className="grid gap-5">
-                    <div className="space-y-6 py-2">
-                        {/* ── Report type ── */}
-                        <div className="space-y-2">
-                            <p
+                    <div className="grid gap-5">
+                        <section className="grid gap-2">
+                            <h3
                                 id="export-report-type-label"
-                                className="text-sm font-semibold"
+                                className="type-headline text-foreground"
                             >
                                 {t("export.reportType")}
-                            </p>
-                            <RadioGroup
+                            </h3>
+                            <SegmentedControl
                                 aria-labelledby="export-report-type-label"
                                 value={reportType}
                                 onValueChange={(v) =>
                                     handleReportTypeChange(v as ReportType)
                                 }
-                                className="grid grid-cols-3 gap-2"
+                                className="w-full"
                             >
                                 {(
                                     ["financial", "portfolio", "tax"] as const
                                 ).map((type) => (
-                                    <label
+                                    <SegmentedControlItem
                                         key={type}
-                                        className={
-                                            "flex items-center gap-2 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors text-sm " +
-                                            (reportType === type
-                                                ? "border-primary bg-primary/5 text-foreground"
-                                                : "border-border hover:bg-muted/50 text-muted-foreground")
-                                        }
+                                        value={type}
                                     >
-                                        <RadioGroupItem value={type} />
-                                        <span className="font-medium">
-                                            {t(`export.reportType.${type}`)}
-                                        </span>
-                                    </label>
+                                        {t(`export.reportType.${type}`)}
+                                    </SegmentedControlItem>
                                 ))}
-                            </RadioGroup>
-                        </div>
+                            </SegmentedControl>
+                        </section>
 
-                        <Separator />
-
-                        {/* ── Period ── */}
-                        <div className="space-y-2">
-                            <p
+                        <section className="grid gap-2">
+                            <h3
                                 id="export-period-label"
-                                className="text-sm font-semibold"
+                                className="type-headline text-foreground"
                             >
                                 {t("export.period")}
-                            </p>
+                            </h3>
                             <RadioGroup
                                 aria-labelledby="export-period-label"
                                 value={periodPreset}
                                 onValueChange={(v) =>
                                     setPeriodPreset(v as PeriodPreset)
                                 }
-                                className="space-y-1.5"
+                                className="block"
                             >
-                                {(
-                                    [
-                                        "ytd",
-                                        "rolling3",
-                                        "rolling12",
-                                        "year",
-                                        "custom",
-                                    ] as const
-                                ).map((preset) => (
-                                    <label
-                                        key={preset}
-                                        className="flex items-center gap-2.5 cursor-pointer py-1 px-1 rounded hover:bg-muted/40 transition-colors"
-                                    >
-                                        <RadioGroupItem value={preset} />
-                                        <span className="text-sm">
-                                            {t(`export.period.${preset}`)}
-                                        </span>
-                                    </label>
-                                ))}
+                                <List>
+                                    {(
+                                        [
+                                            "ytd",
+                                            "rolling3",
+                                            "rolling12",
+                                            "year",
+                                            "custom",
+                                        ] as const
+                                    ).map((preset) => (
+                                        <li key={preset}>
+                                            <label
+                                                htmlFor={`export-period-${preset}`}
+                                                className={optionRowClass}
+                                            >
+                                                <RadioGroupItem
+                                                    id={`export-period-${preset}`}
+                                                    value={preset}
+                                                />
+                                                <span>
+                                                    {t(
+                                                        `export.period.${preset}`,
+                                                    )}
+                                                </span>
+                                            </label>
+                                        </li>
+                                    ))}
+                                </List>
                             </RadioGroup>
 
-                            {/* Year input */}
                             {periodPreset === "year" && (
-                                <div className="flex items-center gap-2 pl-1 pt-1">
-                                    <Label
-                                        htmlFor="export-year"
-                                        className="text-xs text-muted-foreground w-10 shrink-0"
-                                    >
+                                <div className="flex items-center gap-3 pt-1">
+                                    <Label htmlFor="export-year">
                                         {t("export.period.year.label")}
                                     </Label>
                                     <Input
@@ -408,7 +407,7 @@ export function ExportDialog({
                                         onChange={(e) =>
                                             setCustomYear(e.target.value)
                                         }
-                                        className="h-8 w-24 text-sm"
+                                        className="w-28"
                                     />
                                 </div>
                             )}
@@ -417,7 +416,7 @@ export function ExportDialog({
                                 <p
                                     id="export-year-error"
                                     role="alert"
-                                    className="text-sm text-destructive"
+                                    className="type-footnote text-destructive"
                                 >
                                     {t("export.period.year.invalid", {
                                         max: currentYear + 1,
@@ -425,14 +424,10 @@ export function ExportDialog({
                                 </p>
                             )}
 
-                            {/* Custom date range */}
                             {periodPreset === "custom" && (
-                                <div className="grid grid-cols-1 gap-3 pl-1 pt-1 sm:grid-cols-2">
-                                    <div className="space-y-1">
-                                        <Label
-                                            htmlFor="export-from"
-                                            className="text-xs text-muted-foreground"
-                                        >
+                                <div className="grid grid-cols-1 gap-3 pt-1 sm:grid-cols-2">
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="export-from">
                                             {t("export.period.from")}
                                         </Label>
                                         <DatePicker
@@ -450,7 +445,6 @@ export function ExportDialog({
                                             placeholder={t(
                                                 "export.period.from",
                                             )}
-                                            buttonClassName="h-8 text-sm"
                                             aria-invalid={
                                                 customRangeInvalid || undefined
                                             }
@@ -461,11 +455,8 @@ export function ExportDialog({
                                             }
                                         />
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label
-                                            htmlFor="export-to"
-                                            className="text-xs text-muted-foreground"
-                                        >
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="export-to">
                                             {t("export.period.to")}
                                         </Label>
                                         <DatePicker
@@ -481,7 +472,6 @@ export function ExportDialog({
                                                 setCustomTo(d ? toYmd(d) : "")
                                             }
                                             placeholder={t("export.period.to")}
-                                            buttonClassName="h-8 text-sm"
                                             aria-invalid={
                                                 customRangeInvalid || undefined
                                             }
@@ -496,28 +486,26 @@ export function ExportDialog({
                                         <p
                                             id="export-range-error"
                                             role="alert"
-                                            className="text-xs text-destructive sm:col-span-2"
+                                            className="type-footnote text-destructive sm:col-span-2"
                                         >
                                             {t("export.period.invalidRange")}
                                         </p>
                                     )}
                                 </div>
                             )}
-                        </div>
+                        </section>
 
-                        <Separator />
-
-                        {/* ── Sections ── */}
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <p
+                        <section className="grid gap-2">
+                            <div className="flex items-center justify-between gap-3">
+                                <h3
                                     id="export-sections-label"
-                                    className="text-sm font-semibold"
+                                    className="type-headline text-foreground"
                                 >
                                     {t("export.sections")}
-                                </p>
-                                <label className="flex items-center gap-1.5 cursor-pointer">
+                                </h3>
+                                <div className="flex items-center gap-2">
                                     <Checkbox
+                                        id="export-sections-all"
                                         checked={
                                             allChecked ||
                                             (someChecked
@@ -528,47 +516,46 @@ export function ExportDialog({
                                             toggleAllSections(checked === true)
                                         }
                                     />
-                                    <span className="text-xs text-muted-foreground">
+                                    <Label
+                                        htmlFor="export-sections-all"
+                                        className="text-label-secondary"
+                                    >
                                         {t("export.sections.all")}
-                                    </span>
-                                </label>
+                                    </Label>
+                                </div>
                             </div>
 
-                            <div
-                                className="space-y-1.5"
+                            <List
                                 role="group"
                                 aria-labelledby="export-sections-label"
                             >
                                 {sectionDefs.map((def) => (
-                                    <label
-                                        key={def.id}
-                                        className="flex items-center gap-2.5 cursor-pointer py-1 px-1 rounded hover:bg-muted/40 transition-colors"
-                                    >
-                                        <Checkbox
-                                            id={`section-${def.id}`}
-                                            checked={sections.has(def.id)}
-                                            onCheckedChange={(checked) =>
-                                                toggleSection(
-                                                    def.id,
-                                                    checked === true,
-                                                )
-                                            }
-                                        />
-                                        <span className="text-sm">
-                                            {t(def.labelKey)}
-                                        </span>
-                                    </label>
+                                    <li key={def.id}>
+                                        <label
+                                            htmlFor={`section-${def.id}`}
+                                            className={optionRowClass}
+                                        >
+                                            <Checkbox
+                                                id={`section-${def.id}`}
+                                                checked={sections.has(def.id)}
+                                                onCheckedChange={(checked) =>
+                                                    toggleSection(
+                                                        def.id,
+                                                        checked === true,
+                                                    )
+                                                }
+                                            />
+                                            <span>{t(def.labelKey)}</span>
+                                        </label>
+                                    </li>
                                 ))}
-                            </div>
-                        </div>
+                            </List>
+                        </section>
 
-                        <Separator />
-
-                        {/* ── Currency ── */}
-                        <div className="space-y-2">
+                        <section className="flex items-center justify-between gap-3">
                             <Label
                                 htmlFor="export-currency"
-                                className="text-sm font-semibold"
+                                className="type-headline text-foreground"
                             >
                                 {t("export.currency")}
                             </Label>
@@ -578,7 +565,7 @@ export function ExportDialog({
                             >
                                 <SelectTrigger
                                     id="export-currency"
-                                    className="w-32 h-9"
+                                    className="w-32"
                                 >
                                     <SelectValue />
                                 </SelectTrigger>
@@ -590,12 +577,12 @@ export function ExportDialog({
                                     ))}
                                 </SelectContent>
                             </Select>
-                        </div>
+                        </section>
                     </div>
 
                     {(excludedCategoryIds.length > 0 ||
                         excludedRecipientIds.length > 0) && (
-                        <p className="text-xs text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("export.exclusionsSummary", {
                                 categories: excludedCategoryIds.length,
                                 recipients: excludedRecipientIds.length,
@@ -605,8 +592,7 @@ export function ExportDialog({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="outline"
-                            size="sm"
+                            variant="ghost"
                             onClick={() => setOpen(false)}
                             disabled={isSubmitting}
                         >
@@ -614,23 +600,21 @@ export function ExportDialog({
                         </Button>
                         <Button
                             type="submit"
-                            size="sm"
                             disabled={
                                 isSubmitting ||
                                 sections.size === 0 ||
                                 customRangeInvalid ||
                                 customYearInvalid
                             }
-                            className="gap-1.5"
                         >
                             {isSubmitting ? (
                                 <>
-                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    <Loader2 className="animate-spin" />
                                     {t("export.downloading")}
                                 </>
                             ) : (
                                 <>
-                                    <FileDown className="h-4 w-4" />
+                                    <FileDown />
                                     {t("export.download")}
                                 </>
                             )}

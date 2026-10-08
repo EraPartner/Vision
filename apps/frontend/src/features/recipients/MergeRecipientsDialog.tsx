@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -16,8 +16,12 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, Link2, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { badgeVariants } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
     useAllRecipientsForMerge,
@@ -36,6 +40,8 @@ export function MergeRecipientsDialog({
     onOpenChange,
 }: MergeRecipientsDialogProps) {
     const { t, tc } = useLanguage();
+    const primarySearchId = useId();
+    const aliasSearchId = useId();
     const [primaryId, setPrimaryId] = useState<number | null>(null);
     const [aliasIds, setAliasIds] = useState<number[]>([]);
     useUnsavedChanges(primaryId !== null || aliasIds.length > 0);
@@ -97,64 +103,71 @@ export function MergeRecipientsDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Link2 className="h-5 w-5" />
-                        {t("merge.title")}
-                    </DialogTitle>
+                    <DialogTitle>{t("merge.title")}</DialogTitle>
                     <DialogDescription>
                         {t("merge.description")}
                     </DialogDescription>
                 </DialogHeader>
 
                 {recipientsError && (
-                    <div role="alert" className="space-y-2">
-                        <p className="text-sm text-destructive">
-                            {t("merge.loadFailed")}
-                        </p>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isFetching}
-                            onClick={() => void refetch()}
-                        >
-                            {t("common.retry")}
-                        </Button>
-                    </div>
+                    <Alert variant="destructive">
+                        <AlertDescription className="flex flex-wrap items-center gap-3">
+                            <span>{t("merge.loadFailed")}</span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={isFetching}
+                                onClick={() => void refetch()}
+                            >
+                                {t("common.retry")}
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
                 )}
                 <div className="space-y-4 flex-1 overflow-hidden">
                     {/* Step 1: Select primary */}
-                    <div>
-                        <label className="text-sm font-medium text-foreground mb-1 block">
+                    <div className="space-y-2">
+                        <Label htmlFor={primarySearchId}>
                             {t("merge.primaryRecipient")}
-                        </label>
+                        </Label>
                         {recipientsLoading && (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 border rounded-md">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                {t("common.loading")}
-                            </div>
+                            <Skeleton
+                                className="h-10 w-full"
+                                aria-label={t("common.loading")}
+                            />
                         )}
                         {primary ? (
-                            <div className="flex items-center gap-2 p-2 rounded-md border border-border bg-muted/50">
-                                <Badge variant="default" className="gap-1">
-                                    <Check className="h-3 w-3" />
-                                    {primary.name}
-                                </Badge>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="icon-touch-target ml-auto [&_svg]:size-3"
-                                    aria-label={t("aria.clearSelection")}
-                                    onClick={() => {
-                                        setPrimaryId(null);
-                                        setAliasIds([]);
-                                    }}
-                                >
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
+                            <List>
+                                <ListRow
+                                    leading={
+                                        <Check
+                                            className="h-4 w-4 text-gain"
+                                            aria-hidden
+                                        />
+                                    }
+                                    title={primary.name}
+                                    trailing={
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-label-secondary"
+                                            aria-label={t(
+                                                "aria.clearSelection",
+                                            )}
+                                            onClick={() => {
+                                                setPrimaryId(null);
+                                                setAliasIds([]);
+                                            }}
+                                        >
+                                            <X aria-hidden />
+                                        </Button>
+                                    }
+                                />
+                            </List>
                         ) : !recipientsLoading && !recipientsError ? (
-                            <Command className="border border-border rounded-md">
+                            <Command className="rounded-card corner-continuous border border-border/60">
                                 <CommandInput
+                                    id={primarySearchId}
                                     placeholder={t("merge.searchPrimary")}
                                 />
                                 <CommandList className="max-h-32">
@@ -181,36 +194,49 @@ export function MergeRecipientsDialog({
 
                     {/* Step 2: Select aliases */}
                     {primaryId && (
-                        <div>
-                            <label className="text-sm font-medium text-foreground mb-1 block">
+                        <div className="space-y-2">
+                            <Label htmlFor={aliasSearchId}>
                                 {t("merge.selectAliases", {
                                     n: String(aliasIds.length),
                                 })}
-                            </label>
+                            </Label>
 
                             {aliasIds.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mb-2">
+                                <div className="flex flex-wrap gap-1">
                                     {aliasIds.map((id) => {
                                         const r = recipients.find(
                                             (x) => x.id === id,
                                         );
                                         return r ? (
-                                            <Badge
+                                            <button
                                                 key={id}
-                                                variant="secondary"
-                                                className="gap-1 cursor-pointer"
+                                                type="button"
+                                                className={cn(
+                                                    badgeVariants({
+                                                        variant: "secondary",
+                                                    }),
+                                                    "gap-1 focus-ring",
+                                                )}
+                                                aria-label={t(
+                                                    "merge.removeAlias",
+                                                    { name: r.name },
+                                                )}
                                                 onClick={() => toggleAlias(id)}
                                             >
                                                 {r.name}
-                                                <X className="h-3 w-3" />
-                                            </Badge>
+                                                <X
+                                                    className="h-3 w-3"
+                                                    aria-hidden
+                                                />
+                                            </button>
                                         ) : null;
                                     })}
                                 </div>
                             )}
 
-                            <Command className="border border-border rounded-md">
+                            <Command className="rounded-card corner-continuous border border-border/60">
                                 <CommandInput
+                                    id={aliasSearchId}
                                     placeholder={t("merge.searchAliases")}
                                 />
                                 <CommandList className="max-h-40">
@@ -229,6 +255,7 @@ export function MergeRecipientsDialog({
                                                     }
                                                 >
                                                     <Check
+                                                        aria-hidden
                                                         className={cn(
                                                             "mr-2 h-4 w-4",
                                                             aliasIds.includes(
@@ -241,14 +268,14 @@ export function MergeRecipientsDialog({
                                                     <span
                                                         className={
                                                             r.primary_recipient_id
-                                                                ? "text-muted-foreground"
+                                                                ? "text-label-secondary"
                                                                 : ""
                                                         }
                                                     >
                                                         {r.name}
                                                     </span>
                                                     {r.primary_recipient_id && (
-                                                        <span className="ml-2 text-xs text-muted-foreground">
+                                                        <span className="ml-2 type-footnote text-label-secondary">
                                                             {t(
                                                                 "merge.aliasOf",
                                                                 {

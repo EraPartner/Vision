@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-07
+updated: 2026-10-07
 tags:
   [
     components,
@@ -143,7 +143,7 @@ uses `text-label-primary/secondary/tertiary/quaternary`; corners use `rounded-ch
 spring motion pairs `ease-spring-*` with `duration-spring-*`. The shared primitives adopted them in
 [[docs/adr/179-primitives-adopt-role-tokens|ADR-179]]: regular controls are 36px (`h-9`, `sm`
 32px, `lg` 40px) on `rounded-control`; cards, menus, popovers, alerts and toasts use `rounded-card
-corner-continuous`; dialogs and sheets use `rounded-sheet corner-continuous`; the glass tiers read
+corner-continuous`; dialogs and sheets use `rounded-sheet corner-continuous`; menu, select and context-menu items derive their radius from the card token (`calc(var(--radius-card) - 0.375rem)`), calendar days and weekday labels use `rounded-chip`; the glass tiers read
 `--elevation-1..4`; the dialog entrance and the switch thumb run on the CSS springs. New
 primitives from the same change: `SegmentedControl`, `List`/`ListRow`, `Inspector` and the
 `undoToast` helper (see [[docs/components/shared-components|Shared Components]] and
@@ -219,8 +219,8 @@ each element's own shape. A primitive that resets the outline (`outline-none`) r
 the `focus-ring` utility, which is the same treatment. Rows inside a clipped group pull the ring
 inward with `focus-visible:outline-offset-[-3px]`. The Tailwind spellings `focus-visible:ring-2 …
 ring-offset-2`, `ring-offset-background` and `focus:ring-*` are no longer used in
-`apps/frontend/src`; `components/ui/primitives.contract.test.ts` keeps them out. Sidebar-owned
-rings are the one remaining exception until the navigation pass.
+`apps/frontend/src`; `components/ui/primitives.contract.test.ts` keeps them out. The former sidebar exception is gone
+after [[docs/adr/187-completeness-sweep|ADR-187]]; the calendar's date input also lost its `focus-within:ring-2`.
 
 ### Overscroll Behavior (June 2026)
 
@@ -870,7 +870,7 @@ When any of `onRowDoubleClick`, `onRowOpen`, or `onRowQuickLook` is present, row
 - **Space** — fires `onRowQuickLook ?? onRowDoubleClick`.
 - Keys are suppressed if the event target is a descendant (e.g., an inline-edit input), so typing in edit fields is not hijacked.
 
-Rows display the shared `focus-visible:ring-2 focus-visible:ring-ring/70 focus-visible:ring-offset-2` ring when keyboard-focused.
+Rows display the shared `focus-ring` outline (pulled inward with `focus-visible:outline-offset-[-2px]`) when keyboard-focused.
 
 ### Inline editing
 

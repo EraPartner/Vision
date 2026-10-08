@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -103,7 +104,7 @@ export function NextSevenDaysStrip({
                             {t("plannedPage.next7.title")}
                         </h2>
                         <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 type-body">
-                            <span className="font-semibold text-foreground">
+                            <span className="type-headline text-foreground">
                                 {tc("plannedPage.next7.dueCount", dueCount)}
                             </span>
                             {dueCount > 0 && (
@@ -124,7 +125,7 @@ export function NextSevenDaysStrip({
                                     ) : (
                                         <span
                                             className={cn(
-                                                "font-semibold tabular-nums",
+                                                "type-headline tabular-nums",
                                                 windowTotal.total < 0
                                                     ? "text-foreground"
                                                     : "text-gain",
@@ -222,7 +223,7 @@ export function NextSevenDaysStrip({
                                         className={cn(
                                             "eyebrow",
                                             isToday
-                                                ? "font-semibold text-primary"
+                                                ? "text-primary"
                                                 : "text-label-secondary",
                                         )}
                                     >
@@ -232,7 +233,7 @@ export function NextSevenDaysStrip({
                                     </span>
                                     <span
                                         className={cn(
-                                            "type-body font-semibold tabular-nums",
+                                            "type-headline tabular-nums",
                                             isToday
                                                 ? "text-primary"
                                                 : "text-label-secondary",
@@ -249,15 +250,16 @@ export function NextSevenDaysStrip({
                                     />
                                 ) : (
                                     shown.map((p) => (
-                                        <button
+                                        <Button
                                             key={p.id}
                                             type="button"
+                                            variant="ghost"
                                             onClick={() => onSelect(p)}
                                             title={t(
                                                 "plannedPage.next7.itemTitle",
                                                 { name: p.name },
                                             )}
-                                            className="group/item rounded-chip px-1 py-0.5 text-left transition-[background-color] duration-fast ease-glide hover:bg-primary/10 focus-ring"
+                                            className="group/item h-auto w-full flex-col items-stretch gap-0 rounded-chip px-1 py-0.5 text-left font-normal hover:bg-primary/10 [&_svg]:size-3"
                                         >
                                             <span
                                                 className={cn(
@@ -277,7 +279,7 @@ export function NextSevenDaysStrip({
                                             </span>
                                             <span
                                                 className={cn(
-                                                    "block type-caption font-semibold tabular-nums",
+                                                    "block type-caption font-medium tabular-nums",
                                                     p.amount < 0
                                                         ? "text-foreground"
                                                         : "text-gain",
@@ -289,7 +291,7 @@ export function NextSevenDaysStrip({
                                                     signed
                                                 />
                                             </span>
-                                        </button>
+                                        </Button>
                                     ))
                                 )}
 

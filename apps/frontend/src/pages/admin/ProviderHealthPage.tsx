@@ -36,10 +36,14 @@ import { useProviderHealthQuery } from "@/features/admin/useAdminQueries";
 
 function StatusIcon({ failures }: { failures: number }) {
     if (failures === 0)
-        return <CheckCircle2 className="h-4 w-4 text-success" />;
+        return (
+            <CheckCircle2 aria-hidden="true" className="h-4 w-4 text-success" />
+        );
     if (failures <= 2)
-        return <AlertTriangle className="h-4 w-4 text-warning" />;
-    return <XCircle className="h-4 w-4 text-destructive" />;
+        return (
+            <AlertTriangle aria-hidden="true" className="h-4 w-4 text-warning" />
+        );
+    return <XCircle aria-hidden="true" className="h-4 w-4 text-destructive" />;
 }
 
 // Same three-step scale StatusIcon uses, expressed as the shared Badge's own
@@ -75,6 +79,8 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
     const dateFormat = appSettings.dateFormat;
     const neverLabel = t("admin.providers.never");
     const [expanded, setExpanded] = useState(false);
+    const hasError =
+        Boolean(provider.last_error) && provider.consecutive_failures > 0;
 
     return (
         <>
@@ -90,7 +96,7 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
                         {provider.kind}
                     </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="text-label-secondary">
                     {formatTs(
                         provider.last_success_at,
                         neverLabel,
@@ -109,19 +115,25 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
                     </Badge>
                 </TableCell>
                 <TableCell>
-                    {provider.last_error &&
-                    provider.consecutive_failures > 0 ? (
-                        <button
+                    {hasError ? (
+                        <Button
+                            variant="link"
+                            size="sm"
+                            aria-expanded={expanded}
                             onClick={() => setExpanded((v) => !v)}
-                            className="text-xs text-destructive hover:underline text-left max-w-[200px] truncate block"
+                            className="h-auto max-w-[200px] justify-start p-0 type-footnote text-destructive decoration-destructive/40"
                         >
-                            {provider.last_error}
-                        </button>
+                            <span className="truncate">
+                                {provider.last_error}
+                            </span>
+                        </Button>
                     ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="type-footnote text-label-tertiary">
+                            —
+                        </span>
                     )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-right">
                     <Button
                         variant="outline"
                         size="sm"
@@ -129,40 +141,39 @@ function ProviderRow({ provider, onProbe, isProbing }: ProviderRowProps) {
                         disabled={isProbing}
                     >
                         {isProbing ? (
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            <RefreshCw
+                                aria-hidden="true"
+                                className="animate-spin"
+                            />
                         ) : (
-                            <Activity className="h-3.5 w-3.5" />
+                            <Activity aria-hidden="true" />
                         )}
-                        <span className="ml-1.5">
-                            {t("admin.providers.checkNow")}
-                        </span>
+                        {t("admin.providers.checkNow")}
                     </Button>
                 </TableCell>
             </TableRow>
-            {expanded &&
-                provider.last_error &&
-                provider.consecutive_failures > 0 && (
-                    <TableRow>
-                        <TableCell
-                            colSpan={6}
-                            className="bg-destructive/5 text-xs text-destructive font-mono py-2 px-4"
-                        >
-                            {provider.last_error}
-                            {provider.last_error_at && (
-                                <span className="ml-2 text-muted-foreground">
-                                    (
-                                    {formatTs(
-                                        provider.last_error_at,
-                                        neverLabel,
-                                        dateFormat,
-                                        locale,
-                                    )}
-                                    )
-                                </span>
-                            )}
-                        </TableCell>
-                    </TableRow>
-                )}
+            {expanded && hasError && (
+                <TableRow className="hover:bg-transparent">
+                    <TableCell
+                        colSpan={6}
+                        className="bg-destructive/5 px-4 py-2 font-mono type-footnote text-destructive"
+                    >
+                        {provider.last_error}
+                        {provider.last_error_at && (
+                            <span className="ml-2 text-label-secondary">
+                                (
+                                {formatTs(
+                                    provider.last_error_at,
+                                    neverLabel,
+                                    dateFormat,
+                                    locale,
+                                )}
+                                )
+                            </span>
+                        )}
+                    </TableCell>
+                </TableRow>
+            )}
         </>
     );
 }
@@ -212,7 +223,7 @@ export default function ProviderHealthPage() {
     });
 
     return (
-        <PageShell className="p-6">
+        <PageShell>
             <PageHeader
                 title={t("admin.providers.title")}
                 subtitle={t("admin.providers.description")}
@@ -226,7 +237,7 @@ export default function ProviderHealthPage() {
                 />
             )}
 
-            <Card className="glass-chrome">
+            <Card>
                 <CardHeader>
                     <CardTitle variant="sm">
                         {t("admin.providers.tableTitle")}
@@ -256,7 +267,11 @@ export default function ProviderHealthPage() {
                                 <TableHead>
                                     {t("admin.providers.colLastError")}
                                 </TableHead>
-                                <TableHead />
+                                <TableHead>
+                                    <span className="sr-only">
+                                        {t("dbMaintenance.col.actions")}
+                                    </span>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>

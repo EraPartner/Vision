@@ -4,7 +4,7 @@ type: testing
 status: active
 date: 2026-10-07
 last_modified: 2026-10-06
-updated: 2026-10-06
+updated: 2026-10-07
 last-updated: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -523,7 +523,7 @@ Three new deep component-integration test files covering multi-step dialogs and 
 | ---------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/frontend/src/features/statistics/__tests__/CustomChartBuilderModal.test.tsx` | 9     | Dialog open; Save disabled when name empty; Save disabled with name but no selection; Save enabled when name + category selected; create mode POST + `onOpenChange(false)`; edit mode pre-populated; edit mode PATCH + close; cancel/close calls `onOpenChange(false)`; recipients loaded from API and shown                      |
 | `apps/frontend/src/features/planned/__tests__/LinkTransactionDialog.test.tsx`      | 9     | Dialog open; renders unlinked transactions list; shows empty state; link button calls PATCH and closes; unlink button calls PATCH and closes; search filters transactions; confirm-unlink dialog shown; cancel from confirm-unlink stays open; error toast on API failure                                                         |
-| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx`               | 10    | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; step indicator buttons jump to step; `initialStep` prop opens directly to specified step |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx`               | 17    | Default trigger renders; opens sheet on click; employment step shown with radio options; Back disabled on step 1; Next advances to income step; can navigate all 4 steps; last step shows Save not Next; Save on last step closes sheet; segmented step-picker radios jump to a step (forward jumps past an incomplete step are blocked); `initialStep` prop opens directly to specified step |
 
 **Total E13 tests:** 3 files, **28 tests**, all passing
 
@@ -555,7 +555,7 @@ Eleven new dialog and modal component integration test files added across portfo
 | `apps/frontend/src/features/portfolio/__tests__/EditPortfolioTxnDialog.test.tsx`        | 10    | Controlled dialog via props; edits portfolio transaction; calls `PATCH /api/investments/transactions/:id`; type field is disabled in edit mode; cancel calls `onOpenChange(false)`                    |
 | `apps/frontend/src/features/portfolio/__tests__/AddToWatchlistDialog.test.tsx`          | 8     | Controlled dialog; adds symbol to watchlist; calls `GET /api/market/search` + `POST /api/watchlist`; search/selection flow; form validation                                                           |
 | `apps/frontend/src/features/portfolio/__tests__/WatchlistChartDialog.test.tsx`          | 7     | Trigger-based dialog; uses raw `fetch()` (not apiClient); MSW handlers use `HttpResponse.json()` directly without `ok()` envelope for `GET /api/market/chart`; chart data rendering                   |
-| `apps/frontend/src/features/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 7     | Trigger-based dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence                                                                        |
+| `apps/frontend/src/features/portfolio/__tests__/PortfolioTaxAdjustmentsDialog.test.tsx` | 10    | Trigger-based or controlled (`open`/`onOpenChange`) dialog; stores adjustments via `PUT /api/settings/:key`; form submission; validation; calls settings persistence                                                                        |
 | `apps/frontend/src/features/portfolio/__tests__/InvestmentDetailDialog.test.tsx`        | 9     | Trigger-based dialog; default trigger label is "Details"; icon-only Pencil/Trash action buttons found by index; delete confirmation; edit/view modes                                                  |
 | `apps/frontend/src/features/portfolio/__tests__/AddInvestmentFromMarketDialog.test.tsx` | 9     | Trigger-based dialog; multi-step (choose → new/transaction); `existingInvestment` prop enables transaction step; scoped `within(dialog)` to avoid trigger button ambiguity; market search integration |
 
@@ -581,7 +581,7 @@ Eleven new dialog and modal component integration test files added across portfo
 
 | File                                                                 | Tests | Coverage                                                                                                                                                                                                                                                                      |
 | -------------------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 10    | Trigger-based Radix **Sheet** (not Dialog); 4-step form (employment → income → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
+| `apps/frontend/src/features/tax/__tests__/TaxProfileDialog.test.tsx` | 17    | Trigger-based Radix **Sheet** (not Dialog); form steps picked through a `SegmentedControl` of radios (employment → income → income sources → exemptions → region); no API calls — uses `BelgianTaxProfileContext` only; "Save" on last step calls `updateProfile({ profileConfigured: true })`; step navigation; `initialStep` prop support |
 
 **Total E14 tests:** 11 files, **88 tests**, all passing
 

@@ -43,7 +43,12 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
         useLanguage: () => ({
             language: "en" as const,
             setLanguage: vi.fn(),
-            t: (key: string) => en[key] ?? key,
+            t: (key: string, vars?: Record<string, string | number>) =>
+                (en[key] ?? key).replace(
+                    /\{(\w+)\}/g,
+                    (match: string, name: string) =>
+                        vars && name in vars ? String(vars[name]) : match,
+                ),
         }),
     };
 });
@@ -141,7 +146,12 @@ describe("ChartBuilderPage oscillator state", () => {
         await user.keyboard("{End}{Enter}");
         expect(axis).toHaveTextContent("Right axis");
         await user.click(
-            screen.getByRole("button", { name: "Remove series: TEST" }),
+            screen.getByRole("button", { name: "Actions for TEST" }),
+        );
+        await user.click(
+            within(await screen.findByRole("menu")).getByRole("menuitem", {
+                name: "Remove series",
+            }),
         );
         expect(
             screen.queryByRole("combobox", { name: "Axis: TEST" }),
@@ -185,13 +195,13 @@ describe("ChartBuilderPage oscillator state", () => {
         expect(scale).toBeChecked();
     });
 
-    it("saves and deletes a named layout through the rendered controls", async () => {
+    it("saves a named layout and deletes it from the page menu with Undo", async () => {
         const user = userEvent.setup();
         renderPage();
 
         await user.click(screen.getByRole("button", { name: /save as/i }));
         await user.type(screen.getByLabelText(/layout name/i), "Belgian view");
-        await user.click(screen.getByRole("button", { name: /^save$/i }));
+        await user.click(screen.getByRole("button", { name: /save layout/i }));
 
         expect(screen.getByText("Belgian view")).toBeInTheDocument();
         const stored = JSON.parse(
@@ -199,14 +209,26 @@ describe("ChartBuilderPage oscillator state", () => {
         );
         expect(stored.layouts).toHaveLength(1);
 
-        await user.click(screen.getByText("Layout actions"));
-        await user.click(screen.getByRole("button", { name: /^delete$/i }));
+        await user.click(screen.getByRole("button", { name: "More actions" }));
         await user.click(
-            within(screen.getByRole("alertdialog")).getByRole("button", {
-                name: /^delete$/i,
+            within(await screen.findByRole("menu")).getByRole("menuitem", {
+                name: "Delete saved layout",
             }),
         );
+        expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
         expect(screen.queryByText("Belgian view")).not.toBeInTheDocument();
+        expect(toast.success).toHaveBeenCalledWith(
+            "Layout deleted",
+            expect.objectContaining({
+                action: expect.objectContaining({ label: "Undo" }),
+            }),
+        );
+
+        const undo = vi.mocked(toast.success).mock.calls.at(-1)?.[1] as unknown as {
+            action: { onClick: () => void };
+        };
+        undo.action.onClick();
+        expect(await screen.findByText("Belgian view")).toBeInTheDocument();
     });
 
     it("preserves an unnamed draft until a shared-chart replacement is confirmed", async () => {

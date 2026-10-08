@@ -17,7 +17,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Loader2, GitMerge, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent } from "@/components/ui/card";
 import {
     useAccountMergePreview,
     useAccounts,
@@ -115,143 +117,165 @@ export function MergeAccountDialog({
                         })}
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3">
-                    <Label htmlFor="merge-target">
-                        {t("accounts.mergeTargetLabel")}
-                    </Label>
-                    <Select
-                        value={targetId}
-                        onValueChange={(value) => {
-                            setTargetId(value);
-                            setAcknowledgedPair(null);
-                        }}
-                    >
-                        <SelectTrigger id="merge-target">
-                            <SelectValue
-                                placeholder={t(
-                                    "accounts.mergeTargetPlaceholder",
-                                )}
-                            />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {candidates.map((a) => (
-                                <SelectItem key={a.id} value={String(a.id)}>
-                                    {label(a)}
-                                    {!a.is_active
-                                        ? ` (${t("accounts.archived")})`
-                                        : ""}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="merge-target">
+                            {t("accounts.mergeTargetLabel")}
+                        </Label>
+                        <Select
+                            value={targetId}
+                            onValueChange={(value) => {
+                                setTargetId(value);
+                                setAcknowledgedPair(null);
+                            }}
+                        >
+                            <SelectTrigger id="merge-target">
+                                <SelectValue
+                                    placeholder={t(
+                                        "accounts.mergeTargetPlaceholder",
+                                    )}
+                                />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {candidates.map((a) => (
+                                    <SelectItem key={a.id} value={String(a.id)}>
+                                        {label(a)}
+                                        {!a.is_active
+                                            ? ` (${t("accounts.archived")})`
+                                            : ""}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     {/* What-would-move preview (§3 F9) */}
                     {target && (
-                        <div className="glass-thin rounded-xl p-3 text-sm">
-                            {preview.isError ? (
-                                <div role="alert" className="space-y-2">
-                                    <p className="text-destructive">
-                                        {t("accounts.mergePreview.failed")}
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={preview.isFetching}
-                                        onClick={() => {
-                                            setAcknowledgedPair(null);
-                                            void preview.refetch();
-                                        }}
-                                    >
-                                        {t("common.retry")}
-                                    </Button>
-                                </div>
-                            ) : !preview.data ? (
-                                <span className="flex items-center gap-2 text-muted-foreground">
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    {t("accounts.mergePreview.loading")}
-                                </span>
-                            ) : (
-                                <>
-                                    <p>
-                                        {t("accounts.mergePreview.summary", {
-                                            transactions: numFmt.format(
-                                                preview.data.reassigned
-                                                    .transactions,
-                                            ),
-                                            planned: numFmt.format(
-                                                preview.data.reassigned.planned,
-                                            ),
-                                            balance: fmtCur(
-                                                preview.data.projectedBalance,
-                                                {
-                                                    currency:
-                                                        preview.data
-                                                            .projectedBalanceCurrency ||
-                                                        target.currency,
-                                                },
-                                            ),
-                                        })}
-                                    </p>
-                                    {preview.data
-                                        .projectedBalanceIncomplete && (
-                                        <div className="mt-2 text-xs text-warning">
-                                            <p>
-                                                {t(
-                                                    "accounts.mergePreview.incomplete",
-                                                )}
-                                            </p>
-                                            {preview.data.balanceParts
-                                                .filter((part) =>
-                                                    preview.data.unconvertedCurrencies.includes(
-                                                        part.currency,
-                                                    ),
-                                                )
-                                                .map((part) => (
-                                                    <p key={part.currency}>
-                                                        {fmtCur(part.balance, {
-                                                            currency:
-                                                                part.currency,
-                                                        })}{" "}
-                                                        {t(
-                                                            "accounts.balanceExcluded",
-                                                        )}
-                                                    </p>
-                                                ))}
-                                        </div>
-                                    )}
-                                    {preview.data.stampsInterleaved && (
-                                        <p className="mt-2 flex items-start gap-1.5 text-xs text-warning">
-                                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <Card>
+                            <CardContent
+                                variant="compact"
+                                className="type-body"
+                            >
+                                {preview.isError ? (
+                                    <div role="alert" className="space-y-2">
+                                        <p className="text-destructive">
+                                            {t("accounts.mergePreview.failed")}
+                                        </p>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={preview.isFetching}
+                                            onClick={() => {
+                                                setAcknowledgedPair(null);
+                                                void preview.refetch();
+                                            }}
+                                        >
+                                            {t("common.retry")}
+                                        </Button>
+                                    </div>
+                                ) : !preview.data ? (
+                                    <span className="flex items-center gap-2 text-label-secondary">
+                                        <Loader2
+                                            className="h-3.5 w-3.5 animate-spin"
+                                            aria-hidden
+                                        />
+                                        {t("accounts.mergePreview.loading")}
+                                    </span>
+                                ) : (
+                                    <>
+                                        <p>
                                             {t(
-                                                "accounts.mergePreview.interleaved",
+                                                "accounts.mergePreview.summary",
+                                                {
+                                                    transactions: numFmt.format(
+                                                        preview.data.reassigned
+                                                            .transactions,
+                                                    ),
+                                                    planned: numFmt.format(
+                                                        preview.data.reassigned
+                                                            .planned,
+                                                    ),
+                                                    balance: fmtCur(
+                                                        preview.data
+                                                            .projectedBalance,
+                                                        {
+                                                            currency:
+                                                                preview.data
+                                                                    .projectedBalanceCurrency ||
+                                                                target.currency,
+                                                        },
+                                                    ),
+                                                },
                                             )}
                                         </p>
-                                    )}
-                                </>
-                            )}
-                        </div>
+                                        {preview.data
+                                            .projectedBalanceIncomplete && (
+                                            <div className="mt-2 type-footnote text-warning">
+                                                <p>
+                                                    {t(
+                                                        "accounts.mergePreview.incomplete",
+                                                    )}
+                                                </p>
+                                                {preview.data.balanceParts
+                                                    .filter((part) =>
+                                                        preview.data.unconvertedCurrencies.includes(
+                                                            part.currency,
+                                                        ),
+                                                    )
+                                                    .map((part) => (
+                                                        <p key={part.currency}>
+                                                            {fmtCur(
+                                                                part.balance,
+                                                                {
+                                                                    currency:
+                                                                        part.currency,
+                                                                },
+                                                            )}{" "}
+                                                            {t(
+                                                                "accounts.balanceExcluded",
+                                                            )}
+                                                        </p>
+                                                    ))}
+                                            </div>
+                                        )}
+                                        {preview.data.stampsInterleaved && (
+                                            <p className="mt-2 flex items-start gap-1.5 type-footnote text-warning">
+                                                <AlertTriangle
+                                                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                                                    aria-hidden
+                                                />
+                                                {t(
+                                                    "accounts.mergePreview.interleaved",
+                                                )}
+                                            </p>
+                                        )}
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
                     )}
                     {/* Irreversibility is always called out, not only once a target is picked. */}
-                    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>
+                    <Alert variant="destructive">
+                        <AlertTriangle className="h-4 w-4" aria-hidden />
+                        <AlertDescription>
                             {target
                                 ? t("accounts.mergeWarning", {
                                       source: label(source),
                                       target: label(target),
                                   })
                                 : t("accounts.mergeIrreversible")}
-                        </span>
-                    </div>
+                        </AlertDescription>
+                    </Alert>
                     {target && target.type !== source.type && (
-                        <p className="text-sm text-warning">
+                        <p className="type-callout text-warning">
                             {t("accounts.mergeTypeMismatch", {
                                 sourceType: t(`accounts.type.${source.type}`),
                                 targetType: t(`accounts.type.${target.type}`),
                             })}
                         </p>
                     )}
-                    <label className="flex items-start gap-2 text-sm">
+                    <div className="flex items-start gap-2">
                         <Checkbox
+                            id="merge-account-acknowledge"
                             checked={acknowledged}
                             disabled={!previewReady || merge.isPending}
                             onCheckedChange={(c) =>
@@ -259,8 +283,13 @@ export function MergeAccountDialog({
                             }
                             className="mt-0.5"
                         />
-                        <span>{t("accounts.mergeAcknowledge")}</span>
-                    </label>
+                        <Label
+                            htmlFor="merge-account-acknowledge"
+                            className="cursor-pointer font-normal leading-snug"
+                        >
+                            {t("accounts.mergeAcknowledge")}
+                        </Label>
+                    </div>
                 </div>
                 <DialogFooter className="pt-2">
                     <Button
@@ -279,10 +308,8 @@ export function MergeAccountDialog({
                         }
                         onClick={handleMerge}
                     >
-                        {merge.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                        ) : (
-                            <GitMerge className="h-4 w-4 mr-1" />
+                        {merge.isPending && (
+                            <Loader2 className="h-4 w-4 animate-spin" />
                         )}
                         {t("accounts.mergeConfirm")}
                     </Button>

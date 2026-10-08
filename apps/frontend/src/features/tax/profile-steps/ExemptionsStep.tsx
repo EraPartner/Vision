@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
@@ -13,27 +14,57 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { StepProps } from "./types";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 import { BoundedCountSelect } from "./ProfileSelectFields";
+import { FieldHint, StepIntro, ToggleGroup, ToggleRow } from "./ProfileRows";
+
+interface EligibilitySwitchProps {
+    id: string;
+    label: ReactNode;
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+}
+
+/** Inline "this item qualifies" switch under a deduction amount. */
+function EligibilitySwitch({
+    id,
+    label,
+    checked,
+    onCheckedChange,
+}: EligibilitySwitchProps) {
+    return (
+        <div className="flex items-center gap-3">
+            <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+            <Label htmlFor={id} className="font-normal">
+                {label}
+            </Label>
+        </div>
+    );
+}
+
+function OptionalBadge() {
+    const { t } = useLanguage();
+    return (
+        <Badge variant="outline" size="sm" className="ml-1">
+            {t("common.optional")}
+        </Badge>
+    );
+}
 
 export function ExemptionsStep({ profile, updateProfile }: StepProps) {
     const { t } = useLanguage();
     return (
         <div className="space-y-5">
-            <div>
-                <p className="text-sm font-semibold text-foreground mb-1">
-                    {t("tax.profile.section.exemptions.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                    {t("tax.profile.section.exemptions.desc")}
-                </p>
-            </div>
+            <StepIntro
+                title={t("tax.profile.section.exemptions.title")}
+                description={t("tax.profile.section.exemptions.desc")}
+            />
 
             <div className="space-y-2">
-                <Label htmlFor="dep-children" className="text-sm font-medium">
+                <Label htmlFor="dep-children">
                     {t("tax.profile.field.children")}
                 </Label>
-                <p className="text-xs text-muted-foreground">
+                <FieldHint>
                     {t("tax.profile.dependents.children.desc")}
-                </p>
+                </FieldHint>
                 <BoundedCountSelect
                     id="dep-children"
                     value={profile.dependentChildren}
@@ -59,19 +90,14 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             </div>
 
             {profile.dependentChildren > 0 && (
-                <div className="space-y-2 pl-3 border-l-2 border-border">
-                    <Label
-                        htmlFor="dep-children-disabled"
-                        className="text-sm font-medium"
-                    >
-                        {t("tax.profile.field.childrenDisabled")}{" "}
-                        <Badge variant="outline" className="text-2xs ml-1">
-                            {t("common.optional")}
-                        </Badge>
+                <div className="space-y-2 border-l-2 border-border/60 pl-3">
+                    <Label htmlFor="dep-children-disabled">
+                        {t("tax.profile.field.childrenDisabled")}
+                        <OptionalBadge />
                     </Label>
-                    <p className="text-xs text-muted-foreground">
+                    <FieldHint>
                         {t("tax.profile.field.childrenDisabled.desc")}
-                    </p>
+                    </FieldHint>
                     <BoundedCountSelect
                         id="dep-children-disabled"
                         value={profile.dependentChildrenDisabled ?? 0}
@@ -87,15 +113,11 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             )}
 
             <div className="space-y-2">
-                <Label htmlFor="dep-other" className="text-sm font-medium">
-                    {t("tax.profile.field.others")}{" "}
-                    <Badge variant="outline" className="text-2xs ml-1">
-                        {t("common.optional")}
-                    </Badge>
+                <Label htmlFor="dep-other">
+                    {t("tax.profile.field.others")}
+                    <OptionalBadge />
                 </Label>
-                <p className="text-xs text-muted-foreground">
-                    {t("tax.profile.dependents.others.desc")}
-                </p>
+                <FieldHint>{t("tax.profile.dependents.others.desc")}</FieldHint>
                 <BoundedCountSelect
                     id="dep-other"
                     value={profile.dependentOtherPersons}
@@ -121,19 +143,14 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
             </div>
 
             {profile.dependentOtherPersons > 0 && (
-                <div className="space-y-2 pl-3 border-l-2 border-border">
-                    <Label
-                        htmlFor="dep-other-disabled"
-                        className="text-sm font-medium"
-                    >
-                        {t("tax.profile.field.othersDisabled")}{" "}
-                        <Badge variant="outline" className="text-2xs ml-1">
-                            {t("common.optional")}
-                        </Badge>
+                <div className="space-y-2 border-l-2 border-border/60 pl-3">
+                    <Label htmlFor="dep-other-disabled">
+                        {t("tax.profile.field.othersDisabled")}
+                        <OptionalBadge />
                     </Label>
-                    <p className="text-xs text-muted-foreground">
+                    <FieldHint>
                         {t("tax.profile.field.othersDisabled.desc")}
-                    </p>
+                    </FieldHint>
                     <BoundedCountSelect
                         id="dep-other-disabled"
                         value={profile.dependentOtherPersonsDisabled ?? 0}
@@ -152,17 +169,13 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
 
             <Separator />
 
-            <div>
-                <p className="text-sm font-semibold text-foreground mb-1">
-                    {t("tax.profile.section.otherDeductions.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-3">
-                    {t("tax.profile.section.otherDeductions.desc")}
-                </p>
-            </div>
+            <StepIntro
+                title={t("tax.profile.section.otherDeductions.title")}
+                description={t("tax.profile.section.otherDeductions.desc")}
+            />
 
-            <div className="grid grid-cols-1 gap-3">
-                <div>
+            <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-2">
                     <Label htmlFor="alimony">
                         {t("tax.profile.field.alimonyPaid")}
                     </Label>
@@ -178,7 +191,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                     />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="pension">
                         {t("tax.profile.field.personalPensionContributions")}
                     </Label>
@@ -196,7 +209,7 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.personalPensionContributions",
                         )}
                     />
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex flex-wrap items-center gap-3">
                         <Select
                             value={profile.pensionScheme}
                             onValueChange={(v) =>
@@ -217,25 +230,18 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                id="pension-eligible"
-                                checked={!!profile.pensionEligible}
-                                onCheckedChange={(v) =>
-                                    updateProfile({ pensionEligible: v })
-                                }
-                            />
-                            <Label
-                                htmlFor="pension-eligible"
-                                className="cursor-pointer"
-                            >
-                                {t("tax.profile.flag.pensionEligible")}
-                            </Label>
-                        </div>
+                        <EligibilitySwitch
+                            id="pension-eligible"
+                            checked={!!profile.pensionEligible}
+                            onCheckedChange={(v) =>
+                                updateProfile({ pensionEligible: v })
+                            }
+                            label={t("tax.profile.flag.pensionEligible")}
+                        />
                     </div>
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="group-insurance">
                         {t(
                             "tax.profile.field.employeeGroupInsuranceContributions",
@@ -255,28 +261,21 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.employeeGroupInsuranceContributions",
                         )}
                     />
-                    <div className="flex items-center gap-3 mt-2">
-                        <Switch
-                            id="group-insurance-eligible"
-                            checked={!!profile.employeeGroupInsuranceEligible}
-                            onCheckedChange={(v) =>
-                                updateProfile({
-                                    employeeGroupInsuranceEligible: v,
-                                })
-                            }
-                        />
-                        <Label
-                            htmlFor="group-insurance-eligible"
-                            className="cursor-pointer"
-                        >
-                            {t(
-                                "tax.profile.flag.employeeGroupInsuranceEligible",
-                            )}
-                        </Label>
-                    </div>
+                    <EligibilitySwitch
+                        id="group-insurance-eligible"
+                        checked={!!profile.employeeGroupInsuranceEligible}
+                        onCheckedChange={(v) =>
+                            updateProfile({
+                                employeeGroupInsuranceEligible: v,
+                            })
+                        }
+                        label={t(
+                            "tax.profile.flag.employeeGroupInsuranceEligible",
+                        )}
+                    />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="life">
                         {t("tax.profile.field.lifeInsurancePremiums")}
                     </Label>
@@ -292,24 +291,17 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.lifeInsurancePremiums",
                         )}
                     />
-                    <div className="flex items-center gap-3 mt-2">
-                        <Switch
-                            id="life-eligible"
-                            checked={!!profile.lifeInsuranceEligible}
-                            onCheckedChange={(v) =>
-                                updateProfile({ lifeInsuranceEligible: v })
-                            }
-                        />
-                        <Label
-                            htmlFor="life-eligible"
-                            className="cursor-pointer"
-                        >
-                            {t("tax.profile.flag.lifeInsuranceEligible")}
-                        </Label>
-                    </div>
+                    <EligibilitySwitch
+                        id="life-eligible"
+                        checked={!!profile.lifeInsuranceEligible}
+                        onCheckedChange={(v) =>
+                            updateProfile({ lifeInsuranceEligible: v })
+                        }
+                        label={t("tax.profile.flag.lifeInsuranceEligible")}
+                    />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="donations">
                         {t("tax.profile.field.charitableDonations")}
                     </Label>
@@ -325,26 +317,21 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.charitableDonations",
                         )}
                     />
-                    <div className="flex items-center gap-3 mt-2">
-                        <Switch
-                            id="donations-eligible"
-                            checked={!!profile.charitableDonationsEligible}
-                            onCheckedChange={(v) =>
-                                updateProfile({
-                                    charitableDonationsEligible: v,
-                                })
-                            }
-                        />
-                        <Label
-                            htmlFor="donations-eligible"
-                            className="cursor-pointer"
-                        >
-                            {t("tax.profile.flag.charitableDonationsEligible")}
-                        </Label>
-                    </div>
+                    <EligibilitySwitch
+                        id="donations-eligible"
+                        checked={!!profile.charitableDonationsEligible}
+                        onCheckedChange={(v) =>
+                            updateProfile({
+                                charitableDonationsEligible: v,
+                            })
+                        }
+                        label={t(
+                            "tax.profile.flag.charitableDonationsEligible",
+                        )}
+                    />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="childcare">
                         {t("tax.profile.field.childcareCosts")}
                     </Label>
@@ -360,44 +347,35 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.childcareCosts",
                         )}
                     />
-                    <div className="mt-2">
-                        <Label htmlFor="childcare-days">
-                            {t("tax.profile.field.childcareEligibleDays")}
-                        </Label>
-                        <ProfileNumberInput
-                            id="childcare-days"
-                            min={0}
-                            step={1}
-                            integer
-                            value={profile.childcareEligibleDays}
-                            onValueChange={(value) =>
-                                updateProfile({
-                                    childcareEligibleDays: value ?? 0,
-                                })
-                            }
-                            placeholder={t(
-                                "tax.profile.placeholder.childcareEligibleDays",
-                            )}
-                        />
-                    </div>
-                    <div className="flex items-center gap-3 mt-2">
-                        <Switch
-                            id="childcare-eligible"
-                            checked={!!profile.childcareEligible}
-                            onCheckedChange={(v) =>
-                                updateProfile({ childcareEligible: v })
-                            }
-                        />
-                        <Label
-                            htmlFor="childcare-eligible"
-                            className="cursor-pointer"
-                        >
-                            {t("tax.profile.flag.childcareEligible")}
-                        </Label>
-                    </div>
+                    <Label htmlFor="childcare-days">
+                        {t("tax.profile.field.childcareEligibleDays")}
+                    </Label>
+                    <ProfileNumberInput
+                        id="childcare-days"
+                        min={0}
+                        step={1}
+                        integer
+                        value={profile.childcareEligibleDays}
+                        onValueChange={(value) =>
+                            updateProfile({
+                                childcareEligibleDays: value ?? 0,
+                            })
+                        }
+                        placeholder={t(
+                            "tax.profile.placeholder.childcareEligibleDays",
+                        )}
+                    />
+                    <EligibilitySwitch
+                        id="childcare-eligible"
+                        checked={!!profile.childcareEligible}
+                        onCheckedChange={(v) =>
+                            updateProfile({ childcareEligible: v })
+                        }
+                        label={t("tax.profile.flag.childcareEligible")}
+                    />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="domestic-help">
                         {t("tax.profile.field.domesticHelpCosts")}
                     </Label>
@@ -413,24 +391,17 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                             "tax.profile.placeholder.domesticHelpCosts",
                         )}
                     />
-                    <div className="flex items-center gap-3 mt-2">
-                        <Switch
-                            id="domestic-help-eligible"
-                            checked={!!profile.domesticHelpEligible}
-                            onCheckedChange={(v) =>
-                                updateProfile({ domesticHelpEligible: v })
-                            }
-                        />
-                        <Label
-                            htmlFor="domestic-help-eligible"
-                            className="cursor-pointer"
-                        >
-                            {t("tax.profile.flag.domesticHelpEligible")}
-                        </Label>
-                    </div>
+                    <EligibilitySwitch
+                        id="domestic-help-eligible"
+                        checked={!!profile.domesticHelpEligible}
+                        onCheckedChange={(v) =>
+                            updateProfile({ domesticHelpEligible: v })
+                        }
+                        label={t("tax.profile.flag.domesticHelpEligible")}
+                    />
                 </div>
 
-                <div>
+                <div className="space-y-2">
                     <Label htmlFor="union">
                         {t("tax.profile.field.unionDues")}
                     </Label>
@@ -444,78 +415,43 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                         }
                         placeholder={t("tax.profile.placeholder.unionDues")}
                     />
-                    <p className="text-xs text-muted-foreground">
-                        {t("tax.profile.field.unionDues.desc")}
-                    </p>
+                    <FieldHint>{t("tax.profile.field.unionDues.desc")}</FieldHint>
                 </div>
             </div>
 
             <Separator />
 
-            <div className="space-y-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div className="flex-1">
-                        <Label
-                            htmlFor="disabled"
-                            className="text-sm font-medium cursor-pointer"
-                        >
-                            {t("tax.profile.field.disabilityExemption.self")}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {t("tax.profile.field.disabilityExemption.desc")}
-                        </p>
-                    </div>
-                    <Switch
-                        id="disabled"
-                        checked={profile.isDisabled}
-                        onCheckedChange={(v) =>
-                            updateProfile({ isDisabled: v })
-                        }
-                    />
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div className="flex-1">
-                        <Label
-                            htmlFor="spouse-disabled"
-                            className="text-sm font-medium cursor-pointer"
-                        >
-                            {t("tax.profile.field.disabilityExemption.spouse")}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {t("tax.profile.field.disabilityExemption.desc")}
-                        </p>
-                    </div>
-                    <Switch
-                        id="spouse-disabled"
-                        checked={profile.isSpouseDisabled}
-                        onCheckedChange={(v) =>
-                            updateProfile({ isSpouseDisabled: v })
-                        }
-                    />
-                </div>
-
-                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
-                    <div className="flex-1">
-                        <Label
-                            htmlFor="isolated-parent"
-                            className="text-sm font-medium cursor-pointer"
-                        >
-                            {t("tax.profile.field.isolatedParent.label")}
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                            {t("tax.profile.field.isolatedParent.desc")}
-                        </p>
-                    </div>
-                    <Switch
-                        id="isolated-parent"
-                        checked={profile.isIsolatedParent ?? false}
-                        onCheckedChange={(v) =>
-                            updateProfile({ isIsolatedParent: v })
-                        }
-                    />
-                </div>
-            </div>
+            <ToggleGroup>
+                <ToggleRow
+                    id="disabled"
+                    label={t("tax.profile.field.disabilityExemption.self")}
+                    description={t(
+                        "tax.profile.field.disabilityExemption.desc",
+                    )}
+                    checked={profile.isDisabled}
+                    onCheckedChange={(v) => updateProfile({ isDisabled: v })}
+                />
+                <ToggleRow
+                    id="spouse-disabled"
+                    label={t("tax.profile.field.disabilityExemption.spouse")}
+                    description={t(
+                        "tax.profile.field.disabilityExemption.desc",
+                    )}
+                    checked={profile.isSpouseDisabled}
+                    onCheckedChange={(v) =>
+                        updateProfile({ isSpouseDisabled: v })
+                    }
+                />
+                <ToggleRow
+                    id="isolated-parent"
+                    label={t("tax.profile.field.isolatedParent.label")}
+                    description={t("tax.profile.field.isolatedParent.desc")}
+                    checked={profile.isIsolatedParent ?? false}
+                    onCheckedChange={(v) =>
+                        updateProfile({ isIsolatedParent: v })
+                    }
+                />
+            </ToggleGroup>
         </div>
     );
 }

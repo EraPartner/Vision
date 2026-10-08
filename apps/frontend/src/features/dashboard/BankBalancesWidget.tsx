@@ -12,7 +12,14 @@ import {
     formatCurrencyCompact,
     numberFormatToLocale,
 } from "@/utils/currency";
-import { Landmark, Wallet, TrendingUp, TrendingDown } from "lucide-react";
+import {
+    AlertCircle,
+    Landmark,
+    Wallet,
+    TrendingUp,
+    TrendingDown,
+} from "lucide-react";
+import { StateBlock } from "@/components/shared/StateBlock";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
@@ -187,16 +194,16 @@ export function BankBalancesWidget() {
                     <CardTitle>{t("bankWidget.title")}</CardTitle>
                 </CardHeader>
                 <CardContent {...loadingSurfaceProps} className="space-y-4">
-                    <Skeleton className="h-24 w-full rounded-xl" />
+                    <Skeleton className="h-24 w-full rounded-card" />
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {[...Array(3)].map((_, i) => (
                             <Skeleton
                                 key={i}
-                                className="h-20 w-full rounded-xl"
+                                className="h-20 w-full rounded-card"
                             />
                         ))}
                     </div>
-                    <Skeleton className="h-48 w-full rounded-xl" />
+                    <Skeleton className="h-48 w-full rounded-card" />
                 </CardContent>
             </Card>
         );
@@ -209,9 +216,13 @@ export function BankBalancesWidget() {
                     <CardTitle>{t("bankWidget.title")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                        {t("bankWidget.unableToLoad")}
-                    </p>
+                    <StateBlock
+                        icon={AlertCircle}
+                        tone="destructive"
+                        size="compact"
+                        headingLevel={3}
+                        title={t("bankWidget.unableToLoad")}
+                    />
                 </CardContent>
             </Card>
         );
@@ -261,12 +272,13 @@ export function BankBalancesWidget() {
                     <CardTitle variant="label">
                         {t("bankWidget.netPosition")}
                     </CardTitle>
-                    <div className="h-10 w-10 rounded-xl flex items-center justify-center text-muted-foreground">
-                        <Wallet className="h-5 w-5" />
-                    </div>
+                    <Wallet
+                        aria-hidden="true"
+                        className="h-5 w-5 text-label-secondary"
+                    />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-3xl font-bold tabular-nums text-foreground">
+                    <div className="type-title-1 tabular-nums text-foreground">
                         {(() => {
                             const r = formatCurrencyCompact(
                                 total_net_position,
@@ -284,7 +296,7 @@ export function BankBalancesWidget() {
                     </div>
                     <p
                         className={cn(
-                            "text-xs font-medium mt-2 flex items-center gap-1",
+                            "mt-2 flex items-center gap-1 type-footnote font-medium",
                             isPositive ? "text-gain" : "text-loss",
                         )}
                     >
@@ -319,35 +331,32 @@ export function BankBalancesWidget() {
                         const provenanceText = balanceProvenance(a);
                         const drift = driftBadge(a);
                         return (
-                            <Card
-                                key={a.id}
-                                className="group transition-shadow hover:shadow-glass-soft"
-                            >
+                            <Card key={a.id} className="group">
                                 <CardContent variant="compact">
                                     <div className="flex items-start justify-between mb-2">
                                         <div className="flex items-center gap-2 min-w-0">
-                                            <div
-                                                className="h-3 w-3 rounded-full shrink-0 ring-2 ring-offset-1 ring-offset-card transition-transform duration-normal group-hover:scale-125"
-                                                style={
-                                                    {
-                                                        backgroundColor: color,
-                                                        ["--tw-ring-color"]:
-                                                            color,
-                                                    } as React.CSSProperties
-                                                }
+                                            <span
+                                                aria-hidden="true"
+                                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                style={{
+                                                    backgroundColor: color,
+                                                }}
                                             />
                                             <TextLink
                                                 to={`/accounts/${a.id}`}
-                                                className="min-w-0 truncate text-xs font-semibold tracking-tight text-muted-foreground"
+                                                className="min-w-0 truncate type-footnote font-medium text-label-secondary"
                                             >
                                                 {label}
                                             </TextLink>
                                         </div>
-                                        <Landmark className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                                        <Landmark
+                                            aria-hidden="true"
+                                            className="h-4 w-4 shrink-0 text-label-tertiary"
+                                        />
                                     </div>
                                     <div
                                         className={cn(
-                                            "text-xl font-bold tabular-nums",
+                                            "type-title-3 tabular-nums",
                                             acctPositive
                                                 ? "text-foreground"
                                                 : "text-loss",
@@ -383,7 +392,7 @@ export function BankBalancesWidget() {
                                         })()}
                                     </div>
                                     {provenanceText && (
-                                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                                        <div className="mt-1 truncate type-footnote text-label-secondary">
                                             <TouchDisclosure
                                                 label={provenanceText}
                                                 content={provenanceText}
@@ -394,7 +403,7 @@ export function BankBalancesWidget() {
                                         </div>
                                     )}
                                     {txCount != null && (
-                                        <div className="text-xs text-muted-foreground mt-1">
+                                        <div className="mt-1 type-footnote text-label-secondary">
                                             {t("bankWidget.transactions", {
                                                 n: integerLocaleFormatter.format(
                                                     txCount,

@@ -1,12 +1,14 @@
 /**
  * YearActionsMenu
  *
- * Dropdown surfacing the per-year actions added by ADR-059: freeze/unfreeze the
- * calculation, mark as filed / unmark, view audit history, and export the year as CSV.
+ * The tax pages' header ••• menu. It holds the page's secondary actions (passed
+ * in as `pageItems`: Export PDF…, Customize…) and the per-year actions from
+ * ADR-059: freeze/unfreeze the calculation, mark as filed / unfile, view the
+ * audit history, and export the year as CSV.
  *
- * Wired against the currently-viewed year. The page mounts one of these alongside the
- * `TaxYearSwitcher` so all year-scoped operations live in a predictable spot.
+ * Wired against the currently-viewed year.
  */
+import type { ReactNode } from "react";
 import {
     MoreHorizontal,
     Snowflake,
@@ -34,9 +36,13 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
     year: number;
+    /** Page-level items (export, customize…) shown above the year actions. */
+    pageItems?: ReactNode;
 }
 
-export function YearActionsMenu({ year }: YearActionsMenuProps) {
+const itemIconClass = "mr-2 h-4 w-4 text-label-secondary";
+
+export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const {
@@ -82,36 +88,34 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
             <DropdownMenuTrigger asChild>
                 <Button
                     variant="outline"
-                    size="sm"
-                    className="h-8 w-8 p-0"
-                    aria-label={t("tax.yearActions.trigger", {
-                        year: String(year),
-                    })}
+                    size="icon"
+                    aria-label={t("tax.menu.label")}
                 >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <MoreHorizontal />
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[220px]">
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
+            <DropdownMenuContent align="end" className="min-w-[240px]">
+                {pageItems && (
+                    <>
+                        {pageItems}
+                        <DropdownMenuSeparator />
+                    </>
+                )}
+                <DropdownMenuLabel>
                     {t("tax.yearActions.menuLabel", { year: String(year) })}
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
 
                 {!filed && !hasFrozen && (
-                    <DropdownMenuItem
-                        onSelect={() => freezeCalculation(year)}
-                        className="gap-2"
-                    >
-                        <Snowflake className="h-3.5 w-3.5 text-info" />
+                    <DropdownMenuItem onSelect={() => freezeCalculation(year)}>
+                        <Snowflake className={itemIconClass} />
                         {t("tax.yearActions.freeze")}
                     </DropdownMenuItem>
                 )}
                 {!filed && hasFrozen && (
                     <DropdownMenuItem
                         onSelect={() => unfreezeCalculation(year)}
-                        className="gap-2"
                     >
-                        <Snowflake className="h-3.5 w-3.5 text-muted-foreground" />
+                        <Snowflake className={itemIconClass} />
                         {t("tax.yearActions.unfreeze")}
                     </DropdownMenuItem>
                 )}
@@ -122,20 +126,16 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                         trigger={
                             <DropdownMenuItem
                                 onSelect={(e) => e.preventDefault()}
-                                className="gap-2"
                             >
-                                <Lock className="h-3.5 w-3.5 text-warning" />
+                                <Lock className={itemIconClass} />
                                 {t("tax.yearActions.markFiled")}
                             </DropdownMenuItem>
                         }
                     />
                 )}
                 {filed && (
-                    <DropdownMenuItem
-                        onSelect={() => unmarkYearAsFiled(year)}
-                        className="gap-2"
-                    >
-                        <Unlock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <DropdownMenuItem onSelect={() => unmarkYearAsFiled(year)}>
+                        <Unlock className={itemIconClass} />
                         {t("tax.yearActions.unmarkFiled")}
                     </DropdownMenuItem>
                 )}
@@ -148,16 +148,15 @@ export function YearActionsMenu({ year }: YearActionsMenuProps) {
                         <DropdownMenuItem
                             onSelect={(e) => e.preventDefault()}
                             disabled={!snapshotExists && !hasFrozen && !filed}
-                            className="gap-2"
                         >
-                            <History className="h-3.5 w-3.5 text-muted-foreground" />
+                            <History className={itemIconClass} />
                             {t("tax.yearActions.viewHistory")}
                         </DropdownMenuItem>
                     }
                 />
 
-                <DropdownMenuItem onSelect={handleExport} className="gap-2">
-                    <FileDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <DropdownMenuItem onSelect={handleExport}>
+                    <FileDown className={itemIconClass} />
                     {t("tax.yearActions.exportCsv")}
                 </DropdownMenuItem>
             </DropdownMenuContent>

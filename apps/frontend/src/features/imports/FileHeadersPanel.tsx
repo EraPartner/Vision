@@ -106,8 +106,11 @@ export function FileHeadersPanel({
 
     if (isLoading) {
         return (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+            <div
+                role="status"
+                className="flex items-center gap-2 type-footnote text-label-secondary"
+            >
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 {t("importPage.csvParsing")}
             </div>
         );
@@ -117,7 +120,7 @@ export function FileHeadersPanel({
 
     if (error || !hasHeaders) {
         return (
-            <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-card corner-continuous border border-dashed border-border/60 p-3 type-footnote text-label-secondary">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 {t("csvHeaders.unreadable")}
             </div>
@@ -130,17 +133,17 @@ export function FileHeadersPanel({
     const sepLabel = SEPARATOR_LABELS[effectiveSep] ?? effectiveSep;
 
     return (
-        <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+        <div className="space-y-3 rounded-card corner-continuous border border-border/60 bg-card/70 p-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <span className="flex items-center gap-1.5 type-footnote font-medium text-foreground">
                     <TableProperties className="h-3.5 w-3.5 text-primary" />
                     {t("csvHeaders.title")}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="type-footnote text-label-secondary">
                     {t("csvHeaders.columns", { n: headers.length })}
                 </span>
                 {separator === undefined && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="type-footnote text-label-secondary">
                         {t("csvHeaders.delimiterDetected", { sep: sepLabel })}
                     </span>
                 )}
@@ -160,7 +163,7 @@ export function FileHeadersPanel({
 
             {rows.length > 0 && (
                 <Collapsible open={open} onOpenChange={setOpen}>
-                    <CollapsibleTrigger className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground">
+                    <CollapsibleTrigger className="flex items-center gap-1 rounded-chip type-footnote font-medium text-label-secondary transition-colors duration-fast ease-glide hover:text-foreground focus-ring">
                         <ChevronRight
                             className={cn(
                                 "h-3.5 w-3.5 transition-transform",
@@ -170,7 +173,7 @@ export function FileHeadersPanel({
                         {t("csvHeaders.sampleRows")}
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2">
-                        <div className="overflow-x-auto rounded-md border text-xs">
+                        <div className="overflow-x-auto rounded-card corner-continuous border border-border/60">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -179,7 +182,7 @@ export function FileHeadersPanel({
                                                 key={`${h}-${i}`}
                                                 className={
                                                     highlighted.has(h)
-                                                        ? "bg-primary/5 font-semibold text-primary"
+                                                        ? "bg-primary/5 font-medium text-primary"
                                                         : "text-muted-foreground"
                                                 }
                                             >

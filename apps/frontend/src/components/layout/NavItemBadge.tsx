@@ -39,10 +39,10 @@ export function SidebarCount({
             className={cn(
                 "inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1.5 type-caption tabular-nums",
                 tone === "hot"
-                    ? "bg-primary font-semibold text-primary-foreground"
+                    ? "bg-primary font-medium text-primary-foreground"
                     : "text-label-tertiary",
                 collapsed &&
-                    "absolute -right-1 -top-1 h-4 min-w-4 px-1 bg-primary font-semibold text-primary-foreground",
+                    "absolute -right-1 -top-1 h-4 min-w-4 bg-primary px-1 font-medium text-primary-foreground",
             )}
         >
             <span aria-hidden="true">{count > 99 ? "99+" : count}</span>

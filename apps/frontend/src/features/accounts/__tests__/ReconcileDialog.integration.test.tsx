@@ -339,10 +339,8 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         const user = userEvent.setup();
         await renderDialog(MULTI_CURRENCY);
 
-        await user.selectOptions(
-            screen.getByLabelText("Statement currency"),
-            "USD",
-        );
+        await user.click(screen.getByLabelText("Statement currency"));
+        await user.click(await screen.findByRole("option", { name: "USD" }));
         await user.type(screen.getByLabelText(/new statement reading/i), "95");
         await user.click(screen.getByRole("button", { name: /save reading/i }));
 

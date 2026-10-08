@@ -240,11 +240,11 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                             { currency },
                         )}
                         {lockAmount ? (
-                            <span className="text-muted-foreground ml-1 text-xs">
+                            <span className="ml-1 type-caption text-label-secondary">
                                 = 0
                             </span>
                         ) : derivedAmount !== undefined ? (
-                            <span className="text-muted-foreground ml-1 text-xs">
+                            <span className="ml-1 type-caption text-label-secondary">
                                 ={" "}
                                 {formatEditableNumber(
                                     Number(derivedAmount.toFixed(4)),
@@ -278,7 +278,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                     {isAppreciation && (
                         <p
                             id={`${amountId}-help`}
-                            className="text-xs text-muted-foreground"
+                            className="type-caption text-label-secondary"
                         >
                             {t("portfolio.txn.valueIncreaseHelp")}
                         </p>
@@ -298,7 +298,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                 {twoOfThreeShown && (
                     <div
                         id={fieldErrorId(twoOfThreeTargetId)}
-                        className="text-xs text-destructive sm:col-span-2"
+                        className="type-footnote text-destructive sm:col-span-2"
                     >
                         {t("addPortTxn.error.twoOfThreeRequired")}
                     </div>
@@ -395,7 +395,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="type-caption text-label-secondary">
                             {t("addPortTxn.dividendConvention.help")}
                         </p>
                     </div>
@@ -429,12 +429,9 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
             </div>
 
             {showRecurring && (
-                <div className="rounded-lg border border-border p-3 space-y-3">
+                <div className="space-y-3 rounded-card corner-continuous bg-foreground/[0.04] p-3">
                     <div className="flex items-center justify-between">
-                        <Label
-                            htmlFor={`${idPrefix}-recurring`}
-                            className="text-sm"
-                        >
+                        <Label htmlFor={`${idPrefix}-recurring`}>
                             {t("addPortTxn.recurring")}
                         </Label>
                         <Switch
@@ -448,10 +445,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                     {form.isRecurring && (
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="space-y-1">
-                                <Label
-                                    htmlFor={`${idPrefix}-interval`}
-                                    className="text-xs"
-                                >
+                                <Label htmlFor={`${idPrefix}-interval`}>
                                     {t("addPortTxn.interval")}
                                 </Label>
                                 <Select
@@ -464,10 +458,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                         }))
                                     }
                                 >
-                                    <SelectTrigger
-                                        id={`${idPrefix}-interval`}
-                                        className="h-8 text-xs"
-                                    >
+                                    <SelectTrigger id={`${idPrefix}-interval`}>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -482,10 +473,7 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                 </Select>
                             </div>
                             <div className="space-y-1">
-                                <Label
-                                    htmlFor={`${idPrefix}-end-date`}
-                                    className="text-xs"
-                                >
+                                <Label htmlFor={`${idPrefix}-end-date`}>
                                     {t("addPortTxn.endDate")}
                                 </Label>
                                 <DatePicker
@@ -508,7 +496,6 @@ export function PortfolioTxnFormFields<F extends PortfolioTxnFieldsForm>({
                                     placeholder={t("plannedPage.link.pickDate")}
                                     allowClear
                                     clearLabel={t("common.clear")}
-                                    buttonClassName="h-8 text-xs"
                                 />
                             </div>
                         </div>

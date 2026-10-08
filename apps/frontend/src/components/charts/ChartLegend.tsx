@@ -22,7 +22,7 @@ export function ChartLegend({ items, className, align = "start" }: ChartLegendPr
     return (
         <ul
             className={cn(
-                "flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground",
+                "flex flex-wrap gap-x-4 gap-y-1 type-footnote text-label-secondary",
                 justify,
                 className,
             )}
@@ -31,7 +31,7 @@ export function ChartLegend({ items, className, align = "start" }: ChartLegendPr
                 <li key={`${item.label}-${idx}`} className="flex items-center gap-2">
                     {item.dashed ? (
                         <span
-                            className="inline-block h-[2px] w-4"
+                            className="inline-block h-[2px] w-4 shrink-0"
                             style={{
                                 backgroundImage: `linear-gradient(to right, ${item.color} 50%, transparent 50%)`,
                                 backgroundSize: "6px 2px",
@@ -39,7 +39,7 @@ export function ChartLegend({ items, className, align = "start" }: ChartLegendPr
                         />
                     ) : (
                         <span
-                            className="inline-block size-2.5 rounded-sm"
+                            className="inline-block size-2.5 shrink-0 rounded-full"
                             style={{ background: item.color }}
                         />
                     )}

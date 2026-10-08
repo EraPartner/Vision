@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Dialog,
     DialogContent,
@@ -66,14 +67,11 @@ export function BulkTagDialog({
                     never falls through to this). grid gap-5 mirrors DialogContent's
                     layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleApply} className="grid gap-5">
-                    <div className="py-2 space-y-3">
-                        <div className="space-y-1">
-                            <label
-                                htmlFor="bulk-tag-add"
-                                className="text-xs font-medium text-muted-foreground"
-                            >
+                    <div className="grid gap-4">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="bulk-tag-add">
                                 {t("txPage.bulk.tagAdd")}
-                            </label>
+                            </Label>
                             <TagFilterCombobox
                                 id="bulk-tag-add"
                                 value={addSlugs}
@@ -81,13 +79,10 @@ export function BulkTagDialog({
                                 className="w-full"
                             />
                         </div>
-                        <div className="space-y-1">
-                            <label
-                                htmlFor="bulk-tag-remove"
-                                className="text-xs font-medium text-muted-foreground"
-                            >
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="bulk-tag-remove">
                                 {t("txPage.bulk.tagRemove")}
-                            </label>
+                            </Label>
                             <TagFilterCombobox
                                 id="bulk-tag-remove"
                                 value={removeSlugs}
@@ -96,7 +91,7 @@ export function BulkTagDialog({
                             />
                         </div>
                     </div>
-                    <DialogFooter className="gap-2">
+                    <DialogFooter>
                         <Button
                             type="button"
                             variant="outline"
@@ -116,7 +111,9 @@ export function BulkTagDialog({
                                     removeSlugs.length === 0)
                             }
                         >
-                            {pending ? t("common.applying") : t("common.apply")}
+                            {pending
+                                ? t("common.applying")
+                                : t("txPage.bulk.tagConfirm")}
                         </Button>
                     </DialogFooter>
                 </form>

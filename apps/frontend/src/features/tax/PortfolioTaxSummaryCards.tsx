@@ -1,17 +1,11 @@
-import {
-    Landmark,
-    Receipt,
-    TrendingDown,
-    AlertTriangle,
-    SlidersHorizontal,
-} from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyPartsFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
 import { RollingNumber } from "@/components/shared/RollingNumber";
-import { TaxSummaryCard } from "@/pages/portfolio/tax/TaxSummaryCard";
+import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface PortfolioTaxSummaryCardsProps {
     totalTaxes: number;
@@ -24,7 +18,12 @@ interface PortfolioTaxSummaryCardsProps {
     txYear: number;
 }
 
-/** Summary stat cards of the portfolio-tax page ("summaryCards" widget). */
+/**
+ * Hero of the portfolio-tax page ("summaryCards" widget): the year's total
+ * costs as the one headline figure, with the taxes, fees, effective rate,
+ * combined total and manual adjustments it is made of as supporting figures.
+ * Every number is a pass-through of the hook's totals.
+ */
 export function PortfolioTaxSummaryCards({
     totalTaxes,
     totalFees,
@@ -37,75 +36,95 @@ export function PortfolioTaxSummaryCards({
 }: PortfolioTaxSummaryCardsProps) {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
-    // Parts formatter: same currency/locale/decimals resolution as the string
-    // formatter it replaced, but the tiles keep the Money micro-typography.
+    // Parts formatter keeps the Money micro-typography inside the odometer.
     const fmtParts = useCurrencyPartsFormatter();
+    const year = String(txYear);
 
-    const cards = [
+    const figures = [
         {
-            title: t("tax.totalTaxesPaid"),
+            key: "taxes",
+            label: t("tax.totalTaxesPaid"),
             value: <RollingNumber parts={fmtParts(totalTaxes)} />,
-            icon: Landmark,
-            desc: t("tax.acrossAllInvestmentsYear", { year: String(txYear) }),
-            cls: "text-loss",
+            detail: t("tax.acrossAllInvestmentsYear", { year }),
+            tone: "text-loss",
         },
         {
-            title: t("tax.totalFeesPaid"),
+            key: "fees",
+            label: t("tax.totalFeesPaid"),
             value: <RollingNumber parts={fmtParts(totalFees)} />,
-            icon: Receipt,
-            desc: t("tax.brokerAndMgmtFeesYear", { year: String(txYear) }),
-            cls: "text-loss",
+            detail: t("tax.brokerAndMgmtFeesYear", { year }),
+            tone: "text-loss",
         },
         {
-            title: t("tax.totalCosts"),
-            value: <RollingNumber parts={fmtParts(totalTaxesAndFees)} />,
-            icon: TrendingDown,
-            desc: t("tax.combinedTaxesAndFeesYear", { year: String(txYear) }),
-            cls: "text-loss",
-        },
-        {
-            title: t("tax.effectiveTaxRate"),
+            key: "effectiveRate",
+            label: t("tax.effectiveTaxRate"),
             value: formatPercent(effectiveTaxRate, { digits: 1 }),
-            icon: AlertTriangle,
-            desc: t("tax.onRealizedGains"),
-            cls: effectiveTaxRate > 25 ? "text-loss" : "text-muted-foreground",
+            detail: t("tax.onRealizedGains"),
+            tone: effectiveTaxRate > 25 ? "text-loss" : "text-foreground",
         },
         {
-            title: t("tax.totalWithPIT"),
+            key: "withIncomeTax",
+            label: t("tax.totalWithPIT"),
             value: <RollingNumber parts={fmtParts(portfolioTaxesPlusPIT)} />,
-            icon: Landmark,
-            desc: t("tax.totalWithPITDesc"),
-            cls: "text-primary",
+            detail: t("tax.totalWithPITDesc"),
+            tone: "text-primary",
         },
         {
-            title: t("tax.manualAdjustments"),
+            key: "manual",
+            label: t("tax.manualAdjustments"),
             value: (
                 <RollingNumber
                     parts={fmtParts(totalManualTaxes + totalManualFees)}
                 />
             ),
-            icon: SlidersHorizontal,
-            desc: t("tax.manualAdjustmentsDescShort"),
-            cls: "text-muted-foreground",
+            detail: t("tax.manualAdjustmentsDescShort"),
+            tone: "text-foreground",
         },
     ];
 
     return (
-        <div className="space-y-4">
-            <TaxSummaryCard cards={cards.slice(0, 3)} />
-            <dl className="grid gap-4 rounded-lg border border-border/50 p-4 sm:grid-cols-3">
-                {cards.slice(3).map((card) => (
-                    <div key={card.title} className="space-y-1">
-                        <dt className="text-sm text-muted-foreground">
-                            {card.title}
-                        </dt>
-                        <dd className="text-lg font-semibold">{card.value}</dd>
-                        <dd className="text-xs text-muted-foreground">
-                            {card.desc}
-                        </dd>
+        <Card asChild className="overflow-hidden">
+            <section aria-labelledby="portfolio-tax-total-costs">
+                <CardContent
+                    variant="headerless"
+                    className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
+                >
+                    <div className="min-w-0">
+                        <h3
+                            id="portfolio-tax-total-costs"
+                            className="type-caption text-label-tertiary"
+                        >
+                            {t("tax.totalCosts")}
+                        </h3>
+                        <p className="mt-1 type-large-title tabular-nums text-loss">
+                            <RollingNumber parts={fmtParts(totalTaxesAndFees)} />
+                        </p>
+                        <p className="mt-1 type-footnote text-label-secondary">
+                            {t("tax.combinedTaxesAndFeesYear", { year })}
+                        </p>
                     </div>
-                ))}
-            </dl>
-        </div>
+                    <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
+                        {figures.map((figure) => (
+                            <div key={figure.key} className="min-w-0">
+                                <dt className="truncate type-caption text-label-tertiary">
+                                    {figure.label}
+                                </dt>
+                                <dd
+                                    className={cn(
+                                        "mt-1 truncate type-title-3 tabular-nums",
+                                        figure.tone,
+                                    )}
+                                >
+                                    {figure.value}
+                                </dd>
+                                <dd className="type-footnote text-label-secondary">
+                                    {figure.detail}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </CardContent>
+            </section>
+        </Card>
     );
 }

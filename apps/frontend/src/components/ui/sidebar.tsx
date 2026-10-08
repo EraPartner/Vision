@@ -210,7 +210,7 @@ const Sidebar = React.forwardRef<
             >
                 <div
                     data-sidebar="sidebar"
-                    className="glass-chrome flex h-full w-full flex-col group-data-[variant=floating]:rounded-2xl group-data-[variant=floating]:shadow-glass-elevated"
+                    className="glass-chrome flex h-full w-full flex-col group-data-[variant=floating]:rounded-sheet group-data-[variant=floating]:shadow-glass-elevated"
                 >
                     {children}
                 </div>
@@ -281,7 +281,7 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<"main
             ref={ref}
             className={cn(
                 "relative flex min-h-svh flex-1 flex-col bg-background",
-                "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-2xl md:peer-data-[variant=inset]:shadow-glass-soft",
+                "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-sheet md:peer-data-[variant=inset]:shadow-glass-soft",
                 className,
             )}
             {...props}
@@ -387,7 +387,7 @@ const SidebarGroupAction = React.forwardRef<HTMLButtonElement, React.ComponentPr
                 ref={ref}
                 data-sidebar="group-action"
                 className={cn(
-                    "absolute right-3 top-3.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none transition-[background-color,color] duration-fast ease-glide hover:bg-foreground/[0.06] hover:text-foreground focus-ring active:bg-foreground/[0.1] [&>svg]:size-4 [&>svg]:shrink-0",
+                    "absolute right-3 top-3.5 flex aspect-square w-5 items-center justify-center rounded-chip p-0 text-muted-foreground outline-none transition-[background-color,color] duration-fast ease-glide hover:bg-foreground/[0.06] hover:text-foreground focus-ring active:bg-foreground/[0.1] [&>svg]:size-4 [&>svg]:shrink-0",
                     "after:absolute after:-inset-2 after:md:hidden",
                     "group-data-[collapsible=icon]:hidden",
                     className,
@@ -493,7 +493,7 @@ const SidebarMenuAction = React.forwardRef<
             ref={ref}
             data-sidebar="menu-action"
             className={cn(
-                "absolute right-1.5 top-1.5 flex aspect-square w-5 items-center justify-center rounded-md p-0 text-muted-foreground outline-none transition-[background-color,color,opacity] duration-fast ease-glide peer-hover/menu-button:text-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-ring active:bg-foreground/[0.12] [&>svg]:size-4 [&>svg]:shrink-0",
+                "absolute right-1.5 top-1.5 flex aspect-square w-5 items-center justify-center rounded-chip p-0 text-muted-foreground outline-none transition-[background-color,color,opacity] duration-fast ease-glide peer-hover/menu-button:text-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-ring active:bg-foreground/[0.12] [&>svg]:size-4 [&>svg]:shrink-0",
                 "after:absolute after:-inset-2 after:md:hidden",
                 "peer-data-[size=sm]/menu-button:top-1",
                 "peer-data-[size=default]/menu-button:top-2",
@@ -545,7 +545,7 @@ const SidebarMenuSkeleton = React.forwardRef<
             className={cn("flex h-8 items-center gap-2.5 rounded-chip px-2", className)}
             {...props}
         >
-            {showIcon && <Skeleton className="size-[18px] rounded-md" data-sidebar="menu-skeleton-icon"/>}
+            {showIcon && <Skeleton className="size-[18px] rounded-chip" data-sidebar="menu-skeleton-icon"/>}
             <Skeleton
                 className="h-4 max-w-[var(--skeleton-width)] flex-1"
                 data-sidebar="menu-skeleton-text"
@@ -598,7 +598,7 @@ const SidebarMenuSubButton = React.forwardRef<
             data-size={size}
             data-active={isActive}
             className={cn(
-                "flex h-8 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-3 text-muted-foreground/90 outline-none transition-[background-color,color] duration-fast ease-glide aria-disabled:pointer-events-none aria-disabled:opacity-50 hover:bg-foreground/[0.05] hover:text-foreground focus-ring active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground/70",
+                "flex h-8 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-chip px-3 text-muted-foreground/90 outline-none transition-[background-color,color] duration-fast ease-glide aria-disabled:pointer-events-none aria-disabled:opacity-50 hover:bg-foreground/[0.05] hover:text-foreground focus-ring active:bg-foreground/[0.08] disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground/70",
                 "data-[active=true]:bg-primary/10 data-[active=true]:text-foreground data-[active=true]:[&>svg]:text-primary",
                 size === "sm" && "text-xs",
                 size === "md" && "text-sm",

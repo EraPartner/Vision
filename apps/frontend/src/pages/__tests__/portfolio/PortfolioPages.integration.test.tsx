@@ -317,7 +317,9 @@ describe("Portfolio pages (integration)", () => {
         // Shares of net worth are gone; the month change and all-time change remain.
         expect(screen.queryByText(/of net worth/i)).not.toBeInTheDocument();
         expect(screen.getByText(/this month/i)).toBeInTheDocument();
-        expect(screen.getByText("All time", { selector: "dt" })).toBeInTheDocument();
+        expect(
+            screen.getByText("All time", { selector: "dt" }),
+        ).toBeInTheDocument();
     }, 15_000);
 
     it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {
@@ -636,7 +638,9 @@ describe("Portfolio pages (integration)", () => {
         expect(within(liveTable).getByText("1.0870")).toBeInTheDocument();
         expect(within(liveTable).getByText(/92[.,]00/)).toBeInTheDocument();
 
-        await user.click(screen.getByRole("tab", { name: /fallback rates/i }));
+        await user.click(
+            screen.getByRole("radio", { name: /fallback rates/i }),
+        );
         const fallbackTable = await screen.findByRole("table", {
             name: /fallback rates are updated in-memory/i,
         });
@@ -728,34 +732,62 @@ describe("Portfolio pages (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("PortfolioTaxPage shows Set up tax profile button", async () => {
+    it("PortfolioTaxPage offers Set up tax profile… from the ••• menu", async () => {
+        const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
-        // tax.profile.setup = "Set up tax profile" (shown when no profile)
+        // tax.menu.setupProfile = "Set up tax profile…" (no profile yet)
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        const menu = await screen.findByRole("menu");
         expect(
-            await screen.findByRole("button", { name: /set up tax profile/i }),
+            within(menu).getByRole("menuitem", { name: /set up tax profile/i }),
         ).toBeInTheDocument();
     });
 
-    it("PortfolioTaxPage shows Widgets button", async () => {
+    it("PortfolioTaxPage opens the tax profile sheet from the ••• menu", async () => {
+        const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
-        // widgets.button = "Widgets"
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", {
+                name: /set up tax profile/i,
+            }),
+        );
+        expect(await screen.findByRole("dialog")).toBeInTheDocument();
+        expect(await screen.findByText("Employment type")).toBeInTheDocument();
+    });
+
+    it("PortfolioTaxPage offers Customize… from the ••• menu", async () => {
+        const user = userEvent.setup();
+        renderWithApp(<PortfolioTaxPage />);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        const menu = await screen.findByRole("menu");
         expect(
-            await screen.findByRole("button", { name: /customize/i }),
+            within(menu).getByRole("menuitem", { name: /customize/i }),
         ).toBeInTheDocument();
     });
 
-    it("PortfolioTaxPage opens Manage Widgets dialog when Widgets button clicked", async () => {
+    it("PortfolioTaxPage opens Manage Widgets dialog from the ••• menu", async () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const widgetsBtn = await screen.findByRole("button", {
-            name: /customize/i,
-        });
-        await user.click(widgetsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /customize/i }),
+        );
 
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
         expect(
-            await screen.findByRole("heading", { name: /customize this page/i }),
+            await screen.findByRole("heading", {
+                name: /customize this page/i,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -933,10 +965,12 @@ describe("Portfolio pages (integration)", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioTaxPage />);
 
-        const widgetsBtn = await screen.findByRole("button", {
-            name: /customize/i,
-        });
-        await user.click(widgetsBtn);
+        await user.click(
+            await screen.findByRole("button", { name: /more actions/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /customize/i }),
+        );
         await screen.findByRole("dialog");
 
         await user.keyboard("{Escape}");
@@ -1317,10 +1351,15 @@ describe("Portfolio pages (integration)", () => {
         // Wait for item to render
         await screen.findByText("Apple Watch");
 
-        // Trash button is the only icon-only button (no text content) on the page
-        const allBtns = screen.getAllByRole("button");
-        const trashBtn = allBtns.find((btn) => !btn.textContent?.trim())!;
-        await user.click(trashBtn);
+        // Removal lives in the row ••• menu (watchlist.rowMenu = "Actions for {name}").
+        await user.click(
+            screen.getByRole("button", { name: /actions for apple watch/i }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", {
+                name: /remove from watchlist/i,
+            }),
+        );
 
         // Removal is destructive and has no undo, so it confirms first
         // (useConfirmDialog) — watchlist.removeConfirm = "Remove".
@@ -1716,10 +1755,16 @@ describe("Portfolio pages (integration)", () => {
             const before = getCalls;
 
             // Click delete on the watchlist item
-            const trashBtn = await screen.findByRole("button", {
-                name: /remove from watchlist/i,
-            });
-            await user.click(trashBtn);
+            await user.click(
+                await screen.findByRole("button", {
+                    name: /actions for apple/i,
+                }),
+            );
+            await user.click(
+                await screen.findByRole("menuitem", {
+                    name: /remove from watchlist/i,
+                }),
+            );
             expect(deleteCalls).toBe(0);
             expect(getCalls).toBe(before);
             await user.click(

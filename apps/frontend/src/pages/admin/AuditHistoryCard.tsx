@@ -5,8 +5,20 @@ import type {
     ElectronAuditVerification,
 } from "@vision/types/electron";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { List } from "@/components/ui/list";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 100;
 const EXPORT_ENTRY_LIMIT = 500;
@@ -23,6 +35,33 @@ function entryLabel(entry: ElectronAuditEntry): string {
         [stream, event]
             .filter((value): value is string => typeof value === "string")
             .join(" · ") || `#${entry.sequence}`
+    );
+}
+
+/** A result line under an action: polite for success, assertive for failure. */
+function OutcomeNote({
+    outcome,
+    successKey,
+    failedKey,
+}: {
+    outcome: "success" | "failed" | undefined;
+    successKey: string;
+    failedKey: string;
+}) {
+    const { t } = useLanguage();
+    if (!outcome) return null;
+    return (
+        <p
+            role={outcome === "failed" ? "alert" : "status"}
+            className={cn(
+                "type-footnote",
+                outcome === "failed"
+                    ? "text-destructive"
+                    : "text-label-secondary",
+            )}
+        >
+            {t(outcome === "success" ? successKey : failedKey)}
+        </p>
     );
 }
 
@@ -191,47 +230,56 @@ export function AuditHistoryCard() {
         ? verification.sequence - verification.anchoredThrough
         : 0;
     const legacy = verification?.legacyUnverified;
+    const exportTooLarge =
+        verification !== undefined &&
+        verification.sequence - (verification.retentionThrough ?? 0) >
+            EXPORT_ENTRY_LIMIT;
 
     return (
-        <Card className="glass-chrome">
-            <CardContent variant="headerless" className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
-                            <FileClock className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                            <h2 className="text-sm font-semibold">
-                                {t("admin.audit.title")}
-                            </h2>
-                            <p className="text-xs text-muted-foreground">
-                                {t("admin.audit.description")}
-                            </p>
-                        </div>
+        <Card>
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
+                <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-primary/12 text-primary">
+                        <FileClock className="h-5 w-5" aria-hidden="true" />
                     </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={busy}
-                        onClick={() => void load()}
-                    >
-                        {t("admin.audit.refresh")}
-                    </Button>
+                    <div className="min-w-0 space-y-1">
+                        <CardTitle variant="sm">
+                            {t("admin.audit.title")}
+                        </CardTitle>
+                        <CardDescription>
+                            {t("admin.audit.description")}
+                        </CardDescription>
+                    </div>
                 </div>
-
+                <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void load()}
+                >
+                    {t("admin.audit.refresh")}
+                </Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
                 {busy && !page && !status && (
-                    <p role="status" className="text-sm text-muted-foreground">
-                        {t("admin.audit.loading")}
-                    </p>
+                    <div role="status" className="space-y-2">
+                        <span className="sr-only">
+                            {t("admin.audit.loading")}
+                        </span>
+                        <Skeleton className="h-4 w-56" />
+                        <Skeleton className="h-11 w-full rounded-card" />
+                        <Skeleton className="h-11 w-full rounded-card" />
+                    </div>
                 )}
                 {status && (
                     <p
                         role={status === "failed" ? "alert" : "status"}
-                        className={
+                        className={cn(
+                            "type-body",
                             status === "failed"
-                                ? "text-sm text-destructive"
-                                : "text-sm text-muted-foreground"
-                        }
+                                ? "text-destructive"
+                                : "text-label-secondary",
+                        )}
                     >
                         {t(
                             status === "unavailable" &&
@@ -245,7 +293,7 @@ export function AuditHistoryCard() {
                     unavailableReason === "no_trusted_anchor" &&
                     window.electronAudit && (
                         <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground">
+                            <p className="type-footnote text-label-secondary">
                                 {t("admin.audit.enrollExplanation")}
                             </p>
                             <Button
@@ -259,7 +307,7 @@ export function AuditHistoryCard() {
                             {enrollFailed && (
                                 <p
                                     role="alert"
-                                    className="text-sm text-destructive"
+                                    className="type-body text-destructive"
                                 >
                                     {t("admin.audit.enrollFailed")}
                                 </p>
@@ -267,13 +315,13 @@ export function AuditHistoryCard() {
                         </div>
                     )}
                 {changed && (
-                    <p role="alert" className="text-sm text-warning">
+                    <p role="alert" className="type-body text-warning">
                         {t("admin.audit.changed")}
                     </p>
                 )}
                 {verification && (
                     <>
-                        <div className="space-y-1 text-sm">
+                        <div className="space-y-1 type-body">
                             <p className="font-medium text-success">
                                 {verification.status === "verified"
                                     ? t("admin.audit.verified", {
@@ -292,7 +340,7 @@ export function AuditHistoryCard() {
                                 </p>
                             )}
                             {verification.enrollmentSequence !== undefined && (
-                                <p className="text-muted-foreground">
+                                <p className="text-label-secondary">
                                     {t("admin.audit.enrollmentCaveat", {
                                         sequence:
                                             verification.enrollmentSequence,
@@ -300,14 +348,14 @@ export function AuditHistoryCard() {
                                 </p>
                             )}
                             {verification.retentionThrough !== undefined && (
-                                <p className="text-muted-foreground">
+                                <p className="text-label-secondary">
                                     {t("admin.audit.retentionCaveat", {
                                         sequence: verification.retentionThrough,
                                     })}
                                 </p>
                             )}
                             {legacy && (
-                                <p className="text-muted-foreground">
+                                <p className="text-label-secondary">
                                     {t("admin.audit.legacy", {
                                         dbEditor: legacy.dbEditor ?? "0",
                                         split: legacy.split ?? "0",
@@ -318,71 +366,75 @@ export function AuditHistoryCard() {
                             )}
                         </div>
 
-                        <div className="space-y-2">
-                            {page.entries.length === 0 && (
-                                <p className="text-sm text-muted-foreground">
-                                    {t("admin.audit.empty")}
-                                </p>
-                            )}
-                            {page.entries.map((entry) => (
-                                <div
-                                    key={entry.sequence}
-                                    className="rounded-lg border border-border/60 p-3 text-sm"
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <span className="font-medium">
-                                            #{entry.sequence}{" "}
-                                            {entryLabel(entry)}
-                                        </span>
-                                        <span
-                                            className={
-                                                verification.enrollmentSequence !==
-                                                    undefined &&
-                                                entry.sequence <=
-                                                    verification.enrollmentSequence
-                                                    ? "text-muted-foreground"
-                                                    : entry.anchorStatus ===
-                                                        "anchored"
-                                                      ? "text-success"
-                                                      : "text-warning"
-                                            }
+                        {page.entries.length === 0 ? (
+                            <p className="type-body text-label-secondary">
+                                {t("admin.audit.empty")}
+                            </p>
+                        ) : (
+                            <List>
+                                {page.entries.map((entry) => {
+                                    const baseline =
+                                        verification.enrollmentSequence !==
+                                            undefined &&
+                                        entry.sequence <=
+                                            verification.enrollmentSequence;
+                                    const anchored =
+                                        entry.anchorStatus === "anchored";
+                                    return (
+                                        <li
+                                            key={entry.sequence}
+                                            className="px-4 py-3 type-body"
                                         >
-                                            {t(
-                                                verification.enrollmentSequence !==
-                                                    undefined &&
-                                                    entry.sequence <=
-                                                        verification.enrollmentSequence
-                                                    ? "admin.audit.enrollmentBaseline"
-                                                    : entry.anchorStatus ===
-                                                        "anchored"
-                                                      ? "admin.audit.anchor"
-                                                      : "admin.audit.pendingAnchor",
-                                            )}
-                                        </span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {entry.createdAt}
-                                    </p>
-                                    <details className="mt-2">
-                                        <summary className="cursor-pointer text-xs text-muted-foreground">
-                                            {t("admin.audit.details")}
-                                        </summary>
-                                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 text-xs">
-                                            {JSON.stringify(
-                                                {
-                                                    hash: entry.hash,
-                                                    previousHash:
-                                                        entry.previousHash,
-                                                    payload: entry.payload,
-                                                },
-                                                null,
-                                                2,
-                                            )}
-                                        </pre>
-                                    </details>
-                                </div>
-                            ))}
-                        </div>
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <span className="font-medium text-foreground">
+                                                    #{entry.sequence}{" "}
+                                                    {entryLabel(entry)}
+                                                </span>
+                                                <span
+                                                    className={cn(
+                                                        "type-footnote",
+                                                        baseline
+                                                            ? "text-label-secondary"
+                                                            : anchored
+                                                              ? "text-success"
+                                                              : "text-warning",
+                                                    )}
+                                                >
+                                                    {t(
+                                                        baseline
+                                                            ? "admin.audit.enrollmentBaseline"
+                                                            : anchored
+                                                              ? "admin.audit.anchor"
+                                                              : "admin.audit.pendingAnchor",
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <p className="type-footnote text-label-secondary">
+                                                {entry.createdAt}
+                                            </p>
+                                            <details className="mt-2">
+                                                <summary className="cursor-pointer rounded-chip type-footnote text-label-secondary hover:text-foreground focus-ring">
+                                                    {t("admin.audit.details")}
+                                                </summary>
+                                                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-card corner-continuous bg-foreground/[0.04] p-3 font-mono type-footnote">
+                                                    {JSON.stringify(
+                                                        {
+                                                            hash: entry.hash,
+                                                            previousHash:
+                                                                entry.previousHash,
+                                                            payload:
+                                                                entry.payload,
+                                                        },
+                                                        null,
+                                                        2,
+                                                    )}
+                                                </pre>
+                                            </details>
+                                        </li>
+                                    );
+                                })}
+                            </List>
+                        )}
 
                         {page.hasMore && (
                             <Button
@@ -394,143 +446,115 @@ export function AuditHistoryCard() {
                                 {t("admin.audit.loadMore")}
                             </Button>
                         )}
-                        <div className="space-y-2 border-t border-border/60 pt-3">
-                            <p className="text-xs text-muted-foreground">
+                        <Separator />
+                        <div className="space-y-2">
+                            <p className="type-footnote text-label-secondary">
                                 {t("admin.audit.exportLimit")}
                             </p>
-                            {verification.sequence -
-                                (verification.retentionThrough ?? 0) >
-                                EXPORT_ENTRY_LIMIT && (
-                                <p className="text-xs text-warning">
+                            {exportTooLarge && (
+                                <p className="type-footnote text-warning">
                                     {t("admin.audit.exportUnavailable")}
                                 </p>
                             )}
                             <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={
-                                    exportBusy ||
-                                    busy ||
-                                    verification.sequence -
-                                        (verification.retentionThrough ?? 0) >
-                                        EXPORT_ENTRY_LIMIT
-                                }
+                                disabled={exportBusy || busy || exportTooLarge}
                                 onClick={() => void exportSnapshot()}
                             >
                                 {t("admin.audit.export")}
                             </Button>
-                            {exportMessage && (
-                                <p
-                                    role={
-                                        exportMessage === "failed"
-                                            ? "alert"
-                                            : "status"
-                                    }
-                                    className="text-xs text-muted-foreground"
-                                >
-                                    {t(
-                                        `admin.audit.export${exportMessage === "success" ? "Success" : "Failed"}`,
-                                    )}
-                                </p>
-                            )}
+                            <OutcomeNote
+                                outcome={exportMessage}
+                                successKey="admin.audit.exportSuccess"
+                                failedKey="admin.audit.exportFailed"
+                            />
                         </div>
                     </>
                 )}
                 {window.electronAudit && (
-                    <div className="space-y-2 border-t border-border/60 pt-3">
-                        <p className="text-xs text-muted-foreground">
-                            {t("admin.audit.transferExplanation")}
-                        </p>
-                        <label
-                            htmlFor="audit-transfer-password"
-                            className="block text-xs font-medium"
-                        >
-                            {t("admin.audit.transferPassword")}
-                        </label>
-                        <input
-                            id="audit-transfer-password"
-                            type="password"
-                            autoComplete="new-password"
-                            minLength={16}
-                            maxLength={1024}
-                            value={transferPassword}
-                            onChange={(event) =>
-                                setTransferPassword(event.target.value)
-                            }
-                            className="w-full max-w-sm rounded-md border border-border bg-background px-3 py-2 text-sm"
-                        />
-                        <div className="flex flex-wrap gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={
-                                    transferBusy ||
-                                    transferPassword.length < 16 ||
-                                    !page
-                                }
-                                onClick={() => void transfer("exportTransfer")}
-                            >
-                                {t("admin.audit.transferExport")}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={
-                                    transferBusy || transferPassword.length < 16
-                                }
-                                onClick={() => void transfer("importTransfer")}
-                            >
-                                {t("admin.audit.transferImport")}
-                            </Button>
-                        </div>
-                        {transferMessage && (
-                            <p
-                                role={
-                                    transferMessage === "failed"
-                                        ? "alert"
-                                        : "status"
-                                }
-                                className="text-xs text-muted-foreground"
-                            >
-                                {t(
-                                    transferMessage === "success"
-                                        ? "admin.audit.transferSuccess"
-                                        : "admin.audit.transferFailed",
-                                )}
+                    <>
+                        <Separator />
+                        <div className="space-y-3">
+                            <p className="type-footnote text-label-secondary">
+                                {t("admin.audit.transferExplanation")}
                             </p>
-                        )}
-                        {page && (
-                            <div className="space-y-2 border-t border-border/60 pt-3">
-                                <p className="text-xs text-muted-foreground">
-                                    {t("admin.audit.rotateExplanation")}
-                                </p>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="audit-transfer-password">
+                                    {t("admin.audit.transferPassword")}
+                                </Label>
+                                <Input
+                                    id="audit-transfer-password"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    minLength={16}
+                                    maxLength={1024}
+                                    value={transferPassword}
+                                    onChange={(event) =>
+                                        setTransferPassword(event.target.value)
+                                    }
+                                    className="max-w-sm"
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    disabled={rotationBusy || busy}
-                                    onClick={() => void rotateKey()}
+                                    disabled={
+                                        transferBusy ||
+                                        transferPassword.length < 16 ||
+                                        !page
+                                    }
+                                    onClick={() =>
+                                        void transfer("exportTransfer")
+                                    }
                                 >
-                                    {t("admin.audit.rotate")}
+                                    {t("admin.audit.transferExport")}
                                 </Button>
-                                {rotationMessage && (
-                                    <p
-                                        role={
-                                            rotationMessage === "failed"
-                                                ? "alert"
-                                                : "status"
-                                        }
-                                        className="text-xs text-muted-foreground"
-                                    >
-                                        {t(
-                                            rotationMessage === "success"
-                                                ? "admin.audit.rotateSuccess"
-                                                : "admin.audit.rotateFailed",
-                                        )}
-                                    </p>
-                                )}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={
+                                        transferBusy ||
+                                        transferPassword.length < 16
+                                    }
+                                    onClick={() =>
+                                        void transfer("importTransfer")
+                                    }
+                                >
+                                    {t("admin.audit.transferImport")}
+                                </Button>
                             </div>
+                            <OutcomeNote
+                                outcome={transferMessage}
+                                successKey="admin.audit.transferSuccess"
+                                failedKey="admin.audit.transferFailed"
+                            />
+                        </div>
+                        {page && (
+                            <>
+                                <Separator />
+                                <div className="space-y-2">
+                                    <p className="type-footnote text-label-secondary">
+                                        {t("admin.audit.rotateExplanation")}
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={rotationBusy || busy}
+                                        onClick={() => void rotateKey()}
+                                    >
+                                        {t("admin.audit.rotate")}
+                                    </Button>
+                                    <OutcomeNote
+                                        outcome={rotationMessage}
+                                        successKey="admin.audit.rotateSuccess"
+                                        failedKey="admin.audit.rotateFailed"
+                                    />
+                                </div>
+                            </>
                         )}
-                    </div>
+                    </>
                 )}
             </CardContent>
         </Card>

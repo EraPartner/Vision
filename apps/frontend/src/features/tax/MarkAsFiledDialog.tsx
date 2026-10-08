@@ -7,7 +7,6 @@
  * Reference is free-text and stored verbatim. Empty reference is permitted.
  */
 import { useState, type ReactNode } from "react";
-import { Lock } from "lucide-react";
 import {
     Dialog,
     DialogContent,
@@ -53,8 +52,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent className="max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Lock className="h-4 w-4 text-warning" />
+                    <DialogTitle>
                         {t("tax.markFiled.title", { year: String(year) })}
                     </DialogTitle>
                     <DialogDescription>
@@ -66,8 +64,8 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                     reversible — see unmarkYearAsFiled). grid gap-5 mirrors
                     DialogContent's layout, so this wrapper is layout-neutral. */}
                 <form onSubmit={handleConfirm} className="grid gap-5">
-                    <div className="space-y-2 py-2">
-                        <Label htmlFor="filing-reference" className="text-sm">
+                    <div className="space-y-2">
+                        <Label htmlFor="filing-reference">
                             {t("tax.markFiled.referenceLabel")}
                         </Label>
                         <Input
@@ -78,7 +76,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                                 "tax.markFiled.referencePlaceholder",
                             )}
                         />
-                        <p className="text-xs text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("tax.markFiled.referenceHelp")}
                         </p>
                     </div>
@@ -91,8 +89,7 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
                         >
                             {t("common.cancel")}
                         </Button>
-                        <Button type="submit" className="gap-1">
-                            <Lock className="h-3 w-3" />
+                        <Button type="submit">
                             {t("tax.markFiled.confirm")}
                         </Button>
                     </DialogFooter>

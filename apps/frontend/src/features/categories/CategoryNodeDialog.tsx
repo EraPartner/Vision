@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
@@ -19,6 +26,8 @@ import {
     useUpdateCategoryNode,
 } from "@/hooks/useCategories";
 import type { CategoryNode } from "@/types/api";
+
+const ROOT_VALUE = "root";
 
 interface CategoryNodeDialogProps {
     nodes: CategoryNode[];
@@ -118,25 +127,31 @@ export function CategoryNodeDialog({
                     <Label htmlFor="category-node-parent">
                         {t("categoriesPage.parent")}
                     </Label>
-                    <select
-                        id="category-node-parent"
-                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        value={parentId ?? ""}
-                        onChange={(event) =>
+                    <Select
+                        value={parentId == null ? ROOT_VALUE : String(parentId)}
+                        onValueChange={(value) =>
                             setParentId(
-                                event.target.value
-                                    ? Number(event.target.value)
-                                    : null,
+                                value === ROOT_VALUE ? null : Number(value),
                             )
                         }
                     >
-                        <option value="">{t("categoriesPage.root")}</option>
-                        {parentOptions.map((node) => (
-                            <option key={node.id} value={node.id}>
-                                {node.path.join(" / ")}
-                            </option>
-                        ))}
-                    </select>
+                        <SelectTrigger id="category-node-parent">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ROOT_VALUE}>
+                                {t("categoriesPage.root")}
+                            </SelectItem>
+                            {parentOptions.map((node) => (
+                                <SelectItem
+                                    key={node.id}
+                                    value={String(node.id)}
+                                >
+                                    {node.path.join(" / ")}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="category-node-description">
@@ -159,9 +174,14 @@ export function CategoryNodeDialog({
                     </Button>
                     <Button type="submit" disabled={isPending}>
                         {isPending && (
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                            <Loader2
+                                className="animate-spin"
+                                aria-hidden="true"
+                            />
                         )}
-                        {editNode ? t("common.save") : t("categories.createButton")}
+                        {editNode
+                            ? t("common.save")
+                            : t("categories.createButton")}
                     </Button>
                 </DialogFooter>
             </form>
@@ -178,8 +198,9 @@ export function CategoryNodeDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogTrigger asChild>
-                <Button size="sm" className="gap-1.5">
-                    <Plus className="h-4 w-4" /> {t("form.addCategory.title")}
+                <Button>
+                    <Plus aria-hidden="true" />
+                    {t("form.addCategory.title")}
                 </Button>
             </DialogTrigger>
             {content}

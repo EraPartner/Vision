@@ -38,6 +38,30 @@ vi.mock("@/stores/hydration/LanguageHydration", async (importOriginal) => {
     };
 });
 
+type User = ReturnType<typeof userEvent.setup>;
+async function openRowMenu(user: User, name: string) {
+    await user.click(
+        screen.getByRole("button", { name: `Actions for ${name}` }),
+    );
+}
+async function clickRowAction(user: User, name: string, action: string) {
+    await openRowMenu(user, name);
+    await user.click(await screen.findByRole("menuitem", { name: action }));
+}
+async function expectRowActionIdle(user: User, name: string, action: string) {
+    await openRowMenu(user, name);
+    await waitFor(() =>
+        expect(
+            screen.getByRole("menuitem", { name: action }),
+        ).not.toHaveAttribute("aria-disabled"),
+    );
+    await user.keyboard("{Escape}");
+}
+async function pickOption(user: User, trigger: HTMLElement, option: string) {
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name: option }));
+}
+
 function renderPage() {
     const queryClient = new QueryClient({
         defaultOptions: {
@@ -185,9 +209,11 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("tab", { name: nl["analysis.chart"] }),
         );
-        expect(screen.getByRole("option", { name: "Uitgaven" })).toHaveValue(
-            "sum_spending",
-        );
+        await user.click(screen.getByLabelText(nl["analysis.ext.chart.x"]));
+        expect(
+            await screen.findByRole("option", { name: "Uitgaven" }),
+        ).toBeInTheDocument();
+        await user.keyboard("{Escape}");
         expect(
             within(screen.getByRole("tabpanel")).getByRole("checkbox", {
                 name: "Uitgaven",
@@ -261,17 +287,18 @@ describe("AnalysisWorkspacePage", () => {
             screen.queryByLabelText("Category / X axis"),
         ).not.toBeInTheDocument();
         await user.click(screen.getByRole("tab", { name: "Chart" }));
-        await user.selectOptions(
+        await pickOption(
+            user,
             screen.getByLabelText("Category / X axis"),
-            "category_general",
+            "Category",
         );
         await user.click(table);
         expect(
             screen.queryByLabelText("Category / X axis"),
         ).not.toBeInTheDocument();
         await user.click(screen.getByRole("tab", { name: "Chart" }));
-        expect(screen.getByLabelText("Category / X axis")).toHaveValue(
-            "category_general",
+        expect(screen.getByLabelText("Category / X axis")).toHaveTextContent(
+            "Category",
         );
         await user.click(
             screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
@@ -400,11 +427,11 @@ describe("AnalysisWorkspacePage", () => {
             }),
         ).toBeInTheDocument();
         await user.click(screen.getByRole("tab", { name: "Chart" }));
+        await user.click(screen.getByLabelText("Category / X axis"));
         expect(
-            within(screen.getByRole("tabpanel")).getByRole("option", {
-                name: "sum_spending",
-            }),
+            await screen.findByRole("option", { name: "sum_spending" }),
         ).toBeInTheDocument();
+        await user.keyboard("{Escape}");
         expect(
             within(screen.getByRole("tabpanel")).getByRole("checkbox", {
                 name: "sum_spending",
@@ -436,8 +463,10 @@ describe("AnalysisWorkspacePage", () => {
                 await screen.findByRole("button", { name: "Monthly cashflow" }),
             );
             await user.click(screen.getByRole("tab", { name: "Chart" }));
-            expect(screen.getByLabelText("Category / X axis")).toHaveValue(
-                expectedX,
+            expect(
+                screen.getByLabelText("Category / X axis"),
+            ).toHaveTextContent(
+                { month: "Month", category_general: "Category" }[expectedX]!,
             );
             expect(
                 within(screen.getByRole("tabpanel")).getByRole("checkbox", {
@@ -476,9 +505,9 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(screen.getByRole("button", { name: "Run" }));
         await user.click(await screen.findByRole("tab", { name: "Chart" }));
         await waitFor(() =>
-            expect(screen.getByLabelText("Category / X axis")).toHaveValue(
-                "category_general",
-            ),
+            expect(
+                screen.getByLabelText("Category / X axis"),
+            ).toHaveTextContent("Category"),
         );
         await user.click(
             screen.getByRole("button", { name: "Save new version" }),
@@ -510,25 +539,29 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: "Monthly cashflow" }),
         );
-        const refreshButton = screen.getByRole("button", {
+        await clickRowAction(user, "Monthly cashflow", "Refresh analysis");
+        await openRowMenu(user, "Monthly cashflow");
+        const pendingItem = await screen.findByRole("menuitem", {
             name: "Refresh analysis",
         });
-        await user.click(refreshButton);
-        expect(refreshButton).toBeDisabled();
-        fireEvent.click(refreshButton);
+        expect(pendingItem).toHaveAttribute("aria-disabled", "true");
+        await user.click(pendingItem);
         expect(refresh).toHaveBeenCalledTimes(1);
+        await user.keyboard("{Escape}");
         rejectRefresh(new Error("Refresh unavailable"));
         expect(await screen.findByRole("alert")).toHaveTextContent(
             "Refresh unavailable",
         );
-        expect(refreshButton).toBeEnabled();
+        await expectRowActionIdle(user, "Monthly cashflow", "Refresh analysis");
         refresh.mockResolvedValueOnce(savedChartAnalysis as never);
-        await user.click(refreshButton);
-        await waitFor(() => expect(refreshButton).toBeEnabled());
+        await clickRowAction(user, "Monthly cashflow", "Refresh analysis");
         expect(refresh).toHaveBeenCalledTimes(2);
-        expect(
-            screen.queryByText("Refresh unavailable"),
-        ).not.toBeInTheDocument();
+        await waitFor(() =>
+            expect(
+                screen.queryByText("Refresh unavailable"),
+            ).not.toBeInTheDocument(),
+        );
+        await expectRowActionIdle(user, "Monthly cashflow", "Refresh analysis");
     });
 
     it("does not replace another opened document when a saved refresh resolves late", async () => {
@@ -552,9 +585,7 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: "Monthly cashflow" }),
         );
-        await user.click(
-            screen.getAllByRole("button", { name: "Refresh analysis" })[0],
-        );
+        await clickRowAction(user, "Monthly cashflow", "Refresh analysis");
         await user.click(
             screen.getByRole("button", { name: "Other analysis" }),
         );
@@ -562,11 +593,7 @@ describe("AnalysisWorkspacePage", () => {
             ...savedChartAnalysis,
             name: "Late refresh overwrote draft",
         } as never);
-        await waitFor(() =>
-            expect(
-                screen.getAllByRole("button", { name: "Refresh analysis" })[0],
-            ).toBeEnabled(),
-        );
+        await expectRowActionIdle(user, "Monthly cashflow", "Refresh analysis");
         expect(screen.getByPlaceholderText("Analysis name")).toHaveValue(
             "Other analysis",
         );
@@ -631,8 +658,11 @@ describe("AnalysisWorkspacePage", () => {
             await screen.findByRole("button", { name: "Monthly cashflow" }),
         );
         vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([]);
+        await clickRowAction(user, "Monthly cashflow", "Delete analysis");
+        const dialog = await screen.findByRole("alertdialog");
+        expect(dialog).toHaveTextContent("Delete analysis?");
         await user.click(
-            screen.getByRole("button", { name: "Delete analysis" }),
+            within(dialog).getByRole("button", { name: "Delete" }),
         );
         await user.click(
             await screen.findByRole("button", { name: "Save analysis" }),
@@ -744,10 +774,7 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: "Monthly cashflow" }),
         );
-        const refreshButton = screen.getByRole("button", {
-            name: "Refresh analysis",
-        });
-        await user.click(refreshButton);
+        await clickRowAction(user, "Monthly cashflow", "Refresh analysis");
         const name = screen.getByPlaceholderText("Analysis name");
         await user.clear(name);
         await user.type(name, "My edited draft");
@@ -761,7 +788,7 @@ describe("AnalysisWorkspacePage", () => {
                 ],
             },
         } as never);
-        await waitFor(() => expect(refreshButton).toBeEnabled());
+        await expectRowActionIdle(user, "Monthly cashflow", "Refresh analysis");
         expect(name).toHaveValue("My edited draft");
         expect(screen.queryByText("Refreshed output")).not.toBeInTheDocument();
     });
@@ -839,15 +866,13 @@ describe("AnalysisWorkspacePage", () => {
         const operator = screen.getByRole("combobox", {
             name: "Filter 1: operator for Transfer",
         });
-        expect(operator).toHaveValue("eq");
         expect(operator).toHaveTextContent("Equals");
-        expect(operator).toHaveTextContent("Does not equal");
         expect(
             screen.getByRole("textbox", {
                 name: "Filter 1: value for Transfer",
             }),
         ).toHaveValue("false");
-        await user.selectOptions(operator, "neq");
+        await pickOption(user, operator, "Does not equal");
         await user.click(screen.getByRole("button", { name: "Run" }));
         await waitFor(() =>
             expect(apiClient.executeAnalysis).toHaveBeenCalledWith(
@@ -897,8 +922,7 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByText(/FROM vision_analysis\.cash_flows_v1/),
         ).toBeInTheDocument();
 
-        await user.click(screen.getByText("Advanced controls"));
-        await user.click(screen.getByRole("button", { name: "SQL editor" }));
+        await user.click(screen.getByRole("radio", { name: "SQL editor" }));
         fireEvent.change(screen.getByLabelText("Typed SQL parameters"), {
             target: { value: "not-json" },
         });
@@ -1045,8 +1069,8 @@ describe("AnalysisWorkspacePage", () => {
         expect(screen.getByText("Edit configuration")).toHaveFocus();
         expect(screen.getByLabelText("Analysis name")).toHaveValue("");
         expect(
-            screen.getByRole("button", { name: "Visual builder" }),
-        ).toHaveAttribute("aria-pressed", "true");
+            screen.getByRole("radio", { name: "Visual builder" }),
+        ).toBeChecked();
     });
 
     it("persists an explicit no-benchmark override", async () => {
@@ -1192,7 +1216,7 @@ describe("AnalysisWorkspacePage", () => {
         );
         await user.click(screen.getByRole("tab", { name: "Chart" }));
         const chartPanel = within(screen.getByRole("tabpanel"));
-        expect(chartPanel.getByLabelText("Chart type")).toHaveValue("line");
+        expect(chartPanel.getByRole("radio", { name: "Line" })).toBeChecked();
         expect(
             chartPanel.getByRole("checkbox", { name: "Spending" }),
         ).toBeChecked();
@@ -1239,8 +1263,10 @@ describe("AnalysisWorkspacePage", () => {
         );
         await user.click(screen.getByRole("tab", { name: "Chart" }));
         expect(
-            within(screen.getByRole("tabpanel")).getByLabelText("Chart type"),
-        ).toHaveValue("line");
+            within(screen.getByRole("tabpanel")).getByRole("radio", {
+                name: "Line",
+            }),
+        ).toBeChecked();
     });
     it("runs fresh analysis with structured formulas, numeric assumptions and pipeline configuration", async () => {
         const saved = {

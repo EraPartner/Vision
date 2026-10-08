@@ -38,13 +38,12 @@ describe("AIInvestigationPanel progressive controls", () => {
             .closest("details")!;
         expect(settings).not.toHaveAttribute("open");
         expect(
-            within(settings).getByText("Local model", { selector: "option" }),
+            within(settings).getByRole("radio", { name: "Local model" }),
         ).not.toBeVisible();
         await user.click(within(settings).getByText("Research settings"));
-        const depth = within(settings).getByRole("combobox", {
-            name: "Answer depth",
-        });
-        await user.selectOptions(depth, "detailed");
+        await user.click(
+            within(settings).getByRole("radio", { name: "Detailed" }),
+        );
         await user.click(within(settings).getByText("Research settings"));
         expect(settings.querySelector("summary")).toHaveTextContent("Detailed");
         await user.type(question, "Explain my portfolio");
@@ -58,10 +57,7 @@ describe("AIInvestigationPanel progressive controls", () => {
         const user = userEvent.setup();
         renderWithApp(<AIInvestigationPanel />);
         await user.click(await screen.findByText("Research settings"));
-        await user.selectOptions(
-            screen.getByRole("combobox", { name: "Model route" }),
-            "openai-api",
-        );
+        await user.click(screen.getByRole("radio", { name: /OpenAI API/ }));
         await user.click(screen.getByText("Research settings"));
         expect(
             screen.getByText("Research settings").closest("summary"),
@@ -75,8 +71,6 @@ describe("AIInvestigationPanel progressive controls", () => {
             screen.getByRole("button", { name: "Preview cloud payload" }),
         ).toBeDisabled();
         await user.click(screen.getByText("Research settings"));
-        expect(
-            screen.getByRole("combobox", { name: "Model route" }),
-        ).toHaveValue("openai-api");
+        expect(screen.getByRole("radio", { name: /OpenAI API/ })).toBeChecked();
     });
 });

@@ -22,7 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Coins, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -168,8 +168,8 @@ export function OpeningBalanceDialog({
                     }}
                     className="grid gap-5"
                 >
-                    <div className="space-y-3">
-                        <div className="space-y-1.5">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
                             <Label htmlFor="opening-balance">
                                 {t("accounts.openingBalance.balanceLabel")} (
                                 {anchorCurrency})
@@ -182,7 +182,7 @@ export function OpeningBalanceDialog({
                                 onChange={(e) => setBalance(e.target.value)}
                             />
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-2">
                             <Label htmlFor="opening-balance-date">
                                 {t("accounts.openingBalance.dateLabel")}
                             </Label>
@@ -204,10 +204,8 @@ export function OpeningBalanceDialog({
                             {t("common.cancel")}
                         </Button>
                         <Button type="submit" disabled={!canSubmit}>
-                            {save.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            ) : (
-                                <Coins className="h-4 w-4 mr-1" />
+                            {save.isPending && (
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             )}
                             {t("accounts.openingBalance.submit")}
                         </Button>

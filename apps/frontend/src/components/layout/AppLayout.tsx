@@ -232,7 +232,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                             e.preventDefault();
                             mainRef.current?.focus();
                         }}
-                        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-xl focus:border focus:border-border/50 focus:bg-background/90 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-glass-soft focus:outline-none focus:ring-2 focus:ring-ring/70"
+                        className="sr-only focus-ring focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-control focus:border focus:border-border/50 focus:bg-background/90 focus:px-4 focus:py-2 type-body focus:font-medium focus:text-foreground focus:shadow-glass-soft"
                     >
                         {t("layout.skipToContent")}
                     </a>
@@ -331,7 +331,7 @@ function TopbarPageTitle({ visible }: { visible: boolean }) {
         <div
             aria-hidden={!shown}
             className={cn(
-                "min-w-0 truncate font-display text-sm font-semibold tracking-tight transition-[opacity,translate] duration-normal ease-glide motion-reduce:transition-none",
+                "min-w-0 truncate font-display type-headline transition-[opacity,translate] duration-normal ease-glide motion-reduce:transition-none",
                 shown
                     ? "opacity-100 translate-y-0"
                     : "pointer-events-none opacity-0 translate-y-1",

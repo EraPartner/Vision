@@ -53,7 +53,7 @@ describe("Admin pages (integration)", () => {
     it("DbMaintenancePage renders heading", async () => {
         renderWithApp(<DbMaintenancePage />);
         expect(
-            await screen.findByRole("heading", { name: /db maintenance/i }),
+            await screen.findByRole("heading", { name: /database maintenance/i }),
         ).toBeInTheDocument();
     });
 

@@ -3,7 +3,7 @@ title: Market Lookup Feature
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-09-27
+updated: 2026-10-07
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the canonical deep-link target from the Markets Overview heat-map and ResearchHomePage search/watchlist tiles. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
@@ -44,8 +44,8 @@ The page has two rendering paths:
 
 **Yahoo / free-symbol path** (default — `isProviderAsset` is false):
 
-1. **Quote header** — symbol, name, live price + change, currency; actions: Add to watchlist (`Star` icon → `AddToWatchlistDialog`) and Add to portfolio (`AddInvestmentFromMarketDialog`).
-2. **Map provider button** (`Link2` icon, `t('research.mapping.button')`) in the header actions area — opens `ResearchMappingDialog` for ISIN-anchored cross-provider symbol mapping. `?investmentId=` is forwarded so the dialog can pre-seed the held investment's provider as already confirmed.
+1. **Quote header** — symbol, name, live price + change, currency; actions: the primary Add to portfolio (`AddInvestmentFromMarketDialog`) and a header ••• menu (`marketLookup.menu`) holding Add to watchlist (`AddToWatchlistDialog`) and Provider mapping.
+2. **Provider mapping** item (`t('research.mapping.button')`) in the header ••• menu — opens `ResearchMappingDialog` for ISIN-anchored cross-provider symbol mapping. `?investmentId=` is forwarded so the dialog can pre-seed the held investment's provider as already confirmed.
 3. **Price chart + volume bars** — historical candlestick/line chart from Yahoo via `GET /api/market/quote` with `detail=basic` (switched from `quoteSummary` to halve outbound Yahoo calls).
    Axis labels use the app number-format locale and adapt to the selected range: time for one day,
    day and short month for five days through six months, and short month plus year for one year,
@@ -60,7 +60,7 @@ The page has two rendering paths:
 
 **Provider-asset path** (`isProviderAsset` is true — non-Yahoo holdings: Kinesis, Binance, custom JSON):
 
-- The tabbed Details card and Map-provider button are hidden (these assets have no data in the research aggregator).
+- The tabbed Details card and Provider mapping menu item are hidden (these assets have no data in the research aggregator).
 - **Price Chart** is served from the holding's own stored history via `GET /api/investments/:id/price-history` (range mapped to `from_ms`), including Kinesis USD→EUR historical-rate conversion. Points carry price only; high/low collapse to close, no volume bars.
 - A minimal price/change header is synthesised from those points.
 - Fundamentals, analyst, and news sections are not shown.
@@ -116,14 +116,14 @@ The market-lookup routes use Yahoo Finance as their primary provider (keyless, u
 
 ### Quote Header Actions (Yahoo symbols)
 
-When viewing a **Yahoo symbol**, the quote header exposes action buttons:
+When viewing a **Yahoo symbol**, the header exposes these actions (the first is a button, the other two are items in the ••• menu):
 
 - **Add to portfolio** — opens `AddInvestmentFromMarketDialog` pre-filled with the symbol and provider.
-- **Add to watchlist** (Star icon, `addWatchlist.title`) — opens `[[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx|AddToWatchlistDialog]]` with a `prefill` object seeded from the current quote (`symbol`, `name`, `type`, `currency`, `price`). The dialog skips its internal search step and is one confirm away from adding the item. See [[docs/features/watchlist|Watchlist]] for full prefill details.
-- **Map provider** (`Link2` icon, `research.mapping.button`) — opens `ResearchMappingDialog`. If the page was opened from a holding (`?investmentId=`), the dialog pre-seeds that holding's configured provider as already confirmed.
+- **Add to watchlist** (`addWatchlist.title`) — opens `[[apps/frontend/src/features/portfolio/AddToWatchlistDialog.tsx|AddToWatchlistDialog]]` with a `prefill` object seeded from the current quote (`symbol`, `name`, `type`, `currency`, `price`). The dialog skips its internal search step and is one confirm away from adding the item. See [[docs/features/watchlist|Watchlist]] for full prefill details.
+- **Provider mapping** (`research.mapping.button`) — opens `ResearchMappingDialog`. If the page was opened from a holding (`?investmentId=`), the dialog pre-seeds that holding's configured provider as already confirmed.
 
 > [!info]
-> The "Add to watchlist" and "Map provider" buttons are shown only for Yahoo symbols (`!isProviderAsset`). Provider-priced assets (Kinesis, Binance, custom JSON) use the alternate price-history path and do not expose these actions.
+> The "Add to watchlist" and "Provider mapping" menu items are shown only for Yahoo symbols (`!isProviderAsset`). Provider-priced assets (Kinesis, Binance, custom JSON) use the alternate price-history path and do not expose these actions.
 
 ### Adding to Portfolio
 

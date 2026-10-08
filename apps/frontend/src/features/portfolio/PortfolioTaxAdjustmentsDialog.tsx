@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { List } from "@/components/ui/list";
 import {
     Select,
     SelectContent,
@@ -53,11 +53,29 @@ function choiceFromReynders(v: boolean | undefined): ReyndersChoice {
     return "auto";
 }
 
+type ClassDraftRow = {
+    etfStructure?: EtfStructure;
+    reynders: ReyndersChoice;
+    interestPortion: string;
+};
+
+type AmountDraftRow = { taxes: string; fees: string };
+
+const EMPTY_AMOUNTS: AmountDraftRow = { taxes: "", fees: "" };
+const EMPTY_CLASS: ClassDraftRow = { reynders: "auto", interestPortion: "" };
+
 interface Props {
     investments: InvestmentSummary[];
+    /** Controlled open state; leave undefined to render the dialog's own trigger. */
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
 }
 
-export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
+export function PortfolioTaxAdjustmentsDialog({
+    investments,
+    open: controlledOpen,
+    onOpenChange,
+}: Props) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const zeroPlaceholder = formatNumberPlaceholder(appSettings.numberFormat);
@@ -69,29 +87,30 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
         setMany: setClassifications,
         isLoading: classificationsLoading,
     } = usePortfolioTaxClassifications();
-    const [open, setOpen] = useState(false);
+    const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+    const isControlled = controlledOpen !== undefined;
+    const open = isControlled ? controlledOpen : uncontrolledOpen;
+    const setOpen = useCallback(
+        (next: boolean) => {
+            if (!isControlled) setUncontrolledOpen(next);
+            onOpenChange?.(next);
+        },
+        [isControlled, onOpenChange],
+    );
 
     const sorted = useMemo(
         () => [...investments].sort((a, b) => a.name.localeCompare(b.name)),
         [investments],
     );
 
-    type ClassDraftRow = {
-        etfStructure?: EtfStructure;
-        reynders: ReyndersChoice;
-        interestPortion: string;
-    };
-
-    const [draft, setDraft] = useState<
-        Record<number, { taxes: string; fees: string }>
-    >({});
+    const [draft, setDraft] = useState<Record<number, AmountDraftRow>>({});
     const [classDraft, setClassDraft] = useState<Record<number, ClassDraftRow>>(
         {},
     );
 
     useEffect(() => {
         if (!open) return;
-        const next: Record<number, { taxes: string; fees: string }> = {};
+        const next: Record<number, AmountDraftRow> = {};
         const nextClass: Record<number, ClassDraftRow> = {};
         sorted.forEach((inv) => {
             const current = getAdjustment(profile.taxYear, inv.id);
@@ -150,6 +169,22 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
     // Shared cached currency formatter (app locale + showDecimalPlaces defaults).
     const fmt = useCurrencyFormatter();
 
+    const updateAmount = (
+        id: number,
+        field: keyof AmountDraftRow,
+        value: string,
+    ) =>
+        setDraft((prev) => ({
+            ...prev,
+            [id]: { ...(prev[id] ?? EMPTY_AMOUNTS), [field]: value },
+        }));
+
+    const updateClass = (id: number, patch: Partial<ClassDraftRow>) =>
+        setClassDraft((prev) => ({
+            ...prev,
+            [id]: { ...(prev[id] ?? EMPTY_CLASS), ...patch },
+        }));
+
     async function handleSave(e: React.FormEvent) {
         e.preventDefault();
         const payload: Record<number, { taxes: number; fees: number }> = {};
@@ -188,17 +223,17 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    disabled={isLoading || classificationsLoading}
-                >
-                    <SlidersHorizontal className="h-4 w-4" />
-                    {t("tax.manualAdjustments")}
-                </Button>
-            </DialogTrigger>
+            {!isControlled && (
+                <DialogTrigger asChild>
+                    <Button
+                        variant="outline"
+                        disabled={isLoading || classificationsLoading}
+                    >
+                        <SlidersHorizontal aria-hidden="true" />
+                        {t("tax.manualAdjustments")}
+                    </Button>
+                </DialogTrigger>
+            )}
             <DialogContent className="max-w-3xl">
                 <DialogHeader>
                     <DialogTitle>
@@ -214,349 +249,291 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                 {/* Real <form> so Enter in any taxes/fees field saves. grid gap-5 mirrors
             DialogContent's layout, so the wrapper is layout-neutral. */}
                 <form onSubmit={handleSave} className="grid gap-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="rounded-lg border border-border p-3">
-                            <p className="text-xs text-muted-foreground">
+                    <dl className="grid grid-cols-2 gap-6">
+                        <div className="min-w-0">
+                            <dt className="type-caption text-label-tertiary">
                                 {t("tax.totalTaxesPaid")}
-                            </p>
-                            <p className="text-lg font-bold tabular-nums text-destructive">
+                            </dt>
+                            <dd className="mt-1 type-title-2 tabular-nums text-loss">
                                 {fmt(draftTotals.taxes)}
-                            </p>
+                            </dd>
                         </div>
-                        <div className="rounded-lg border border-border p-3">
-                            <p className="text-xs text-muted-foreground">
+                        <div className="min-w-0">
+                            <dt className="type-caption text-label-tertiary">
                                 {t("tax.totalFeesPaid")}
-                            </p>
-                            <p className="text-lg font-bold tabular-nums text-destructive">
+                            </dt>
+                            <dd className="mt-1 type-title-2 tabular-nums text-loss">
                                 {fmt(draftTotals.fees)}
-                            </p>
+                            </dd>
                         </div>
-                    </div>
+                    </dl>
 
-                    <Separator />
-
-                    <div className="max-h-[52vh] overflow-y-auto space-y-2 pr-1">
-                        {sorted.map((inv) => {
-                            const showEtfStructure = inv.assetClass === "etf";
-                            const showReynders =
-                                inv.assetClass === "etf" ||
-                                inv.assetClass === "bond";
-                            const cls: ClassDraftRow = classDraft[inv.id] ?? {
-                                reynders: "auto",
-                                interestPortion: "",
-                            };
-                            const reyndersResolved =
-                                cls.reynders === "yes" ||
-                                (cls.reynders === "auto" &&
-                                    inv.assetClass === "bond");
-                            return (
-                                <div
-                                    key={inv.id}
-                                    role="group"
-                                    aria-label={inv.name}
-                                    className="rounded-lg border border-border p-3"
-                                >
-                                    <div className="flex items-center gap-2 flex-wrap mb-2">
-                                        {inv.symbol && (
-                                            <span className="font-mono text-xs font-semibold">
-                                                {inv.symbol}
+                    <div className="max-h-[52vh] overflow-y-auto pr-1">
+                        <List>
+                            {sorted.map((inv) => {
+                                const showEtfStructure =
+                                    inv.assetClass === "etf";
+                                const showReynders =
+                                    inv.assetClass === "etf" ||
+                                    inv.assetClass === "bond";
+                                const cls: ClassDraftRow =
+                                    classDraft[inv.id] ?? EMPTY_CLASS;
+                                const reyndersResolved =
+                                    cls.reynders === "yes" ||
+                                    (cls.reynders === "auto" &&
+                                        inv.assetClass === "bond");
+                                return (
+                                    <li
+                                        key={inv.id}
+                                        role="group"
+                                        aria-label={inv.name}
+                                        className="space-y-3 px-4 py-3"
+                                    >
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="type-body font-medium text-foreground">
+                                                {inv.name}
                                             </span>
-                                        )}
-                                        <span className="text-sm font-medium">
-                                            {inv.name}
-                                        </span>
-                                        <Badge
-                                            variant="secondary"
-                                            className="text-2xs"
-                                        >
-                                            {getAssetClassLabel(
-                                                t,
-                                                inv.assetClass,
+                                            {inv.symbol && (
+                                                <span className="font-mono type-footnote text-label-secondary">
+                                                    {inv.symbol}
+                                                </span>
                                             )}
-                                        </Badge>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                            <Label
-                                                htmlFor={`taxes-${inv.id}`}
-                                                className="text-xs"
-                                            >
-                                                {t("tax.taxes")}
-                                            </Label>
-                                            <Input
-                                                id={`taxes-${inv.id}`}
-                                                aria-label={`${t("tax.taxes")}: ${inv.name}`}
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={
-                                                    draft[inv.id]?.taxes ?? ""
-                                                }
-                                                onChange={(e) =>
-                                                    setDraft((prev) => ({
-                                                        ...prev,
-                                                        [inv.id]: {
-                                                            ...(prev[
-                                                                inv.id
-                                                            ] ?? {
-                                                                taxes: "",
-                                                                fees: "",
-                                                            }),
-                                                            taxes: e.target
-                                                                .value,
-                                                        },
-                                                    }))
-                                                }
-                                                placeholder={zeroPlaceholder}
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label
-                                                htmlFor={`fees-${inv.id}`}
-                                                className="text-xs"
-                                            >
-                                                {t("tax.fees")}
-                                            </Label>
-                                            <Input
-                                                id={`fees-${inv.id}`}
-                                                aria-label={`${t("tax.fees")}: ${inv.name}`}
-                                                type="text"
-                                                inputMode="decimal"
-                                                value={
-                                                    draft[inv.id]?.fees ?? ""
-                                                }
-                                                onChange={(e) =>
-                                                    setDraft((prev) => ({
-                                                        ...prev,
-                                                        [inv.id]: {
-                                                            ...(prev[
-                                                                inv.id
-                                                            ] ?? {
-                                                                taxes: "",
-                                                                fees: "",
-                                                            }),
-                                                            fees: e.target
-                                                                .value,
-                                                        },
-                                                    }))
-                                                }
-                                                placeholder={zeroPlaceholder}
-                                            />
-                                        </div>
-                                    </div>
-                                    {(showEtfStructure || showReynders) && (
-                                        <details
-                                            className="mt-3 pt-3 border-t border-dashed border-border"
-                                            onInvalidCapture={(event) => {
-                                                // Keep optional fields mounted so drafts and native
-                                                // validation survive collapsing this section.
-                                                event.currentTarget.open = true;
-                                                (
-                                                    event.target as HTMLElement
-                                                ).focus();
-                                            }}
-                                        >
-                                            <summary
-                                                className="cursor-pointer rounded-sm text-sm font-medium focus-ring"
-                                                aria-label={`${t("tax.treatmentOptions")}: ${inv.name}`}
-                                            >
-                                                {t("tax.treatmentOptions")}
-                                            </summary>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                                {showEtfStructure && (
-                                                    <div className="space-y-1">
-                                                        <Label
-                                                            htmlFor={`etf-structure-${inv.id}`}
-                                                            className="text-xs"
-                                                        >
-                                                            {t(
-                                                                "tax.etfStructure",
-                                                            )}
-                                                        </Label>
-                                                        <Select
-                                                            value={
-                                                                cls.etfStructure ??
-                                                                "accumulating"
-                                                            }
-                                                            onValueChange={(
-                                                                v,
-                                                            ) =>
-                                                                setClassDraft(
-                                                                    (prev) => ({
-                                                                        ...prev,
-                                                                        [inv.id]:
-                                                                            {
-                                                                                ...(prev[
-                                                                                    inv
-                                                                                        .id
-                                                                                ] ?? {
-                                                                                    reynders:
-                                                                                        "auto",
-                                                                                }),
-                                                                                etfStructure:
-                                                                                    v as EtfStructure,
-                                                                            },
-                                                                    }),
-                                                                )
-                                                            }
-                                                        >
-                                                            <SelectTrigger
-                                                                id={`etf-structure-${inv.id}`}
-                                                                aria-label={`${t("tax.etfStructure")}: ${inv.name}`}
-                                                            >
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="accumulating">
-                                                                    {t(
-                                                                        "tax.etfStructure.accumulating",
-                                                                    )}
-                                                                </SelectItem>
-                                                                <SelectItem value="distributing">
-                                                                    {t(
-                                                                        "tax.etfStructure.distributing",
-                                                                    )}
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        <p className="text-2xs text-muted-foreground">
-                                                            {t(
-                                                                "tax.etfStructure.desc",
-                                                            )}
-                                                        </p>
-                                                    </div>
+                                            <Badge variant="secondary" size="sm">
+                                                {getAssetClassLabel(
+                                                    t,
+                                                    inv.assetClass,
                                                 )}
-                                                {showReynders && (
-                                                    <div className="space-y-1">
-                                                        <Label
-                                                            htmlFor={`reynders-${inv.id}`}
-                                                            className="text-xs"
-                                                        >
-                                                            {t(
-                                                                "tax.subjectToReynders",
-                                                            )}
-                                                        </Label>
-                                                        <Select
-                                                            value={cls.reynders}
-                                                            onValueChange={(
-                                                                v,
-                                                            ) =>
-                                                                setClassDraft(
-                                                                    (prev) => ({
-                                                                        ...prev,
-                                                                        [inv.id]:
-                                                                            {
-                                                                                ...(prev[
-                                                                                    inv
-                                                                                        .id
-                                                                                ] ?? {
-                                                                                    reynders:
-                                                                                        "auto",
-                                                                                    interestPortion:
-                                                                                        "",
-                                                                                }),
-                                                                                reynders:
-                                                                                    v as ReyndersChoice,
-                                                                            },
-                                                                    }),
-                                                                )
-                                                            }
-                                                        >
-                                                            <SelectTrigger
-                                                                id={`reynders-${inv.id}`}
-                                                                aria-label={`${t("tax.subjectToReynders")}: ${inv.name}`}
-                                                            >
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="auto">
-                                                                    {t(
-                                                                        "tax.subjectToReynders.auto",
-                                                                    )}
-                                                                </SelectItem>
-                                                                <SelectItem value="yes">
-                                                                    {t(
-                                                                        "tax.subjectToReynders.yes",
-                                                                    )}
-                                                                </SelectItem>
-                                                                <SelectItem value="no">
-                                                                    {t(
-                                                                        "tax.subjectToReynders.no",
-                                                                    )}
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                        <p className="text-2xs text-muted-foreground">
-                                                            {t(
-                                                                "tax.subjectToReynders.desc",
-                                                            )}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {showReynders &&
-                                                    reyndersResolved && (
-                                                        <div className="space-y-1 md:col-span-2">
+                                            </Badge>
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`taxes-${inv.id}`}>
+                                                    {t("tax.taxes")}
+                                                </Label>
+                                                <Input
+                                                    id={`taxes-${inv.id}`}
+                                                    aria-label={`${t("tax.taxes")}: ${inv.name}`}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={
+                                                        draft[inv.id]?.taxes ??
+                                                        ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        updateAmount(
+                                                            inv.id,
+                                                            "taxes",
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder={zeroPlaceholder}
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`fees-${inv.id}`}>
+                                                    {t("tax.fees")}
+                                                </Label>
+                                                <Input
+                                                    id={`fees-${inv.id}`}
+                                                    aria-label={`${t("tax.fees")}: ${inv.name}`}
+                                                    type="text"
+                                                    inputMode="decimal"
+                                                    value={
+                                                        draft[inv.id]?.fees ??
+                                                        ""
+                                                    }
+                                                    onChange={(e) =>
+                                                        updateAmount(
+                                                            inv.id,
+                                                            "fees",
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    placeholder={zeroPlaceholder}
+                                                />
+                                            </div>
+                                        </div>
+                                        {(showEtfStructure || showReynders) && (
+                                            <details
+                                                className="border-t border-border/50 pt-3"
+                                                onInvalidCapture={(event) => {
+                                                    // Keep optional fields mounted so drafts and native
+                                                    // validation survive collapsing this section.
+                                                    event.currentTarget.open =
+                                                        true;
+                                                    (
+                                                        event.target as HTMLElement
+                                                    ).focus();
+                                                }}
+                                            >
+                                                <summary
+                                                    className="cursor-default rounded-chip type-headline text-foreground focus-ring"
+                                                    aria-label={`${t("tax.treatmentOptions")}: ${inv.name}`}
+                                                >
+                                                    {t("tax.treatmentOptions")}
+                                                </summary>
+                                                <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                    {showEtfStructure && (
+                                                        <div className="space-y-2">
                                                             <Label
-                                                                htmlFor={`reynders-interest-${inv.id}`}
-                                                                className="text-xs"
+                                                                htmlFor={`etf-structure-${inv.id}`}
                                                             >
                                                                 {t(
-                                                                    "tax.reyndersInterestPortion",
+                                                                    "tax.etfStructure",
                                                                 )}
                                                             </Label>
-                                                            <Input
-                                                                id={`reynders-interest-${inv.id}`}
-                                                                aria-label={`${t("tax.reyndersInterestPortion")}: ${inv.name}`}
-                                                                type="number"
-                                                                inputMode="numeric"
-                                                                min={0}
-                                                                max={100}
-                                                                step={1}
+                                                            <Select
                                                                 value={
-                                                                    cls.interestPortion
+                                                                    cls.etfStructure ??
+                                                                    "accumulating"
                                                                 }
-                                                                onChange={(e) =>
-                                                                    setClassDraft(
-                                                                        (
-                                                                            prev,
-                                                                        ) => ({
-                                                                            ...prev,
-                                                                            [inv.id]:
-                                                                                {
-                                                                                    ...(prev[
-                                                                                        inv
-                                                                                            .id
-                                                                                    ] ?? {
-                                                                                        reynders:
-                                                                                            "auto",
-                                                                                        interestPortion:
-                                                                                            "",
-                                                                                    }),
-                                                                                    interestPortion:
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                },
-                                                                        }),
+                                                                onValueChange={(
+                                                                    v,
+                                                                ) =>
+                                                                    updateClass(
+                                                                        inv.id,
+                                                                        {
+                                                                            etfStructure:
+                                                                                v as EtfStructure,
+                                                                        },
                                                                     )
                                                                 }
-                                                                placeholder="100"
-                                                            />
-                                                            <p className="text-2xs text-muted-foreground">
+                                                            >
+                                                                <SelectTrigger
+                                                                    id={`etf-structure-${inv.id}`}
+                                                                    aria-label={`${t("tax.etfStructure")}: ${inv.name}`}
+                                                                >
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="accumulating">
+                                                                        {t(
+                                                                            "tax.etfStructure.accumulating",
+                                                                        )}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="distributing">
+                                                                        {t(
+                                                                            "tax.etfStructure.distributing",
+                                                                        )}
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <p className="type-footnote text-label-secondary">
                                                                 {t(
-                                                                    "tax.reyndersInterestPortion.desc",
+                                                                    "tax.etfStructure.desc",
                                                                 )}
                                                             </p>
                                                         </div>
                                                     )}
-                                            </div>
-                                        </details>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                                    {showReynders && (
+                                                        <div className="space-y-2">
+                                                            <Label
+                                                                htmlFor={`reynders-${inv.id}`}
+                                                            >
+                                                                {t(
+                                                                    "tax.subjectToReynders",
+                                                                )}
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    cls.reynders
+                                                                }
+                                                                onValueChange={(
+                                                                    v,
+                                                                ) =>
+                                                                    updateClass(
+                                                                        inv.id,
+                                                                        {
+                                                                            reynders:
+                                                                                v as ReyndersChoice,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            >
+                                                                <SelectTrigger
+                                                                    id={`reynders-${inv.id}`}
+                                                                    aria-label={`${t("tax.subjectToReynders")}: ${inv.name}`}
+                                                                >
+                                                                    <SelectValue />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="auto">
+                                                                        {t(
+                                                                            "tax.subjectToReynders.auto",
+                                                                        )}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="yes">
+                                                                        {t(
+                                                                            "tax.subjectToReynders.yes",
+                                                                        )}
+                                                                    </SelectItem>
+                                                                    <SelectItem value="no">
+                                                                        {t(
+                                                                            "tax.subjectToReynders.no",
+                                                                        )}
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <p className="type-footnote text-label-secondary">
+                                                                {t(
+                                                                    "tax.subjectToReynders.desc",
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                                    {showReynders &&
+                                                        reyndersResolved && (
+                                                            <div className="space-y-2 md:col-span-2">
+                                                                <Label
+                                                                    htmlFor={`reynders-interest-${inv.id}`}
+                                                                >
+                                                                    {t(
+                                                                        "tax.reyndersInterestPortion",
+                                                                    )}
+                                                                </Label>
+                                                                <Input
+                                                                    id={`reynders-interest-${inv.id}`}
+                                                                    aria-label={`${t("tax.reyndersInterestPortion")}: ${inv.name}`}
+                                                                    type="number"
+                                                                    inputMode="numeric"
+                                                                    min={0}
+                                                                    max={100}
+                                                                    step={1}
+                                                                    value={
+                                                                        cls.interestPortion
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        updateClass(
+                                                                            inv.id,
+                                                                            {
+                                                                                interestPortion:
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                    placeholder="100"
+                                                                />
+                                                                <p className="type-footnote text-label-secondary">
+                                                                    {t(
+                                                                        "tax.reyndersInterestPortion.desc",
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                </div>
+                                            </details>
+                                        )}
+                                    </li>
+                                );
+                            })}
+                        </List>
                     </div>
 
-                    <DialogFooter className="pt-2">
+                    <DialogFooter>
                         <Button
                             type="button"
                             variant="outline"
@@ -564,7 +541,9 @@ export function PortfolioTaxAdjustmentsDialog({ investments }: Props) {
                         >
                             {t("common.cancel")}
                         </Button>
-                        <Button type="submit">{t("common.save")}</Button>
+                        <Button type="submit">
+                            {t("tax.manualAdjustmentsSave")}
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

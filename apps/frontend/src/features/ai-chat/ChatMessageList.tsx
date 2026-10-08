@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Bot } from "lucide-react";
 import type { ChatMessage } from "@/types/aiChat";
-import { ChatBubble } from "./ChatBubble";
+import { Avatar, ChatBubble } from "./ChatBubble";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import type { StreamState } from "@/lib/aiChatStreamStore";
 import { isOptimisticUserId } from "@/lib/aiChatStreamStore";
 
@@ -242,11 +243,11 @@ export function ChatMessageList({
                     />
                 )}
                 {showTerminal && (
-                    <div
-                        className="ml-12 flex max-w-[85%] items-center justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+                    <Alert
                         role="status"
+                        className="ml-12 flex max-w-[85%] items-center justify-between gap-3 px-3 py-2"
                     >
-                        <span>
+                        <AlertDescription className="type-footnote text-label-secondary">
                             {t(
                                 streamStatus === "stopped"
                                     ? "aiChat.streamStopped"
@@ -254,7 +255,7 @@ export function ChatMessageList({
                                       ? "aiChat.streamTimedOut"
                                       : "aiChat.streamInterrupted",
                             )}
-                        </span>
+                        </AlertDescription>
                         {onRetry && (
                             <Button
                                 type="button"
@@ -265,14 +266,12 @@ export function ChatMessageList({
                                 {t("common.retry")}
                             </Button>
                         )}
-                    </div>
+                    </Alert>
                 )}
                 {showThinking && (
                     <div className="flex items-center gap-3 px-1">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/30 text-primary ring-1 ring-border/50">
-                            <Bot className="h-4 w-4" />
-                        </div>
-                        <div className="rounded-2xl rounded-tl-sm bg-muted/60 px-4 py-2.5 text-sm text-muted-foreground ring-1 ring-border/50">
+                        <Avatar role="assistant" />
+                        <Card className="px-4 py-2.5 type-body text-label-secondary">
                             <span className="inline-flex items-center gap-1">
                                 <span className="motion-safe:animate-pulse">
                                     {t("aiChat.thinking")}
@@ -292,7 +291,7 @@ export function ChatMessageList({
                                     </span>
                                 </span>
                             </span>
-                        </div>
+                        </Card>
                     </div>
                 )}
             </div>

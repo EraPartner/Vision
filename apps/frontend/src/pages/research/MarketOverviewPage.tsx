@@ -3,7 +3,18 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Star } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useInvestmentsQuery } from "@/hooks/portfolio/useInvestments";
@@ -35,7 +46,7 @@ export default function MarketOverviewPage() {
     const [region, setRegion] = useState<Region>("worldwide");
     const [sector, setSector] = useState<string>("overview");
 
-    // Symbols the user actually holds, so their tiles get an accent ring + star.
+    // Symbols the user actually holds, so their tiles get an accent frame + star.
     // Match the investment's symbol and (for Yahoo-priced holdings) its provider
     // id, both upper-cased. Crypto tiles use Yahoo pairs (e.g. BTC-USD) while a
     // holding usually stores the bare base ticker, so we also fold off "-USD".
@@ -122,41 +133,41 @@ export default function MarketOverviewPage() {
                                 : entry.label
                         }
                         className={cn(
-                            "relative flex flex-col gap-1 rounded-xl border border-border/40 p-3.5 text-left",
+                            "relative flex flex-col gap-1 rounded-card corner-continuous border border-border/40 p-3.5 text-left",
                             // Transition list composed via --press-compose (press-feedback owns
                             // the `transition` shorthand — see index.css); the transform entry is
                             // the press curve AND micro-lift's hover ride, both at 90ms as before.
-                            "micro-lift press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] hover:border-primary/40 outline-none focus-ring",
-                            pct == null && "bg-muted/20",
+                            "micro-lift press-feedback [--press-compose:color_var(--default-transition-duration)_var(--default-transition-timing-function),background-color_var(--default-transition-duration)_var(--default-transition-timing-function),border-color_var(--default-transition-duration)_var(--default-transition-timing-function),transform_var(--duration-press)_ease-out] hover:border-primary/40 focus-ring",
+                            pct == null && "bg-foreground/[0.03]",
                             held &&
-                                "border-accent/60 ring-2 ring-accent ring-offset-1 shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",
+                                "border-accent/70 shadow-[0_0_14px_-2px_hsl(var(--accent)/0.55)]",
                         )}
                     >
                         {held && (
                             <Star
                                 aria-hidden
-                                className="absolute right-2 top-2 h-3.5 w-3.5 fill-accent text-accent drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)]"
+                                className="absolute right-2 top-2 h-3.5 w-3.5 fill-accent text-accent"
                             />
                         )}
                         <span
                             className={cn(
-                                "truncate text-xs font-medium text-foreground/70",
+                                "truncate type-caption text-foreground/70",
                                 held && "pr-4",
                             )}
                         >
                             {entry.label}
                         </span>
                         {pct != null ? (
-                            <span className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">
+                            <span className="type-title-1 tabular-nums text-foreground">
                                 {up ? "+" : "−"}
                                 {formatPercent(Math.abs(pct), { digits: 2 })}
                             </span>
                         ) : (
-                            <span className="text-2xl font-bold tabular-nums text-muted-foreground/40 sm:text-3xl">
+                            <span className="type-title-1 tabular-nums text-label-tertiary">
                                 —
                             </span>
                         )}
-                        <span className="truncate font-mono text-2xs text-foreground/50">
+                        <span className="truncate font-mono type-caption text-foreground/50">
                             {entry.symbol}
                         </span>
                     </Link>
@@ -173,78 +184,63 @@ export default function MarketOverviewPage() {
                 icon={PAGE_ICONS["/research/markets"]}
             />
 
-            <div className="space-y-3">
-                <ToggleCluster
-                    label={t("research.markets.regions")}
-                    options={REGION_OPTIONS}
+            <div className="flex flex-wrap items-center gap-3">
+                <SegmentedControl
+                    size="sm"
                     value={region}
-                    onChange={(v) => setRegion(v as Region)}
-                    t={t}
-                />
-                <ToggleCluster
-                    label={t("research.markets.sectors")}
-                    options={SECTOR_OPTIONS}
-                    value={sector}
-                    onChange={setSector}
-                    t={t}
-                />
+                    onValueChange={(v) => setRegion(v as Region)}
+                    aria-label={t("research.markets.regions")}
+                    className="max-w-full overflow-x-auto"
+                >
+                    {REGION_OPTIONS.map((o) => (
+                        <SegmentedControlItem
+                            key={o.key}
+                            value={o.key}
+                            className="px-2.5 type-footnote"
+                        >
+                            {t(o.labelKey)}
+                        </SegmentedControlItem>
+                    ))}
+                </SegmentedControl>
+                <Select value={sector} onValueChange={setSector}>
+                    <SelectTrigger
+                        className="h-8 w-48"
+                        aria-label={t("research.markets.sectors")}
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {SECTOR_OPTIONS.map((o) => (
+                            <SelectItem key={o.key} value={o.key}>
+                                {t(o.labelKey)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
 
             {groups.map((group, i) => (
                 <section key={group.titleKey ?? i} className="space-y-3">
                     {showHeadings && group.titleKey && (
-                        <h2 className="text-sm font-semibold text-muted-foreground">
+                        <h2 className="type-headline text-label-secondary">
                             {t(group.titleKey)}
                         </h2>
                     )}
                     {group.entries.length > 0 ? (
                         renderGrid(group.entries)
                     ) : (
-                        <div className="rounded-xl border border-dashed border-border/40">
-                            <EmptyState
-                                size="compact"
-                                icon={PAGE_ICONS["/research/markets"]}
-                                title={t("research.markets.empty")}
-                            />
-                        </div>
+                        <Card>
+                            <CardContent variant="state">
+                                <EmptyState
+                                    size="compact"
+                                    icon={PAGE_ICONS["/research/markets"]}
+                                    title={t("research.markets.empty")}
+                                />
+                            </CardContent>
+                        </Card>
                     )}
                 </section>
             ))}
         </PageShell>
-    );
-}
-
-interface ToggleClusterProps {
-    label: string;
-    options: ReadonlyArray<{ key: string; labelKey: string }>;
-    value: string;
-    onChange: (key: string) => void;
-    t: (key: string) => string;
-}
-
-function ToggleCluster({
-    label,
-    options,
-    value,
-    onChange,
-    t,
-}: ToggleClusterProps) {
-    return (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className="w-16 shrink-0 eyebrow">{label}</span>
-            <ToggleGroup
-                type="single"
-                value={value}
-                onValueChange={(v) => v && onChange(v)}
-                variant="outline"
-                className="flex-wrap justify-start"
-            >
-                {options.map((o) => (
-                    <ToggleGroupItem key={o.key} value={o.key} className="px-3">
-                        {t(o.labelKey)}
-                    </ToggleGroupItem>
-                ))}
-            </ToggleGroup>
-        </div>
     );
 }

@@ -13,17 +13,27 @@ import {
     formatDateWithAppSettings,
     parseLocalDateFromYmd,
 } from "@/lib/dateUtils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
+import {
+    SegmentedControl,
+    SegmentedControlItem,
+} from "@/components/ui/segmented-control";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { StateBlock } from "@/components/shared/StateBlock";
 import { StatCard } from "@/components/shared/StatCard";
 import { Money } from "@/components/shared/Money";
 import { RollingNumber } from "@/components/shared/RollingNumber";
@@ -206,7 +216,7 @@ export default function PortfolioForecastPage() {
                     <div className="space-y-2">
                         <p
                             id="forecast-horizon-label"
-                            className="text-sm font-medium"
+                            className="type-body font-medium text-foreground"
                         >
                             {t("research.forecast.horizon")}
                         </p>
@@ -252,12 +262,12 @@ export default function PortfolioForecastPage() {
                         />
                     </div>
 
-                    <details className="group rounded-lg border border-border/60 md:col-span-2 lg:col-span-3">
-                        <summary className="cursor-pointer rounded-lg px-4 py-3 text-sm marker:text-muted-foreground focus-ring">
+                    <details className="group rounded-card corner-continuous border border-border/60 md:col-span-2 lg:col-span-3">
+                        <summary className="cursor-pointer rounded-card px-4 py-3 type-body text-foreground marker:text-label-tertiary focus-ring">
                             <span className="font-medium">
                                 {t("research.forecast.assumptions")}
                             </span>
-                            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
+                            <span className="mt-1 block type-footnote text-label-secondary">
                                 {t(
                                     returnSource === "historical"
                                         ? "research.forecast.sourceHistorical"
@@ -280,41 +290,28 @@ export default function PortfolioForecastPage() {
                             <div className="space-y-2">
                                 <p
                                     id="forecast-return-source-label"
-                                    className="text-sm font-medium"
+                                    className="type-body font-medium text-foreground"
                                 >
                                     {t("research.forecast.returnSource")}
                                 </p>
-                                <Tabs
+                                <SegmentedControl
+                                    size="sm"
                                     value={returnSource}
                                     onValueChange={(v) =>
                                         setReturnSource(v as ReturnSource)
                                     }
+                                    aria-labelledby="forecast-return-source-label"
                                 >
-                                    <TabsList
-                                        className="h-8"
-                                        aria-labelledby="forecast-return-source-label"
-                                    >
-                                        <TabsTrigger
-                                            value="historical"
-                                            className="text-xs"
-                                        >
-                                            {t(
-                                                "research.forecast.sourceHistorical",
-                                            )}
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="blended"
-                                            className="text-xs"
-                                        >
-                                            {t(
-                                                "research.forecast.sourceBlended",
-                                            )}
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </Tabs>
+                                    <SegmentedControlItem value="historical">
+                                        {t("research.forecast.sourceHistorical")}
+                                    </SegmentedControlItem>
+                                    <SegmentedControlItem value="blended">
+                                        {t("research.forecast.sourceBlended")}
+                                    </SegmentedControlItem>
+                                </SegmentedControl>
                                 {returnSource === "blended" && (
                                     <div className="pt-1">
-                                        <div className="flex justify-between text-xs text-muted-foreground">
+                                        <div className="flex justify-between type-footnote text-label-secondary">
                                             <span>
                                                 {100 - blendPct}%{" "}
                                                 {t(
@@ -355,44 +352,31 @@ export default function PortfolioForecastPage() {
                             <div className="space-y-2">
                                 <p
                                     id="forecast-method-label"
-                                    className="text-sm font-medium"
+                                    className="type-body font-medium text-foreground"
                                 >
                                     {t("research.forecast.method")}
                                 </p>
-                                <Tabs
+                                <SegmentedControl
+                                    size="sm"
                                     value={method}
                                     onValueChange={(v) =>
                                         setMethod(v as ForecastMethod)
                                     }
+                                    aria-labelledby="forecast-method-label"
                                 >
-                                    <TabsList
-                                        className="h-8"
-                                        aria-labelledby="forecast-method-label"
-                                    >
-                                        <TabsTrigger
-                                            value="parametric"
-                                            className="text-xs"
-                                        >
-                                            {t(
-                                                "research.forecast.methodParametric",
-                                            )}
-                                        </TabsTrigger>
-                                        <TabsTrigger
-                                            value="block_bootstrap"
-                                            className="text-xs"
-                                        >
-                                            {t(
-                                                "research.forecast.methodBootstrap",
-                                            )}
-                                        </TabsTrigger>
-                                    </TabsList>
-                                </Tabs>
+                                    <SegmentedControlItem value="parametric">
+                                        {t("research.forecast.methodParametric")}
+                                    </SegmentedControlItem>
+                                    <SegmentedControlItem value="block_bootstrap">
+                                        {t("research.forecast.methodBootstrap")}
+                                    </SegmentedControlItem>
+                                </SegmentedControl>
                             </div>
 
                             <div className="space-y-2">
                                 <p
                                     id="forecast-paths-label"
-                                    className="text-sm font-medium"
+                                    className="type-body font-medium text-foreground"
                                 >
                                     {t("research.forecast.paths")}
                                 </p>
@@ -413,11 +397,13 @@ export default function PortfolioForecastPage() {
 
             {isError && (
                 <Card>
-                    <CardContent
-                        variant="state"
-                        className="text-center text-sm text-destructive"
-                    >
-                        {t("research.forecast.error")}
+                    <CardContent variant="flush">
+                        <StateBlock
+                            size="compact"
+                            tone="destructive"
+                            icon={AlertTriangle}
+                            title={t("research.forecast.error")}
+                        />
                     </CardContent>
                 </Card>
             )}
@@ -509,10 +495,7 @@ export default function PortfolioForecastPage() {
                                     {t("research.forecast.chartTitle")}
                                 </CardTitle>
                                 {forecast?.lowConfidence && (
-                                    <Badge
-                                        variant="outline"
-                                        className="border-warning/40 text-warning text-2xs"
-                                    >
+                                    <Badge variant="warning" size="sm">
                                         {t("research.forecast.lowConfidence")}
                                     </Badge>
                                 )}
@@ -522,7 +505,7 @@ export default function PortfolioForecastPage() {
                             {isFetching && !forecast ? (
                                 <Skeleton
                                     {...loadingSurfaceProps}
-                                    className="h-[360px] w-full rounded-lg"
+                                    className="h-[360px] w-full"
                                 />
                             ) : rows.length > 0 ? (
                                 <LineChart<ForecastRow>
@@ -551,7 +534,7 @@ export default function PortfolioForecastPage() {
                                     }
                                 />
                             ) : (
-                                <div className="flex h-[360px] items-center justify-center text-sm text-muted-foreground">
+                                <div className="flex h-[360px] items-center justify-center type-callout text-label-secondary">
                                     {t("research.forecast.noData")}
                                 </div>
                             )}
@@ -567,11 +550,11 @@ export default function PortfolioForecastPage() {
                                     <CardTitle variant="sm">
                                         {t("research.forecast.forwardInputs")}
                                     </CardTitle>
-                                    <p className="text-xs text-muted-foreground">
+                                    <CardDescription>
                                         {t(
                                             "research.forecast.forwardInputsHint",
                                         )}
-                                    </p>
+                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent className="flex flex-wrap gap-2">
                                     {forecast.forwardHoldings.map((h) => (

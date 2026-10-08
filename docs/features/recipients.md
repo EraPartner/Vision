@@ -141,7 +141,7 @@ These constraints are enforced at the database level and handled gracefully in a
 
 ## List visibility filters
 
-Include inactive is a labeled switch with a stable label and an explicit on/off state. Recipients also uses an Uncategorized only switch. These controls retain the existing filtering and URL behavior.
+_Include inactive_ and _Uncategorized only_ are checkbox items in the page header's **View** menu, each with an explicit on/off state, and keep the existing filtering and URL behavior. _Merge payees_ is in the header ••• menu and _Add_ is the primary action. Each row shows a status badge and a ••• menu with Match rules, Unmerge (for merged aliases), Mark active or inactive (undoable) and Delete ([[docs/adr/187-completeness-sweep|ADR-187]]).
 
 ## Clarity and recovery feedback
 

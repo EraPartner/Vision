@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
@@ -54,36 +55,47 @@ function AttachmentRow({
     const isImage = attachment.mime_type.startsWith("image/");
 
     return (
-        <div className="flex items-center gap-2 py-1.5 group">
-            <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <div className="group flex items-center gap-2 py-1.5">
+            <Paperclip
+                aria-hidden="true"
+                className="h-3.5 w-3.5 shrink-0 text-label-tertiary"
+            />
             <a
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 min-w-0 flex items-center gap-1 text-sm text-foreground hover:underline"
+                className="flex min-w-0 flex-1 items-center gap-1 rounded-chip type-body text-foreground underline-offset-4 hover:underline focus-ring"
                 title={attachment.filename}
             >
                 <span className="truncate">{attachment.filename}</span>
-                <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                <ExternalLink
+                    aria-hidden="true"
+                    className="h-3 w-3 shrink-0 text-label-tertiary"
+                />
             </a>
-            <span className="text-xs text-muted-foreground shrink-0">
+            <span className="shrink-0 type-footnote tabular-nums text-label-secondary">
                 {formatBytes(attachment.size_bytes)}
             </span>
             {isImage && (
-                <a href={url} target="_blank" rel="noopener noreferrer">
+                <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-chip focus-ring"
+                >
                     <img
                         src={url}
                         alt={attachment.filename}
                         loading="lazy"
                         decoding="async"
-                        className="h-6 w-6 rounded object-cover border border-border shrink-0"
+                        className="h-6 w-6 shrink-0 rounded-chip border border-border/60 object-cover"
                     />
                 </a>
             )}
             <Button
                 variant="ghost"
                 size="icon"
-                className="icon-touch-target text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 transition-opacity"
+                className="icon-touch-target text-label-secondary opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100"
                 onClick={() => onDelete(attachment.id)}
                 disabled={deleting}
                 title={t("txPage.deleteAttachment")}
@@ -92,9 +104,9 @@ function AttachmentRow({
                 })}
             >
                 {deleting ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Loader2 aria-hidden="true" className="animate-spin" />
                 ) : (
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 aria-hidden="true" />
                 )}
             </Button>
         </div>
@@ -165,20 +177,21 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
         <>
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-muted-foreground">
-                        {t("txPage.attachments")}
-                    </span>
+                    <span className="eyebrow">{t("txPage.attachments")}</span>
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 gap-1 text-xs"
+                        className="-mr-2 h-7 px-2 type-footnote"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploadMutation.isPending}
                     >
                         {uploadMutation.isPending ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <Loader2
+                                aria-hidden="true"
+                                className="animate-spin"
+                            />
                         ) : (
-                            <Upload className="h-3 w-3" />
+                            <Upload aria-hidden="true" />
                         )}
                         {t("txPage.uploadAttachment")}
                     </Button>
@@ -192,28 +205,38 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
                 </div>
 
                 {isLoading && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        {t("common.loading")}
+                    <div
+                        role="status"
+                        aria-label={t("common.loading")}
+                        className="space-y-2 py-1"
+                    >
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-4 w-1/2" />
                     </div>
                 )}
 
                 {isError && (
-                    <div className="flex items-center gap-2 text-xs text-destructive py-1">
-                        <AlertCircle className="h-3 w-3" />
+                    <p
+                        role="alert"
+                        className="flex items-center gap-2 py-1 type-footnote text-destructive"
+                    >
+                        <AlertCircle aria-hidden="true" className="h-3 w-3" />
                         {t("txPage.attachmentsError")}
-                    </div>
+                    </p>
                 )}
 
                 {uploadMutation.isError && (
-                    <div className="flex items-center gap-2 text-xs text-destructive py-1">
-                        <AlertCircle className="h-3 w-3" />
+                    <p
+                        role="alert"
+                        className="flex items-center gap-2 py-1 type-footnote text-destructive"
+                    >
+                        <AlertCircle aria-hidden="true" className="h-3 w-3" />
                         {t("txPage.uploadError")}
-                    </div>
+                    </p>
                 )}
 
                 {!isLoading && !isError && attachments.length === 0 && (
-                    <p className="text-xs text-muted-foreground py-1">
+                    <p className="py-1 type-footnote text-label-secondary">
                         {t("txPage.noAttachments")}
                     </p>
                 )}

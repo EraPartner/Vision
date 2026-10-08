@@ -2,8 +2,8 @@
 title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-07
+updated: 2026-10-07
 last-updated: 2026-09-24
 last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
@@ -542,7 +542,7 @@ Two new tests in `OwesPage.integration.test.tsx`:
 - **Export CSV shows success toast when download succeeds** — Stubs blob URL helpers, MSW intercepts `GET /api/splits/owed/:id/export/csv`, verifies success toast in recipient detail view
 - **Export CSV shows error toast when download fails** — MSW returns HTTP 500, verifies error toast in recipient detail view
 
-Covers: Export button in recipient detail view integrating with `GET /api/splits/owed/:id/export/csv` endpoint.
+Covers: the **Export CSV** item in the recipient detail's ••• menu (a `menuitem`, since the redesign in [[docs/adr/187-completeness-sweep|ADR-187]]) integrating with `GET /api/splits/owed/:id/export/csv` endpoint.
 
 **Historical Phase A coverage included:**
 

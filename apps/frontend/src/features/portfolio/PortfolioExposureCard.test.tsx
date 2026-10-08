@@ -85,7 +85,9 @@ describe("PortfolioExposureCard", () => {
         );
         expect(screen.getByText("99,94%")).toBeInTheDocument();
         // CSS needs an invariant decimal separator even when visible labels use commas.
-        expect(container.querySelector('[style="width: 99.94%;"]')).not.toBeNull();
+        expect(
+            container.querySelector('[style="width: 99.94%;"]'),
+        ).not.toBeNull();
         expect(screen.getByText("0,06%")).toBeInTheDocument();
         act(() =>
             useSettingsStore
@@ -121,16 +123,19 @@ describe("PortfolioExposureCard", () => {
                 <PortfolioExposureCard currency="EUR" />
             </QueryClientProvider>,
         );
-        const issuer = screen.getByRole("button", {
+        expect(
+            screen.getByRole("radiogroup", { name: "Group exposure by" }),
+        ).toBeInTheDocument();
+        const issuer = screen.getByRole("radio", {
             name: "Issuer",
         });
-        const sector = screen.getByRole("button", {
+        const sector = screen.getByRole("radio", {
             name: "Sector",
         });
-        expect(issuer).toHaveAttribute("aria-pressed", "true");
+        expect(issuer).toHaveAttribute("aria-checked", "true");
         await userEvent.click(sector);
-        expect(issuer).toHaveAttribute("aria-pressed", "false");
-        expect(sector).toHaveAttribute("aria-pressed", "true");
+        expect(issuer).toHaveAttribute("aria-checked", "false");
+        expect(sector).toHaveAttribute("aria-checked", "true");
     });
     it("rejects oversized source bundles without replacing the current coverage", async () => {
         render(

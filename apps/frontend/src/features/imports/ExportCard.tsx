@@ -96,9 +96,9 @@ export function ExportCard() {
             </CardHeader>
             <CardContent>
                 <div className="flex items-center justify-between mb-4">
-                    <p className="text-sm font-semibold text-foreground">
+                    <h3 className="type-headline text-foreground">
                         {t("importPage.exportFilters")}
-                    </p>
+                    </h3>
                     <Button
                         variant="outline"
                         size="sm"
@@ -112,7 +112,7 @@ export function ExportCard() {
                 </div>
 
                 {showFilters && (
-                    <div className="space-y-4 mb-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="mb-4 space-y-4 rounded-card corner-continuous bg-foreground/[0.04] p-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="export-start-date">
@@ -199,7 +199,7 @@ export function ExportCard() {
                             </div>
                         </div>
 
-                        <p className="text-xs text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("importPage.exportNote")}
                         </p>
                     </div>
@@ -212,7 +212,7 @@ export function ExportCard() {
                             onClick={() => handleExport(format)}
                             disabled={exportingFormat !== null}
                             variant="outline"
-                            className="flex-1 h-11"
+                            className="flex-1"
                             size="lg"
                         >
                             {exportingFormat === format ? (

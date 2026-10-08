@@ -3,7 +3,7 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-10-07
-updated: 2026-10-06
+updated: 2026-10-07
 last_modified: 2026-10-06
 tags:
   [
@@ -100,14 +100,14 @@ related_code:
 
 ## Choosing a workflow
 
-The page shows one workflow at a time through **Chat** and **Investigation** tabs. Chat is the
+The page shows one workflow at a time through a **Chat** | **Investigation** `SegmentedControl` in the page header ([[docs/adr/187-completeness-sweep|ADR-187]]). Chat is the
 default; `?mode=investigation` restores the investigation view. The conversation selection remains
 in the separate `c` query parameter. The conversation rail and its mobile drawer button appear
 only in Chat. A shared Ollama status banner remains above both modes.
 
 Both panels stay mounted while the inactive panel is hidden. Switching modes therefore preserves
 the chat composer draft, investigation inputs, and the investigation panel's current job state.
-Each tab has a short description of its purpose; the two question forms are not shown together.
+The page subtitle describes the active mode's purpose; the two question forms are not shown together. Deleting an attached research document in the investigation panel asks for confirmation (`aiResearch.deleteDocumentConfirm`).
 
 ## Investigation controls
 
