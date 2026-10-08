@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
 // Zero-row import guard (TODO E9): a bad column mapping (nonexistent date
 // column, wrong date format) null-parses every row — the adapter skips them
 // all and the batch used to auto-complete {imported: 0, errors: 0} with a

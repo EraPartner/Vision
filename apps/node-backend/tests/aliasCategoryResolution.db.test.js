@@ -42,7 +42,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { computeSankeyFlow } from "../src/services/calculations/aggregation/sankey.ts";
 import {

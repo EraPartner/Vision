@@ -256,7 +256,7 @@ TRANSPORT,GAS,Fuel purchases
 
 ## Test Updates (Phase C, April 2026)
 
-Import route tests ([[apps/node-backend/tests/routes/import.test.js]]) were refactored to mock the new orchestrator:
+Import route tests ([[apps/node-backend/tests/routes/import.test.ts]]) were refactored to mock the new orchestrator:
 
 **Key changes:**
 
@@ -581,7 +581,7 @@ Commit a reviewed batch. Honours all recipient and category overrides set above.
 
 ## Test Coverage
 
-- **Phase C (April 2026)**: [[apps/node-backend/tests/routes/import.test.js]] covers orchestrator integration, SSE backpressure scenarios, recipients/categories bulk import, and multer error handling.
+- **Phase C (April 2026)**: [[apps/node-backend/tests/routes/import.test.ts]] covers orchestrator integration, SSE backpressure scenarios, recipients/categories bulk import, and multer error handling.
 - **Removed (Phase C)**: Old service unit tests (`importService.test.js`, `streamingImportService.test.js`, `rawTransactionImportService.test.js`) superseded by pipeline integration tests.
 
 ## Related

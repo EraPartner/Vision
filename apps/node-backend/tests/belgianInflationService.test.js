@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockPooledTxConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockPooledTxConnection } from "./helpers/repoMocks.ts";
 vi.mock("../src/database/connection.ts", () => mockPooledTxConnection());
 
 vi.mock("../src/config/logger.ts", () => ({

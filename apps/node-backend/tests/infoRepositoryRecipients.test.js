@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 

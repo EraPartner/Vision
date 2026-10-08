@@ -35,7 +35,7 @@ import {
   vi,
 } from "vitest";
 
-import { mockLogger } from "./helpers/mockLogger.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
@@ -57,7 +57,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { logger } from "../src/config/logger.ts";
 import { closePool, query } from "../src/database/connection.ts";
 import { recipientRepository } from "../src/repositories/recipientRepository.ts";
@@ -70,7 +70,7 @@ import {
   importCategoriesCSV,
   importRecipientsCSV,
 } from "../src/services/dataImportService.ts";
-import { useTempCSV } from "./helpers/tempFile.js";
+import { useTempCSV } from "./helpers/tempFile.ts";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

@@ -6,12 +6,12 @@ import { proveKinesisCorrectionSources } from "../src/services/portfolioKinesisA
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,
-} from "./helpers/kinesisAdoptionScope.js";
+} from "./helpers/kinesisAdoptionScope.ts";
 import {
   retainedEvent,
   retainedReference,
   retainedEvidenceRow,
-} from "./fixtures/retainedPortfolioEvidence.js";
+} from "./fixtures/retainedPortfolioEvidence.ts";
 
 const build = (source, extra = {}) =>
   buildPortfolioImportReconciliationPlan({

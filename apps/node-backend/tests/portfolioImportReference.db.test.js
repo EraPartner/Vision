@@ -6,7 +6,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { createBatch } from "../src/services/portfolioImportPipeline/stage.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
@@ -19,8 +19,8 @@ import {
   retainedReference,
   retainedEvidenceRow,
   retainedReferenceConfiguration,
-} from "./fixtures/retainedPortfolioEvidence.js";
-import { capturedKinesisStatement } from "./helpers/kinesisSourceContext.js";
+} from "./fixtures/retainedPortfolioEvidence.ts";
+import { capturedKinesisStatement } from "./helpers/kinesisSourceContext.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,

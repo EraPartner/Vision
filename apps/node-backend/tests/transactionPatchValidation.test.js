@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
-import { routeAgent, errEnvelope } from "./helpers/routeApp.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
+import { routeAgent, errEnvelope } from "./helpers/routeApp.ts";
 import {
   mockDeduplication,
   mockCurrencyConversion,
   mockTransferReconciliation,
-} from "./helpers/transactionsRouteMocks.js";
+} from "./helpers/transactionsRouteMocks.ts";
 
 // PATCH /api/transactions/:id validation parity (TODO E8): the handler
 // whitelist-filtered only — a cleared inline date ('') survived to Postgres

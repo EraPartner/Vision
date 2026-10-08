@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { networkReceipt, networkSource } from "./helpers/kinesisNetwork.js";
+import { networkReceipt, networkSource } from "./helpers/kinesisNetwork.ts";
 import {
   verifyKinesisNetworkReceipt,
   verifiedKinesisNetworkRow,
@@ -70,7 +70,7 @@ describe("literal native wallet supplemental evidence", () => {
   );
 });
 
-import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.js";
+import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.ts";
 describe("unchanged original broker identity with native transfer witness", () => {
   it("binds the staged InternalMovement with NULL instrument through one literal matched peer", async () => {
     const source = await networkBindingFixture(),

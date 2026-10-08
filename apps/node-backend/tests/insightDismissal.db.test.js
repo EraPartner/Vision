@@ -5,7 +5,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import insightDismissalRepository from "../src/repositories/insightDismissalRepository.ts";
 import insightCashProjectionRepository from "../src/repositories/insightCashProjectionRepository.ts";
 import { closePool } from "../src/database/connection.ts";

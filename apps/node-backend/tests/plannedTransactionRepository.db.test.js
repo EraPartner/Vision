@@ -27,7 +27,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from './setup/db.js';
+} from './setup/db.ts';
 import plannedTransactionRepository from '../src/repositories/plannedTransactionRepository.ts';
 import { closePool } from '../src/database/connection.ts';
 import { todayAppDateString, appDateStringToUtc } from '../src/lib/timezone.ts';

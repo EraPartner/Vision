@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { installFreshBaseline } from "../src/database/freshBaseline.ts";
-import { hasTestDatabase } from "./setup/db.js";
+import { hasTestDatabase } from "./setup/db.ts";
 import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
 
 const run = promisify(execFile);

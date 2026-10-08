@@ -323,7 +323,7 @@ When creating/updating a loan, the system generates an amortization schedule:
 
 ## Testing Coverage Note (2026-04-16 Phase 5)
 
-Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]] verifies:
+Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.ts]] verifies:
 
 - execute endpoint atomic idempotent behavior via `executeAndAdvance()` with duplicate detection (UNIQUE constraint on `(planned_transaction_id, executed_transaction_id)`)
 - loan term bounds validation
@@ -334,5 +334,5 @@ Recent coverage in [[apps/node-backend/tests/routes/plannedTransactions.test.js]
 
 Golden-fixture test suites added in Phase 3:
 
-- [[apps/node-backend/tests/services/loanSchedule.golden.test.js]] — Loan amortization schedule generation (amortizing, fixed_principal, interest_only types with edge cases)
-- [[apps/node-backend/tests/services/recurrence.golden.test.js]] — Recurring payment date calculation (all built-in patterns + edge cases like Jan 31 clamping, Feb 29 leap-year rollover)
+- [[apps/node-backend/tests/services/loanSchedule.golden.test.ts]] — Loan amortization schedule generation (amortizing, fixed_principal, interest_only types with edge cases)
+- [[apps/node-backend/tests/services/recurrence.golden.test.ts]] — Recurring payment date calculation (all built-in patterns + edge cases like Jan 31 clamping, Feb 29 leap-year rollover)

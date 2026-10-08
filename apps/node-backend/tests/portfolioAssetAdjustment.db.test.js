@@ -10,7 +10,7 @@ import {
   getTestPool,
   hasTestDatabase,
   closeTestPool,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import transactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";

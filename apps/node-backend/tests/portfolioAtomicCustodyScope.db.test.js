@@ -6,7 +6,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool, withTransaction } from "../src/database/connection.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";

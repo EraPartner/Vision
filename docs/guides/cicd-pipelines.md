@@ -59,8 +59,9 @@ The backend source (`src/**/*.ts`) is checked by the strict `apps/node-backend/t
 the `Type Check (Backend)` job and in the release workflow; see
 [[docs/adr/186-backend-strict-typescript|ADR-186]] and
 [[docs/adr/191-retire-backend-checkjs|ADR-191]]. The earlier checkJs program and its
-`noImplicitAny` ratchet were retired once the last JavaScript source file converted. Backend tests
-are still JavaScript and are not type-checked.
+`noImplicitAny` ratchet were retired once the last JavaScript source file converted. Converted backend tests (`tests/**/*.ts`) are checked by the strict
+`apps/node-backend/tsconfig.tests.json` in a second step of the same job; tests still in
+JavaScript are not checked ([[docs/adr/192-backend-tests-strict-typescript|ADR-192]]).
 
 ### Dependency and workflow admission
 

@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { createAdapter } from "../src/services/importPipeline/adapters/index.ts";
 
-import { useTempCSV } from "./helpers/tempFile.js";
+import { useTempCSV } from "./helpers/tempFile.ts";
 
 const writeTempCSV = useTempCSV("sabb");
 

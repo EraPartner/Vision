@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 const { mockClient, systemRecipient } = vi.hoisted(() => ({
   mockClient: { query: vi.fn() },

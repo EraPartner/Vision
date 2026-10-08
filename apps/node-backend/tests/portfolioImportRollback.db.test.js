@@ -36,7 +36,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from './setup/db.js';
+} from './setup/db.ts';
 
 // Passthrough spy on the shared query helper: every statement the pipeline and
 // the repositories issue still hits the real database, but the call log is

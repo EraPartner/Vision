@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { syntheticKinesisIncomePair } from "./helpers/kinesisIncomePairs.js";
+import { syntheticKinesisIncomePair } from "./helpers/kinesisIncomePairs.ts";
 import { proveKinesisIncomePairs } from "../src/services/portfolioKinesisIncomePairs.ts";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 const proof = (source) =>

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
-import { syntheticIbkrCashCorrection } from "./helpers/ibkrCashReconciliation.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { syntheticIbkrCashCorrection } from "./helpers/ibkrCashReconciliation.ts";
 const { client } = vi.hoisted(() => ({ client: { query: vi.fn() } }));
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../src/database/connection.ts", () => mockTxConnection(client));

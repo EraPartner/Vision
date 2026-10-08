@@ -30,7 +30,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";

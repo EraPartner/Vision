@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -346,6 +346,6 @@ writers. Conditional APIs do not make administrative restore transactional with 
 - [[docs/components/dashboard-settings-dialog|DashboardSettingsDialog]] - Settings UI component (Phase 3 refactor)
 - [[docs/guides/backend-configuration|Backend Configuration]] - Server-side config vs user settings
 - [[docs/testing/testing|Testing Documentation]] - Branch-level settings route validation coverage
-- Coverage code links: [[apps/node-backend/tests/routes/settings.test.js]], [[apps/node-backend/tests/validation.test.js]]
+- Coverage code links: [[apps/node-backend/tests/routes/settings.test.ts]], [[apps/node-backend/tests/validation.test.js]]
 - Coverage follow-up (2026-04-11): settings route tests now also cover GET all/key behavior, known-default fallback, unknown-key `404`, and success/error branches for single PUT, bulk PUT, and DELETE.
 - Coverage follow-up (2026-04-20): settings route tests now also cover `theme_settings` variant/mode/schedule validation and persistence.

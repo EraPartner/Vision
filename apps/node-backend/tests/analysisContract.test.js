@@ -6,7 +6,7 @@ import {
   checkAnalysisResultCompatibility,
 } from "@vision/types/analysis";
 import { calculateCostBasis } from "@vision/shared-utils/portfolio";
-import { ANALYSIS_REFERENCE_QUESTIONS_V1 } from "./fixtures/analysis/referenceQuestionsV1.js";
+import { ANALYSIS_REFERENCE_QUESTIONS_V1 } from "./fixtures/analysis/referenceQuestionsV1.ts";
 
 function clone(value) {
   return structuredClone(value);

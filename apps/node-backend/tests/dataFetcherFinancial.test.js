@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { mockLogger } from './helpers/mockLogger.js';
+import { mockLogger } from './helpers/mockLogger.ts';
 // fetchFinancialData used to fetch all seven data sources regardless of which
 // report sections were requested. These tests pin that it now only fetches the
 // sources the requested sections render from, and still fetches everything when

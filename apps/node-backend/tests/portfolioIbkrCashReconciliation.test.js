@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { syntheticIbkrCashCorrection as fixture } from "./helpers/ibkrCashReconciliation.js";
+import { syntheticIbkrCashCorrection as fixture } from "./helpers/ibkrCashReconciliation.ts";
 import {
   __getIbkrBaseCashEvidence,
   __ibkrFundingAccountMatches,

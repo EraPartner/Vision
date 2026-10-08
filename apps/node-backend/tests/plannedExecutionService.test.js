@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { makePlannedTransactionRow } from "./builders/domainRows.js";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { makePlannedTransactionRow } from "./builders/domainRows.ts";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/services/plannedTransactionService.ts", () => ({
   default: {

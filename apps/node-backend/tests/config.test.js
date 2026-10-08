@@ -2,7 +2,7 @@
  * Configuration tests.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mockLogger } from './helpers/mockLogger.js';
+import { mockLogger } from './helpers/mockLogger.ts';
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal();

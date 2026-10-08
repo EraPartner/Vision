@@ -286,7 +286,7 @@ Data is provided by Yahoo Finance via the `yahoo-finance2` library. Some data ma
 
 ### `detail=basic` mode (2026-06-16)
 
-`GET /api/market/quote` gained an optional `detail` query parameter (`"basic"` | `"full"`, default `"full"`). When `detail=basic`, the handler issues a single `yahooFinance.quote()` call per symbol and skips the per-symbol `quoteSummary` fetch, returning only the core price fields. This halves outbound Yahoo Finance calls for price-only views. The test suite (`apps/node-backend/tests/routes/marketLookup.test.js`) has a new basic-mode case; the suite is 22 route tests total.
+`GET /api/market/quote` gained an optional `detail` query parameter (`"basic"` | `"full"`, default `"full"`). When `detail=basic`, the handler issues a single `yahooFinance.quote()` call per symbol and skips the per-symbol `quoteSummary` fetch, returning only the core price fields. This halves outbound Yahoo Finance calls for price-only views. The test suite (`apps/node-backend/tests/routes/marketLookup.test.ts`) has a new basic-mode case; the suite is 22 route tests total.
 
 ### Error Handling Improvements (2026-04-22)
 
@@ -312,4 +312,4 @@ Backend import route tests were updated to validate the unified API response env
 - `GET /api/market/news` deduplication by title and server-side thumbnail normalization.
 - News search failure tolerance returning `{"items": [], "total": 0}`.
 
-Code links: [[apps/node-backend/tests/routes/marketLookup.test.js]], [[apps/node-backend/src/routes/marketLookup.ts]], [[apps/node-backend/tests/routes/import.test.js]]
+Code links: [[apps/node-backend/tests/routes/marketLookup.test.ts]], [[apps/node-backend/src/routes/marketLookup.ts]], [[apps/node-backend/tests/routes/import.test.ts]]

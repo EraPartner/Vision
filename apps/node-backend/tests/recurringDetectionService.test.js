@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockLogger } from "./helpers/mockLogger.js";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockLogger } from "./helpers/mockLogger.ts";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 

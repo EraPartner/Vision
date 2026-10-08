@@ -4,7 +4,7 @@ import {
   closeTestPool,
   getTestPool,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import {
   finishJob,
   requestCancel,

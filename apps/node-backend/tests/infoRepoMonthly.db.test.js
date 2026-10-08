@@ -42,7 +42,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { createMaterializedViews } from "../src/services/materializedViewService.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";

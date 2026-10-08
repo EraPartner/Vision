@@ -164,12 +164,12 @@ No orphan rows remain after a successful bulk delete.
 
 | Layer          | File                                                             | Scope                                                                |
 | -------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Service unit   | `apps/node-backend/tests/services/bulkSelection.test.js`         | Resolver caps, both/neither rejection, filter-mode count enforcement |
-| Route          | `apps/node-backend/tests/routes/transactionsBulkDelete.test.js`  | Validation, id-mode + filter-mode, atomicity rollback                |
-| Route          | `apps/node-backend/tests/routes/transactionsBulkUpdate.test.js`  | Field validation, FK pre-checks, multi-field SET clause, atomicity   |
-| Route          | `apps/node-backend/tests/routes/transactionsBulkExport.test.js`  | Format gating, CSV header + row, NDJSON line shape, filter cap       |
+| Service unit   | `apps/node-backend/tests/services/bulkSelection.test.ts`         | Resolver caps, both/neither rejection, filter-mode count enforcement |
+| Route          | `apps/node-backend/tests/routes/transactionsBulkDelete.test.ts`  | Validation, id-mode + filter-mode, atomicity rollback                |
+| Route          | `apps/node-backend/tests/routes/transactionsBulkUpdate.test.ts`  | Field validation, FK pre-checks, multi-field SET clause, atomicity   |
+| Route          | `apps/node-backend/tests/routes/transactionsBulkExport.test.ts`  | Format gating, CSV header + row, NDJSON line shape, filter cap       |
 | Service unit   | `apps/node-backend/tests/splitService.test.js`                   | Bulk split: preset amounts, lock order, skip counts, unknown payee   |
-| Route          | `apps/node-backend/tests/routes/splits.test.js`                  | Bulk split: id/mode validation, actor forwarding, 404 payee          |
+| Route          | `apps/node-backend/tests/routes/splits.test.ts`                  | Bulk split: id/mode validation, actor forwarding, 404 payee          |
 | Frontend       | `apps/frontend/src/features/transactions/components/bulk/__tests__/BulkSplitDialog.test.tsx` | Bulk split dialog: payee gating, presets, pending state |
 | Frontend hooks | `apps/frontend/src/hooks/__tests__/useBulkTransactions.test.tsx` | Mutation success + error paths for delete / update / export          |
 

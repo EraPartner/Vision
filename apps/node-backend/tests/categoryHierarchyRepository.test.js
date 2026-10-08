@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mockTxConnection } from "./helpers/repoMocks.js";
+import { mockTxConnection } from "./helpers/repoMocks.ts";
 
 const mockClientQuery = vi.hoisted(() => vi.fn());
 vi.mock("../src/database/connection.ts", () =>

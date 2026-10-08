@@ -4,7 +4,7 @@ import {
   proveKinesisCashSources,
   cashFeeFingerprint,
 } from "../src/services/portfolioKinesisCashScope.ts";
-import { cashSource } from "./helpers/kinesisCashScope.js";
+import { cashSource } from "./helpers/kinesisCashScope.ts";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";

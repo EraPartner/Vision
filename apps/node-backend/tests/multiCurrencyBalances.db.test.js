@@ -37,7 +37,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { accountService } from "../src/services/accountService.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 

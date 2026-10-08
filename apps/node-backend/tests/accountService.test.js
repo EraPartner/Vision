@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
   loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),

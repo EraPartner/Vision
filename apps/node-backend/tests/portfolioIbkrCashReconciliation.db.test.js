@@ -1,7 +1,7 @@
 import { beforeAll, afterAll, afterEach, describe, expect, it } from "vitest";
-import { acquireDbSuiteLock, releaseDbSuiteLock, getTestPool, hasTestDatabase, closeTestPool } from "./setup/db.js";
+import { acquireDbSuiteLock, releaseDbSuiteLock, getTestPool, hasTestDatabase, closeTestPool } from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
-import { syntheticIbkrCashCorrection } from "./helpers/ibkrCashReconciliation.js";
+import { syntheticIbkrCashCorrection } from "./helpers/ibkrCashReconciliation.ts";
 import { readReconciliationSources, readReconciliationBatchScope } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import { __CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
 import {

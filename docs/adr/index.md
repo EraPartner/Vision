@@ -249,6 +249,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-08: Backend tests move to strict TypeScript
+
+[[docs/adr/192-backend-tests-strict-typescript|ADR-192]] converts the backend Vitest suites to
+strict TypeScript over a few pull requests, checked by a separate strict `tsconfig.tests.json` in
+the backend typecheck and CI.
+
 ### 2026-10-08: Backend source is fully strict TypeScript
 
 [[docs/adr/191-retire-backend-checkjs|ADR-191]] converts the backend entry point to `main.ts` and

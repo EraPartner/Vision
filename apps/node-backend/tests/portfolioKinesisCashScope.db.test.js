@@ -13,8 +13,8 @@ import {
   acquireDbSuiteLock,
   releaseDbSuiteLock,
   closeTestPool,
-} from "./setup/db.js";
-import { cashSource } from "./helpers/kinesisCashScope.js";
+} from "./setup/db.ts";
+import { cashSource } from "./helpers/kinesisCashScope.ts";
 import { closePool } from "../src/database/connection.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";

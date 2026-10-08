@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/watchlist
 description: Investment watchlist management
-date: 2026-10-07
-updated: 2026-08-31
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     api,
@@ -143,6 +143,6 @@ Remove item from watchlist.
 
 ## Testing references (2026-04-10)
 
-- [[apps/node-backend/tests/routes/watchlist.test.js]] adds route-level regression coverage for query normalization (`limit`, `offset`), validation/error paths, defaulting behavior, and not-found responses for `GET /api/watchlist/:id`.
+- [[apps/node-backend/tests/routes/watchlist.test.ts]] adds route-level regression coverage for query normalization (`limit`, `offset`), validation/error paths, defaulting behavior, and not-found responses for `GET /api/watchlist/:id`.
 
 Related docs: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]].

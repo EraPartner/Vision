@@ -35,7 +35,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { closePool } from "../src/database/connection.ts";

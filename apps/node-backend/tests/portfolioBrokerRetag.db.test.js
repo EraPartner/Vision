@@ -7,7 +7,7 @@ import {
   getTestPool,
   hasTestDatabase,
   releaseDbSuiteLock,
-} from "./setup/db.js";
+} from "./setup/db.ts";
 import { closePool } from "../src/database/connection.ts";
 import { __retagPortfolioTransactions as retagPortfolioTransactions } from "../src/services/portfolio/portfolioBrokerRetagService.ts";
 

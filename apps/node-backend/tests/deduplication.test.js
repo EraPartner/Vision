@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockConnection } from "./helpers/repoMocks.js";
+import { mockConnection } from "./helpers/repoMocks.ts";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
