@@ -46,13 +46,15 @@ vi.mock("../src/repositories/auditChainRepository.ts", () => ({
 
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 
-import {
+import splitService, {
   addPayment,
-  createBulkSplitsAtomic,
   createSplitAtomic,
   deleteSplit,
   settleSplit,
 } from "../src/services/splitService.js";
+
+// Production reaches the bulk path through the default service object.
+const { createBulkSplitsAtomic } = splitService;
 
 beforeEach(() => {
   vi.clearAllMocks();
