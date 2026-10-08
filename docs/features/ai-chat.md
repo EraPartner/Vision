@@ -39,8 +39,8 @@ related_code:
     "apps/frontend/src/features/ai-chat/",
     "apps/frontend/src/hooks/useAIChat.ts",
     "apps/frontend/src/lib/aiChatStreamStore.ts",
-    "apps/node-backend/tests/aiChatService.test.js",
-    "apps/node-backend/tests/aiChatTools.test.js",
+    "apps/node-backend/tests/aiChatService.test.ts",
+    "apps/node-backend/tests/aiChatTools.test.ts",
   ]
 ---
 
@@ -444,7 +444,7 @@ Enable via browser DevTools (Console tab) or server-side log aggregation.
 
 ## Privacy & Security
 
-- **No external API calls** — enforced by service-layer conventions and **CI test** (spies on `global.fetch` when Ollama client is injected) in `aiChatService.test.js`.
+- **No external API calls** — enforced by service-layer conventions and **CI test** (spies on `global.fetch` when Ollama client is injected) in `aiChatService.test.ts`.
 - **Read-only tool registry** — enforced by **CI denylist check** verifying no tool calls write methods (`create()`, `update()`, `delete()`, etc.) or imports the Postgres pool directly.
 - **Parameterized queries only** — tools go through existing repositories; no dynamic SQL built from LLM output.
 - **Audit log** — every `tool_call` + `tool_result` persisted in `ai_messages`.

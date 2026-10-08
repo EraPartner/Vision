@@ -361,8 +361,8 @@ See [[docs/reference/code-patterns#csv-record-splitter-phase-c-multi-line-field-
 
 **New test suites:**
 
-- **Portfolio Math Tests** (`apps/node-backend/tests/portfolioMath.test.js`) — **21 tests** covering FIFO/LIFO cost basis calculation, accrued interest computation with fake timers, and snapshot spike sanitization (geometric mean) with UTC DST safety
-- **Import Pipeline Tests** (`apps/node-backend/tests/importPipeline.test.js`) — **11 tests** covering all four import orchestration phases: validateBatch, stageBatch, matchBatch, commitBatch with full error path coverage via mock database simulation
+- **Portfolio Math Tests** (`apps/node-backend/tests/portfolioMath.test.ts`) — **21 tests** covering FIFO/LIFO cost basis calculation, accrued interest computation with fake timers, and snapshot spike sanitization (geometric mean) with UTC DST safety
+- **Import Pipeline Tests** (`apps/node-backend/tests/importPipeline.test.ts`) — **11 tests** covering all four import orchestration phases: validateBatch, stageBatch, matchBatch, commitBatch with full error path coverage via mock database simulation
 
 **Impact:** Backend test count: 871 → **882** (+11 net; 21 portfolio math + 11 import = +32 but -21 legacy import tests removed per Phase C consolidation). Total test suite: 2109 → **2120** vitest tests.
 
@@ -413,7 +413,7 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047]], [[docs/a
 - **Adapter Details**: Semicolon-delimited CSV with header row containing `Omzetnummer` + `Detail van de omzet` columns
 - **Supported Fields**: Account number, counterparty IBAN, transaction reference, booking date (DD/MM/YYYY), amount (EU decimal), currency, description, counterparty name, and free-text message
 - **Detection**: Auto-detection enabled; ING imports placed before KBC in adapter registry to win detection order
-- **Testing**: Complete test coverage including adapter creation, CSV parsing, and detection logic in [[apps/node-backend/tests/bankAdapterFactory.test.js]]
+- **Testing**: Complete test coverage including adapter creation, CSV parsing, and detection logic in [[apps/node-backend/tests/bankAdapterFactory.test.ts]]
 - **Documentation**: [[docs/integrations/bank-adapters#ing|Bank Adapters - ING section]]
 
 **Supported Banks Now (8):** Belfius, Revolut, ING, KBC, SABB, Wise, Vision (internal), Custom (user-defined)
@@ -436,7 +436,7 @@ See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|B
 - New filters in `GET /api/transactions`: `category_ids` (comma-separated string, ignored if `category_id` set) and `transaction_type` (enum: 'income' | 'expense')
 - `[[apps/node-backend/src/lib/filterBuilder.ts]]` — `buildTransactionWhere()` updated with `categoryIds` and `transactionType` params
 - `[[apps/node-backend/src/repositories/transactionRepository.ts]]` — `getAllWithCount()` forwards filter params
-- Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.js]]` for filter logic
+- Tests: 9 new tests in `[[apps/node-backend/tests/filterBuilder.test.ts]]` for filter logic
 
 **Frontend:**
 
@@ -815,7 +815,7 @@ See [[docs/adr/009-timezone-policy|ADR-009]], [[docs/reference/code-patterns|Cod
 
 - **Dependency Security Remediation**: Added workspace-level remediation record for root `overrides`/`resolutions` hardening and toolchain updates ([[docs/security/dependency-security-remediation-2026-04]]).
 - **Toolchain baseline updated**: Frontend Vite upgraded to `^8.0.8` with `@vitejs/plugin-react-swc` `^4.3.0`; backend Vitest upgraded to `^4.1.4` ([[apps/frontend/package.json]], [[apps/node-backend/package.json]]).
-- **Test compatibility note**: Documented constructor-compatible Vitest 4 mock pattern for `yahoo-finance2` ([[apps/node-backend/tests/priceProviderService.test.js]]).
+- **Test compatibility note**: Documented constructor-compatible Vitest 4 mock pattern for `yahoo-finance2` ([[apps/node-backend/tests/priceProviderService.test.ts]]).
 
 ### 2026-04-02 KB Consistency Updates
 

@@ -249,7 +249,7 @@ bun run test
 bun run test:watch
 
 # Run specific test file
-bun vitest run src/services/transactionService.test.js
+bun vitest run tests/services/transactionService.test.ts
 ```
 
 #### Test Structure

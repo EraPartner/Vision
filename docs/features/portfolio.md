@@ -359,7 +359,7 @@ insufficient dated source holdings, or an unavailable adjustment allocation reje
 `computeAndStoreSnapshots` completes that replay before deleting or inserting performance
 snapshots. Invalid history therefore leaves the existing stored series intact; a valid rebuild
 still replaces the series atomically. Regression cases are in
-[[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]].
+[[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.ts]].
 
 ### Portfolio Decimal Precision (May 2026 Audit)
 
@@ -467,7 +467,7 @@ Current behavior:
 - Daily net worth snapshots sanitize isolated one-day investment needles (spike/trough reversal + local needle ratio check) by replacing only the outlier day with geometric interpolation between neighboring days; downstream monthly change/baseline values use the sanitized series.
 - Net worth backend logs fallback paths and final computed summary metrics (currency, seed date, snapshot count, current totals) for easier debugging when users report zeroed dashboards.
 - Regression tests cover transactions-only (no investments) workspaces to keep non-zero liquid/net worth responses correct.
-- Regression tests cover isolated one-day unit investment spike sanitization in net worth snapshots ([[apps/node-backend/tests/infoRepository.test.js]]).
+- Regression tests cover isolated one-day unit investment spike sanitization in net worth snapshots ([[apps/node-backend/tests/infoRepository.test.ts]]).
 - The newest Performance chart snapshot remains raw because spike detection requires points on
   both sides. The API marks it `is_provisional`, and the page labels that status until a later
   snapshot can confirm or reject an isolated spike
@@ -488,7 +488,7 @@ Current behavior:
   > [!info] Invested cost-basis — resolved by ADR-074 (2026-06-11)
   > The snapshot `invested` column uses transaction-date FX rates. As of ADR-074, the live Portfolio Summary endpoint also converts invested capital at transaction-date rates (no longer at today's rate). The Portfolio page's period chart and "Total invested" breakdown row now use the same semantics — the prior divergence is closed.
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/tests/infoRepository.test.js]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.ts]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/tests/infoRepository.test.ts]], [[apps/frontend/src/pages/portfolio/net-worth/NetWorthPage.tsx]], [[apps/frontend/src/lib/api.ts]], [[apps/node-backend/src/services/portfolio/snapshotBuilder.ts]], [[apps/node-backend/tests/portfolioPerformanceSnapshotService.test.ts]]
 
 ## Cross-Currency Display Normalization
 
@@ -930,7 +930,7 @@ now replays canonical transfer events with original lots under ADR-177. Each ele
 }
 ```
 
-For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.js` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. `contribution_kind` separates lot-bearing `position` rows from `non_position` rows containing only income or adjustments. Thus an unassigned dividend does not make an otherwise assigned instrument incomplete, and it does not merge with a null-account position row from another instrument. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
+For an instrument whose lots are fully broker-assigned, its per-investment summary **is** the sum of its partitions, so `Σ byAccount ≡ totals` holds field-by-field by construction (locked by the real-Postgres parity suite `tests/portfolioSummaryPartitionParity.db.test.ts` under all three cost-basis methods). Each summary carries `fullyAssigned` and `oversold` booleans. While an instrument still has unassigned lot rows (transition rule), its **entire** value/P&L sits on the `account_id: null` row and its global figures stay the exact flat-replay values. The row also carries `assignment: "unassigned"`, which is the stable identity clients localize as Unassigned. `contribution_kind` separates lot-bearing `position` rows from `non_position` rows containing only income or adjustments. Thus an unassigned dividend does not make an otherwise assigned instrument incomplete, and it does not merge with a null-account position row from another instrument. Non-unit-based investments (savings/bond/real estate — no lot machinery, non-linear interest accrual) are attributed whole to their single account, or to the null row when their rows span accounts.
 
 Sell validation is account-scoped on fully-assigned instruments: a sell exceeding the broker-local units is rejected with an error naming the broker (display name), even if investment-wide units would cover it; unassigned sells and instruments in transition validate globally, as before. Create and update also replay the complete ordered unit-event history and reject any newly introduced or worsened broker deficit, including a later oversell caused by reassigning or redating an earlier lot. Existing invalid data remains editable when the deficit is unchanged or improved. Assignment state, availability, and projected deficits come from one database read.
 
@@ -1226,7 +1226,7 @@ New keys in `rebalance.*` namespace (en + nl). Notable renames: `rebalance.plan`
 management UI), `rebalance.editor.*` (custom editor rows), `rebalance.sleeve.*` (sleeve labels),
 `rebalance.customNew`, `rebalance.presets`, `rebalance.savedPlans`.
 
-Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.ts]], [[apps/node-backend/src/routes/crossWorkspace.ts]], [[apps/node-backend/src/services/portfolio/rebalanceTargets.ts]], [[apps/node-backend/tests/settingsStorage.test.js]]
+Code links: [[apps/frontend/src/pages/portfolio/RebalancePage.tsx]], [[apps/frontend/src/hooks/useRebalancePlans.ts]], [[apps/frontend/src/lib/api/crossWorkspace.ts]], [[apps/node-backend/src/routes/settings.ts]], [[apps/node-backend/src/routes/crossWorkspace.ts]], [[apps/node-backend/src/services/portfolio/rebalanceTargets.ts]], [[apps/node-backend/tests/settingsStorage.test.ts]]
 
 See also: [[docs/api/settings|Settings API — `rebalance_plans` key]], [[docs/adr/098-cross-workspace-features|ADR-098]]
 

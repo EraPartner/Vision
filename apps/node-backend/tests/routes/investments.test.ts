@@ -803,7 +803,7 @@ describe("Investment Routes", () => {
 
     // 'abc' was the only value pinned, and it is the one the old isNaN guard
     // happened to catch. '12abc' is the 🔺 case: it hard-deleted transaction 12
-    // and answered 204. Full matrix in investmentsIdValidation.test.js.
+    // and answered 204. Full matrix in investmentsIdValidation.test.ts.
     it("should throw ValidationError for invalid ID", async () => {
       portfolioTransactionRepository.getById.mockResolvedValue(
         partial({

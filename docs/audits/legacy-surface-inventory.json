@@ -95,7 +95,7 @@
         "alembic/versions/0091_import_staging_resolved_fks.py",
         "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
         "apps/node-backend/src/types/rows.ts",
-        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.js",
+        "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.ts",
         "scripts/test-legacy-retirements.js"
       ],
       "readers": "No production readers.",
@@ -138,7 +138,7 @@
       "paths": [
         "alembic/versions/0087_flat_investments_conversion.py",
         "alembic/manual/drop_adr109_legacy_relations/up.sql",
-        "apps/node-backend/tests/adr109Cleanup.test.js"
+        "apps/node-backend/tests/adr109Cleanup.test.ts"
       ],
       "readers": "Only the retained maintenance and verification history refers to the removed relation names.",
       "writers": "No current writer targets the removed rollback relations.",
@@ -237,7 +237,7 @@
       "disposition": "The startup migrator still needs the map to prevent supported old databases from failing with an unknown revision.",
       "paths": [
         "apps/node-backend/src/database/migrate.ts",
-        "apps/node-backend/tests/migrationRolePreflight.test.js"
+        "apps/node-backend/tests/migrationRolePreflight.test.ts"
       ],
       "readers": "Startup reads alembic_version and the archived revision set.",
       "writers": "The schema-owner preflight can rewrite an archived stamp to the current baseline.",
@@ -486,7 +486,7 @@
       "disposition": "Removed after the explicit admin-client cutoff; reset confirmation accepts only the required JSON boolean body field.",
       "paths": [
         "apps/node-backend/src/routes/admin.ts",
-        "apps/node-backend/tests/routes/admin.test.js",
+        "apps/node-backend/tests/routes/admin.test.ts",
         "apps/frontend/src/types/generated.ts",
         "openapi.yaml"
       ],
@@ -1102,7 +1102,7 @@
       "disposition": "Active regression evidence for cross-release restore, not stale production data.",
       "paths": [
         "packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc",
-        "apps/node-backend/tests/backup-release-compat.test.js"
+        "apps/node-backend/tests/backup-release-compat.test.ts"
       ],
       "readers": "Backup release compatibility test.",
       "writers": "None; immutable fixture.",

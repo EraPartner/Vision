@@ -8,7 +8,7 @@
 # installed. No container daemon is used.
 #
 #   bun run test:db                                  # whole backend suite
-#   bun run test:db tests/services/transferReconciliation.db.test.js
+#   bun run test:db tests/services/transferReconciliation.db.test.ts
 #
 # Any arguments are forwarded to Vitest, so a single file or -t filter works.
 # The Python Alembic toolchain must be available on PATH
@@ -330,7 +330,7 @@ if [ "$TASK" = adr088-contract ]; then
     -f alembic/manual/contract_drop_bank_account/up.sql >/dev/null
   (
     cd apps/node-backend
-    bun vitest run tests/adr088Contract.db.test.js
+    bun vitest run tests/adr088Contract.db.test.ts
   )
   echo "[test-db] Restoring the ADR-088 compatibility schema."
   "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \
@@ -378,7 +378,7 @@ if [ "$TASK" = statement-contract ]; then
     -f alembic/manual/contract_drop_statement_scalars/up.sql >/dev/null
   (
     cd apps/node-backend
-    bun vitest run tests/accountStatementScalarContract.db.test.js
+    bun vitest run tests/accountStatementScalarContract.db.test.ts
   )
   echo "[test-db] Restoring the statement-scalar compatibility schema."
   "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -v ON_ERROR_STOP=1 \

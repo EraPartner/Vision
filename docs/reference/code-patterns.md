@@ -612,7 +612,7 @@ two lists must be edited together.
 
 ## Timezone Boundary Handling & APP_TIMEZONE Consistency (Phase 9, ADR-009)
 
-**Source:** [[apps/node-backend/src/lib/timezone.ts|timezone.js]], [[apps/node-backend/tests/timezone.test.js|timezone.test.js]]
+**Source:** [[apps/node-backend/src/lib/timezone.ts|timezone.js]], [[apps/node-backend/tests/timezone.test.ts|timezone.test.ts]]
 
 **May 2026 Update:** As of 2026-05-14, date bucketing throughout the backend now consistently uses `APP_TIMEZONE` (default `Europe/Brussels`):
 
@@ -660,7 +660,7 @@ When `hour === 24`:
 
 ### Tests
 
-Two new test cases in `timezone.test.js`:
+Two new test cases in `timezone.test.ts`:
 
 - `toAppTz handles year boundary at Dec 31 -> Jan 1 rollover`
 - (Existing case already covered Jan 31 → Feb 1)

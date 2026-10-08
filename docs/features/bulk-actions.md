@@ -168,7 +168,7 @@ No orphan rows remain after a successful bulk delete.
 | Route          | `apps/node-backend/tests/routes/transactionsBulkDelete.test.ts`  | Validation, id-mode + filter-mode, atomicity rollback                |
 | Route          | `apps/node-backend/tests/routes/transactionsBulkUpdate.test.ts`  | Field validation, FK pre-checks, multi-field SET clause, atomicity   |
 | Route          | `apps/node-backend/tests/routes/transactionsBulkExport.test.ts`  | Format gating, CSV header + row, NDJSON line shape, filter cap       |
-| Service unit   | `apps/node-backend/tests/splitService.test.js`                   | Bulk split: preset amounts, lock order, skip counts, unknown payee   |
+| Service unit   | `apps/node-backend/tests/splitService.test.ts`                   | Bulk split: preset amounts, lock order, skip counts, unknown payee   |
 | Route          | `apps/node-backend/tests/routes/splits.test.ts`                  | Bulk split: id/mode validation, actor forwarding, 404 payee          |
 | Frontend       | `apps/frontend/src/features/transactions/components/bulk/__tests__/BulkSplitDialog.test.tsx` | Bulk split dialog: payee gating, presets, pending state |
 | Frontend hooks | `apps/frontend/src/hooks/__tests__/useBulkTransactions.test.tsx` | Mutation success + error paths for delete / update / export          |

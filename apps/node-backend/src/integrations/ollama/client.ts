@@ -107,6 +107,19 @@ export interface OllamaChatStreamParams {
   onToken?: (chunk: string) => void | Promise<void>;
 }
 
+/** The assembled result of a streamed /api/chat call. */
+export interface OllamaChatStreamResult {
+  model: string;
+  role: "assistant";
+  content: string;
+  toolCalls: OllamaToolCall[];
+  done: boolean;
+  doneReason: string | null;
+  evalCount: number | null;
+  promptEvalCount: number | null;
+  totalDurationMs: number | null;
+}
+
 export class OllamaError extends Error {
   status: number | null;
   code: string | null;
@@ -477,7 +490,7 @@ function createOllamaClient({
     options,
     signal,
     onToken,
-  }: OllamaChatStreamParams = {}) {
+  }: OllamaChatStreamParams = {}): Promise<OllamaChatStreamResult> {
     if (!Array.isArray(messages) || messages.length === 0) {
       throw new OllamaError("chatStream requires a non-empty messages array", {
         code: "INVALID_INPUT",

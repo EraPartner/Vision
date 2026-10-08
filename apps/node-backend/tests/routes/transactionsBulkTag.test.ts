@@ -1,6 +1,6 @@
 /**
  * Bulk-tag route tests — isolated file so we can add withTransaction to the
- * connection mock without touching the large transactions.test.js.
+ * connection mock without touching the large transactions.test.ts.
  *
  * Driven over HTTP against the real router (tests/helpers/routeApp.ts): the
  * per-route rate limiter declared on POST /bulk-tag (routes/transactions.js:433)

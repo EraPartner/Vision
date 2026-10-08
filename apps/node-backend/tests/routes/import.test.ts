@@ -16,9 +16,9 @@
  *
  * multer is stubbed to a pass-through; requests that need `req.file` set it
  * via a shared `uploadState` (vi.hoisted), the same pattern as
- * attachments.test.js. This lets one suite cover both "no file uploaded"
+ * attachments.test.ts. This lets one suite cover both "no file uploaded"
  * guards AND the csvUploadErrorTranslator's multer-error mapping (a fixed
- * `before`-middleware injection, as importValidationPins.test.js uses, can
+ * `before`-middleware injection, as importValidationPins.test.ts uses, can
  * only ever inject a successful upload).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -573,7 +573,7 @@ describe("Import Routes", () => {
     });
 
     // The underlying "write()/end() are no-ops once the client has
-    // disconnected" invariant is unit-pinned in tests/sseWriter.test.js
+    // disconnected" invariant is unit-pinned in tests/sseWriter.test.ts
     // ("no-ops write() after client disconnect"); this is the integration-level
     // regression check that a mid-stream client abort doesn't hang the
     // in-flight pipeline or throw an unhandled rejection.
@@ -1157,7 +1157,7 @@ describe("Import Routes", () => {
   });
 
   // GET /api/import/supported-banks was removed (dead route; adapter catalog is
-  // served from /api/info/supported-adapters, registry-derived — see info.test.js).
+  // served from /api/info/supported-adapters, registry-derived — see info.test.ts).
 });
 
 describe("Saved custom parser routes", () => {
@@ -1267,7 +1267,7 @@ describe("Saved custom parser routes", () => {
 
     // 'abc' was the only value pinned here, and it is the one the old
     // `parseInt`+isNaN guard happened to catch. '12abc' is the one that mattered:
-    // it resolved to parser 12. Full matrix in parserConfigIdValidation.test.js;
+    // it resolved to parser 12. Full matrix in parserConfigIdValidation.test.ts;
     // these two keep the *real* router on the hook for wiring the guard.
     it("rejects an invalid id", async () => {
       for (const id of ["abc", "12abc"]) {

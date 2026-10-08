@@ -3,7 +3,7 @@
  * and default-membership of every section, per report type.
  *
  * This is deliberately a dependency-free data leaf — it imports no render
- * functions, so the FE↔BE drift guard (tests/reportSectionCatalog.test.js) and
+ * functions, so the FE↔BE drift guard (tests/reportSectionCatalog.test.ts) and
  * (transitively) the frontend export dialog can pin the section contract
  * without loading the heavy Puppeteer/HTML render graph. index.ts zips these
  * catalogs with its renderer maps and throws at module load if the two ever

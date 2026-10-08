@@ -1,0 +1,114 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { StreamImportResult } from "../src/lib/importProgress.ts";
+import { partial } from "./helpers/partial.ts";
+
+// createSseWriter is mocked below, so the request/response are never read.
+const req = partial<IncomingMessage>({});
+const res = partial<ServerResponse>({});
+
+async function loadSubject() {
+  vi.resetModules();
+  const writer = {
+    closed: false,
+    write: vi.fn().mockResolvedValue(undefined),
+    end: vi.fn(),
+  };
+  const cleanup = vi.fn();
+  const logger = { error: vi.fn() };
+
+  vi.doMock("../src/lib/sse.ts", () => ({
+    createSseWriter: vi.fn(() => writer),
+  }));
+  vi.doMock("../src/lib/csvUpload.ts", () => ({ cleanup }));
+  vi.doMock("../src/config/logger.ts", () => ({ logger }));
+
+  const subject = await import("../src/lib/importProgress.ts");
+  const { ValidationError } = await import("../src/middleware/errorHandler.ts");
+  return { ...subject, ValidationError, writer, cleanup };
+}
+
+describe("streamImport terminal events", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.resetModules();
+  });
+
+  it("emits complete for a successful import", async () => {
+    const { streamImport, writer, cleanup } = await loadSubject();
+
+    await streamImport<StreamImportResult & { imported: number }>(req, res, {
+      filePath: "/tmp/import.csv",
+      errorLogMessage: "failed",
+      run: vi.fn().mockResolvedValue({ errors: 0, imported: 2 }),
+      buildComplete: (result) => ({ imported: result.imported }),
+    });
+
+    expect(writer.write).toHaveBeenCalledWith("complete", {
+      imported: 2,
+      status: "completed",
+      percent: 100,
+    });
+    expect(writer.end).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledWith("/tmp/import.csv");
+  });
+
+  it("preserves skipped rows when review is required", async () => {
+    const { streamImport, writer } = await loadSubject();
+
+    await streamImport(req, res, {
+      filePath: "/tmp/import.csv",
+      errorLogMessage: "failed",
+      run: vi.fn().mockResolvedValue({
+        requiresReview: true,
+        batchId: 9,
+        matchSourceCounts: { unresolved: 1 },
+        skipped: 4,
+        errors: 0,
+      }),
+      buildComplete: vi.fn(),
+    });
+
+    expect(writer.write).toHaveBeenCalledWith("review_required", {
+      batch_id: 9,
+      match_source_counts: { unresolved: 1 },
+      skipped: 4,
+      percent: 70,
+    });
+  });
+
+  it("adds VALIDATION_ERROR to an actionable validation failure", async () => {
+    const { streamImport, ValidationError, writer } = await loadSubject();
+
+    await streamImport(req, res, {
+      filePath: "/tmp/import.csv",
+      errorLogMessage: "failed",
+      run: vi
+        .fn()
+        .mockRejectedValue(new ValidationError("date_column is required")),
+      buildComplete: vi.fn(),
+    });
+
+    expect(writer.write).toHaveBeenCalledWith("error", {
+      detail: "date_column is required",
+      code: "VALIDATION_ERROR",
+    });
+  });
+
+  it("sanitizes unexpected failures and adds INTERNAL_SERVER_ERROR", async () => {
+    const { streamImport, writer } = await loadSubject();
+
+    await streamImport(req, res, {
+      filePath: "/tmp/import.csv",
+      errorLogMessage: "failed",
+      run: vi.fn().mockRejectedValue(new Error("database password leaked")),
+      buildComplete: vi.fn(),
+    });
+
+    expect(writer.write).toHaveBeenCalledWith("error", {
+      detail: "Import failed",
+      code: "INTERNAL_SERVER_ERROR",
+    });
+    expect(JSON.stringify(writer.write.mock.calls)).not.toContain("password");
+  });
+});

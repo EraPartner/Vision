@@ -73,7 +73,7 @@ export function cleanKbcRecipientName(
 
 /**
  * @returns pass-through of any falsy `name` (see
- *   tests/textNormalization.test.js: `normalizeToUppercase(null) === null`),
+ *   tests/textNormalization.test.ts: `normalizeToUppercase(null) === null`),
  *   otherwise the trimmed/uppercased string. Throws for a truthy non-string.
  */
 export function normalizeToUppercase(name: string): string;

@@ -60,7 +60,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 - Automatic expiration
 - Stale-while-revalidate pattern
 - Provider-consistent keying for investment-scoped providers (`custom`, `kinesis`) across lookup/set paths
-- Kinesis trendline sanitization runs before latest/history cache writes to prevent isolated one-point needles from polluting short-lived memory cache or persisted history ([[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/tests/priceProviderService.test.js]])
+- Kinesis trendline sanitization runs before latest/history cache writes to prevent isolated one-point needles from polluting short-lived memory cache or persisted history ([[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/tests/priceProviderService.test.ts]])
 - DB-backed historical quote persistence for `yahoo`/`custom` provider history
 - Read-through history fetch (`DB -> provider -> DB upsert`)
 - Startup background backfill for held market-priced assets

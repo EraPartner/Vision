@@ -1,6 +1,6 @@
 /**
  * Shared `vi.mock` factories for the transactions route-test family
- * (`routes/transactions*.test.js`, `transactionPatchValidation.test.js`),
+ * (`routes/transactions*.test.ts`, `transactionPatchValidation.test.ts`),
  * which all mock the same module set around `src/routes/transactions.js`.
  *
  * Function names are prefixed with `mock` so they may be referenced inside

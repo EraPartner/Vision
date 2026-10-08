@@ -2,11 +2,11 @@
 title: Dependency Security Remediation (2026-04)
 type: security
 status: active
-date: 2026-04-10
+date: 2026-10-08
 tags: [security, dependencies, remediation, toolchain, vite, vitest]
 description: Workspace-level dependency hardening with overrides/resolutions, toolchain upgrades, and validation outcomes
 aliases: [dependency remediation april 2026, security hardening dependencies, bun audit remediation]
-related_code: ["package.json", "apps/frontend/package.json", "apps/node-backend/package.json", "apps/node-backend/tests/priceProviderService.test.js"]
+related_code: ["package.json", "apps/frontend/package.json", "apps/node-backend/package.json", "apps/node-backend/tests/priceProviderService.test.ts"]
 ---
 
 # Dependency Security Remediation (2026-04)
@@ -50,7 +50,7 @@ In [[apps/node-backend/package.json]]:
 
 Vitest 4 required a constructor-compatible mock implementation for `yahoo-finance2` in:
 
-- [[apps/node-backend/tests/priceProviderService.test.js]]
+- [[apps/node-backend/tests/priceProviderService.test.ts]]
 
 The mock now uses `vi.fn().mockImplementation(function MockYahooFinance() { ... })` to preserve constructor-like behavior expected by the module usage pattern.
 

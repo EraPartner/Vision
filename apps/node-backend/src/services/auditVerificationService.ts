@@ -90,7 +90,7 @@ type DbEditorAuditRow = {
 type SplitAuditRow = {
   split_id_text: string;
   action: string;
-  actor: string;
+  actor: string | null;
   payload_text: string | null;
   occurred_at: string;
 };

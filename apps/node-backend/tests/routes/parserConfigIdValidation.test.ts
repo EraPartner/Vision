@@ -13,10 +13,10 @@
  * routes/parserConfigRoutes.js, so the matrix is driven against a router built the
  * way both real routers build theirs (same `kind`/`normalizeConfig`/`label`
  * parameterisation). The two real routers are pinned to *use* it in
- * import.test.js and portfolioImportValidationPins.test.js — this file owns the
+ * import.test.ts and portfolioImportValidationPins.test.ts — this file owns the
  * shape, those own the wiring.
  *
- * Its own file rather than appended to import.test.js: that suite is mounted at
+ * Its own file rather than appended to import.test.ts: that suite is mounted at
  * /api/import, whose per-mount limiter allows 20 requests a minute, and this
  * matrix alone is well past that if the limiter is ever mounted there.
  */

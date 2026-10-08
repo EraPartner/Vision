@@ -2,7 +2,7 @@
 title: Error Codes Reference
 type: reference
 status: active
-date: 2026-10-07
+date: 2026-10-08
 updated: 2026-09-11
 tags: [reference, errors, api, responses, status-codes, envelope, adr-026]
 description: Complete reference of all API error responses, status codes, and error formats used by the Vision backend. All responses use the unified envelope (ADR-026).
@@ -43,7 +43,7 @@ Every API response — success or failure — uses this envelope shape:
 > [!info] Canonical envelope is the only supported JSON error shape
 > Pre-ADR-026 `{ detail }`, `{ message }`, Pydantic-array, and top-level `retry_after` failures are
 > not accepted by the frontend. The envelope is enforced by `middleware/envelope.ts` (success) and
-> `middleware/errorHandler.ts` (failure); `tests/responseEnvelopeContract.test.js` blocks new JSON
+> `middleware/errorHandler.ts` (failure); `tests/responseEnvelopeContract.test.ts` blocks new JSON
 > writers outside those shared serializers. See
 > [[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
 

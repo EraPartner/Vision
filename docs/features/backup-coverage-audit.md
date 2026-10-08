@@ -2,7 +2,7 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-08
 updated: 2026-10-06
 last_modified: 2026-10-06
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
@@ -42,7 +42,7 @@ All user-data tables are included in the `pg_dump` SQL artifact inside every `.v
 
 **Source of truth:** `apps/node-backend/src/backup/coverage.ts` → `BACKUP_COVERED_TABLES`
 
-**Enforced by:** `apps/node-backend/tests/backup-coverage.test.js`
+**Enforced by:** `apps/node-backend/tests/backup-coverage.test.ts`
 
 #### Aggregates
 
@@ -421,7 +421,7 @@ their public interfaces and supply format-specific magic values and messages:
 
 ## Coverage Enforcement
 
-`apps/node-backend/tests/backup-coverage.test.js` runs in CI and:
+`apps/node-backend/tests/backup-coverage.test.ts` runs in CI and:
 
 1. **Table coverage** — parses all `alembic/versions/*.py` files, computes net table set (created minus dropped), and asserts exact match against `BACKUP_COVERED_TABLES`. Fails if a new migration adds a table not in the registry.
 2. **localStorage coverage** — asserts all keys in `LOCAL_STORAGE_KEYS` are referenced in the bundle snapshot logic.
@@ -439,7 +439,7 @@ setting, and attachment values plus the schema revision, database statistics, fr
 payload, API readiness, and packaged frontend assets. The entire temporary instance is removed
 after success; it cannot address the user's real Vision data.
 
-`apps/node-backend/tests/backup-release-compat.test.js` also opens the immutable, sanitized
+`apps/node-backend/tests/backup-release-compat.test.ts` also opens the immutable, sanitized
 `packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc` artifact. The artifact was
 written and encrypted by the bundle implementation from Git tag `v1.0.2` and includes synthetic
 SQL, an attachment, metadata, and frontend state. This checks the current reader against encrypted

@@ -152,9 +152,9 @@ The Transaction Tags feature test suite is **complete and passing** (2026-05-08)
 
 | Test File | Coverage |
 |-----------|----------|
-| `apps/node-backend/tests/filterBuilder.test.js` | Filter builder tag slug handling (empty/single/multiple tag filter semantics) |
+| `apps/node-backend/tests/filterBuilder.test.ts` | Filter builder tag slug handling (empty/single/multiple tag filter semantics) |
 | `apps/node-backend/tests/routes/tags.ts` | Tag CRUD endpoints (list, create, update color/is_active, soft-delete) |
-| `apps/node-backend/tests/plannedTransactionRepository.test.js` | Planned transaction tag read/write and execute-forward inheritance |
+| `apps/node-backend/tests/plannedTransactionRepository.test.ts` | Planned transaction tag read/write and execute-forward inheritance |
 | `apps/node-backend/tests/routes/transactions.test.ts` | Transaction tag filtering and NDJSON export with tag fields |
 | `apps/node-backend/src/backup/coverage.ts` | Backup table enumeration includes tag tables (`tags`, `transaction_tags`, `planned_transaction_tags`) |
 

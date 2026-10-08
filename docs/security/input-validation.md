@@ -817,7 +817,7 @@ HSL_COMPONENT_RE = /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%
 
 Valid example: `"250 84% 60%"` (bare HSL components without `hsl()` wrapper).
 
-**Test coverage:** [[apps/node-backend/tests/themeCss.test.js]]
+**Test coverage:** [[apps/node-backend/tests/themeCss.test.ts]]
 
 **Related:** [[docs/api/reports#css-injection-hardening-2026-05-29|Reports API — CSS Injection Hardening]]
 

@@ -336,7 +336,7 @@ The execute endpoint is now **atomic and idempotent**:
 
 See [[docs/adr/012-planned-execution-idempotency|ADR-012]] for design rationale.
 
-[[apps/node-backend/tests/plannedExecutionConcurrency.db.test.js]] covers concurrent distinct
+[[apps/node-backend/tests/plannedExecutionConcurrency.db.test.ts]] covers concurrent distinct
 payments, duplicate replay, the final bounded occurrence, and end-date completion on disposable
 PostgreSQL. Live verification of these new cases is pending in [[TODO]].
 

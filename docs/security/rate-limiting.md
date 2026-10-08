@@ -292,7 +292,7 @@ For production deployments:
 
 ## Test Coverage Notes (2026-04-10, Updated 2026-05-29)
 
-Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.js]], including:
+Rate-limiter middleware behavior is covered by [[apps/node-backend/tests/rateLimiter.test.ts]], including:
 
 - allow-under-limit and `429 Too Many Requests` over-limit behavior,
 - rolling window reset behavior,

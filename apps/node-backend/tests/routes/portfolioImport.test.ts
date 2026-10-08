@@ -11,8 +11,8 @@
  * portfolioImportRoutes.js:494) on the tested path — the mock-router harness
  * dropped it entirely. multer is still stubbed to a pass-through (no real
  * multipart parsing); this suite doesn't exercise the upload routes, so no
- * `req.file` injection is needed (see portfolioImportValidationPins.test.js
- * for that, mirroring importValidationPins.test.js's pattern).
+ * `req.file` injection is needed (see portfolioImportValidationPins.test.ts
+ * for that, mirroring importValidationPins.test.ts's pattern).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { IRoute } from "express";
