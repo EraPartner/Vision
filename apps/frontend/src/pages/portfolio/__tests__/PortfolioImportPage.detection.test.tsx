@@ -202,7 +202,9 @@ describe("automatic portfolio upload", () => {
         const { container } = await renderAdvanced(user);
         await user.upload(fileInput(container), statement("nexo"));
         await waitFor(() =>
-            expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText(/Detecting statement format/),
+            ).not.toBeInTheDocument(),
         );
         expect(brokerField()).toHaveTextContent("Unassigned");
         expect(importButton()).toBeDisabled();
@@ -225,7 +227,9 @@ describe("automatic portfolio upload", () => {
             ),
         );
         await waitFor(() =>
-            expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText(/Detecting statement format/),
+            ).not.toBeInTheDocument(),
         );
         expect(brokerField()).toHaveTextContent("Unassigned");
         expect(importButton()).toBeDisabled();
@@ -255,7 +259,9 @@ describe("automatic portfolio upload", () => {
             expect(screen.getByLabelText(/Date column/)).toBeVisible(),
         );
         await waitFor(() =>
-            expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+            expect(
+                screen.queryByText(/Detecting statement format/),
+            ).not.toBeInTheDocument(),
         );
         expect(brokerField()).toHaveTextContent("Unassigned");
         expect(
@@ -274,8 +280,9 @@ describe("automatic portfolio upload", () => {
         await user.upload(input, first.file);
         await user.upload(input, second.file);
         await act(async () => first.finish());
-        expect(screen.getByRole("status")).toHaveTextContent(
-            "Detecting statement format",
+        expect(screen.getByText(/Detecting statement format/)).toHaveAttribute(
+            "role",
+            "status",
         );
         expect(importButton()).toBeDisabled();
         expect(brokerField()).toHaveTextContent("Unassigned");

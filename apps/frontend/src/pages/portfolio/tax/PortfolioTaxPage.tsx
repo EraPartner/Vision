@@ -340,7 +340,7 @@ export default function PortfolioTaxPage() {
                                 transaction.date?.startsWith(`${txYear}-`),
                         ),
                     ) && (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="type-footnote text-label-secondary">
                             {t("tax.inKindIncomeUnclassified")}
                         </p>
                     )}

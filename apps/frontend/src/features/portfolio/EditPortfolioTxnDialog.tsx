@@ -336,7 +336,7 @@ export function EditPortfolioTxnDialog({
                 </DialogHeader>
                 {transaction.income_recognition_role ===
                     "included_in_units" && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="type-footnote text-label-secondary">
                         {t("portfolio.inKindIncome")}.{" "}
                         {t("portfolio.inKindIncomeHint")}
                     </p>

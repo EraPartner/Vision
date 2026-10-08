@@ -10,6 +10,7 @@ import type { Account } from "@/types/api";
 import {
     importPortfolioCSVWithProgress,
     previewPortfolioImportReconciliation,
+    type PortfolioReconciliationMode,
 } from "@/lib/api/portfolioImports";
 import { PortfolioImportSession } from "../PortfolioImportSession";
 import { portfolioImportPresetConfig } from "../portfolioImportPresets";
@@ -326,23 +327,105 @@ async function selectAndStage(
         ).toBeEnabled(),
     );
 }
-function choosePolicy(user: ReturnType<typeof userEvent.setup>, value: string) {
-    return user.selectOptions(
-        screen.getByLabelText("Existing transaction facts"),
-        value,
+type User = ReturnType<typeof userEvent.setup>;
+/** Option labels of the reconciliation scope Select, by model value. */
+const scopeLabels: Record<PortfolioReconciliationMode, string> = {
+    full: "Full history",
+    record_cash_only: "Record proven cash history",
+    record_in_kind_income_only: "Record proven in-kind income",
+    correct_existing_only: "Correct proven existing records",
+    adopt_existing_only: "Attach proven source records",
+};
+/** Option labels of the session policy Select, by model value. */
+const policyLabels = {
+    auto: "Automatic exact matches",
+    preserve_existing: "Preserve existing facts",
+    prefer_source: "Use detailed source facts",
+} as const;
+/** Option labels of a per-statement policy Select; "" defers to the session. */
+const statementPolicyLabels = {
+    "": "Use session policy",
+    preserve_existing: policyLabels.preserve_existing,
+    prefer_source: policyLabels.prefer_source,
+} as const;
+const scopeField = () => screen.getByLabelText("Reconciliation scope");
+const policyField = () => screen.getByLabelText("Existing transaction facts");
+const statementPolicyField = (file: string) =>
+    screen.getByLabelText(`Policy for ${file}`);
+
+/** Picks an option of a design-system (Radix) Select by its visible label. */
+async function pickOption(
+    user: User,
+    trigger: HTMLElement,
+    name: string | RegExp,
+) {
+    await user.click(trigger);
+    await user.click(await screen.findByRole("option", { name }));
+}
+function chooseScope(user: User, scope: PortfolioReconciliationMode) {
+    return pickOption(user, scopeField(), scopeLabels[scope]);
+}
+function choosePolicy(user: User, value: keyof typeof policyLabels) {
+    return pickOption(user, policyField(), policyLabels[value]);
+}
+function chooseStatementPolicy(
+    user: User,
+    file: string,
+    value: keyof typeof statementPolicyLabels,
+) {
+    return pickOption(
+        user,
+        statementPolicyField(file),
+        statementPolicyLabels[value],
+    );
+}
+/**
+ * Opens a Select so its options exist in the DOM, runs `inspect` against
+ * them and closes the list again without changing the value.
+ */
+async function withOptions<T>(
+    user: User,
+    trigger: HTMLElement,
+    inspect: () => Promise<T> | T,
+): Promise<T> {
+    await user.click(trigger);
+    await screen.findAllByRole("option");
+    try {
+        return await inspect();
+    } finally {
+        await user.keyboard("{Escape}");
+        await waitFor(() =>
+            expect(screen.queryByRole("listbox")).not.toBeInTheDocument(),
+        );
+    }
+}
+const expectOptionEnabled = (name: string) =>
+    expect(screen.getByRole("option", { name })).not.toHaveAttribute(
+        "aria-disabled",
+    );
+const expectOptionDisabled = (name: string) =>
+    expect(screen.getByRole("option", { name })).toHaveAttribute(
+        "aria-disabled",
+        "true",
+    );
+/** Waits until the scope option `name` becomes selectable. */
+function waitForScopeOption(user: User, name: string) {
+    return withOptions(user, scopeField(), () =>
+        waitFor(() => expectOptionEnabled(name)),
     );
 }
 
-async function chooseExistingBatch(user: ReturnType<typeof userEvent.setup>) {
+async function chooseExistingBatch(user: User) {
     await user.click(
         await screen.findByText("Reconcile existing import history"),
     );
     await user.click(
         screen.getByRole("button", { name: "Load existing batches" }),
     );
-    await user.selectOptions(
+    await pickOption(
+        user,
         await screen.findByLabelText("Existing source batch"),
-        "4",
+        /· Batch 4 ·/,
     );
     await user.click(
         screen.getByRole("button", { name: "Add selected history" }),
@@ -563,20 +646,11 @@ describe("reviewed portfolio import sessions", () => {
                     await screen.findByLabelText("Statements (CSV or XLSX)"),
                     kinesisStatement(),
                 );
-            await waitFor(() =>
-                expect(
-                    screen.getByRole("option", {
-                        name: "Record proven cash history",
-                    }),
-                ).toBeEnabled(),
-            );
-            await user.selectOptions(
-                screen.getByLabelText("Reconciliation scope"),
-                "record_cash_only",
-            );
+            await waitForScopeOption(user, "Record proven cash history");
+            await chooseScope(user, "record_cash_only");
             expect(
                 screen.getByLabelText("Existing transaction facts"),
-            ).toHaveValue("preserve_existing");
+            ).toHaveTextContent(policyLabels.preserve_existing);
             expect(
                 screen.queryByLabelText(
                     "Portfolio Performance reference (XML)",
@@ -655,12 +729,12 @@ describe("reviewed portfolio import sessions", () => {
             renderWithApp(
                 <PortfolioImportSession accounts={kinesisAccounts} />,
             );
-            expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-                "record_cash_only",
-            );
+            expect(
+                screen.getByLabelText("Reconciliation scope"),
+            ).toHaveTextContent(scopeLabels.record_cash_only);
             expect(
                 screen.getByLabelText("Existing transaction facts"),
-            ).toHaveValue("preserve_existing");
+            ).toHaveTextContent(policyLabels.preserve_existing);
             expect(
                 screen.getByRole("checkbox", {
                     name: /I confirm that this statement/,
@@ -752,17 +826,8 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByLabelText("Statements (CSV or XLSX)"),
             kinesisStatement(),
         );
-        await waitFor(() =>
-            expect(
-                screen.getByRole("option", {
-                    name: "Record proven cash history",
-                }),
-            ).toBeEnabled(),
-        );
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "record_cash_only",
-        );
+        await waitForScopeOption(user, "Record proven cash history");
+        await chooseScope(user, "record_cash_only");
         await user.click(screen.getByRole("button", { name: "Change" }));
         const broker = screen.getByRole("combobox", { name: "Broker" });
         await user.click(broker);
@@ -826,12 +891,12 @@ describe("reviewed portfolio import sessions", () => {
             ]),
         );
         renderWithApp(<PortfolioImportSession accounts={kinesisAccounts} />);
-        expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-            "full",
+        expect(screen.getByLabelText("Reconciliation scope")).toHaveTextContent(
+            scopeLabels.full,
         );
-        expect(screen.getByLabelText("Existing transaction facts")).toHaveValue(
-            "auto",
-        );
+        expect(
+            screen.getByLabelText("Existing transaction facts"),
+        ).toHaveTextContent(policyLabels.auto);
     });
 
     it.each([false, true])(
@@ -925,20 +990,11 @@ describe("reviewed portfolio import sessions", () => {
                     await screen.findByLabelText("Statements (CSV or XLSX)"),
                     kinesisStatement(),
                 );
-            await waitFor(() =>
-                expect(
-                    screen.getByRole("option", {
-                        name: "Record proven in-kind income",
-                    }),
-                ).toBeEnabled(),
-            );
-            await user.selectOptions(
-                screen.getByLabelText("Reconciliation scope"),
-                "record_in_kind_income_only",
-            );
+            await waitForScopeOption(user, "Record proven in-kind income");
+            await chooseScope(user, "record_in_kind_income_only");
             expect(
                 screen.getByLabelText("Existing transaction facts"),
-            ).toHaveValue("preserve_existing");
+            ).toHaveTextContent(policyLabels.preserve_existing);
             expect(
                 screen.getByLabelText("Existing transaction facts"),
             ).toBeDisabled();
@@ -1021,12 +1077,12 @@ describe("reviewed portfolio import sessions", () => {
             renderWithApp(
                 <PortfolioImportSession accounts={kinesisAccounts} />,
             );
-            expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-                "record_in_kind_income_only",
-            );
+            expect(
+                screen.getByLabelText("Reconciliation scope"),
+            ).toHaveTextContent(scopeLabels.record_in_kind_income_only);
             expect(
                 screen.getByLabelText("Existing transaction facts"),
-            ).toHaveValue("preserve_existing");
+            ).toHaveTextContent(policyLabels.preserve_existing);
             await user.click(
                 screen.getByRole("button", { name: "Review reconciliation" }),
             );
@@ -1097,17 +1153,8 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByLabelText("Statements (CSV or XLSX)"),
             kinesisStatement("fresh-repeat.csv"),
         );
-        await waitFor(() =>
-            expect(
-                screen.getByRole("option", {
-                    name: "Record proven in-kind income",
-                }),
-            ).toBeEnabled(),
-        );
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "record_in_kind_income_only",
-        );
+        await waitForScopeOption(user, "Record proven in-kind income");
+        await chooseScope(user, "record_in_kind_income_only");
         await user.click(
             screen.getByRole("button", { name: "Stage statements" }),
         );
@@ -1165,26 +1212,19 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByLabelText("Statements (CSV or XLSX)"),
             kinesisStatement(),
         );
-        const option = screen.getByRole("option", {
-            name: "Record proven in-kind income",
-        });
-        await waitFor(() => expect(option).toBeEnabled());
+        const option = "Record proven in-kind income";
+        await waitForScopeOption(user, option);
         await user.type(screen.getByLabelText("Assets to include"), "TOKEN");
-        expect(option).toBeDisabled();
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
+        );
         await user.clear(screen.getByLabelText("Assets to include"));
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "prefer_source",
+        await chooseStatementPolicy(user, "kinesis.csv", "prefer_source");
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
         );
-        expect(option).toBeDisabled();
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "",
-        );
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "record_in_kind_income_only",
-        );
+        await chooseStatementPolicy(user, "kinesis.csv", "");
+        await chooseScope(user, "record_in_kind_income_only");
         expect(screen.getByLabelText("Assets to include")).toBeDisabled();
         await user.upload(
             screen.getByLabelText("Statements (CSV or XLSX)"),
@@ -1195,8 +1235,8 @@ describe("reviewed portfolio import sessions", () => {
                 /In-kind income requires only complete Kinesis statements/,
             ),
         ).toBeVisible();
-        expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-            "record_in_kind_income_only",
+        expect(screen.getByLabelText("Reconciliation scope")).toHaveTextContent(
+            scopeLabels.record_in_kind_income_only,
         );
         expect(
             screen.getByRole("button", { name: "Stage statements" }),
@@ -1218,26 +1258,19 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByLabelText("Statements (CSV or XLSX)"),
             kinesisStatement(),
         );
-        const option = await screen.findByRole("option", {
-            name: "Correct proven existing records",
-        });
-        await waitFor(() => expect(option).toBeEnabled());
+        const option = "Correct proven existing records";
+        await waitForScopeOption(user, option);
         await user.type(screen.getByLabelText("Assets to include"), "KAG");
-        expect(option).toBeDisabled();
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
+        );
         await user.clear(screen.getByLabelText("Assets to include"));
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "preserve_existing",
+        await chooseStatementPolicy(user, "kinesis.csv", "preserve_existing");
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
         );
-        expect(option).toBeDisabled();
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "",
-        );
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "correct_existing_only",
-        );
+        await chooseStatementPolicy(user, "kinesis.csv", "");
+        await chooseScope(user, "correct_existing_only");
         expect(screen.getByLabelText("Assets to include")).toBeDisabled();
         await user.upload(
             screen.getByLabelText("Statements (CSV or XLSX)"),
@@ -1246,8 +1279,8 @@ describe("reviewed portfolio import sessions", () => {
         await screen.findByText(
             /Existing corrections require only complete Kinesis statements/,
         );
-        expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-            "correct_existing_only",
+        expect(screen.getByLabelText("Reconciliation scope")).toHaveTextContent(
+            scopeLabels.correct_existing_only,
         );
         expect(
             screen.getByRole("button", { name: "Stage statements" }),
@@ -1342,21 +1375,12 @@ describe("reviewed portfolio import sessions", () => {
                 await screen.findByLabelText("Statements (CSV or XLSX)"),
                 kinesisStatement(),
             );
-            await waitFor(() =>
-                expect(
-                    screen.getByRole("option", {
-                        name: "Attach proven source records",
-                    }),
-                ).toBeEnabled(),
-            );
-            expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-                "full",
-            );
+            await waitForScopeOption(user, "Attach proven source records");
+            expect(
+                screen.getByLabelText("Reconciliation scope"),
+            ).toHaveTextContent(scopeLabels.full);
             if (scope === "adopt_existing_only") {
-                await user.selectOptions(
-                    screen.getByLabelText("Reconciliation scope"),
-                    scope,
-                );
+                await chooseScope(user, scope);
             } else {
                 await choosePolicy(user, "preserve_existing");
             }
@@ -1480,20 +1504,11 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByLabelText("Statements (CSV or XLSX)"),
             [kinesisStatement(), kinesisStatement("older.csv")],
         );
-        await waitFor(() =>
-            expect(
-                screen.getByRole("option", {
-                    name: "Attach proven source records",
-                }),
-            ).toBeEnabled(),
-        );
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "adopt_existing_only",
-        );
-        expect(screen.getByLabelText("Existing transaction facts")).toHaveValue(
-            "preserve_existing",
-        );
+        await waitForScopeOption(user, "Attach proven source records");
+        await chooseScope(user, "adopt_existing_only");
+        expect(
+            screen.getByLabelText("Existing transaction facts"),
+        ).toHaveTextContent(policyLabels.preserve_existing);
         expect(
             screen.getByLabelText("Existing transaction facts"),
         ).toBeDisabled();
@@ -1555,10 +1570,7 @@ describe("reviewed portfolio import sessions", () => {
         ).not.toBeInTheDocument();
         first.unmount();
         renderWithApp(<PortfolioImportSession accounts={kinesisAccounts} />);
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "adopt_existing_only",
-        );
+        await chooseScope(user, "adopt_existing_only");
         await user.click(
             screen.getByRole("button", { name: "Review reconciliation" }),
         );
@@ -1592,10 +1604,7 @@ describe("reviewed portfolio import sessions", () => {
                 name: "Import reviewed history",
             }),
         ).toBeEnabled();
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "adopt_existing_only",
-        );
+        await chooseScope(user, "adopt_existing_only");
         expect(
             screen.queryByRole("button", { name: "Import reviewed history" }),
         ).not.toBeInTheDocument();
@@ -1606,8 +1615,8 @@ describe("reviewed portfolio import sessions", () => {
         await screen.findByText(
             /Source attachment requires only complete Kinesis statements/,
         );
-        expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-            "adopt_existing_only",
+        expect(screen.getByLabelText("Reconciliation scope")).toHaveTextContent(
+            scopeLabels.adopt_existing_only,
         );
         expect(
             screen.getByRole("button", { name: "Review reconciliation" }),
@@ -1629,36 +1638,30 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByLabelText("Statements (CSV or XLSX)"),
             kinesisStatement(),
         );
-        const option = await screen.findByRole("option", {
-            name: "Attach proven source records",
-        });
-        await waitFor(() => expect(option).toBeEnabled());
+        const option = "Attach proven source records";
+        await waitForScopeOption(user, option);
         const assetFilter = screen.getByLabelText("Assets to include");
         await user.type(assetFilter, "KAG");
-        expect(option).toBeDisabled();
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
+        );
         await user.clear(assetFilter);
-        expect(option).toBeEnabled();
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "prefer_source",
+        await withOptions(user, scopeField(), () =>
+            expectOptionEnabled(option),
         );
-        expect(option).toBeDisabled();
-        await user.selectOptions(
-            screen.getByLabelText("Policy for kinesis.csv"),
-            "preserve_existing",
+        await chooseStatementPolicy(user, "kinesis.csv", "prefer_source");
+        await withOptions(user, scopeField(), () =>
+            expectOptionDisabled(option),
         );
-        expect(option).toBeEnabled();
-        await user.selectOptions(
-            screen.getByLabelText("Reconciliation scope"),
-            "adopt_existing_only",
+        await chooseStatementPolicy(user, "kinesis.csv", "preserve_existing");
+        await withOptions(user, scopeField(), () =>
+            expectOptionEnabled(option),
         );
+        await chooseScope(user, "adopt_existing_only");
         expect(assetFilter).toBeDisabled();
-        expect(
-            within(screen.getByLabelText("Policy for kinesis.csv")).getByRole(
-                "option",
-                { name: "Use detailed source facts" },
-            ),
-        ).toBeDisabled();
+        await withOptions(user, statementPolicyField("kinesis.csv"), () =>
+            expectOptionDisabled("Use detailed source facts"),
+        );
         expect(previews).toHaveLength(0);
     });
 
@@ -1830,10 +1833,10 @@ describe("reviewed portfolio import sessions", () => {
         await selectAndStage(user, [kinesis, statement("pro.csv", true)]);
         const kinesisPolicy = screen.getByLabelText("Policy for kinesis.csv");
         const proPolicy = screen.getByLabelText("Policy for pro.csv");
-        expect(kinesisPolicy).toHaveValue("");
-        expect(proPolicy).toHaveValue("");
-        await user.selectOptions(kinesisPolicy, "preserve_existing");
-        await user.selectOptions(proPolicy, "prefer_source");
+        expect(kinesisPolicy).toHaveTextContent(statementPolicyLabels[""]);
+        expect(proPolicy).toHaveTextContent(statementPolicyLabels[""]);
+        await pickOption(user, kinesisPolicy, policyLabels.preserve_existing);
+        await pickOption(user, proPolicy, policyLabels.prefer_source);
         await user.click(
             screen.getByRole("button", { name: "Review reconciliation" }),
         );
@@ -1869,10 +1872,7 @@ describe("reviewed portfolio import sessions", () => {
             statement("pro.csv", true),
         ]);
         await choosePolicy(user, "prefer_source");
-        await user.selectOptions(
-            screen.getByLabelText("Policy for wallet.csv"),
-            "preserve_existing",
-        );
+        await chooseStatementPolicy(user, "wallet.csv", "preserve_existing");
         await user.click(
             screen.getByRole("button", { name: "Review reconciliation" }),
         );
@@ -1884,10 +1884,7 @@ describe("reviewed portfolio import sessions", () => {
                 { batch_id: 11, adopt_policy: "preserve_existing" },
             ],
         });
-        await user.selectOptions(
-            screen.getByLabelText("Policy for wallet.csv"),
-            "prefer_source",
-        );
+        await chooseStatementPolicy(user, "wallet.csv", "prefer_source");
         expect(
             screen.queryByRole("button", { name: "Import reviewed history" }),
         ).not.toBeInTheDocument();
@@ -1896,11 +1893,8 @@ describe("reviewed portfolio import sessions", () => {
         renderWithApp(<PortfolioImportSession accounts={accounts} />);
         expect(
             await screen.findByLabelText("Policy for wallet.csv"),
-        ).toHaveValue("prefer_source");
-        await user.selectOptions(
-            screen.getByLabelText("Policy for wallet.csv"),
-            "",
-        );
+        ).toHaveTextContent(policyLabels.prefer_source);
+        await chooseStatementPolicy(user, "wallet.csv", "");
         await user.click(
             screen.getByRole("button", { name: "Review reconciliation" }),
         );
@@ -1916,10 +1910,7 @@ describe("reviewed portfolio import sessions", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioImportSession accounts={accounts} />);
         await selectAndStage(user);
-        await user.selectOptions(
-            screen.getByLabelText("Policy for wallet.csv"),
-            "preserve_existing",
-        );
+        await chooseStatementPolicy(user, "wallet.csv", "preserve_existing");
         server.use(
             http.post(`${api}/reconciliation/preview`, () => ok(plan())),
         );
@@ -2055,8 +2046,8 @@ describe("reviewed portfolio import sessions", () => {
         expect(new TextEncoder().encode(sourceText).length).toBe(native.size);
         expect(sourceText).toContain(nativeHeader);
         expect(sourceText).toContain('""version"":1');
-        expect(screen.getByLabelText("Reconciliation scope")).toHaveValue(
-            "full",
+        expect(screen.getByLabelText("Reconciliation scope")).toHaveTextContent(
+            scopeLabels.full,
         );
         expect(
             screen.getByText(/Review all selected history together/),
@@ -2350,11 +2341,12 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByLabelText("Statements (CSV or XLSX)"),
             statement(),
         );
-        await user.selectOptions(
+        await pickOption(
+            user,
             await screen.findByLabelText(
                 "Other custody account (for asset transfers)",
             ),
-            "2",
+            "Saxo",
         );
         await user.click(
             screen.getByRole("button", { name: "Stage statements" }),
@@ -2624,8 +2616,9 @@ describe("reviewed portfolio import sessions", () => {
             if (policyTarget === "session")
                 await choosePolicy(user, "preserve_existing");
             else
-                await user.selectOptions(
-                    screen.getByLabelText("Policy for wallet.csv"),
+                await chooseStatementPolicy(
+                    user,
+                    "wallet.csv",
                     "preserve_existing",
                 );
             await act(async () => finish());
@@ -2847,11 +2840,18 @@ describe("reviewed portfolio import sessions", () => {
             "record_in_kind_income_only",
             "record_cash_only",
             "full",
-        ]) {
-            await user.selectOptions(
-                screen.getByLabelText("Reconciliation scope"),
-                scope,
+        ] as const) {
+            // Scopes the legacy proof cannot enter stay disabled; the native
+            // select skipped those silently, the Radix list keeps them visible.
+            const selectable = await withOptions(
+                user,
+                scopeField(),
+                () =>
+                    !screen
+                        .getByRole("option", { name: scopeLabels[scope] })
+                        .hasAttribute("aria-disabled"),
             );
+            if (selectable) await chooseScope(user, scope);
             expect(document.querySelector('input[accept=".xml"]')).toBeNull();
             expect(
                 screen.queryByText("Optional Portfolio Performance reference"),
