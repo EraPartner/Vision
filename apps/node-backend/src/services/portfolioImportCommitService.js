@@ -160,10 +160,12 @@ async function commitLockedScope(
         ) => entry.batchId === Number(batch.id),
       );
       if (
+        // A batch whose own rows are settled stays in review while its session
+        // still has pending events; only a complete session finalizes.
         !(await finalizeAdoptionOnlyBatch(
           Number(batch.id),
           progress.pending,
-          progress.complete,
+          plan.complete === true,
         ))
       )
         throw new ConflictError("Adoption scope source changed during commit", {
