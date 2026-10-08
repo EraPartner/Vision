@@ -81,12 +81,64 @@ describe("SplitTransactionDialog", () => {
         expect(await screen.findByText(/this transaction already has 1 split/i)).toBeInTheDocument();
     });
 
-    it("shows Equal Split and Custom Amounts toggle buttons", async () => {
+    it("shows Equal split, Others pay all and Custom amounts presets", async () => {
         const user = userEvent.setup();
         renderDialog();
         await openDialog(user);
         expect(await screen.findByRole("radio", { name: /equal split/i })).toBeChecked();
+        expect(screen.getByRole("radio", { name: /others pay all/i })).not.toBeChecked();
         expect(screen.getByRole("radio", { name: /custom amounts/i })).not.toBeChecked();
+    });
+
+    // 0/100: the other person owes the whole transaction, the user nothing.
+    it("Others pay all submits the full amount for one recipient", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
+        );
+        let batchBody: { transaction_id: number; splits: Array<{ recipient_id: number; amount: number }> } | undefined;
+        server.use(
+            http.post(SPLITS_BATCH_URL, async ({ request }) => {
+                batchBody = (await request.json()) as typeof batchBody;
+                return ok({ items: [] });
+            }),
+        );
+
+        const user = userEvent.setup();
+        renderDialog();
+        await openDialog(user);
+        await user.click(await screen.findByRole("radio", { name: /others pay all/i }));
+        await user.click(await screen.findByRole("combobox"));
+        await user.click(await screen.findByRole("option", { name: /test recipient/i }));
+
+        expect(await screen.findByText(/pays the full/i)).toBeInTheDocument();
+        expect(screen.getByText(/^owes /i)).toBeInTheDocument();
+        expect(screen.queryByPlaceholderText(/amount owed/i)).not.toBeInTheDocument();
+
+        const splitButton = screen.getByRole("button", { name: /^split$/i });
+        await waitFor(() => expect(splitButton).not.toBeDisabled());
+        await user.click(splitButton);
+
+        await waitFor(() => expect(batchBody).toBeDefined());
+        expect(batchBody?.splits).toEqual([{ recipient_id: 1, amount: 100 }]);
+    });
+
+    it("Others pay all is blocked when the transaction is already split", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
+            http.get(SPLITS_TX_URL, () =>
+                ok({ items: [{ id: 1, recipient_id: 1, recipient_name: "Alice", amount: 30, note: "" }] }),
+            ),
+        );
+        const user = userEvent.setup();
+        renderDialog();
+        await openDialog(user);
+        await user.click(await screen.findByRole("radio", { name: /others pay all/i }));
+        await user.click(await screen.findByRole("combobox"));
+        await user.click(await screen.findByRole("option", { name: /test recipient/i }));
+
+        // 30 already allocated + 100 would exceed the 100 total.
+        expect(await screen.findByText(/add up to more than the transaction/i)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /^split$/i })).toBeDisabled();
     });
 
     it("shows Add Person button", async () => {

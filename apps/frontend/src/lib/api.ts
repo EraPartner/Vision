@@ -196,6 +196,7 @@ export const apiClient = {
     exportOwedByRecipientCsv: splits.exportOwedByRecipientCsv,
     getSplitsByTransaction: splits.getSplitsByTransaction,
     createSplitsBatch: splits.createSplitsBatch,
+    createBulkSplits: splits.createBulkSplits,
     recordSplitPayment: splits.recordSplitPayment,
     settleSplit: splits.settleSplit,
     settleAllSplitsByRecipient: splits.settleAllSplitsByRecipient,

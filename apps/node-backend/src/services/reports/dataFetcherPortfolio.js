@@ -292,10 +292,14 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   const byInvestmentMap = new Map();
   const rates = await loadCurrentRates();
   const inKind = result.rows.filter(
-    (row) => row.income_recognition_role === "included_in_units",
+    (/** @type {{ income_recognition_role: string | null }} */ row) =>
+      row.income_recognition_role === "included_in_units",
   );
   const currencies = [
-    ...new Set([...inKind.map((row) => row.currency), targetCurrency]),
+    ...new Set([
+      ...inKind.map((/** @type {{ currency: string }} */ row) => row.currency),
+      targetCurrency,
+    ]),
   ].filter((code) => code !== "EUR");
   const historicalIndex =
     inKind.length && currencies.length
@@ -304,6 +308,7 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   let totalInKindIncome = addAll([]);
   for (const row of result.rows) {
     if (row.income_recognition_role === "included_in_units") {
+      /** @type {Record<string, number>} */
       const dateRates = { EUR: 1 };
       for (const code of currencies)
         dateRates[code] =

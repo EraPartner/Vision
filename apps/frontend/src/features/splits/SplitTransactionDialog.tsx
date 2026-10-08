@@ -34,6 +34,9 @@ import {
     roundMoney,
 } from "@vision/shared-utils/money";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import { allocateEvenly } from "./splitShares";
+
+type SplitType = "equal" | "full" | "custom";
 
 interface SplitEntry {
     uid: string;
@@ -59,7 +62,7 @@ export function SplitTransactionDialog({
     transactionCurrency,
 }: SplitTransactionDialogProps) {
     const [open, setOpen] = useState(false);
-    const [splitType, setSplitType] = useState<"equal" | "custom">("equal");
+    const [splitType, setSplitType] = useState<SplitType>("equal");
     const [entries, setEntries] = useState<SplitEntry[]>([
         { uid: crypto.randomUUID(), recipient_id: null, amount: "", note: "" },
     ]);
@@ -112,6 +115,14 @@ export function SplitTransactionDialog({
             ? roundMoney(toDecimal(absAmount).div(totalPeople))
             : 0;
 
+    // "Others pay all" (0/100): the others cover the whole amount between
+    // them, cent-exact, so one person owes exactly the transaction and three
+    // people owe shares that add up to it (no rounding gap either way).
+    const fullShares =
+        open && splitType === "full"
+            ? allocateEvenly(absAmount, validEntries.length)
+            : [];
+
     const customTotal = open
         ? roundMoney(
               addAll(
@@ -132,12 +143,16 @@ export function SplitTransactionDialog({
     const newSplitTotal =
         splitType === "equal"
             ? roundMoney(multiply(equalShare, validEntries.length))
-            : customTotal;
+            : splitType === "full"
+              ? roundMoney(addAll(fullShares))
+              : customTotal;
     const hasNonPositiveSplitAmount = !open
         ? false
         : splitType === "equal"
           ? validEntries.length > 0 && equalShare <= 0
-          : validEntries.some((entry) => {
+          : splitType === "full"
+            ? fullShares.some((share) => share <= 0)
+            : validEntries.some((entry) => {
                 if (!entry.recipient_id) return false;
                 return (
                     parseDecimal(entry.amount, appSettings.numberFormat) <= 0
@@ -158,12 +173,14 @@ export function SplitTransactionDialog({
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        const splits = validEntries.map((e) => ({
+        const splits = validEntries.map((e, index) => ({
             recipient_id: e.recipient_id!,
             amount:
                 splitType === "equal"
                     ? equalShare
-                    : parseDecimal(e.amount, appSettings.numberFormat),
+                    : splitType === "full"
+                      ? fullShares[index]
+                      : parseDecimal(e.amount, appSettings.numberFormat),
             note: e.note || undefined,
         }));
 
@@ -299,13 +316,20 @@ export function SplitTransactionDialog({
                         <SegmentedControl
                             value={splitType}
                             onValueChange={(value) => {
-                                if (value === "equal" || value === "custom")
+                                if (
+                                    value === "equal" ||
+                                    value === "full" ||
+                                    value === "custom"
+                                )
                                     setSplitType(value);
                             }}
                             aria-label={t("splitDialog.splitType")}
                         >
                             <SegmentedControlItem value="equal">
                                 {t("splitDialog.equalSplit")}
+                            </SegmentedControlItem>
+                            <SegmentedControlItem value="full">
+                                {t("splitDialog.othersPayAll")}
                             </SegmentedControlItem>
                             <SegmentedControlItem value="custom">
                                 {t("splitDialog.customAmounts")}
@@ -320,6 +344,20 @@ export function SplitTransactionDialog({
                                     }),
                                     n: totalPeople,
                                 })}
+                            </p>
+                        )}
+
+                        {splitType === "full" && validEntries.length > 0 && (
+                            <p className="type-callout text-label-secondary">
+                                {tc(
+                                    "splitDialog.othersPayAllSummary",
+                                    validEntries.length,
+                                    {
+                                        amount: formatCurrency(absAmount, {
+                                            currency: transactionCurrency,
+                                        }),
+                                    },
+                                )}
                             </p>
                         )}
 
@@ -346,6 +384,24 @@ export function SplitTransactionDialog({
                                                     portalContainer
                                                 }
                                             />
+                                            {splitType === "full" &&
+                                                entry.recipient_id != null && (
+                                                    <p className="type-footnote text-label-secondary">
+                                                        {t("splitDialog.owes", {
+                                                            amount: formatCurrency(
+                                                                fullShares[
+                                                                    validEntries.indexOf(
+                                                                        entry,
+                                                                    )
+                                                                ] ?? 0,
+                                                                {
+                                                                    currency:
+                                                                        transactionCurrency,
+                                                                },
+                                                            ),
+                                                        })}
+                                                    </p>
+                                                )}
                                             {splitType === "custom" && (
                                                 <Input
                                                     aria-label={`${t("splitDialog.amountOwed")} ${idx + 1}`}

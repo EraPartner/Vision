@@ -91,8 +91,8 @@ related_code:
 
 Fresh PostgreSQL 18 installations load the reviewed `0119` baseline SQL in one transaction.
 Older 0118 installations wait for the guarded bridge to verify the contracted shape and a restored
-logical backup. Existing profiles at the exact registered 0120–0125 revisions can instead advance
-to pinned additive 0125 without replaying that maintenance bridge, retaining financial values,
+logical backup. Existing profiles at the exact registered 0120–0126 revisions can instead advance
+to pinned additive 0126 without replaying that maintenance bridge, retaining financial values,
 legacy objects and old receipt JSON. Unknown successor revisions refuse automatic upgrade.
 The baseline and the historical Alembic graph
 produce the same application objects; one PostgreSQL CHECK-expression rendering differs after dump
@@ -485,7 +485,8 @@ renormalized by the exposure service.
 
 
 Migration 0124 adds `income_recognition_role` (TEXT, non-null, default `standard`). The check allows
-`standard` or `included_in_units`, with included income restricted to dividends. This read-only
+`standard` or `included_in_units`, with included income restricted to dividends; migration 0126
+renames that check to `chk_portfolio_income_recognition_role`. This read-only
 role retains literal income separately from ordinary income and gain; see
 [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and the paired journal below.
 

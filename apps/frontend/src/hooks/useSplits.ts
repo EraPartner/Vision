@@ -1,11 +1,11 @@
 import { QUERY_STALE_TIME_MS } from "@/lib/queryPolicies";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
-import { splitKeys } from "@/lib/queryKeys";
+import { invalidateTransactionData, splitKeys } from "@/lib/queryKeys";
 import { toast } from "sonner";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import type { SplitCreateInput } from "@/lib/api/splits";
+import type { BulkSplitRequest, SplitCreateInput } from "@/lib/api/splits";
 
 export function useOwedSummary() {
     return useQuery({
@@ -47,6 +47,50 @@ export function useCreateSplits() {
         },
         onError: (e: Error) =>
             toast.error(t("splits.createFailed"), {
+                description: apiErrorToMessage(e, t),
+            }),
+    });
+}
+
+/**
+ * Bulk "Split" from the transactions toolbar. The toast names what was NOT
+ * split (already split, no amount, gone) so a partial result is never read as
+ * a full one.
+ */
+export function useBulkSplitTransactions() {
+    const qc = useQueryClient();
+    const { t, tc } = useLanguage();
+    return useMutation({
+        mutationFn: (request: BulkSplitRequest) =>
+            apiClient.createBulkSplits(request),
+        onSuccess: (result) => {
+            qc.invalidateQueries({ queryKey: splitKeys.all });
+            invalidateTransactionData(qc);
+            const skippedOther =
+                result.skipped_zero_amount + result.skipped_missing;
+            const details = [
+                result.skipped_already_split > 0
+                    ? tc(
+                          "splits.bulkSkippedAlreadySplit",
+                          result.skipped_already_split,
+                      )
+                    : null,
+                skippedOther > 0
+                    ? tc("splits.bulkSkippedOther", skippedOther)
+                    : null,
+            ].filter((line): line is string => line !== null);
+            const description =
+                details.length > 0 ? details.join(" ") : undefined;
+            if (result.split === 0) {
+                toast.info(t("splits.bulkNothingSplit"), { description });
+                return;
+            }
+            toast.success(tc("splits.bulkCreated", result.split), {
+                description,
+            });
+        },
+        onError: (e: Error) =>
+            toast.error(t("splits.bulkCreateFailed"), {
                 description: apiErrorToMessage(e, t),
             }),
     });

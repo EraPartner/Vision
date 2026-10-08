@@ -504,6 +504,6 @@ describeDb("durable paired income scoped writer", () => {
         "UPDATE portfolio_transactions SET income_recognition_role='included_in_units' WHERE id=$1",
         [fx.unitId],
       ),
-    ).rejects.toThrow(/ck_portfolio_income/);
+    ).rejects.toThrow(/chk_portfolio_income/);
   });
 });

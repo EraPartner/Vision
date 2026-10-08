@@ -6,6 +6,7 @@ import { BulkRecipientDialog } from "@/features/transactions/components/bulk/Bul
 import { BulkRecategorizeDialog } from "@/features/transactions/components/bulk/BulkRecategorizeDialog";
 import { BulkExportDialog } from "@/features/transactions/components/bulk/BulkExportDialog";
 import { BulkTagDialog } from "@/features/transactions/components/bulk/BulkTagDialog";
+import { BulkSplitDialog } from "@/features/transactions/components/bulk/BulkSplitDialog";
 
 describe("bulk action dialog field labels", () => {
     it("associates the visible Recipient label with its combobox", async () => {
@@ -23,6 +24,24 @@ describe("bulk action dialog field labels", () => {
             "id",
             "bulk-recipient",
         );
+    });
+
+    it("associates the visible Payee label with the bulk split combobox", async () => {
+        renderWithApp(
+            <BulkSplitDialog
+                open
+                selectedCount={3}
+                onOpenChange={vi.fn()}
+                onApply={vi.fn()}
+            />,
+        );
+
+        expect(await screen.findByText("Payee", { selector: "label" })).toBeVisible();
+        expect(screen.getByRole("combobox", { name: "Payee" })).toHaveAttribute(
+            "id",
+            "bulk-split-recipient",
+        );
+        expect(screen.getByRole("radiogroup", { name: "Split type" })).toBeInTheDocument();
     });
 
     it("associates the visible Category label with its combobox", async () => {
@@ -60,6 +79,10 @@ describe("bulk action dialog footer variants", () => {
         [
             "tag",
             <BulkTagDialog open selectedCount={3} onOpenChange={vi.fn()} onApply={vi.fn()} />,
+        ],
+        [
+            "split",
+            <BulkSplitDialog open selectedCount={3} onOpenChange={vi.fn()} onApply={vi.fn()} />,
         ],
     ])("%s dialog uses the outline Cancel convention", async (_name, dialog) => {
         renderWithApp(dialog);

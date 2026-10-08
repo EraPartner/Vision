@@ -25,6 +25,7 @@ const { mockClient, mockWithTransaction, mockRepository, mockPrimitives } =
         lockAndGetTotals: vi.fn(),
         lockSplitForPayment: vi.fn(),
         markSettledIfCovered: vi.fn(),
+        recipientExistsInTransaction: vi.fn(),
       },
     };
   });
@@ -45,12 +46,15 @@ vi.mock("../src/repositories/auditChainRepository.ts", () => ({
 
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
 
-import {
+import splitService, {
   addPayment,
   createSplitAtomic,
   deleteSplit,
   settleSplit,
 } from "../src/services/splitService.js";
+
+// Production reaches the bulk path through the default service object.
+const { createBulkSplitsAtomic } = splitService;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -155,5 +159,130 @@ describe("splitService transaction orchestration", () => {
         payload: expect.objectContaining({ transaction_id: 3 }),
       }),
     );
+  });
+});
+
+
+describe("splitService.createBulkSplitsAtomic", () => {
+  beforeEach(() => {
+    mockPrimitives.recipientExistsInTransaction.mockResolvedValue(true);
+    mockPrimitives.insertSplitInTransaction.mockImplementation(
+      async (_client, input) => ({ id: input.transaction_id * 10, ...input }),
+    );
+  });
+
+  it("writes one preset split per unsplit transaction, locking ids in ascending order", async () => {
+    const totals = {
+      1: { transaction_total: 10.01, current_split_total: 0 },
+      2: { transaction_total: 40, current_split_total: 0 },
+      5: { transaction_total: 7.5, current_split_total: 0 },
+    };
+    mockPrimitives.lockAndGetTotals.mockImplementation(
+      async (_client, id) => totals[id] ?? null,
+    );
+
+    const result = await createBulkSplitsAtomic({
+      transaction_ids: [5, 1, 2, 1],
+      recipient_id: 3,
+      mode: "equal",
+      actor: "tor",
+    });
+
+    // Deduplicated and sorted: a second overlapping bulk call takes the same
+    // row locks in the same order, so the two cannot deadlock.
+    expect(
+      mockPrimitives.lockAndGetTotals.mock.calls.map(([, id]) => id),
+    ).toEqual([1, 2, 5]);
+    // Half of each, banker's rounding to cents (10.01 / 2 = 5.005 -> 5.00).
+    expect(
+      mockPrimitives.insertSplitInTransaction.mock.calls.map(
+        ([, input]) => [input.transaction_id, input.amount],
+      ),
+    ).toEqual([
+      [1, 5],
+      [2, 20],
+      [5, 3.75],
+    ]);
+    expect(result).toMatchObject({
+      requested: 4,
+      split: 3,
+      skipped_already_split: 0,
+      skipped_zero_amount: 0,
+      skipped_missing: 0,
+    });
+    expect(result.items).toHaveLength(3);
+    expect(mockRepository.writeAudit).toHaveBeenCalledTimes(3);
+    expect(mockRepository.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        split_id: 10,
+        action: "create",
+        actor: "tor",
+        client: mockClient,
+        payload: expect.objectContaining({ bulk: true, mode: "equal" }),
+      }),
+    );
+  });
+
+  it("full mode gives the other person the whole amount", async () => {
+    mockPrimitives.lockAndGetTotals.mockResolvedValue({
+      transaction_total: 12.34,
+      current_split_total: 0,
+    });
+
+    await createBulkSplitsAtomic({
+      transaction_ids: [1],
+      recipient_id: 3,
+      mode: "full",
+    });
+
+    expect(mockPrimitives.insertSplitInTransaction).toHaveBeenCalledWith(
+      mockClient,
+      expect.objectContaining({ transaction_id: 1, amount: 12.34 }),
+    );
+  });
+
+  it("skips and counts already-split, zero-amount and missing transactions", async () => {
+    const totals = {
+      1: { transaction_total: 30, current_split_total: 15 },
+      2: { transaction_total: 0, current_split_total: 0 },
+      3: { transaction_total: 9, current_split_total: 0 },
+    };
+    mockPrimitives.lockAndGetTotals.mockImplementation(
+      async (_client, id) => totals[id] ?? null,
+    );
+
+    const result = await createBulkSplitsAtomic({
+      transaction_ids: [1, 2, 3, 4],
+      recipient_id: 3,
+      mode: "full",
+    });
+
+    expect(result).toMatchObject({
+      requested: 4,
+      split: 1,
+      skipped_already_split: 1,
+      skipped_zero_amount: 1,
+      skipped_missing: 1,
+    });
+    expect(mockPrimitives.insertSplitInTransaction).toHaveBeenCalledTimes(1);
+    expect(mockPrimitives.insertSplitInTransaction).toHaveBeenCalledWith(
+      mockClient,
+      expect.objectContaining({ transaction_id: 3, amount: 9 }),
+    );
+  });
+
+  it("rejects an unknown recipient before locking or writing anything", async () => {
+    mockPrimitives.recipientExistsInTransaction.mockResolvedValue(false);
+
+    await expect(
+      createBulkSplitsAtomic({
+        transaction_ids: [1],
+        recipient_id: 999,
+        mode: "equal",
+      }),
+    ).rejects.toThrow(/Recipient not found/);
+    expect(mockPrimitives.lockAndGetTotals).not.toHaveBeenCalled();
+    expect(mockPrimitives.insertSplitInTransaction).not.toHaveBeenCalled();
+    expect(mockRepository.writeAudit).not.toHaveBeenCalled();
   });
 });

@@ -565,7 +565,10 @@ function literalKinesisAssetRecord(row) {
   };
 }
 
-/** Literal negative asset balance must equal received units plus its same-asset fee. */
+/**
+ * Literal negative asset balance must equal received units plus its same-asset fee.
+ * @param {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} row
+ */
 export function __verifiedKinesisWithdrawal(row) {
   try {
     if (

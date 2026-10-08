@@ -7,6 +7,48 @@ import {
   readReconciliationBatchScope,
 } from "./portfolioImportReconciliationRepository.ts";
 
+/**
+ * Full after-image of a `transactions` row as built by CASH_SNAPSHOT_SQL
+ * (jsonb: NUMERIC columns as exact text, `date` as 'YYYY-MM-DD').
+ * @typedef {object} CashTransactionSnapshot
+ * @property {number} id
+ * @property {string} date
+ * @property {string} amount
+ * @property {string | null} currency
+ * @property {string | null} memo
+ * @property {string | null} comment
+ * @property {string | null} balance
+ * @property {number | null} account_id
+ * @property {number | null} recipient_id
+ * @property {number | null} recipient_bank_account_id
+ * @property {number | null} category_id
+ * @property {boolean} is_active
+ * @property {number | null} import_batch_id
+ * @property {string | null} source_record_hash
+ * @property {string | null} dedup_fingerprint
+ * @property {number | null} dedup_fingerprint_version
+ * @property {boolean} is_transfer
+ * @property {string | null} transfer_source
+ * @property {number | null} transfer_peer_id
+ */
+/**
+ * Proven cash movement values (see portfolioKinesisCashScope).
+ * @typedef {object} KinesisCashValues
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {string} amount exact decimal text
+ * @property {string} currency
+ * @property {number} accountId
+ * @property {boolean} isTransfer
+ */
+/**
+ * An `account_statement_balances` row as `to_jsonb` (NUMERIC as a JSON number).
+ * @typedef {object} StatementBalanceSnapshot
+ * @property {number} account_id
+ * @property {string} currency
+ * @property {number} balance
+ * @property {string} balance_date 'YYYY-MM-DD'
+ */
+
 const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
   'amount',t.amount::text,'currency',t.currency,'memo',t.memo,'comment',t.comment,'balance',t.balance::text,
   'account_id',t.account_id,'recipient_id',t.recipient_id,'recipient_bank_account_id',t.recipient_bank_account_id,
@@ -19,17 +61,30 @@ const stale = () =>
   new ConflictError("Owned cash source or ledger image changed", {
     details: { reason: "cash_receipt_changed" },
   });
+/**
+ * @returns {Promise<{
+ *   ledger: CashTransactionSnapshot[],
+ *   sources: import('./portfolioImportReconciliationRepository.ts').ReconciliationSourceRow[],
+ *   batches: import('./portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow[],
+ *   statementBalances: StatementBalanceSnapshot[],
+ * }>}
+ */
 export async function readKinesisCashContext() {
   // Whole ledger binds competing identities; no date-window guesses are adopted.
   const ledger = (
     await query(
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t ORDER BY t.id`,
     )
-  ).rows.map((item) => item.snapshot);
+  ).rows.map(
+    (/** @type {{ snapshot: CashTransactionSnapshot }} */ item) =>
+      item.snapshot,
+  );
   const ids = (
     await query(`SELECT DISTINCT batch_id FROM portfolio_import_staging_rows
     WHERE route='cash' AND committed_txn_id IS NOT NULL AND raw_data LIKE '%"portfolioCashReceipt"%' ORDER BY batch_id`)
-  ).rows.map((item) => Number(item.batch_id));
+  ).rows.map((/** @type {{ batch_id: string }} */ item) =>
+    Number(item.batch_id),
+  );
   const [sources, batches] = ids.length
     ? await Promise.all([
         readReconciliationSources(ids),
@@ -40,9 +95,13 @@ export async function readKinesisCashContext() {
     await query(
       "SELECT to_jsonb(s) AS snapshot FROM account_statement_balances s ORDER BY account_id,currency",
     )
-  ).rows.map((item) => item.snapshot);
+  ).rows.map(
+    (/** @type {{ snapshot: StatementBalanceSnapshot }} */ item) =>
+      item.snapshot,
+  );
   return { ledger, sources, batches, statementBalances };
 }
+/** @param {number[]} [accountIds] */
 export async function lockKinesisCashLedger(accountIds = []) {
   await query("LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE");
   if (accountIds.length)
@@ -51,6 +110,16 @@ export async function lockKinesisCashLedger(accountIds = []) {
       [accountIds],
     );
 }
+/**
+ * @param {object} args
+ * @param {any} args.row the matched staging source row
+ * @param {KinesisCashValues} args.values
+ * @param {any} args.proof
+ * @param {KinesisCashValues} [args.feeValues]
+ * @param {string} args.primaryRawData
+ * @param {string} [args.feeFingerprint]
+ * @returns {Promise<{ after: CashTransactionSnapshot, feeAfter?: CashTransactionSnapshot, recordedCash: number }>}
+ */
 export async function insertKinesisCash({
   row,
   values,
@@ -148,11 +217,18 @@ export async function insertKinesisCash({
     recordedCash: feeAfter ? 2 : 1,
   };
 }
+/**
+ * @param {readonly number[]} ids
+ * @returns {Promise<CashTransactionSnapshot[]>}
+ */
 export async function readCashImagesForUpdate(ids) {
   return (
     await query(
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE`,
       [ids],
     )
-  ).rows.map((item) => item.snapshot);
+  ).rows.map(
+    (/** @type {{ snapshot: CashTransactionSnapshot }} */ item) =>
+      item.snapshot,
+  );
 }

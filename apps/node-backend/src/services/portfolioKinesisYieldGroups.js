@@ -8,6 +8,132 @@ import {
 } from "./portfolioPerformanceReferenceEvidence.js";
 import { proveKinesisCorrectionSources } from "./portfolioKinesisAdoptionScope.js";
 
+/**
+ * @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} ReconciliationSourceRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow} ReconciliationBatchScopeRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationReceiptContext} ReconciliationReceiptContext
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationJournalRow} ReconciliationJournalRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').PortfolioTransactionSnapshot} PortfolioTransactionSnapshot
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {ReturnType<typeof proveKinesisCorrectionSources>} KinesisCorrectionEvidence
+ */
+/**
+ * The history fields read here. Custody transfer and adjustment events carry
+ * no cash columns, so those stay optional.
+ * @typedef {object} KinesisYieldHistoryEntry
+ * @property {number} id
+ * @property {number} investment_id
+ * @property {string} type
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {string | null} [amount]
+ * @property {string | null} units
+ * @property {string | null} [price_per_unit]
+ * @property {string | null} [fees]
+ * @property {string | null} [taxes]
+ * @property {string | null} [currency]
+ * @property {string | null} [fx_rate_to_eur]
+ * @property {number | null} [account_id]
+ * @property {string | null} import_batch_id
+ * @property {string | null} source_record_hash
+ * @property {string | null} dedup_fingerprint
+ * @property {number | null} dedup_fingerprint_version
+ */
+/**
+ * One retained Portfolio Performance event (JSON evidence in batch config).
+ * @typedef {object} KinesisYieldReferenceEvent
+ * @property {string} id
+ * @property {string} portfolioId
+ * @property {string} securityId
+ * @property {string} type
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {string} shares
+ * @property {{ sharesMinor: string, [key: string]: unknown }} literal
+ */
+/**
+ * @typedef {object} KinesisYieldReference
+ * @property {string} sourceHash
+ * @property {KinesisYieldReferenceEvent[]} events
+ */
+/**
+ * @typedef {object} KinesisYieldAccountMapping
+ * @property {string} portfolioId
+ * @property {number} accountId
+ */
+/**
+ * @typedef {object} KinesisYieldRetained
+ * @property {ReconciliationJournalRow} receipt
+ * @property {ReconciliationSourceRow} prior
+ */
+/**
+ * @typedef {object} KinesisYieldManifestMember
+ * @property {number} canonicalId
+ * @property {string} eventKey
+ * @property {string | null} sourceHash
+ * @property {string | null} sourceId
+ * @property {string} referenceId
+ * @property {string} recordedDate
+ * @property {string} paymentDate
+ * @property {string} units
+ */
+/**
+ * @typedef {object} KinesisYieldManifest
+ * @property {string} sourceFileHash
+ * @property {string} referenceHash
+ * @property {number} accountId
+ * @property {number} investmentId
+ * @property {string} portfolioId
+ * @property {string} securityId
+ * @property {string} lower
+ * @property {string} upper
+ * @property {{ canonicalId: number, receiptId: number, sourceHash: string | null, referenceId: string }[]} boundaries
+ * @property {KinesisYieldManifestMember[]} members
+ */
+/**
+ * @typedef {object} KinesisYieldMember
+ * @property {ReconciliationSourceRow} row
+ * @property {KinesisYieldHistoryEntry} current
+ * @property {KinesisYieldHistoryEntry | PortfolioTransactionSnapshot} recorded
+ * @property {KinesisYieldReferenceEvent} referenceEvent
+ * @property {KinesisYieldRetained | undefined} retained
+ * @property {{ eventKey: string, sourceFileHash: string, parsed: ParsedPortfolioRow }} proof
+ */
+/**
+ * @typedef {object} KinesisYieldGroup
+ * @property {string} key
+ * @property {KinesisYieldManifest} manifest
+ * @property {KinesisYieldMember[]} members
+ */
+/**
+ * @typedef {object} KinesisYieldBlocker
+ * @property {string} reason
+ * @property {number[]} candidateTransactionIds
+ * @property {number} [batchId]
+ * @property {number} [rowId]
+ * @property {number} [rowOrdinal]
+ */
+/**
+ * `custom_config.portfolio_performance_reference.yieldGroupEvidence`.
+ * @typedef {object} KinesisYieldGroupEvidence
+ * @property {number} version
+ * @property {KinesisYieldReference} reference
+ * @property {string} referenceDigest
+ * @property {KinesisYieldAccountMapping[]} accountMappings
+ * @property {KinesisYieldManifest[]} manifests
+ */
+/**
+ * @typedef {object} KinesisYieldGroupsResult
+ * @property {KinesisYieldGroup[]} groups
+ * @property {KinesisYieldBlocker[]} blockers
+ * @property {Set<number>} reservedRowIds
+ * @property {KinesisCorrectionEvidence} [evidence]
+ * @property {KinesisYieldAccountMapping[]} [accountMappings]
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {unknown}
+ */
 const canonical = (value) =>
   Array.isArray(value)
     ? value.map(canonical)
@@ -15,34 +141,64 @@ const canonical = (value) =>
       ? Object.fromEntries(
           Object.keys(value)
             .sort()
-            .map((key) => [key, canonical(value[key])]),
+            .map((key) => [
+              key,
+              canonical(/** @type {Record<string, unknown>} */ (value)[key]),
+            ]),
         )
       : value;
 // PostgreSQL JSONB may reorder object keys without changing documentary facts.
+/** @param {unknown} reference */
 export const kinesisYieldReferenceDigest = (reference) =>
   createHash("sha256")
     .update(JSON.stringify(canonical(reference)))
     .digest("hex");
+/**
+ * @param {DecimalInput} a
+ * @param {DecimalInput} b
+ * @param {number} [places]
+ */
 const equal = (a, b, places = 8) =>
   a != null &&
   b != null &&
   toDecimal(a)
     .toDecimalPlaces(places, 4)
     .eq(toDecimal(b).toDecimalPlaces(places, 4));
+/**
+ * @param {object | null | undefined} a
+ * @param {object | null | undefined} b
+ */
 const snapshotEqual = (a, b) =>
   JSON.stringify(Object.entries(a || {}).sort()) ===
   JSON.stringify(Object.entries(b || {}).sort());
+/** @param {{ amount?: DecimalInput, price_per_unit?: DecimalInput, fees?: DecimalInput, taxes?: DecimalInput }} row */
 const zero = (row) =>
-  ["amount", "price_per_unit", "fees", "taxes"].every((key) =>
-    toDecimal(row[key] ?? 0).eq(0),
+  /** @type {const} */ (["amount", "price_per_unit", "fees", "taxes"]).every(
+    (key) => toDecimal(row[key] ?? 0).eq(0),
   );
+/**
+ * @param {string} day
+ * @param {string} lower
+ * @param {string} upper
+ */
 const inside = (day, lower, upper) => day > lower && day < upper;
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {KinesisYieldHistoryEntry} current
+ */
 const sourceMatches = (row, current) =>
   current.dedup_fingerprint === row.dedup_fingerprint &&
   current.dedup_fingerprint_version === row.dedup_fingerprint_version &&
   Number(current.investment_id) === Number(row.investment_id);
 
-/** Strict retained receipt binding, including complete original-file proof. */
+/** Strict retained receipt binding, including complete original-file proof.
+ * @param {ReconciliationSourceRow} row
+ * @param {KinesisYieldHistoryEntry} current
+ * @param {ReconciliationReceiptContext} context
+ * @param {KinesisCorrectionEvidence} evidence
+ * @param {KinesisCorrectionEvidence} priorEvidence
+ * @returns {KinesisYieldRetained | undefined}
+ */
 function retainedReceipt(row, current, context, evidence, priorEvidence) {
   const receipts = context.receipts.filter(
     (entry) => Number(entry.transaction_id) === Number(current.id),
@@ -85,6 +241,14 @@ function retainedReceipt(row, current, context, evidence, priorEvidence) {
   return { receipt, prior };
 }
 
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {KinesisYieldHistoryEntry[]} history
+ * @param {ReconciliationReceiptContext} context
+ * @param {KinesisCorrectionEvidence} evidence
+ * @param {KinesisCorrectionEvidence} priorEvidence
+ * @param {KinesisYieldReference} reference
+ */
 function nativeBoundary(
   row,
   history,
@@ -139,11 +303,22 @@ function nativeBoundary(
     return undefined;
   return { row, current, ...retained, event };
 }
+/**
+ * @param {DecimalInput} a
+ * @param {DecimalInput} b
+ * @param {number} places
+ */
 function equalNullable(a, b, places) {
   return a == null || b == null ? a == null && b == null : equal(a, b, places);
 }
 
-/** A corrected date retains the original XML witness in the immutable before-image. */
+/** A corrected date retains the original XML witness in the immutable before-image.
+ * @param {ReconciliationSourceRow} row
+ * @param {KinesisYieldHistoryEntry} current
+ * @param {KinesisYieldRetained | undefined} retained
+ * @param {ReconciliationReceiptContext} context
+ * @returns {KinesisYieldHistoryEntry | PortfolioTransactionSnapshot | undefined}
+ */
 function recordedMember(row, current, retained, context) {
   if (!retained) return current;
   const { receipt } = retained;
@@ -156,10 +331,16 @@ function recordedMember(row, current, retained, context) {
   ]);
   if (receipt.policy === "preserve_existing")
     return Object.keys(current).every(
-      (field) => metadata.has(field) || current[field] === before[field],
+      (field) =>
+        metadata.has(field) ||
+        /** @type {Record<string, unknown>} */ (current)[field] ===
+          /** @type {Record<string, unknown>} */ (before)[field],
     ) &&
       Object.keys(before).every(
-        (field) => metadata.has(field) || current[field] === before[field],
+        (field) =>
+          metadata.has(field) ||
+          /** @type {Record<string, unknown>} */ (current)[field] ===
+            /** @type {Record<string, unknown>} */ (before)[field],
       )
       ? current
       : undefined;
@@ -167,6 +348,7 @@ function recordedMember(row, current, retained, context) {
   const batch = context.batches.find(
     (item) => Number(item.id) === Number(receipt.batch_id),
   );
+  /** @type {KinesisYieldManifest[]} */
   const manifests =
     batch?.custom_config?.portfolio_performance_reference?.yieldGroupEvidence
       ?.manifests || [];
@@ -190,17 +372,31 @@ function recordedMember(row, current, retained, context) {
     before.dedup_fingerprint != null ||
     before.source_record_hash != null ||
     Object.keys(current).some(
-      (field) => !allowed.has(field) && current[field] !== before[field],
+      (field) =>
+        !allowed.has(field) &&
+        /** @type {Record<string, unknown>} */ (current)[field] !==
+          /** @type {Record<string, unknown>} */ (before)[field],
     ) ||
     Object.keys(before).some(
-      (field) => !allowed.has(field) && current[field] !== before[field],
+      (field) =>
+        !allowed.has(field) &&
+        /** @type {Record<string, unknown>} */ (current)[field] !==
+          /** @type {Record<string, unknown>} */ (before)[field],
     )
   )
     return undefined;
   return before;
 }
 
-/** No subset sums: every event between independently proved adjacent deposits participates. */
+/** No subset sums: every event between independently proved adjacent deposits participates.
+ * @param {object} input
+ * @param {ReconciliationSourceRow[]} input.rows
+ * @param {ReconciliationBatchScopeRow[]} input.batches
+ * @param {KinesisYieldHistoryEntry[]} input.history
+ * @param {ReconciliationReceiptContext} input.context
+ * @param {KinesisYieldReference} input.reference
+ * @param {KinesisYieldAccountMapping[]} input.accountMappings
+ */
 export function buildKinesisYieldGroups({
   rows,
   batches,
@@ -214,10 +410,11 @@ export function buildKinesisYieldGroups({
     context.sources,
     context.batches,
   );
+  /** @type {KinesisYieldGroup[]} */
   const groups = [];
   const provedMappings = new Map();
   const reservedRowIds = new Set();
-  /** @type {any[]} */
+  /** @type {KinesisYieldBlocker[]} */
   const blockers = [...evidence.issues];
   if (blockers.length) return { groups, blockers, evidence, reservedRowIds };
   const recordGroups = new Map();
@@ -285,7 +482,7 @@ export function buildKinesisYieldGroups({
           continue;
         const bounds = [first, last].map((item) => {
           const row = item.rows.find(
-            (candidate) =>
+            (/** @type {ReconciliationSourceRow} */ candidate) =>
               candidate.type === "gift" && candidate.route === "portfolio",
           );
           return (
@@ -328,7 +525,10 @@ export function buildKinesisYieldGroups({
             if (row.type === "gift") reservedRowIds.add(Number(row.id));
         const witnessesById = new Map();
         for (const item of interval) {
-          const row = item.rows.find((candidate) => candidate.type === "gift");
+          const row = item.rows.find(
+            (/** @type {ReconciliationSourceRow} */ candidate) =>
+              candidate.type === "gift",
+          );
           const current =
             row && history.find((candidate) => sourceMatches(row, candidate));
           if (!current) continue;
@@ -388,13 +588,13 @@ export function buildKinesisYieldGroups({
         const members = [];
         for (const item of interval) {
           const unitRows = item.rows.filter(
-            (row) =>
+            (/** @type {ReconciliationSourceRow} */ row) =>
               row.type === "gift" &&
               row.source_transaction_id ===
                 `${item.literal.Transaction_ID}:units`,
           );
           const incomeRows = item.rows.filter(
-            (row) =>
+            (/** @type {ReconciliationSourceRow} */ row) =>
               row.type === "dividend" &&
               row.source_transaction_id ===
                 `${item.literal.Transaction_ID}:income`,
@@ -588,13 +788,21 @@ export function buildKinesisYieldGroups({
   };
 }
 
-/** Reconstruct the proof from the retained full typed original reference. */
+/** Reconstruct the proof from the retained full typed original reference.
+ * @param {object} input
+ * @param {ReconciliationSourceRow[]} input.rows
+ * @param {ReconciliationBatchScopeRow[]} input.batches
+ * @param {KinesisYieldHistoryEntry[]} input.history
+ * @param {ReconciliationReceiptContext} input.context
+ * @returns {KinesisYieldGroupsResult}
+ */
 export function proveRetainedKinesisYieldGroups({
   rows,
   batches,
   history,
   context,
 }) {
+  /** @type {KinesisYieldGroupEvidence[]} */
   const entries = batches
     .map(
       (batch) =>

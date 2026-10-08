@@ -30,6 +30,27 @@ export interface SplitCreateInput {
     note?: string;
 }
 
+/** Preset share for POST /api/splits/bulk: `equal` = 50/50, `full` = 0/100 (the payee owes everything). */
+export type BulkSplitMode = 'equal' | 'full';
+
+/** Body of POST /api/splits/bulk — one payee, one preset, many transactions. */
+export interface BulkSplitRequest {
+    transaction_ids: number[];
+    recipient_id: number;
+    mode: BulkSplitMode;
+    note?: string;
+}
+
+/** Result of POST /api/splits/bulk (splitService.createBulkSplitsAtomic). */
+export interface BulkSplitResult {
+    requested: number;
+    split: number;
+    skipped_already_split: number;
+    skipped_zero_amount: number;
+    skipped_missing: number;
+    items: SplitItem[];
+}
+
 /** Aggregated "who owes what" row from GET /api/splits/owed (computeOwedSummary). */
 export interface OwedSummaryItem {
     recipient_id: number;
@@ -84,6 +105,13 @@ export function createSplitsBatch(
     return apiRequest('/api/splits/batch', {
         method: 'POST',
         body: JSON.stringify({ transaction_id: transactionId, splits }),
+    });
+}
+
+export function createBulkSplits(request: BulkSplitRequest): Promise<BulkSplitResult> {
+    return apiRequest('/api/splits/bulk', {
+        method: 'POST',
+        body: JSON.stringify(request),
     });
 }
 

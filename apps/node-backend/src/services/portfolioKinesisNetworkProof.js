@@ -18,16 +18,98 @@ import {
 } from "./importIdentity.js";
 
 import { kinesisYieldReferenceDigest as hash } from "./portfolioKinesisYieldGroups.js";
+
+/**
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisSourceRow} KinesisSourceRow
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisBatchRow} KinesisBatchRow
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisSourceIssue} KinesisSourceIssue
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationHistoryEvent} ReconciliationHistoryEvent
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationTransferEvent} ReconciliationTransferEvent
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationAdjustmentEvent} ReconciliationAdjustmentEvent
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationContext} ReconciliationContext
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationReceiptContext} ReconciliationReceiptContext
+ * @typedef {import('../lib/money.ts').DecimalInput} DecimalInput
+ */
+/**
+ * A Horizon transaction record as embedded in a receipt (validated before use).
+ * @typedef {object} HorizonTransaction
+ * @property {string} hash
+ * @property {boolean} successful
+ * @property {string} created_at
+ * @property {string} source_account
+ * @property {string} fee_account
+ * @property {string|number} fee_charged
+ * @property {number} operation_count
+ * @property {string} paging_token
+ */
+/**
+ * One fetched Horizon page; `body` is the literal untrusted response JSON.
+ * @typedef {object} HorizonPage
+ * @property {string} url
+ * @property {any} body
+ */
+/**
+ * @typedef {object} HorizonAccount
+ * @property {string} account_id
+ * @property {{ asset_type: string, balance: string }[]} [balances]
+ */
+/**
+ * Portfolio Performance basis witness attached to a native gift receipt.
+ * @typedef {object} RecordedBasisWitness
+ * @property {string} id
+ * @property {string} date
+ * @property {string} sourceHash
+ * @property {{ date: string, type: string, transactionId: string, securityId: string, amountMinor: string, sharesMinor: string, currency: string, units: unknown[] }} literal
+ */
+/**
+ * Native wallet receipt as supplied in the generic source's Receipt_JSON cell.
+ * @typedef {object} KinesisNetworkReceipt
+ * @property {number} version
+ * @property {string} network
+ * @property {string} asset
+ * @property {HorizonTransaction} transaction
+ * @property {HorizonPage[]} sourceHistoryPages
+ * @property {HorizonAccount} [sourceAccount]
+ * @property {HorizonAccount} [destinationAccount]
+ * @property {unknown} [operation]
+ * @property {RecordedBasisWitness} [recordedBasisWitness]
+ */
+/**
+ * @typedef {object} NativeGiftGroupProof
+ * @property {string} kind
+ * @property {string[]} memberSourceIds
+ * @property {string[]} nativeReceiptHashes
+ * @property {string[]} basisWitnessIds
+ * @property {number} preservedTransactionId
+ * @property {string} associatedSourceId
+ * @property {ReconciliationHistoryEvent} preservedBefore
+ * @property {string} [groupKey]
+ */
+/**
+ * `asset_transfer_details.nativeGiftGroupReceipt` as retained at commit.
+ * @typedef {object} NativeGiftGroupReceipt
+ * @property {number} version
+ * @property {NativeGiftGroupProof} proof
+ * @property {ReconciliationHistoryEvent[]} after
+ */
+
+/**
+ * @param {DecimalInput} a
+ * @param {DecimalInput} b
+ */
 const equal = (a, b) => toDecimal(a).eq(b);
+/** @param {string} url */
 const hostAsset = (url) =>
   ({
     "kau-mainnet.kinesisgroup.io": "KAU",
     "kag-mainnet.kinesisgroup.io": "KAG",
   })[new URL(url).hostname];
+/** @param {string|undefined} value */
 const day = (value) =>
   /^\d{4}-\d{2}-\d{2}T/.test(value ?? "") && Number.isFinite(Date.parse(value))
     ? value.slice(0, 10)
     : undefined;
+/** @param {HorizonTransaction} tx */
 const financialTransaction = (tx) => [
   tx.hash,
   tx.successful,
@@ -38,6 +120,11 @@ const financialTransaction = (tx) => [
   tx.operation_count,
 ];
 
+/**
+ * @param {HorizonTransaction} transaction
+ * @param {HorizonPage[]} pages
+ * @param {string} asset
+ */
 function operationFor(transaction, pages, asset) {
   const matches = pages.filter((page) => {
     const url = new URL(page.url);
@@ -91,7 +178,10 @@ function operationFor(transaction, pages, asset) {
   };
 }
 
-/** Check exhausted native history, exact account balance, operation and fee payer. */
+/** Check exhausted native history, exact account balance, operation and fee payer.
+ * @param {KinesisNetworkReceipt} receipt
+ * @param {string} kind
+ */
 export function verifyKinesisNetworkReceipt(receipt, kind) {
   if (
     receipt?.version !== 1 ||
@@ -230,7 +320,9 @@ export function verifyKinesisNetworkReceipt(receipt, kind) {
   };
 }
 
-/** Re-read generic literal source rather than trusting mutable staging metadata. */
+/** Re-read generic literal source rather than trusting mutable staging metadata.
+ * @param {KinesisSourceRow} row
+ */
 export function verifiedKinesisNetworkRow(row) {
   try {
     const config = row.custom_config || {};
@@ -246,8 +338,10 @@ export function verifiedKinesisNetworkRow(row) {
     const kind = record[mapping.type];
     if (!["asset_fee", "asset_transfer_witness"].includes(kind))
       return undefined;
+    /** @type {KinesisNetworkReceipt} */
     const receipt = JSON.parse(record.Receipt_JSON);
     const proof = verifyKinesisNetworkReceipt(receipt, kind);
+    /** @param {string} field */
     const number = (field) =>
       mapping[field] && record[mapping[field]] !== ""
         ? parseCustomAmount(record[mapping[field]], config.number_format, {
@@ -287,7 +381,7 @@ export function verifiedKinesisNetworkRow(row) {
       row.symbol_raw !== proof.asset ||
       row.tx_date !== proof.date ||
       !equal(row.units, proof.units) ||
-      ["amount", "price_per_unit", "fees", "taxes"].some(
+      /** @type {const} */ (["amount", "price_per_unit", "fees", "taxes"]).some(
         (field) => !toDecimal(row[field] ?? 0).eq(0),
       )
     )
@@ -315,7 +409,12 @@ export function verifiedKinesisNetworkRow(row) {
   }
 }
 
-/** Exact native outbound witnesses identify one broker incoming custody event. */
+/** Exact native outbound witnesses identify one broker incoming custody event.
+ * @param {KinesisSourceRow[]} rows
+ * @param {KinesisBatchRow[]} batches
+ * @param {ReconciliationHistoryEvent[]} history
+ * @param {ReconciliationContext} [context]
+ */
 export function proveKinesisNetworkBindings(
   rows,
   batches,
@@ -324,7 +423,7 @@ export function proveKinesisNetworkBindings(
 ) {
   const overrides = new Map(),
     bindings = [],
-    blockers = [];
+    blockers = /** @type {KinesisSourceIssue[]} */ ([]);
   const selected = rows.filter(
     (row) =>
       row.asset_transfer_details?.networkReceipt ||
@@ -348,6 +447,10 @@ export function proveKinesisNetworkBindings(
         ?.direction === "in" &&
       /^[a-f0-9]{64}$/.test(row.source_transaction_id ?? ""),
   );
+  /**
+   * @param {KinesisSourceRow} row
+   * @param {string} reason
+   */
   const issue = (row, reason) =>
     blockers.push({
       reason,
@@ -372,7 +475,8 @@ export function proveKinesisNetworkBindings(
         matches.length &&
         (matches.length !== 1 ||
           matches[0].type !== "asset_adjustment" ||
-          matches[0].adjustment_kind !== "asset_fee" ||
+          /** @type {ReconciliationAdjustmentEvent} */ (matches[0])
+            .adjustment_kind !== "asset_fee" ||
           Number(matches[0].account_id) !== Number(row.account_id) ||
           Number(matches[0].investment_id) !== Number(row.investment_id) ||
           matches[0].date !== row.tx_date ||
@@ -474,6 +578,7 @@ export function proveKinesisNetworkBindings(
       feeUnits: verified.proof.feeUnits,
       networkBinding: binding,
     };
+    /** @type {KinesisSourceRow} */
     const projected = {
       ...row,
       route: "asset_transfer",
@@ -506,15 +611,25 @@ export function proveKinesisNetworkBindings(
         owner.source_record_hash !== row.source_record_hash ||
         hash(owner.asset_transfer_details.networkBinding) !== hash(binding) ||
         current.type !== "asset_transfer" ||
-        Number(current.staging_row_id) !== Number(owner.id) ||
+        Number(
+          /** @type {ReconciliationTransferEvent} */ (current).staging_row_id,
+        ) !== Number(owner.id) ||
         Number(current.import_batch_id) !== Number(owner.batch_id) ||
-        Number(current.source_account_id) !== binding.originAccountId ||
-        Number(current.destination_account_id) !==
-          binding.destinationAccountId ||
+        Number(
+          /** @type {ReconciliationTransferEvent} */ (current)
+            .source_account_id,
+        ) !== binding.originAccountId ||
+        Number(
+          /** @type {ReconciliationTransferEvent} */ (current)
+            .destination_account_id,
+        ) !== binding.destinationAccountId ||
         Number(current.investment_id) !== Number(row.investment_id) ||
         current.date !== row.tx_date ||
         !equal(current.units, projected.units) ||
-        !equal(current.fee_units, binding.feeUnits) ||
+        !equal(
+          /** @type {ReconciliationTransferEvent} */ (current).fee_units,
+          binding.feeUnits,
+        ) ||
         current.source_record_hash !== row.source_record_hash
       ) {
         issue(row, "network_receipt_changed");
@@ -528,6 +643,7 @@ export function proveKinesisNetworkBindings(
   return { overrides, bindings, blockers };
 }
 
+/** @param {KinesisSourceRow} row */
 function verifiedNativeGiftRow(row) {
   try {
     if (row.route !== "portfolio" || row.type !== "gift") return undefined;
@@ -544,7 +660,9 @@ function verifiedNativeGiftRow(row) {
     )
       return undefined;
     const raw = records[0],
-      receipt = JSON.parse(raw.Receipt_JSON),
+      receipt = /** @type {KinesisNetworkReceipt} */ (
+        JSON.parse(raw.Receipt_JSON)
+      ),
       proof = verifyKinesisNetworkReceipt(receipt, "gift");
     const witness = receipt.recordedBasisWitness,
       literal = witness?.literal;
@@ -572,6 +690,7 @@ function verifiedNativeGiftRow(row) {
     const identity = assignImportIdentities([row], (source) =>
       portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
     )[0];
+    /** @param {string} field */
     const number = (field) =>
       mapping[field] && raw[mapping[field]] !== ""
         ? parseCustomAmount(raw[mapping[field]], config.number_format, {
@@ -623,7 +742,16 @@ function verifiedNativeGiftRow(row) {
   }
 }
 
-/** Closed cardinality associates equivalent daily gifts; it does not infer an individual legacy identity. */
+/**
+ * @typedef {NonNullable<ReturnType<typeof verifiedNativeGiftRow>>} NativeGiftMember
+ */
+
+/** Closed cardinality associates equivalent daily gifts; it does not infer an individual legacy identity.
+ * @param {KinesisSourceRow[]} rows
+ * @param {KinesisBatchRow[]} batches
+ * @param {ReconciliationHistoryEvent[]} history
+ * @param {ReconciliationReceiptContext} [context]
+ */
 export function proveKinesisNativeGiftGroups(
   rows,
   batches,
@@ -632,13 +760,17 @@ export function proveKinesisNativeGiftGroups(
 ) {
   const candidates = new Map(),
     groups = [],
-    blockers = [];
+    blockers = /** @type {KinesisSourceIssue[]} */ ([]);
   const selected = rows.filter(
     (row) =>
       row.type === "gift" &&
       row.custom_config?.column_mapping &&
       row.custom_config?.source_columns?.includes("Receipt_JSON"),
   );
+  /**
+   * @param {KinesisSourceRow} row
+   * @param {string} reason
+   */
   const issue = (row, reason) =>
     blockers.push({
       reason,
@@ -647,6 +779,7 @@ export function proveKinesisNativeGiftGroups(
       rowOrdinal: row.row_index + 1,
       candidateTransactionIds: [],
     });
+  /** @type {Map<string, NativeGiftMember[]>} */
   const grouped = new Map();
   for (const row of selected) {
     const member = verifiedNativeGiftRow(row);
@@ -720,6 +853,7 @@ export function proveKinesisNativeGiftGroups(
           issue(member.row, "network_gift_group_incomplete");
         continue;
       }
+      /** @param {ReconciliationHistoryEvent} current */
       const matching = (current) =>
         current.type === "gift" &&
         current.date === first.proof.date &&
@@ -778,7 +912,9 @@ export function proveKinesisNativeGiftGroups(
             source.source_record_hash === member.row.source_record_hash,
         );
         const owner = owners[0],
-          receipt = owner?.asset_transfer_details?.nativeGiftGroupReceipt;
+          receipt = /** @type {NativeGiftGroupReceipt|undefined} */ (
+            owner?.asset_transfer_details?.nativeGiftGroupReceipt
+          );
         const ownerBatch = context.batches.find(
           (item) => Number(item.id) === Number(owner?.batch_id),
         );
@@ -846,6 +982,7 @@ export function proveKinesisNativeGiftGroups(
             throw new Error("network_gift_receipt_changed");
         }
       }
+      /** @type {NativeGiftGroupProof} */
       const proof = {
         kind: "closed_native_gift_cardinality",
         memberSourceIds: memberIds,

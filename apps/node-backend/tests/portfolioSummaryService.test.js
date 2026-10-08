@@ -104,6 +104,7 @@ describe("getPortfolioSummary", () => {
       totalUnrealizedGain: 0,
       totalGain: 0,
       totalIncome: 0,
+      totalDividends: 0,
       totalInKindIncome: 0,
       totalFees: 0,
       totalTaxes: 0,
@@ -374,6 +375,65 @@ describe("getPortfolioSummary", () => {
     expect(result.totals.totalPortfolioValue).toBeCloseTo(sumValue, 2);
     expect(result.totals.totalInvested).toBeCloseTo(sumInvested, 2);
     expect(result.totals.totalGainLoss).toBeCloseTo(sumGainLoss, 2);
+  });
+
+  it("totals carry the summed dividends the tax income tool splits from interest and rent", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [
+          investmentRow({ id: 1, currency: "EUR", current_price: 150 }),
+          investmentRow({
+            id: 2,
+            currency: "EUR",
+            current_price: 50,
+            name: "B",
+            symbol: "B",
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            id: 1,
+            investment_id: 1,
+            type: "buy",
+            currency: "EUR",
+            amount: 100,
+            units: 1,
+          }),
+          txnRow({
+            id: 2,
+            investment_id: 1,
+            type: "dividend",
+            currency: "EUR",
+            amount: 12.5,
+          }),
+          txnRow({
+            id: 3,
+            investment_id: 2,
+            type: "buy",
+            currency: "EUR",
+            amount: 30,
+            units: 1,
+          }),
+          txnRow({
+            id: 4,
+            investment_id: 2,
+            type: "dividend",
+            currency: "EUR",
+            amount: 7.25,
+          }),
+        ],
+      });
+
+    const result = await getPortfolioSummary("EUR");
+    const sumDividends = result.summaries.reduce(
+      (s, x) => s + x.totalDividends,
+      0,
+    );
+
+    expect(sumDividends).toBeCloseTo(19.75, 2);
+    expect(result.totals.totalDividends).toBeCloseTo(sumDividends, 2);
   });
 
   it("byAccount: an instrument with ANY unassigned lot collapses whole into the null row (ADR-108 transition rule — never wrong partitions)", async () => {

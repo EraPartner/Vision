@@ -8,6 +8,29 @@ import {
   PORTFOLIO_TRANSACTION_SNAPSHOT_SQL,
 } from "./portfolioImportReconciliationRepository.ts";
 
+/**
+ * @typedef {import('./portfolioImportReconciliationRepository.ts').ReconciliationHistoryLike} ReconciliationHistoryLike
+ * @typedef {import('./portfolioImportReconciliationRepository.ts').ReconciliationContext} ReconciliationContext
+ */
+/**
+ * A `portfolio_import_income_recognition_journal` row (BIGINT columns arrive as
+ * strings from pg).
+ * @typedef {object} IncomeRecognitionJournalRow
+ * @property {string} id
+ * @property {string} batch_id
+ * @property {string} staging_row_id
+ * @property {string} unit_staging_row_id
+ * @property {number} income_transaction_id
+ * @property {number} unit_transaction_id
+ * @property {"record" | "restore"} action
+ * @property {string | null} previous_entry_id
+ * @property {any} income_data
+ * @property {any} unit_data
+ * @property {any} proof_data
+ * @property {Date} created_at
+ */
+
+/** @param {readonly ReconciliationHistoryLike[]} history */
 export async function readKinesisIncomeUnitContext(history) {
   const adopted = await readKinesisAdoptionContext(history);
   const ids = [
@@ -29,11 +52,16 @@ export async function readKinesisIncomeUnitContext(history) {
   );
   return { ...adopted, batches, sources };
 }
+/**
+ * @param {readonly ReconciliationHistoryLike[]} history
+ * @returns {Promise<ReconciliationContext & { receipts: IncomeRecognitionJournalRow[] }>}
+ */
 export async function readIncomeRecognitionContext(history) {
   const ids = history
     .filter((row) => row.type === "dividend" || row.type === "gift")
     .map((row) => Number(row.id));
   if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  /** @type {IncomeRecognitionJournalRow[]} */
   const receipts = (
     await query(
       `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.action='record'
@@ -50,6 +78,10 @@ export async function readIncomeRecognitionContext(history) {
   ]);
   return { receipts, sources, batches };
 }
+/**
+ * @param {{ row: any, unit: any, unitSource: any, proof: any }} record
+ * @returns {Promise<any>} the inserted income transaction snapshot
+ */
 export async function recordPairedPortfolioIncome({
   row,
   unit,
@@ -111,7 +143,12 @@ export async function recordPairedPortfolioIncome({
   );
   return income;
 }
+/**
+ * @param {number | string} batchId
+ * @returns {Promise<IncomeRecognitionJournalRow[]>}
+ */
 export async function restorePairedPortfolioIncomeForBatch(batchId) {
+  /** @type {IncomeRecognitionJournalRow[]} */
   const receipts = (
     await query(
       `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.batch_id=$1 AND r.action='record'
@@ -138,6 +175,10 @@ export async function restorePairedPortfolioIncomeForBatch(batchId) {
   return receipts;
 }
 
+/**
+ * @param {number | string} batchId
+ * @returns {Promise<number[]>}
+ */
 export async function readPairedIncomeRollbackBatchIds(batchId) {
   return (
     await query(
@@ -146,5 +187,5 @@ export async function readPairedIncomeRollbackBatchIds(batchId) {
     AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY source.batch_id`,
       [batchId],
     )
-  ).rows.map((row) => Number(row.batch_id));
+  ).rows.map((/** @type {{ batch_id: string }} */ row) => Number(row.batch_id));
 }

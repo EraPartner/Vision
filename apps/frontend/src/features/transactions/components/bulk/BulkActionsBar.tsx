@@ -12,6 +12,7 @@ import {
     ChevronDown,
     Download,
     FolderTree,
+    Split,
     Tag,
     ToggleLeft,
     ToggleRight,
@@ -31,12 +32,15 @@ import {
     useBulkTagTransactions,
     useBulkUpdateTransactions,
 } from "@/hooks/useTransactions";
+import { useBulkSplitTransactions } from "@/hooks/useSplits";
+import type { BulkSplitMode } from "@/lib/api/splits";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { BulkRecategorizeDialog } from "./BulkRecategorizeDialog";
 import { BulkRecipientDialog } from "./BulkRecipientDialog";
 import { BulkTagDialog } from "./BulkTagDialog";
 import { BulkExportDialog } from "./BulkExportDialog";
+import { BulkSplitDialog } from "./BulkSplitDialog";
 
 export type BulkSelectionMode = "ids" | "filter";
 
@@ -66,11 +70,13 @@ export function BulkActionsBar({
     const bulkUpdate = useBulkUpdateTransactions();
     const bulkExport = useBulkExportTransactions();
     const bulkTag = useBulkTagTransactions();
+    const bulkSplit = useBulkSplitTransactions();
 
     const [tagOpen, setTagOpen] = useState(false);
     const [categoryOpen, setCategoryOpen] = useState(false);
     const [recipientOpen, setRecipientOpen] = useState(false);
     const [exportOpen, setExportOpen] = useState(false);
+    const [splitOpen, setSplitOpen] = useState(false);
 
     const idCount = selectedIds.size;
     const effectiveCount = selectionMode === "filter" ? totalMatching : idCount;
@@ -175,11 +181,32 @@ export function BulkActionsBar({
         });
     }
 
+    function handleSplitApply(recipientId: number, mode: BulkSplitMode) {
+        // Ids only, like bulk tag: a preset share is computed per row on the
+        // server, and the bulk-split route takes an explicit id list.
+        if (selectionMode === "filter") return;
+        bulkSplit.mutate(
+            {
+                transaction_ids: Array.from(selectedIds),
+                recipient_id: recipientId,
+                mode,
+            },
+            {
+                onSuccess: () => {
+                    setSplitOpen(false);
+                    onClearSelection();
+                },
+            },
+        );
+    }
+
     const updateBusy = bulkUpdate.isPending;
     const deleteBusy = bulkDelete.isPending;
     const exportBusy = bulkExport.isPending;
     const tagBusy = bulkTag.isPending;
-    const anyBusy = updateBusy || deleteBusy || exportBusy || tagBusy;
+    const splitBusy = bulkSplit.isPending;
+    const anyBusy =
+        updateBusy || deleteBusy || exportBusy || tagBusy || splitBusy;
 
     return (
         <>
@@ -224,6 +251,13 @@ export function BulkActionsBar({
                         >
                             <Tag className="h-4 w-4 mr-2" />
                             {t("txPage.bulk.tag")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onClick={() => setSplitOpen(true)}
+                            disabled={selectionMode === "filter"}
+                        >
+                            <Split className="h-4 w-4 mr-2" />
+                            {t("txPage.bulk.split")}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setCategoryOpen(true)}>
                             <FolderTree className="h-4 w-4 mr-2" />
@@ -297,6 +331,13 @@ export function BulkActionsBar({
                 onOpenChange={setExportOpen}
                 onApply={handleExport}
                 pending={exportBusy}
+            />
+            <BulkSplitDialog
+                open={splitOpen}
+                selectedCount={effectiveCount}
+                onOpenChange={setSplitOpen}
+                onApply={handleSplitApply}
+                pending={splitBusy}
             />
             <ConfirmDialog />
         </>

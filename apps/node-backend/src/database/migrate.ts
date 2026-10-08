@@ -191,13 +191,14 @@ const BASELINE_REVISION = "0001_initial";
 
 // These reviewed additive successors need no replay of the maintenance bridge.
 // Pin the target so adding a later migration does not widen this registration.
-const MAINTAINED_ADDITIVE_TARGET = "0125_brokerage_cash_origin";
+const MAINTAINED_ADDITIVE_TARGET = "0126_income_recognition_check_name";
 const MAINTAINED_ADDITIVE_REVISIONS = new Set([
   "0120_portfolio_import_reconciliation",
   "0121_portfolio_asset_transfers",
   "0122_portfolio_import_duplicate_repair",
   "0123_portfolio_asset_adjustments",
   "0124_portfolio_income_recognition",
+  "0125_brokerage_cash_origin",
   MAINTAINED_ADDITIVE_TARGET,
 ]);
 

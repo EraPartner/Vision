@@ -57,6 +57,10 @@ Backups/
 *.csv
 !apps/node-backend/tests/fixtures/portfolio/ibkr-transaction-history.csv
 !apps/node-backend/tests/fixtures/portfolio/kinesis-transaction-history.csv
+!apps/node-backend/tests/fixtures/portfolio/kinesis-adoption-only.csv
+!apps/node-backend/tests/fixtures/portfolio/kinesis-closed-cash.csv
+!apps/node-backend/tests/fixtures/portfolio/kinesis-equal-value-income.csv
+!apps/node-backend/tests/fixtures/portfolio/kinesis-full-paired-income.csv
 !apps/node-backend/tests/fixtures/portfolio/nexo-transaction-history.csv
 !apps/node-backend/tests/fixtures/portfolio/not-ibkr.csv
 !apps/node-backend/tests/fixtures/portfolio/saxo-transaction-history.csv

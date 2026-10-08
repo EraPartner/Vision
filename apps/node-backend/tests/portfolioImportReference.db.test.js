@@ -20,10 +20,15 @@ import {
   retainedEvidenceRow,
   retainedReferenceConfiguration,
 } from "./fixtures/retainedPortfolioEvidence.js";
+import { capturedKinesisStatement } from "./helpers/kinesisSourceContext.js";
+import {
+  assignImportIdentities,
+  portfolioIdentityBase,
+} from "../src/services/importIdentity.js";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;
-const owned = { accounts: [], investments: [], batches: [] };
+const owned = { accounts: [], investments: [], batches: [], rates: [] };
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 let counter = 0;
 async function fixture() {
@@ -93,14 +98,31 @@ async function storedEvidence(batchId, event) {
     ],
   );
 }
+// One complete synthetic statement: an ETH asset deposit without original basis.
+const KINESIS_ASSET_IN_ID = "TX-REFERENCE-ASSET-IN";
+const KINESIS_ASSET_IN = `2025-01-01 12:00:00 UTC,KM00000001,ETH,Deposit,${KINESIS_ASSET_IN_ID},,,1,,,,,,,0,ETH,1,ETH`;
 async function sourceBatch(
   fx,
   format = "kinesis_transaction_history",
-  rows = [{}],
+  rows = format === "kinesis_transaction_history"
+    ? [
+        {
+          raw_data: KINESIS_ASSET_IN,
+          source_transaction_id: KINESIS_ASSET_IN_ID,
+        },
+      ]
+    : [{}],
 ) {
+  const kinesis = format === "kinesis_transaction_history";
+  // Staging records the complete literal capture; full Kinesis review requires it.
+  const captured = kinesis
+    ? await capturedKinesisStatement([
+        ...new Set(rows.map((row) => row.raw_data)),
+      ])
+    : undefined;
   const id = await createBatch({
     adapterName: format,
-    customConfig: { format, yield_basis_policy: "zero" },
+    customConfig: { format, yield_basis_policy: "zero", ...captured?.config },
     defaultAssetClass: "crypto",
     isBrokerage: true,
     accountId: fx.account,
@@ -109,15 +131,15 @@ async function sourceBatch(
   for (const [index, row] of rows.entries()) {
     const raw = row.raw_data || `synthetic primary source ${id}:${index}`;
     await pool.query(
-      `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,type,route,symbol_raw,units,price_per_unit,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_transaction_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence,note,asset_transfer_details)
-   VALUES($1,$2,'matched',$3,$4,$5::portfolio_txn_type,'portfolio','ETH',$6,$7,$8,$17,$18,$9,$10,$11,$12,$13,$14,1,1,$15,$16::jsonb)`,
+      `INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,tx_date,type_raw,type,route,symbol_raw,units,price_per_unit,amount,fees,taxes,currency,resolved_investment_id,raw_data,source_transaction_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,dedup_occurrence,note,asset_transfer_details,source_account_identity)
+   VALUES($1,$2,'matched',$3,$4,$5::portfolio_txn_type,'portfolio','ETH',$6,$7,$8,$17,$18,$9,$10,$11,$12,$13,$14,1,1,$15,$16::jsonb,$19)`,
       [
         id,
         index,
         row.tx_date || "2025-01-01",
         row.type_raw || "Gift",
         row.type || "gift",
-        row.units || "1",
+        row.units === undefined ? "1" : row.units,
         row.price_per_unit ?? null,
         row.amount ?? "0",
         row.currency || "USD",
@@ -135,8 +157,33 @@ async function sourceBatch(
         ),
         row.fees ?? "0",
         row.taxes ?? "0",
+        kinesis
+          ? (captured.parsed.find(
+              (event) =>
+                event.sourceId ===
+                (row.source_transaction_id ||
+                  `reference-source:${id}:${index}`),
+            )?.sourceAccountIdentity ?? null)
+          : null,
       ],
     );
+  }
+  if (kinesis) {
+    // Staging assigns the source-identity fingerprints that Kinesis proofs recompute.
+    const staged = await readReconciliationSources([id]);
+    const identities = assignImportIdentities(staged, (row) =>
+      portfolioIdentityBase(row, { accountIdentity: "UNASSIGNED" }),
+    );
+    for (const [index, row] of staged.entries())
+      await pool.query(
+        "UPDATE portfolio_import_staging_rows SET dedup_fingerprint=$2,dedup_fingerprint_version=$3,dedup_occurrence=$4 WHERE id=$1",
+        [
+          row.id,
+          identities[index].fingerprint,
+          identities[index].version,
+          identities[index].occurrence,
+        ],
+      );
   }
   await pool.query(
     "UPDATE portfolio_import_batches SET status='awaiting_review',rows_total=$2 WHERE id=$1",
@@ -165,7 +212,7 @@ async function manual(
 }
 async function cleanup() {
   await pool.query(
-    "TRUNCATE portfolio_import_reconciliation_journal,portfolio_import_duplicate_repair_journal RESTART IDENTITY",
+    "TRUNCATE portfolio_import_reconciliation_journal,portfolio_import_duplicate_repair_journal,portfolio_import_income_recognition_journal RESTART IDENTITY",
   );
   if (owned.investments.length)
     await pool.query(
@@ -184,6 +231,10 @@ async function cleanup() {
   if (owned.accounts.length)
     await pool.query("DELETE FROM accounts WHERE id=ANY($1::integer[])", [
       owned.accounts,
+    ]);
+  if (owned.rates.length)
+    await pool.query("DELETE FROM exchange_rates WHERE id=ANY($1::integer[])", [
+      owned.rates,
     ]);
   for (const list of Object.values(owned)) list.length = 0;
 }
@@ -616,27 +667,18 @@ describeDb("retained JSON evidence and reviewed atomic adoption", () => {
     const old = await manual(fx, { amount: "0", price: "0" });
     const raw =
       "2025-01-01 00:00:00,SYNTHETIC,ETH,Holder's_Distribution,YIELD-SYNTHETIC,,,1,,1,0,ETH,20,USD,0,ETH,1,ETH";
-    const columns = [
-      "DateTime",
-      "HIN",
-      "Currency_Code",
-      "Transaction_Type",
-      "Transaction_ID",
-      "Order_ID",
-      "Currency_Pair",
-      "Amount",
-      "Trade_Price",
-      "Total",
-      "Fee",
-      "Fee_Currency",
-      "Trade_Value",
-      "Trade_Value_Currency",
-      "Starting_Balance",
-      "Starting_Balance_Currency",
-      "Closing_Balance",
-      "Closing_Balance_Currency",
-    ];
+    // The complete statement record stages as its literal income and units events.
     const id = await sourceBatch(fx, "kinesis_transaction_history", [
+      {
+        raw_data: raw,
+        type_raw: "Dividend",
+        type: "dividend",
+        source_transaction_id: "YIELD-SYNTHETIC:income",
+        units: null,
+        amount: "20",
+        price_per_unit: null,
+        note: "Holder's Distribution",
+      },
       {
         raw_data: raw,
         source_transaction_id: "YIELD-SYNTHETIC:units",
@@ -645,40 +687,76 @@ describeDb("retained JSON evidence and reviewed atomic adoption", () => {
         note: "Holder's Distribution units",
       },
     ]);
-    await pool.query(
-      "UPDATE portfolio_import_staging_rows SET asset_transfer_details=NULL,asset_adjustment_details=$2::jsonb WHERE batch_id=$1",
-      [id, JSON.stringify({ kind: "yield_acquisition", basisPolicy: "zero" })],
+    // Paired income needs a stored historical rate; never fetch one in tests.
+    const rate = await pool.query(
+      "INSERT INTO exchange_rates(currency_code,rate_to_eur,rate_date,is_latest) VALUES('USD',0.9,'2025-01-01',false) ON CONFLICT(currency_code,rate_date) DO NOTHING RETURNING id",
     );
+    owned.rates.push(...rate.rows.map((row) => row.id));
     await pool.query(
-      "UPDATE portfolio_import_batches SET custom_config=custom_config || $2::jsonb WHERE id=$1",
-      [id, JSON.stringify({ source_columns: columns })],
+      "UPDATE portfolio_import_staging_rows SET asset_transfer_details=NULL,asset_adjustment_details=$2::jsonb WHERE batch_id=$1 AND source_transaction_id=$3",
+      [
+        id,
+        JSON.stringify({ kind: "yield_acquisition", basisPolicy: "zero" }),
+        "YIELD-SYNTHETIC:units",
+      ],
     );
     const plan = await previewPortfolioImportReconciliation({
       batchIds: [id],
       adoptPolicy: "prefer_source",
     });
     expect(plan.ready).toBe(true);
+    // A complete literal statement adopts the zero legacy receipt with its own zero
+    // economics and records the paired literal income instead of a second acquisition.
+    expect(plan.summary).toMatchObject({
+      insert: 0,
+      adopt: 1,
+      record_income: 1,
+    });
+    expect(plan.actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "adopt",
+          existingTransactionId: old,
+          corrections: [],
+        }),
+        expect.objectContaining({
+          action: "record_income",
+          incomeProof: expect.objectContaining({ unitTransactionId: old }),
+        }),
+      ]),
+    );
     expect(
       await commitReviewedPortfolioImports({
         batchIds: [id],
         adoptPolicy: "prefer_source",
         expectedPlanFingerprint: plan.planFingerprint,
       }),
-    ).toMatchObject({ imported: 0, adopted: 1 });
+    ).toMatchObject({ imported: 1, recordedIncome: 1, adopted: 1 });
     expect(
       (
         await pool.query(
-          "SELECT id,currency,amount,fx_rate_to_eur,note FROM portfolio_transactions WHERE id=$1",
-          [old],
+          "SELECT id,type,currency,amount,fx_rate_to_eur,note,account_id,import_batch_id,income_recognition_role FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
+          [fx.investment],
         )
-      ).rows[0],
-    ).toMatchObject({
-      id: old,
-      currency: "USD",
-      amount: "0.0000",
-      fx_rate_to_eur: null,
-      note: "Original manual reference note",
-    });
+      ).rows,
+    ).toMatchObject([
+      {
+        id: old,
+        type: "gift",
+        currency: "EUR",
+        amount: "0.0000",
+        fx_rate_to_eur: null,
+        note: "Original manual reference note",
+        account_id: fx.account,
+        import_batch_id: null,
+      },
+      {
+        type: "dividend",
+        currency: "USD",
+        amount: "20.0000",
+        income_recognition_role: "included_in_units",
+      },
+    ]);
     await rollbackBatch(id);
     expect(
       (
@@ -694,5 +772,13 @@ describeDb("retained JSON evidence and reviewed atomic adoption", () => {
       account_id: null,
       note: "Original manual reference note",
     });
+    expect(
+      (
+        await pool.query(
+          "SELECT id FROM portfolio_transactions WHERE investment_id=$1 ORDER BY id",
+          [fx.investment],
+        )
+      ).rows.map((row) => row.id),
+    ).toEqual([old]);
   });
 });

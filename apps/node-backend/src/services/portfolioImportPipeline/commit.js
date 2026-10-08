@@ -171,7 +171,10 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
   if (
     batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
     batchRows[0]?.custom_config?.yield_basis_policy === "zero" &&
-    matched.some((row) => row.type === "dividend")
+    matched.some(
+      (/** @type {MatchedPortfolioStagingRow} */ row) =>
+        row.type === "dividend",
+    )
   )
     throw new ConflictError(
       "Paired Kinesis income requires its proved acquisition scope",
@@ -180,18 +183,30 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
       },
     );
   const kinesisCash = new Map();
+  /**
+   * The proved cash plan re-checked under the ledger lock before the first
+   * cash row is marked.
+   * @type {{
+   *   source: import('../../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow[],
+   *   batch: any,
+   *   rates: { currency: string, date: string, rate: number | undefined }[],
+   *   actions: any[],
+   * } | undefined}
+   */
   let cashReproof;
   let cashReproved = false;
   if (
     batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
-    matched.some((row) => row.route === "cash")
+    matched.some(
+      (/** @type {MatchedPortfolioStagingRow} */ row) => row.route === "cash",
+    )
   ) {
     const source = await readReconciliationSources([Number(batchId)]);
     const batch = batchRows[0];
     const cashContext = await readKinesisCashContext();
     if (
       matched.some(
-        (row) =>
+        (/** @type {MatchedPortfolioStagingRow} */ row) =>
           row.route === "cash" &&
           !cashContext.ledger.some(
             (current) =>

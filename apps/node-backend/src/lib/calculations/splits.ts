@@ -150,6 +150,36 @@ export function validateBatchSplitAllocation({
 }
 
 /**
+ * Preset shares for the bulk split action (POST /api/splits/bulk) and the
+ * split dialog's presets. One other person is always assumed on the bulk
+ * route; the dialog generalizes "full" to N others.
+ *
+ *   - `equal`: the other person owes half (50/50).
+ *   - `full`:  the other person owes the whole amount (0/100 — the caller
+ *              pays nothing).
+ */
+export type BulkSplitMode = "equal" | "full";
+
+export const BULK_SPLIT_MODES: readonly BulkSplitMode[] = ["equal", "full"];
+
+/**
+ * The amount one other person owes on a transaction under a preset, rounded
+ * to cents (banker's rounding). Returns 0 for a zero or non-finite total so
+ * callers can skip the row instead of writing a non-positive split.
+ */
+export function computeBulkSplitAmount({
+  transactionTotal,
+  mode,
+}: {
+  transactionTotal: number;
+  mode: BulkSplitMode;
+}): number {
+  const total = toDecimal(transactionTotal).abs();
+  if (!total.isFinite() || total.isZero()) return 0;
+  return roundToCents(mode === "full" ? total : total.div(2));
+}
+
+/**
  * Validate a candidate payment against a split's paid state.
  * Sum of payments against a split must never exceed the split's amount.
  */
@@ -227,6 +257,7 @@ export function computeOwedSummary(rows: SplitOutstandingRow[]): OwedSummaryRow[
 
 export default {
   roundToCents,
+  computeBulkSplitAmount,
   roundToMoneyPrecision,
   normalizeMoneyAmount,
   validateSplitAllocation,

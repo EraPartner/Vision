@@ -92,6 +92,7 @@ export async function pruneOldImportBatches() {
   for (const table of tables) {
     try {
       // Adoption receipts retain source provenance and rollback snapshots.
+      // The detail columns are json, which has no `?` operator; cast to jsonb.
       const preserveReconciliation =
         table === "portfolio_import_batches"
           ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id)
@@ -103,7 +104,7 @@ export async function pruneOldImportBatches() {
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustments adjustment WHERE adjustment.import_batch_id = ${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustment_sources evidence JOIN portfolio_import_staging_rows source ON source.id=evidence.staging_row_id WHERE source.batch_id=${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows cash_source WHERE cash_source.batch_id=${table}.id AND portfolio_cash_receipt(cash_source.raw_data) IS NOT NULL)
-             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (native_source.asset_transfer_details ? 'networkBinding' OR native_source.asset_transfer_details ? 'nativeGiftGroupReceipt' OR native_source.asset_adjustment_details ? 'networkReceipt'))
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (native_source.asset_transfer_details::jsonb ? 'networkBinding' OR native_source.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt' OR native_source.asset_adjustment_details::jsonb ? 'networkReceipt'))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows annotation WHERE annotation.batch_id = ${table}.id AND annotation.route = 'account_internal')`
           : "";
       const result = await query(

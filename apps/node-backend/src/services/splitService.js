@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { withTransaction } from "../database/connection.ts";
 import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import {
+  computeBulkSplitAmount,
   computeOwedSummary,
   normalizeMoneyAmount,
   roundToMoneyPrecision,
@@ -22,6 +23,7 @@ import splitRepository, {
   lockAndGetTotals,
   lockSplitForPayment,
   markSettledIfCovered,
+  recipientExistsInTransaction,
 } from "../repositories/splitRepository.ts";
 
 async function writeSplitAudit(input) {
@@ -132,6 +134,93 @@ export async function createSplitsBatchAtomic({
       });
     }
     return created;
+  });
+}
+
+/**
+ * Bulk split: give ONE other person a preset share of MANY transactions in
+ * one atomic write (POST /api/splits/bulk).
+ *
+ * Per transaction the share is `computeBulkSplitAmount` (equal = half,
+ * full = the whole amount). Rows the preset cannot apply to are skipped and
+ * counted rather than failing the batch: an id that no longer exists, a
+ * transaction that already carries a split (a preset on top of an existing
+ * allocation has no single right answer — the user edits those one by one),
+ * and a zero-amount transaction. Ids are deduplicated and locked in
+ * ascending order so two overlapping bulk calls cannot deadlock.
+ *
+ * @param {{transaction_ids:number[], recipient_id:number, mode:import("../lib/calculations/splits.ts").BulkSplitMode, note?:string|null, actor?:string|null}} input
+ */
+export async function createBulkSplitsAtomic({
+  transaction_ids,
+  recipient_id,
+  mode,
+  note,
+  actor = null,
+}) {
+  const ids = Array.from(new Set(transaction_ids)).sort((a, b) => a - b);
+  const requested = transaction_ids.length;
+  return withTransaction(async (client) => {
+    if (!(await recipientExistsInTransaction(client, recipient_id)))
+      throw new NotFoundError("Recipient not found");
+
+    const result = {
+      requested,
+      split: 0,
+      skipped_already_split: 0,
+      skipped_zero_amount: 0,
+      skipped_missing: 0,
+      items: /** @type {import("../repositories/splitRepository.ts").FormattedSplit[]} */ ([]),
+    };
+
+    for (const transaction_id of ids) {
+      const totals = await lockAndGetTotals(client, transaction_id);
+      if (!totals) {
+        result.skipped_missing += 1;
+        continue;
+      }
+      if (totals.current_split_total > 0) {
+        result.skipped_already_split += 1;
+        continue;
+      }
+      const amount = computeBulkSplitAmount({
+        transactionTotal: totals.transaction_total,
+        mode,
+      });
+      if (amount <= 0) {
+        result.skipped_zero_amount += 1;
+        continue;
+      }
+      const check = validateSplitAllocation({
+        newSplitAmount: amount,
+        transactionTotal: totals.transaction_total,
+        currentSplitTotal: totals.current_split_total,
+      });
+      if (!check.ok) throw new ValidationError(check.error);
+      const split = await insertSplitInTransaction(client, {
+        transaction_id,
+        recipient_id,
+        amount,
+        note,
+      });
+      await writeSplitAudit({
+        split_id: split.id,
+        action: "create",
+        actor,
+        payload: {
+          transaction_id,
+          recipient_id,
+          amount,
+          note: note || null,
+          bulk: true,
+          mode,
+        },
+        client,
+      });
+      result.items.push(split);
+      result.split += 1;
+    }
+    return result;
   });
 }
 
@@ -270,6 +359,7 @@ export default {
   ...splitRepository,
   createSplitAtomic,
   createSplitsBatchAtomic,
+  createBulkSplitsAtomic,
   getOwedSummary,
   getOwedByRecipient,
   addPayment,

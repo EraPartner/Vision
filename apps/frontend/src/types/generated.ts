@@ -2756,6 +2756,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/splits/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Give one payee a preset share of many transactions (bulk split) */
+        post: operations["createBulkSplits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/splits/{id}": {
         parameters: {
             query?: never;
@@ -4870,6 +4887,8 @@ export interface components {
             /** Format: date-time */
             computed_at: string;
             totals: {
+                /** @description Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income. */
+                totalDividends?: number;
                 /** @description Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero. */
                 totalInKindIncome?: number;
             } & {
@@ -6119,6 +6138,14 @@ export interface components {
             created_at: string;
         };
         SplitList: components["schemas"]["OptionalPaginationFields"] & {
+            items: components["schemas"]["Split"][];
+        };
+        BulkSplitResult: {
+            requested: number;
+            split: number;
+            skipped_already_split: number;
+            skipped_zero_amount: number;
+            skipped_missing: number;
             items: components["schemas"]["Split"][];
         };
         SplitOwed: {
@@ -12945,6 +12972,62 @@ export interface operations {
                         data?: components["schemas"]["SplitList"];
                     };
                 };
+            };
+        };
+    };
+    createBulkSplits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    transaction_ids: number[];
+                    recipient_id: number;
+                    /**
+                     * @description `equal` — the payee owes half of each transaction (50/50). `full` — the payee owes the whole amount (0/100).
+                     * @enum {string}
+                     */
+                    mode: "equal" | "full";
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created splits plus skip counts. The write is atomic; rows the preset cannot apply to are skipped and counted, not failed: ids that no longer exist, transactions that already carry a split, and zero-amount transactions. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: components["schemas"]["BulkSplitResult"];
+                    };
+                };
+            };
+            /** @description Validation error (empty or malformed ids, unknown mode) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recipient not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited (30 requests per minute) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

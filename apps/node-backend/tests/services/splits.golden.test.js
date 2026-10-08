@@ -1,6 +1,7 @@
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
 import {
+  computeBulkSplitAmount,
   computeOwedSummary,
   validateSplitAllocation,
   validateBatchSplitAllocation,
@@ -104,5 +105,28 @@ describe('splits.validatePaymentAmount golden', () => {
 
   it('rejects non-positive amount', async () => {
     await runGolden('splits/validatePaymentAmount-non-positive', validatePaymentAmount);
+  });
+});
+
+
+describe('splits.computeBulkSplitAmount', () => {
+  it('equal gives the other person half, rounded to cents (banker\'s)', () => {
+    expect(computeBulkSplitAmount({ transactionTotal: 40, mode: 'equal' })).toBe(20);
+    expect(computeBulkSplitAmount({ transactionTotal: 10.01, mode: 'equal' })).toBe(5);
+    expect(computeBulkSplitAmount({ transactionTotal: 10.03, mode: 'equal' })).toBe(5.02);
+  });
+
+  it('full gives the other person the whole amount', () => {
+    expect(computeBulkSplitAmount({ transactionTotal: 12.34, mode: 'full' })).toBe(12.34);
+  });
+
+  it('uses the absolute amount, so expenses (negative) split like income', () => {
+    expect(computeBulkSplitAmount({ transactionTotal: -40, mode: 'equal' })).toBe(20);
+    expect(computeBulkSplitAmount({ transactionTotal: -40, mode: 'full' })).toBe(40);
+  });
+
+  it('returns 0 for a zero or non-finite total so the caller can skip the row', () => {
+    expect(computeBulkSplitAmount({ transactionTotal: 0, mode: 'full' })).toBe(0);
+    expect(computeBulkSplitAmount({ transactionTotal: Number.NaN, mode: 'equal' })).toBe(0);
   });
 });

@@ -17,7 +17,8 @@ const isolated =
   process.env.VISION_TEST_DB_ISOLATED === "1" &&
   Boolean(process.env.TEST_DATABASE_URL);
 const prior = "0124_portfolio_income_recognition";
-const target = "0125_brokerage_cash_origin";
+const cashOrigin = "0125_brokerage_cash_origin";
+const target = "0126_income_recognition_check_name";
 async function disposable(fn) {
   const url = new URL(process.env.TEST_DATABASE_URL);
   const name = `vision_additive_${randomUUID().replaceAll("-", "")}`;
@@ -130,7 +131,8 @@ describe.skipIf(!isolated)(
         await expect(alembic("downgrade", prior)).rejects.toThrow(
           /before downgrade/,
         );
-        expect(await revision(client)).toBe(target);
+        // Each migration commits on its own, so 0126 has already stepped down.
+        expect(await revision(client)).toBe(cashOrigin);
         await client.query(
           "UPDATE transactions SET is_active=false WHERE account_id=$1",
           [account],
@@ -171,7 +173,7 @@ describe.skipIf(!isolated)(
         ).rejects.toThrow(/immutable/);
       });
     }, 120000);
-    it("boots a populated legacy-shaped0124 profile to0125 without rewriting rows/old receipts or running the bridge", async () => {
+    it("boots a populated legacy-shaped0124 profile to the additive head without rewriting rows/old receipts or running the bridge", async () => {
       await disposable(
         async ({ client, connectionString, alembic, boot, directory }) => {
           await installFreshBaseline({ repoRoot: root, connectionString });
@@ -240,6 +242,13 @@ describe.skipIf(!isolated)(
           expect(
             (
               await client.query(
+                "SELECT conname FROM pg_constraint WHERE conrelid='public.portfolio_transactions'::regclass AND conname LIKE '%portfolio_income_recognition_role'",
+              )
+            ).rows,
+          ).toEqual([{ conname: "chk_portfolio_income_recognition_role" }]);
+          expect(
+            (
+              await client.query(
                 "SELECT COUNT(*)::int AS n FROM portfolio_import_income_recognition_journal",
               )
             ).rows[0].n,
@@ -274,7 +283,7 @@ describe.skipIf(!isolated)(
         },
       );
     }, 120000);
-    it("keeps existing0118 profiles deferred without installing0125 or executing0119", async () => {
+    it("keeps existing0118 profiles deferred without installing0120-0126 or executing0119", async () => {
       await disposable(async ({ client, connectionString, alembic, boot }) => {
         await installFreshBaseline({ repoRoot: root, connectionString });
         await alembic("downgrade", "0118_audit_retention_pruner");

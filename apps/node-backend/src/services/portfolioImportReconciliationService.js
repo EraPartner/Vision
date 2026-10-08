@@ -90,9 +90,124 @@ import {
   proveKinesisNativeGiftGroups,
 } from "./portfolioKinesisNetworkProof.js";
 
+/**
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationSourceRow} ReconciliationSourceRow
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationBatchScopeRow} ReconciliationBatchScopeRow
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationJournalRow} ReconciliationJournalRow
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationContext} ReconciliationContext
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationReceiptContext} ReconciliationReceiptContext
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationHistoryEvent} ReconciliationHistoryEvent
+ * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").PortfolioTransactionSnapshot} PortfolioTransactionSnapshot
+ * @typedef {import("../lib/money.ts").DecimalInput} DecimalInput
+ * @typedef {import("./portfolioImportPipeline/portfolioGenericAdapter.js").ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {import("./portfolioKinesisAdoptionScope.js").KinesisSourceProof} KinesisSourceProof
+ */
+/**
+ * One reconciliation history event read by column name. Custody events
+ * (asset transfers and adjustments) share the transaction columns compared
+ * here and add their own custody columns.
+ * @typedef {PortfolioTransactionSnapshot & {
+ *   source_account_id?: number,
+ *   destination_account_id?: number,
+ *   fee_units?: string,
+ *   adjustment_kind?: string,
+ *   basis_policy?: string,
+ * }} HistoryImage
+ */
+/**
+ * normalizedSource's output: the staged values as exact NUMERIC text.
+ * @typedef {Record<string, string | null>} NormalizedSource
+ */
+/**
+ * @typedef {import("./portfolioKinesisCashScope.js").KinesisCashContext} CashContext
+ * @typedef {import("./portfolioKinesisIncomePairs.js").IncomeRecognitionContext} IncomeContext
+ */
+/**
+ * A stored EUR rate for one currency on one source date (null when absent).
+ * @typedef {{ currency: string, date: string, rate: string | null }} HistoricalFxRate
+ */
+/**
+ * A plan blocker. Retained yield-group evidence issues may name no row.
+ * @typedef {object} PlanIssue
+ * @property {number} [batchId]
+ * @property {number} [rowId]
+ * @property {number} [rowOrdinal]
+ * @property {string} reason
+ * @property {number[]} candidateTransactionIds
+ */
+/**
+ * One planned row outcome. `action` selects which optional fields are set.
+ * @typedef {object} PlanAction
+ * @property {number} batchId
+ * @property {number} rowId
+ * @property {number} rowOrdinal
+ * @property {string} action
+ * @property {string} [reason]
+ * @property {number[]} [candidateTransactionIds]
+ * @property {number} [investmentId]
+ * @property {Record<string, unknown>} [source]
+ * @property {Record<string, unknown>} [existing]
+ * @property {number} [existingTransactionId]
+ * @property {number} [duplicateOfRowId]
+ * @property {string[]} [corrections]
+ * @property {boolean} [economicsProven]
+ * @property {string | null} [policy]
+ * @property {object} [incomeProof]
+ * @property {unknown} [cashProof]
+ * @property {{ date: string, units: string, feeUnits: string, receivedUnits: string, sourceAccountId: number, destinationAccountId: number }} [transfer]
+ * @property {{ date: string, units: string, kind: string, basisPolicy: string, accountId: number }} [adjustment]
+ */
+/**
+ * @typedef {object} PlanAdoption
+ * @property {ReconciliationSourceRow} row
+ * @property {PortfolioTransactionSnapshot} before
+ * @property {PortfolioTransactionSnapshot} after
+ * @property {ReconciliationJournalRow["policy"]} policy
+ * @property {PortfolioTransactionSnapshot} [imported]
+ * @property {ReconciliationJournalRow} [priorSaxoReceipt]
+ */
+/**
+ * @typedef {{ batchId: number, adoptPolicy: string }} BatchPolicy
+ */
+/**
+ * @typedef {object} ReconciliationPlan
+ * @property {number[]} batchIds
+ * @property {string | null} adoptPolicy
+ * @property {BatchPolicy[]} batchPolicies
+ * @property {string} planFingerprint
+ * @property {boolean} ready
+ * @property {PlanAction[]} actions
+ * @property {PlanIssue[]} blockers
+ * @property {Record<string, number>} summary
+ * @property {string} [reconciliationScope]
+ * @property {number[]} [selectedRowIds]
+ * @property {number} [pending]
+ * @property {boolean} [complete]
+ * @property {Record<string, number>} [deferredCounts]
+ * @property {Array<{ batchId: number, pending: number, complete: boolean, deferredCounts: Record<string, number> }>} [batchProgress]
+ */
+/**
+ * @typedef {{ proof: unknown, members: ReconciliationSourceRow[] }} NativeGiftGroup
+ */
+/**
+ * @typedef {object} ReconciliationPlanResult
+ * @property {ReconciliationPlan} plan
+ * @property {PlanAdoption[]} adoptions
+ * @property {Array<{ row: ReconciliationSourceRow, primary: ReconciliationSourceRow }>} companions
+ * @property {Map<number, ReconciliationSourceRow>} sourceOverrides
+ * @property {Array<Parameters<typeof retainKinesisNetworkBinding>[0]>} networkBindings
+ * @property {NativeGiftGroup[]} nativeGiftGroups
+ * @property {ReturnType<typeof proveKinesisIncomePairs>["records"]} [incomeRecords]
+ * @property {ReturnType<typeof classifyKinesisCash>["records"]} [cashRecords]
+ */
+/**
+ * The binding a bounded plan records for one selected row.
+ * @typedef {Pick<KinesisSourceProof, "eventKey" | "sourceFileHash">} RowProofBinding
+ */
+
 const POLICIES = new Set(["preserve_existing", "prefer_source"]);
 const UNIT_TYPES = new Set(["buy", "sell", "gift", "split"]);
-const VALUE_FIELDS = [
+const VALUE_FIELDS = /** @type {const} */ ([
   "date",
   "amount",
   "units",
@@ -102,7 +217,8 @@ const VALUE_FIELDS = [
   "currency",
   "fx_rate_to_eur",
   "dividend_amount_convention",
-];
+]);
+/** @type {Record<string, number>} */
 const PLACES = {
   amount: 4,
   units: 8,
@@ -147,6 +263,7 @@ function formatOf(row) {
   return config?.format;
 }
 
+/** @returns {NormalizedSource} */
 function normalizedSource(row) {
   const payload = normalizeTransactionPayload(
     {
@@ -206,6 +323,10 @@ function sourceProof(row, source) {
   return proof;
 }
 
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {NormalizedSource} source
+ */
 function saxoSourceProof(row, source) {
   if (formatOf(row) !== "saxo_transaction_history") return undefined;
   const raw = portfolioPrimaryRawData(row.raw_data);
@@ -247,11 +368,17 @@ function saxoSourceProof(row, source) {
   return proof;
 }
 
+/**
+ * @param {DecimalInput} value
+ * @param {DecimalInput} staged
+ * @param {number} places
+ */
 function sourceCellNumberMatches(value, staged, places) {
   if (value == null || staged == null) return value == null && staged == null;
   return toDecimal(value).toDecimalPlaces(places, 4).eq(toDecimal(staged));
 }
 
+/** @param {ReconciliationSourceRow} row */
 function verifiedSaxoWorkbookRow(row) {
   const raw = portfolioPrimaryRawData(row.raw_data);
   const proof = getSaxoWorkbookReconciliationEvidence(raw);
@@ -285,12 +412,24 @@ function verifiedSaxoWorkbookRow(row) {
   return proof;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {string | undefined}
+ */
 function fingerprintRaw(raw) {
   return typeof raw === "string"
     ? createHash("sha256").update(raw).digest("hex")
     : undefined;
 }
 
+/**
+ * Staging columns that hold one CSV cell's NUMERIC value.
+ * @typedef {"units" | "price_per_unit" | "amount" | "fees" | "taxes" | "fx_rate_to_eur"} StagedNumberColumn
+ */
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {{ csv: ParsedPortfolioRow }} proof
+ */
 function saxoCsvStagingMatches(row, proof) {
   const csv = proof.csv;
   const unsupportedDividend =
@@ -324,11 +463,16 @@ function saxoCsvStagingMatches(row, proof) {
     fees: csv.fees,
     taxes: csv.taxes,
     fx_rate_to_eur: csv.fxRateToEur,
-  }).every(([field, value]) =>
-    sourceCellNumberMatches(value, row[field], PLACES[field]),
+  }).every(
+    (/** @type {[StagedNumberColumn, number | null]} */ [field, value]) =>
+      sourceCellNumberMatches(value, row[field], PLACES[field]),
   );
 }
 
+/**
+ * @param {Record<string, unknown> | undefined} left
+ * @param {Record<string, unknown> | undefined} right
+ */
 function sameSnapshot(left, right) {
   if (!left || !right) return false;
   left = normalizeIncomeSnapshot(left);
@@ -340,6 +484,12 @@ function sameSnapshot(left, right) {
   );
 }
 
+/**
+ * @param {PortfolioTransactionSnapshot} current
+ * @param {NormalizedSource} source
+ * @param {ReconciliationSourceRow} row
+ * @returns {PortfolioTransactionSnapshot}
+ */
 function sourcePreferredImage(current, source, row) {
   const after = {
     ...current,
@@ -360,6 +510,11 @@ function sourcePreferredImage(current, source, row) {
   return after;
 }
 
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {PortfolioTransactionSnapshot} current
+ * @param {ReconciliationReceiptContext} context
+ */
 function priorSaxoAdoption(row, current, context) {
   const receipts = context.receipts.filter(
     (receipt) => Number(receipt.transaction_id) === Number(current.id),
@@ -560,14 +715,35 @@ export function buildPortfolioImportReconciliationPlan({
   batchPolicies = [],
   priorProAccounts = [],
   referenceOriginalRows = [],
-  saxoAdoptionContext = { receipts: [], sources: [], batches: [] },
-  kinesisAdoptionContext = { receipts: [], sources: [], batches: [] },
-  historicalFxContext = [],
-  incomeRecognitionContext = { receipts: [], sources: [], batches: [] },
-  cashContext = { ledger: [], sources: [], batches: [] },
-  cashFundingPolicy = undefined,
-  networkContext = { sources: [], batches: [] },
-  nativeGiftContext = kinesisAdoptionContext,
+  saxoAdoptionContext = /** @type {ReconciliationReceiptContext} */ ({
+    receipts: [],
+    sources: [],
+    batches: [],
+  }),
+  kinesisAdoptionContext = /** @type {ReconciliationReceiptContext} */ ({
+    receipts: [],
+    sources: [],
+    batches: [],
+  }),
+  historicalFxContext = /** @type {HistoricalFxRate[]} */ ([]),
+  incomeRecognitionContext = /** @type {IncomeContext} */ ({
+    receipts: [],
+    sources: [],
+    batches: [],
+  }),
+  cashContext = /** @type {CashContext} */ ({
+    ledger: [],
+    sources: [],
+    batches: [],
+  }),
+  cashFundingPolicy = /** @type {string | undefined} */ (undefined),
+  networkContext = /** @type {ReconciliationContext} */ ({
+    sources: [],
+    batches: [],
+  }),
+  nativeGiftContext = /** @type {ReconciliationReceiptContext} */ (
+    kinesisAdoptionContext
+  ),
   reconciliationScope = "full",
   repairContext = {
     transactions: [],
@@ -600,7 +776,8 @@ export function buildPortfolioImportReconciliationPlan({
     (adoptPolicy !== scopedPolicy ||
       canonicalPolicies.some((policy) => policy.adoptPolicy !== scopedPolicy) ||
       batches.some(
-        (batch) => formatOf(batch) !== "kinesis_transaction_history",
+        (/** @type {ReconciliationBatchScopeRow} */ batch) =>
+          formatOf(batch) !== "kinesis_transaction_history",
       ))
   )
     throw new ValidationError(
@@ -608,7 +785,10 @@ export function buildPortfolioImportReconciliationPlan({
     );
   if (
     reconciliationScope === "record_in_kind_income_only" &&
-    batches.some((batch) => batch.custom_config?.yield_basis_policy !== "zero")
+    batches.some(
+      (/** @type {ReconciliationBatchScopeRow} */ batch) =>
+        batch.custom_config?.yield_basis_policy !== "zero",
+    )
   )
     throw new ValidationError(
       "record_in_kind_income_only requires explicit zero yield basis policy",
@@ -699,7 +879,7 @@ export function buildPortfolioImportReconciliationPlan({
       referenceIssues.add(key);
       const sourceRow =
         rows.find(
-          (row) =>
+          (/** @type {ReconciliationSourceRow} */ row) =>
             Number(row.batch_id) === Number(issue.batchId) &&
             row.row_index + 1 === issue.rowOrdinal,
         ) || anchor;
@@ -742,17 +922,19 @@ export function buildPortfolioImportReconciliationPlan({
       addReference({ reason: "reference_scope_changed" });
     for (const issue of config.reference_blockers || []) addReference(issue);
   }
-  const selectedWorkbook = rows.filter((selected) => {
-    if (formatOf(selected) !== "saxo_transaction_history") return false;
-    try {
-      return (
-        JSON.parse(portfolioPrimaryRawData(selected.raw_data))?.format ===
-        "saxo_xlsx_v1"
-      );
-    } catch {
-      return false;
-    }
-  });
+  const selectedWorkbook = rows.filter(
+    (/** @type {ReconciliationSourceRow} */ selected) => {
+      if (formatOf(selected) !== "saxo_transaction_history") return false;
+      try {
+        return (
+          JSON.parse(portfolioPrimaryRawData(selected.raw_data))?.format ===
+          "saxo_xlsx_v1"
+        );
+      } catch {
+        return false;
+      }
+    },
+  );
   for (const originalRow of rows) {
     const row = network.overrides.get(Number(originalRow.id)) ?? originalRow;
     if (["committed", "duplicate"].includes(row.status)) {
@@ -775,7 +957,7 @@ export function buildPortfolioImportReconciliationPlan({
       if (!workbook) {
         if (selectedWorkbook.length) {
           const candidates = selectedWorkbook.filter(
-            (selected) =>
+            (/** @type {ReconciliationSourceRow} */ selected) =>
               selected.source_transaction_id === row.source_transaction_id &&
               selected.source_account_identity === row.source_account_identity,
           );
@@ -1209,7 +1391,7 @@ export function buildPortfolioImportReconciliationPlan({
     }
     if (identity) seenSources.set(identity, { row, source });
     const proof = sourceProof(row, source);
-    let candidates = history.filter((current) =>
+    let candidates = history.filter((/** @type {HistoryImage} */ current) =>
       broadCandidate(row, source, current, proof),
     );
     const fullYield = fullYieldCandidates.candidates.get(Number(row.id));
@@ -1542,6 +1724,13 @@ export function buildPortfolioImportReconciliationPlan({
             );
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {CashContext} context
+ * @param {HistoricalFxRate[]} rates
+ */
 function completeKinesisCashRepeatPlan(full, rows, batches, context, rates) {
   const sourceBatches = batches.filter(
     (batch) => formatOf(batch) === "kinesis_transaction_history",
@@ -1563,6 +1752,7 @@ function completeKinesisCashRepeatPlan(full, rows, batches, context, rates) {
   const replacements = new Map(
     repeated.map((action) => [action.rowId, action]),
   );
+  /** @type {PlanAction[]} */
   const actions = full.plan.actions.map(
     (action) => replacements.get(action.rowId) ?? action,
   );
@@ -1590,7 +1780,16 @@ function completeKinesisCashRepeatPlan(full, rows, batches, context, rates) {
   };
 }
 
-/** Ordinary full imports still need the same pair proof as income-only review. */
+/**
+ * Ordinary full imports still need the same pair proof as income-only review.
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {HistoryImage[]} history
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {ReconciliationReceiptContext} context
+ * @param {IncomeContext} incomeContext
+ * @param {HistoricalFxRate[]} rates
+ */
 function completeKinesisIncomePlan(
   full,
   rows,
@@ -1623,16 +1822,19 @@ function completeKinesisIncomePlan(
       return {
         action: action.action,
         row,
-        after: adoption?.after ?? {
-          ...normalizedSource(row),
-          id: -Number(row.id),
-          investment_id: Number(row.investment_id),
-          account_id: row.account_id,
-          source_record_hash: row.source_record_hash,
-          note: row.note,
-          dedup_fingerprint: row.dedup_fingerprint,
-          dedup_fingerprint_version: row.dedup_fingerprint_version,
-        },
+        // A planned insert's projected image: source values and identity only.
+        after:
+          adoption?.after ??
+          /** @type {PortfolioTransactionSnapshot} */ ({
+            ...normalizedSource(row),
+            id: -Number(row.id),
+            investment_id: Number(row.investment_id),
+            account_id: row.account_id,
+            source_record_hash: row.source_record_hash,
+            note: row.note,
+            dedup_fingerprint: row.dedup_fingerprint,
+            dedup_fingerprint_version: row.dedup_fingerprint_version,
+          }),
       };
     })
     .filter(Boolean);
@@ -1647,6 +1849,7 @@ function completeKinesisIncomePlan(
   const records = [];
   const actions = [...full.plan.actions];
   const blockers = [...full.plan.blockers, ...proved.blockers];
+  /** @param {ReconciliationSourceRow} row */
   const available = (row) =>
     row.currency === "EUR" ||
     rates.some(
@@ -1801,6 +2004,14 @@ function completeKinesisIncomePlan(
   };
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {CashContext} context
+ * @param {string | undefined} fundingPolicy
+ * @param {HistoricalFxRate[]} historicalFxContext
+ */
 function boundedKinesisCashPlan(
   full,
   rows,
@@ -1843,6 +2054,15 @@ function boundedKinesisCashPlan(
   };
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {HistoryImage[]} history
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {ReconciliationReceiptContext} context
+ * @param {IncomeContext} incomeContext
+ * @param {HistoricalFxRate[]} historicalFxContext
+ */
 function boundedKinesisIncomePlan(
   full,
   rows,
@@ -1852,6 +2072,7 @@ function boundedKinesisIncomePlan(
   incomeContext,
   historicalFxContext,
 ) {
+  /** @param {ReconciliationSourceRow} row */
   const availableRate = (row) =>
     row.currency === "EUR" ||
     historicalFxContext.some(
@@ -1960,14 +2181,19 @@ function boundedKinesisIncomePlan(
   };
 }
 
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {HistoryImage} current
+ * @param {ParsedPortfolioRow} parsed
+ */
 function kinesisSourceFactsMatchExisting(row, current, parsed) {
   if (
     row.type === "gift" &&
     parsed.assetAdjustment?.kind === "yield_acquisition" &&
     parsed.assetAdjustment.basisPolicy === "zero" &&
     toDecimal(parsed.amount ?? 0).isZero() &&
-    ["amount", "price_per_unit", "fees", "taxes"].every((field) =>
-      toDecimal(current[field] ?? 0).isZero(),
+    /** @type {const} */ (["amount", "price_per_unit", "fees", "taxes"]).every(
+      (field) => toDecimal(current[field] ?? 0).isZero(),
     )
   )
     return true;
@@ -1986,7 +2212,7 @@ function kinesisSourceFactsMatchExisting(row, current, parsed) {
     fx_rate_to_eur: parsed.fxRateToEur,
   });
   return (
-    [
+    /** @type {const} */ ([
       "type",
       "amount",
       "units",
@@ -1994,7 +2220,7 @@ function kinesisSourceFactsMatchExisting(row, current, parsed) {
       "fees",
       "taxes",
       "currency",
-    ].every((field) => sameValue(field, source[field], current[field])) &&
+    ]).every((field) => sameValue(field, source[field], current[field])) &&
     (source.fx_rate_to_eur == null ||
       sameValue(
         "fx_rate_to_eur",
@@ -2004,15 +2230,20 @@ function kinesisSourceFactsMatchExisting(row, current, parsed) {
   );
 }
 
-const KINESIS_CORRECTION_FIELDS = [
+const KINESIS_CORRECTION_FIELDS = /** @type {const} */ ([
   "amount",
   "price_per_unit",
   "fees",
   "taxes",
   "currency",
   "fx_rate_to_eur",
-];
+]);
 
+/**
+ * @param {ReconciliationSourceRow} row
+ * @param {KinesisSourceProof | undefined} proof
+ * @returns {NormalizedSource | undefined}
+ */
 function kinesisCorrectionSource(row, proof) {
   if (!proof) return undefined;
   const parsed = proof.parsed;
@@ -2044,7 +2275,9 @@ function kinesisCorrectionSource(row, proof) {
     basis.sourceHash !==
       row.custom_config?.portfolio_performance_reference?.sourceHash ||
     (parsed.currency && parsed.currency !== basis.currency) ||
-    !basis.literal.units.every((unit) => unit.type === "GROSS_VALUE") ||
+    !basis.literal.units.every(
+      (/** @type {{ type: string }} */ unit) => unit.type === "GROSS_VALUE",
+    ) ||
     !equalNumber(source.fees, "0", 4) ||
     !equalNumber(source.taxes, "0", 4) ||
     !equalNumber(source.fx_rate_to_eur, basis.fxRateToEur ?? null, 10) ||
@@ -2058,6 +2291,14 @@ function kinesisCorrectionSource(row, proof) {
   return source;
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {HistoryImage[]} history
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {ReconciliationReceiptContext} context
+ * @param {HistoricalFxRate[]} historicalFxContext
+ */
 function boundedKinesisCorrectionPlan(
   full,
   rows,
@@ -2075,6 +2316,7 @@ function boundedKinesisCorrectionPlan(
     context.batches,
   ).proofs;
   const selected = [];
+  /** @type {PlanAdoption[]} */
   const adoptions = [];
   const groups = proveRetainedKinesisYieldGroups({
     rows,
@@ -2133,14 +2375,15 @@ function boundedKinesisCorrectionPlan(
         });
         continue;
       }
-      const after = {
+      // Yield group members bind gift transactions: full snapshot images.
+      const after = /** @type {PortfolioTransactionSnapshot} */ ({
         ...current,
         date: row.tx_date,
         account_id: row.account_id,
         source_record_hash: row.source_record_hash,
         dedup_fingerprint: row.dedup_fingerprint,
         dedup_fingerprint_version: row.dedup_fingerprint_version,
-      };
+      });
       selected.push({
         ...action,
         action: "adopt",
@@ -2158,7 +2401,12 @@ function boundedKinesisCorrectionPlan(
           memberCount: group.members.length,
         },
       });
-      adoptions.push({ row, before: current, after, policy: "prefer_source" });
+      adoptions.push({
+        row,
+        before: /** @type {PortfolioTransactionSnapshot} */ (current),
+        after,
+        policy: "prefer_source",
+      });
     }
   }
   for (const action of full.plan.actions) {
@@ -2197,9 +2445,14 @@ function boundedKinesisCorrectionPlan(
         before.date !== row.tx_date ||
         !equalNumber(before.units, row.units, 8) ||
         (row.type === "gift" && !toDecimal(before.amount ?? 0).gt("0.01")) ||
-        ["id", "investment_id", "type", "date", "units", "note"].some(
-          (field) => !sameValue(field, before[field], after[field]),
-        ) ||
+        /** @type {const} */ ([
+          "id",
+          "investment_id",
+          "type",
+          "date",
+          "units",
+          "note",
+        ]).some((field) => !sameValue(field, before[field], after[field])) ||
         !KINESIS_CORRECTION_FIELDS.every((field) =>
           sameValue(
             field,
@@ -2320,6 +2573,13 @@ function boundedKinesisCorrectionPlan(
   );
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {HistoryImage[]} history
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {ReconciliationReceiptContext} context
+ */
 function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
   const { proofs, issues } = proveKinesisAdoptionSources(rows, batches);
   const corrected = boundedKinesisCorrectionPlan(
@@ -2338,6 +2598,7 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
     context,
   });
   const selected = [];
+  /** @type {PlanAdoption[]} */
   const adoptions = [];
   const blockers = [
     ...issues,
@@ -2364,6 +2625,7 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
     context.sources,
     context.batches,
   ).proofs;
+  /** @param {ReconciliationSourceRow} row */
   const currentFor = (row) =>
     history.filter(
       (current) =>
@@ -2394,13 +2656,14 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
           existingTransactionId: Number(current.id),
         });
       } else {
-        const after = {
+        // Yield group members bind gift transactions: full snapshot images.
+        const after = /** @type {PortfolioTransactionSnapshot} */ ({
           ...current,
           account_id: row.account_id,
           source_record_hash: row.source_record_hash,
           dedup_fingerprint: row.dedup_fingerprint,
           dedup_fingerprint_version: row.dedup_fingerprint_version,
-        };
+        });
         selected.push({
           ...action,
           action: "adopt",
@@ -2413,7 +2676,7 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
         });
         adoptions.push({
           row,
-          before: current,
+          before: /** @type {PortfolioTransactionSnapshot} */ (current),
           after,
           policy: "preserve_existing",
         });
@@ -2441,7 +2704,7 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
           proofs.get(action.rowId).parsed,
         ) ||
         !["buy", "gift"].includes(row.type) ||
-        ["type", ...VALUE_FIELDS, "note"].some(
+        /** @type {const} */ (["type", ...VALUE_FIELDS, "note"]).some(
           (field) =>
             !sameValue(field, adoption.before[field], adoption.after[field]),
         )
@@ -2516,6 +2779,17 @@ function boundedKinesisAdoptionPlan(full, rows, history, batches, context) {
   );
 }
 
+/**
+ * @param {ReconciliationPlanResult} full
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {object} context the scope's evidence context, bound into the fingerprint
+ * @param {Map<number, RowProofBinding>} proofs
+ * @param {PlanAction[]} selected
+ * @param {PlanAdoption[]} adoptions
+ * @param {PlanIssue[]} blockers
+ * @param {string} scope
+ */
 function boundedKinesisPlanResult(
   full,
   rows,
@@ -2545,6 +2819,7 @@ function boundedKinesisPlanResult(
       !selectedIds.has(Number(row.id)) &&
       !["committed", "duplicate"].includes(row.status),
   );
+  /** @type {Record<string, number>} */
   const deferredCounts = {};
   for (const row of deferred) {
     const kind = [
@@ -2561,6 +2836,7 @@ function boundedKinesisPlanResult(
     const pending = deferred.filter(
       (row) => Number(row.batch_id) === Number(batch.id),
     );
+    /** @type {Record<string, number>} */
     const counts = {};
     for (const row of pending) {
       const kind = [
@@ -2583,7 +2859,7 @@ function boundedKinesisPlanResult(
   return {
     ...full,
     adoptions,
-    companions: [],
+    companions: /** @type {ReconciliationPlanResult["companions"]} */ ([]),
     plan: {
       ...full.plan,
       actions: selected,
@@ -2630,6 +2906,13 @@ function scopeIds(batchIds) {
   return [...new Set(batchIds)].sort((left, right) => left - right);
 }
 
+/**
+ * @param {number[]} batchIds
+ * @param {string | undefined} adoptPolicy
+ * @param {BatchPolicy[]} [batchPolicies]
+ * @param {string} [reconciliationScope]
+ * @param {string} [cashFundingPolicy]
+ */
 async function loadPlan(
   batchIds,
   adoptPolicy,
@@ -2702,7 +2985,7 @@ async function loadPlan(
   const cashContext =
     reconciliationScope === "record_cash_only" || fullKinesis
       ? await readKinesisCashContext()
-      : { ledger: [], sources: [], batches: [] };
+      : /** @type {CashContext} */ ({ ledger: [], sources: [], batches: [] });
   const networkContext = fullKinesis
     ? await readKinesisNetworkContext(history)
     : { sources: [], batches: [] };
@@ -2776,7 +3059,8 @@ async function loadPlan(
                 fullSources.literalProofs.has(Number(row.id)),
             )
             .map((row) => ({ row })),
-          duplicates: [],
+          duplicates:
+            /** @type {Array<{ row: ReconciliationSourceRow }>} */ ([]),
         }
       : reconciliationScope === "record_cash_only"
         ? {
@@ -2879,6 +3163,14 @@ async function loadPlan(
   };
 }
 
+/**
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ * @param {string} [options.reconciliationScope]
+ * @param {string} [options.cashFundingPolicy]
+ */
 export async function previewPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
@@ -2945,6 +3237,14 @@ function assertProjectedHistory(before, after) {
   }
 }
 
+/**
+ * @param {object} input
+ * @param {Pick<ReconciliationPlan, "actions">} input.plan
+ * @param {PlanAdoption[]} input.adoptions
+ * @param {ReconciliationHistoryEvent[]} input.history
+ * @param {ReconciliationSourceRow[]} input.rows
+ * @param {Map<number, ReconciliationSourceRow>} [input.sourceOverrides]
+ */
 function projectedReconciliationHistory({
   plan,
   adoptions,
@@ -2999,7 +3299,17 @@ function projectedReconciliationHistory({
   ];
 }
 
-/** Caller holds every selected batch lock, then account and portfolio writer locks. */
+/**
+ * Caller holds every selected batch lock, then account and portfolio writer locks.
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ * @param {string} [options.expectedPlanFingerprint]
+ * @param {number[]} [options.lockedBatchIds]
+ * @param {string} [options.reconciliationScope]
+ * @param {string} [options.cashFundingPolicy]
+ */
 export async function applyPortfolioImportReconciliation({
   batchIds,
   adoptPolicy,
@@ -3095,7 +3405,10 @@ export async function applyPortfolioImportReconciliation({
       });
   const recordedCashByBatch = new Map();
   for (const record of cashRecords) {
-    const recorded = await recordKinesisCash(record);
+    // classifyKinesisCash returns only grouped members, which carry their proof.
+    const recorded = await recordKinesisCash(
+      /** @type {Parameters<typeof recordKinesisCash>[0]} */ (record),
+    );
     const id = Number(record.row.batch_id);
     recordedCashByBatch.set(
       id,
@@ -3190,7 +3503,14 @@ export async function applyPortfolioImportReconciliation({
   };
 }
 
-/** Unit writers have finished inside the same locked transaction; bind their actual images. */
+/**
+ * Unit writers have finished inside the same locked transaction; bind their actual images.
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {number[]} options.rowIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ */
 export async function completePortfolioImportIncome({
   batchIds,
   rowIds,
@@ -3223,7 +3543,15 @@ export async function completePortfolioImportIncome({
   return counts;
 }
 
-/** Exact proved rows from the locked scope may bypass only source-readiness errors. */
+/**
+ * Exact proved rows from the locked scope may bypass only source-readiness errors.
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ * @param {string} [options.reconciliationScope]
+ * @param {string} [options.cashFundingPolicy]
+ */
 export async function getPortfolioImportCompanionRowIds({
   batchIds,
   adoptPolicy,
@@ -3241,7 +3569,15 @@ export async function getPortfolioImportCompanionRowIds({
   return companions.map(({ row }) => Number(row.id));
 }
 
-/** Selection is derived from the complete source under the caller's locks. */
+/**
+ * Selection is derived from the complete source under the caller's locks.
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ * @param {string} [options.reconciliationScope]
+ * @param {string} [options.cashFundingPolicy]
+ */
 export async function getPortfolioImportScopedSelection({
   batchIds,
   adoptPolicy,
@@ -3259,6 +3595,14 @@ export async function getPortfolioImportScopedSelection({
   return loaded.plan;
 }
 
+/**
+ * @param {object} options
+ * @param {number[]} options.batchIds
+ * @param {string} [options.adoptPolicy]
+ * @param {BatchPolicy[]} [options.batchPolicies]
+ * @param {string} [options.reconciliationScope]
+ * @param {string} [options.cashFundingPolicy]
+ */
 export async function getPortfolioImportRepairBatchIds({
   batchIds,
   adoptPolicy,
@@ -3368,7 +3712,10 @@ export async function restorePortfolioImportAdoptions(receipts) {
   }
 }
 
-/** Capture both canonical after-images in the retained literal group source. */
+/**
+ * Capture both canonical after-images in the retained literal group source.
+ * @param {NativeGiftGroup[]} groups
+ */
 export async function completePortfolioImportNativeGiftGroups(groups) {
   for (const group of groups) {
     const ids = [

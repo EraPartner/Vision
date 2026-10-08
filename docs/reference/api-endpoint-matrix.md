@@ -8,7 +8,7 @@ last_modified: 2026-10-08
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 299
+api_operation_count: 300
 tags:
   [
     reference,
@@ -523,6 +523,7 @@ in ascending order and preserves source order within a date. See
 | GET    | `/api/splits/transaction/:id`     | Splits for transaction (optional `limit`/`offset`; omit both for all) | —          | [[docs/api/splits\|Splits]] |
 | POST   | `/api/splits`                     | Create split                                                          | —          | [[docs/api/splits\|Splits]] |
 | POST   | `/api/splits/batch`               | Create multiple splits                                                | —          | [[docs/api/splits\|Splits]] |
+| POST   | `/api/splits/bulk`                | Bulk split: one payee, preset share (`equal`/`full`) of many transactions | 30/min | [[docs/api/splits\|Splits]] |
 | POST   | `/api/splits/:id/pay`             | Record payment                                                        | —          | [[docs/api/splits\|Splits]] |
 | GET    | `/api/splits/:id/payments`        | Get payments (optional `limit`/`offset`; omit both for all)           | —          | [[docs/api/splits\|Splits]] |
 | POST   | `/api/splits/:id/settle`          | Mark settled                                                          | —          | [[docs/api/splits\|Splits]] |
@@ -719,14 +720,14 @@ equal the main senders and preload subscriptions.
 | Recipient Bank Accounts              | 5                             |
 | Admin (incl. DB Data Editor ADR-101) | 22                            |
 | Private Electron Audit Bridge        | 6                             |
-| Splits                               | 11                            |
+| Splits                               | 12                            |
 | Health                               | 2                             |
 | Aggregations (Phase 2/6/10/D)        | 15                            |
 | Reports (Phase 3/7)                  | 3                             |
 | Info/Statistics (Phase 14)           | 17                            |
 | AI Chat                              | 9                             |
 | Electron IPC invoke channels         | 25                            |
-| **Total**                            | **322**                       |
+| **Total**                            | **323**                       |
 
 > **300** versioned `/api` HTTP operations are declared in `openapi.yaml`. The checker compares their concrete method/path pairs with the resource tables and also checks `api_operation_count`. The 2 health routes and 25 Electron invoke channels are separate contracts; the 6 Electron event channels are not request endpoints. Resource summary counts and rate-limit descriptions are navigation aids and are not independently gate-checked.
 
