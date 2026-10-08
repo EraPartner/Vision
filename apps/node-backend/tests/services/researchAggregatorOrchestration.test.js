@@ -4,8 +4,8 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { __createResearchAggregator as createResearchAggregator } from '../../src/services/research/researchAggregator.js';
-import { createResearchCache } from '../../src/services/research/researchCache.js';
+import { __createResearchAggregator as createResearchAggregator } from '../../src/services/research/researchAggregator.ts';
+import { createResearchCache } from '../../src/services/research/researchCache.ts';
 
 const makeGovernor = (canSpendImpl = () => true) => ({
   canSpend: vi.fn(async (p) => canSpendImpl(p)),

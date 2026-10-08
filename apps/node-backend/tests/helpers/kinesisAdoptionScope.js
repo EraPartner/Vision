@@ -1,7 +1,7 @@
 /** Complete synthetic Kinesis source; contains no supplied account data. */
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
-import { parseKinesisTransactionHistory } from "../../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
+import { parseKinesisTransactionHistory } from "../../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import { captureKinesisSourceContext } from "../../src/services/portfolioKinesisAdoptionScope.js";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
 import { toDecimal } from "../../src/lib/money.ts";

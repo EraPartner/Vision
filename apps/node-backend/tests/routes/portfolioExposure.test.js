@@ -6,7 +6,7 @@ const exposure = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  "../../src/services/portfolio/portfolioExposureService.js",
+  "../../src/services/portfolio/portfolioExposureService.ts",
   () => exposure,
 );
 vi.mock("../../src/services/investmentService.js", () =>

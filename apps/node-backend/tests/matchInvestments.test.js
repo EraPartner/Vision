@@ -9,7 +9,7 @@ vi.mock("../src/config/logger.ts", () => ({
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query } from "../src/database/connection.ts";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
+import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 
 // Batched resolution: one grouped query per resolution kind. The mock indexes a
 // fixture "table" of active investments by lowercased symbol / lowercased-trimmed

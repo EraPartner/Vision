@@ -35,7 +35,7 @@ import { recipientBankAccountRepository } from "../repositories/recipientBankAcc
 import {
   decodeCsvBuffer,
   normalizeCsvEncoding,
-} from "./importPipeline/adapters/_shared.js";
+} from "./importPipeline/adapters/_shared.ts";
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
 /**

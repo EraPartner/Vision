@@ -43,7 +43,7 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
     getSummary: vi.fn(),
   },
 }));
-vi.mock("../../src/services/portfolio/portfolioTransactionService.js", () => ({
+vi.mock("../../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
@@ -82,7 +82,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 
 import investmentRepository from "../../src/repositories/investmentRepository.ts";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
 import {
   fetchHistoricalPrices,
   fetchLivePricesDetailed,

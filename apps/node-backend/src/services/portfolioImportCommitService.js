@@ -9,7 +9,7 @@ import {
   setBatchAccount,
   finalizeAdoptionOnlyBatch,
 } from "../repositories/portfolioImportBatchRepository.ts";
-import { commitPortfolioImport } from "./portfolioImportPipeline/index.js";
+import { commitPortfolioImport } from "./portfolioImportPipeline/index.ts";
 import { assertPortfolioImportAccount } from "./portfolioImportAccountService.js";
 import {
   assertPortfolioImportReadiness,
@@ -25,13 +25,13 @@ import {
 } from "./portfolioImportReconciliationService.js";
 import { lockReconciliationAccountsAndHistory } from "../repositories/portfolioImportReconciliationRepository.ts";
 import { readReconciliationSources } from "../repositories/portfolioImportReconciliationRepository.ts";
-import { invalidatePortfolioCaches } from "./info/cache.js";
+import { invalidatePortfolioCaches } from "./info/cache.ts";
 import {
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
-} from "./portfolio/portfolioAssetTransferService.js";
-import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.js";
-import { withPortfolioCustodyImportScope } from "./portfolio/portfolioCustodyImportScope.js";
+} from "./portfolio/portfolioAssetTransferService.ts";
+import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.ts";
+import { withPortfolioCustodyImportScope } from "./portfolio/portfolioCustodyImportScope.ts";
 import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 
 function assertReviewable(batch, batchId) {
@@ -46,7 +46,7 @@ function assertReviewable(batch, batchId) {
     );
 }
 
-import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.js";
+import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
 import { scheduleRefresh } from "./materializedViewService.js";
 
 async function commitLockedScope(

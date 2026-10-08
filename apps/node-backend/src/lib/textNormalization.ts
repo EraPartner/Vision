@@ -16,6 +16,10 @@ const KBC_TRANSACTION_TYPES = [
 
 const KBC_SEPARATORS = [' VIA ', ' NAAR ', ' VAN ', ' MET ', ' DOOR ', ' OP ', ' OM '];
 
+export function cleanRecipientName(recipient: string): string;
+export function cleanRecipientName(
+  recipient: string | null | undefined,
+): string | null | undefined;
 export function cleanRecipientName(
   recipient: string | null | undefined,
 ): string | null | undefined {
@@ -30,6 +34,10 @@ export function cleanRecipientName(
   return cleaned;
 }
 
+export function cleanKbcRecipientName(recipient: string): string;
+export function cleanKbcRecipientName(
+  recipient: string | null | undefined,
+): string | null | undefined;
 export function cleanKbcRecipientName(
   recipient: string | null | undefined,
 ): string | null | undefined {
@@ -68,6 +76,8 @@ export function cleanKbcRecipientName(
  *   tests/textNormalization.test.js: `normalizeToUppercase(null) === null`),
  *   otherwise the trimmed/uppercased string. Throws for a truthy non-string.
  */
+export function normalizeToUppercase(name: string): string;
+export function normalizeToUppercase(name: unknown): string | null | undefined;
 export function normalizeToUppercase(name: unknown): string | null | undefined {
   if (!name) return name as string | null | undefined;
   if (typeof name !== 'string') throw new Error(`Name must be a string, got ${typeof name}`);

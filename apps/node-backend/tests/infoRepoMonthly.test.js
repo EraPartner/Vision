@@ -5,7 +5,7 @@ import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 import { mockLogger } from "./helpers/mockLogger.js";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 
@@ -26,7 +26,7 @@ vi.mock("../src/repositories/infoRepositoryHelpers.ts", async () => {
 });
 
 import { query } from "../src/database/connection.ts";
-import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { mvAvailable } from "../src/repositories/infoRepositoryHelpers.ts";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";

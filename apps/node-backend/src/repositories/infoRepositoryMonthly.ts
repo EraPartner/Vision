@@ -17,7 +17,7 @@ import {
   buildExclusionClauses,
   validateInt4Ids,
 } from "../lib/filterBuilder.ts";
-import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import { logger } from "../config/logger.ts";
 import {
   toDecimal,
@@ -79,8 +79,12 @@ export async function getMonthlyFinancialSummary(
   allTime = false,
   startDate: string | undefined = undefined,
   endDate: string | undefined = undefined,
+  accountIds: number[] = [],
 ) {
   const validIds = validateInt4Ids(excludedCategoryIds, "excludedCategoryIds");
+  // Empty means every account; the MV has no account grain, so a scope forces
+  // the live path.
+  const validAccountIds = validateInt4Ids(accountIds, "accountIds");
   const validRecipientIds = validateInt4Ids(
     excludedRecipientIds,
     "excludedRecipientIds",
@@ -112,6 +116,7 @@ export async function getMonthlyFinancialSummary(
     !hasExplicitRange &&
     validIds.length === 0 &&
     validRecipientIds.length === 0 &&
+    validAccountIds.length === 0 &&
     (await mvAvailable("mv_monthly_summary"));
   if (mvUsable) {
     const hetero = await query(
@@ -272,19 +277,23 @@ export async function getMonthlyFinancialSummary(
     ? `COALESCE((SELECT MIN(date_trunc('month', date)) FROM transactions WHERE is_active = true), date_trunc('month', ${todayParam}::date))`
     : `date_trunc('month', ${todayParam}::date - interval '5 months')`;
   let rangeEnd = `date_trunc('month', ${todayParam}::date)`;
-  const transactionDateFilters: string[] = [];
+  const transactionFilters: string[] = [];
   if (!allTime && startDate) {
     params.push(startDate);
     rangeStart = `date_trunc('month', $${params.length}::date)`;
-    transactionDateFilters.push(`t.date >= $${params.length}::date`);
+    transactionFilters.push(`t.date >= $${params.length}::date`);
   }
   if (!allTime && endDate) {
     params.push(endDate);
     rangeEnd = `date_trunc('month', $${params.length}::date)`;
-    transactionDateFilters.push(`t.date <= $${params.length}::date`);
+    transactionFilters.push(`t.date <= $${params.length}::date`);
   }
-  const transactionDateWhere = transactionDateFilters.length
-    ? `AND ${transactionDateFilters.join(" AND ")}`
+  if (validAccountIds.length > 0) {
+    params.push(validAccountIds);
+    transactionFilters.push(`t.account_id = ANY($${params.length}::int[])`);
+  }
+  const transactionWhere = transactionFilters.length
+    ? `AND ${transactionFilters.join(" AND ")}`
     : "";
 
   // Aggregate per (date, currency) in SQL instead of streaming every transaction
@@ -322,7 +331,7 @@ export async function getMonthlyFinancialSummary(
       WHERE t.is_active = true
       ${includeTransfers ? "" : "AND t.is_transfer = false"}
       ${exclusionWhere}
-      ${transactionDateWhere}
+      ${transactionWhere}
     ),
     daily AS (
       SELECT

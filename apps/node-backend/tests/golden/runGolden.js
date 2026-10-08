@@ -12,7 +12,7 @@
  *
  *   import { describe, it, expect } from 'vitest';
  *   import { runGolden } from '../golden/runGolden.js';
- *   import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.js';
+ *   import { generateLoanSchedule } from '../../src/services/calculations/loanSchedule.ts';
  *
  *   describe('loanSchedule golden', () => {
  *     it('amortizing-standard', async () => {

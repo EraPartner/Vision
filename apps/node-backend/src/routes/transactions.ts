@@ -22,7 +22,7 @@ import {
   bulkUpdateTransactions,
   bulkDeleteTransactions,
 } from "../services/transactionBulkService.js";
-import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   validateIdParam,
   validateId,

@@ -3,7 +3,7 @@ import {
   buildInvestmentSummaryCorePartitioned,
   projectAssetTransferPartitions,
 } from "@vision/shared-utils/portfolio";
-import { previewPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.js";
+import { previewPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.ts";
 
 const a = "a".repeat(64),
   b = "b".repeat(64),

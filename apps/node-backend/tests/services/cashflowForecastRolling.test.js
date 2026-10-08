@@ -60,7 +60,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("returns shape with actual length === daysBack + 1 and forecast length === daysForward", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecastRolling({
       daysBack: 30,
       daysForward: 30,
@@ -92,7 +92,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("cumulative anchor is window-relative (starts at the first actual net)", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecastRolling({
       daysBack: 7,
       daysForward: 7,
@@ -105,7 +105,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("actual entries past today have null net + cumulative", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecastRolling({
       daysBack: 5,
       daysForward: 5,
@@ -121,7 +121,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("same-day same-params calls return identical MC bands (determinism)", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const a = await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 14,
@@ -141,7 +141,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("different daysBack/daysForward changes seed → different MC bands", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const a = await computeCashflowForecastRolling({
       daysBack: 14,
       daysForward: 14,
@@ -162,7 +162,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("include_planned=false leaves cumulative untouched by future planned", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const without = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -191,7 +191,7 @@ describe("computeCashflowForecastRolling", () => {
 
   it("always applies scheduled ledger rows without requiring include_planned", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,

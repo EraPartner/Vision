@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), quoteSummary: vi.fn() }));
-vi.mock("../src/services/prices/yahooClient.js", () => ({
+vi.mock("../src/services/prices/yahooClient.ts", () => ({
   getYahooClient: vi.fn(async () => yahoo),
 }));
 

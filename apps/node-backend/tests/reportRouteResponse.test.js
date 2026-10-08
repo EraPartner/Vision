@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/services/reports/index.js', () => ({
+vi.mock('../src/services/reports/index.ts', () => ({
   generateReport: vi.fn(),
 }));
 
-import { generateReport } from '../src/services/reports/index.js';
+import { generateReport } from '../src/services/reports/index.ts';
 import reportsRouter from '../src/routes/reports.ts';
 
 /** Find one Express route handler without binding a network listener. */

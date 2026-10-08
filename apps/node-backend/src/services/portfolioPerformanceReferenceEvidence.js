@@ -1,16 +1,16 @@
 import { Decimal, toDecimal } from "../lib/money.ts";
 import { createHash } from "node:crypto";
 import { parsedDateToYmd } from "../lib/importDates.ts";
-import { parseKinesisSourceRecordForBasisPolicy } from "./portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
+import { parseKinesisSourceRecordForBasisPolicy } from "./portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import {
   parseAmountField,
   parseCsvText,
   parseDateWithFormat,
-} from "./importPipeline/adapters/_shared.js";
+} from "./importPipeline/adapters/_shared.ts";
 import {
   getNexoProSpotReconciliationEvidence,
   nexoProSourceMoneyMatches,
-} from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.js";
+} from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
 
 const same = (left, right, places = 4) =>
   left != null &&

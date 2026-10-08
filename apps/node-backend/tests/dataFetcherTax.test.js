@@ -5,7 +5,7 @@ vi.mock("../src/database/connection.ts", () => mockConnection());
 
 // Keep convertWithRates real (pure math); only stub the DB-backed current-rate loader.
 vi.mock(
-  "../src/services/currency/currencyConversionService.js",
+  "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => {
     const actual = await importOriginal();
     return { ...actual, loadCurrentRates: vi.fn() };
@@ -16,8 +16,8 @@ import { query } from "../src/database/connection.ts";
 import {
   loadCurrentRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
-} from "../src/services/currency/currencyConversionService.js";
-import { fetchTaxData } from "../src/services/reports/dataFetcherTax.js";
+} from "../src/services/currency/currencyConversionService.ts";
+import { fetchTaxData } from "../src/services/reports/dataFetcherTax.ts";
 
 const dividendRow = (over = {}) => ({
   id: 1,

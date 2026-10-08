@@ -3,7 +3,7 @@ import { query } from "../database/connection.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
 import { toDecimal } from "../lib/money.ts";
-import { findRateOnOrBeforeInIndex } from "./currency/rateFetcher.js";
+import { findRateOnOrBeforeInIndex } from "./currency/rateFetcher.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 
 const MAX_ROWS = 100000;
@@ -446,7 +446,7 @@ export async function executeFinancialAnalysis(plan, options = {}) {
         deps.fetchBenchmark ??
         (async (params) =>
           (
-            await import("./research/researchAggregator.js")
+            await import("./research/researchAggregator.ts")
           ).researchAggregator.fetch("chart", params));
       const result = await fetch({
         symbol: plan.symbol,

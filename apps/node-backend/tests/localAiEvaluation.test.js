@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.js";
-import { getToolNames } from "../src/services/aiChat/tools/index.js";
+import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.ts";
+import { getToolNames } from "../src/services/aiChat/tools/index.ts";
 import {
   runLocalAiCase,
   scoreLocalAiRun,
   summarizeLocalAiEvaluation,
-} from "../src/services/aiEvaluation/localReliability.js";
+} from "../src/services/aiEvaluation/localReliability.ts";
 
 function call(name, args) {
   return { function: { name, arguments: args } };

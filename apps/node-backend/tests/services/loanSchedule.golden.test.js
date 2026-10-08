@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { runGolden } from '../golden/runGolden.js';
-import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.js';
+import { generateLoanRepaymentSchedule } from '../../src/services/calculations/loanSchedule.ts';
 
 /**
  * Golden-fixture regression suite for services/calculations/loanSchedule.

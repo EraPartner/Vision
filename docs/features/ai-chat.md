@@ -2,8 +2,8 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-10-06
 tags:
   [
@@ -296,7 +296,7 @@ The frontend, backend service, and route use the shared `@vision/types/aiChat` c
 
 ## Tool Registry (30 tools across 6 domains)
 
-Tools are declared with JSON Schema params. Backend validates args before dispatch with the hand-rolled helpers in `services/aiChat/tools/_validate.js` (`parseDate`, `parseEnum`, `parsePositiveInt`) — not Zod, despite what this page said before 2026-08-11. `parsePositiveInt` delegates to the shared `validateId` (see [[docs/security/input-validation#parsePositiveInt (AI-chat tool arguments)|Input Validation]]), so a malformed `categoryId`/`recipientId`/`plannedId` is an error the model can correct rather than a silent hit on the wrong record. Results capped at 500 rows by default. Each tool returns `{ok, data, meta}`; optional `meta.renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering. Omitting the hint uses the JSON fallback.
+Tools are declared with JSON Schema params. Backend validates args before dispatch with the hand-rolled helpers in `services/aiChat/tools/_validate.ts` (`parseDate`, `parseEnum`, `parsePositiveInt`) — not Zod, despite what this page said before 2026-08-11. `parsePositiveInt` delegates to the shared `validateId` (see [[docs/security/input-validation#parsePositiveInt (AI-chat tool arguments)|Input Validation]]), so a malformed `categoryId`/`recipientId`/`plannedId` is an error the model can correct rather than a silent hit on the wrong record. Results capped at 500 rows by default. Each tool returns `{ok, data, meta}`; optional `meta.renderAs ∈ {"table", "line", "bar", "pie"}` drives the `ToolResultCard` rendering. Omitting the hint uses the JSON fallback.
 
 ### Expenses (11 tools)
 

@@ -2,8 +2,8 @@
 title: AI Agent Codebase Navigation Map
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     ai-agent,
@@ -145,7 +145,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]]   | CSV column mapping UI (used by TransactionImportCard) |
 
 **Backend Route** | [[apps/node-backend/src/routes/importRoutes.ts]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.js|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.js|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.ts]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.ts|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.ts|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.ts]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -156,7 +156,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page       | [[apps/frontend/src/pages/TaxOverviewPage.tsx]]                                                                                |
 | Components          | [[apps/frontend/src/features/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]]        |
 | State and hydration | [[apps/frontend/src/stores/belgianTaxStore.ts]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]]                   |
-| Backend Service     | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/calculations/loanSchedule.js]] |
+| Backend Service     | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/calculations/loanSchedule.ts]] |
 | Feature Doc         | [[docs/features/belgian-tax]]                                                                                                  |
 | Integration Doc     | [[docs/integrations/belgian-inflation]], [[docs/integrations/loan-repayment-service]]                                          |
 
@@ -291,14 +291,14 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | Service               | File                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------ |
 | AI Chat               | [[apps/node-backend/src/services/aiChatService.js]]                                        |
-| Bank Adapters         | [[apps/node-backend/src/services/importPipeline/adapters/index.js]]                        |
+| Bank Adapters         | [[apps/node-backend/src/services/importPipeline/adapters/index.ts]]                        |
 | Belgian Inflation     | [[apps/node-backend/src/services/belgianInflationService.js]]                              |
-| Currency Conversion   | [[apps/node-backend/src/services/currency/currencyConversionService.js]]                   |
+| Currency Conversion   | [[apps/node-backend/src/services/currency/currencyConversionService.ts]]                   |
 | Data Import           | [[apps/node-backend/src/services/dataImportService.js]]                                    |
 | Deduplication         | [[apps/node-backend/src/services/deduplication.js]]                                        |
 | IBAN                  | ~~[[apps/node-backend/src/services/iban.js]]~~ (deleted 2026-05-29; validation now inline) |
-| Import Pipeline       | [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C)                       |
-| Loan Repayment        | [[apps/node-backend/src/services/calculations/loanSchedule.js]]                            |
+| Import Pipeline       | [[apps/node-backend/src/services/importPipeline/index.ts]] (Phase C)                       |
+| Loan Repayment        | [[apps/node-backend/src/services/calculations/loanSchedule.ts]]                            |
 | Materialized Views    | [[apps/node-backend/src/services/materializedViewService.js]]                              |
 | Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]                  |
 | Price Provider        | [[apps/node-backend/src/services/priceProviderService.js]]                                 |

@@ -14,7 +14,7 @@ vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: { hardDelete: vi.fn() },
 }));
-vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: { create: vi.fn(), update: vi.fn() },
 }));
 
@@ -30,18 +30,18 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
   default: { get: vi.fn() },
 }));
 
-vi.mock("../src/services/portfolio/fxResolve.js", () => ({
+vi.mock("../src/services/portfolio/fxResolve.ts", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 
 import { query, poolQuery } from "../src/database/connection.ts";
 import portfolioTransactionPersistence from "../src/repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import recipientRepository from "../src/repositories/recipientRepository.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
 import settingsRepository from "../src/repositories/settingsRepository.ts";
-import { autoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.js";
-import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
+import { autoResolveFxRateToEur } from "../src/services/portfolio/fxResolve.ts";
+import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 
 const portfolioTransactionRepository = {
   ...portfolioTransactionPersistence,

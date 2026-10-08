@@ -11,13 +11,13 @@ vi.mock('../src/repositories/infoRepository.ts', () => ({
   default: { getMonthlyFinancialSummary: vi.fn() },
 }));
 
-vi.mock('../src/services/aiChat/tools/_financialMetrics.js', () => ({
+vi.mock('../src/services/aiChat/tools/_financialMetrics.ts', () => ({
   getAiDisplayCurrency: vi.fn(),
 }));
 
 import { transactionRepository } from '../src/repositories/transactionRepository.ts';
 import infoRepository from '../src/repositories/infoRepository.ts';
-import { getAiDisplayCurrency } from '../src/services/aiChat/tools/_financialMetrics.js';
+import { getAiDisplayCurrency } from '../src/services/aiChat/tools/_financialMetrics.ts';
 import {
   getSpendByCategory,
   getTopRecipients,
@@ -28,7 +28,7 @@ import {
   getYearOverYearComparison,
   getUncategorisedTransactions,
   getNetCashflow,
-} from '../src/services/aiChat/tools/expenses.js';
+} from '../src/services/aiChat/tools/expenses.ts';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -328,7 +328,7 @@ describe('getNetCashflow', () => {
     ]);
     expect(r.meta).toMatchObject({ totalIncome: 1100, totalExpenses: 200, totalNet: 900 });
     expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith(
-      [], 'EUR', [], false, '2025-04-01', '2025-05-31',
+      [], 'EUR', [], false, '2025-04-01', '2025-05-31', [],
     );
   });
 

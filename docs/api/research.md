@@ -2,8 +2,8 @@
 title: Research API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-09-20
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - api
   - research
@@ -32,19 +32,19 @@ aliases:
   - multi-provider-research
 related_code:
   - apps/node-backend/src/routes/research.ts
-  - apps/node-backend/src/services/research/researchAggregator.js
-  - apps/node-backend/src/services/research/capabilityMap.js
-  - apps/node-backend/src/services/research/quotaGovernor.js
-  - apps/node-backend/src/services/research/researchCache.js
-  - apps/node-backend/src/services/research/providerKeys.js
-  - apps/node-backend/src/services/research/adapters/yahooAdapter.js
-  - apps/node-backend/src/services/research/adapters/fredAdapter.js
-  - apps/node-backend/src/services/research/adapters/eurostatAdapter.js
-  - apps/node-backend/src/services/research/adapters/dbnomicsAdapter.js
-  - apps/node-backend/src/services/research/adapters/macroRange.js
-  - apps/node-backend/src/services/research/adapters/macroCatalog.js
-  - apps/node-backend/src/services/research/projection/portfolioProjection.js
-  - apps/node-backend/src/services/research/fundamentalsScorecard.js
+  - apps/node-backend/src/services/research/researchAggregator.ts
+  - apps/node-backend/src/services/research/capabilityMap.ts
+  - apps/node-backend/src/services/research/quotaGovernor.ts
+  - apps/node-backend/src/services/research/researchCache.ts
+  - apps/node-backend/src/services/research/providerKeys.ts
+  - apps/node-backend/src/services/research/adapters/yahooAdapter.ts
+  - apps/node-backend/src/services/research/adapters/fredAdapter.ts
+  - apps/node-backend/src/services/research/adapters/eurostatAdapter.ts
+  - apps/node-backend/src/services/research/adapters/dbnomicsAdapter.ts
+  - apps/node-backend/src/services/research/adapters/macroRange.ts
+  - apps/node-backend/src/services/research/adapters/macroCatalog.ts
+  - apps/node-backend/src/services/research/projection/portfolioProjection.ts
+  - apps/node-backend/src/services/research/fundamentalsScorecard.ts
   - apps/node-backend/src/repositories/providerQuotaRepository.ts
 ---
 
@@ -619,7 +619,7 @@ Fetch observations for a specific macro series from a specific provider (no fall
 
 ## Symbol Mapping Endpoints (ADR-079)
 
-The cross-provider symbol map is the fool-proof anchor against silent wrong-instrument merges: a provider's data is only used for an instrument when a mapping records which symbol on that provider backs it. Mappings are stored in `instrument_provider_map`, anchored on ISIN (`key_type=isin`) where available or a Vision-internal id (`key_type=internal`) for crypto/metals. See [[apps/node-backend/src/services/research/researchMappingService.js]].
+The cross-provider symbol map is the fool-proof anchor against silent wrong-instrument merges: a provider's data is only used for an instrument when a mapping records which symbol on that provider backs it. Mappings are stored in `instrument_provider_map`, anchored on ISIN (`key_type=isin`) where available or a Vision-internal id (`key_type=internal`) for crypto/metals. See [[apps/node-backend/src/services/research/researchMappingService.ts]].
 
 ### GET /api/research/mappings
 
@@ -681,10 +681,10 @@ key is not an error. `400` on unknown provider.
 
 ## Aggregation Layer Architecture
 
-The six data endpoints are thin wrappers over the `researchAggregator` singleton in [[apps/node-backend/src/services/research/researchAggregator.js]]. The orchestration steps on every request are:
+The six data endpoints are thin wrappers over the `researchAggregator` singleton in [[apps/node-backend/src/services/research/researchAggregator.ts]]. The orchestration steps on every request are:
 
 1. **Cache check** — `researchCache.get(key)` keyed by `dataType:assetClass:symbol:range`. A hit returns `source: 'cache'` immediately; no quota is spent.
-2. **Capability chain** — `resolveProviderChain(dataType, assetClass)` from [[apps/node-backend/src/services/research/capabilityMap.js]] returns the ordered provider preference for that data type and asset class. Providers absent an adapter method or API key are filtered out by `isProviderKeyed` ([[apps/node-backend/src/services/research/providerKeys.js]]).
+2. **Capability chain** — `resolveProviderChain(dataType, assetClass)` from [[apps/node-backend/src/services/research/capabilityMap.ts]] returns the ordered provider preference for that data type and asset class. Providers absent an adapter method or API key are filtered out by `isProviderKeyed` ([[apps/node-backend/src/services/research/providerKeys.ts]]).
 3. **Quota gate** — `governor.canSpend(provider)` checks per-minute (in-memory) and per-day (persisted to `provider_quota` table via [[apps/node-backend/src/repositories/providerQuotaRepository.ts]]) token buckets. A full bucket moves to the next provider instead of issuing a 429.
 4. **Race-to-first** — The first provider that returns successfully wins. `governor.spend()` records the token, `providerHealthService.recordSuccess()` updates health, the result is cached with the type TTL. **Exception: `fundamentals`** — `GET /api/research/fundamentals` and `GET /api/research/scorecard` bypass this step and call `researchAggregator.fetchFundamentals()`, which fetches FMP and Yahoo **in parallel** and merges field-by-field (FMP preferred). See the `/fundamentals` endpoint doc above.
 5. **Provider error** — `providerHealthService.recordError()` is called, the error is noted in `attempted[]`, and the next provider is tried.

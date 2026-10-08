@@ -9,12 +9,12 @@ import { query, withTransaction } from "../database/connection.ts";
 import {
   computeMetrics,
   computeHeatmap,
-} from "./calculations/portfolioMath.js";
-import { computeAndStoreSnapshots as computeAggregateSnapshots } from "./portfolio/snapshotBuilder.js";
+} from "./calculations/portfolioMath.ts";
+import { computeAndStoreSnapshots as computeAggregateSnapshots } from "./portfolio/snapshotBuilder.ts";
 import {
   getPortfolioSummary,
   getBreakdownSummary,
-} from "./portfolio/portfolioSummaryService.js";
+} from "./portfolio/portfolioSummaryService.ts";
 import { addAll, toDecimal } from "../lib/money.ts";
 
 /** @typedef {import('../types/rows.ts').PortfolioPerformanceSnapshotRow} PortfolioPerformanceSnapshotRow */

@@ -74,7 +74,7 @@
       "paths": [
         "alembic/versions/0103_import_identity_provenance.py",
         "apps/node-backend/src/repositories/transactionRepository.ts",
-        "apps/node-backend/src/services/importPipeline/commit.js"
+        "apps/node-backend/src/services/importPipeline/commit.ts"
       ],
       "readers": "No current runtime reader.",
       "writers": "No current import path writes tx_hash.",
@@ -117,7 +117,7 @@
         "alembic/legacy_versions/0025_exchange_rate_cache.py",
         "alembic/versions/0105_retire_legacy_exchange_rate_cache.py",
         "apps/node-backend/src/backup/coverage.ts",
-        "apps/node-backend/src/services/currency/currencyConversionService.js",
+        "apps/node-backend/src/services/currency/currencyConversionService.ts",
         "scripts/test-legacy-retirements.js"
       ],
       "readers": "No current application readers.",
@@ -177,7 +177,7 @@
       "disposition": "This is a current schema and runtime contract, despite nearby comments that discuss older recurrence behavior.",
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
-        "apps/node-backend/src/services/portfolioImportPipeline/validate.js",
+        "apps/node-backend/src/services/portfolioImportPipeline/validate.ts",
         "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts"
       ],
       "readers": "Portfolio repositories and import validation cast and read it.",
@@ -298,14 +298,14 @@
       "classification": "historical-record-only",
       "disposition": "Removed after tests moved to the canonical adapter registry and its test-only export allowlist entries were repointed.",
       "paths": [
-        "apps/node-backend/src/services/importPipeline/adapters/index.js",
+        "apps/node-backend/src/services/importPipeline/adapters/index.ts",
         "scripts/check-test-only-exports.js"
       ],
       "readers": "Backend adapter tests only.",
       "writers": "None.",
       "persistedData": "None.",
       "supportWindow": "None; private repository entrypoint.",
-      "replacement": "services/importPipeline/adapters/index.js and production registry APIs.",
+      "replacement": "services/importPipeline/adapters/index.ts and production registry APIs.",
       "deletionDependencies": [
         "repoint tests",
         "remove obsolete test-only allowlist entries",
@@ -825,7 +825,7 @@
       "paths": [
         "packages/types/src/recurrence.ts",
         "apps/node-backend/src/services/investmentService.js",
-        "apps/node-backend/src/services/portfolio/portfolioTransactionRules.js"
+        "apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts"
       ],
       "readers": "Current runtime readers accept only canonical recurrence values.",
       "writers": "Current writers persist and emit only biweekly.",
@@ -944,7 +944,7 @@
       "paths": [
         "apps/frontend/src/types/portfolio.ts",
         "apps/frontend/src/pages/portfolio/PortfolioPage.tsx",
-        "apps/node-backend/src/services/portfolio/portfolioSummaryService.js"
+        "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts"
       ],
       "readers": "Portfolio pages, accounts, reports, hooks, and metrics.",
       "writers": "Backend summary calculation emits it.",

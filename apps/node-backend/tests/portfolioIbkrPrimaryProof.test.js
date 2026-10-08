@@ -13,11 +13,11 @@ vi.mock("../src/database/connection.ts", () =>
   mockTxConnection(undefined, { query: vi.fn(async () => ({ rows: [] })) }),
 );
 import { query } from "../src/database/connection.ts";
-import { parseIbkrTransactionHistory } from "../src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js";
+import { parseIbkrTransactionHistory } from "../src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts";
 import {
   applyPortfolioAssetScope,
   stageBatch,
-} from "../src/services/portfolioImportPipeline/stage.js";
+} from "../src/services/portfolioImportPipeline/stage.ts";
 
 const hash = (raw) => createHash("sha256").update(raw).digest("hex");
 const columns = [

@@ -37,7 +37,7 @@ vi.mock('../../src/services/deduplication.js', () => ({
 }));
 vi.mock('../../src/config/logger.ts', () => ({ logger: mockLogger() }));
 vi.mock('../../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
-vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
+vi.mock('../../src/services/currency/currencyConversionService.ts', () => mockCurrencyConversion());
 vi.mock('../../src/database/connection.ts', () => mockTxConnection());
 vi.mock('../../src/repositories/accountRepository.ts', () => {
   const accountRepository = { findActiveId: vi.fn(async () => 1) };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateLoanRepaymentSchedule } from '../src/services/calculations/loanSchedule.js';
+import { generateLoanRepaymentSchedule } from '../src/services/calculations/loanSchedule.ts';
 
 const base = {
   loan_type: 'amortizing',

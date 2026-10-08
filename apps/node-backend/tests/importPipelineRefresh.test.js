@@ -18,17 +18,17 @@ vi.mock("../src/database/connection.ts", () =>
   mockConnection({ query: mocks.query }),
 );
 vi.mock("../src/config/logger.ts", () => ({ logger: mocks.logger }));
-vi.mock("../src/services/importPipeline/stage.js", () => ({
+vi.mock("../src/services/importPipeline/stage.ts", () => ({
   createBatch: vi.fn(),
   stageBatch: vi.fn(),
 }));
-vi.mock("../src/services/importPipeline/validate.js", () => ({
+vi.mock("../src/services/importPipeline/validate.ts", () => ({
   validateBatch: vi.fn(),
 }));
-vi.mock("../src/services/importPipeline/match.js", () => ({
+vi.mock("../src/services/importPipeline/match.ts", () => ({
   matchBatch: vi.fn(),
 }));
-vi.mock("../src/services/importPipeline/commit.js", () => ({
+vi.mock("../src/services/importPipeline/commit.ts", () => ({
   commitBatch: mocks.commitBatch,
 }));
 vi.mock("../src/services/transferReconciliationService.js", () => ({
@@ -39,7 +39,7 @@ vi.mock("../src/services/aggregationRefresh.js", () => ({
   scheduleMaterializedViewRefresh: mocks.scheduleMaterializedViewRefresh,
 }));
 
-import { commitImport } from "../src/services/importPipeline/index.js";
+import { commitImport } from "../src/services/importPipeline/index.ts";
 
 function deferred() {
   let resolve;

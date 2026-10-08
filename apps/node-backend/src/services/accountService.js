@@ -20,7 +20,7 @@ import {
 import {
   loadCurrentRates,
   convertWithRates,
-} from "./currency/currencyConversionService.js";
+} from "./currency/currencyConversionService.ts";
 import { hasConversionRate } from "../lib/exchangeRates.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.ts";

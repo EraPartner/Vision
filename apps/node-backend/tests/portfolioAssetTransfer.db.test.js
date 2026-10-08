@@ -19,12 +19,12 @@ import {
 import {
   commitPortfolioAssetTransfer,
   rollbackPortfolioAssetTransfersForBatch,
-} from "../src/services/portfolio/portfolioAssetTransferService.js";
-import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
+} from "../src/services/portfolio/portfolioAssetTransferService.ts";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import { stageBatch } from "../src/services/portfolioImportPipeline/stage.js";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
+import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
+import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
+import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 
 const pool = getTestPool();
 const ids = { investments: [], accounts: [], batches: [] };

@@ -24,7 +24,7 @@ import {
 } from "../middleware/validation.ts";
 import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
-import { generateLoanRepaymentSchedule } from "../services/calculations/loanSchedule.js";
+import { generateLoanRepaymentSchedule } from "../services/calculations/loanSchedule.ts";
 import { isValidPattern } from "../lib/calculations/recurrence.ts";
 import { executePlanned } from "../services/plannedExecutionService.js";
 import { getMatchSuggestions } from "../services/plannedMatchService.js";
@@ -39,7 +39,7 @@ import {
   optionalQueryString,
   parseBooleanQueryParam,
 } from "../lib/httpParams.ts";
-import type { LoanConfig } from "../services/calculations/loanSchedule.js";
+import type { LoanConfig } from "../services/calculations/loanSchedule.ts";
 import type { ExpressRequest } from "../types/express.ts";
 import type {
   HydratedPlannedTransactionRow,

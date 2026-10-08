@@ -4,7 +4,7 @@
  */
 
 import { query } from "../database/connection.ts";
-import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import { toDecimal, toNumber, roundMoney } from "../lib/money.ts";
 import type { DecimalInput } from "../lib/money.ts";
 import settingsRepository from "./settingsRepository.ts";

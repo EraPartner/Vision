@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { densifyDailyHistory } from '../../src/services/calculations/forecast/_densify.js';
-import * as simpleAverage from '../../src/services/calculations/forecast/methods/simpleAverage.js';
+import { densifyDailyHistory } from '../../src/services/calculations/forecast/_densify.ts';
+import * as simpleAverage from '../../src/services/calculations/forecast/methods/simpleAverage.ts';
 
 describe('densifyDailyHistory', () => {
   it('fills missing calendar days with net 0 through endIso', () => {

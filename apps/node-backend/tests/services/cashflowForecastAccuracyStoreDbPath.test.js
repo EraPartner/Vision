@@ -7,12 +7,12 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import * as ensemble from "../../src/services/calculations/forecast/methods/ensemble.js";
+import * as ensemble from "../../src/services/calculations/forecast/methods/ensemble.ts";
 import {
   __getAccuracyHistory as getAccuracyHistory,
   getLatestAccuracyByMethod,
   getAllAccuracyHistory,
-} from "../../src/services/calculations/forecast/accuracyStore.js";
+} from "../../src/services/calculations/forecast/accuracyStore.ts";
 
 const dbRows = vi.hoisted(() => [
   {

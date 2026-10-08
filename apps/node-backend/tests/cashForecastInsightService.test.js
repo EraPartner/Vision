@@ -9,11 +9,11 @@ vi.mock("../src/repositories/insightCashProjectionRepository.ts", () => ({
   default: projectionRepository,
 }));
 
-vi.mock("../src/services/calculations/forecast/index.js", () => ({
+vi.mock("../src/services/calculations/forecast/index.ts", () => ({
   computeCashflowForecast: vi.fn(),
 }));
 
-import { computeCashflowForecast } from "../src/services/calculations/forecast/index.js";
+import { computeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
 import { getCashForecastInsight } from "../src/services/cashForecastInsightService.js";
 
 /** ISO date for day n of the synthetic month. */

@@ -22,7 +22,7 @@ vi.mock('../../src/config/logger.ts', () => ({
 
 vi.mock('../../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
 
-vi.mock('../../src/services/currency/currencyConversionService.js', () => mockCurrencyConversion());
+vi.mock('../../src/services/currency/currencyConversionService.ts', () => mockCurrencyConversion());
 
 vi.mock('../../src/database/connection.ts', () => mockPooledTxConnection());
 

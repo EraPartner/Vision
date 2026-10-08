@@ -31,7 +31,7 @@ import { createCsrfGuard } from "./middleware/csrfGuard.ts";
 import { createHostGuard } from "./middleware/hostGuard.ts";
 import { createCorsMiddleware } from "./middleware/cors.ts";
 import { compression } from "./middleware/compression.ts";
-import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.js";
+import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppeteerRenderer.ts";
 import { wrapResponse } from "./middleware/envelope.ts";
 import { requestId } from "./middleware/requestId.ts";
 import { requestMetrics } from "./middleware/requestMetrics.ts";

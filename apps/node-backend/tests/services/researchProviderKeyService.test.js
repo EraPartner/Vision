@@ -18,13 +18,13 @@ import {
   setKey,
   clearKey,
   hydrate,
-} from '../../src/services/research/researchProviderKeyService.js';
+} from '../../src/services/research/researchProviderKeyService.ts';
 import {
   providerKey,
   requireProviderKey,
   keySource,
   loadKeyOverrides,
-} from '../../src/services/research/providerKeys.js';
+} from '../../src/services/research/providerKeys.ts';
 
 const PROVIDER_ENV = ['TWELVE_DATA_API_KEY', 'FINNHUB_API_KEY', 'FMP_API_KEY', 'ALPHA_VANTAGE_API_KEY', 'FRED_API_KEY'];
 

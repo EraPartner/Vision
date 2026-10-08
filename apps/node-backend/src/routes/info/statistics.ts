@@ -20,8 +20,8 @@ import {
   getInsightsDigest,
 } from "../../services/insightsDigestService.js";
 import { dismissInsight } from "../../services/insightDismissalService.js";
-import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.js";
-import { listAdapters } from "../../services/importPipeline/adapters/index.js";
+import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.ts";
+import { listAdapters } from "../../services/importPipeline/adapters/index.ts";
 import { logger } from "../../config/logger.ts";
 import { getTargetCurrency } from "./_queryParams.ts";
 import { assertOptionalId } from "../../middleware/validation.ts";

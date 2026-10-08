@@ -8,7 +8,7 @@ import {
   verifiedPortfolioPerformanceBasisReference,
   portfolioReferenceStagingBinding,
 } from "./portfolioPerformanceReferenceEvidence.js";
-import { reparseKinesisSourceEvents } from "./portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
+import { reparseKinesisSourceEvents } from "./portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,
@@ -17,7 +17,7 @@ import {
 /**
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} KinesisSourceRow
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow} KinesisBatchRow
- * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.ts').ParsedPortfolioRow} ParsedPortfolioRow
  */
 /**
  * One captured statement event (see captureKinesisSourceContext).
@@ -80,7 +80,7 @@ const tuple = (rawHash, sourceId, account) => [
 
 /** Capture before any symbol or reconciliation selection.
  * @param {string} path
- * @param {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRows} rows
+ * @param {import('./portfolioImportPipeline/portfolioGenericAdapter.ts').ParsedPortfolioRows} rows
  */
 export async function captureKinesisSourceContext(path, rows) {
   const occurrences = new Map();

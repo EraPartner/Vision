@@ -24,7 +24,7 @@ vi.mock("../src/services/transactionService.js", () => ({
   },
 }));
 vi.mock("../src/services/deduplication.js", () => mockDeduplication());
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 vi.mock("../src/config/logger.ts", () => ({

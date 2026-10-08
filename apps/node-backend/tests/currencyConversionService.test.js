@@ -22,7 +22,7 @@ import {
   backfillPortfolioHistoricalRates,
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
   getHistoricalRateIndex,
-} from "../src/services/currency/currencyConversionService.js";
+} from "../src/services/currency/currencyConversionService.ts";
 import { hasConversionRate } from "../src/lib/exchangeRates.ts";
 import { query, withTransaction } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";

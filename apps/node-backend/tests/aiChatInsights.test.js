@@ -46,7 +46,7 @@ import {
   getWatchlist,
   getCategories,
   getRecurringDetected,
-} from "../src/services/aiChat/tools/insights.js";
+} from "../src/services/aiChat/tools/insights.ts";
 
 beforeEach(() => vi.resetAllMocks());
 

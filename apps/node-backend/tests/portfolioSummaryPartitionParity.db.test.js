@@ -35,7 +35,7 @@ import {
 } from "./setup/db.js";
 
 import { closePool } from "../src/database/connection.ts";
-import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

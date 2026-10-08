@@ -2,8 +2,8 @@
 title: Exchange Rates Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-09-11
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
 description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability at the canonical /admin/exchange-rates route.
@@ -12,7 +12,7 @@ related_code:
   - apps/frontend/src/pages/admin/ExchangeRatesPage.tsx
   - apps/frontend/src/components/notifications/FxStatusBanner.tsx
   - apps/node-backend/src/routes/info.ts
-  - apps/node-backend/src/services/currency/currencyConversionService.js
+  - apps/node-backend/src/services/currency/currencyConversionService.ts
 ---
 
 # Exchange Rates Feature
@@ -99,7 +99,7 @@ Forces a fresh fetch from the ECB API:
 
 ### Fallback: Hardcoded Rates
 
-Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currency/currencyConversionService.js]]`:
+Defined in `FALLBACK_RATES` constant in `[[apps/node-backend/src/services/currency/currencyConversionService.ts]]`:
 
 - Covers ~40 currencies
 - Used when ECB data is unavailable or for rare currencies

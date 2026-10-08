@@ -8,7 +8,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
-import { createBatch } from "../src/services/portfolioImportPipeline/stage.js";
+import { createBatch } from "../src/services/portfolioImportPipeline/stage.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";

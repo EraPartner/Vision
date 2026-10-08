@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { summarizeSimulationPaths } from "../../src/services/calculations/forecast/simulationBands.js";
+import { summarizeSimulationPaths } from "../../src/services/calculations/forecast/simulationBands.ts";
 
 describe("summarizeSimulationPaths", () => {
   it("takes cumulative quantiles across whole paths instead of summing daily quantiles", () => {

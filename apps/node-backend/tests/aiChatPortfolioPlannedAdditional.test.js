@@ -8,18 +8,18 @@ vi.mock("../src/repositories/infoRepository.ts", () => ({
   infoRepository: { getBankBalances: vi.fn() },
 }));
 
-vi.mock("../src/services/aiChat/tools/_financialMetrics.js", () => ({
+vi.mock("../src/services/aiChat/tools/_financialMetrics.ts", () => ({
   loadCanonicalPortfolioSummary: vi.fn(),
 }));
 
 import { plannedTransactionRepository } from "../src/repositories/plannedTransactionRepository.ts";
 import { infoRepository } from "../src/repositories/infoRepository.ts";
-import { loadCanonicalPortfolioSummary } from "../src/services/aiChat/tools/_financialMetrics.js";
+import { loadCanonicalPortfolioSummary } from "../src/services/aiChat/tools/_financialMetrics.ts";
 import {
   getUnrealizedGains,
   getBestWorstPerformers,
-} from "../src/services/aiChat/tools/portfolio.js";
-import { getProjectedBalance } from "../src/services/aiChat/tools/planned.js";
+} from "../src/services/aiChat/tools/portfolio.ts";
+import { getProjectedBalance } from "../src/services/aiChat/tools/planned.ts";
 
 beforeEach(() => {
   vi.resetAllMocks();

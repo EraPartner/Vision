@@ -258,7 +258,7 @@ export async function assertPortfolioUploadSupported(
       "XLSX portfolio imports require a supported Saxo transaction-history workbook",
     );
   const { parseSaxoTransactionHistory } =
-    await import("../services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js");
+    await import("../services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts");
   await parseSaxoTransactionHistory(
     filePath instanceof URL ? fileURLToPath(filePath) : filePath,
   );

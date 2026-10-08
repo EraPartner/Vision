@@ -3,8 +3,8 @@
 import {
   CLOUD_PRIVACY_EVALUATION_CASES,
   CLOUD_PRIVACY_SYNTHETIC_POLICY,
-} from "../src/services/aiEvaluation/cloudPrivacyCases.js";
-import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.js";
+} from "../src/services/aiEvaluation/cloudPrivacyCases.ts";
+import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.ts";
 
 function unique(values) {
   return [...new Set(values)].sort();

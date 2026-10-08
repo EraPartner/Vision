@@ -17,10 +17,10 @@ vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { parse as parseBnp } from "../src/services/importPipeline/adapters/bnp.js";
-import { parse as parseIng } from "../src/services/importPipeline/adapters/ing.js";
-import { parse as parseGeneric } from "../src/services/importPipeline/adapters/generic.js";
-import { parse as parseWise } from "../src/services/importPipeline/adapters/wise.js";
+import { parse as parseBnp } from "../src/services/importPipeline/adapters/bnp.ts";
+import { parse as parseIng } from "../src/services/importPipeline/adapters/ing.ts";
+import { parse as parseGeneric } from "../src/services/importPipeline/adapters/generic.ts";
+import { parse as parseWise } from "../src/services/importPipeline/adapters/wise.ts";
 
 const tmpFiles = [];
 function writeTempCSV(prefix, content) {

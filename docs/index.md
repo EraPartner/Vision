@@ -418,7 +418,7 @@ See [[docs/adr/047-tailwind-v4-migration-dependency-upgrades|ADR-047]], [[docs/a
 
 **Supported Banks Now (8):** Belfius, Revolut, ING, KBC, SABB, Wise, Vision (internal), Custom (user-defined)
 
-See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|Bank Adapters]], [[apps/node-backend/src/services/importPipeline/adapters/ing.js]]
+See [[docs/features/import|Import Feature]], [[docs/integrations/bank-adapters|Bank Adapters]], [[apps/node-backend/src/services/importPipeline/adapters/ing.ts]]
 
 ### 2026-04-28 Phase 13: Pivot Table Drillthrough with Multi-Category & Transaction-Type Filters
 
@@ -780,7 +780,7 @@ See [[docs/adr/010-phase1-aggregation-strategy|ADR-010]], [[docs/performance/mat
 - **Query Optimization**: Prepared-statement plan cache (`queryPrepared`) adopted on hot paths: `getBanks`, `getTransactionCount`, key transaction/info repository methods
 - **Import Performance**: Post-commit fire-and-forget materialized-view refresh to keep aggregations warm
 - **Electron**: Async file I/O for startup (`loadSettings`, `saveSettings` deferred due to module-load coupling)
-- **Code Consolidation**: Deleted deprecated `services/calculations/currency.js` facade; canonical path is now `services/currency/currencyConversionService.js`
+- **Code Consolidation**: Deleted deprecated `services/calculations/currency.js` facade; canonical path is now `services/currency/currencyConversionService.ts`
 
 ### 2026-04-16 Phase 0 Foundations Complete
 

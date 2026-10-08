@@ -2,9 +2,9 @@
 title: Test Inventory
 type: testing
 status: active
-date: 2026-10-07
+date: 2026-10-08
 last_modified: 2026-10-06
-updated: 2026-10-07
+updated: 2026-10-08
 last-updated: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
@@ -1007,7 +1007,7 @@ bun vitest run --test-name-pattern="testName"
 
 Validation runs (passed): `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`; `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Test Updates (2026-04-22)
 
@@ -1035,7 +1035,7 @@ Related code: [[apps/node-backend/src/repositories/categoryRepository.ts]], [[ap
 ### Incremental backend coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] adds a historical miss-cache regression scenario, verifying repeated historical misses do **not** cause duplicate DB lookups.
-- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
+- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (overall `74.18/59.54/78.47/77.68`).
 
 ### Backend coverage addendum (2026-04-11, repository deep-branching)
@@ -1070,7 +1070,7 @@ Removed tests (2026-05-29):
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route-level tests mocking unified orchestrator
 
-Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]], [[docs/testing/testing|Testing Documentation]]
+Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, info routes)
 
@@ -1085,7 +1085,7 @@ Validation runs (passed):
 
 Coverage snapshot after this update: overall `81.12/66.86/84.49/84.53` and [[apps/node-backend/src/routes/info.ts]] `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 
-Related source links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
+Related source links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[docs/testing/testing|Testing Documentation]]
 
 ### Backend coverage addendum (2026-04-11, portfolio transaction repository)
 

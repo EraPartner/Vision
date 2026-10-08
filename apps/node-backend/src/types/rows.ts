@@ -1110,8 +1110,14 @@ export type PortfolioImportStagingRow = {
   match_similarity: number | null;
   committed_txn_id: number | null;
   error_message: string | null;
-  /** migration 0060 — brokerage routing (ADR-095). */
-  route?: "cash" | "portfolio" | null;
+  /** migration 0060 — brokerage routing (ADR-095); custody routes 0121/0123. */
+  route?:
+    | "cash"
+    | "portfolio"
+    | "asset_transfer"
+    | "asset_adjustment"
+    | "account_internal"
+    | null;
   /** TIMESTAMPTZ */
   created_at: Date;
 };

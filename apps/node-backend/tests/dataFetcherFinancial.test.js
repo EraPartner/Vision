@@ -6,19 +6,19 @@ import { mockLogger } from './helpers/mockLogger.js';
 // sources the requested sections render from, and still fetches everything when
 // no section filter is passed (default behaviour).
 
-vi.mock('../src/services/calculations/aggregation/monthly.js', () => ({
+vi.mock('../src/services/calculations/aggregation/monthly.ts', () => ({
   computeMonthlySummary: vi.fn().mockResolvedValue({ data: { months: [], summary: {} } }),
 }));
-vi.mock('../src/services/calculations/aggregation/category.js', () => ({
+vi.mock('../src/services/calculations/aggregation/category.ts', () => ({
   computeCategoryBreakdown: vi.fn().mockResolvedValue({ data: { categories: [] } }),
 }));
-vi.mock('../src/services/calculations/aggregation/recipient.js', () => ({
+vi.mock('../src/services/calculations/aggregation/recipient.ts', () => ({
   computeRecipientInsights: vi.fn().mockResolvedValue({ data: { topMerchants: [], monthOverMonth: [] } }),
 }));
-vi.mock('../src/services/calculations/aggregation/bankBalances.js', () => ({
+vi.mock('../src/services/calculations/aggregation/bankBalances.ts', () => ({
   computeBankBalances: vi.fn().mockResolvedValue({ data: { accounts: [] } }),
 }));
-vi.mock('../src/services/calculations/aggregation/averageVsCurrent.js', () => ({
+vi.mock('../src/services/calculations/aggregation/averageVsCurrent.ts', () => ({
   computeAverageVsCurrent: vi.fn().mockResolvedValue({ data: {} }),
 }));
 vi.mock('../src/repositories/infoRepository.ts', () => ({
@@ -28,13 +28,13 @@ vi.mock('../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-import { computeMonthlySummary } from '../src/services/calculations/aggregation/monthly.js';
-import { computeCategoryBreakdown } from '../src/services/calculations/aggregation/category.js';
-import { computeRecipientInsights } from '../src/services/calculations/aggregation/recipient.js';
-import { computeBankBalances } from '../src/services/calculations/aggregation/bankBalances.js';
-import { computeAverageVsCurrent } from '../src/services/calculations/aggregation/averageVsCurrent.js';
+import { computeMonthlySummary } from '../src/services/calculations/aggregation/monthly.ts';
+import { computeCategoryBreakdown } from '../src/services/calculations/aggregation/category.ts';
+import { computeRecipientInsights } from '../src/services/calculations/aggregation/recipient.ts';
+import { computeBankBalances } from '../src/services/calculations/aggregation/bankBalances.ts';
+import { computeAverageVsCurrent } from '../src/services/calculations/aggregation/averageVsCurrent.ts';
 import infoRepository from '../src/repositories/infoRepository.ts';
-import { fetchFinancialData } from '../src/services/reports/dataFetcher.js';
+import { fetchFinancialData } from '../src/services/reports/dataFetcher.ts';
 
 beforeEach(() => {
   vi.clearAllMocks();

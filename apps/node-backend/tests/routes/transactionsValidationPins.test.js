@@ -39,7 +39,7 @@ vi.mock("../../src/services/transferReconciliationService.js", () =>
   mockTransferReconciliation(),
 );
 
-vi.mock("../../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 

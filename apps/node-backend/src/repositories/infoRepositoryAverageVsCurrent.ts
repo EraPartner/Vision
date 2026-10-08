@@ -17,7 +17,7 @@ import { query } from '../database/connection.ts';
 import { toDecimal, toNumber, addAll, roundMoney as roundToCents } from '../lib/money.ts';
 import { formatDateToYmd } from '../lib/dateFormat.ts';
 import { extractYearMonth } from '../lib/dateKeys.ts';
-import { convertRowsToEur } from '../services/currency/currencyConversionService.js';
+import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
 import {
   mapRowsForAmountConversion,
   getIncludeTransfers,

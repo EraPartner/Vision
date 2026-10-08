@@ -54,7 +54,7 @@ vi.mock("../../src/repositories/portfolioTransactionRepository.ts", () => ({
     getSummary: vi.fn(),
   },
 }));
-vi.mock("../../src/services/portfolio/portfolioTransactionService.js", () => ({
+vi.mock("../../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
@@ -68,7 +68,7 @@ vi.mock("../../src/services/quoteBackfillService.js", () => ({
   refreshQuotesForInvestment: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../../src/services/portfolio/fxResolve.js", () => ({
+vi.mock("../../src/services/portfolio/fxResolve.ts", () => ({
   autoResolveFxRateToEur: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -76,7 +76,7 @@ vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import investmentRepository from "../../src/repositories/investmentRepository.ts";
 import portfolioTransactionPersistence from "../../src/repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../../src/services/portfolio/portfolioTransactionService.ts";
 
 const { default: investmentsRouter } =
   await import("../../src/routes/investments.ts");

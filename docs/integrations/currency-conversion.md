@@ -2,11 +2,11 @@
 title: Currency Conversion
 type: integration
 status: active
-date: 2026-10-07
-updated: 2026-09-26
+date: 2026-10-08
+updated: 2026-10-08
 tags: [integration, currency, exchange-rates, phase-0, phase-1, phase-3-1, offline-resilience, network-reachability, startup-optimization, historical-rates, ecb-full-history, purchase-date-rates, fx-attribution, adr-074]
 description: Multi-currency support with automatic conversion to target currencies using ECB and supplementary exchange rates, including date-aware historical conversion and batch grouped conversion (Phase 3.1+). Startup FX warmup is skipped when offline (2026-05-03). 2026-06-11 (ADR-074): ECB full-history tier (daily since 1999), on-or-before weekend convention, one-time repair of fabricated old rates, and bulk-stamp of fx_rate_to_eur on non-EUR portfolio transactions.
-related_code: ["apps/node-backend/src/services/currency/rateFetcher.js", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
+related_code: ["apps/node-backend/src/services/currency/rateFetcher.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/lib/network.ts"]
 ---
 
 # Currency Conversion
@@ -197,7 +197,7 @@ import {
   clearMemoryCache,
   backfillPortfolioHistoricalRates,
   FALLBACK_RATES,
-} from "./services/currency/currencyConversionService.js";
+} from "./services/currency/currencyConversionService.ts";
 ```
 
 This is the canonical direct path (moved from `services/calculations/currency.js` in Phase 0). The service is the **active implementation** for all currency conversion operations.
@@ -223,7 +223,7 @@ const CACHE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 Convert multiple rows at once:
 
 ```javascript
-import { convertRowsToEur } from "./services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "./services/currency/currencyConversionService.ts";
 
 const converted = await convertRowsToEur(transactions, "USD");
 ```
@@ -347,7 +347,7 @@ When a portfolio transaction is created or edited without an explicit `fx_rate_t
 Generic amount conversion:
 
 ```javascript
-import { convertToCurrency } from "./services/currency/currencyConversionService.js";
+import { convertToCurrency } from "./services/currency/currencyConversionService.ts";
 
 const amountInSar = await convertToCurrency(125, "USD", "SAR");
 ```
@@ -424,4 +424,4 @@ See [[docs/features/portfolio#historical-fx-in-snapshots-2026-05-29|Portfolio â€
 - [[docs/integrations/index]] - Integrations Index
 - [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currency/rateFetcher.js|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.js|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/currency/rateFetcher.ts|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.ts|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]

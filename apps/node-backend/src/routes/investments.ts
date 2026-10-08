@@ -26,7 +26,7 @@ import {
 import {
   getPortfolioExposure,
   upsertPortfolioExposureBundle,
-} from "../services/portfolio/portfolioExposureService.js";
+} from "../services/portfolio/portfolioExposureService.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();

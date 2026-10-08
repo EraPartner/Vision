@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { routeAgent } from '../helpers/routeApp.js';
 
-vi.mock('../../src/services/calculations/forecast/accuracyStore.js', () => ({
+vi.mock('../../src/services/calculations/forecast/accuracyStore.ts', () => ({
   getAllAccuracyHistory: vi.fn(async () => [
     { userId: 'u1', methodId: 'ewma', asOfMonth: '2026-02', mae: 50.1, rmse: 66.0, mape: 0.09, sampleDays: 60, recordedAt: '2026-03-01T02:00:00.000Z' },
     { userId: 'u1', methodId: 'ewma', asOfMonth: '2026-03', mae: 45.2, rmse: 60.3, mape: 0.08, sampleDays: 90, recordedAt: '2026-04-01T02:00:00.000Z' },

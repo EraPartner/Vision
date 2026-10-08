@@ -23,7 +23,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 const { convertToCurrency, clearMemoryCache, FALLBACK_RATES } =
-  await import("../../src/services/currency/currencyConversionService.js");
+  await import("../../src/services/currency/currencyConversionService.ts");
 
 const originalFetch = global.fetch;
 const EPSILON_RATIO = 1e-9; // 1 part per billion

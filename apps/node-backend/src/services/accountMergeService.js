@@ -37,7 +37,7 @@ import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBala
 import {
   convertWithRates,
   loadCurrentRates,
-} from "./currency/currencyConversionService.js";
+} from "./currency/currencyConversionService.ts";
 import { hasConversionRate } from "../lib/exchangeRates.ts";
 import { accountRepository } from "../repositories/accountRepository.ts";
 import { transactionRepository } from "../repositories/transactionRepository.ts";

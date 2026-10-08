@@ -1,0 +1,803 @@
+/**
+ * Currency Conversion Service
+ *
+ * Converts currencies to EUR using ECB exchange rates.
+ *
+ * Design:
+ * - Fetches latest rates from ECB (primary) on startup and every 12 hours
+ * - Supplements ECB rates with open.er-api.com for currencies ECB doesn't cover
+ *   (AED, SAR, KWD, QAR, BHD, OMR, PKR, EGP, NGN, and ~130 more)
+ * - ECB always takes priority over the supplementary source on overlapping currencies
+ * - If both APIs are unavailable the service falls back to DB then hardcoded constants
+ */
+
+import { query } from "../../database/connection.ts";
+import { logger } from "../../config/logger.ts";
+import { toDecimal, toNumber } from "../../lib/money.ts";
+import {
+  recordSuccess as recordProviderSuccess,
+  recordError as recordProviderError,
+} from "../providerHealthService.js";
+import {
+  CACHE_LIFETIME_MS,
+  normalizeDateInput,
+  fetchFromEcb,
+  fetchFromErApi,
+  fetchHistoricalFromEcbFull,
+  rateOnOrBeforeFromMap,
+  loadFromDatabase,
+  saveToDatabase,
+  saveHistoricalRate,
+  getUnindexedRatesToEurForDates,
+  buildHistoricalRateIndex,
+  findRateOnOrBeforeInIndex,
+  getRateToEurForDate,
+  clearHistoricalCache,
+} from "./rateFetcher.ts";
+import { settingsRepository } from "../../repositories/settingsRepository.ts";
+import type {
+  ExchangeRateRow,
+  HistoricalRateIndex,
+  RateTable,
+} from "../../types/rows.ts";
+
+/** Message of a caught value, for log metadata. */
+function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// In-memory cache: { rates: {...}, timestamp: number } | null
+let memoryCache: { rates: RateTable; timestamp: number } | null = null;
+
+// Process-level cache of the built historical-rate index. Historical-FX row
+// conversion (convertRowsToEur, dataFetcherTax) otherwise reloaded the full
+// exchange_rates history and rebuilt the index on EVERY request. The index is
+// built for a growing union of requested currencies so a request with a new
+// currency set doesn't invalidate it; it's invalidated whenever rates are
+// refreshed (warmCache), the memory cache is cleared, or a backfill runs, and
+// expires after CACHE_LIFETIME_MS as a backstop. Cache misses still resolve
+// correctly via the per-date fallback paths, so conversion results are unchanged.
+let historicalIndexCache: {
+  index: HistoricalRateIndex;
+  currencies: string[];
+  builtAt: number;
+} | null = null;
+
+// Static hardcoded fallback rates. Never mutated.
+// Covers ECB currencies plus common non-ECB currencies (Gulf, South Asia, Africa, etc.)
+export const FALLBACK_RATES: RateTable = {
+  EUR: 1.0,
+  // ECB currencies
+  USD: 1 / 1.09,
+  GBP: 1 / 0.85,
+  CHF: 1 / 0.95,
+  JPY: 1 / 163.0,
+  SEK: 1 / 11.2,
+  NOK: 1 / 11.5,
+  DKK: 1 / 7.46,
+  PLN: 1 / 4.3,
+  CZK: 1 / 25.3,
+  HUF: 1 / 395.0,
+  RON: 1 / 4.97,
+  TRY: 1 / 35.0,
+  AUD: 1 / 1.66,
+  CAD: 1 / 1.5,
+  CNY: 1 / 7.9,
+  INR: 1 / 91.0,
+  BRL: 1 / 5.4,
+  IDR: 1 / 17600.0,
+  KRW: 1 / 1450.0,
+  MXN: 1 / 18.5,
+  MYR: 1 / 4.8,
+  NZD: 1 / 1.78,
+  PHP: 1 / 61.0,
+  SGD: 1 / 1.46,
+  THB: 1 / 37.5,
+  ZAR: 1 / 19.5,
+  HKD: 1 / 8.5,
+  ISK: 1 / 150.0,
+  ILS: 1 / 3.95,
+  // Supplementary currencies (open.er-api.com)
+  AED: 1 / 4.01,
+  SAR: 1 / 4.09,
+  KWD: 1 / 0.335,
+  QAR: 1 / 3.97,
+  BHD: 1 / 0.41,
+  OMR: 1 / 0.42,
+  PKR: 1 / 305.0,
+  EGP: 1 / 53.0,
+  MAD: 1 / 10.9,
+  NGN: 1 / 1650.0,
+  KES: 1 / 141.0,
+};
+
+// Live fallback — refreshed to latest fetched rates so cache-miss + DB-miss still gets fresh data.
+let liveFallbackRates: RateTable = FALLBACK_RATES;
+
+// ─── Cache helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Get current rates using the cache hierarchy:
+ *   1. In-memory cache (24-hour TTL)
+ *   2. Database (latest rows)
+ *   3. Hardcoded fallback
+ */
+async function getRates(): Promise<RateTable> {
+  if (memoryCache && Date.now() - memoryCache.timestamp < CACHE_LIFETIME_MS) {
+    return memoryCache.rates;
+  }
+
+  const dbRates = await loadFromDatabase();
+  if (dbRates) {
+    memoryCache = { rates: dbRates, timestamp: Date.now() };
+    return dbRates;
+  }
+
+  logger.warn(
+    "Using fallback exchange rates — ECB API and database unavailable",
+  );
+  // Return the reference (callers never mutate) so warmCache can detect that
+  // the fallback path was taken via identity comparison.
+  return liveFallbackRates;
+}
+
+/**
+ * Clear in-memory cache to force fresh data on next request.
+ */
+export function clearMemoryCache() {
+  memoryCache = null;
+  clearHistoricalCache();
+  clearHistoricalIndexCache();
+  logger.debug("Cleared exchange rate memory cache");
+}
+
+/** Drop the cached historical-rate index (rebuilt on next demand). */
+function clearHistoricalIndexCache() {
+  historicalIndexCache = null;
+}
+
+/**
+ * Historical-rate index for the given currencies, cached at process level and
+ * shared across call sites. Builds (or extends) the index for the union of
+ * already-cached and newly-requested currencies so distinct currency sets don't
+ * thrash the cache. A superset index is safe: per-currency lookups
+ * (findRateOnOrBeforeInIndex) is unaffected by extra
+ * currencies being present.
+ */
+export async function getHistoricalRateIndex(
+  currencies: string[],
+): Promise<HistoricalRateIndex> {
+  const wanted = [...new Set(currencies)].filter(Boolean);
+  if (wanted.length === 0) return new Map();
+
+  const cache = historicalIndexCache;
+  const fresh =
+    cache !== null && Date.now() - cache.builtAt < CACHE_LIFETIME_MS;
+  if (fresh && wanted.every((c) => cache.currencies.includes(c))) {
+    return cache.index;
+  }
+
+  const union = fresh
+    ? [...new Set([...cache.currencies, ...wanted])]
+    : wanted;
+  const result = await query<
+    Pick<ExchangeRateRow, "currency_code" | "rate_to_eur"> & {
+      rate_date: string;
+    }
+  >(
+    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = ANY($1::text[])
+     ORDER BY currency_code ASC, rate_date ASC`,
+    [union],
+  );
+  const index = buildHistoricalRateIndex(result.rows || []);
+  historicalIndexCache = { index, currencies: union, builtAt: Date.now() };
+  return index;
+}
+
+/**
+ * Merge fetched points into the request's historical index without duplicating
+ * dates. If another request replaced the process cache while providers were in
+ * flight, invalidate that newer-but-now-stale cache so the next request reloads
+ * the points just persisted to PostgreSQL.
+ */
+function mergeFetchedRatesIntoHistoricalIndex(
+  requestIndex: HistoricalRateIndex,
+  fetchedRates: Map<string, number>,
+) {
+  for (const [key, rate] of fetchedRates) {
+    const separator = key.indexOf(":");
+    const currency = key.slice(0, separator);
+    const date = key.slice(separator + 1);
+    const byDate = new Map(
+      (requestIndex.get(currency) || []).map((point) => [
+        point.date,
+        point.rate,
+      ]),
+    );
+    byDate.set(date, rate);
+    requestIndex.set(
+      currency,
+      [...byDate].map(([pointDate, pointRate]) => ({
+        date: pointDate,
+        rate: pointRate,
+      })),
+    );
+  }
+  for (const entries of requestIndex.values()) {
+    entries.sort((left, right) => left.date.localeCompare(right.date));
+  }
+
+  if (
+    historicalIndexCache !== null &&
+    historicalIndexCache.index !== requestIndex
+  ) {
+    clearHistoricalIndexCache();
+  }
+}
+
+/**
+ * Latest stored exchange-rate rows (`is_latest = true`), one per currency,
+ * ordered by currency code. Returns the raw pg result — the /exchange-rates
+ * route owns response shaping (ADR-067: routes call services, never the
+ * database layer directly).
+ */
+export async function listLatestStoredRates() {
+  return query(`
+      SELECT currency_code, rate_to_eur, rate_date, fetched_at
+      FROM exchange_rates
+      WHERE is_latest = true
+      ORDER BY currency_code ASC
+    `);
+}
+
+/**
+ * Fetch fresh rates from both sources, update DB, memory cache, and fallback map.
+ * ECB is fetched first and takes priority; open.er-api fills in currencies ECB doesn't publish.
+ * Called on startup and every 12 hours by the scheduler in main.js.
+ */
+export async function warmCache() {
+  try {
+    const [ecbRates, erarRates] = await Promise.all([
+      fetchFromEcb(),
+      fetchFromErApi(),
+    ]);
+
+    if (ecbRates) {
+      recordProviderSuccess("ecb");
+    } else {
+      recordProviderError("ecb", "ECB fetch returned no rates");
+    }
+
+    if (erarRates) {
+      recordProviderSuccess("open.er-api");
+    } else {
+      recordProviderError("open.er-api", "open.er-api fetch returned no rates");
+    }
+
+    if (!ecbRates && !erarRates) {
+      const rates = await getRates();
+      logger.warn(
+        `Exchange rate cache warmed from ${rates === liveFallbackRates ? "fallback" : "database"} (all APIs unavailable)`,
+      );
+      return;
+    }
+
+    // Supplementary first, then ECB overwrites any overlaps
+    const freshRates: RateTable = {
+      ...(erarRates ?? {}),
+      ...(ecbRates ?? {}),
+    };
+
+    const ecbCount = ecbRates ? Object.keys(ecbRates).length - 1 : 0;
+    const totalCount = Object.keys(freshRates).length - 1;
+    // Supplementary = er-api currencies that survived the ECB-priority merge,
+    // i.e. total minus ECB (not erarCount − ecbCount, which miscounted when
+    // the two sources didn't fully overlap).
+    logger.info(
+      `Merged exchange rates: ${ecbCount} from ECB + ${totalCount - ecbCount} supplementary = ${totalCount} total`,
+    );
+
+    // Partial provider success must retain known rates for omitted currencies.
+    // Only provider quotes may be stamped with today's date in the database.
+    const storedRates = await loadFromDatabase();
+    const mergedRates = {
+      ...FALLBACK_RATES,
+      ...liveFallbackRates,
+      ...(storedRates ?? {}),
+      ...(memoryCache?.rates ?? {}),
+      ...freshRates,
+    };
+    liveFallbackRates = mergedRates;
+    await saveToDatabase(freshRates);
+    memoryCache = { rates: mergedRates, timestamp: Date.now() };
+    // Fresh rates were written — drop the cached historical index so the 12h
+    // refresh cycle is the primary invalidation hook for it.
+    clearHistoricalIndexCache();
+  } catch (err) {
+    logger.warn("Failed to warm exchange rate cache", {
+      error: errorMessage(err),
+    });
+  }
+}
+
+// ─── Conversion helpers ───────────────────────────────────────────────────────
+
+export interface ConvertRowsOptions {
+  useHistoricalRatesByDate?: boolean;
+  dateField?: string | null;
+}
+
+/** Fields {@link convertRowsToEur} adds to each row. */
+export type ConversionFields = {
+  amount_eur: number;
+  used_fallback_rate?: boolean;
+  fallback_reason?: string;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary SQL projection; see convertRowsToEur
+export type ConvertibleRow = Record<string, any>;
+
+export type ConvertedRow = ConvertibleRow & ConversionFields;
+
+/**
+ * Convert an array of rows to a target currency (default EUR).
+ * Rows must have `amount` and `currency` fields.
+ * Returns rows with an `amount_eur` field containing the converted amount.
+ *
+ * Rows are arbitrary query projections (any column may be the date — see
+ * `dateField`) and callers read their own projected columns back off the
+ * result, so rows stay loosely typed records at this boundary.
+ */
+export async function convertRowsToEur(
+  rows: ConvertibleRow[],
+  targetCurrency = "EUR",
+  options: ConvertRowsOptions | null = {},
+): Promise<ConvertedRow[]> {
+  if (!rows || rows.length === 0) return [];
+
+  const { useHistoricalRatesByDate = false, dateField = null } = options || {};
+  const toCur = (targetCurrency || "EUR").toUpperCase().trim();
+  const rates = await getRates();
+
+  /** @returns 'YYYY-MM-DD', or null when the row carries no usable date */
+  function resolveDateFromRow(row: ConvertibleRow): string | null {
+    if (dateField && row[dateField]) return normalizeDateInput(row[dateField]);
+    return normalizeDateInput(
+      row.date ||
+        row.day ||
+        row.transaction_date ||
+        row.planned_date ||
+        row.rate_date,
+    );
+  }
+
+  // Resolve a rate for one side of the conversion. Returns the rate plus a
+  // boolean flagging whether we fell back to current rates because the
+  // requested historical rate was missing. convertRowsToEur retains this as
+  // internal row metadata. Recipient pivot summarizes it into an explicit
+  // response-level conversion contract; other repositories may project it away.
+  async function resolveRateWithFallback(
+    code: string,
+    rowDate: string | null,
+  ): Promise<{ rate: number | undefined; fellBack: boolean }> {
+    if (code === "EUR") return { rate: 1, fellBack: false };
+
+    if (!useHistoricalRatesByDate || !rowDate) {
+      return { rate: rates[code], fellBack: false };
+    }
+
+    const historical = historicalIndex
+      ? findRateOnOrBeforeInIndex(historicalIndex, code, rowDate)
+      : undefined;
+    if (historical !== undefined) return { rate: historical, fellBack: false };
+
+    const fallback = rates[code];
+    if (fallback !== undefined) {
+      logger.warn("Historical FX missing, falling back to current rate", {
+        currency: code,
+        date: rowDate,
+      });
+      return { rate: fallback, fellBack: true };
+    }
+    // No rate found anywhere — retain the same internal diagnostic flag.
+    return { rate: undefined, fellBack: true };
+  }
+
+  let historicalIndex: HistoricalRateIndex | null = null;
+  if (useHistoricalRatesByDate) {
+    const relevantCurrencies = [
+      ...new Set([
+        ...rows.map((row) => (row.currency || "EUR").toUpperCase().trim()),
+        toCur,
+      ]),
+    ].filter(Boolean);
+
+    if (relevantCurrencies.length > 0) {
+      historicalIndex = await getHistoricalRateIndex(relevantCurrencies);
+
+      const datesByUnindexedCurrency = new Map<string, string[]>();
+      for (const row of rows) {
+        const rowDate = resolveDateFromRow(row);
+        if (!rowDate) continue;
+        const rowCurrency = (row.currency || "EUR").toUpperCase().trim();
+        if (rowCurrency === toCur) continue;
+        for (const currency of [rowCurrency, toCur]) {
+          if (
+            currency === "EUR" ||
+            findRateOnOrBeforeInIndex(historicalIndex, currency, rowDate) !==
+              undefined
+          )
+            continue;
+          if (!datesByUnindexedCurrency.has(currency))
+            datesByUnindexedCurrency.set(currency, []);
+          datesByUnindexedCurrency.get(currency)!.push(rowDate);
+        }
+      }
+
+      const fetchedRates = await getUnindexedRatesToEurForDates(
+        datesByUnindexedCurrency,
+      );
+      mergeFetchedRatesIntoHistoricalIndex(historicalIndex, fetchedRates);
+    }
+  }
+
+  const converted: ConvertedRow[] = [];
+  for (const row of rows) {
+    const currency = (row.currency || "EUR").toUpperCase().trim();
+    const amount = toNumber(toDecimal(row.amount));
+    const rowDate = resolveDateFromRow(row);
+
+    if (currency === toCur) {
+      converted.push({ ...row, amount_eur: amount });
+      continue;
+    }
+
+    const fromResolved = await resolveRateWithFallback(currency, rowDate);
+    const toResolved = await resolveRateWithFallback(toCur, rowDate);
+    const fellBack = fromResolved.fellBack || toResolved.fellBack;
+    const fallbackFields = fellBack
+      ? { used_fallback_rate: true, fallback_reason: "historical_rate_missing" }
+      : {};
+
+    if (!fromResolved.rate) {
+      logger.warn(
+        `Unsupported source currency ${currency}, using 1:1 conversion`,
+      );
+      converted.push({ ...row, amount_eur: amount, ...fallbackFields });
+      continue;
+    }
+    if (!toResolved.rate) {
+      logger.warn(`Unsupported target currency ${toCur}, falling back to EUR`);
+      converted.push({
+        ...row,
+        // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+        amount_eur: amount * fromResolved.rate,
+        ...fallbackFields,
+      });
+      continue;
+    }
+
+    converted.push({
+      ...row,
+      // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+      amount_eur: (amount * fromResolved.rate) / toResolved.rate,
+      ...fallbackFields,
+    });
+  }
+
+  return converted;
+}
+
+/**
+ * Generic converter from any currency to any currency.
+ *
+ * @param fromCurrency falsy short-circuits to `amount`
+ * @param toCurrency defaults to EUR when falsy
+ */
+export async function convertToCurrency(
+  amount: number,
+  fromCurrency: string | null | undefined,
+  toCurrency: string | null | undefined,
+): Promise<number> {
+  if (
+    !fromCurrency ||
+    fromCurrency.toUpperCase().trim() ===
+      (toCurrency || "EUR").toUpperCase().trim()
+  ) {
+    return amount;
+  }
+  const rates = await getRates();
+  return convertWithRates(amount, fromCurrency, toCurrency, rates);
+}
+
+/**
+ * Fetch the current rate table once. Callers that convert many rows in a loop
+ * should call this once and pass the result to {@link convertWithRates},
+ * avoiding a per-row `await` on the (already memory-cached) rate lookup.
+ */
+export async function loadCurrentRates(): Promise<RateTable> {
+  return getRates();
+}
+
+/**
+ * Synchronous conversion against a pre-fetched rate table. Mirrors the logic of
+ * {@link convertToCurrency} exactly — only the rate acquisition is hoisted out.
+ *
+ * @param fromCurrency falsy short-circuits to `amount`
+ * @param toCurrency defaults to EUR when falsy
+ */
+export function convertWithRates(
+  amount: number,
+  fromCurrency: string | null | undefined,
+  toCurrency: string | null | undefined,
+  rates: RateTable,
+): number {
+  if (
+    !fromCurrency ||
+    fromCurrency.toUpperCase().trim() ===
+      (toCurrency || "EUR").toUpperCase().trim()
+  ) {
+    return amount;
+  }
+
+  const from = fromCurrency.toUpperCase().trim();
+  const to = (toCurrency || "EUR").toUpperCase().trim();
+
+  const rateFrom = rates[from];
+  const rateTo = rates[to];
+
+  if (!rateFrom) {
+    logger.warn(`Unsupported currency ${from}, using 1:1 conversion`);
+    return amount;
+  }
+  if (!rateTo) {
+    logger.warn(
+      `Unsupported target currency ${to}, falling back to EUR conversion`,
+    );
+    // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+    return amount * rateFrom;
+  }
+
+  // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
+  return (amount * rateFrom) / rateTo;
+}
+
+// ─── Historical backfill ──────────────────────────────────────────────────────
+
+// One-time repair marker: before the full-history tier existed, the backfill
+// saved nearest-known rates under old transaction dates (fabricated history).
+// The repair overwrites those rows with true ECB rates; the flag is only set
+// once the full-history download succeeded so offline starts retry later.
+const FX_FULL_HISTORY_REPAIR_FLAG = "fx_full_history_repair_done";
+
+/**
+ * Overwrite stored txn-date rates with true ECB full-history values (one-time).
+ *
+ * @param pairs distinct non-EUR (currency, date) pairs
+ * @returns rows repaired, or undefined when the repair could not run (offline)
+ */
+async function repairHistoricalRatesFromFullHistory(
+  pairs: Array<{ currency_code: string; rate_date: string | Date }>,
+): Promise<number | undefined> {
+  if ((await settingsRepository.get(FX_FULL_HISTORY_REPAIR_FLAG)) === true)
+    return 0;
+
+  const fullByDate = await fetchHistoricalFromEcbFull();
+  if (fullByDate.size === 0) return undefined;
+
+  const currencies = [
+    ...new Set(
+      pairs.map((p) =>
+        String(p.currency_code || "")
+          .toUpperCase()
+          .trim(),
+      ),
+    ),
+  ].filter(Boolean);
+  const storedResult = await query<
+    Pick<ExchangeRateRow, "currency_code" | "rate_to_eur"> & {
+      rate_date: string;
+    }
+  >(
+    `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
+     FROM exchange_rates
+     WHERE currency_code = ANY($1::text[])`,
+    [currencies],
+  );
+  const storedByKey = new Map(
+    storedResult.rows.map((r) => [
+      `${r.currency_code}:${r.rate_date}`,
+      toNumber(toDecimal(r.rate_to_eur)),
+    ]),
+  );
+
+  let repaired = 0;
+  for (const pair of pairs) {
+    const code = String(pair.currency_code || "")
+      .toUpperCase()
+      .trim();
+    const dateStr = normalizeDateInput(pair.rate_date);
+    if (!code || !dateStr) continue;
+
+    const truth = rateOnOrBeforeFromMap(fullByDate, code, dateStr);
+    if (truth === undefined) continue; // currency not published by ECB
+
+    const stored = storedByKey.get(`${code}:${dateStr}`);
+    if (
+      stored !== undefined &&
+      Math.abs(stored - truth) <= Math.abs(truth) * 1e-9
+    )
+      continue;
+
+    await saveHistoricalRate(code, dateStr, truth);
+    repaired += 1;
+  }
+
+  await settingsRepository.set(FX_FULL_HISTORY_REPAIR_FLAG, true);
+  return repaired;
+}
+
+/**
+ * Stamp `fx_rate_to_eur` onto manual non-EUR transactions that lack it, using the
+ * stored rate on-or-before the transaction date (≤ 7 days back — the standard
+ * weekend/holiday convention). Distant nearest rates are never stamped; those
+ * rows stay NULL and read paths keep resolving them per-date with a fallback flag.
+ * Source-provenance rows keep their booked FX evidence and immutable receipts;
+ * their missing historical rates are still backfilled in exchange_rates.
+ */
+async function stampTransactionFxRates() {
+  const result = await query(
+    `UPDATE portfolio_transactions pt
+     SET fx_rate_to_eur = sub.rate
+     FROM (
+       SELECT pt2.id,
+              (SELECT er.rate_to_eur
+               FROM exchange_rates er
+               WHERE er.currency_code = UPPER(pt2.currency::text)
+                 AND er.rate_date <= pt2.date::date
+                 AND er.rate_date >= pt2.date::date - INTERVAL '7 days'
+               ORDER BY er.rate_date DESC
+               LIMIT 1) AS rate
+       FROM portfolio_transactions pt2
+       WHERE pt2.fx_rate_to_eur IS NULL
+         AND pt2.import_batch_id IS NULL
+         AND pt2.source_record_hash IS NULL
+         AND pt2.dedup_fingerprint IS NULL
+         AND pt2.currency IS NOT NULL
+         AND UPPER(pt2.currency::text) <> 'EUR'
+     ) sub
+     WHERE pt.id = sub.id AND sub.rate IS NOT NULL
+       AND pt.fx_rate_to_eur IS NULL
+       AND pt.import_batch_id IS NULL
+       AND pt.source_record_hash IS NULL
+       AND pt.dedup_fingerprint IS NULL`,
+  );
+  return result.rowCount ?? 0;
+}
+
+/** A distinct (currency, transaction day) pair; `rate_date` is a pg DATE. */
+type CurrencyDatePairRow = { currency_code: string; rate_date: Date };
+
+export async function backfillPortfolioHistoricalRates() {
+  const pairsResult = await query<CurrencyDatePairRow>(
+    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+     FROM portfolio_transactions pt
+     WHERE pt.currency IS NOT NULL
+       AND UPPER(pt.currency::text) <> 'EUR'
+     GROUP BY pt.currency::text, pt.date::date
+     ORDER BY pt.date::date ASC`,
+  );
+  if (pairsResult.rows.length === 0)
+    return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
+
+  let repaired = 0;
+  try {
+    repaired =
+      (await repairHistoricalRatesFromFullHistory(pairsResult.rows)) ?? 0;
+  } catch (err) {
+    logger.warn("Full-history FX repair failed — will retry next startup", {
+      error: errorMessage(err),
+    });
+  }
+
+  const missingResult = await query<CurrencyDatePairRow>(
+    `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
+     FROM portfolio_transactions pt
+     LEFT JOIN exchange_rates er
+       ON er.currency_code = UPPER(pt.currency::text)
+      AND er.rate_date = pt.date::date
+     WHERE pt.currency IS NOT NULL
+       AND UPPER(pt.currency::text) <> 'EUR'
+       AND er.id IS NULL
+     GROUP BY pt.currency::text, pt.date::date
+     ORDER BY pt.date::date ASC`,
+  );
+
+  let inserted = 0;
+  let unresolved = 0;
+
+  const resolvedPairs: Array<{ currencyCode: string; rateDate: string }> = [];
+  for (const row of missingResult.rows) {
+    const currencyCode = String(row.currency_code || "")
+      .toUpperCase()
+      .trim();
+    const rateDate = normalizeDateInput(row.rate_date);
+    if (!currencyCode || !rateDate) continue;
+
+    // getRateToEurForDate persists rates it sources from ECB (90d or full
+    // history). When it falls through to a prior stored rate no exact row
+    // appears — count those as unresolved rather than fabricating history.
+    await getRateToEurForDate(currencyCode, rateDate, {
+      saveFetchedHistoricalRate: true,
+    });
+    resolvedPairs.push({ currencyCode, rateDate });
+  }
+
+  // One batched existence check for every attempted pair, replacing the former
+  // per-row SELECT (the N+1). Same accounting: a pair with an exact stored row
+  // now counts as inserted, everything else unresolved.
+  if (resolvedPairs.length > 0) {
+    const codes = resolvedPairs.map((p) => p.currencyCode);
+    const dates = resolvedPairs.map((p) => p.rateDate);
+    const existsResult = await query<
+      Pick<ExchangeRateRow, "currency_code"> & { rate_date: string }
+    >(
+      `SELECT er.currency_code, er.rate_date::text AS rate_date
+         FROM exchange_rates er
+         JOIN UNNEST($1::text[], $2::text[]) AS want(currency_code, rate_date)
+           ON er.currency_code = want.currency_code
+          AND er.rate_date = want.rate_date::date`,
+      [codes, dates],
+    );
+    const present = new Set(
+      existsResult.rows.map(
+        (r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`,
+      ),
+    );
+    for (const p of resolvedPairs) {
+      if (present.has(`${p.currencyCode}|${p.rateDate}`)) inserted += 1;
+      else unresolved += 1;
+    }
+  }
+
+  let stamped = 0;
+  try {
+    stamped = await stampTransactionFxRates();
+  } catch (err) {
+    logger.warn("Stamping fx_rate_to_eur onto transactions failed", {
+      error: errorMessage(err),
+    });
+  }
+
+  if (inserted > 0 || unresolved > 0 || repaired > 0 || stamped > 0) {
+    logger.info("Portfolio historical FX backfill complete", {
+      inserted,
+      unresolved,
+      repaired,
+      stamped,
+    });
+  }
+
+  if (inserted > 0 || repaired > 0) {
+    clearHistoricalCache();
+    clearHistoricalIndexCache();
+  }
+
+  return { inserted, missing: unresolved, repaired, stamped };
+}
+
+export default {
+  convertRowsToEur,
+  convertToCurrency,
+  convertWithRates,
+  loadCurrentRates,
+  listLatestStoredRates,
+  warmCache,
+  clearMemoryCache,
+  backfillPortfolioHistoricalRates,
+  FALLBACK_RATES,
+};
+
+export { clearHistoricalIndexCache as __clearHistoricalIndexCache };

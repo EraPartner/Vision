@@ -15,7 +15,7 @@ import {
   resolveDeployableCash,
 } from "../services/crossWorkspaceAnalytics.js";
 import { assembleRebalanceInputs } from "../services/crossWorkspaceDataService.js";
-import { resolveRebalanceTargetWeights } from "../services/portfolio/rebalanceTargets.js";
+import { resolveRebalanceTargetWeights } from "../services/portfolio/rebalanceTargets.ts";
 import { computeCommitmentAwareCash } from "../services/commitmentAwareCashService.js";
 import { ValidationError } from "../middleware/errorHandler.ts";
 

@@ -7,7 +7,7 @@ updated: 2026-10-08
 tags: [endpoint, api, portfolio, realtime, summary, totals, dashboard, performance, net-worth, live-overlay, fx-attribution, asset-gain, fx-gain, purchase-date-rates, per-account, byAccount, adr-091, adr-100]
 description: "Realtime portfolio totals endpoint serving as single source of truth for dashboard, performance, and (from 2026-05-31) net-worth current-point metrics. Single computation path, consistent FX timing, 60s cache TTL. 2026-06-11 (ADR-074): flows convert at transaction-date FX; gainLoss = assetGain + fxGain. 2026-06-18 (ADR-091/ADR-100): additive byAccount array. 2026-08-10 (ADR-108): byAccount carries full per-broker P&L from the partitioned lot engine, summaries carry fullyAssigned, Σ byAccount ≡ totals parity-tested under all cost-basis methods."
 aliases: [portfolio-totals, portfolio-metrics, summary-api]
-related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.js", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
+related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService.ts", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/node-backend/src/routes/info/_cache.js", "apps/node-backend/src/routes/info/_liveSummary.js", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/lib/api/info.ts"]
 ---
 
 # Portfolio Summary API
@@ -448,7 +448,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 - **New per-investment fields:** `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`.
 - **Identity guaranteed:** `gainLoss = assetGain + fxGain` holds per-investment and in totals.
 - `fx_rate_to_eur` is now auto-resolved from stored `exchange_rates` (on-or-before ≤7 days) on transaction create/edit when not explicitly provided and currency ≠ EUR.
-- Source: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js]], [[apps/node-backend/src/services/investmentService.js]]
+- Source: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/services/investmentService.js]]
 
 ### 2026-05-31 — Net Worth overlay extended single source of truth
 

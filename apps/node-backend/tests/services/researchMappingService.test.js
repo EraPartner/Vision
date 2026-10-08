@@ -8,7 +8,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   __createResearchMappingService as createResearchMappingService,
   __analyzeQuotes as analyzeQuotes,
-} from '../../src/services/research/researchMappingService.js';
+} from '../../src/services/research/researchMappingService.ts';
 
 const KEY = 'US0378331005';
 const TYPE = 'isin';

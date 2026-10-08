@@ -25,11 +25,11 @@ vi.mock("../src/services/cashForecastInsightService.js", () => ({
 import { detectSubscriptionCreep } from "../src/services/subscriptionCreepService.js";
 import { detectCategoryOutliers } from "../src/services/categoryOutlierService.js";
 import { getCashForecastInsight } from "../src/services/cashForecastInsightService.js";
-import { insightsDigest } from "../src/services/aiChat/tools/insights.js";
+import { insightsDigest } from "../src/services/aiChat/tools/insights.ts";
 import {
   __TOOLS as TOOLS,
   getToolSchemas,
-} from "../src/services/aiChat/tools/index.js";
+} from "../src/services/aiChat/tools/index.ts";
 
 beforeEach(() => {
   vi.resetAllMocks();

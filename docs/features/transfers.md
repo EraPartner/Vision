@@ -55,7 +55,7 @@ apart, and the late-arriving leg pairs with the still-open earlier one.
 
 A candidate pair is: opposite sign, **equal amount, same currency**, on **two different own
 `bank_account`s**, within **±3 days**. The pure matcher
-([[apps/node-backend/src/services/calculations/transfers.js]]) classifies candidates:
+([[apps/node-backend/src/services/calculations/transfers.ts]]) classifies candidates:
 
 - **Single unambiguous candidate on each side → auto-marked** (`transfer_source = 'auto'`).
 - **Contended (multiple candidates) → suggestion only** — surfaced via the API, never auto-picked.

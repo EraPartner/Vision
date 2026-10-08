@@ -17,7 +17,7 @@ import { Router } from "express";
 import infoService from "../services/infoService.js";
 import { logger } from "../config/logger.ts";
 import { getSnapshots } from "../services/portfolioPerformanceSnapshotService.js";
-import { getPortfolioSummary } from "../services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../services/portfolio/portfolioSummaryService.ts";
 import {
   netWorthResponseCache,
   perfResponseCache,
@@ -26,9 +26,9 @@ import {
   PERF_CACHE_TTL_MS,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   setCachedData,
-} from "../services/info/cache.js";
-import { buildPortfolioPerformancePayload } from "../services/info/performanceHelpers.js";
-import { resolveLivePortfolioValue } from "../services/info/liveSummary.js";
+} from "../services/info/cache.ts";
+import { buildPortfolioPerformancePayload } from "../services/info/performanceHelpers.ts";
+import { resolveLivePortfolioValue } from "../services/info/liveSummary.ts";
 import { getCurrentDateString } from "./info/_queryParams.ts";
 
 import statisticsRouter from "./info/statistics.ts";

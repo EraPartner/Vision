@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationError } from '../src/middleware/errorHandler.ts';
-import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.js';
+import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.ts';
 
 function expectValidationError(body, message) {
   expect(() => resolveRebalanceTargetWeights(body)).toThrowError(ValidationError);
@@ -32,6 +32,10 @@ describe('resolveRebalanceTargetWeights', () => {
       { targetWeights: {}, model: 'sixty_forty' },
       'targetWeights must include at least one positive weight',
     );
+  });
+
+  it.each(['toString', 'constructor', '__proto__'])('rejects inherited object key %s as a model', (model) => {
+    expectValidationError({ model }, `Unknown model '${model}'`);
   });
 
   it('lets a truthy non-object target fall through to a valid model', () => {

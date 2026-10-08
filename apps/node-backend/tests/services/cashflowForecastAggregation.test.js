@@ -5,7 +5,7 @@ vi.mock('../../src/repositories/plannedTransactionRepository.ts', () => ({
 }));
 
 import plannedTransactionRepository from '../../src/repositories/plannedTransactionRepository.ts';
-import { computeCashflowForecast } from '../../src/services/calculations/aggregation/cashflowForecast.js';
+import { computeCashflowForecast } from '../../src/services/calculations/aggregation/cashflowForecast.ts';
 
 describe('computeCashflowForecast — pg DATE handling', () => {
   beforeEach(() => {

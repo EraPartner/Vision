@@ -17,23 +17,23 @@
  */
 
 import { Router } from "express";
-import { computeMonthlySummary } from "../services/calculations/aggregation/monthly.js";
-import { computeCategoryBreakdown } from "../services/calculations/aggregation/category.js";
-import { computeRecipientInsights } from "../services/calculations/aggregation/recipient.js";
-import { computeCashflowComparison } from "../services/calculations/aggregation/cashflow.js";
-import { computeAverageVsCurrent } from "../services/calculations/aggregation/averageVsCurrent.js";
-import { computeBankBalances } from "../services/calculations/aggregation/bankBalances.js";
-import { computeCashflowForecast } from "../services/calculations/aggregation/cashflowForecast.js";
+import { computeMonthlySummary } from "../services/calculations/aggregation/monthly.ts";
+import { computeCategoryBreakdown } from "../services/calculations/aggregation/category.ts";
+import { computeRecipientInsights } from "../services/calculations/aggregation/recipient.ts";
+import { computeCashflowComparison } from "../services/calculations/aggregation/cashflow.ts";
+import { computeAverageVsCurrent } from "../services/calculations/aggregation/averageVsCurrent.ts";
+import { computeBankBalances } from "../services/calculations/aggregation/bankBalances.ts";
+import { computeCashflowForecast } from "../services/calculations/aggregation/cashflowForecast.ts";
 import {
   computeCashflowForecast as computeCashflowForecastMethods,
   computeCashflowForecastRolling,
-} from "../services/calculations/forecast/index.js";
-import { getAllAccuracyHistory } from "../services/calculations/forecast/accuracyStore.js";
-import { computeSankeyFlow } from "../services/calculations/aggregation/sankey.js";
-import { computeCategoryPivot } from "../services/calculations/aggregation/categoryPivot.js";
-import { computeRecipientByYear } from "../services/calculations/aggregation/recipientByYear.js";
-import { computeRecipientPivot } from "../services/calculations/aggregation/recipientPivot.js";
-import { computeTagPivot } from "../services/calculations/aggregation/tagPivot.js";
+} from "../services/calculations/forecast/index.ts";
+import { getAllAccuracyHistory } from "../services/calculations/forecast/accuracyStore.ts";
+import { computeSankeyFlow } from "../services/calculations/aggregation/sankey.ts";
+import { computeCategoryPivot } from "../services/calculations/aggregation/categoryPivot.ts";
+import { computeRecipientByYear } from "../services/calculations/aggregation/recipientByYear.ts";
+import { computeRecipientPivot } from "../services/calculations/aggregation/recipientPivot.ts";
+import { computeTagPivot } from "../services/calculations/aggregation/tagPivot.ts";
 import { getTargetCurrency } from "./info/_queryParams.ts";
 import {
   optionalQueryString,
@@ -43,13 +43,6 @@ import { parseIntClamped } from "../lib/pagination.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { validateId, validateIntArray } from "../middleware/validation.ts";
 import { parseAggregationDateRange } from "../lib/aggregationDateRange.ts";
-
-// The JS service's `ancestorCategoryId = undefined` default makes its inferred
-// parameter type `undefined`; the implementation forwards a numeric id.
-const computeCategoryBreakdownForId = computeCategoryBreakdown as (opts: {
-  targetCurrency?: string;
-  ancestorCategoryId?: number;
-}) => ReturnType<typeof computeCategoryBreakdown>;
 
 const router = Router();
 
@@ -129,7 +122,7 @@ router.get("/category-breakdown", async (req, res) => {
     if (!parsed.valid) throw new ValidationError(parsed.error);
     ancestorCategoryId = parsed.value;
   }
-  const { data, meta } = await computeCategoryBreakdownForId({
+  const { data, meta } = await computeCategoryBreakdown({
     targetCurrency: getTargetCurrency(req),
     ancestorCategoryId,
   });

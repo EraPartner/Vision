@@ -18,12 +18,12 @@ vi.mock("../src/repositories/infoRepositoryTags.ts", () => ({
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 import { tagInsightsRepository } from "../src/repositories/infoRepositoryTags.ts";
-import { computeCategoryPivot } from "../src/services/calculations/aggregation/categoryPivot.js";
-import { computeRecipientByYear } from "../src/services/calculations/aggregation/recipientByYear.js";
-import { computeRecipientPivot } from "../src/services/calculations/aggregation/recipientPivot.js";
-import { computeTagPivot } from "../src/services/calculations/aggregation/tagPivot.js";
-import { statsKeyPart } from "../src/services/calculations/aggregation/_statisticsCache.js";
-import { invalidateStatisticsCaches } from "../src/services/info/cache.js";
+import { computeCategoryPivot } from "../src/services/calculations/aggregation/categoryPivot.ts";
+import { computeRecipientByYear } from "../src/services/calculations/aggregation/recipientByYear.ts";
+import { computeRecipientPivot } from "../src/services/calculations/aggregation/recipientPivot.ts";
+import { computeTagPivot } from "../src/services/calculations/aggregation/tagPivot.ts";
+import { statsKeyPart } from "../src/services/calculations/aggregation/_statisticsCache.ts";
+import { invalidateStatisticsCaches } from "../src/services/info/cache.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -52,7 +52,7 @@ import {
 import { getAverageVsCurrentSpending } from "../src/repositories/infoRepositoryAverageVsCurrent.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
-import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 
 const cat = {};

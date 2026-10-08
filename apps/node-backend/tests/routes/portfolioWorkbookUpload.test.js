@@ -10,7 +10,7 @@ import {
   syntheticSaxoWorkbook,
 } from "../helpers/saxoWorkbook.js";
 
-vi.mock("../../src/services/portfolioImportPipeline/index.js", () => ({
+vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
@@ -41,7 +41,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.js";
+import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
 import accountService from "../../src/services/accountService.js";
 import router from "../../src/routes/portfolioImportRoutes.ts";
 const BASE = "/api/portfolio/import";

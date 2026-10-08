@@ -59,7 +59,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 // a single test can make the generator throw a non-AppError and prove the route
 // does not relabel an internal fault as a client 400.
 vi.mock(
-  "../../src/services/calculations/loanSchedule.js",
+  "../../src/services/calculations/loanSchedule.ts",
   async (importOriginal) => {
     const actual = await importOriginal();
     return {
@@ -73,7 +73,7 @@ vi.mock(
 
 import plannedTransactionService from "../../src/services/plannedTransactionService.js";
 import { query as dbQuery } from "../../src/database/connection.ts";
-import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
+import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
 
 const { default: plannedRouter } =
   await import("../../src/routes/plannedTransactions.ts");

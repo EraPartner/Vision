@@ -16,7 +16,7 @@ vi.mock("../src/config/logger.ts", () => ({
 }));
 
 import { parse } from "csv-parse/sync";
-import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 const COLUMN_MAPPING = {
   date: "Date",

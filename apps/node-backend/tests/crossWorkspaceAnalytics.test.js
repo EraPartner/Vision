@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   __projectNetWorth as projectNetWorth, rebalanceDeployment, resolveDeployableCash,
 } from '../src/services/crossWorkspaceAnalytics.js';
-import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.js';
-import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.js';
+import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.ts';
+import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.ts';
 
 describe('projectNetWorth (ADR-098)', () => {
   it('compounds the median path and widens bands with time', () => {

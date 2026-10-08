@@ -2,7 +2,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { parseWithConfig } from "../../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+import { parseWithConfig } from "../../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,

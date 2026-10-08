@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createQuotaGovernor } from "../src/services/research/quotaGovernor.js";
+import { createQuotaGovernor } from "../src/services/research/quotaGovernor.ts";
 
 describe("createQuotaGovernor — dayMirror eviction", () => {
   it("reserves a persistent daily slot atomically and fails closed without a reservation store", async () => {

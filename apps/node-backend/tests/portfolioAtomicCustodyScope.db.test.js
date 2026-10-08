@@ -15,13 +15,13 @@ import {
   commitPortfolioAssetTransfer,
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
-} from "../src/services/portfolio/portfolioAssetTransferService.js";
+} from "../src/services/portfolio/portfolioAssetTransferService.ts";
 import {
   portfolioCustodyWriteHistory,
   withPortfolioCustodyImportScope,
-} from "../src/services/portfolio/portfolioCustodyImportScope.js";
+} from "../src/services/portfolio/portfolioCustodyImportScope.ts";
 import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
-import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 
 const pool = getTestPool();
 const owned = { accounts: [], investments: [], batches: [] };

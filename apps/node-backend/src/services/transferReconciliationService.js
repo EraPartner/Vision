@@ -14,9 +14,9 @@
 
 import { query, withTransaction } from '../database/connection.ts';
 import { transactionRepository } from '../repositories/transactionRepository.ts';
-import { resolveTransferMatches } from './calculations/transfers.js';
+import { resolveTransferMatches } from './calculations/transfers.ts';
 import { scheduleAggregationRefresh } from './aggregationRefresh.js';
-import { invalidateStatisticsCaches } from './info/cache.js';
+import { invalidateStatisticsCaches } from './info/cache.ts';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
 

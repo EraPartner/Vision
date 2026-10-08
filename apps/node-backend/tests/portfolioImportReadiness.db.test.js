@@ -9,7 +9,7 @@ import {
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
 import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.js";
-import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 
 const pool = getTestPool();
 const fixtures = { accountIds: [], investmentIds: [], batchIds: [] };

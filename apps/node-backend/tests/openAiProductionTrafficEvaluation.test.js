@@ -27,8 +27,8 @@ import { executeBrokerRequest } from "../src/integrations/openai/egress-helper.m
 import {
   createInspectionFetch,
   evaluateCloudPrivacyTrace,
-} from "../src/services/aiEvaluation/cloudPrivacy.js";
-import { CLOUD_PRIVACY_SYNTHETIC_POLICY } from "../src/services/aiEvaluation/cloudPrivacyCases.js";
+} from "../src/services/aiEvaluation/cloudPrivacy.ts";
+import { CLOUD_PRIVACY_SYNTHETIC_POLICY } from "../src/services/aiEvaluation/cloudPrivacyCases.ts";
 import { disclosurePayload } from "../src/services/aiProviderAdapters.js";
 
 const privateQuestion = "PRIVATE_ACCOUNT_441 spent at Rare Clinic 184.73";

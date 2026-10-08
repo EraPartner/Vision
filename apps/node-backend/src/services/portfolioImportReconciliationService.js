@@ -4,19 +4,19 @@ import { partitionOversellDeficits } from "@vision/shared-utils/portfolio";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
 import { withTransaction } from "../database/connection.ts";
 import { toDecimal } from "../lib/money.ts";
-import { normalizeTransactionPayload } from "./portfolio/portfolioTransactionRules.js";
+import { normalizeTransactionPayload } from "./portfolio/portfolioTransactionRules.ts";
 import {
   getStoredRateToEurOnOrBefore,
   getUnindexedRatesToEurForDates,
-} from "./currency/rateFetcher.js";
+} from "./currency/rateFetcher.ts";
 import {
   getNexoProSpotReconciliationEvidence,
   nexoProSourceMoneyMatches,
-} from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.js";
+} from "./portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
 import {
   getSaxoCsvCompanionEvidence,
   getSaxoWorkbookReconciliationEvidence,
-} from "./portfolioImportPipeline/saxoTransactionHistoryAdapter.js";
+} from "./portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import {
   portfolioPrimaryRawData,
   verifiedPortfolioPerformanceBasisReference,
@@ -31,8 +31,8 @@ import {
 import {
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
-} from "./portfolio/portfolioAssetTransferService.js";
-import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.js";
+} from "./portfolio/portfolioAssetTransferService.ts";
+import { previewPortfolioAssetAdjustment } from "./portfolio/portfolioAssetAdjustmentService.ts";
 import { getEligibleYieldSourceHashes } from "../repositories/portfolioAssetAdjustmentRepository.ts";
 import {
   compareAndSetReconciledTransaction,
@@ -75,13 +75,13 @@ import {
   readKinesisIncomeUnitContext,
   readIncomeRecognitionContext,
   recordPairedPortfolioIncome,
-} from "../repositories/portfolioIncomeRecognitionRepository.js";
+} from "../repositories/portfolioIncomeRecognitionRepository.ts";
 
 import {
   classifyKinesisCash,
   proveKinesisCashSources,
 } from "./portfolioKinesisCashScope.js";
-import { readKinesisCashContext } from "../repositories/portfolioImportCashRepository.js";
+import { readKinesisCashContext } from "../repositories/portfolioImportCashRepository.ts";
 import { recordKinesisCash } from "./portfolioImportCashService.js";
 import { proveKinesisFullYieldCandidates } from "./portfolioKinesisFullImport.js";
 import {
@@ -99,7 +99,7 @@ import {
  * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").ReconciliationHistoryEvent} ReconciliationHistoryEvent
  * @typedef {import("../repositories/portfolioImportReconciliationRepository.ts").PortfolioTransactionSnapshot} PortfolioTransactionSnapshot
  * @typedef {import("../lib/money.ts").DecimalInput} DecimalInput
- * @typedef {import("./portfolioImportPipeline/portfolioGenericAdapter.js").ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {import("./portfolioImportPipeline/portfolioGenericAdapter.ts").ParsedPortfolioRow} ParsedPortfolioRow
  * @typedef {import("./portfolioKinesisAdoptionScope.js").KinesisSourceProof} KinesisSourceProof
  */
 /**
@@ -1063,13 +1063,15 @@ export function buildPortfolioImportReconciliationPlan({
         );
         const same = (current) =>
           current.type === "asset_adjustment" &&
-          [
+          /** @type {const} */ ([
             "investment_id",
             "account_id",
             "date",
             "adjustment_kind",
             "basis_policy",
-          ].every((field) => String(current[field]) === String(event[field])) &&
+          ]).every(
+            (field) => String(current[field]) === String(event[field]),
+          ) &&
           equalNumber(current.units, event.units, 8);
         if (canonical && !same(canonical)) {
           addBlocker(row, "source_identity_conflict", [canonical]);
@@ -1118,12 +1120,14 @@ export function buildPortfolioImportReconciliationPlan({
         );
         const sameTransfer = (current) =>
           current.type === "asset_transfer" &&
-          [
+          /** @type {const} */ ([
             "investment_id",
             "source_account_id",
             "destination_account_id",
             "date",
-          ].every((field) => String(current[field]) === String(event[field])) &&
+          ]).every(
+            (field) => String(current[field]) === String(event[field]),
+          ) &&
           equalNumber(current.units, event.units, 8) &&
           equalNumber(current.fee_units, event.fee_units, 8);
         if (canonical && !sameTransfer(canonical)) {

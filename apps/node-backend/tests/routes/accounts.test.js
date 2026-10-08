@@ -46,7 +46,7 @@ vi.mock("../../src/services/aggregationRefresh.js", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 
-vi.mock("../../src/services/info/cache.js", () => ({
+vi.mock("../../src/services/info/cache.ts", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
@@ -59,7 +59,7 @@ import { setOpeningBalance } from "../../src/services/openingBalanceService.js";
 import { reconcileAccount } from "../../src/services/reconcileService.js";
 import { closeAccount } from "../../src/services/accountCloseService.js";
 import { scheduleAggregationRefresh } from "../../src/services/aggregationRefresh.js";
-import { invalidatePortfolioCaches } from "../../src/services/info/cache.js";
+import { invalidatePortfolioCaches } from "../../src/services/info/cache.ts";
 
 const { default: accountsRouter } =
   await import("../../src/routes/accounts.ts");

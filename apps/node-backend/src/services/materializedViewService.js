@@ -12,7 +12,7 @@
 
 import { query, getClient } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
-import { invalidateStatisticsCaches } from "./info/cache.js";
+import { invalidateStatisticsCaches } from "./info/cache.ts";
 
 /**
  * Run one maintenance statement with the pool-wide 30s statement_timeout

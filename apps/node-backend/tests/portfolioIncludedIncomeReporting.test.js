@@ -17,7 +17,7 @@ vi.mock("../src/services/portfolioPerformanceSnapshotService.js", () => ({
   ]),
 }));
 vi.mock(
-  "../src/services/currency/currencyConversionService.js",
+  "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => {
     const actual = await importOriginal();
     return {
@@ -30,9 +30,9 @@ vi.mock(
   },
 );
 import { query } from "../src/database/connection.ts";
-import { getHistoricalRateIndex } from "../src/services/currency/currencyConversionService.js";
-import { buildHistoricalRateIndex } from "../src/services/currency/rateFetcher.js";
-import { fetchPortfolioData } from "../src/services/reports/dataFetcherPortfolio.js";
+import { getHistoricalRateIndex } from "../src/services/currency/currencyConversionService.ts";
+import { buildHistoricalRateIndex } from "../src/services/currency/rateFetcher.ts";
+import { fetchPortfolioData } from "../src/services/reports/dataFetcherPortfolio.ts";
 describe("descriptive income portfolio reporting", () => {
   it("keeps literal included income separate and converts it at its historical date", async () => {
     getHistoricalRateIndex.mockResolvedValue(

@@ -32,28 +32,28 @@ tags:
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
 description: Multi-statement portfolio history import with automatic detection, reviewed reconciliation, dated custody and unit adjustments, immutable receipts, and retained historical source evidence.
 related_code:
-  - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/validate.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/commit.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/index.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/stage.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/validate.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/commit.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioIbkrPrimaryProof.js"
   - "apps/node-backend/src/services/portfolioIbkrRepairCandidates.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
   - "apps/node-backend/src/services/portfolioKinesisYieldGroups.js"
   - "apps/node-backend/src/services/portfolioKinesisAdoptionScope.js"
   - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
   - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
-  - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
-  - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.js"
+  - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.ts"
+  - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.ts"
   - "packages/shared-utils/src/portfolioCustody.ts"
-  - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js"
-  - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js"
+  - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts"
+  - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.ts"
   - "apps/node-backend/src/services/importIdentity.js"
   - "apps/node-backend/src/services/portfolioImportBatchService.js"
   - "apps/node-backend/src/services/portfolioImportCommitService.js"
@@ -62,7 +62,7 @@ related_code:
   - "apps/node-backend/src/routes/portfolioImportRoutes.ts"
   - "apps/node-backend/src/routes/importBatchRoutes.ts"
   - "apps/node-backend/src/lib/portfolioUpload.ts"
-  - "apps/node-backend/src/services/portfolio/fxResolve.js"
+  - "apps/node-backend/src/services/portfolio/fxResolve.ts"
   - "apps/frontend/src/pages/portfolio/PortfolioImportPage.tsx"
   - "apps/frontend/src/pages/portfolio/PortfolioImportSession.tsx"
   - "apps/frontend/src/pages/portfolio/portfolioImportDetection.ts"
@@ -77,7 +77,7 @@ related_code:
   - "alembic/versions/0123_portfolio_asset_adjustments.py"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
   - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
-  - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js"
+  - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
   - "alembic/versions/0041_add_parser_config_kind.py"
 ---
@@ -138,7 +138,7 @@ chunk does not retain failed subtransactions until its final commit.
 
 ### 1. Stage
 
-**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/stage.js]]
+**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/stage.ts]]
 
 Parses an ordinary uploaded CSV using `portfolioGenericAdapter`, which reads `column_mapping` from
 the config. The maintained `format` values delegate to IBKR, Kinesis, Nexo wallet, Nexo Pro, or Saxo
@@ -317,7 +317,7 @@ Progress event: `{ phase: 'staging', current, total, percent }`
 
 ### 2. Validate
 
-**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/validate.js]]
+**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/validate.ts]]
 
 For each staged row:
 
@@ -331,7 +331,7 @@ Progress event: `{ phase: 'validating', current, total, errors, percent }`
 
 ### 3. Match Investments
 
-**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js]]
+**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.ts]]
 
 For each valid staged row, attempts to find an existing `investments` record:
 
@@ -439,7 +439,7 @@ Each adoption writes immutable before/after snapshots into
 reversible domain evidence, not an independently anchored audit chain.
 
 After the locked complete projection passes, the reviewed writer drains source events in date, batch,
-and row order. Custody writes use [[apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.js]]
+and row order. Custody writes use [[apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.ts]]
 to bind each approved event to the same transaction client and source signature. Each event allocates
 lots from persisted history through its own date. This permits an earlier withdrawal and later return
 to be inserted around an already recorded sale without treating the temporary partial timeline as
@@ -661,7 +661,7 @@ timestamp-trigger changes on retained rows do not replace the financial equality
 
 ### Dated custody and original basis
 
-**Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js]] and
+**Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetTransferService.ts]] and
 [[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_transfers` stores one dated, source-identified event for a whole or partial custody
@@ -691,7 +691,7 @@ partial custody movement. See [[docs/adr/177-reviewed-history-reconciliation-and
 
 ### Unit adjustments and consumed basis
 
-**Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js]] and
+**Modules:** [[apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts]] and
 [[packages/shared-utils/src/portfolioCustody.ts]].
 
 `portfolio_asset_adjustments` stores dated positive unit removals as `yield_reversal` with
@@ -729,7 +729,7 @@ and reference write repository are removed; only stored JSON proof validation re
 
 ### 5. Commit
 
-**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/commit.js]]
+**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/commit.ts]]
 
 For each valid, resolved staged row:
 
@@ -739,7 +739,7 @@ For each valid, resolved staged row:
   tied to the original source records.
 - Calls `portfolioTransactionService.create` (shared with the manual transaction entry path), which enforces 2-of-3 unit math (units × price ≈ amount), oversell prevention, and asset-class routing.
 - **Account assignment:** if the batch has `account_id` set (migration 0057), each committed `portfolio_transaction` inherits that `account_id` so all lots from this import belong to the specified brokerage account.
-- **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.js]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
+- **FX auto-resolution**: if the trade currency is not EUR and no `fx_rate` was mapped or present in the row, calls `fxResolve` ([[apps/node-backend/src/services/portfolio/fxResolve.ts]]) to look up the historical EUR rate for the trade date (ADR-074 semantics).
 - **Occurrence-aware deduplication**: each trade identity includes `(investment, date, type, amount, units, account, currency)`. The i-th occurrence in the uploaded statement is paired with the i-th matching destination row. This preserves legitimate identical fills on first import, makes a complete reimport a no-op, and inserts only missing occurrences after a partial import. As in budgeting imports, every row also gets a hash derived from its retained source record. Portfolio commit deliberately uses occurrence matching instead of collapsing equal hashes because a broker statement may contain two legitimate byte-identical fills.
 - Maintained reviewed commits and session commits use one outer transaction for adoption, trades,
   cash, custody events, adjustments, staging states, and counters. Any runtime row failure aborts the whole scope.
@@ -755,7 +755,7 @@ Progress event: `{ phase: 'committing', current, total, imported, duplicates, er
 ## Brokerage cash routing and the double-count rule (WP-C2, Aug 2026)
 
 On an `is_brokerage` batch, `validate.js` stamps each row's `route` via
-`classifyBrokerageRow` ([[apps/node-backend/src/services/importPipeline/brokerageRouting.js]]):
+`classifyBrokerageRow` ([[apps/node-backend/src/services/importPipeline/brokerageRouting.ts]]):
 
 - **`route='cash'`** — external deposits/withdrawals, **and (D6, [[docs/adr/095-brokerage-account-import|ADR-095 addendum 2026-07-10]]) dividend/interest/fee/tax rows that carry no instrument reference at all** (no symbol, no name — sleeve interest, custody fees, account-level distributions). Each commits as ONE signed row in `transactions` on the batch's sleeve account: staging magnitudes are absolute, the sign comes from the row's canonical type (dividend/interest → `+`, fee/tax → `−`; deposits `+`, withdrawals `−`). The Behavior setting `brokerage_cash_category_ids` optionally maps each D6 kind to an active category ID. Import reads one mapping snapshot per commit, resolves active IDs only, and never creates or reactivates a category. An unset, missing, or inactive mapping commits the row uncategorized. External deposits/withdrawals always stay uncategorized because they are transfers, not income or expense. The payee is the broker (sleeve account `institution`, falling back to `name`).
 - **`route='asset_transfer'`** — dated custody event with carried original acquisition lots.
@@ -780,7 +780,7 @@ Tests: `tests/portfolioImportInstrumentlessCash.db.test.js` (full pipeline, sign
 
 ## Type Normalization
 
-**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.js]]
+**Module:** [[apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.ts]]
 
 Converts raw CSV type strings → canonical `portfolio_txn_type` values:
 

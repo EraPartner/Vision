@@ -15,11 +15,11 @@ vi.mock("../../src/repositories/infoRepository.ts", () => ({
 vi.mock("../../src/repositories/cashflowForecastMcRepository.ts", () => ({
   default: { upsert: mocks.upsert },
 }));
-vi.mock("../../src/services/calculations/forecast/accuracyStore.js", () => ({
+vi.mock("../../src/services/calculations/forecast/accuracyStore.ts", () => ({
   recordAccuracy: vi.fn(),
   getLatestAccuracyByMethod: vi.fn(async () => []),
 }));
-import { computeCashflowForecast } from "../../src/services/calculations/forecast/index.js";
+import { computeCashflowForecast } from "../../src/services/calculations/forecast/index.ts";
 beforeEach(() => vi.clearAllMocks());
 describe("daily forecast completion requires acknowledged persistence", () => {
   it("propagates forced cache write failure", async () => {

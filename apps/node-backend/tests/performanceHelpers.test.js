@@ -12,12 +12,12 @@ vi.mock("../src/services/portfolioPerformanceSnapshotService.js", () => ({
   computeHeatmap: mockComputeHeatmap,
 }));
 
-vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: mockGetPortfolioSummary,
 }));
 
 const { buildPortfolioPerformancePayload } =
-  await import("../src/services/info/performanceHelpers.js");
+  await import("../src/services/info/performanceHelpers.ts");
 
 function snapshot({ date, invested, stocks, crypto, metals, cash, fxNeutral }) {
   const value = stocks + crypto + metals + cash;

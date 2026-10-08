@@ -1,0 +1,107 @@
+/**
+ * FRED (Federal Reserve Economic Data) macro adapter (ADR-082).
+ *
+ * Keyed via FRED_API_KEY (free, ~120 req/min). The open-ended discovery engine
+ * for the macro vertical: `/series/search` returns chartable series directly,
+ * covering US + many global indicators — CPI, policy/market rates (incl. ECB
+ * `ECBMRRFR`/`ECBDFR`), GDP, unemployment, and regional-Fed business surveys
+ * (the free PMI proxies). Provider-pinned: a FRED seriesId is fetched only here.
+ */
+
+import { z } from 'zod';
+import { getJson } from './httpClient.ts';
+import { requireProviderKey } from '../providerKeys.ts';
+import { trimToRange } from './macroRange.ts';
+import { looseArray, looseString, numish, parseOr } from './schemas.ts';
+
+const BASE = 'https://api.stlouisfed.org/fred';
+
+// Response shapes (tolerant: unknown keys pass through, malformed rows are
+// skipped, malformed leaves degrade like missing ones — see schemas.js).
+const searchResponseSchema = z.looseObject({
+  seriess: looseArray(z.looseObject({
+    id: looseString,
+    title: looseString,
+    units_short: looseString,
+    units: looseString,
+    frequency: looseString,
+    frequency_short: looseString,
+  })),
+});
+
+const observationsResponseSchema = z.looseObject({
+  // FRED encodes missing observations as "." → numish → undefined.
+  observations: looseArray(z.looseObject({ date: looseString, value: numish })),
+});
+
+const metaResponseSchema = z.looseObject({
+  seriess: looseArray(z.looseObject({
+    title: looseString,
+    units_short: looseString,
+    units: looseString,
+    frequency: looseString,
+  })),
+});
+
+const key = () => requireProviderKey('fred');
+
+const fredAdapter = {
+  key: 'fred',
+
+  async macroSearch(query: string) {
+    const url =
+      `${BASE}/series/search?search_text=${encodeURIComponent(query)}` +
+      `&api_key=${key()}&file_type=json&limit=15&order_by=popularity&sort_order=desc`;
+    const data = await getJson(url);
+    const { seriess } = parseOr(searchResponseSchema, data, { seriess: [] });
+    const items = seriess
+      .filter((s) => s.id)
+      .map((s) => ({
+        provider: 'fred',
+        seriesId: s.id,
+        title: s.title || s.id,
+        units: s.units_short || s.units || undefined,
+        frequency: s.frequency || s.frequency_short || undefined,
+        region: undefined as string | undefined,
+        source: 'FRED',
+      }));
+    return { items };
+  },
+
+  async macroSeries(seriesId: string, { range = '5y' }: { range?: string } = {}) {
+    const k = key();
+    const enc = encodeURIComponent(seriesId);
+    // Fetch the full series and trim client-side anchored on the last point — see
+    // macroRange. FRED series are compact (a daily series is still well under the
+    // httpClient 5 MB cap), and the result is cached for 12 h.
+    const obsUrl = `${BASE}/series/observations?series_id=${enc}&api_key=${k}&file_type=json&sort_order=asc`;
+    const metaUrl = `${BASE}/series?series_id=${enc}&api_key=${k}&file_type=json`;
+    const [obs, meta] = await Promise.all([
+      getJson(obsUrl),
+      getJson(metaUrl).catch(() => undefined),
+    ]);
+    const { observations } = parseOr(observationsResponseSchema, obs, { observations: [] });
+    const points = observations
+      // A missing date parses to NaN either way and is filtered below.
+      .map((o) => ({ time: Date.parse(o.date ?? ''), close: o.value }))
+      .filter((p) => Number.isFinite(p.time) && p.close !== undefined)
+      .map((p) => ({
+        time: p.time,
+        close: p.close,
+        high: undefined as number | undefined,
+        low: undefined as number | undefined,
+        volume: undefined as number | undefined,
+      }));
+    const m = parseOr(metaResponseSchema, meta, { seriess: [] }).seriess[0];
+    return {
+      provider: 'fred',
+      seriesId,
+      title: m?.title || seriesId,
+      units: m?.units_short || m?.units || undefined,
+      frequency: m?.frequency || undefined,
+      points: trimToRange(points, range),
+    };
+  },
+};
+
+export default fredAdapter;

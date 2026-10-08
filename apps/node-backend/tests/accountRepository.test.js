@@ -21,7 +21,7 @@ vi.mock("../src/database/connection.ts", () => mockTxConnection());
 // accountService.list folds the repository's per-currency partitions into
 // `accounts.currency`. Stub its rate table so these SQL + shaping tests do not
 // reach the database or ECB.
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({
     loadCurrentRates: mockLoadCurrentRates,
     convertWithRates: mockConvertWithRates,

@@ -16,7 +16,7 @@ import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
 import * as plannedTransactionService from "../src/services/plannedTransactionService.js";
-import { commitBatch } from "../src/services/importPipeline/commit.js";
+import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import { isManualDuplicate } from "../src/services/deduplication.js";
 
 vi.mock("../src/services/plannedMatchService.js", () => ({

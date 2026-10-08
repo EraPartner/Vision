@@ -2,7 +2,7 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-08
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
 aliases:
@@ -11,7 +11,7 @@ related_code:
   - apps/node-backend/src/routes/recipients.ts
   - apps/node-backend/src/repositories/recipientRepository.ts
   - apps/node-backend/src/services/recipientMergeService.js
-  - apps/node-backend/src/services/calculations/normalization.js
+  - apps/node-backend/src/services/calculations/normalization.ts
   - apps/frontend/src/features/recipients/
 ---
 
@@ -56,7 +56,7 @@ normalizeForMatching("ABC Supermarket") → "abc supermarket"
 // Both match the same recipient via fuzzy similarity (threshold: 0.7)
 ```
 
-**Service:** [[apps/node-backend/src/services/calculations/normalization.js|normalization.js]]
+**Service:** [[apps/node-backend/src/services/calculations/normalization.ts|normalization.js]]
 
 ### Atomic Merge (Phase 6)
 

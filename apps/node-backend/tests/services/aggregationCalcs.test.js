@@ -27,17 +27,17 @@ vi.mock("../../src/repositories/infoRepository.ts", () => {
 });
 
 import infoRepository from "../../src/repositories/infoRepository.ts";
-import { buildEnvelope } from "../../src/services/calculations/aggregation/_envelope.js";
-import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.js";
-import { computeCategoryBreakdown } from "../../src/services/calculations/aggregation/category.js";
-import { computeRecipientInsights } from "../../src/services/calculations/aggregation/recipient.js";
-import { computeCashflowComparison } from "../../src/services/calculations/aggregation/cashflow.js";
-import { computeAverageVsCurrent } from "../../src/services/calculations/aggregation/averageVsCurrent.js";
-import { computeBankBalances } from "../../src/services/calculations/aggregation/bankBalances.js";
+import { buildEnvelope } from "../../src/services/calculations/aggregation/_envelope.ts";
+import { computeMonthlySummary } from "../../src/services/calculations/aggregation/monthly.ts";
+import { computeCategoryBreakdown } from "../../src/services/calculations/aggregation/category.ts";
+import { computeRecipientInsights } from "../../src/services/calculations/aggregation/recipient.ts";
+import { computeCashflowComparison } from "../../src/services/calculations/aggregation/cashflow.ts";
+import { computeAverageVsCurrent } from "../../src/services/calculations/aggregation/averageVsCurrent.ts";
+import { computeBankBalances } from "../../src/services/calculations/aggregation/bankBalances.ts";
 import {
   bankBalancesResponseCache,
   invalidatePortfolioCaches,
-} from "../../src/services/info/cache.js";
+} from "../../src/services/info/cache.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

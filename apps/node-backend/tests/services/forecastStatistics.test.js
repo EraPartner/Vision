@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { quantile } from '../../src/services/calculations/forecast/_statistics.js';
+import { quantile } from '../../src/services/calculations/forecast/_statistics.ts';
 
 describe('forecast quantile', () => {
   it('returns zero for an empty sample', () => {

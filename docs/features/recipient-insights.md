@@ -2,8 +2,8 @@
 title: Recipient Insights Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-08-26
 tags: [feature, recipients, analytics, insights, frontend, merchant, exclusion-filters]
 description: Merchant/recipient spending analytics with KPI cards, month-over-month change alerts, and detailed spending tables. June 2026: the all-years Top Recipients chart now honours category/recipient exclusion filters via new optional params on GET /api/aggregations/recipient-insights.
@@ -14,7 +14,7 @@ related_code:
   - apps/frontend/src/lib/api/aggregations.ts
   - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/repositories/infoRepositoryRecipients.ts
-  - apps/node-backend/src/services/calculations/aggregation/recipient.js
+  - apps/node-backend/src/services/calculations/aggregation/recipient.ts
 ---
 
 # Recipient Insights Feature

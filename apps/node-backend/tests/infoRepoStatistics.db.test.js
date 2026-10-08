@@ -31,7 +31,7 @@ import { statisticsRepository } from "../src/repositories/infoRepositoryStatisti
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { buildExclusionClauses } from "../src/lib/filterBuilder.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
-import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 
 const cat = {};

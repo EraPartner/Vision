@@ -19,7 +19,7 @@ vi.mock("../src/database/connection.ts", () =>
   }),
 );
 
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 

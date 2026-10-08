@@ -266,8 +266,8 @@ This ensures:
 
 **Affected Sections:**
 
-- `apps/node-backend/src/services/reports/sections/categoryBreakdown.js` — Chart on page 1, table on page 2 (continuation)
-- `apps/node-backend/src/services/reports/sections/topRecipients.js` — Charts on page 1, table + month-over-month on page 2+ (continuation)
+- `apps/node-backend/src/services/reports/sections/categoryBreakdown.ts` — Chart on page 1, table on page 2 (continuation)
+- `apps/node-backend/src/services/reports/sections/topRecipients.ts` — Charts on page 1, table + month-over-month on page 2+ (continuation)
 
 ### Layout Changes
 
@@ -484,10 +484,10 @@ export.comingSoon                     → "This report type is not yet available
 
 The PDF report system is a three-layer architecture:
 
-1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.js` — routes by report type, assembles cover + content, invokes Puppeteer renderer
+1. **Report dispatcher** — `apps/node-backend/src/services/reports/index.ts` — routes by report type, assembles cover + content, invokes Puppeteer renderer
 2. **Modular sections** — `apps/node-backend/src/services/reports/sections/` — seven financial section renderers (executiveSummary, cashflowTrend, categoryBreakdown, topRecipients, bankBalances, plannedOutlook, rollingAverages)
-3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.js` — parallel Promise.allSettled loads all data sources; graceful degradation if any fails
-4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.js` + `sectionHelpers.js` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
+3. **Data fetcher** — `apps/node-backend/src/services/reports/dataFetcher.ts` — parallel Promise.allSettled loads all data sources; graceful degradation if any fails
+4. **Theme integration** — `apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js` — CSS custom properties, shared formatting utilities (currency, date, percentages), SVG chart builders
 
 The PDF contains:
 
@@ -635,7 +635,7 @@ const pdf = await renderHtmlToPdf(html, {
 
 **Rendering Pipeline:**
 
-1. **Dispatcher** (`apps/node-backend/src/services/reports/index.js`)
+1. **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`)
    - Validates report type + period + sections
    - Builds HTML document from theme tokens + CSS + body sections
    - Invokes Puppeteer renderer → PDF buffer
@@ -645,7 +645,7 @@ const pdf = await renderHtmlToPdf(html, {
    - Writes the PDF content type, download filename, and byte length
    - Ends the response with the raw PDF buffer
 
-3. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`)
+3. **Data Fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`)
    - Parallel `Promise.allSettled` loads all data in parallel
    - Gracefully handles failures (returns null for failed sources)
    - Wraps aggregation results + repository data
@@ -658,14 +658,14 @@ const pdf = await renderHtmlToPdf(html, {
    - Default sections list: all except plannedOutlook (customizable)
    - Each section uses shared helpers (formatters, SVG chart builders)
 
-5. **Theme System** (`apps/node-backend/src/services/reports/themeCss.js` + `sectionHelpers.js`)
+5. **Theme System** (`apps/node-backend/src/services/reports/themeCss.ts` + `sectionHelpers.js`)
    - CSS custom properties (HSL) resolved from frontend theme tokens
    - Missing or invalid tokens fall back to the shared `@vision/types/reportThemeDefaults` light or dark palette
    - Built-in CSS classes: `.kpi-grid`, `.data-table`, `.account-grid`, etc.
    - Shared formatters: `fmtCurrency()`, `fmtDate()`, `fmtPct()`, `fmtMonthLabel()`
    - SVG chart builders: `svgGroupedBarChart()`, `svgHorizontalBars()`
 
-6. **Puppeteer Renderer** (`apps/node-backend/src/services/reports/puppeteerRenderer.js`)
+6. **Puppeteer Renderer** (`apps/node-backend/src/services/reports/puppeteerRenderer.ts`)
    - `renderHtmlToPdf(html, opts)` → Promise<Buffer>
    - Accepts optional `opts.footerTemplate`, `opts.headerTemplate`, `opts.margin` (Phase 5)
    - Uses Puppeteer headless Chrome with print-to-PDF
@@ -793,7 +793,7 @@ All sections inherit:
 
 ### Print CSS Enhancements (Phase 5 & Phase 7)
 
-**Base CSS** (`apps/node-backend/src/services/reports/index.js`):
+**Base CSS** (`apps/node-backend/src/services/reports/index.ts`):
 
 - `html { background: hsl(var(--surface)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }` — Ensures surface color fills the entire page canvas including `@page` margin boxes, eliminating the white bar above the Puppeteer footer (Phase 5 fix).
 - `@page { margin: 0 0 28px 0; }` — Fixed CSS page rule to align Chrome layout engine with Puppeteer physical 28px footer margin, reserving explicit space for footer without content overflow.
@@ -802,7 +802,7 @@ All sections inherit:
 - `.page-continuation` — New class for logical continuation pages: `padding: 32px 52px 56px; border-top: none; page-break-before: always;` used for tables following charts to ensure tables always start at the top of a fresh page
 - `.section-title` and `.section-subtitle`: `break-after: avoid` prevents orphaning section headers from their content
 
-**Section CSS module** (`apps/node-backend/src/services/reports/sectionHelpers.js`):
+**Section CSS module** (`apps/node-backend/src/services/reports/sectionHelpers.ts`):
 
 ```css
 /* Print break control — prevent orphaning across pages */

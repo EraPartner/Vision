@@ -3,7 +3,7 @@ import { mockConnection } from "../helpers/repoMocks.js";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent } from "../helpers/routeApp.js";
 
-vi.mock("../../src/services/portfolioImportPipeline/index.js", () => ({
+vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 vi.mock("../../src/services/portfolioImportCommitService.js", () => ({

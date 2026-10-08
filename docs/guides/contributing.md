@@ -2,7 +2,7 @@
 title: Contributing Guide
 type: guide
 status: active
-date: 2026-09-24
+date: 2026-10-08
 tags:
   [
     guide,
@@ -339,7 +339,7 @@ bun run db:revision -- "add new_column to transactions"
 Link to code files using Obsidian-style links:
 
 ```markdown
-See [[apps/node-backend/src/services/importPipeline/index.js]] for implementation.
+See [[apps/node-backend/src/services/importPipeline/index.ts]] for implementation.
 ```
 
 ## AI Agent Guidelines

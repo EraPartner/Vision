@@ -2,17 +2,17 @@
 title: Cash Flow Forecast
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-09-25
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-09-05
 tags: [feature, cash-flow, forecast, planning, aggregations, phase-6, phase-10, phase-c, phase-d, phase-e, phase-g, planned-transactions, statistical-forecasting, ensemble-methods, ensemble-v2, empirical-bayes, frontend-visualization, multi-method-forecast, diagnostics-sheet, accuracy-persistence, materialized-cache, nightly-job, category-breakdown, fallback-resilience]
 aliases: [cashflow-forecast, forward-projections, cash-flow-planning, income-expense-forecast, budget-projection, multi-method-forecast, ensemble-forecast, category-breakdown]
 description: Project income and expenses forward based on planned transactions (Phase 6) or using 8 statistical methods including 7 base methods + Ensemble (v2) (Phase 10, F). Phase C adds frontend dashboard visualization with controls, MC confidence bands, and diagnostics panel. Phase E adds nightly cache materialization. Phase G adds per-category breakdown with hierarchical reconciliation. June 2026: ensemble weighting upgraded from plain inverse-MSE to sample-size-shrunk RMSE + uniform-blend floor (empirical Bayes).
 related_code:
-  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
-  - apps/node-backend/src/services/calculations/forecast/index.js
-  - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
-  - apps/node-backend/src/services/calculations/forecast/accuracyStore.js
+  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts
+  - apps/node-backend/src/services/calculations/forecast/index.ts
+  - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.ts
+  - apps/node-backend/src/services/calculations/forecast/accuracyStore.ts
   - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/repositories/plannedTransactionRepository.ts
   - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
@@ -630,7 +630,7 @@ than a fixed nightly time. It records success only after cache persistence compl
 
 ### Phase 6: Planned Projection
 
-**Implementation:** [[apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js]]
+**Implementation:** [[apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts]]
 
 Pure calculation module with no I/O; called by aggregations route. Returns structured forecast data suitable for dashboard widgets, charts, and detailed analysis views.
 
@@ -640,7 +640,7 @@ Pure calculation module with no I/O; called by aggregations route. Returns struc
 
 ### Phase 10: Multi-Method Statistical Forecast
 
-**Implementation:** [[apps/node-backend/src/services/calculations/forecast/index.js]]
+**Implementation:** [[apps/node-backend/src/services/calculations/forecast/index.ts]]
 
 Modular forecast orchestrator with 7 pluggable methods:
 
@@ -692,7 +692,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 - Idempotent upsert per (user_id, method_id, as_of_month)
 - Retrieves full history grouped by method for sparkline construction
 
-**Rewrote accuracyStore:** `apps/node-backend/src/services/calculations/forecast/accuracyStore.js`
+**Rewrote accuracyStore:** `apps/node-backend/src/services/calculations/forecast/accuracyStore.ts`
 
 - Now delegates to Postgres via repository
 - **Fallback (April 2026):** when table is missing or Postgres is unreachable, reverts to in-memory Map for backward compatibility
@@ -740,7 +740,7 @@ Modular forecast orchestrator with 7 pluggable methods:
 - Writes successful computations to cache table; logs per-user success/failure
 - Export: `refreshCashflowForecastMc()` (callable from main.js or tests)
 
-**Cache-Aware Forecast Orchestrator:** Updated `apps/node-backend/src/services/calculations/forecast/index.js`
+**Cache-Aware Forecast Orchestrator:** Updated `apps/node-backend/src/services/calculations/forecast/index.ts`
 
 - New parameter `_forceCache` (default false; internal use by nightly job)
 - Before computing: checks DB cache if not _forceCache and using default MC params (1000 paths, [10,50,90] percentiles)
@@ -778,14 +778,14 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **New Method:** `ensemble_imse` — 8th forecasting method that weights point-estimate methods by inverse-MSE (1/RMSE²) of historical accuracy.
 
-**Implementation:** `apps/node-backend/src/services/calculations/forecast/methods/ensemble.js`
+**Implementation:** `apps/node-backend/src/services/calculations/forecast/methods/ensemble.ts`
 
 - `id = 'ensemble_imse'`, `label = 'Ensemble (inv-MSE)'`
 - `computeWeights(accuracyRows, methodIds)` — Derives per-method weights using inverse-MSE normalization; filters out methods with RMSE ≤ 0; returns normalized Map summing to 1; returns empty map when no accuracy data available
 - `forecast({ forecastDates, methodOutputs, weights })` — Computes weighted-average daily forecasts across point methods (excludes MC methods and errored methods); falls back to equal weights when weights map is empty
 - Not included in `POINT_METHODS` or `MC_METHODS` — excluded from walk-forward backtest to avoid circular dependency on accuracy metrics it consumes
 
-**Orchestrator Integration:** Updated `apps/node-backend/src/services/calculations/forecast/index.js`
+**Orchestrator Integration:** Updated `apps/node-backend/src/services/calculations/forecast/index.ts`
 
 - Ensemble runs after all 7 point+MC methods
 - `getLatestAccuracyByMethod()` wrapped in try-catch; falls back to `[]` if DB unreachable
@@ -1028,7 +1028,7 @@ The rolling forecast endpoint now uses a dedicated materialized cache table:
   - `isFresh(computedAt)` — Check if cached data is within 6-hour TTL
   - `upsert({ userId, todayIso, daysBack, daysForward, filterHash, mcPaths, payload })` — Idempotent cache write (updates computed_at on conflict)
 
-**Cache-Aware Rolling Orchestrator:** Updated `computeCashflowForecastRolling()` in `apps/node-backend/src/services/calculations/forecast/index.js`
+**Cache-Aware Rolling Orchestrator:** Updated `computeCashflowForecastRolling()` in `apps/node-backend/src/services/calculations/forecast/index.ts`
 
 - Before computing: checks DB cache if using default MC params (1000 paths, [10,50,90] percentiles)
   - Returns cached result if fresh (<6h)
@@ -1051,7 +1051,7 @@ the documented diagnostics default.
 
 The rolling forecast now supports walk-forward backtesting and diagnostics via optional `include_backtest` query param. The backtest is **lazy-loaded**: it runs only when the user opens the diagnostics sheet, avoiding on-load computation cost.
 
-**New Function:** `walkForwardBacktestRolling()` in `apps/node-backend/src/services/calculations/forecast/backtest.js`
+**New Function:** `walkForwardBacktestRolling()` in `apps/node-backend/src/services/calculations/forecast/backtest.ts`
 
 - Runs rolling walk-forward backtest across default 8 windows
 - Returns `ForecastDiagnostics`-compatible payload with `window_end` mapped to `month` field for UI consistency

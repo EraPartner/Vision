@@ -2,10 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 import { makeImportStagingRow } from "./builders/domainRows.js";
-import { validateBatch } from "../src/services/importPipeline/validate.js";
-import { stageBatch } from "../src/services/importPipeline/stage.js";
-import { matchBatch } from "../src/services/importPipeline/match.js";
-import { commitBatch } from "../src/services/importPipeline/commit.js";
+import { validateBatch } from "../src/services/importPipeline/validate.ts";
+import { stageBatch } from "../src/services/importPipeline/stage.ts";
+import { matchBatch } from "../src/services/importPipeline/match.ts";
+import { commitBatch } from "../src/services/importPipeline/commit.ts";
 import {
   query,
   poolQuery,
@@ -14,8 +14,8 @@ import {
 import transactionRepository, {
   clearTransactionCountCache,
 } from "../src/repositories/transactionRepository.ts";
-import { getAdapter } from "../src/services/importPipeline/adapters/index.js";
-import { findBestRecipientMatches } from "../src/services/calculations/normalization.js";
+import { getAdapter } from "../src/services/importPipeline/adapters/index.ts";
+import { findBestRecipientMatches } from "../src/services/calculations/normalization.ts";
 import {
   loadActivePatterns,
   applyPatterns,
@@ -32,10 +32,10 @@ vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/services/importPipeline/adapters/index.js", () => ({
+vi.mock("../src/services/importPipeline/adapters/index.ts", () => ({
   getAdapter: vi.fn(),
 }));
-vi.mock("../src/services/calculations/normalization.js", () => ({
+vi.mock("../src/services/calculations/normalization.ts", () => ({
   findBestRecipientMatches: vi.fn(),
   normalizeForMatching: vi.fn(),
 }));

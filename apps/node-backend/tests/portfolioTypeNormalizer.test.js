@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeType } from '../src/services/portfolioImportPipeline/portfolioTypeNormalizer.js';
+import { normalizeType } from '../src/services/portfolioImportPipeline/portfolioTypeNormalizer.ts';
 import { VALID_PORTFOLIO_TXN_TYPES } from '../src/lib/portfolioTxnTypes.ts';
 
 describe('normalizeType', () => {

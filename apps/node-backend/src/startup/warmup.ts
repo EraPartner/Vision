@@ -23,7 +23,7 @@ import {
   warmCache as warmExchangeRateCache,
   clearMemoryCache as clearExchangeRateCache,
   backfillPortfolioHistoricalRates,
-} from "../services/currency/currencyConversionService.js";
+} from "../services/currency/currencyConversionService.ts";
 import {
   warmInflationCache,
   clearInflationMemoryCache,
@@ -42,7 +42,7 @@ import {
 import { warmInfoCaches } from "../routes/info.ts";
 import { backfillTransfersOnce } from "../services/transferReconciliationService.js";
 import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.ts";
-import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";
+import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
 import { isInternetReachable } from "../lib/network.ts";
 import { createDailyJob } from "./dailyJobs.ts";
 import investmentRepository from "../repositories/investmentRepository.ts";

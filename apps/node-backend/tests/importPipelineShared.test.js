@@ -11,7 +11,7 @@ import {
   parseCsvText,
   rawDataForCsvRecord,
   parseCustomAmount,
-} from "../src/services/importPipeline/adapters/_shared.js";
+} from "../src/services/importPipeline/adapters/_shared.ts";
 
 describe("custom numeric grammar", () => {
   it.each([

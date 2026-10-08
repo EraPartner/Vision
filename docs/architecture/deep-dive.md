@@ -2,8 +2,8 @@
 title: Architecture Deep Dive
 type: architecture-doc
 status: active
-date: 2026-09-09
-updated: 2026-09-09
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     architecture,
@@ -100,7 +100,7 @@ Bank Adapter Interface:
 - WiseAdapter
 - VisionAdapter
 
-**Implementation:** [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
+**Implementation:** [[apps/node-backend/src/services/importPipeline/adapters/index.ts]]
 
 ### 3. Chain of Responsibility (Price Providers)
 
@@ -152,7 +152,7 @@ Import Pipeline:
 6. Create transactions (fixed)
 ```
 
-**Implementation:** [[apps/node-backend/src/services/importPipeline/index.js]] (Phase C unified orchestrator)
+**Implementation:** [[apps/node-backend/src/services/importPipeline/index.ts]] (Phase C unified orchestrator)
 
 ---
 

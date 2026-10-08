@@ -35,7 +35,7 @@ import {
   __assertRetagPreservesPartitionUnits as assertRetagPreservesPartitionUnits,
   __fingerprintRetagRequest as fingerprintRetagRequest,
   __retagPortfolioTransactions as retagPortfolioTransactions,
-} from "../src/services/portfolio/portfolioBrokerRetagService.js";
+} from "../src/services/portfolio/portfolioBrokerRetagService.ts";
 import {
   ConflictError,
   ValidationError,

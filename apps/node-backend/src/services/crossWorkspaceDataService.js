@@ -13,8 +13,8 @@ import { query } from "../database/connection.ts";
 import {
   convertToCurrency,
   convertWithRates,
-} from "./currency/currencyConversionService.js";
-import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.js";
+} from "./currency/currencyConversionService.ts";
+import { getPortfolioSummary } from "./portfolio/portfolioSummaryService.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import { todayAppDateString } from "../lib/timezone.ts";

@@ -2,8 +2,8 @@
 title: Ollama Integration
 type: integration
 status: active
-date: 2026-10-07
-updated: 2026-09-13
+date: 2026-10-08
+updated: 2026-10-08
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
@@ -115,7 +115,7 @@ The system prompt requires reconciled financial results to use the canonical rep
 
 Persisted history stores final assistant text and tool-result rows, but not the assistant `tool_calls` frame that originally preceded each result. Replayed history can therefore contain an orphan `role: "tool"` message. Ollama accepts this lenient shape. A future stricter provider requires either a history adapter or persistence of the original assistant tool-call frames.
 
-See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and [[apps/node-backend/src/services/aiChat/tools/index.js|tools/index.js]] for the registry.
+See [[docs/security/ai-data-access|AI Data Access]] for the allowlist policy and [[apps/node-backend/src/services/aiChat/tools/index.ts|tools/index.js]] for the registry.
 
 ## Context Window Management
 

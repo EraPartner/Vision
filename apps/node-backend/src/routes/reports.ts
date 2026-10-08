@@ -15,8 +15,8 @@
 import { Router } from "express";
 import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
-import { generateReport } from "../services/reports/index.js";
-import { HSL_COMPONENT_RE } from "../services/reports/themeCss.js";
+import { generateReport } from "../services/reports/index.ts";
+import { HSL_COMPONENT_RE } from "../services/reports/themeCss.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();

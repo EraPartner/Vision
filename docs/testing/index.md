@@ -2,8 +2,8 @@
 title: Testing Documentation Index
 type: testing-index
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 last-updated: 2026-10-06
 modified: 2026-10-06
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -243,14 +243,14 @@ bun vitest run src/path/to/test.test.js
 
 - Added targeted backend adapter/import branch coverage for Wise, SABB, and Vision adapters plus import orchestration paths.
 - Tests: [[apps/node-backend/tests/wiseAdapter.test.js]], [[apps/node-backend/tests/sabbAdapter.test.js]], [[apps/node-backend/tests/visionAdapter.test.js]], [[apps/node-backend/tests/routes/import.test.js]] (Phase C)
-- Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
+- Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]]
 - Details and validation context: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 
 ### Coverage update addendum (2026-04-11, info route dependency branches)
 
 - Added targeted backend coverage for info-route dependency orchestration, stale FX refresh branching, recurring-pattern fallback semantics, and cache prewarm failure isolation.
 - Tests: [[apps/node-backend/tests/routes/info.test.js]]
-- Related source: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+- Related source: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/database/connection.ts]], [[apps/node-backend/src/services/recurringDetectionService.js]], [[apps/node-backend/src/services/materializedViewService.js]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Validation + coverage snapshot: `bun vitest run tests/routes/info.test.js`; `npm test -- --coverage`; overall `81.12/66.86/84.49/84.53`, `info.js` `93.62/78.72/100/94.58` (statements/branches/functions/lines).
 - Details: [[docs/testing/testing|Testing Documentation]], [[docs/testing/test-inventory|Test Inventory]]
 

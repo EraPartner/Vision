@@ -12,17 +12,17 @@ vi.mock("../src/database/connection.ts", () =>
   }),
 );
 
-vi.mock("../src/services/portfolioImportPipeline/commit.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/commit.ts", () => ({
   commitBatch: vi.fn(),
 }));
 
-vi.mock("../src/services/info/cache.js", () => ({
+vi.mock("../src/services/info/cache.ts", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
 import { query } from "../src/database/connection.ts";
-import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
-import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.js";
+import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
+import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.ts";
 import {
   lockInvestmentResolutionRows,
   overrideInvestment,

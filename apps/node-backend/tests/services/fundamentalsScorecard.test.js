@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fundamentalsScorecard } from '../../src/services/research/fundamentalsScorecard.js';
+import { fundamentalsScorecard } from '../../src/services/research/fundamentalsScorecard.ts';
 
 describe('fundamentalsScorecard', () => {
   it('returns an unknown grade with no flags for empty input', () => {

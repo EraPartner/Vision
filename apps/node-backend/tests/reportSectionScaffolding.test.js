@@ -9,32 +9,32 @@ import {
   emptySection,
   filterNotice,
   sectionPage,
-} from "../src/services/reports/sectionHelpers.js";
+} from "../src/services/reports/sectionHelpers.ts";
 import {
   __buildPerformanceTrendData as buildPerformanceTrendData,
   __buildPortfolioExecutiveSummaryData as buildPortfolioExecutiveSummaryData,
   __normalizeBreakdownRow as normalizeBreakdownRow,
-} from "../src/services/reports/dataFetcherPortfolio.js";
-import { renderAssetClassDetail } from "../src/services/reports/sections/assetClassDetail.js";
-import { renderBankBalances } from "../src/services/reports/sections/bankBalances.js";
-import { renderBelgianRulesSummary } from "../src/services/reports/sections/belgianRulesSummary.js";
-import { renderCashflowTrend } from "../src/services/reports/sections/cashflowTrend.js";
-import { renderCategoryBreakdown } from "../src/services/reports/sections/categoryBreakdown.js";
-import { renderDividendIncome } from "../src/services/reports/sections/dividendIncome.js";
-import { renderExecutiveSummary } from "../src/services/reports/sections/executiveSummary.js";
-import { renderFeeBreakdown } from "../src/services/reports/sections/feeBreakdown.js";
-import { renderPerformanceTrend } from "../src/services/reports/sections/performanceTrend.js";
-import { renderPlannedOutlook } from "../src/services/reports/sections/plannedOutlook.js";
-import { renderPortfolioAllocation } from "../src/services/reports/sections/portfolioAllocation.js";
-import { renderPortfolioExecutiveSummary } from "../src/services/reports/sections/portfolioExecutiveSummary.js";
-import { renderRollingAverages } from "../src/services/reports/sections/rollingAverages.js";
-import { renderTaxByAssetClass } from "../src/services/reports/sections/taxByAssetClass.js";
-import { renderTaxExecutiveSummary } from "../src/services/reports/sections/taxExecutiveSummary.js";
-import { renderTaxMonthlyTrend } from "../src/services/reports/sections/taxMonthlyTrend.js";
-import { renderTaxTypeBreakdown } from "../src/services/reports/sections/taxTypeBreakdown.js";
-import { renderTopHoldings } from "../src/services/reports/sections/topHoldings.js";
-import { renderTopInvestmentsByCost } from "../src/services/reports/sections/topInvestmentsByCost.js";
-import { renderTopRecipients } from "../src/services/reports/sections/topRecipients.js";
+} from "../src/services/reports/dataFetcherPortfolio.ts";
+import { renderAssetClassDetail } from "../src/services/reports/sections/assetClassDetail.ts";
+import { renderBankBalances } from "../src/services/reports/sections/bankBalances.ts";
+import { renderBelgianRulesSummary } from "../src/services/reports/sections/belgianRulesSummary.ts";
+import { renderCashflowTrend } from "../src/services/reports/sections/cashflowTrend.ts";
+import { renderCategoryBreakdown } from "../src/services/reports/sections/categoryBreakdown.ts";
+import { renderDividendIncome } from "../src/services/reports/sections/dividendIncome.ts";
+import { renderExecutiveSummary } from "../src/services/reports/sections/executiveSummary.ts";
+import { renderFeeBreakdown } from "../src/services/reports/sections/feeBreakdown.ts";
+import { renderPerformanceTrend } from "../src/services/reports/sections/performanceTrend.ts";
+import { renderPlannedOutlook } from "../src/services/reports/sections/plannedOutlook.ts";
+import { renderPortfolioAllocation } from "../src/services/reports/sections/portfolioAllocation.ts";
+import { renderPortfolioExecutiveSummary } from "../src/services/reports/sections/portfolioExecutiveSummary.ts";
+import { renderRollingAverages } from "../src/services/reports/sections/rollingAverages.ts";
+import { renderTaxByAssetClass } from "../src/services/reports/sections/taxByAssetClass.ts";
+import { renderTaxExecutiveSummary } from "../src/services/reports/sections/taxExecutiveSummary.ts";
+import { renderTaxMonthlyTrend } from "../src/services/reports/sections/taxMonthlyTrend.ts";
+import { renderTaxTypeBreakdown } from "../src/services/reports/sections/taxTypeBreakdown.ts";
+import { renderTopHoldings } from "../src/services/reports/sections/topHoldings.ts";
+import { renderTopInvestmentsByCost } from "../src/services/reports/sections/topInvestmentsByCost.ts";
+import { renderTopRecipients } from "../src/services/reports/sections/topRecipients.ts";
 
 const currency = "EUR";
 const period = { kind: "year", year: 2026 };
@@ -548,7 +548,7 @@ describe("report section scaffolding", () => {
       new URL("../src/services/reports/sections/", import.meta.url),
     );
     const files = (await readdir(sectionDirectory)).filter((file) =>
-      file.endsWith(".js"),
+      file.endsWith(".ts"),
     );
 
     expect(files).toHaveLength(20);
@@ -593,7 +593,7 @@ describe("portfolio breakdown normalization", () => {
   it("is wired into the portfolio fetch boundary", async () => {
     const source = await readFile(
       new URL(
-        "../src/services/reports/dataFetcherPortfolio.js",
+        "../src/services/reports/dataFetcherPortfolio.ts",
         import.meta.url,
       ),
       "utf8",

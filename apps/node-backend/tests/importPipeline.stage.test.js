@@ -25,11 +25,11 @@ vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/services/importPipeline/adapters/index.js", () => ({
+vi.mock("../src/services/importPipeline/adapters/index.ts", () => ({
   getAdapter: (...args) => getAdapter(...args),
 }));
 
-vi.mock("../src/services/importPipeline/adapters/generic.js", () => ({
+vi.mock("../src/services/importPipeline/adapters/generic.ts", () => ({
   default: {
     name: "generic",
     parseWithConfig: (...args) => genericParseWithConfig(...args),
@@ -37,7 +37,7 @@ vi.mock("../src/services/importPipeline/adapters/generic.js", () => ({
 }));
 
 vi.mock(
-  "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js",
+  "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts",
   () => ({
     parseWithConfig: (...args) => portfolioParseWithConfig(...args),
   }),
@@ -46,11 +46,11 @@ vi.mock(
 import {
   stageBatch,
   createBatch,
-} from "../src/services/importPipeline/stage.js";
+} from "../src/services/importPipeline/stage.ts";
 import {
   createBatch as createPortfolioBatch,
   stageBatch as stagePortfolioBatch,
-} from "../src/services/portfolioImportPipeline/stage.js";
+} from "../src/services/portfolioImportPipeline/stage.ts";
 import { query } from "../src/database/connection.ts";
 
 const CONFIG = { dateColumn: "D", recipientColumn: "R", amountColumn: "A" };

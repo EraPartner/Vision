@@ -2,8 +2,8 @@
 title: Environment Variables Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     reference,
@@ -56,7 +56,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 > - **Runtime user settings** — persisted per-install and editable in-app; these **override** a
 >   build-time default once settings hydrate. Examples: the `colorblindGainLoss` setting overrides
 >   `VITE_SKIN_V2` (see `lib/skin.ts`, with a `localStorage` mirror for first paint), and a
->   Settings-managed provider key overrides its env-var counterpart (`services/research/providerKeys.js`).
+>   Settings-managed provider key overrides its env-var counterpart (`services/research/providerKeys.ts`).
 >
 > **Precedence is surface-specific.** For frontend presentation defaults, a persisted user setting
 > overrides a build-time `VITE_` default, which overrides the coded default. For provider keys, a
@@ -101,7 +101,7 @@ aliases: [env vars, environment variables, .env, configuration, env]
 | `VISION_RUNTIME_ROOT`          | Repository root                                                            | No       | Root containing the packaged native migrations, grants template, config, and frontend payload. Set by the native runtime; operators normally do not override it.                                                                                                                                                                                                                | [[apps/node-backend/src/database/migrate.ts\|migrate.js]], [[apps/node-backend/src/database/roleBootstrap.ts\|roleBootstrap.js]]                                                                                                    |
 | `VISION_DIST_DIR`              | `<repo_root>/apps/frontend/dist`                                           | No       | Absolute production frontend directory served by the native backend. Set to the packaged `native-runtime/dist` directory by Electron.                                                                                                                                                                                                                                           | [[apps/node-backend/src/main.js\|main.js]]                                                                                                                                                                                          |
 | `VISION_SKIP_CONFIG_ENV_LOCAL` | `false`                                                                    | No       | When `true`, Alembic ignores the legacy `config/.env.local` layer. Native children set this so checkout settings cannot replace generated native database URLs.                                                                                                                                                                                                                 | [[alembic/env.py\|env.py]]                                                                                                                                                                                                          |
-| `PUPPETEER_EXECUTABLE_PATH`    | _(unset)_                                                                  | No       | Path to Chrome/Chromium used for PDF reports. Native Electron verifies the bundled Chrome Headless Shell and sets this explicitly. A standalone backend may rely on Puppeteer's normal discovery.                                                                                                                                                                               | [[apps/node-backend/src/services/reports/puppeteerRenderer.js\|puppeteerRenderer.js]], [[packaging/electron/runtime/native.js\|native.js]]                                                                                          |
+| `PUPPETEER_EXECUTABLE_PATH`    | _(unset)_                                                                  | No       | Path to Chrome/Chromium used for PDF reports. Native Electron verifies the bundled Chrome Headless Shell and sets this explicitly. A standalone backend may rely on Puppeteer's normal discovery.                                                                                                                                                                               | [[apps/node-backend/src/services/reports/puppeteerRenderer.ts\|puppeteerRenderer.js]], [[packaging/electron/runtime/native.js\|native.js]]                                                                                          |
 
 `VISION_BASELINE_BRIDGE_APPROVED=1` is an internal one-run flag used by the
 restore-tested `db:bridge-baseline` command and the disposable PostgreSQL test
@@ -191,11 +191,11 @@ keyed — Yahoo needs no key). See
 
 | Variable                | Default | Required | Description                                                                                                                                                                 | Code                                                                         |
 | ----------------------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `TWELVE_DATA_API_KEY`   | —       | No       | Twelve Data key — quotes/charts (free tier 8/min, 800/day)                                                                                                                  | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
-| `FINNHUB_API_KEY`       | —       | No       | Finnhub key — news, US fundamentals (free tier 60/min)                                                                                                                      | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
-| `FMP_API_KEY`           | —       | No       | Financial Modeling Prep key — fundamentals (free tier 250/day)                                                                                                              | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
-| `ALPHA_VANTAGE_API_KEY` | —       | No       | Alpha Vantage key — fallback quotes/fundamentals (free tier ~25/day)                                                                                                        | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
-| `FRED_API_KEY`          | —       | No       | FRED key — macroeconomic series open search + fetch (ADR-082; free, ~120/min, get one at fredaccount.stlouisfed.org/apikeys). Eurostat/DBnomics macro providers need no key | [[apps/node-backend/src/services/research/providerKeys.js\|providerKeys.js]] |
+| `TWELVE_DATA_API_KEY`   | —       | No       | Twelve Data key — quotes/charts (free tier 8/min, 800/day)                                                                                                                  | [[apps/node-backend/src/services/research/providerKeys.ts\|providerKeys.js]] |
+| `FINNHUB_API_KEY`       | —       | No       | Finnhub key — news, US fundamentals (free tier 60/min)                                                                                                                      | [[apps/node-backend/src/services/research/providerKeys.ts\|providerKeys.js]] |
+| `FMP_API_KEY`           | —       | No       | Financial Modeling Prep key — fundamentals (free tier 250/day)                                                                                                              | [[apps/node-backend/src/services/research/providerKeys.ts\|providerKeys.js]] |
+| `ALPHA_VANTAGE_API_KEY` | —       | No       | Alpha Vantage key — fallback quotes/fundamentals (free tier ~25/day)                                                                                                        | [[apps/node-backend/src/services/research/providerKeys.ts\|providerKeys.js]] |
+| `FRED_API_KEY`          | —       | No       | FRED key — macroeconomic series open search + fetch (ADR-082; free, ~120/min, get one at fredaccount.stlouisfed.org/apikeys). Eurostat/DBnomics macro providers need no key | [[apps/node-backend/src/services/research/providerKeys.ts\|providerKeys.js]] |
 
 ## Experimental Codex App Server
 

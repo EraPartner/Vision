@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runPortfolioForecast } from '../../src/services/research/projection/portfolioProjection.js';
+import { runPortfolioForecast } from '../../src/services/research/projection/portfolioProjection.ts';
 
 /** Deterministic value series (Math.sin is host-stable) with positive drift + noise. */
 function buildSnapshots(n = 200) {

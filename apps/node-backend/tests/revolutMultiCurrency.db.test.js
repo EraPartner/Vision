@@ -48,7 +48,7 @@ import {
   prepareImport,
   runImportPipeline,
   commitImport,
-} from "../src/services/importPipeline/index.js";
+} from "../src/services/importPipeline/index.ts";
 import { accountService } from "../src/services/accountService.js";
 import { closePool } from "../src/database/connection.ts";
 
