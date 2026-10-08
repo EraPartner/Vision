@@ -6,7 +6,7 @@ import {
   budgetingIdentityBase,
   __computeSourceRecordHash as computeSourceRecordHash,
   portfolioIdentityBase,
-} from "../src/services/importIdentity.js";
+} from "../src/services/importIdentity.ts";
 
 const budgetRow = (overrides = {}) => ({
   tx_date: "2026-09-09",

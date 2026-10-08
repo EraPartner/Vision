@@ -57,7 +57,7 @@ vi.mock("../../src/services/importPipeline/index.ts", () => ({
   commitImport: vi.fn(),
 }));
 
-vi.mock("../../src/services/dataImportService.js", () => ({
+vi.mock("../../src/services/dataImportService.ts", () => ({
   importRecipientsCSV: vi.fn(),
   importCategoriesCSV: vi.fn(),
 }));
@@ -76,7 +76,7 @@ vi.mock("../../src/repositories/importBatchRepository.ts", () => ({
   categoryExists: vi.fn(),
 }));
 
-vi.mock("../../src/services/aggregationRefresh.js", () => ({
+vi.mock("../../src/services/aggregationRefresh.ts", () => ({
   clearForecastMcCaches: vi.fn().mockResolvedValue(undefined),
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
@@ -104,7 +104,7 @@ import { createBatch } from "../../src/services/importPipeline/stage.ts";
 import {
   importCategoriesCSV,
   importRecipientsCSV,
-} from "../../src/services/dataImportService.js";
+} from "../../src/services/dataImportService.ts";
 import {
   getBatch,
   getPreviewRows,

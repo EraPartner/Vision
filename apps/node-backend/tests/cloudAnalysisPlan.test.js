@@ -3,7 +3,7 @@ import {
   executeCloudAnalysisPlan,
   getPublicCloudAnalysisCatalog,
   parseCloudAnalysisPlans,
-} from "../src/services/cloudAnalysisPlan.js";
+} from "../src/services/cloudAnalysisPlan.ts";
 
 const spendingPlan = {
   schemaVersion: 1,

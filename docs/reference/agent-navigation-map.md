@@ -50,7 +50,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Action Dialogs   | [[apps/frontend/src/features/transactions/components/bulk/BulkRecategorizeDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkRecipientDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkExportDialog.tsx]], [[apps/frontend/src/features/transactions/components/bulk/BulkTagDialog.tsx]] |
 | Hook             | `useBulkDeleteTransactions`, `useBulkUpdateTransactions`, `useBulkExportTransactions` in [[apps/frontend/src/hooks/useTransactions.ts]]                                                                                                                                                                                                      |
 | API Client       | `bulkDeleteTransactions()`, `bulkUpdateTransactions()`, `bulkExportTransactions()` in [[apps/frontend/src/lib/api/transactions.ts]]                                                                                                                                                                                                          |
-| Backend Service  | [[apps/node-backend/src/services/bulkSelection.js]] (id/filter resolver), [[apps/node-backend/src/services/transactionExport.js]] (streaming export)                                                                                                                                                                                         |
+| Backend Service  | [[apps/node-backend/src/services/bulkSelection.ts]] (id/filter resolver), [[apps/node-backend/src/services/transactionExport.ts]] (streaming export)                                                                                                                                                                                         |
 | Backend Route    | [[apps/node-backend/src/routes/transactions.ts]] (`/bulk-delete`, `/bulk-update`, `/bulk-export`)                                                                                                                                                                                                                                            |
 | API Doc          | [[docs/api/transactions#post-apitransactionsbulk-delete                                                                                                                                                                                                                                                                                      | Bulk Delete]], [[docs/api/transactions#post-apitransactionsbulk-update | Bulk Update]], [[docs/api/transactions#post-apitransactionsbulk-export | Bulk Export]] |
 | Feature Doc      | [[docs/features/bulk-actions]]                                                                                                                                                                                                                                                                                                               |
@@ -86,7 +86,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Recurring Detection | [[apps/frontend/src/features/planned/RecurringDetectionPanel.tsx]]                                                             |
 | Backend Route       | [[apps/node-backend/src/routes/plannedTransactions.ts]]                                                                        |
 | Backend Repository  | [[apps/node-backend/src/repositories/plannedTransactionRepository.ts]]                                                         |
-| Backend Service     | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.js]] |
+| Backend Service     | [[apps/node-backend/src/services/calculations/recurrence.js]], [[apps/node-backend/src/services/recurringDetectionService.ts]] |
 | API Doc             | [[docs/api/plannedTransactions]]                                                                                               |
 | Feature Doc         | [[docs/features/plannedTransactions]]                                                                                          |
 
@@ -106,7 +106,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Dialogs            | [[apps/frontend/src/features/portfolio/AddInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]], [[apps/frontend/src/features/portfolio/InvestmentDetailDialog.tsx]] |
 | Backend Route      | [[apps/node-backend/src/routes/investments.ts]]                                                                                                                                                          |
 | Backend Repository | [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/repositories/watchlistRepository.ts]]  |
-| Backend Services   | [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]                                                                    |
+| Backend Services   | [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]                                                                    |
 | API Doc            | [[docs/api/investments]], [[docs/api/watchlist]], [[docs/api/marketLookup]]                                                                                                                              |
 | Feature Doc        | [[docs/features/portfolio]]                                                                                                                                                                              |
 
@@ -145,7 +145,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | [[apps/frontend/src/features/imports/CsvColumnMapper.tsx]]   | CSV column mapping UI (used by TransactionImportCard) |
 
 **Backend Route** | [[apps/node-backend/src/routes/importRoutes.ts]] |
-**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.ts|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.ts|adapter registry]], [[apps/node-backend/src/services/deduplication.js]], [[apps/node-backend/src/lib/textNormalization.ts]] |
+**Backend Services** | [[apps/node-backend/src/services/importPipeline/index.ts|importPipeline]] (orchestrator), [[apps/node-backend/src/services/importPipeline/adapters/index.ts|adapter registry]], [[apps/node-backend/src/services/deduplication.ts]], [[apps/node-backend/src/lib/textNormalization.ts]] |
 | API Doc | [[docs/api/imports]] |
 | Feature Doc | [[docs/features/import]] |
 
@@ -156,7 +156,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Frontend Page       | [[apps/frontend/src/pages/TaxOverviewPage.tsx]]                                                                                |
 | Components          | [[apps/frontend/src/features/tax/TaxProfileDialog.tsx]], [[apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx]]        |
 | State and hydration | [[apps/frontend/src/stores/belgianTaxStore.ts]], [[apps/frontend/src/contexts/BelgianTaxProfileContext.tsx]]                   |
-| Backend Service     | [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/services/calculations/loanSchedule.ts]] |
+| Backend Service     | [[apps/node-backend/src/services/belgianInflationService.ts]], [[apps/node-backend/src/services/calculations/loanSchedule.ts]] |
 | Feature Doc         | [[docs/features/belgian-tax]]                                                                                                  |
 | Integration Doc     | [[docs/integrations/belgian-inflation]], [[docs/integrations/loan-repayment-service]]                                          |
 
@@ -168,7 +168,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 | Components      | [[apps/frontend/src/components/shared/StatCard.tsx]], [[apps/frontend/src/features/dashboard/MonthlyTrendsChart.tsx]], [[apps/frontend/src/features/dashboard/CategoryPieChart.tsx]], [[apps/frontend/src/features/dashboard/CashFlowForecastChart.tsx]], [[apps/frontend/src/features/dashboard/BankBalancesWidget.tsx]], [[apps/frontend/src/features/dashboard/MonthToDateHero.tsx]], [[apps/frontend/src/features/dashboard/NeedsAttentionList.tsx]], [[apps/frontend/src/features/dashboard/NetWorthCard.tsx]], [[apps/frontend/src/features/dashboard/UpcomingPaymentsList.tsx]], [[apps/frontend/src/features/dashboard/AccountsList.tsx]], [[apps/frontend/src/features/dashboard/RecentTransactionsList.tsx]] |
 | Settings Dialog | [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]]                                                                                                                                                                                                                                                       |
 | Hook            | [[apps/frontend/src/hooks/useFilteredDashboardStats.ts]]                                                                                                                                                                                                                                                                  |
-| Backend Service | [[apps/node-backend/src/services/materializedViewService.js]]                                                                                                                                                                                                                                                             |
+| Backend Service | [[apps/node-backend/src/services/materializedViewService.ts]]                                                                                                                                                                                                                                                             |
 
 ### Onboarding
 
@@ -290,21 +290,21 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 
 | Service               | File                                                                                       |
 | --------------------- | ------------------------------------------------------------------------------------------ |
-| AI Chat               | [[apps/node-backend/src/services/aiChatService.js]]                                        |
+| AI Chat               | [[apps/node-backend/src/services/aiChatService.ts]]                                        |
 | Bank Adapters         | [[apps/node-backend/src/services/importPipeline/adapters/index.ts]]                        |
-| Belgian Inflation     | [[apps/node-backend/src/services/belgianInflationService.js]]                              |
+| Belgian Inflation     | [[apps/node-backend/src/services/belgianInflationService.ts]]                              |
 | Currency Conversion   | [[apps/node-backend/src/services/currency/currencyConversionService.ts]]                   |
-| Data Import           | [[apps/node-backend/src/services/dataImportService.js]]                                    |
-| Deduplication         | [[apps/node-backend/src/services/deduplication.js]]                                        |
+| Data Import           | [[apps/node-backend/src/services/dataImportService.ts]]                                    |
+| Deduplication         | [[apps/node-backend/src/services/deduplication.ts]]                                        |
 | IBAN                  | ~~[[apps/node-backend/src/services/iban.js]]~~ (deleted 2026-05-29; validation now inline) |
 | Import Pipeline       | [[apps/node-backend/src/services/importPipeline/index.ts]] (Phase C)                       |
 | Loan Repayment        | [[apps/node-backend/src/services/calculations/loanSchedule.ts]]                            |
-| Materialized Views    | [[apps/node-backend/src/services/materializedViewService.js]]                              |
-| Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]                  |
-| Price Provider        | [[apps/node-backend/src/services/priceProviderService.js]]                                 |
-| Quote Backfill        | [[apps/node-backend/src/services/quoteBackfillService.js]]                                 |
+| Materialized Views    | [[apps/node-backend/src/services/materializedViewService.ts]]                              |
+| Portfolio Performance | [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]                  |
+| Price Provider        | [[apps/node-backend/src/services/priceProviderService.ts]]                                 |
+| Quote Backfill        | [[apps/node-backend/src/services/quoteBackfillService.ts]]                                 |
 | Recurrence            | [[apps/node-backend/src/services/calculations/recurrence.js]]                              |
-| Recurring Detection   | [[apps/node-backend/src/services/recurringDetectionService.js]]                            |
+| Recurring Detection   | [[apps/node-backend/src/services/recurringDetectionService.ts]]                            |
 | Text Normalization    | [[apps/node-backend/src/lib/textNormalization.ts]]                                         |
 
 ### Database

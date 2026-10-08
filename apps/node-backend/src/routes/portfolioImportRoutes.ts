@@ -37,12 +37,12 @@ import {
   createInvestmentForRow,
   resolveInvestmentRows,
   rollbackBatch,
-} from "../services/portfolioImportBatchService.js";
+} from "../services/portfolioImportBatchService.ts";
 import {
   commitReviewedPortfolioImport,
   commitReviewedPortfolioImports,
-} from "../services/portfolioImportCommitService.js";
-import { previewPortfolioImportReconciliation } from "../services/portfolioImportReconciliationService.js";
+} from "../services/portfolioImportCommitService.ts";
+import { previewPortfolioImportReconciliation } from "../services/portfolioImportReconciliationService.ts";
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import {
   CSV_NUMBER_FORMATS,
@@ -54,7 +54,7 @@ import {
   assertPortfolioImportAccount,
   buildPortfolioImportPreviewRouting,
   getPortfolioImportAccountForPreview,
-} from "../services/portfolioImportAccountService.js";
+} from "../services/portfolioImportAccountService.ts";
 
 const router = Router();
 
@@ -817,15 +817,11 @@ router.post("/reconciliation/preview", async (req, res) => {
       batchIds: input.batch_ids,
       adoptPolicy: input.adopt_policy,
       reconciliationScope: input.reconciliation_scope,
-      // The JS service has no @param types, so tsc infers its
-      // `cashFundingPolicy = undefined` default as undefined and its
-      // `batchPolicies = []` default as never[]; these zod-validated values are
-      // the shapes it reads.
-      cashFundingPolicy: input.cash_funding_policy as undefined,
+      cashFundingPolicy: input.cash_funding_policy,
       batchPolicies: input.batch_policies?.map((policy) => ({
         batchId: policy.batch_id,
         adoptPolicy: policy.adopt_policy,
-      })) as never[] | undefined,
+      })),
     }),
   );
 });
@@ -836,12 +832,11 @@ router.post("/reconciliation/commit", async (req, res) => {
     batchIds: input.batch_ids,
     adoptPolicy: input.adopt_policy,
     reconciliationScope: input.reconciliation_scope,
-    // Same undefined and never[] inference as the preview call above.
-    cashFundingPolicy: input.cash_funding_policy as undefined,
+    cashFundingPolicy: input.cash_funding_policy,
     batchPolicies: input.batch_policies?.map((policy) => ({
       batchId: policy.batch_id,
       adoptPolicy: policy.adopt_policy,
-    })) as never[] | undefined,
+    })),
     expectedPlanFingerprint: input.expected_plan_fingerprint,
   });
   logger.info("[portfolio-import] reviewed scope committed", {

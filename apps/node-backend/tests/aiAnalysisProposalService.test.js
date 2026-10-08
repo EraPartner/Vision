@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { __buildDefinition } from "../src/services/savedAnalysisService.js";
+import { __buildDefinition } from "../src/services/savedAnalysisService.ts";
 import {
   __applyOperations,
   __querySpecFromDefinition,
-} from "../src/services/aiAnalysisProposalService.js";
+} from "../src/services/aiAnalysisProposalService.ts";
 
 describe("AI analysis proposal boundary", () => {
   it("edits only the requested path without losing the existing scope", () => {
@@ -63,6 +63,42 @@ describe("AI analysis proposal boundary", () => {
       mode: "sql",
       visualOrigin: { datasetId: "accounts", fields: ["account_name"] },
     });
+  });
+
+  it("maps a sorted visual definition back to plan sort ids", () => {
+    const plan = {
+      datasetId: "cash-flows",
+      fields: ["month", "currency"],
+      groups: ["month", "currency"],
+      measures: ["sum_spending"],
+      filters: [],
+      joins: [],
+      orderBy: [{ id: "month", direction: "desc" }],
+      limit: 500,
+    };
+    const definition = __buildDefinition({
+      definitionId: "analysis:sorted",
+      version: 1,
+      name: "Sorted",
+      workspace: "budgeting",
+      parameters: {},
+      querySpec: { mode: "visual", plan },
+    });
+
+    const spec = __querySpecFromDefinition(definition);
+    expect(spec.plan.orderBy).toEqual([{ id: "month", direction: "desc" }]);
+    // The round trip must compile again; an `outputId` entry threw
+    // "Unsupported sort output: undefined" here.
+    expect(() =>
+      __buildDefinition({
+        definitionId: "analysis:sorted",
+        version: 2,
+        name: "Sorted",
+        workspace: "budgeting",
+        parameters: {},
+        querySpec: spec,
+      }),
+    ).not.toThrow();
   });
 
   it("rejects prototype and invalid array paths", () => {

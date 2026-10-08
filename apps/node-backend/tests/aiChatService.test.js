@@ -50,7 +50,7 @@ import {
   listConversations,
   runChatTurn,
   __constants,
-} from "../src/services/aiChatService.js";
+} from "../src/services/aiChatService.ts";
 
 function makeConversation(overrides = {}) {
   return {

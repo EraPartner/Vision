@@ -15,11 +15,11 @@ vi.mock("../src/repositories/insightDismissalRepository.ts", () => ({
   },
 }));
 
-vi.mock("../src/services/categoryOutlierService.js", () => ({
+vi.mock("../src/services/categoryOutlierService.ts", () => ({
   detectCategoryOutliers: mocks.detectCategoryOutliers,
 }));
 
-import { dismissInsight } from "../src/services/insightDismissalService.js";
+import { dismissInsight } from "../src/services/insightDismissalService.ts";
 import { NotFoundError } from "../src/middleware/errorHandler.ts";
 
 describe("insightDismissalService", () => {

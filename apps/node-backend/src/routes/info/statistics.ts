@@ -13,13 +13,13 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import infoService from "../../services/infoService.js";
-import { detectRecurringPatterns } from "../../services/recurringDetectionService.js";
+import infoService from "../../services/infoService.ts";
+import { detectRecurringPatterns } from "../../services/recurringDetectionService.ts";
 import {
   getInsightsCount,
   getInsightsDigest,
-} from "../../services/insightsDigestService.js";
-import { dismissInsight } from "../../services/insightDismissalService.js";
+} from "../../services/insightsDigestService.ts";
+import { dismissInsight } from "../../services/insightDismissalService.ts";
 import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.ts";
 import { listAdapters } from "../../services/importPipeline/adapters/index.ts";
 import { logger } from "../../config/logger.ts";

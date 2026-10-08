@@ -37,7 +37,7 @@ vi.mock("../src/services/portfolio/portfolioAssetAdjustmentService.ts", () => ({
   previewPortfolioAssetAdjustment: vi.fn(),
 }));
 vi.mock(
-  "../src/services/portfolioImportDuplicateRepairService.js",
+  "../src/services/portfolioImportDuplicateRepairService.ts",
   async (importOriginal) => ({
     ...(await importOriginal()),
     getActiveDuplicateRepairReceipts: vi.fn().mockResolvedValue([]),
@@ -70,7 +70,7 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
 import { query, withTransaction } from "../src/database/connection.ts";
 import portfolioTransactionRepository from "../src/repositories/portfolioTransactionRepository.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
-import { getActiveDuplicateRepairReceipts } from "../src/services/portfolioImportDuplicateRepairService.js";
+import { getActiveDuplicateRepairReceipts } from "../src/services/portfolioImportDuplicateRepairService.ts";
 import {
   getRowForInvestmentCreation,
   lockBatchForUpdate,
@@ -87,7 +87,7 @@ import {
   getPortfolioImportBatchPreview,
   resolveInvestmentRows,
   rollbackBatch,
-} from "../src/services/portfolioImportBatchService.js";
+} from "../src/services/portfolioImportBatchService.ts";
 
 /**
  * Default query mock: answer rollbackBatch's is_brokerage lookup (true unless a

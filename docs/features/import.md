@@ -72,10 +72,10 @@ related_code:
     "apps/node-backend/src/services/importPipeline/validate.ts",
     "apps/node-backend/src/services/importPipeline/match.ts",
     "apps/node-backend/src/services/importPipeline/commit.ts",
-    "apps/node-backend/src/services/importIdentity.js",
-    "apps/node-backend/src/services/importBatchService.js",
-    "apps/node-backend/src/services/dataImportService.js",
-    "apps/node-backend/src/services/deduplication.js",
+    "apps/node-backend/src/services/importIdentity.ts",
+    "apps/node-backend/src/services/importBatchService.ts",
+    "apps/node-backend/src/services/dataImportService.ts",
+    "apps/node-backend/src/services/deduplication.ts",
     "apps/node-backend/src/lib/textNormalization.ts",
     "apps/node-backend/src/routes/importRoutes.ts",
     "apps/node-backend/src/routes/importBatchRoutes.ts",
@@ -248,7 +248,7 @@ When a merge response includes a `patternSuggestion`, the `useMergeRecipients` h
 ### Recipient Clusters Endpoint
 
 **Route:** `GET /api/recipients/clusters` (Phase H — April 2026)  
-**Backend Service:** [[apps/node-backend/src/services/recipientClusterService.js]]
+**Backend Service:** [[apps/node-backend/src/services/recipientClusterService.ts]]
 
 Analyzes active primary recipients and identifies clusters with:
 
@@ -403,7 +403,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 
 #### 6. **Auto-Link Planned Payments** (post-commit, June 2026)
 
-After committed rows are inserted, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.js]]. Transfer reconciliation and the asynchronous materialized-view refresh follow at the orchestrator boundary:
+After committed rows are inserted, `commit.js` calls `autoLinkTransactions(insertedRows)` from [[apps/node-backend/src/services/plannedMatchService.ts]]. Transfer reconciliation and the asynchronous materialized-view refresh follow at the orchestrator boundary:
 
 - Runs only when `app_settings.autoClearPlannedOnMatch` is `true` (default).
 - Checks each newly committed transaction against active, unexecuted planned payments using the moderate tolerance rule (same recipient cluster, same sign, ±5 % amount, ±5 calendar days). See [[docs/features/plannedTransactions#auto-link--auto-clear-on-ingest-june-2026|Auto-Link on Ingest]] for the full matching spec.
@@ -424,7 +424,7 @@ After committed rows are inserted, `commit.js` calls `autoLinkTransactions(inser
 
 ### Data Import Service (Recipients & Categories)
 
-**File:** [[apps/node-backend/src/services/dataImportService.js]]
+**File:** [[apps/node-backend/src/services/dataImportService.ts]]
 
 Handles bulk CSV import for **recipients** and **categories** (not transactions).
 
@@ -466,7 +466,7 @@ Text processing utilities for import and recipient matching:
 
 ### `deduplication.js`
 
-**File:** [[apps/node-backend/src/services/deduplication.js]]
+**File:** [[apps/node-backend/src/services/deduplication.ts]]
 
 Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|recipient|memo|bank_account` for raw table dedup, and direct field matching for the legacy path.
 
@@ -951,7 +951,7 @@ Vision supports receipt and document attachments for transactions via the attach
 ### Backend Services
 
 - [[apps/node-backend/src/middleware/attachmentUpload.ts]]: Multipart memory buffering, declared MIME prefilter, and upload-size limit
-- [[apps/node-backend/src/services/attachmentService.js]]: Content verification, file storage, path resolution, and removal
+- [[apps/node-backend/src/services/attachmentService.ts]]: Content verification, file storage, path resolution, and removal
 - [[apps/node-backend/src/repositories/attachmentRepository.ts]]: Database operations (CRUD)
 - [[apps/node-backend/src/routes/attachments.ts]]: Four REST endpoints for attachment management
 - Database migration `0004_attachments.py`: Schema with transaction FK, stored_path, mime_type, size_bytes

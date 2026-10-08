@@ -1,24 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/services/accountService.js", () => ({
+vi.mock("../src/services/accountService.ts", () => ({
   default: {},
 }));
-vi.mock("../src/services/accountMergeService.js", () => ({
+vi.mock("../src/services/accountMergeService.ts", () => ({
   MAX_ACCOUNT_MERGE_SOURCES: 500,
   mergeAccounts: vi.fn(),
   previewMerge: vi.fn(),
 }));
-vi.mock("../src/services/openingBalanceService.js", () => ({
+vi.mock("../src/services/openingBalanceService.ts", () => ({
   setOpeningBalance: vi.fn(),
 }));
-vi.mock("../src/services/reconcileService.js", () => ({
+vi.mock("../src/services/reconcileService.ts", () => ({
   reconcileAccount: vi.fn(),
 }));
-vi.mock("../src/services/accountCloseService.js", () => ({
+vi.mock("../src/services/accountCloseService.ts", () => ({
   closeAccount: vi.fn(),
   previewAccountPortfolioLots: vi.fn(),
 }));
-vi.mock("../src/services/aggregationRefresh.js", () => ({
+vi.mock("../src/services/aggregationRefresh.ts", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 vi.mock("../src/services/info/cache.ts", () => ({
@@ -28,8 +28,8 @@ vi.mock("../src/services/info/cache.ts", () => ({
 import {
   closeAccount,
   previewAccountPortfolioLots,
-} from "../src/services/accountCloseService.js";
-import { scheduleAggregationRefresh } from "../src/services/aggregationRefresh.js";
+} from "../src/services/accountCloseService.ts";
+import { scheduleAggregationRefresh } from "../src/services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../src/services/info/cache.ts";
 
 const { default: accountsRouter } = await import("../src/routes/accounts.ts");

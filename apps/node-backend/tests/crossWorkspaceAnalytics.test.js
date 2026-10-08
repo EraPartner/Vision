@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   __projectNetWorth as projectNetWorth, rebalanceDeployment, resolveDeployableCash,
-} from '../src/services/crossWorkspaceAnalytics.js';
+} from '../src/services/crossWorkspaceAnalytics.ts';
 import { foldTargetSleeves } from '../src/services/portfolio/allocationAnalytics.ts';
 import { resolveRebalanceTargetWeights } from '../src/services/portfolio/rebalanceTargets.ts';
 

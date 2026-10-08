@@ -23,13 +23,13 @@ import { logger } from "../../config/logger.ts";
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
-} from "../aggregationRefresh.js";
+} from "../aggregationRefresh.ts";
 
 import { createBatch, stageBatch } from "./stage.ts";
 import { validateBatch } from "./validate.ts";
 import { matchBatch } from "./match.ts";
 import { commitBatch } from "./commit.ts";
-import { reconcileTransfers } from "../transferReconciliationService.js";
+import { reconcileTransfers } from "../transferReconciliationService.ts";
 import type { CustomTransactionParserConfig } from "./adapters/generic.ts";
 
 export { createBatch, stageBatch, validateBatch, matchBatch, commitBatch };

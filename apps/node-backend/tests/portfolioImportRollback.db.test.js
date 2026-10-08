@@ -51,7 +51,7 @@ vi.mock('../src/database/connection.ts', async (importOriginal) => {
 
 import { query, closePool } from '../src/database/connection.ts';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.ts';
-import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
+import { rollbackBatch } from '../src/services/portfolioImportBatchService.ts';
 import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.ts';
 
 const pool = getTestPool();

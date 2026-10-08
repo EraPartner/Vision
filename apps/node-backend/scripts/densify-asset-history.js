@@ -20,8 +20,8 @@
  */
 
 import { createInterface } from 'node:readline';
-import { backfillHoldingGaps } from '../src/services/quoteBackfillService.js';
-import { computeAndStoreSnapshots } from '../src/services/portfolioPerformanceSnapshotService.js';
+import { backfillHoldingGaps } from '../src/services/quoteBackfillService.ts';
+import { computeAndStoreSnapshots } from '../src/services/portfolioPerformanceSnapshotService.ts';
 import { closePool } from '../src/database/connection.ts';
 
 const args = new Set(process.argv.slice(2));

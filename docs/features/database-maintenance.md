@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -29,7 +29,7 @@ aliases:
   ]
 related_code:
   - apps/node-backend/src/routes/admin.ts
-  - apps/node-backend/src/services/dbEditor.js
+  - apps/node-backend/src/services/dbEditor.ts
   - apps/frontend/src/pages/DbMaintenancePage.tsx
   - apps/frontend/src/pages/admin/TableDataEditorPage.tsx
   - apps/frontend/src/features/admin/useTableDataEditorData.ts
@@ -311,6 +311,6 @@ Full endpoint documentation: [[docs/api/admin|Admin API]].
 ## Related Code
 
 - [[apps/node-backend/src/routes/admin.ts]]
-- [[apps/node-backend/src/services/dbEditor.js]]
+- [[apps/node-backend/src/services/dbEditor.ts]]
 - [[apps/frontend/src/pages/DbMaintenancePage.tsx]]
 - [[apps/frontend/src/pages/admin/TableDataEditorPage.tsx]]

@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../src/config/config.ts", () => ({
   default: { aiResearch: { agentCloak: { enabled: false } } },
 }));
-vi.mock("../src/services/agentCloakRuntimeConfig.js", () => ({
+vi.mock("../src/services/agentCloakRuntimeConfig.ts", () => ({
   getAgentCloakConfig: vi.fn(async () => ({ enabled: false })),
 }));
 
 import {
   checkAgentCloakPreflight,
   detectAgentCloakDesktopSpans,
-} from "../src/services/agentCloakPreflight.js";
+} from "../src/services/agentCloakPreflight.ts";
 
 const config = {
   enabled: true,

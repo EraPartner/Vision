@@ -7,7 +7,7 @@ last_modified: 2026-05-14
 tags: [integration, kinesis, price-provider, metals, commodities, eur-to-usd-mapping, data-sanitization, currency-conversion, historical-fx]
 description: Kinesis market data provider for metals and commodity price feeds with EUR-to-USD symbol remapping, currency conversion, and misconfiguration detection
 aliases: [kinesis, kinesis price provider, metals prices, commodity data, kinesis eur conversion]
-related_code: ["apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/prices/priceProviderRegistry.ts", "apps/node-backend/src/config/kinesisConfig.ts", "apps/node-backend/src/routes/admin.ts", "apps/node-backend/tests/priceProviderRegistry.test.js"]
+related_code: ["apps/node-backend/src/services/priceProviderService.ts", "apps/node-backend/src/services/prices/priceProviderRegistry.ts", "apps/node-backend/src/config/kinesisConfig.ts", "apps/node-backend/src/routes/admin.ts", "apps/node-backend/tests/priceProviderRegistry.test.js"]
 ---
 
 # Integration: Kinesis Price Provider

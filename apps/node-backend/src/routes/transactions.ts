@@ -16,12 +16,12 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import transactionService from "../services/transactionService.js";
+import transactionService from "../services/transactionService.ts";
 import {
   bulkTagTransactions,
   bulkUpdateTransactions,
   bulkDeleteTransactions,
-} from "../services/transactionBulkService.js";
+} from "../services/transactionBulkService.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   validateIdParam,
@@ -42,7 +42,7 @@ import {
   streamCsvExport,
   streamNdjsonExport,
   streamBulkTransactionExport,
-} from "../services/transactionExport.js";
+} from "../services/transactionExport.ts";
 import { parsePagination } from "../lib/pagination.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import {
@@ -816,10 +816,7 @@ router.post("/", async (req, res) => {
 
   res.status(201);
   res.ok({
-    // transactionService.createManualTransaction's own @returns widens
-    // `transaction` to `object` at the service seam, but it's a pass-through
-    // of transactionRepository.create()'s EnrichedTransactionRow|null.
-    ...formatTransaction(transaction as EnrichedTransactionRow),
+    ...formatTransaction(transaction),
     auto_linked: autoLink.links[0]?.plannedTransactionId ?? null,
   });
 });
@@ -856,9 +853,7 @@ router.patch(
       throw new NotFoundError(`Transaction with ID ${id} not found`);
     }
 
-    // transactionService.update's @returns widens the row to `object`; it is
-    // a pass-through of transactionRepository.update()'s EnrichedTransactionRow.
-    res.ok(formatTransaction(updated as EnrichedTransactionRow));
+    res.ok(formatTransaction(updated));
   },
 );
 

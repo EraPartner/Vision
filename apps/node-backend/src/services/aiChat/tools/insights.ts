@@ -15,9 +15,9 @@ import { toDecimal, roundToCents } from "../../../lib/money.ts";
 import { toYmd } from "../../calculations/portfolioMath.ts";
 import { parseEnum, parsePositiveInt } from "./_validate.ts";
 import type { ToolContext } from "./_validate.ts";
-import { getQuotes } from "../../marketLookupService.js";
-import { detectRecurringPatterns } from "../../recurringDetectionService.js";
-import { getInsightsDigest } from "../../insightsDigestService.js";
+import { getQuotes } from "../../marketLookupService.ts";
+import { detectRecurringPatterns } from "../../recurringDetectionService.ts";
+import { getInsightsDigest } from "../../insightsDigestService.ts";
 
 type AverageVsCurrentSpending = Awaited<
   ReturnType<typeof infoRepository.getAverageVsCurrentSpending>

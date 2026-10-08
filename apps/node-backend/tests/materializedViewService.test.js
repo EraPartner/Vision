@@ -36,7 +36,7 @@ async function loadMaterializedViewService() {
     invalidateStatisticsCaches,
   }));
 
-  const service = await import("../src/services/materializedViewService.js");
+  const service = await import("../src/services/materializedViewService.ts");
   return {
     ...service,
     query,

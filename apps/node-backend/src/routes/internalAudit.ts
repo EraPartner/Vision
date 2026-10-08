@@ -16,13 +16,13 @@ import {
 import {
   recordElectronAuditCheckpoint,
   recordElectronUpdateDecision,
-} from "../services/auditBridgeService.js";
-import { readVerifiedAuditPage } from "../services/auditReadService.js";
+} from "../services/auditBridgeService.ts";
+import { readVerifiedAuditPage } from "../services/auditReadService.ts";
 import {
   planAuditRetention,
   pruneAuditRetention,
-} from "../services/auditRetentionService.js";
-import { verifyAuditHistory } from "../services/auditVerificationService.js";
+} from "../services/auditRetentionService.ts";
+import { verifyAuditHistory } from "../services/auditVerificationService.ts";
 
 const HASH = /^[0-9a-f]{64}$/;
 const MAX_BODY_BYTES = 4096;

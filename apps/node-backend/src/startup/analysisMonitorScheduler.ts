@@ -1,7 +1,7 @@
 /** Bounded local monitor polling, outside startup-readiness warmup. */
 
 import { logger } from "../config/logger.ts";
-import { checkDueAnalysisMonitors } from "../services/analysisMonitorService.js";
+import { checkDueAnalysisMonitors } from "../services/analysisMonitorService.ts";
 
 export function startAnalysisMonitorScheduler() {
   let inFlight = false;

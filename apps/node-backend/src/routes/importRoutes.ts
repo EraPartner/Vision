@@ -13,7 +13,7 @@ import { z } from "zod";
 import {
   importRecipientsCSV,
   importCategoriesCSV,
-} from "../services/dataImportService.js";
+} from "../services/dataImportService.ts";
 import {
   parseBatchIdParam,
   parseBatchRowIdParams,
@@ -39,11 +39,11 @@ import {
   overrideRecipient,
   overrideCategory,
   categoryExists,
-} from "../services/importBatchService.js";
+} from "../services/importBatchService.ts";
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
-} from "../services/aggregationRefresh.js";
+} from "../services/aggregationRefresh.ts";
 import { registerParserRoutes } from "./parserConfigRoutes.ts";
 import { registerImportBatchRoutes } from "./importBatchRoutes.ts";
 import {

@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, DELETE
 path: /api/attachments
 description: Manage receipt and document attachments for transactions
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, attachments, receipts, files, storage, phase-5a, security, path-traversal, rfc-5987]
 status: active
 aliases: [attachments-api, receipts, documents, file-management]
-related_code: ["apps/node-backend/src/routes/attachments.ts", "apps/node-backend/src/middleware/attachmentUpload.ts", "apps/node-backend/src/services/attachmentService.js", "apps/node-backend/src/repositories/attachmentRepository.ts", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
+related_code: ["apps/node-backend/src/routes/attachments.ts", "apps/node-backend/src/middleware/attachmentUpload.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/repositories/attachmentRepository.ts", "apps/frontend/src/components/shared/AttachmentPanel.tsx"]
 ---
 
 # Attachments API

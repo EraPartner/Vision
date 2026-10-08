@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { toDecimal } from "../src/lib/money.ts";
-import { __computeSourceRecordHash } from "../src/services/importIdentity.js";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { __computeSourceRecordHash } from "../src/services/importIdentity.ts";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import {
   portfolioPerformanceRoundedDepositIdentifiesLegacy,
   __verifiedKinesisWithdrawal as verifiedKinesisWithdrawal,
-} from "../src/services/portfolioPerformanceReferenceEvidence.js";
+} from "../src/services/portfolioPerformanceReferenceEvidence.ts";
 import {
   retainedEvent,
   retainedReference,

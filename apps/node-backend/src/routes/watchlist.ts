@@ -9,7 +9,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import { watchlistRepository } from "../services/watchlistService.js";
+import { watchlistRepository } from "../services/watchlistService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,

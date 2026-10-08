@@ -25,7 +25,7 @@ import {
   applyPortfolioImportReconciliation,
   getPortfolioImportRepairBatchIds,
   previewPortfolioImportReconciliation,
-} from "../src/services/portfolioImportReconciliationService.js";
+} from "../src/services/portfolioImportReconciliationService.ts";
 import {
   syntheticSaxoStaging,
   syntheticSaxoPrimaryRawData,
@@ -43,9 +43,9 @@ import {
   retainedKinesisYieldEvidence,
 } from "./helpers/kinesisYieldGroups.js";
 import { readReconciliationSources } from "../src/repositories/portfolioImportReconciliationRepository.ts";
-import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import {
   getSaxoCsvCompanionEvidence,

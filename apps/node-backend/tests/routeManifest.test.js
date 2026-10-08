@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { buildRouteManifest, getRouteManifest, mountRouter } from '../src/services/routeManifest.js';
+import { buildRouteManifest, getRouteManifest, mountRouter } from '../src/services/routeManifest.ts';
 
 function makeRouteLayer(path, methods) {
   const methodMap = {};

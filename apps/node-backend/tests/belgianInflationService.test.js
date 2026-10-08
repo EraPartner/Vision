@@ -14,7 +14,7 @@ import {
   clearInflationMemoryCache,
   getInflationRates,
   warmInflationCache,
-} from "../src/services/belgianInflationService.js";
+} from "../src/services/belgianInflationService.ts";
 
 describe("belgianInflationService", () => {
   beforeEach(() => {
@@ -101,6 +101,34 @@ describe("belgianInflationService", () => {
     expect(query).toHaveBeenCalledWith("BEGIN");
     expect(query).toHaveBeenCalledWith("COMMIT");
     vi.unstubAllGlobals();
+  });
+
+  it("ignores a Statbel month named after an Object.prototype key", async () => {
+    query.mockResolvedValue({ rows: [] });
+    const fact = (Month, cpi) => ({
+      Month,
+      "Level 1": null,
+      "Consumer price index": cpi,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          facts: [
+            fact("January 2024", "100"),
+            fact("February 2024", "101"),
+            fact("constructor 2024", "102"),
+          ],
+        }),
+      }),
+    );
+
+    const result = await getInflationRates({ forceRefresh: true });
+
+    expect(result.rates.map((rate) => rate.month)).toEqual(["2024-02"]);
+    vi.unstubAllGlobals();
+    query.mockReset();
   });
 
   it("falls back to database when Statbel fetch fails", async () => {

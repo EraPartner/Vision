@@ -4,11 +4,11 @@ import {
   verifyKinesisNetworkReceipt,
   verifiedKinesisNetworkRow,
   proveKinesisNetworkBindings,
-} from "../src/services/portfolioKinesisNetworkProof.js";
+} from "../src/services/portfolioKinesisNetworkProof.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,
-} from "../src/services/importIdentity.js";
+} from "../src/services/importIdentity.ts";
 
 describe("literal native wallet supplemental evidence", () => {
   it.each(["asset_fee", "asset_transfer_witness"])(

@@ -7,7 +7,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
-import { mergeRecipients } from "../src/services/recipientMergeService.js";
+import { mergeRecipients } from "../src/services/recipientMergeService.ts";
 
 describe.skipIf(!hasTestDatabase())(
   "recipient merge concurrency (real DB)",

@@ -26,7 +26,7 @@ vi.mock("../../src/database/connection.ts", () =>
 );
 
 const { resolveBulkSelection, __normalizeBulkFilter: normalizeBulkFilter } =
-  await import("../../src/services/bulkSelection.js");
+  await import("../../src/services/bulkSelection.ts");
 const { query: dbQuery } = await import("../../src/database/connection.ts");
 const { ValidationError } =
   await import("../../src/middleware/errorHandler.ts");

@@ -1,0 +1,328 @@
+import type { AiInvestigationRequest } from "@vision/types/aiResearch";
+import settings from "../config/config.ts";
+import type { OpenAiModel } from "../config/openAiModelCatalog.ts";
+import { getOllamaClient } from "../integrations/ollama/client.ts";
+import { callOpenAiBroker } from "../integrations/openai/brokerClient.ts";
+import {
+  assertPublicDisclosureText,
+  bindDisclosureToRequest,
+  buildDisclosurePreview,
+} from "./cloudDisclosurePolicy.ts";
+import {
+  reserveDisclosure,
+  findUncertainDisclosure,
+  updateDisclosureRecord,
+} from "../repositories/aiDisclosureRepository.ts";
+import { getPublicCloudAnalysisCatalog } from "./cloudAnalysisPlan.ts";
+import { checkAgentCloakPreflight } from "./agentCloakPreflight.ts";
+
+export interface ProviderGeneration {
+  text: string;
+  usage: { inputTokens: number | null; outputTokens: number | null };
+  provider: "ollama" | "openai-api";
+  disclosureRecordId?: string;
+}
+
+export interface ProviderGenerationInput {
+  request: AiInvestigationRequest;
+  messages: unknown[];
+  signal?: AbortSignal;
+}
+
+/** Error codes are strings throughout this module's callees. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error))
+    return undefined;
+  return typeof error.code === "string" ? error.code : undefined;
+}
+
+function outputText(
+  response: { content?: string; outputText?: string } | null | undefined,
+) {
+  return String(response?.content ?? response?.outputText ?? "").trim();
+}
+
+function configuredOpenAiModel(
+  requestedModel: string | null | undefined,
+): OpenAiModel {
+  const modelId = requestedModel || settings.aiResearch.openai.model;
+  const model = settings.aiResearch.openai.models.find(
+    (candidate) => candidate.id === modelId,
+  );
+  if (!model)
+    throw Object.assign(
+      new Error("The selected OpenAI model is not in the configured allowlist"),
+      { code: "OPENAI_MODEL_NOT_ALLOWED", status: 400 },
+    );
+  return model;
+}
+
+export function disclosurePayload(request: AiInvestigationRequest) {
+  const selectedModel = configuredOpenAiModel(request.model);
+  const candidates = [
+    request.savedAnalysisId ? "saved-analysis" : null,
+    request.scope.workspaces.some((item) =>
+      ["budgeting", "cross-workspace"].includes(item),
+    )
+      ? request.scope.dateFrom && request.scope.dateTo
+        ? "cashflow-range"
+        : "balances"
+      : null,
+    request.scope.workspaces.some((item) =>
+      ["portfolio", "cross-workspace"].includes(item),
+    )
+      ? "holdings"
+      : null,
+    request.scope.workspaces.some((item) =>
+      ["portfolio", "cross-workspace"].includes(item),
+    ) &&
+    request.scope.dateFrom &&
+    request.scope.dateTo
+      ? "portfolio-income-range"
+      : null,
+    request.scope.workspaces.some((item) =>
+      ["research", "cross-workspace"].includes(item),
+    )
+      ? "documents"
+      : null,
+    request.researchMode === "public-web" ? "web" : null,
+    ...(request.publicSymbols ?? []).flatMap((symbol) => [
+      `quote-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      `fundamentals-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      `news-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    ]),
+    ...(request.publicMacroQueries ?? []).map(
+      (_, index) => `macro-search-${index + 1}`,
+    ),
+  ].filter(Boolean);
+  const selectedSummaryMode = Boolean(request.selectedSummary);
+  const selectedEvidenceMode = Boolean(request.selectedEvidence);
+  if (!selectedSummaryMode && !selectedEvidenceMode) {
+    if (!request.publicQuestion?.trim())
+      throw Object.assign(
+        new Error("A separately authored publicQuestion is required"),
+        { code: "PUBLIC_QUESTION_REQUIRED" },
+      );
+    assertPublicDisclosureText(request.publicQuestion, "publicQuestion");
+  }
+  const disclosed = buildDisclosurePreview({
+    ...(selectedSummaryMode || selectedEvidenceMode
+      ? {}
+      : {
+          question: request.publicQuestion,
+        }),
+    publicSchema: selectedEvidenceMode
+      ? "Vision selected-evidence synthesis v1. Use only the explicitly selected evidence. Return JSON only matching the Vision AI answer schema: {schemaVersion:1,status:'complete'|'qualified'|'abstained'|'partial',depth:'quick'|'detailed',language:'en'|'nl',summary:string,facts:{text:string,evidenceIds:string[]}[],calculations:{text:string,evidenceIds:string[]}[],interpretations:{text:string,evidenceIds:string[]}[],assumptions:string[],missingInformation:string[],conflicts:{description:string,evidenceIds:string[]}[],evidence:[],analysisReference:null}. Every fact, calculation, and interpretation must cite evidence id 'selected-evidence'. Do not request tools or additional data."
+      : `${selectedSummaryMode ? "Use only the explicitly selected summary. " : ""}Vision investigation planner v2. Return JSON only as {stepIds:string[],analysisPlans:CloudAnalysisPlan[]}. Select and order only supplied candidate step ids. You may add at most three CloudAnalysisPlan objects using only the catalog identifiers below. Never emit SQL, relation names, account or investment identifiers, URLs, code, result callbacks, disclosure instructions, or a final answer. CloudAnalysisPlan is {schemaVersion:1,catalogVersion:number,datasetId:string,fields:string[],filters:{fieldId:string,operator:string,value?:string|number|boolean}[],groups:string[],measures:string[],joins:string[],orderBy:{id:string,direction:'asc'|'desc'}[],limit:1..500,formulas:{id:string,label:string,expression:string,scope:'row'|'summary',resultType:'decimal'|'integer'|'boolean'|'string',dependencies:string[]}[]}. Formula expressions use Vision's bounded formula language and cannot access files, network, SQL, or tools. Catalog: ${JSON.stringify(getPublicCloudAnalysisCatalog())}`,
+    language: request.language,
+    depth: request.depth,
+    citations: selectedEvidenceMode ? ["selected-evidence"] : candidates,
+    ...(request.selectedSummary
+      ? { selectedSummary: request.selectedSummary }
+      : {}),
+    ...(request.selectedEvidence
+      ? { selectedEvidence: request.selectedEvidence }
+      : {}),
+  });
+  const maxOutputTokens = Math.min(
+    request.depth === "detailed" ? 2400 : 900,
+    32000,
+  );
+  return bindDisclosureToRequest(disclosed, {
+    model: selectedModel.id,
+    input: disclosed.serialized,
+    store: false,
+    background: false,
+    tools: [],
+    max_output_tokens: maxOutputTokens,
+  });
+}
+
+function costMicros(
+  inputTokens: number,
+  outputTokens: number,
+  model: OpenAiModel,
+) {
+  return Math.ceil(
+    (inputTokens * model.inputMicrosPerMillion) / 1_000_000 +
+      (outputTokens * model.outputMicrosPerMillion) / 1_000_000,
+  );
+}
+
+function estimatedCostMicros(
+  inputText: string,
+  outputTokens: number,
+  model: OpenAiModel,
+) {
+  // A UTF-8 byte is a conservative upper bound for tokenizer units across
+  // compatible byte-level tokenizers. This intentionally over-reserves.
+  return costMicros(Buffer.byteLength(String(inputText)), outputTokens, model);
+}
+
+export async function generateWithProvider({
+  jobId,
+  request,
+  messages,
+  signal,
+}: ProviderGenerationInput & { jobId: string }): Promise<ProviderGeneration> {
+  if (request.route === "local") {
+    const response = await getOllamaClient().chat({
+      model: request.model ?? undefined,
+      messages,
+      options: { num_ctx: settings.ollama.numCtx },
+      signal,
+    });
+    return {
+      text: outputText(response),
+      usage: {
+        inputTokens: response.promptEvalCount,
+        outputTokens: response.evalCount,
+      },
+      provider: "ollama",
+    };
+  }
+  if (!settings.aiResearch.openai.enabled)
+    throw Object.assign(new Error("OpenAI API route is disabled"), {
+      code: "OPENAI_DISABLED",
+    });
+  const selectedModel = configuredOpenAiModel(request.model);
+  if (
+    settings.aiResearch.openai.monthlyBudgetMicros <= 0 ||
+    selectedModel.inputMicrosPerMillion <= 0 ||
+    selectedModel.outputMicrosPerMillion <= 0
+  )
+    throw Object.assign(
+      new Error(
+        "The selected OpenAI model requires positive per-model prices and a monthly spend limit",
+      ),
+      { code: "OPENAI_CONFIGURATION_INCOMPLETE" },
+    );
+  if (!request.grantId)
+    throw Object.assign(new Error("An active disclosure grant is required"), {
+      code: "GRANT_REQUIRED",
+    });
+  const disclosureMode = request.selectedEvidence
+    ? "cloud-synthesis-selected"
+    : request.selectedSummary
+      ? "selected-summary"
+      : "cloud-plan-public";
+  const preview = disclosurePayload(request);
+  const maxOutputTokens = preview.payload.max_output_tokens;
+  const cost = estimatedCostMicros(
+    preview.serialized,
+    maxOutputTokens,
+    selectedModel,
+  );
+  if (await findUncertainDisclosure(jobId))
+    throw Object.assign(
+      new Error(
+        "A prior cloud send has an uncertain outcome and will not be replayed",
+      ),
+      { code: "UNCERTAIN_PRIOR_SEND" },
+    );
+  let lastError: unknown;
+  const retryable = new Set<string | undefined>([
+    "TIMEOUT",
+    "NETWORK_ERROR",
+    "HTTP_429",
+    "HTTP_500",
+    "HTTP_502",
+    "HTTP_503",
+    "HTTP_504",
+  ]);
+  for (
+    let attempt = 0;
+    attempt <= settings.aiResearch.openai.maxRetries;
+    attempt += 1
+  ) {
+    await checkAgentCloakPreflight(preview.disclosedPayload, { signal });
+    const record = await reserveDisclosure({
+      grantId: request.grantId,
+      jobId,
+      expectedMode: disclosureMode,
+      preview,
+      outputTokens: maxOutputTokens,
+      costMicros: cost,
+      monthlyBudgetMicros: settings.aiResearch.openai.monthlyBudgetMicros,
+    });
+    let helperReturned = false;
+    try {
+      await updateDisclosureRecord(record.id, { status: "sent" });
+      const response = await callOpenAiBroker(
+        {
+          body: preview.serialized,
+          timeoutMs: settings.aiResearch.openai.timeoutMs,
+        },
+        { signal },
+      );
+      helperReturned = true;
+      if (
+        !response.ok &&
+        new Set(["NETWORK_ERROR", "TIMEOUT"]).has(response.code)
+      )
+        helperReturned = false;
+      if (!response.ok)
+        throw Object.assign(
+          new Error("OpenAI request failed inside the egress helper"),
+          { code: response.code },
+        );
+      const inputTokens = response.usage?.input_tokens ?? null;
+      const outputTokens = response.usage?.output_tokens ?? null;
+      await updateDisclosureRecord(record.id, {
+        status: "completed",
+        inputTokens,
+        outputTokens,
+        costMicros: costMicros(
+          inputTokens ?? 0,
+          outputTokens ?? 0,
+          selectedModel,
+        ),
+        providerRequestId: response.requestId,
+      });
+      return {
+        text: response.outputText,
+        usage: { inputTokens, outputTokens },
+        provider: "openai-api",
+        disclosureRecordId: record.id,
+      };
+    } catch (error) {
+      lastError = error;
+      if (!helperReturned) {
+        throw Object.assign(
+          new Error(
+            "The cloud send outcome is uncertain and will not be replayed automatically",
+          ),
+          { code: "UNCERTAIN_CLOUD_SEND", cause: error },
+        );
+      }
+      await updateDisclosureRecord(record.id, {
+        status: "failed",
+        errorCode: errorCode(error) || "CLOUD_REQUEST_FAILED",
+      });
+      if (!retryable.has(errorCode(error))) break;
+    }
+  }
+  throw lastError;
+}
+
+/** Final evidence synthesis is intentionally local even when cloud planning was selected. */
+export async function generateLocalSynthesis({
+  request,
+  messages,
+  signal,
+}: ProviderGenerationInput): Promise<ProviderGeneration> {
+  const response = await getOllamaClient().chat({
+    model: request.route === "local" ? (request.model ?? undefined) : undefined,
+    messages,
+    options: { num_ctx: settings.ollama.numCtx },
+    signal,
+  });
+  return {
+    text: outputText(response),
+    usage: {
+      inputTokens: response.promptEvalCount,
+      outputTokens: response.evalCount,
+    },
+    provider: "ollama",
+  };
+}

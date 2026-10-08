@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureReferenceMappingKey } from "../src/services/aiReferenceKeySetup.js";
+import { ensureReferenceMappingKey } from "../src/services/aiReferenceKeySetup.ts";
 
 const directories = [];
 

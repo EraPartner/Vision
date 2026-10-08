@@ -3,8 +3,8 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { toDecimal } from "../src/lib/money.ts";
-import { proveKinesisAdoptionSources } from "../src/services/portfolioKinesisAdoptionScope.js";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { proveKinesisAdoptionSources } from "../src/services/portfolioKinesisAdoptionScope.ts";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,

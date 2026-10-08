@@ -14,13 +14,13 @@ import { routeAgent } from '../helpers/routeApp.js';
 
 vi.mock('../../src/repositories/transactionRepository.ts', () => mockTransactionRepository());
 
-vi.mock('../../src/services/deduplication.js', () => mockDeduplication());
+vi.mock('../../src/services/deduplication.ts', () => mockDeduplication());
 
 vi.mock('../../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-vi.mock('../../src/services/transferReconciliationService.js', () => mockTransferReconciliation());
+vi.mock('../../src/services/transferReconciliationService.ts', () => mockTransferReconciliation());
 
 vi.mock('../../src/services/currency/currencyConversionService.ts', () => mockCurrencyConversion());
 
@@ -29,7 +29,7 @@ vi.mock('../../src/database/connection.ts', () => mockPooledTxConnection());
 const { default: transactionsRouter } = await import('../../src/routes/transactions.ts');
 
 import { getClient, query as dbQuery } from '../../src/database/connection.ts';
-import { scheduleReconcile } from '../../src/services/transferReconciliationService.js';
+import { scheduleReconcile } from '../../src/services/transferReconciliationService.ts';
 
 const api = routeAgent(transactionsRouter, { mountPath: '/api/transactions' });
 const bulkTag = (body) => api.post('/api/transactions/bulk-tag').send(body);

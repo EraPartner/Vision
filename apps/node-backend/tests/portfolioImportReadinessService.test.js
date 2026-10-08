@@ -10,7 +10,7 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => mocks);
 import {
   assertPortfolioImportReadiness,
   isMaintainedPortfolioImport,
-} from "../src/services/portfolioImportReadinessService.js";
+} from "../src/services/portfolioImportReadinessService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -5,7 +5,7 @@ import {
   __evaluateThreshold as evaluateThreshold,
   listMonitorObservations,
   readMonitorNotification,
-} from "../src/services/analysisMonitorService.js";
+} from "../src/services/analysisMonitorService.ts";
 
 const uuid = "00000000-0000-4000-8000-000000000001";
 

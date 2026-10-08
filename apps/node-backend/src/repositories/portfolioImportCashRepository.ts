@@ -125,7 +125,7 @@ export interface InsertKinesisCashArgs {
   values: KinesisCashValues;
   proof: unknown;
   feeValues?: KinesisCashValues;
-  primaryRawData: string;
+  primaryRawData: string | null;
   feeFingerprint?: string;
 }
 

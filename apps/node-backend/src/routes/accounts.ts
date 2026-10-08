@@ -14,19 +14,19 @@
  */
 
 import { Router } from "express";
-import accountService from "../services/accountService.js";
+import accountService from "../services/accountService.ts";
 import {
   MAX_ACCOUNT_MERGE_SOURCES,
   mergeAccounts,
   previewMerge,
-} from "../services/accountMergeService.js";
-import { setOpeningBalance } from "../services/openingBalanceService.js";
-import { reconcileAccount } from "../services/reconcileService.js";
+} from "../services/accountMergeService.ts";
+import { setOpeningBalance } from "../services/openingBalanceService.ts";
+import { reconcileAccount } from "../services/reconcileService.ts";
 import {
   closeAccount,
   previewAccountPortfolioLots,
-} from "../services/accountCloseService.js";
-import { scheduleAggregationRefresh } from "../services/aggregationRefresh.js";
+} from "../services/accountCloseService.ts";
+import { scheduleAggregationRefresh } from "../services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../services/info/cache.ts";
 import {
   validateIdParam,

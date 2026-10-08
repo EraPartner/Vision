@@ -13,10 +13,10 @@ import {
 vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
+vi.mock("../../src/services/portfolioImportCommitService.ts", () => ({
   commitReviewedPortfolioImport: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
+vi.mock("../../src/services/portfolioImportBatchService.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPortfolioImportBatchPreview: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
   resolveInvestmentRows: vi.fn(),
   rollbackBatch: vi.fn(),
 }));
-vi.mock("../../src/services/accountService.js", () => ({
+vi.mock("../../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
 }));
 vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
@@ -42,7 +42,7 @@ vi.mock("../../src/database/connection.ts", () => mockConnection());
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
 import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
-import accountService from "../../src/services/accountService.js";
+import accountService from "../../src/services/accountService.ts";
 import router from "../../src/routes/portfolioImportRoutes.ts";
 const BASE = "/api/portfolio/import";
 const api = routeAgent(router, { mountPath: BASE });

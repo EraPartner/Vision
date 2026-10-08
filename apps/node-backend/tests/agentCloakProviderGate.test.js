@@ -28,7 +28,7 @@ vi.mock("../src/config/config.ts", () => ({
     },
   },
 }));
-vi.mock("../src/services/agentCloakPreflight.js", () => ({
+vi.mock("../src/services/agentCloakPreflight.ts", () => ({
   checkAgentCloakPreflight: mocked.check,
 }));
 vi.mock("../src/repositories/aiDisclosureRepository.ts", () => ({
@@ -40,7 +40,7 @@ vi.mock("../src/integrations/openai/brokerClient.ts", () => ({
   callOpenAiBroker: mocked.broker,
 }));
 
-import { generateWithProvider } from "../src/services/aiProviderAdapters.js";
+import { generateWithProvider } from "../src/services/aiProviderAdapters.ts";
 
 describe("AgentCloak provider gate", () => {
   it("stops direct cloud jobs before reservation or OpenAI when the preflight blocks", async () => {

@@ -32,7 +32,7 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: vi.fn(async () => null) },
 }));
 
-import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.js";
+import { __storeCurrentBrokerSnapshot } from "../src/services/portfolioPerformanceSnapshotService.ts";
 import { query } from "../src/database/connection.ts";
 import { settingsRepository } from "../src/repositories/settingsRepository.ts";
 import {

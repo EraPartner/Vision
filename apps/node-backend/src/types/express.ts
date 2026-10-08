@@ -4,7 +4,7 @@
  * The legacy checkJs program (tsconfig.check.json) still resolves `express`
  * to the ambient `any` shim in thirdPartyModules.d.ts, so its JavaScript
  * callers cannot use `@types/express` — same reasoning as `ExpressResponse` in
- * services/transactionExport.js and services/reports/index.js, and
+ * services/transactionExport.ts and services/reports/index.js, and
  * `ExpressApp`/`ExpressLayer` in services/routeManifest.js. Those files each
  * defined a narrow local structural type; this module centralizes the
  * equivalent for the middleware/lib/controllers layer, where many files share
@@ -64,7 +64,7 @@ export interface ExpressResponse {
   statusCode: number;
   headersSent: boolean;
   writableEnded: boolean;
-  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.js) and, reassigned wholesale, by main.js's gzip wrapper. */
+  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts) and, reassigned wholesale, by main.js's gzip wrapper. */
   write: (chunk?: any, encoding?: any, cb?: any) => boolean;
   /** Same overload shape as `write` above; main.js's gzip wrapper reassigns this too. */
   end: (chunk?: any, encoding?: any, cb?: any) => ExpressResponse | void;

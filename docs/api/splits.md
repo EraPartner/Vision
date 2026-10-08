@@ -24,7 +24,7 @@ aliases:
 description: API endpoints for transaction splitting and debt tracking between recipients. Phase Q+ adds automatic recipient-alias collapsing on owed-summary endpoints to consolidate linked recipients (via merge operations) for consistency with merge semantics.
 related_code:
   - apps/node-backend/src/routes/splits.ts
-  - apps/node-backend/src/services/splitService.js
+  - apps/node-backend/src/services/splitService.ts
   - apps/node-backend/src/repositories/splitRepository.ts
 ---
 
@@ -479,7 +479,7 @@ The endpoint validates payment amount via `validatePaymentAmount` before write. 
 
 Implementation notes:
 
-- `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.js]]).
+- `splitService.addPayment()` locks and fetches the split, obtains the already-paid total, validates at four-decimal precision, inserts the payment, conditionally auto-settles, and writes the audit row in one database transaction ([[apps/node-backend/src/services/splitService.ts]]).
 - Actor is resolved by the route and propagated to the service audit transaction via `resolveActor(req)` ([[apps/node-backend/src/routes/splits.ts]]).
 
 ---

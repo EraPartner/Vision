@@ -3,7 +3,7 @@ import {
   __assertPublicResearchQuery,
   searchPublicWeb,
   fetchPublicWebPage,
-} from "../src/services/webResearch.js";
+} from "../src/services/webResearch.ts";
 
 describe("controlled web research", () => {
   it("blocks private financial patterns before a provider call", () => {
@@ -88,5 +88,22 @@ describe("controlled web research", () => {
       trust: "untrusted-evidence",
       instructionPolicy: "never-execute",
     });
+  });
+  it("decodes &amp; once, so an escaped entity stays literal text", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce({
+      status: 200,
+      ok: true,
+      headers: new Headers({ "content-type": "text/html" }),
+      body: null,
+      arrayBuffer: async () =>
+        new TextEncoder().encode(
+          "<title>T</title><p>Write &amp;lt;b&amp;gt; for bold &amp; more</p>",
+        ).buffer,
+    });
+    const result = await fetchPublicWebPage(
+      { url: "https://example.com" },
+      { enabled: true, assertUrl: async (url) => new URL(url), fetchImpl },
+    );
+    expect(result.text).toContain("Write &lt;b&gt; for bold & more");
   });
 });

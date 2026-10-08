@@ -9,7 +9,7 @@ import multer from 'multer';
 import {
   ATTACHMENT_MAX_SIZE_BYTES,
   isAllowedAttachmentMime,
-} from '../services/attachmentService.js';
+} from '../services/attachmentService.ts';
 
 /** The slice of a multer upload used by the declaration-only MIME filter. */
 export interface MulterFile {

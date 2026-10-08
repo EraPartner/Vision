@@ -17,12 +17,12 @@ vi.mock("../src/repositories/investmentRepository.ts", () => ({
 vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   default: {},
 }));
-vi.mock("../src/services/priceProviderService.js", () => ({
+vi.mock("../src/services/priceProviderService.ts", () => ({
   fetchHistoricalPrices: vi.fn(),
   fetchLivePricesDetailed: vi.fn(),
   SUPPORTED_PROVIDERS: [],
 }));
-vi.mock("../src/services/quoteBackfillService.js", () => ({
+vi.mock("../src/services/quoteBackfillService.ts", () => ({
   refreshQuotesForInvestment: vi.fn(),
 }));
 vi.mock("../src/config/kinesisConfig.ts", () => ({
@@ -41,7 +41,7 @@ import {
   createInvestment,
   updateInvestment,
   __parseDefaultListOptions as parseDefaultListOptions,
-} from "../src/services/investmentService.js";
+} from "../src/services/investmentService.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 function mockRes() {

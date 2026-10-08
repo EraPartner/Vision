@@ -19,7 +19,7 @@ async function loadAggregationRefresh() {
 
   vi.doMock("../src/database/connection.ts", () => mockConnection({ query }));
   vi.doMock("../src/config/logger.ts", () => ({ logger }));
-  vi.doMock("../src/services/materializedViewService.js", () => ({
+  vi.doMock("../src/services/materializedViewService.ts", () => ({
     refreshMaterializedViews: refreshLegacyMaterializedViews,
     scheduleRefresh: scheduleLegacyRefresh,
   }));
@@ -33,7 +33,7 @@ async function loadAggregationRefresh() {
     }),
   );
 
-  const service = await import("../src/services/aggregationRefresh.js");
+  const service = await import("../src/services/aggregationRefresh.ts");
   return {
     ...service,
     query,

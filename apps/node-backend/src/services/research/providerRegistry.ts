@@ -19,7 +19,7 @@ import fredAdapter from './adapters/fredAdapter.ts';
 import eurostatAdapter from './adapters/eurostatAdapter.ts';
 import dbnomicsAdapter from './adapters/dbnomicsAdapter.ts';
 import { createQuotaGovernor } from './quotaGovernor.ts';
-import * as providerHealth from '../providerHealthService.js';
+import * as providerHealth from '../providerHealthService.ts';
 import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.ts';
 
 /** A search hit as the adapters normalise it (leaves may be absent). */

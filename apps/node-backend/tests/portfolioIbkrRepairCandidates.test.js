@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { narrowImportedIbkrRepairCandidates } from "../src/services/portfolioIbkrRepairCandidates.js";
+import { narrowImportedIbkrRepairCandidates } from "../src/services/portfolioIbkrRepairCandidates.ts";
 
 const legacy = (over = {}) => ({
   id: 40,

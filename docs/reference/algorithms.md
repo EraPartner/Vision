@@ -129,7 +129,7 @@ const area = Math.abs(
 
 ## Deduplication Hashing (SHA-256)
 
-**Location:** [[apps/node-backend/src/services/deduplication.js]]
+**Location:** [[apps/node-backend/src/services/deduplication.ts]]
 
 ### Problem Statement
 
@@ -186,7 +186,7 @@ The hash is used as a **unique constraint** in the database. If a hash collision
 
 ## Recurring Pattern Detection
 
-**Location:** [[apps/node-backend/src/services/recurringDetectionService.js]]
+**Location:** [[apps/node-backend/src/services/recurringDetectionService.ts]]
 
 ### Problem Statement
 

@@ -5,7 +5,7 @@ import {
 } from "./helpers/kinesisAdoptionScope.js";
 import { describe, expect, it } from "vitest";
 import { fullFixture } from "./helpers/kinesisFullImport.js";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import { syntheticKinesisIncomePair } from "./helpers/kinesisIncomePairs.js";
 
 const plan = (source) =>

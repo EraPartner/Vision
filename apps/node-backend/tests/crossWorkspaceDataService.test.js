@@ -20,7 +20,7 @@ import {
   convertToCurrency,
   convertWithRates,
 } from "../src/services/currency/currencyConversionService.ts";
-import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
+import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

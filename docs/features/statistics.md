@@ -37,8 +37,8 @@ related_code:
   - apps/frontend/src/features/statistics/statisticsUtils.ts
   - apps/frontend/src/features/statistics/InsightsDigestPanel.tsx
   - apps/frontend/src/hooks/useSavedCharts.ts
-  - apps/node-backend/src/services/categoryOutlierService.js
-  - apps/node-backend/src/services/cashForecastInsightService.js
+  - apps/node-backend/src/services/categoryOutlierService.ts
+  - apps/node-backend/src/services/cashForecastInsightService.ts
   - apps/node-backend/src/routes/info.ts
   - apps/node-backend/src/repositories/infoRepository.ts
 ---
@@ -105,7 +105,7 @@ and typical baseline labels. The UI therefore does not imply that a partial mont
 complete prior months.
 
 The calculation remains owned by
-`[[apps/node-backend/src/services/categoryOutlierService.js|categoryOutlierService]]`; the frontend
+`[[apps/node-backend/src/services/categoryOutlierService.ts|categoryOutlierService]]`; the frontend
 only presents the returned boundary. See [[docs/features/ai-chat|AI Chat]] for the separate narration
 surface that can consume the same digest.
 

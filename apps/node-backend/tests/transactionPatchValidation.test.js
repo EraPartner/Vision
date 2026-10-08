@@ -16,34 +16,34 @@ import {
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({ query: vi.fn().mockResolvedValue({ rows: [] }) }),
 );
-vi.mock("../src/services/transactionService.js", () => ({
+vi.mock("../src/services/transactionService.ts", () => ({
   default: {
     update: vi
       .fn()
       .mockResolvedValue({ id: 1, amount: "10", date: "2026-07-01" }),
   },
 }));
-vi.mock("../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../src/services/deduplication.ts", () => mockDeduplication());
 vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
-vi.mock("../src/services/transferReconciliationService.js", () =>
+vi.mock("../src/services/transferReconciliationService.ts", () =>
   mockTransferReconciliation(),
 );
-vi.mock("../src/services/plannedMatchService.js", () => ({
+vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn(),
 }));
-vi.mock("../src/services/transactionExport.js", () => ({
+vi.mock("../src/services/transactionExport.ts", () => ({
   EXPORT_MAX_LIST_SIZE: 1000,
   streamCsvExport: vi.fn(),
   streamNdjsonExport: vi.fn(),
   streamBulkTransactionExport: vi.fn(),
 }));
 
-import transactionRepository from "../src/services/transactionService.js";
+import transactionRepository from "../src/services/transactionService.ts";
 
 const { default: transactionsRouter } =
   await import("../src/routes/transactions.ts");

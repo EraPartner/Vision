@@ -11,7 +11,7 @@ vi.mock("../src/repositories/importBatchRepository.ts", () => ({
 }));
 
 import { getPreviewRows } from "../src/repositories/importBatchRepository.ts";
-import { getImportBatchPreview } from "../src/services/importBatchService.js";
+import { getImportBatchPreview } from "../src/services/importBatchService.ts";
 
 describe("getImportBatchPreview", () => {
   beforeEach(() => vi.clearAllMocks());

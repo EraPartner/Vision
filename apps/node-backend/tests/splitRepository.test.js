@@ -13,7 +13,7 @@ vi.mock("../src/repositories/auditChainRepository.ts", () => ({
 
 import { query } from "../src/database/connection.ts";
 import splitPersistence from "../src/repositories/splitRepository.ts";
-import splitService from "../src/services/splitService.js";
+import splitService from "../src/services/splitService.ts";
 
 const splitRepository = { ...splitPersistence, ...splitService };
 

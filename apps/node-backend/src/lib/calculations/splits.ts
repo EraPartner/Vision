@@ -50,11 +50,10 @@ export function normalizeMoneyAmount(value: number | string | Decimal): number {
   return toNumber(roundToMoneyPrecision(value));
 }
 
-export interface ValidationResult {
-  ok: boolean;
-  /** — null when ok === true */
-  error: string | null;
-}
+/** `error` is null when ok === true. */
+export type ValidationResult =
+  | { ok: true; error: null }
+  | { ok: false; error: string };
 
 /**
  * Raw projection of splitRepository.getOwedSummaryRows' aggregate query — see

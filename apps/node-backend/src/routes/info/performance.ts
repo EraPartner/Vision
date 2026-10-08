@@ -7,7 +7,7 @@ import { Router } from "express";
 import {
   getSnapshots,
   getBrokerSnapshots,
-} from "../../services/portfolioPerformanceSnapshotService.js";
+} from "../../services/portfolioPerformanceSnapshotService.ts";
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
 import { getTargetCurrency, getCurrentDateString } from "./_queryParams.ts";
 import {

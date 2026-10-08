@@ -17,7 +17,7 @@ import type { ParsedBankTransaction } from "./adapters/_shared.ts";
 import {
   normalizeCreatedBatchId,
   runImportStageLifecycle,
-} from "../importStageLifecycle.js";
+} from "../importStageLifecycle.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
 
 /**

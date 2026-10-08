@@ -2,14 +2,14 @@
 title: Cross-Workspace API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-09-20
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, endpoint, cross-workspace, portfolio, budgeting, cash]
 description: Rebalancing and commitment-aware candidate cash cap endpoints.
 related_code:
   [
     "apps/node-backend/src/routes/crossWorkspace.ts",
-    "apps/node-backend/src/services/commitmentAwareCashService.js",
+    "apps/node-backend/src/services/commitmentAwareCashService.ts",
     "apps/frontend/src/lib/api/crossWorkspace.ts",
   ]
 ---

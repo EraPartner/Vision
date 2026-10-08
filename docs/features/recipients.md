@@ -10,7 +10,7 @@ aliases:
 related_code:
   - apps/node-backend/src/routes/recipients.ts
   - apps/node-backend/src/repositories/recipientRepository.ts
-  - apps/node-backend/src/services/recipientMergeService.js
+  - apps/node-backend/src/services/recipientMergeService.ts
   - apps/node-backend/src/services/calculations/normalization.ts
   - apps/frontend/src/features/recipients/
 ---
@@ -78,7 +78,7 @@ If any step fails, the entire merge rolls back.
   This prevents a waiting merge from recreating a two-level alias chain.
 - Bank account deduplication is race-safe via `INSERT ... ON CONFLICT` and `RETURNING id` for exact-one semantics.
 
-**Service:** [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]]
+**Service:** [[apps/node-backend/src/services/recipientMergeService.ts|recipientMergeService.js]]
 
 ### Default Category Assignment (ADR-046)
 

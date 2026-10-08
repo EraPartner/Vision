@@ -11,11 +11,11 @@ import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { parseWithConfig } from "./portfolioGenericAdapter.ts";
-import { captureKinesisSourceContext } from "../portfolioKinesisAdoptionScope.js";
+import { captureKinesisSourceContext } from "../portfolioKinesisAdoptionScope.ts";
 import {
   normalizeCreatedBatchId,
   runImportStageLifecycle,
-} from "../importStageLifecycle.js";
+} from "../importStageLifecycle.ts";
 import type {
   ParsedPortfolioRow,
   ParsedPortfolioRows,

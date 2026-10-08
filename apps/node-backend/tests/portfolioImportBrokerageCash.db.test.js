@@ -34,7 +34,7 @@ import {
 
 import { closePool } from '../src/database/connection.ts';
 import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.ts';
-import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
+import { rollbackBatch } from '../src/services/portfolioImportBatchService.ts';
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

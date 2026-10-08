@@ -38,7 +38,7 @@ import {
   markTransfer,
   unmarkTransfer,
   backfillTransfersOnce,
-} from "../../src/services/transferReconciliationService.js";
+} from "../../src/services/transferReconciliationService.ts";
 import { closePool } from "../../src/database/connection.ts";
 
 /** Fixed reference date — the suite asserts on ±windowDays, never on "today". */

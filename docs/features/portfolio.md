@@ -8,7 +8,7 @@ updated: 2026-10-08
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
-related_code: ["apps/node-backend/src/routes/investments.ts", "apps/node-backend/src/services/priceProviderService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.ts", "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts", "apps/node-backend/src/services/portfolio/rebalanceTargets.ts", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/frontend/src/pages/portfolio/PortfolioPage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
+related_code: ["apps/node-backend/src/routes/investments.ts", "apps/node-backend/src/services/priceProviderService.ts", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts", "apps/node-backend/src/services/info/performanceHelpers.ts", "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts", "apps/node-backend/src/services/portfolio/rebalanceTargets.ts", "apps/node-backend/src/routes/info/portfolioSummary.ts", "apps/frontend/src/pages/portfolio/PortfolioPage.tsx", "apps/frontend/src/pages/portfolio/MetalsPage.tsx", "apps/frontend/src/hooks/portfolio/usePortfolioSummary.ts", "apps/frontend/src/hooks/usePortfolio.ts", "apps/frontend/src/lib/api.ts"]
 ---
 
 # Feature: Portfolio & Investments
@@ -422,7 +422,7 @@ Code links: [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/fronten
   inheritance compatibility view. Migration 0087 later converted that shape to the canonical flat
   table used by current repositories.
 
-Code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
 ## Net Worth Tracking
 
@@ -608,7 +608,7 @@ The performance architecture was significantly refactored to move heavy computat
   `return_pct` from the value it serves, preserving snapshot decomposition and
   FX-neutral parity ([[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
 - Cache key includes period: `${currency}:${period}` for independent caching per period
-- New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
+- New service: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]] with functions: `computeMetrics(snapshots)`, `computeHeatmap(snapshots)`, `getBreakdownSummary(currency)`
 - Payload shaping: [[apps/node-backend/src/services/info/performanceHelpers.ts]] filters the requested period and returns daily snapshots without downsampling
 
 **Frontend simplification (now `PortfolioPage.tsx`, `PerformanceBreakdown.tsx`):**
@@ -640,7 +640,7 @@ and `netContributionSparkline.ts`, with their tests, were removed by
 - **X-axis adaptive formatting**: For periods ≤ 6 months (5d, 1m, 3m, 6m), x-axis ticks use the shared `dayTick` role (day + month, e.g., "15 Jan"). Longer periods use `monthTick` (month + two-digit year, e.g., "Jan 26"). Detailed tooltips use `detail` (day + month + four-digit year). Locale-aware month names follow the app language.
 - **Y-axis adaptive domain**: For short periods (5d, 1m, 3m), the Y-axis uses `auto/auto` domain to zoom into the data range and highlight price fluctuations. For longer periods (≥ 6m), Y-axis uses `0/auto` domain to anchor at zero, showing full historical context.
 
-Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/features/portfolio/PerformanceBreakdown.tsx]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]
 
 Code links: [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]], [[apps/frontend/src/pages/portfolio/tax/PortfolioTaxPage.tsx]], [[apps/frontend/src/pages/portfolio/StocksPage.tsx]], [[apps/frontend/src/pages/portfolio/CryptoPage.tsx]], [[apps/frontend/src/pages/portfolio/RealEstatePage.tsx]], [[apps/frontend/src/pages/portfolio/SavingsPage.tsx]], [[apps/frontend/src/pages/portfolio/MetalsPage.tsx]], [[apps/frontend/src/lib/api.ts]]
 
@@ -710,7 +710,7 @@ All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePort
 - Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
-Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
+Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ### Performance Improvements (2026-05-08 Bug Hunt)
 
@@ -724,7 +724,7 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.js]], [[app
 - Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
 - Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
+Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ## Cost Basis Methods (Phase 6)
 
@@ -1063,7 +1063,7 @@ Before ADR-074, `totalInvested` was restated at today's FX on every request. Aft
 - **`gainLoss`** includes the FX component. A USD holding that gained 0% in USD terms but whose currency strengthened 5% vs EUR will show a positive `gainLoss` driven entirely by `fxGain`.
 - The live portfolio totals and the snapshot series now agree on semantics (both use purchase-date rates for invested capital), closing the contradiction that existed before.
 
-Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.js]], [[packages/shared-utils/src/portfolio.ts]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
+Code links: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/routes/info/_performanceHelpers.js]], [[apps/node-backend/src/services/investmentService.ts]], [[packages/shared-utils/src/portfolio.ts]], [[docs/adr/074-fx-attribution-historical-rates|ADR-074]]
 
 ### Unified FX-Aware P&L in InvestmentDetailDialog (2026-06-28)
 

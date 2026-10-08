@@ -17,7 +17,7 @@ import {
   listResearchDossierVersions,
   restoreResearchDossier,
   updateResearchDossier,
-} from "../src/services/researchDossierService.js";
+} from "../src/services/researchDossierService.ts";
 
 const base = {
   title: "Research lifecycle fixture",

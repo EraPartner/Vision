@@ -29,7 +29,7 @@ import {
 } from "./providerRegistry.ts";
 import type { AdapterMap, ResearchSearchItem } from "./providerRegistry.ts";
 import type { QuotaReserver } from "./quotaGovernor.ts";
-import * as providerHealth from "../providerHealthService.js";
+import * as providerHealth from "../providerHealthService.ts";
 import * as mapRepo from "../../repositories/instrumentProviderMapRepository.ts";
 import investmentRepo from "../../repositories/investmentRepository.ts";
 import type { InstrumentProviderMapRow } from "../../types/rows.ts";

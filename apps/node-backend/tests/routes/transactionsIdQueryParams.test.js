@@ -47,21 +47,21 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 vi.mock("../../src/config/logger.ts", () => ({ logger: mockLogger() }));
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
-vi.mock("../../src/services/materializedViewService.js", () =>
+vi.mock("../../src/services/deduplication.ts", () => mockDeduplication());
+vi.mock("../../src/services/materializedViewService.ts", () =>
   mockMaterializedViews(),
 );
 vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 vi.mock("../../src/database/connection.ts", () => mockConnection());
-vi.mock("../../src/services/attachmentRecordService.js", () =>
+vi.mock("../../src/services/attachmentRecordService.ts", () =>
   mockAttachmentRecordService(),
 );
-vi.mock("../../src/services/attachmentService.js", () =>
+vi.mock("../../src/services/attachmentService.ts", () =>
   mockAttachmentService(),
 );
-vi.mock("../../src/services/transferReconciliationService.js", () => ({
+vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
   getTransferSuggestions: vi.fn(async () => []),
   markTransfer: vi.fn(),
@@ -69,10 +69,10 @@ vi.mock("../../src/services/transferReconciliationService.js", () => ({
 }));
 
 import transactionRepository from "../../src/repositories/transactionRepository.ts";
-import { markTransfer } from "../../src/services/transferReconciliationService.js";
+import { markTransfer } from "../../src/services/transferReconciliationService.ts";
 import { query as dbQuery } from "../../src/database/connection.ts";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
-import { attachmentRepository } from "../../src/services/attachmentRecordService.js";
+import { attachmentRepository } from "../../src/services/attachmentRecordService.ts";
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");

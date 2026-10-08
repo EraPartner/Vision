@@ -1,0 +1,241 @@
+/**
+ * Drift reconciliation (ADR-094, Phase C — accounts rewrite).
+ *
+ * The drift badge surfaces the selected statement reading minus computed balance.
+ * This service backs the reconcile dialog opened from the badge, resolving a drift
+ * one of two explicit ways:
+ *
+ *   - mode 'accept'     — treat the computed (ledger) balance as truth. Rewrites
+ *                         the stored statement figures to the computed balance and
+ *                         stamps today's as-of date; drift collapses to 0. No
+ *                         ledger rows are created.
+ *   - mode 'adjustment' — treat the statement as truth: the ledger is missing the
+ *                         difference. Creates ONE server-side ledger row with
+ *                         amount = drift, `balance` left NULL (it is NOT an anchor,
+ *                         so the ADR-094 anchor+delta computed balance stays honest
+ *                         — the descriptive-only default is preserved),
+ *                         is_transfer=true and transfer_source='adjustment'
+ *                         (migration 0075), owned by the shared system recipient
+ *                         (`recipient_id` is NOT NULL and the row has no payee).
+ *                         computed rises to meet statement; drift collapses to 0.
+ *
+ * On a multi-currency account only the selected currency partition is
+ * reconciled, and it is the currency both outcomes are denominated in. See
+ * the comment at the drift read below.
+ *
+ * Both are opt-in: the caller must name the mode. 'adjustment' follows the
+ * 'opening' (0073) / 'trade' (0053) precedent so the row stays out of
+ * income/spending aggregations and out of the ADR-083 transfer reconciler.
+ */
+
+import { query, withTransaction } from "../database/connection.ts";
+import {
+  computedBalanceByCurrencyAggLateral,
+  statementPartition,
+} from "../repositories/accountBalanceSql.ts";
+import { recipientRepository } from "../repositories/recipientRepository.ts";
+import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { todayAppDateString } from "../lib/timezone.ts";
+import { roundToCents, toDecimal, toNumber } from "../lib/money.ts";
+import { assertCurrency } from "../lib/validation.ts";
+
+const ADJUSTMENT_MEMO = "BALANCE ADJUSTMENT";
+const VALID_MODES = new Set(["accept", "adjustment"]);
+
+// Drifts below this (in the account currency's minor units) are treated as
+// already reconciled — floating-point noise should never mint a 0.00 adjustment
+// row or a no-op statement rewrite.
+const DRIFT_EPSILON = 0.005;
+
+type ReconcileMode = "accept" | "adjustment";
+
+type ReconcileDriftRow = {
+  account_currency: string | null;
+  /** Not selected by the drift query; the fallback below never fires. */
+  currency?: string | null;
+  reconcile_currency: string;
+  /** NUMERIC — string; null when the account has no statement figure. */
+  statement_balance: string | null;
+  balance_parts: Array<{ currency: string; balance: string }> | null;
+};
+
+export interface ReconcileResult {
+  mode: ReconcileMode;
+  drift: number;
+  currency: string;
+  statement_balance: number;
+  computed_balance: number;
+  transaction: Record<string, unknown> | null;
+}
+
+/**
+ * Validate the reconcile payload.
+ * Pure (no I/O) so it can be unit-tested directly.
+ */
+function normalizeReconcile(
+  body: { mode?: unknown; currency?: unknown } | null | undefined,
+): { mode: ReconcileMode; currency: string | undefined } {
+  const mode = String(body?.mode ?? "");
+  if (!VALID_MODES.has(mode)) {
+    throw new ValidationError(
+      "mode is required and must be 'accept' or 'adjustment'",
+    );
+  }
+  const currency =
+    body?.currency == null ? undefined : assertCurrency(body.currency);
+  return { mode: mode as ReconcileMode, currency };
+}
+
+export { normalizeReconcile as __normalizeReconcile };
+
+/**
+ * Reconcile an account's drift.
+ */
+export async function reconcileAccount(
+  accountId: number,
+  body: { mode?: unknown; currency?: unknown } | null | undefined,
+): Promise<ReconcileResult> {
+  const { mode, currency: requestedCurrency } = normalizeReconcile(body);
+  const today = todayAppDateString();
+
+  // The drift read and the adjustment INSERT / accept UPDATE must be atomic:
+  // two concurrent adjustment reconciles would otherwise both read the same
+  // drift and both insert, overshooting by exactly the drift. Lock the account
+  // row FOR UPDATE first so the second request blocks, then re-reads a now-zero
+  // drift and falls into the "already reconciled" guard below.
+  return withTransaction(async () => {
+    const lockRes = await query(
+      `SELECT id FROM accounts WHERE id = $1 FOR UPDATE`,
+      [accountId],
+    );
+    if (!lockRes.rows[0])
+      throw new NotFoundError(`Account ${accountId} not found`);
+
+    // Statement figure + the live computed balance, per currency partition (the
+    // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
+    // SELECT — the lateral aggregates, so the lock is taken separately above.
+    const res = await query<ReconcileDriftRow>(
+      `SELECT a.currency AS account_currency,
+              COALESCE($3::varchar(3), a.currency) AS reconcile_currency,
+              s.balance AS statement_balance,
+              bp.balance_parts
+         FROM accounts a
+         ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
+         LEFT JOIN account_statement_balances s
+           ON s.account_id = a.id
+          AND s.currency = COALESCE($3::varchar(3), a.currency)
+        WHERE a.id = $1`,
+      [accountId, today, requestedCurrency ?? null],
+    );
+    const row = res.rows[0];
+    if (!row) throw new NotFoundError(`Account ${accountId} not found`);
+
+    if (row.statement_balance == null) {
+      throw new ValidationError(
+        "Account has no statement balance to reconcile against",
+      );
+    }
+
+    // Multi-currency: reconcile ONE partition — the reconciliation base, which
+    // is the shared definition the hub badge and the reconcile dialog's
+    // `reconcilable_balance` also read, so the figure resolved here is the one
+    // the user was shown. The selected collection reading names the currency it
+    // is a statement for; measuring the drift against anything
+    // else — a cross-currency Σ of bare amounts, or an FX-converted total that
+    // moves with the daily rate — would not actually clear the badge. Every
+    // single-currency account keeps its previous figure exactly (see
+    // statementPartition). The other partitions are untouched: they have no
+    // statement figure to reconcile against.
+    const fallbackBase = statementPartition(
+      row.balance_parts,
+      row.account_currency ?? row.currency,
+    );
+    const reconcileCurrency = String(
+      requestedCurrency ?? fallbackBase.currency,
+    ).toUpperCase();
+    const exactPart = (row.balance_parts ?? []).find(
+      (part) => String(part.currency).toUpperCase() === reconcileCurrency,
+    );
+    const base = requestedCurrency
+      ? { currency: reconcileCurrency, balance: exactPart?.balance ?? 0 }
+      : fallbackBase;
+    const statement = Number(row.statement_balance);
+    // Round the base to cents BEFORE differencing, mirroring the hub's
+    // `reconcilable_balance` — the drift resolved here must equal the drift
+    // the dialog displayed, even when the partition sum carries a 4-dp tail.
+    const computed = toNumber(roundToCents(toDecimal(base.balance)));
+    const drift = toNumber(toDecimal(statement).minus(toDecimal(computed)));
+
+    if (Math.abs(drift) < DRIFT_EPSILON) {
+      throw new ValidationError(
+        "Account is already reconciled (no drift to resolve)",
+      );
+    }
+
+    // APP_TIMEZONE calendar day (ADR-009), not UTC — otherwise a row created
+    // between local midnight and ~02:00 east of UTC is stamped yesterday.
+
+    if (mode === "accept") {
+      // Adopt the reconciliation base — exactly the figure the dialog displayed
+      // — as the statement of record; drift → 0. On an account whose declared
+      // currency holds nothing the base is 0, and writing 0 is the honest
+      // outcome: there is no balance in the statement's currency to adopt.
+      // (The dialog shows that 0 as the base, so this is no longer a figure the
+      // user never saw.)
+      const upd = await query<{ balance: string }>(
+        `INSERT INTO account_statement_balances
+           (account_id, currency, balance, balance_date)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (account_id, currency) DO UPDATE
+           SET balance = EXCLUDED.balance, balance_date = EXCLUDED.balance_date
+         RETURNING balance`,
+        [accountId, reconcileCurrency, computed, today],
+      );
+      return {
+        mode,
+        drift: 0,
+        currency: reconcileCurrency,
+        statement_balance: Number(upd.rows[0].balance),
+        computed_balance: computed,
+        transaction: null,
+      };
+    }
+
+    // mode === 'adjustment': stamp a descriptive delta row (no `balance`) so the
+    // computed balance rises to meet the statement. The row is stamped in the
+    // BASE's currency, not blindly in `accounts.currency`: on a mislabelled
+    // single-currency account (USD rows under an account still declared EUR)
+    // those differ, and a EUR adjustment would open a second partition instead
+    // of moving the USD one the drift was measured against — leaving the badge
+    // exactly where it was. They are the same code for every other account.
+    //
+    // `recipient_id` is NOT NULL (migration 0001) and this row has no payee, so
+    // it is owned by the shared system recipient — resolved inside this
+    // transaction, so a rolled-back reconcile leaves no trace of it either.
+    const systemRecipientId = await recipientRepository.getOrCreateSystemId();
+    const ins = await query<Record<string, unknown>>(
+      `INSERT INTO transactions
+         (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
+       RETURNING id, amount, transfer_source`,
+      [
+        today,
+        drift,
+        base.currency,
+        ADJUSTMENT_MEMO,
+        accountId,
+        systemRecipientId,
+      ],
+    );
+    return {
+      mode,
+      drift: 0,
+      currency: reconcileCurrency,
+      statement_balance: statement,
+      computed_balance: statement, // computed now equals statement after the delta
+      transaction: ins.rows[0] || null,
+    };
+  });
+}
+
+export default { reconcileAccount, normalizeReconcile };

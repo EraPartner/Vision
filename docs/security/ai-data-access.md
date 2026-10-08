@@ -22,15 +22,15 @@ aliases:
 related_code:
   [
     "apps/node-backend/src/routes/ai.ts",
-    "apps/node-backend/src/services/aiChatService.js",
+    "apps/node-backend/src/services/aiChatService.ts",
     "apps/node-backend/src/services/aiChat/tools/index.ts",
     "apps/node-backend/src/integrations/ollama/client.ts",
     "apps/node-backend/tests/aiChatService.test.js",
     "apps/node-backend/tests/aiChatTools.test.js",
     "apps/node-backend/src/services/aiEvaluation/localReliability.ts",
     "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts",
-    "apps/node-backend/src/services/aiReferenceService.js",
-    "apps/node-backend/src/services/agentCloakPreflight.js",
+    "apps/node-backend/src/services/aiReferenceService.ts",
+    "apps/node-backend/src/services/agentCloakPreflight.ts",
     "apps/node-backend/src/repositories/aiReferenceRepository.ts",
     "apps/node-backend/tests/aiReferenceService.test.js",
   ]

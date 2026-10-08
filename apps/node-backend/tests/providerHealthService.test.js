@@ -22,7 +22,7 @@ import {
   listProviderHealth,
   probeProvider,
   __PROVIDER_DEFINITIONS as PROVIDER_DEFINITIONS,
-} from '../src/services/providerHealthService.js';
+} from '../src/services/providerHealthService.ts';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -132,6 +132,17 @@ describe('probeProvider', () => {
       status: 404,
     });
   });
+
+  it.each(['constructor', 'toString', '__proto__'])(
+    'treats inherited object key %s as an unknown provider',
+    async (name) => {
+      await expect(probeProvider(name)).rejects.toMatchObject({ status: 404 });
+      await recordSuccess(name);
+      await recordError(name, new Error('x'));
+      expect(providerHealthRepository.recordSuccess).not.toHaveBeenCalled();
+      expect(providerHealthRepository.recordError).not.toHaveBeenCalled();
+    },
+  );
 
   it('records success and returns enriched provider on healthy probe', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });

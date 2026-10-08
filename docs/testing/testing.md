@@ -926,7 +926,7 @@ Reference: [[docs/reference/code-patterns#Golden-Fixture Pattern|Golden-Fixture 
 - `apps/node-backend/tests/routes/admin.test.js` covers `POST /api/admin/investments/kinesis/sanitize-history` response handling for success and failure paths.
 - `apps/node-backend/tests/routes/investments.test.js` covers refresh eligibility for Kinesis investments when `price_provider_id` is missing but asset name/symbol maps through Kinesis config.
 
-Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/investments.ts]]
+Code links: [[apps/node-backend/tests/priceProviderService.test.js]], [[apps/node-backend/tests/routes/admin.test.js]], [[apps/node-backend/tests/routes/investments.test.js]], [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/investments.ts]]
 
 ### Backend
 
@@ -1482,10 +1482,10 @@ Validation runs (Phase C):
 
 - [[apps/node-backend/tests/routes/info.test.js]] expanded coverage for route-level dependency interactions in [[apps/node-backend/src/routes/info.ts]] using explicit mocks for:
   - [[apps/node-backend/src/database/connection.ts]] query behavior
-  - [[apps/node-backend/src/services/recurringDetectionService.js]]
-  - [[apps/node-backend/src/services/materializedViewService.js]]
+  - [[apps/node-backend/src/services/recurringDetectionService.ts]]
+  - [[apps/node-backend/src/services/materializedViewService.ts]]
   - [[apps/node-backend/src/services/currency/currencyConversionService.ts]] cache helpers
-  - [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
+  - [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]
 - Added assertions for:
   - `GET /recurring-patterns` success + detector-failure fallback (`{ patterns: [], total: 0 }`)
   - `GET /exchange-rates` stale-rate background refresh behavior, current-date no-refresh behavior, warm-failure warning log path, and DB-failure `500`

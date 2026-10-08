@@ -7,7 +7,7 @@ import { mockConnection } from '../helpers/repoMocks.js';
 vi.mock('../../src/database/connection.ts', () => mockConnection({ getClient: vi.fn() }));
 
 const { resolveBulkSelection, __normalizeBulkFilter: normalizeBulkFilter, __BULK_SELECTION_DEFAULTS: BULK_SELECTION_DEFAULTS } =
-  await import('../../src/services/bulkSelection.js');
+  await import('../../src/services/bulkSelection.ts');
 const { query: dbQuery } = await import('../../src/database/connection.ts');
 const { ValidationError } = await import('../../src/middleware/errorHandler.ts');
 

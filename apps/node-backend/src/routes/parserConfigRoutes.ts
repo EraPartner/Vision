@@ -13,7 +13,7 @@ import {
   ConflictError,
 } from "../middleware/errorHandler.ts";
 import { assertIdParam, validateIdParam } from "../middleware/validation.ts";
-import customParserConfigService from "../services/customParserConfigService.js";
+import customParserConfigService from "../services/customParserConfigService.ts";
 
 // (name, kind)-unique since migration 0041; both budgeting and portfolio parsers share it.
 export const PARSER_NAME_CONSTRAINT = "uq_custom_parser_configs_name_kind";

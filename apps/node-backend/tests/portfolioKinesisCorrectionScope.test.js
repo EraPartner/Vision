@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { toDecimal } from "../src/lib/money.ts";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
-import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.js";
-import { proveKinesisCorrectionSources } from "../src/services/portfolioKinesisAdoptionScope.js";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
+import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.ts";
+import { proveKinesisCorrectionSources } from "../src/services/portfolioKinesisAdoptionScope.ts";
 import {
   syntheticKinesisScope,
   syntheticKinesisManual,

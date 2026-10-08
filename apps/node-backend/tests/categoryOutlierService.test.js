@@ -16,7 +16,7 @@ import {
   detectCategoryOutliers,
   __filterDismissedFindings as filterDismissedFindings,
   __clearCategoryOutlierCacheForTests,
-} from "../src/services/categoryOutlierService.js";
+} from "../src/services/categoryOutlierService.ts";
 
 /** Expense row as returned by the service's SELECT (pg NUMERIC = string). */
 const row = (

@@ -10,7 +10,7 @@ import {
   __resolveProviderAnswer,
   __shouldPreserveProviderCheckpoint,
   resumeRecoverableInvestigations,
-} from "../src/services/aiInvestigationService.js";
+} from "../src/services/aiInvestigationService.ts";
 
 const request = {
   question: "Exclude rent and compare last year",

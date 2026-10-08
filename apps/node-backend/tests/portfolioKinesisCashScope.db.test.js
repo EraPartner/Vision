@@ -16,18 +16,18 @@ import {
 } from "./setup/db.js";
 import { cashSource } from "./helpers/kinesisCashScope.js";
 import { closePool } from "../src/database/connection.ts";
-import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import { readReconciliationSources } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
-import { cashReceipt } from "../src/services/portfolioKinesisCashScope.js";
-import { reconcileTransfers } from "../src/services/transferReconciliationService.js";
+import { cashReceipt } from "../src/services/portfolioKinesisCashScope.ts";
+import { reconcileTransfers } from "../src/services/transferReconciliationService.ts";
 import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 import { pruneOldImportBatches } from "../src/startup/warmup.ts";
 const warming = vi.hoisted(() => ({ available: true, calls: [] }));
 const refreshCash = vi.hoisted(() => vi.fn());
-vi.mock("../src/services/materializedViewService.js", async (original) => ({
+vi.mock("../src/services/materializedViewService.ts", async (original) => ({
   ...(await original()),
   scheduleRefresh: refreshCash,
 }));

@@ -16,9 +16,9 @@ import transactionService from "../src/services/portfolio/portfolioTransactionSe
 import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
-import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import { commitPortfolioAssetTransfer } from "../src/services/portfolio/portfolioAssetTransferService.ts";
 import { toDecimal } from "../src/lib/money.ts";
 import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.ts";

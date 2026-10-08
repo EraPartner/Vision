@@ -52,7 +52,7 @@ import {
   listConversations,
   renameConversation,
   runChatTurn,
-} from "../services/aiChatService.js";
+} from "../services/aiChatService.ts";
 import { ApiErrorCode } from "@vision/types/errors";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import { listBody, parsePagination } from "../lib/pagination.ts";

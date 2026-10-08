@@ -10,7 +10,7 @@
 import { Router } from "express";
 import type { ExpressRequest } from "../types/express.ts";
 import { z } from "zod";
-import splitService from "../services/splitService.js";
+import splitService from "../services/splitService.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
 import {
   BULK_SPLIT_MODES,

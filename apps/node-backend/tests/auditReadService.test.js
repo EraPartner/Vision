@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { readVerifiedAuditPage } from "../src/services/auditReadService.js";
+import { readVerifiedAuditPage } from "../src/services/auditReadService.ts";
 
 const HASH = "a".repeat(64);
 

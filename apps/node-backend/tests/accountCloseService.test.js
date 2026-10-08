@@ -17,7 +17,7 @@ import {
   closeAccount,
   __normalizeCloseAccount as normalizeCloseAccount,
   previewAccountPortfolioLots,
-} from "../src/services/accountCloseService.js";
+} from "../src/services/accountCloseService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

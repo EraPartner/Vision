@@ -108,7 +108,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ## 2. belgianInflationService.js
 
-**File:** [[apps/node-backend/src/services/belgianInflationService.js]]  
+**File:** [[apps/node-backend/src/services/belgianInflationService.ts]]  
 **Purpose:** Fetches, caches, and persists Belgian monthly inflation rates from Statbel (primary) and Eurostat HICP (fallback).
 
 ### Exported Functions
@@ -196,7 +196,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ## 4. dataImportService.js
 
-**File:** [[apps/node-backend/src/services/dataImportService.js]]  
+**File:** [[apps/node-backend/src/services/dataImportService.ts]]  
 **Purpose:** Handles bulk CSV import for reference data (recipients and categories), not transactions.
 
 ### Exported Functions
@@ -221,7 +221,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ## 5. deduplication.js
 
-**File:** [[apps/node-backend/src/services/deduplication.js]]  
+**File:** [[apps/node-backend/src/services/deduplication.ts]]  
 **Purpose:** Prevents duplicate transactions during import using SHA-256 hashing and field-based matching.
 
 ### Exported Functions
@@ -360,7 +360,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ## 9. materializedViewService.js
 
-**File:** [[apps/node-backend/src/services/materializedViewService.js]]  
+**File:** [[apps/node-backend/src/services/materializedViewService.ts]]  
 **Purpose:** Creates and refreshes PostgreSQL materialized views for pre-computed dashboard aggregations.
 
 ### Exported Functions
@@ -394,7 +394,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ## 10. portfolioPerformanceSnapshotService.js
 
-**File:** [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]  
+**File:** [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]]  
 **Purpose:** Computes aggregate daily portfolio performance and a separate forward-only per-broker history, including an explicit unassigned series.
 
 ### Exported Functions
@@ -450,7 +450,7 @@ not supply the internal parity evidence.
 
 ## 11. priceProviderService.js
 
-**File:** [[apps/node-backend/src/services/priceProviderService.js]]  
+**File:** [[apps/node-backend/src/services/priceProviderService.ts]]  
 **Purpose:** Fetches live and historical asset prices from multiple providers with caching and spike sanitization.
 
 ### Exported Functions
@@ -465,7 +465,7 @@ not supply the internal parity evidence.
 | `sanitizePersistedKinesisHistory` | `() => Promise<void>`                                           | Re-sanitizes stored Kinesis history |
 | `__resetPriceCache`               | `() => void`                                                    | Test-only: clears in-process cache  |
 
-> **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.js|quoteBackfillService.js]] (2026-04-16)
+> **Note:** `backfillHistoricalAssetQuotes()` moved to [[apps/node-backend/src/services/quoteBackfillService.ts|quoteBackfillService.js]] (2026-04-16)
 
 ### Providers
 
@@ -496,7 +496,7 @@ not supply the internal parity evidence.
 
 ## 12. quoteBackfillService.js
 
-**File:** [[apps/node-backend/src/services/quoteBackfillService.js]]  
+**File:** [[apps/node-backend/src/services/quoteBackfillService.ts]]  
 **Purpose:** Orchestrates historical quote backfill and maintenance for investments with holding window awareness.
 
 ### Exported Functions
@@ -601,7 +601,7 @@ See [[docs/features/import#import-pipeline-orchestrator|Import Feature — Pipel
 
 ## 15. recurringDetectionService.js
 
-**File:** [[apps/node-backend/src/services/recurringDetectionService.js]]  
+**File:** [[apps/node-backend/src/services/recurringDetectionService.ts]]  
 **Purpose:** Analyzes transaction history to automatically detect recurring payment patterns.
 
 ### Exported Functions
@@ -681,7 +681,7 @@ See [[docs/features/import#streaming-import-with-server-sent-events-sse|Import F
 
 ## 18. aiChatService.js
 
-**File:** [[apps/node-backend/src/services/aiChatService.js]]  
+**File:** [[apps/node-backend/src/services/aiChatService.ts]]  
 **Purpose:** Orchestrates natural-language financial queries using a local Ollama LLM with tool-calling. Implements the agentic loop: user message → LLM → tool dispatch → result → assistant narrative.
 
 ### Exported Functions
@@ -738,9 +738,9 @@ every other `OllamaError` incl. `TIMEOUT`/`NETWORK_ERROR` → 502; a 504 remap o
 
 ## 19. Manual analysis services
 
-**Files:** [[apps/node-backend/src/services/analysisCatalog.js|analysisCatalog.js]],
-[[apps/node-backend/src/services/analysisExecutor.js|analysisExecutor.js]], and
-[[apps/node-backend/src/services/savedAnalysisService.js|savedAnalysisService.js]]
+**Files:** [[apps/node-backend/src/services/analysisCatalog.ts|analysisCatalog.js]],
+[[apps/node-backend/src/services/analysisExecutor.ts|analysisExecutor.js]], and
+[[apps/node-backend/src/services/savedAnalysisService.ts|savedAnalysisService.js]]
 
 **Purpose:** Compile allowlisted visual plans, execute bounded read-only SQL, and preserve reusable
 analysis definitions and run state.
@@ -811,7 +811,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## aggregationRefresh.js (2026-04-29)
 
-**File:** [[apps/node-backend/src/services/aggregationRefresh.js]]  
+**File:** [[apps/node-backend/src/services/aggregationRefresh.ts]]  
 **Purpose:** Manages debounced and deferred refresh scheduling for aggregation materialized views without blocking server shutdown.
 
 ### Exported Functions
@@ -839,7 +839,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## attachmentService.js
 
-**File:** [[apps/node-backend/src/services/attachmentService.js]]
+**File:** [[apps/node-backend/src/services/attachmentService.ts]]
 **Purpose:** Owns the on-disk lifecycle of receipt attachments — validation, hashed-path layout, mime detection, and cleanup on transaction delete.
 
 | Function                            | Returns                                      |
@@ -854,7 +854,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## providerHealthService.js
 
-**File:** [[apps/node-backend/src/services/providerHealthService.js]]
+**File:** [[apps/node-backend/src/services/providerHealthService.ts]]
 **Purpose:** Records success/error metrics for every external data source call and exposes on-demand probe endpoints for the admin observability hub (ADR-034).
 
 | Function                                                                  | Returns                                  |
@@ -869,7 +869,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## recipientMergeService.js
 
-**File:** [[apps/node-backend/src/services/recipientMergeService.js]]
+**File:** [[apps/node-backend/src/services/recipientMergeService.ts]]
 **Purpose:** Transactional merge of duplicate recipients into a primary; rewrites transaction FKs, transfers bank-account ownership, and warms aggregations.
 
 | Function                                     | Returns                        |
@@ -883,7 +883,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## recipientClusterService.js
 
-**File:** [[apps/node-backend/src/services/recipientClusterService.js]]
+**File:** [[apps/node-backend/src/services/recipientClusterService.ts]]
 **Purpose:** Identifies merge-candidate clusters from the recipient list using normalized-name similarity + alias overlap; powers `GET /api/recipients/clusters` and the Recipients page suggestions UI.
 
 | Function             | Returns                                     |
@@ -896,7 +896,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## recipientPatternService.js
 
-**File:** [[apps/node-backend/src/services/recipientPatternService.js]]
+**File:** [[apps/node-backend/src/services/recipientPatternService.ts]]
 **Purpose:** Creates, previews, caches, and applies literal-prefix, glob, and regex recipient match patterns for the import pipeline.
 
 | Function                                            | Returns                              |
@@ -914,7 +914,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## transactionExport.js
 
-**File:** [[apps/node-backend/src/services/transactionExport.js]]
+**File:** [[apps/node-backend/src/services/transactionExport.ts]]
 **Purpose:** Builds export SQL from route-validated filter models and streams transaction exports (CSV + NDJSON), including ownership of the repeatable-read, read-only snapshot used by `POST /api/transactions/bulk-export`. It resolves the fixed selection, counts it, paginates the source query, applies `escapeCsvValue` / formula-injection protection, and commits or rolls back before releasing the database client.
 
 | Function                                      | Returns                                                     |
@@ -930,7 +930,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## routeManifest.js
 
-**File:** [[apps/node-backend/src/services/routeManifest.js]]
+**File:** [[apps/node-backend/src/services/routeManifest.ts]]
 **Purpose:** Scans the live Express router stack and emits a static manifest of every registered route (method + path + description). Drives the admin `/admin/endpoints` page and the dev observability inspector's "top endpoints" view.
 
 | Function             | Returns                                |
@@ -956,7 +956,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 ## bulkSelection.js
 
-**File:** [[apps/node-backend/src/services/bulkSelection.js]]
+**File:** [[apps/node-backend/src/services/bulkSelection.ts]]
 **Purpose:** Resolves either an explicit `ids[]` (≤500) or a `filter` object (capped at 5000 matches) into a concrete transaction id set for the bulk endpoints (`bulk-update`, `bulk-delete`, `bulk-export`, `bulk-tag`).
 
 | Function                                    | Returns                       |
@@ -1010,7 +1010,7 @@ Portfolio transaction domain rules are kept beside the orchestrator in [[apps/no
 ```javascript
 // routes/transactions.ts
 // ✅ Allowed — import from service seam
-import { createTransaction } from "../services/transactionService.js";
+import { createTransaction } from "../services/transactionService.ts";
 
 // routes/transactions.ts
 // ESLint ERROR — no-repo-direct-from-route

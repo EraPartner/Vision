@@ -20,13 +20,13 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../../src/services/deduplication.ts", () => mockDeduplication());
 
 vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () =>
+vi.mock("../../src/services/materializedViewService.ts", () =>
   mockMaterializedViews(),
 );
 

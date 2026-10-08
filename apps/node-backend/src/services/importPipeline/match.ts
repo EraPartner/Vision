@@ -22,7 +22,7 @@ import {
   findBestRecipientMatches,
   normalizeForMatching,
 } from '../calculations/normalization.ts';
-import { loadActivePatterns, applyPatterns } from '../recipientPatternService.js';
+import { loadActivePatterns, applyPatterns } from '../recipientPatternService.ts';
 import type { ImportStagingRow } from '../../types/rows.ts';
 import type { ImportBatchId, ImportProgressCallback } from './index.ts';
 

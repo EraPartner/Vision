@@ -39,25 +39,25 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/commit.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.ts"
-  - "apps/node-backend/src/services/portfolioIbkrPrimaryProof.js"
-  - "apps/node-backend/src/services/portfolioIbkrRepairCandidates.js"
+  - "apps/node-backend/src/services/portfolioIbkrPrimaryProof.ts"
+  - "apps/node-backend/src/services/portfolioIbkrRepairCandidates.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts"
-  - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
-  - "apps/node-backend/src/services/portfolioKinesisYieldGroups.js"
-  - "apps/node-backend/src/services/portfolioKinesisAdoptionScope.js"
-  - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
+  - "apps/node-backend/src/services/portfolioImportReconciliationService.ts"
+  - "apps/node-backend/src/services/portfolioKinesisYieldGroups.ts"
+  - "apps/node-backend/src/services/portfolioKinesisAdoptionScope.ts"
+  - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.ts"
   - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.ts"
   - "apps/node-backend/src/services/portfolio/portfolioCustodyImportScope.ts"
   - "packages/shared-utils/src/portfolioCustody.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioTypeNormalizer.ts"
-  - "apps/node-backend/src/services/importIdentity.js"
-  - "apps/node-backend/src/services/portfolioImportBatchService.js"
-  - "apps/node-backend/src/services/portfolioImportCommitService.js"
-  - "apps/node-backend/src/services/portfolioImportReadinessService.js"
+  - "apps/node-backend/src/services/importIdentity.ts"
+  - "apps/node-backend/src/services/portfolioImportBatchService.ts"
+  - "apps/node-backend/src/services/portfolioImportCommitService.ts"
+  - "apps/node-backend/src/services/portfolioImportReadinessService.ts"
   - "apps/node-backend/src/repositories/portfolioImportBatchRepository.ts"
   - "apps/node-backend/src/routes/portfolioImportRoutes.ts"
   - "apps/node-backend/src/routes/importBatchRoutes.ts"
@@ -75,7 +75,7 @@ related_code:
   - "alembic/versions/0121_portfolio_asset_transfers.py"
   - "alembic/versions/0122_portfolio_import_duplicate_repair.py"
   - "alembic/versions/0123_portfolio_asset_adjustments.py"
-  - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
+  - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.ts"
   - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
@@ -378,8 +378,8 @@ can still be retried with an explicit batch account under the batch lock.
 
 ### Reviewed reconciliation
 
-**Modules:** [[apps/node-backend/src/services/portfolioImportReconciliationService.js]],
-[[apps/node-backend/src/services/portfolioImportCommitService.js]], and
+**Modules:** [[apps/node-backend/src/services/portfolioImportReconciliationService.ts]],
+[[apps/node-backend/src/services/portfolioImportCommitService.ts]], and
 [[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts]].
 
 A full-history session previews all selected batches together. Pending, validated, unresolved, and
@@ -462,7 +462,7 @@ fails it stays pending even if its older receipt lacks complete source context. 
 source records settle only when one active adoption receipt, retained source proof and the full
 canonical after-image still agree. An ambiguous eligible record remains a blocker.
 
-[[apps/node-backend/src/services/portfolioKinesisAdoptionScope.js]] verifies the complete literal
+[[apps/node-backend/src/services/portfolioKinesisAdoptionScope.ts]] verifies the complete literal
 CSV capture, SHA-256, ordered headers/events, identities, account and occurrence context before
 any selection. Skipped rows, asset filters, old captures without this context, or changed staging
 evidence prevent a ready plan. The full source is classified first; callers cannot provide row IDs
@@ -476,7 +476,7 @@ attached when the recorded amount, unit price, fees and taxes are also zero, wit
 recorded values.
 
 Already-retained complete original-document evidence can prove a closed yield group between independent
-meaningful deposit receipts. [[apps/node-backend/src/services/portfolioKinesisYieldGroups.js]]
+meaningful deposit receipts. [[apps/node-backend/src/services/portfolioKinesisYieldGroups.ts]]
 requires complete primary, reference and canonical interval membership, a same-file settled yield
 anchor, and globally unique eight-decimal unit pairing. It does not choose a subset by quantity or
 infer an individual date. All eligible members are reviewed together or blocked together. Each

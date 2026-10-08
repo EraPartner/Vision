@@ -16,8 +16,11 @@ import {
   poolQuery,
   withTransaction,
 } from "../src/database/connection.ts";
-import { updatePattern } from "../src/services/recipientPatternService.js";
-import { mergeRecipients } from "../src/services/recipientMergeService.js";
+import {
+  createPattern,
+  updatePattern,
+} from "../src/services/recipientPatternService.ts";
+import { mergeRecipients } from "../src/services/recipientMergeService.ts";
 import {
   ValidationError,
   NotFoundError,
@@ -158,5 +161,27 @@ describe("mergeRecipients — flattens nested alias chains", () => {
       sql.includes("UPDATE transactions"),
     );
     expect(transactionUpdate[1]).toEqual([1, [3, 3]]);
+  });
+});
+
+describe("createPattern — validates the kind it stores", () => {
+  it("accepts a regex-invalid literal when pattern_kind is omitted", async () => {
+    poolQuery.mockResolvedValueOnce({ rows: [{ id: 7 }] });
+
+    await expect(
+      createPattern({ recipientId: 3, pattern: "ACME (BE" }),
+    ).resolves.toEqual({ id: 7 });
+    expect(poolQuery.mock.calls[0][1][2]).toBe("literal_prefix");
+  });
+
+  it("still rejects an invalid explicit regex", async () => {
+    await expect(
+      createPattern({
+        recipientId: 3,
+        pattern: "ACME (BE",
+        pattern_kind: "regex",
+      }),
+    ).rejects.toThrow(ValidationError);
+    expect(poolQuery).not.toHaveBeenCalled();
   });
 });

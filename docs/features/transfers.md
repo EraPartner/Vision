@@ -111,7 +111,7 @@ Cross-currency and FX-fee transfers (which auto-detection rejects because it req
 amount matching) are the primary use case for manual marking. The validation guards only
 structural sanity.
 
-**Related code:** [[apps/node-backend/src/services/transferReconciliationService.js]]
+**Related code:** [[apps/node-backend/src/services/transferReconciliationService.ts]]
 
 ### Creating a transfer from the UI (ADR-181)
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makePlannedTransactionRow } from "./builders/domainRows.js";
 import { mockTxConnection } from "./helpers/repoMocks.js";
 
-vi.mock("../src/services/plannedTransactionService.js", () => ({
+vi.mock("../src/services/plannedTransactionService.ts", () => ({
   default: {
     lockForExecution: vi.fn(),
     getById: vi.fn(),
@@ -11,8 +11,8 @@ vi.mock("../src/services/plannedTransactionService.js", () => ({
 }));
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 
-import plannedTransactionService from "../src/services/plannedTransactionService.js";
-import { executePlanned } from "../src/services/plannedExecutionService.js";
+import plannedTransactionService from "../src/services/plannedTransactionService.ts";
+import { executePlanned } from "../src/services/plannedExecutionService.ts";
 
 function planned(overrides = {}) {
   return makePlannedTransactionRow({

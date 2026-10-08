@@ -29,7 +29,7 @@ import type { ResearchFetchResult } from '../researchAggregator.ts';
 import {
   getPortfolioSummary,
   getSnapshots,
-} from '../../portfolioPerformanceSnapshotService.js';
+} from '../../portfolioPerformanceSnapshotService.ts';
 import { mean, stdev, quantile, clamp, flowAdjustedLogReturns } from './stats.ts';
 
 const TRADING_DAYS_PER_MONTH = 21;

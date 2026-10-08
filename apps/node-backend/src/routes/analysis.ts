@@ -5,11 +5,11 @@ import type { ExpressResponse } from "../types/express.ts";
 import {
   getAnalysisCatalog,
   compileVisualAnalysis,
-} from "../services/analysisCatalog.js";
+} from "../services/analysisCatalog.ts";
 import {
   executeAnalysisSql,
   cancelAnalysisQuery,
-} from "../services/analysisExecutor.js";
+} from "../services/analysisExecutor.ts";
 import {
   listSavedAnalyses,
   getSavedAnalysis,
@@ -19,13 +19,13 @@ import {
   deleteSavedAnalysis,
   listSavedAnalysisVersions,
   restoreSavedAnalysisVersion,
-} from "../services/savedAnalysisService.js";
-import { evaluateAnalysisFormulas } from "../services/analysisFormulaEngine.js";
+} from "../services/savedAnalysisService.ts";
+import { evaluateAnalysisFormulas } from "../services/analysisFormulaEngine.ts";
 import {
   previewAnalysisProposal,
   applyAnalysisProposal,
   generateAnalysisProposal,
-} from "../services/aiAnalysisProposalService.js";
+} from "../services/aiAnalysisProposalService.ts";
 import {
   AppError,
   NotFoundError,
@@ -36,27 +36,17 @@ import { optionalQueryString } from "../lib/httpParams.ts";
 import {
   executeFinancialAnalysis,
   isFinancialAnalysisDataset,
-} from "../services/analysisFinancialDatasets.js";
-import { executeAnalysisPivot } from "../services/analysisPivotService.js";
+} from "../services/analysisFinancialDatasets.ts";
+import { executeAnalysisPivot } from "../services/analysisPivotService.ts";
 import {
   applyAnalysisWorkbench,
   applyAnalysisScenarioModel,
   applyAnalysisFormulaModel,
   evaluateAnalysisExtension,
-} from "../services/analysisWorkbenchService.js";
+} from "../services/analysisWorkbenchService.ts";
+import type { AnalysisColumn } from "../services/analysisExtensions.ts";
 
 const router = Router();
-
-// analysisExecutor.js has no parameter JSDoc, so its `= []` defaults infer
-// `never[]` for values/datasetIds. Describe what the executor validates itself.
-const runAnalysisSql = executeAnalysisSql as (options: {
-  requestId?: string;
-  sql: string;
-  values?: unknown[];
-  datasetIds?: string[];
-  limit?: number;
-  offset?: number;
-}) => ReturnType<typeof executeAnalysisSql>;
 
 /**
  * Analysis services throw plain Errors decorated with optional `status`,
@@ -114,7 +104,7 @@ router.post("/execute", async (req, res) => {
       sql: string;
       values: unknown[];
       datasetIds: string[];
-      columns: unknown[];
+      columns: AnalysisColumn[];
       visualPlan?: { limit?: number };
     } =
       req.body.mode === "visual"
@@ -133,7 +123,7 @@ router.post("/execute", async (req, res) => {
             limit: req.body.limit,
             offset: req.body.offset,
           })
-        : await runAnalysisSql({
+        : await executeAnalysisSql({
             requestId: req.body.requestId,
             sql: source.sql,
             values: source.values,
@@ -284,7 +274,7 @@ router.post("/drill", async (req, res) => {
           requestId: req.body.requestId,
           limit: 100,
         })
-      : await runAnalysisSql({
+      : await executeAnalysisSql({
           requestId: req.body.requestId,
           sql: compiled.sql,
           values: compiled.values,

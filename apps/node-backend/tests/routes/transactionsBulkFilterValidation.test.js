@@ -39,13 +39,13 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../../src/services/deduplication.ts", () => mockDeduplication());
 
 vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/transferReconciliationService.js", () =>
+vi.mock("../../src/services/transferReconciliationService.ts", () =>
   mockTransferReconciliation(),
 );
 
@@ -55,11 +55,11 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
 
 vi.mock("../../src/database/connection.ts", () => mockPooledTxConnection());
 
-vi.mock("../../src/services/attachmentRecordService.js", () =>
+vi.mock("../../src/services/attachmentRecordService.ts", () =>
   mockAttachmentRecordService(),
 );
 
-vi.mock("../../src/services/attachmentService.js", () =>
+vi.mock("../../src/services/attachmentService.ts", () =>
   mockAttachmentService(),
 );
 

@@ -1415,7 +1415,7 @@ process.on("SIGTERM", async () => {
 
 ## Error Handling Pattern
 
-**Source:** [[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]], [[apps/node-backend/src/services/deduplication.js|deduplication.js]]
+**Source:** [[apps/node-backend/src/middleware/errorHandler.ts|errorHandler.js]], [[apps/node-backend/src/services/deduplication.ts|deduplication.js]]
 
 Centralized error-handling middleware with typed error classes. Routes throw typed errors; middleware maps to HTTP responses.
 
@@ -1960,7 +1960,7 @@ function DashboardStatCards() {
 
 ## Aggregation Refresh Orchestrator (Phase 1)
 
-**Source:** [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]]
+**Source:** [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.js]]
 
 Single entrypoint for refreshing PostgreSQL aggregations (materialized views + trigger-maintained tables).
 
@@ -1972,7 +1972,7 @@ After bulk imports or mass updates:
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
-} from "../services/aggregationRefresh.js";
+} from "../services/aggregationRefresh.ts";
 
 // In import service:
 await bulkInsertTransactions(transactions);
@@ -1992,7 +1992,7 @@ scheduleMaterializedViewRefresh(); // Five-second trailing debounce, ten-second 
 After editing or deleting a transaction:
 
 ```js
-import { scheduleAggregationRefresh } from "../services/aggregationRefresh.js";
+import { scheduleAggregationRefresh } from "../services/aggregationRefresh.ts";
 
 // In transaction route:
 app.patch("/api/transactions/:id", async (req, res) => {
@@ -2828,7 +2828,7 @@ test("createSseWriter tracks client close", (done) => {
 
 ## Atomic Transaction Pattern (Multi-Step Operations)
 
-**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.js|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.ts|splitRepository.js]] (Phase 12 Bugfix Sweep)
+**Source:** [[apps/node-backend/src/database/connection.ts|connection.js]], [[apps/node-backend/src/services/recipientMergeService.ts|recipientMergeService.js]], [[apps/node-backend/src/repositories/splitRepository.ts|splitRepository.js]] (Phase 12 Bugfix Sweep)
 
 For complex operations spanning multiple tables (e.g., merging recipients across transactions, splits, planned transactions, and bank accounts), or for race-sensitive single-table operations (e.g., recording payments against a split with overpayment risk), use explicit transaction control with row-level locking to ensure atomicity and serialize concurrent access.
 
@@ -2961,7 +2961,7 @@ const aggregateResult = await client.query(
 
 Both queries execute within the same transaction, so atomicity is preserved: the lock acquired on the first query holds until `COMMIT`.
 
-**Used in:** [[apps/node-backend/src/services/splitService.js]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — service orchestration asks the repository to lock the transaction row, then reads its split totals to validate allocation before insert.
+**Used in:** [[apps/node-backend/src/services/splitService.ts]] for `createSplitAtomic()` and `createSplitsBatchAtomic()` — service orchestration asks the repository to lock the transaction row, then reads its split totals to validate allocation before insert.
 
 ---
 

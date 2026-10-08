@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/services/accountService.js", () => ({
+vi.mock("../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
 }));
 
-import accountService from "../src/services/accountService.js";
+import accountService from "../src/services/accountService.ts";
 import { __normalizePortfolioParserConfig as normalizePortfolioParserConfig } from "../src/routes/portfolioImportRoutes.ts";
 import {
   assertPortfolioImportAccount,
   buildPortfolioImportPreviewRouting as buildPreviewRouting,
   getPortfolioImportAccountForPreview,
-} from "../src/services/portfolioImportAccountService.js";
+} from "../src/services/portfolioImportAccountService.ts";
 
 const config = (accountId) => ({
   dateColumn: "Date",

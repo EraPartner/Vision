@@ -40,8 +40,8 @@ import { closePool } from "../src/database/connection.ts";
 import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
 import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.ts";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
-import { accountService } from "../src/services/accountService.js";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
+import { accountService } from "../src/services/accountService.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 
 const pool = getTestPool();

@@ -3,7 +3,7 @@ import {
   getSaxoCsvCompanionEvidence,
   getSaxoWorkbookReconciliationEvidence,
 } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import { syntheticSaxoWorkbook } from "./helpers/saxoWorkbook.js";
 import {
   saxoHash,

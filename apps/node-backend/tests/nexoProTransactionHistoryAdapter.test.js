@@ -13,7 +13,7 @@ import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfol
 import {
   portfolioIdentityBase,
   assignImportIdentities,
-} from "../src/services/importIdentity.js";
+} from "../src/services/importIdentity.ts";
 import { toDecimal } from "../src/lib/money.ts";
 
 const fixture = path.join(

@@ -17,7 +17,7 @@ vi.mock("../src/repositories/savedChartsRepository.ts", () => ({
   },
 }));
 
-import savedChartsService from "../src/services/savedChartsService.js";
+import savedChartsService from "../src/services/savedChartsService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

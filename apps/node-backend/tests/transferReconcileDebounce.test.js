@@ -18,12 +18,12 @@ async function loadService() {
   vi.doMock("../src/config/logger.ts", () => ({
     logger: mockLogger(),
   }));
-  vi.doMock("../src/services/aggregationRefresh.js", () => ({
+  vi.doMock("../src/services/aggregationRefresh.ts", () => ({
     scheduleAggregationRefresh,
   }));
 
   const service =
-    await import("../src/services/transferReconciliationService.js");
+    await import("../src/services/transferReconciliationService.ts");
   return { ...service, query, scheduleAggregationRefresh };
 }
 

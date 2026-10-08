@@ -15,7 +15,7 @@ vi.mock("../src/config/logger.ts", () => ({
 import {
   detectRecurringPatterns,
   __clearRecurringCacheForTests,
-} from "../src/services/recurringDetectionService.js";
+} from "../src/services/recurringDetectionService.ts";
 
 const gymRow = (id, date, amount) => ({
   id,

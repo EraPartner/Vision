@@ -14,7 +14,7 @@ vi.mock("../src/services/calculations/forecast/index.ts", () => ({
 }));
 
 import { computeCashflowForecast } from "../src/services/calculations/forecast/index.ts";
-import { getCashForecastInsight } from "../src/services/cashForecastInsightService.js";
+import { getCashForecastInsight } from "../src/services/cashForecastInsightService.ts";
 
 /** ISO date for day n of the synthetic month. */
 const day = (n) => `2026-07-${String(n).padStart(2, "0")}`;

@@ -42,7 +42,7 @@ import {
   getHistoricalPriceAt,
   SUPPORTED_PROVIDERS,
   __resetPriceCache,
-} from "../src/services/priceProviderService.js";
+} from "../src/services/priceProviderService.ts";
 import { query } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";

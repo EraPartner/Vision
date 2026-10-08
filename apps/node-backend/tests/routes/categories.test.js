@@ -25,7 +25,7 @@ vi.mock("../../src/repositories/categoryRepository.ts", () => ({
   },
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () => ({
+vi.mock("../../src/services/materializedViewService.ts", () => ({
   scheduleRefresh: vi.fn(),
 }));
 

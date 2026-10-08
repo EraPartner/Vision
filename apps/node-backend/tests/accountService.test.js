@@ -30,7 +30,7 @@ vi.mock("../src/repositories/accountRepository.ts", () => {
 });
 
 import accountRepository from "../src/repositories/accountRepository.ts";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 import {
   ValidationError,
   NotFoundError,

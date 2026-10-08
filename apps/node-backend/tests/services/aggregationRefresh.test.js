@@ -32,8 +32,8 @@ import {
 import {
   __TRIGGER_MAINTAINED_TABLES as TRIGGER_MAINTAINED_TABLES,
   default as aggregationRefresh,
-} from "../../src/services/aggregationRefresh.js";
-import { createMaterializedViews } from "../../src/services/materializedViewService.js";
+} from "../../src/services/aggregationRefresh.ts";
+import { createMaterializedViews } from "../../src/services/materializedViewService.ts";
 
 afterAll(async () => {
   await closeTestPool();

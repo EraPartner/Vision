@@ -71,7 +71,7 @@ const BASELINE_PATH = path.join(ROOT, "scripts/checkjs-ratchet-baseline.json");
  * `ExpressRequest.file.buffer` for multer memoryStorage uploads) rather than
  * casting per file — one shared surface for every route/middleware/controller
  * file instead of the report-generation one-offs `ExpressResponse` in
- * services/transactionExport.js and services/reports/index.js predate.
+ * services/transactionExport.ts and services/reports/index.js predate.
  * `express` itself joined `multer`/`pg` in `src/types/thirdPartyModules.d.ts`'s
  * ambient-module list partway through `routes/` (every route file does
  * `import { Router } from 'express'`, a VALUE import that trips TS7016 the

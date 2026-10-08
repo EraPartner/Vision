@@ -26,7 +26,7 @@ import { validateId, MAX_SAFE_ID } from "./validation.ts";
 /**
  * The slice of an Express `Request` these parsers read. Structural, not
  * `import('express').Request` — the legacy checkJs program
- * resolves `express` to the ambient `any` shim (same reasoning as `ExpressResponse` in services/transactionExport.js).
+ * resolves `express` to the ambient `any` shim (same reasoning as `ExpressResponse` in services/transactionExport.ts).
  */
 export interface ExpressRequest {
   params: Record<string, string>;

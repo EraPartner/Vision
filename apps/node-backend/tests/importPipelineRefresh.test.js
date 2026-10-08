@@ -31,10 +31,10 @@ vi.mock("../src/services/importPipeline/match.ts", () => ({
 vi.mock("../src/services/importPipeline/commit.ts", () => ({
   commitBatch: mocks.commitBatch,
 }));
-vi.mock("../src/services/transferReconciliationService.js", () => ({
+vi.mock("../src/services/transferReconciliationService.ts", () => ({
   reconcileTransfers: mocks.reconcileTransfers,
 }));
-vi.mock("../src/services/aggregationRefresh.js", () => ({
+vi.mock("../src/services/aggregationRefresh.ts", () => ({
   clearForecastMcCaches: mocks.clearForecastMcCaches,
   scheduleMaterializedViewRefresh: mocks.scheduleMaterializedViewRefresh,
 }));

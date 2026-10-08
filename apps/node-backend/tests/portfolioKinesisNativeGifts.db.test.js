@@ -9,10 +9,10 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { fullFixture } from "./helpers/kinesisFullImport.js";
 import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.js";
-import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
+import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
 import { readReconciliationHistory } from "../src/repositories/portfolioImportReconciliationRepository.ts";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 const pool = getTestPool(),
   owned = { batches: [], investments: [], accounts: [] },
   describeDb = hasTestDatabase() ? describe : describe.skip;

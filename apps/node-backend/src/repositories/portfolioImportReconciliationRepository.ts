@@ -80,6 +80,12 @@ export type ReconciliationSourceRow = Omit<
   /** 'YYYY-MM-DD' */
   tx_date: string | null;
   route: string | null;
+  // `s.*` always selects the identity columns the staging type leaves optional.
+  source_transaction_id: string | null;
+  source_account_identity: string | null;
+  source_record_hash: string | null;
+  dedup_fingerprint: string | null;
+  dedup_fingerprint_version: number | null;
   asset_transfer_details: any;
   asset_adjustment_details: any;
   investment_id: number | null;

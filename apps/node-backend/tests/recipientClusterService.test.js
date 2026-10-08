@@ -4,7 +4,7 @@ import { mockConnection } from './helpers/repoMocks.js';
 vi.mock('../src/database/connection.ts', () => mockConnection());
 
 import { query } from '../src/database/connection.ts';
-import { findRecipientClusters } from '../src/services/recipientClusterService.js';
+import { findRecipientClusters } from '../src/services/recipientClusterService.ts';
 
 describe('recipientClusterService', () => {
   beforeEach(() => vi.clearAllMocks());

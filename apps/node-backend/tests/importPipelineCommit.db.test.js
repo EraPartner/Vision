@@ -42,13 +42,13 @@ import { closePool } from "../src/database/connection.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,
-} from "../src/services/importIdentity.js";
+} from "../src/services/importIdentity.ts";
 
 // The post-commit fan-out (MV refresh, planned-payment auto-link) is not what
 // this suite measures and would need materialized views this database does not
 // have. Both are already try/caught inside commitBatch; stubbing them keeps the
 // assertions about commit itself.
-vi.mock("../src/services/plannedMatchService.js", () => ({
+vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 

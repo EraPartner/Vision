@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { __validateAnalysisSql } from "../src/services/analysisExecutor.js";
-import { executeAnalysisPivot } from "../src/services/analysisPivotService.js";
+import { __validateAnalysisSql } from "../src/services/analysisExecutor.ts";
+import { executeAnalysisPivot } from "../src/services/analysisPivotService.ts";
 
 const plan = {
   datasetId: "cash-flows",

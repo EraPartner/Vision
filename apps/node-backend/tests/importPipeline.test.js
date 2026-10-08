@@ -19,7 +19,7 @@ import { findBestRecipientMatches } from "../src/services/calculations/normaliza
 import {
   loadActivePatterns,
   applyPatterns,
-} from "../src/services/recipientPatternService.js";
+} from "../src/services/recipientPatternService.ts";
 
 const baseWithTransaction = withTransaction.getMockImplementation();
 
@@ -39,7 +39,7 @@ vi.mock("../src/services/calculations/normalization.ts", () => ({
   findBestRecipientMatches: vi.fn(),
   normalizeForMatching: vi.fn(),
 }));
-vi.mock("../src/services/recipientPatternService.js", () => ({
+vi.mock("../src/services/recipientPatternService.ts", () => ({
   loadActivePatterns: vi.fn(),
   applyPatterns: vi.fn(),
 }));

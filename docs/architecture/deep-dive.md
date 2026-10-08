@@ -114,7 +114,7 @@ Price Resolution Chain:
 4. Cached current_price (fallback)
 ```
 
-**Implementation:** [[apps/node-backend/src/services/priceProviderService.js]]
+**Implementation:** [[apps/node-backend/src/services/priceProviderService.ts]]
 
 ### 4. Observer Pattern (React Query)
 

@@ -2,8 +2,8 @@
 title: Admin Observability Dashboard
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-05-08
+date: 2026-10-08
+updated: 2026-10-08
 tags: [feature, admin, observability, provider-health, endpoint-liveness, shadow-divergences, aggregation, migration, phase-f, phase-9-complete, rate-limiting, admin-guard, route-gating]
 description: Unified admin hub — DB maintenance, provider health, endpoint liveness, and request metrics — gated via Settings toggle.
 aliases: [admin dashboard, system observability, admin monitoring, admin hub]
@@ -196,7 +196,7 @@ Four entries: Overview, Database, Data Sources, Endpoints.
 |--------|---------|
 | `services/providerHealth/` | `recordSuccess`, `recordError`, `listHealth`, `probe` |
 | `middleware/requestMetrics.ts` | In-memory rolling window (15 min / 1 min buckets), p50/p95 |
-| `services/routeManifest.js` | Express router stack scan → static endpoint list |
+| `services/routeManifest.ts` | Express router stack scan → static endpoint list |
 
 ### API Endpoints
 

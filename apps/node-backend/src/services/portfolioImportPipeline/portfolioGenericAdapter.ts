@@ -24,10 +24,10 @@ import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapt
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.ts";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.ts";
 import { parseSaxoTransactionHistory } from "./saxoTransactionHistoryAdapter.ts";
-import { verifyKinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.js";
+import { verifyKinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
-import type { KinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.js";
-import type { IbkrSourceContext } from "../portfolioIbkrPrimaryProof.js";
+import type { KinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts";
+import type { IbkrSourceContext } from "../portfolioIbkrPrimaryProof.ts";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging

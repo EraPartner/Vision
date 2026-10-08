@@ -1,8 +1,8 @@
 import { researchAggregator } from "../../research/researchAggregator.ts";
 import { runPortfolioForecast } from "../../research/projection/portfolioProjection.ts";
-import { searchResearchDocuments } from "../../aiResearchDocuments.js";
-import { fetchPublicWebPage, searchPublicWeb } from "../../webResearch.js";
-import { getSavedAnalysis } from "../../savedAnalysisService.js";
+import { searchResearchDocuments } from "../../aiResearchDocuments.ts";
+import { fetchPublicWebPage, searchPublicWeb } from "../../webResearch.ts";
+import { getSavedAnalysis } from "../../savedAnalysisService.ts";
 import settings from "../../../config/config.ts";
 import {
   ToolValidationError,
@@ -352,12 +352,9 @@ export const searchPublicResearchWeb = {
       throw new ToolValidationError("Public web search limit reached", "query");
     context.researchBudget.searches += 1;
     // searchPublicWeb validates the raw model values itself (string query,
-    // bounded numeric count); its JSDoc names the shapes it accepts.
+    // bounded numeric count).
     const result = await searchPublicWeb(
-      {
-        query: args.query as string,
-        count: args.count as number | undefined,
-      },
+      { query: args.query, count: args.count },
       { signal: context.signal },
     );
     return { ok: true, data: result.results, meta: result.meta };

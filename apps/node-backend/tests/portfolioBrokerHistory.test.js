@@ -13,7 +13,7 @@ import { query } from "../src/database/connection.ts";
 import {
   getBrokerSnapshots,
   __storeCurrentBrokerSnapshot,
-} from "../src/services/portfolioPerformanceSnapshotService.js";
+} from "../src/services/portfolioPerformanceSnapshotService.ts";
 
 describe("forward-only broker snapshots", () => {
   beforeEach(() => vi.clearAllMocks());

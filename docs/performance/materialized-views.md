@@ -2,8 +2,8 @@
 title: Materialized Views & Aggregation Strategy
 type: performance
 status: active
-date: 2026-10-07
-updated: 2026-09-04
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     performance,
@@ -30,8 +30,8 @@ aliases:
   ]
 related_code:
   [
-    "apps/node-backend/src/services/aggregationRefresh.js",
-    "apps/node-backend/src/services/materializedViewService.js",
+    "apps/node-backend/src/services/aggregationRefresh.ts",
+    "apps/node-backend/src/services/materializedViewService.ts",
     "alembic/versions/0035_add_recipient_aggregations.py",
     "alembic/versions/0038_drop_mv_recipient_monthly.py",
     "alembic/versions/0080_drop_agg_recipient_totals.py",
@@ -187,7 +187,7 @@ Application mutation refreshes are orchestrated through **`aggregationRefresh.js
 Explicit maintenance that must wait for current projections can trigger a full refresh:
 
 ```javascript
-import { refreshAggregations } from "./services/aggregationRefresh.js";
+import { refreshAggregations } from "./services/aggregationRefresh.ts";
 
 // Explicit maintenance operation:
 await refreshAggregations();
@@ -213,7 +213,7 @@ Startup runs create, index, and refresh after Express begins listening. The boot
 After editing or deleting a single transaction:
 
 ```javascript
-import { scheduleAggregationRefresh } from "./services/aggregationRefresh.js";
+import { scheduleAggregationRefresh } from "./services/aggregationRefresh.ts";
 
 // In route handler after mutation:
 scheduleAggregationRefresh();
@@ -302,7 +302,7 @@ ON mv_monthly_summary (month_start, currency, category_id_key);
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
-} from "./services/aggregationRefresh.js";
+} from "./services/aggregationRefresh.ts";
 
 // In import service, after all transactions inserted:
 await reconcileTransfers();
@@ -314,7 +314,7 @@ scheduleMaterializedViewRefresh();
 ### After Single-Row Mutation
 
 ```javascript
-import { scheduleAggregationRefresh } from "./services/aggregationRefresh.js";
+import { scheduleAggregationRefresh } from "./services/aggregationRefresh.ts";
 
 // In transaction route handler:
 app.patch("/api/transactions/:id", async (req, res) => {
@@ -382,7 +382,7 @@ date_trunc('month', t.date)
 - [[docs/reference/data-model|Data Model Reference]] — Aggregation entity definitions
 - [[docs/performance/index]] — Performance Documentation Index
 - [[docs/reference/database-triggers|Database Triggers]] — All trigger definitions
-- [[apps/node-backend/src/services/aggregationRefresh.js|aggregationRefresh.js]] — Orchestrator source
+- [[apps/node-backend/src/services/aggregationRefresh.ts|aggregationRefresh.js]] — Orchestrator source
 - **Migrations:**
   - [[alembic/legacy_versions/0026_finance_aggregations.py|0026_finance_aggregations.py]] (legacy, archived)
   - [[alembic/versions/0035_add_recipient_aggregations.py|0035_add_recipient_aggregations.py]] (historical Phase 1 baseline)

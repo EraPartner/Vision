@@ -48,8 +48,8 @@ import { computeSankeyFlow } from "../src/services/calculations/aggregation/sank
 import {
   detectRecurringPatterns,
   __clearRecurringCacheForTests,
-} from "../src/services/recurringDetectionService.js";
-import { createMaterializedViews } from "../src/services/materializedViewService.js";
+} from "../src/services/recurringDetectionService.ts";
+import { createMaterializedViews } from "../src/services/materializedViewService.ts";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
@@ -58,7 +58,7 @@ import {
   __buildIdListWhere as buildIdListWhere,
   streamCsvExport,
   streamNdjsonExport,
-} from "../src/services/transactionExport.js";
+} from "../src/services/transactionExport.ts";
 import splitRepository from "../src/repositories/splitRepository.ts";
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
 import { plannedRepository } from "../src/repositories/infoRepositoryPlanned.ts";

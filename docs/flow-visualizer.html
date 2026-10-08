@@ -1288,7 +1288,7 @@
             "sub": "services/importPipeline",
             "kind": "service",
             "path": "apps/node-backend/src/services/importPipeline/",
-            "desc": "Budgeting CSV pipeline. Adapters retain exact logical CSV records; services/importIdentity.js assigns byte-sensitive provenance hashes and versioned occurrence fingerprints shared with portfolio import (ADR-134).",
+            "desc": "Budgeting CSV pipeline. Adapters retain exact logical CSV records; services/importIdentity.ts assigns byte-sensitive provenance hashes and versioned occurrence fingerprints shared with portfolio import (ADR-134).",
             "x": 40,
             "y": 448
           },
@@ -1342,7 +1342,7 @@
             "x": 1120,
             "y": 448,
             "desc": "Read-time suggestions; user Track creates a plan.",
-            "path": "apps/node-backend/src/services/recurringDetectionService.js"
+            "path": "apps/node-backend/src/services/recurringDetectionService.ts"
           },
           {
             "id": "sv.merge",
@@ -1611,7 +1611,7 @@
             "kind": "service",
             "x": 1120,
             "y": 740,
-            "path": "apps/node-backend/src/services/analysisExecutor.js",
+            "path": "apps/node-backend/src/services/analysisExecutor.ts",
             "desc": "ADR-144, ADR-149 and ADR-175: restricted SQL views stay isolated; enumerated financial adapters reuse canonical replay and stored FX, while complete-source pivots and pure preparation/time/scenario operations preserve unit provenance, resource limits, coverage and immutable saved settings."
           },
           {
@@ -1621,7 +1621,7 @@
             "kind": "service",
             "x": 580,
             "y": 960,
-            "path": "apps/node-backend/src/services/researchDossierService.js",
+            "path": "apps/node-backend/src/services/researchDossierService.ts",
             "desc": "ADR-153: validates user-authored research and optional document provenance, appends immutable versions under expectedVersion, retains deleted-link labels, and exports complete local JSON history. No provider call."
           },
           {
@@ -1631,7 +1631,7 @@
             "kind": "service",
             "x": 220,
             "y": 960,
-            "path": "apps/node-backend/src/services/analysisMonitorService.js",
+            "path": "apps/node-backend/src/services/analysisMonitorService.ts",
             "desc": "ADR-154: a bounded local scheduler leases due rules, checks one exact saved-analysis run or dossier evidence set, and persists baseline, failure, cooldown, episode, and in-app notification state. No AI, provider, web, or OS notification call."
           },
           {
@@ -1665,7 +1665,7 @@
             "label": "AI research orchestration",
             "sub": "jobs \u00b7 typed tools \u00b7 disclosure \u00b7 local restoration",
             "kind": "service",
-            "path": "apps/node-backend/src/services/aiInvestigationService.js",
+            "path": "apps/node-backend/src/services/aiInvestigationService.ts",
             "desc": "ADR-145, ADR-146, ADR-149, and ADR-151: serial, recoverable investigations compose bounded local tools and cited evidence. Optional OpenAI planning may propose identifier-only catalog plans while execution and results remain local; the distinct selected-evidence mode sends only the previewed evidence for a cloud-written final answer. Provider-form answers are checkpointed before local reversible-reference restoration.",
             "x": 940,
             "y": 960
@@ -1675,7 +1675,7 @@
             "label": "AI reference boundary",
             "sub": "typed tokens \u00b7 AES-256-GCM \u00b7 allowlisted restore",
             "kind": "service",
-            "path": "apps/node-backend/src/services/aiReferenceService.js",
+            "path": "apps/node-backend/src/services/aiReferenceService.ts",
             "desc": "ADR-151: converts explicit selected-text markers to one-job CSPRNG tokens, stores only authenticated ciphertext, validates scope claims, and restores known tokens only in allowlisted answer text. The installation key stays outside PostgreSQL and database backup. This is pseudonymization, not anonymity.",
             "x": 1120,
             "y": 960
@@ -1685,7 +1685,7 @@
             "label": "Commitment-aware cash",
             "sub": "90-day bills \u00b7 reserve floor \u00b7 candidate cap",
             "kind": "service",
-            "path": "apps/node-backend/src/services/commitmentAwareCashService.js",
+            "path": "apps/node-backend/src/services/commitmentAwareCashService.ts",
             "desc": "Reads active unexecuted planned bills and spendable balances, expands bounded recurrence, uses one checked stored-rate map, and computes a candidate cap.",
             "x": 220,
             "y": 1060
@@ -1705,7 +1705,7 @@
             "label": "Audit verifier",
             "sub": "chain \u00b7 domain links \u00b7 migration heads",
             "kind": "service",
-            "path": "apps/node-backend/src/services/auditVerificationService.js",
+            "path": "apps/node-backend/src/services/auditVerificationService.ts",
             "desc": "Scans the complete chain, linked domain rows, migration heads, and legacy cutover against an authenticated checkpoint supplied by Electron.",
             "x": 580,
             "y": 1060
@@ -1735,7 +1735,7 @@
             "label": "Audit retention",
             "sub": "one-year prefix \u00b7 guarded prune",
             "kind": "service",
-            "path": "apps/node-backend/src/services/auditRetentionService.js",
+            "path": "apps/node-backend/src/services/auditRetentionService.ts",
             "desc": "Plans a verified year-old chain prefix and asks migration 0118 to prune only after Electron signs the boundary outside PostgreSQL.",
             "x": 1120,
             "y": 1060
@@ -1761,7 +1761,7 @@
             "label": "AgentCloak setup",
             "sub": "Desktop probe \u00b7 private key",
             "kind": "service",
-            "path": "apps/node-backend/src/services/agentCloakDesktopSetupService.js",
+            "path": "apps/node-backend/src/services/agentCloakDesktopSetupService.ts",
             "desc": "ADR-171: AI settings probes Desktop /detect, creates a missing or blank Vision reference key in the private runtime environment, and stores only the enabled preference in PostgreSQL. Setup can precede OpenAI configuration.",
             "x": 760,
             "y": 1310
@@ -1771,7 +1771,7 @@
             "label": "AgentCloak preflight",
             "sub": "Desktop detect \u00b7 MCP gate",
             "kind": "service",
-            "path": "apps/node-backend/src/services/agentCloakPreflight.js",
+            "path": "apps/node-backend/src/services/agentCloakPreflight.ts",
             "desc": "ADR-169/170: Desktop detects selected-text spans before Vision creates encrypted scoped tokens, then checks for remaining findings at preview and before each OpenAI attempt. MCP mode blocks changed results. Neither mode rewrites the consent-bound send payload.",
             "x": 940,
             "y": 1310
@@ -1830,7 +1830,7 @@
             "kind": "service",
             "x": 940,
             "y": 740,
-            "path": "apps/node-backend/src/services/dbEditor.js",
+            "path": "apps/node-backend/src/services/dbEditor.ts",
             "desc": "JetBrains-style table browser/editor: schema discovery, paginated filtered reads (READ ONLY txn), batch insert/update/delete with xmin OCC; writes to db_editor_audit; debounces matview refresh for base tables (ADR-101)"
           },
           {
@@ -1840,7 +1840,7 @@
             "kind": "service",
             "x": 40,
             "y": 960,
-            "path": "apps/node-backend/src/services/portfolioImportReconciliationService.js",
+            "path": "apps/node-backend/src/services/portfolioImportReconciliationService.ts",
             "desc": "One-to-one existing trade adoption, explicit repair of a prior imported duplicate, policy-pinned plans, immutable restore images, and projected history validation. Adjustment actions consume eligible zero-yield or carried-basis lots."
           },
           {
@@ -2017,7 +2017,7 @@
                 "from": "be.routes",
                 "to": "sv.transactiondomains",
                 "payload": "transactionService.createManualTransaction({... account_id ...})",
-                "annotation": "apps/node-backend/src/services/transactionService.js",
+                "annotation": "apps/node-backend/src/services/transactionService.ts",
                 "title": "Apply transaction rules",
                 "note": "An active canonical account_id is required; bank_account is rejected on writes."
               },
@@ -2025,7 +2025,7 @@
                 "from": "sv.transactiondomains",
                 "to": "db.postgres",
                 "payload": "BEGIN \u00b7 pg_advisory_xact_lock(manual-v2 hash) \u00b7 duplicate lookup",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/deduplication.js",
+                "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/deduplication.ts",
                 "title": "Lock the duplicate identity"
               },
               {
@@ -2039,7 +2039,7 @@
                 "from": "be.repos",
                 "to": "db.postgres",
                 "payload": "INSERT transaction + tags; UPSERT manual_transaction_dedup_claims; COMMIT",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/deduplication.js",
+                "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/deduplication.ts",
                 "title": "Commit the row and neutral claim"
               },
               {
@@ -2048,13 +2048,13 @@
                 "title": "Match plans and schedule transfer reconciliation",
                 "note": "These follow the durable create. Auto-link failure does not roll back the transaction.",
                 "payload": "autoLinkTransactions; scheduleReconcile",
-                "annotation": "apps/node-backend/src/services/transactionService.js"
+                "annotation": "apps/node-backend/src/services/transactionService.ts"
               },
               {
                 "from": "sv.transactiondomains",
                 "to": "sv.aggrefresh",
                 "payload": "scheduleAggregationRefresh(rowIds)",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/transferReconciliationService.js",
+                "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/transferReconciliationService.ts",
                 "title": "Schedule derived-total refresh",
                 "note": "scheduleReconcile invalidates statistics and schedules aggregation refresh after reconciliation."
               },
@@ -2062,7 +2062,7 @@
                 "from": "sv.aggrefresh",
                 "to": "sv.matview",
                 "payload": "REFRESH MATERIALIZED VIEW CONCURRENTLY mv_*",
-                "annotation": "apps/node-backend/src/services/aggregationRefresh.js; apps/node-backend/src/services/materializedViewService.js",
+                "annotation": "apps/node-backend/src/services/aggregationRefresh.ts; apps/node-backend/src/services/materializedViewService.ts",
                 "title": "Refresh materialized views"
               },
               {
@@ -2134,7 +2134,7 @@
                 "title": "Persist staging and identity evidence",
                 "note": "Validation separates provenance hashes and occurrence fingerprints; matching resolves recipient candidates.",
                 "payload": "import_batches and import_staging_rows",
-                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts; apps/node-backend/src/services/importPipeline/validate.ts; apps/node-backend/src/services/importPipeline/match.ts; apps/node-backend/src/services/importIdentity.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts; apps/node-backend/src/services/importPipeline/validate.ts; apps/node-backend/src/services/importPipeline/match.ts; apps/node-backend/src/services/importIdentity.ts"
               },
               {
                 "from": "sv.import",
@@ -2217,7 +2217,7 @@
                 "title": "Refresh derived totals",
                 "note": "Attempt forecast invalidation and schedule one coalesced asynchronous refresh.",
                 "payload": "scheduleMaterializedViewRefresh()",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/aggregationRefresh.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/aggregationRefresh.ts"
               },
               {
                 "from": "be.routes",
@@ -2352,7 +2352,7 @@
                 "title": "Read daily history",
                 "note": "Select persisted rows for currency and date range.",
                 "payload": "SELECT portfolio_performance_snapshots",
-                "annotation": "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js"
+                "annotation": "apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts"
               },
               {
                 "from": "be.routes",
@@ -2489,7 +2489,7 @@
                 "from": "be.routes",
                 "to": "sv.dossiers",
                 "payload": "validated content, expectedVersion, source and live-link checks",
-                "annotation": "apps/node-backend/src/services/researchDossierService.js refuses a stale version or mismatched changed document citation."
+                "annotation": "apps/node-backend/src/services/researchDossierService.ts refuses a stale version or mismatched changed document citation."
               },
               {
                 "from": "sv.dossiers",
@@ -2539,7 +2539,7 @@
                 "from": "be.routes",
                 "to": "sv.monitors",
                 "payload": "claim lease; inspect threshold or evidence",
-                "annotation": "apps/node-backend/src/services/analysisMonitorService.js applies exact decimal comparison and persisted episode state; startup/analysisMonitorScheduler.ts checks overdue rules."
+                "annotation": "apps/node-backend/src/services/analysisMonitorService.ts applies exact decimal comparison and persisted episode state; startup/analysisMonitorScheduler.ts checks overdue rules."
               },
               {
                 "from": "sv.monitors",
@@ -2741,7 +2741,7 @@
                 "title": "Run the chat turn",
                 "note": "Load conversation history and tool definitions.",
                 "payload": "runChatTurn",
-                "annotation": "apps/node-backend/src/services/aiChatService.js"
+                "annotation": "apps/node-backend/src/services/aiChatService.ts"
               },
               {
                 "from": "sv.aichat",
@@ -2749,7 +2749,7 @@
                 "title": "Send the model context",
                 "note": "Use the configured Ollama endpoint.",
                 "payload": "chatStream",
-                "annotation": "apps/node-backend/src/services/aiChatService.js"
+                "annotation": "apps/node-backend/src/services/aiChatService.ts"
               },
               {
                 "from": "be.ollamaclient",
@@ -2789,7 +2789,7 @@
                 "title": "Continue within the limit",
                 "note": "Tool results return to the configured model for at most six iterations.",
                 "payload": "MAX_TOOL_ITERATIONS = 6",
-                "annotation": "apps/node-backend/src/services/aiChatService.js"
+                "annotation": "apps/node-backend/src/services/aiChatService.ts"
               },
               {
                 "from": "sv.aichat",
@@ -2797,7 +2797,7 @@
                 "title": "Persist the transcript",
                 "note": "Store user, assistant and tool messages.",
                 "payload": "conversation messages",
-                "annotation": "apps/node-backend/src/services/aiChatService.js"
+                "annotation": "apps/node-backend/src/services/aiChatService.ts"
               },
               {
                 "from": "be.routes",
@@ -3100,7 +3100,7 @@
                 "title": "Detect patterns",
                 "note": "Consider cadence, direction and confidence.",
                 "payload": "detectRecurringPatterns",
-                "annotation": "apps/node-backend/src/services/recurringDetectionService.js"
+                "annotation": "apps/node-backend/src/services/recurringDetectionService.ts"
               },
               {
                 "from": "sv.recurring",
@@ -3108,7 +3108,7 @@
                 "title": "Read history and plans",
                 "note": "Three years of active transactions, aliases and existing plans inform suggestions.",
                 "payload": "transactions and planned_transactions",
-                "annotation": "apps/node-backend/src/services/recurringDetectionService.js"
+                "annotation": "apps/node-backend/src/services/recurringDetectionService.ts"
               },
               {
                 "from": "sv.recurring",
@@ -3140,7 +3140,7 @@
                 "title": "Validate the plan",
                 "note": "The domain service checks the planned payment.",
                 "payload": "plannedTransactionService.create",
-                "annotation": "apps/node-backend/src/services/plannedTransactionService.js"
+                "annotation": "apps/node-backend/src/services/plannedTransactionService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -3148,7 +3148,7 @@
                 "title": "Save the plan",
                 "note": "Refresh planned queries so reminders can show it.",
                 "payload": "INSERT planned_transactions",
-                "annotation": "apps/node-backend/src/services/plannedTransactionService.js; apps/frontend/src/hooks/usePlannedPayments.ts"
+                "annotation": "apps/node-backend/src/services/plannedTransactionService.ts; apps/frontend/src/hooks/usePlannedPayments.ts"
               }
             ],
             "takeaway": "Detection does not automatically create planned payments or posted transactions.",
@@ -3478,7 +3478,7 @@
                 "from": "be.routes",
                 "to": "sv.bulkselection",
                 "payload": "resolveSelection({ ids?, filter? })",
-                "annotation": "services/bulkSelection.js  \u00b7  collapses ids \u222a filter \u2192 concrete id set (truncated to caps)."
+                "annotation": "services/bulkSelection.ts  \u00b7  collapses ids \u222a filter \u2192 concrete id set (truncated to caps)."
               },
               {
                 "from": "sv.bulkselection",
@@ -3546,7 +3546,7 @@
                 "from": "be.routes",
                 "to": "sv.attachments",
                 "payload": "storeAttachment(txId, file)",
-                "annotation": "services/attachmentService.js  \u00b7  hashes the file + chooses storage path."
+                "annotation": "services/attachmentService.ts  \u00b7  hashes the file + chooses storage path."
               },
               {
                 "from": "sv.attachments",
@@ -3954,7 +3954,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.ts retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Fresh Kinesis staging also captures the full literal hash and ordered event context through services/portfolioKinesisAdoptionScope.js before any selection; all bounded Kinesis scopes reject filters or incomplete capture. Narrowed UI staging explicitly uses zero yield basis before review. Explicit included_symbols otherwise excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.ts retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Fresh Kinesis staging also captures the full literal hash and ordered event context through services/portfolioKinesisAdoptionScope.ts before any selection; all bounded Kinesis scopes reject filters or incomplete capture. Narrowed UI staging explicitly uses zero yield basis before review. Explicit included_symbols otherwise excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.ts for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
               },
               {
                 "from": "sv.portfolioimport",
@@ -3978,19 +3978,19 @@
                 "from": "fe.pages",
                 "to": "fe.apiclient",
                 "payload": "POST /api/portfolio/import/batches/:id/rows/investment-override  { row_ids, investment_id } or { row_ids, create_new: true }",
-                "annotation": "User resolves each unresolved group via apps/frontend/src/features/portfolio/InvestmentCombobox.tsx. One atomic request locks the batch and complete row set, then resolveInvestmentRows in apps/node-backend/src/services/portfolioImportBatchService.js links every requested row to one existing or newly created holding."
+                "annotation": "User resolves each unresolved group via apps/frontend/src/features/portfolio/InvestmentCombobox.tsx. One atomic request locks the batch and complete row set, then resolveInvestmentRows in apps/node-backend/src/services/portfolioImportBatchService.ts links every requested row to one existing or newly created holding."
               },
               {
                 "from": "fe.apiclient",
                 "to": "sv.portfolioreconciliation",
                 "payload": "POST /reconciliation/preview {batch_ids, adopt_policy?, batch_policies?, reconciliation_scope?, cash_funding_policy?}",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js classifies complete unfiltered Kinesis sources before every bounded selection. preserve_existing attachments retain all recorded fields. services/portfolioKinesisYieldGroups.js proves closed intervals through independent meaningful deposit receipts, same-file settled anchors and global unique eight-decimal pairing; every eligible member selects or blocks together. prefer_source permits financial corrections or typed dateProof date-only yield-group corrections to the literal broker payment date, preserving quantities/type/financials/notes/IDs; ordinary financial corrections retain dates. Literal fees replace stored fees; native gift basis/currency requires retained validated original-document proof and dated conversion readiness without invented FX. Selected counts and pending/deferred progress remain bound to planFingerprint. Attachment/correction leave paired income pending; record_in_kind_income_only selects literal paired income against proved existing zero-basis units, with typed incomeProof and separate recordedIncome counts. Full history binds a distinct selected zero-basis Gift insert/adoption/existing action through incomeProof.unitRowId; existing units and repeated income also identify unitTransactionId. Literal paired income retains included_in_units without a second acquisition or gain. Stored historical proof remains readable; the session has no XML upload. Normal historical cache warm requires stored date rates within seven days; unresolved income dates defer, rate evidence binds the fingerprint, and source FX stays null. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete original Kinesis cash balance chains and source-bound own_account_transfer confirmation in record_cash_only. Every group selects together through cashProof and signed cashValues; separately quoted funding-withdrawal cashFeeValues preserve fee spending. Typed one/two-component evidence retains brokerage origin and null peers, without portfolio/income/custody selection or reference upload."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.ts classifies complete unfiltered Kinesis sources before every bounded selection. preserve_existing attachments retain all recorded fields. services/portfolioKinesisYieldGroups.ts proves closed intervals through independent meaningful deposit receipts, same-file settled anchors and global unique eight-decimal pairing; every eligible member selects or blocks together. prefer_source permits financial corrections or typed dateProof date-only yield-group corrections to the literal broker payment date, preserving quantities/type/financials/notes/IDs; ordinary financial corrections retain dates. Literal fees replace stored fees; native gift basis/currency requires retained validated original-document proof and dated conversion readiness without invented FX. Selected counts and pending/deferred progress remain bound to planFingerprint. Attachment/correction leave paired income pending; record_in_kind_income_only selects literal paired income against proved existing zero-basis units, with typed incomeProof and separate recordedIncome counts. Full history binds a distinct selected zero-basis Gift insert/adoption/existing action through incomeProof.unitRowId; existing units and repeated income also identify unitTransactionId. Literal paired income retains included_in_units without a second acquisition or gain. Stored historical proof remains readable; the session has no XML upload. Normal historical cache warm requires stored date rates within seven days; unresolved income dates defer, rate evidence binds the fingerprint, and source FX stays null. apps/node-backend/src/services/portfolioKinesisCashScope.ts proves complete original Kinesis cash balance chains and source-bound own_account_transfer confirmation in record_cash_only. Every group selects together through cashProof and signed cashValues; separately quoted funding-withdrawal cashFeeValues preserve fee spending. Typed one/two-component evidence retains brokerage origin and null peers, without portfolio/income/custody selection or reference upload."
               },
               {
                 "from": "sv.portfolioreconciliation",
                 "to": "be.repos",
                 "payload": "current history + canonical fingerprints; adopt / insert / duplicate / explicit repair_duplicate / bounded record_income",
-                "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
+                "annotation": "apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts reads source and current history. Exact legacy matches retain IDs; corrections require policy. apps/node-backend/src/services/portfolioImportDuplicateRepairService.ts removes an unchanged prior copy only with one manual candidate, complete old batch/pointer evidence, and explicit reviewed policy; both row images and source counters are retained."
               },
               {
                 "from": "sv.portfolioreconciliation",
@@ -4020,13 +4020,13 @@
                 "from": "fe.apiclient",
                 "to": "sv.portfolioimport",
                 "payload": "POST /reconciliation/commit with current expected_plan_fingerprint, unchanged policies, reconciliation_scope and confirmed cash_funding_policy",
-                "annotation": "apps/node-backend/src/services/portfolioImportCommitService.js locks batches/accounts and trade/custody writers, reloads the plan, and rejects stale fingerprints. Attachment and correction return before every general event drain with zero new financial records/repairs/cash/custody. record_in_kind_income_only writes only literal paired income under preserve_existing and zero yield policy, then returns before any acquisition/cash/custody/adjustment drain. Excluded rows remain unsettled, and all selected batches stay awaiting_review while any events are pending. Full-scope events run by date, batch ID and source row order. portfolio/portfolioCustodyImportScope.js binds approved custody signatures, allocates through each event date, then validates complete persisted history. Runtime row or final replay failure rolls back the outer scope. record_cash_only writes only proved cash components and returns before all other drains. recordedCash/imported counts components; source actions/duplicates count source events. Transfer components exclude trade quotes and confirmed own funding from ordinary flows; literal withdrawal fees and card spending remain expenses. No opposite bank transaction is invented. Successful new cash commit/rollback schedules existing statistics cache refresh; failures and no-op repeats do not. Every active routed-account ledger row must be a validated same-source main/fee component; unrelated dates, currencies or anchors block. Routed-account account_statement_balances readings, including zero readings, also block zero-opening source; their locked fingerprint prevents stale commit."
+                "annotation": "apps/node-backend/src/services/portfolioImportCommitService.ts locks batches/accounts and trade/custody writers, reloads the plan, and rejects stale fingerprints. Attachment and correction return before every general event drain with zero new financial records/repairs/cash/custody. record_in_kind_income_only writes only literal paired income under preserve_existing and zero yield policy, then returns before any acquisition/cash/custody/adjustment drain. Excluded rows remain unsettled, and all selected batches stay awaiting_review while any events are pending. Full-scope events run by date, batch ID and source row order. portfolio/portfolioCustodyImportScope.js binds approved custody signatures, allocates through each event date, then validates complete persisted history. Runtime row or final replay failure rolls back the outer scope. record_cash_only writes only proved cash components and returns before all other drains. recordedCash/imported counts components; source actions/duplicates count source events. Transfer components exclude trade quotes and confirmed own funding from ordinary flows; literal withdrawal fees and card spending remain expenses. No opposite bank transaction is invented. Successful new cash commit/rollback schedules existing statistics cache refresh; failures and no-op repeats do not. Every active routed-account ledger row must be a validated same-source main/fee component; unrelated dates, currencies or anchors block. Routed-account account_statement_balances readings, including zero readings, also block zero-opening source; their locked fingerprint prevents stale commit."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "atomic selected adoption receipts/source counters; full scope also writes repairs + missing trades/cash + dated custody/adjustments",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. Attachment/correction scopes write only proven existing attachments, financial corrections or whole-group payment-date corrections and newly settled receipt-backed duplicates. The separate income scope records literal paired dividends with read-only included_in_units, incomeProof and recordedIncome counts; services/portfolioKinesisIncomePairs.js and repositories/portfolioIncomeRecognitionRepository.ts retain complete pair proof and immutable record/restore receipts, without changing acquired units or gains. Group date actions change only date and retain distinct source/canonical identities; unchanged anchors are proof context, not correction counts. Pending progress does not declare remaining history complete. Existing immutable adoption/restore receipts verify full after-images before rollback, including original group dates. Full-scope duplicate repair retains dual images/counters; services/portfolioImportPipeline/commit.ts routes each new event once. Full history records the Gift once, then verifies its actual canonical after-image before writing the paired income receipt; typed unitRowId and canonical identity are bound in the review fingerprint. recordedIncome/recordedCash are additive subsets of full imported totals, with exact owned repeats writing neither again. All writers share trade, transfer and adjustment locks. apps/node-backend/src/services/portfolioImportCashService.js orchestrates the selected writer/rollback and apps/node-backend/src/repositories/portfolioImportCashRepository.ts owns signed main/fee persistence and image locks. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete source/account closure and retains typed immutable cash envelopes in source staging with primary and optional fee after-images. Brokerage origin prevents automatic re-pairing/orphan clearing; complete groups and component images are fingerprint-bound."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.ts preserves adopted transaction IDs. Attachment/correction scopes write only proven existing attachments, financial corrections or whole-group payment-date corrections and newly settled receipt-backed duplicates. The separate income scope records literal paired dividends with read-only included_in_units, incomeProof and recordedIncome counts; services/portfolioKinesisIncomePairs.ts and repositories/portfolioIncomeRecognitionRepository.ts retain complete pair proof and immutable record/restore receipts, without changing acquired units or gains. Group date actions change only date and retain distinct source/canonical identities; unchanged anchors are proof context, not correction counts. Pending progress does not declare remaining history complete. Existing immutable adoption/restore receipts verify full after-images before rollback, including original group dates. Full-scope duplicate repair retains dual images/counters; services/portfolioImportPipeline/commit.ts routes each new event once. Full history records the Gift once, then verifies its actual canonical after-image before writing the paired income receipt; typed unitRowId and canonical identity are bound in the review fingerprint. recordedIncome/recordedCash are additive subsets of full imported totals, with exact owned repeats writing neither again. All writers share trade, transfer and adjustment locks. apps/node-backend/src/services/portfolioImportCashService.ts orchestrates the selected writer/rollback and apps/node-backend/src/repositories/portfolioImportCashRepository.ts owns signed main/fee persistence and image locks. apps/node-backend/src/services/portfolioKinesisCashScope.ts proves complete source/account closure and retains typed immutable cash envelopes in source staging with primary and optional fee after-images. Brokerage origin prevents automatic re-pairing/orphan clearing; complete groups and component images are fingerprint-bound."
               },
               {
                 "from": "fe.hooks",
@@ -4044,7 +4044,7 @@
                 "from": "sv.portfolioreconciliation",
                 "to": "db.postgres",
                 "payload": "guarded batch rollback: remove owned rows; compare-and-set restore original adopted history",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. repositories/portfolioIncomeRecognitionRepository.ts validates both paired after-images, restores income first and releases active acquisition dependencies. Migration 0124 omits standard from normalized old-receipt comparisons without rewriting receipts and guards downgrade. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts removes owned adjustments only after history checks; source links delete only by parent cascade. apps/node-backend/src/services/portfolioKinesisCashScope.js checks every owned cash component, including a quoted withdrawal fee, before atomic removal; typed source receipts remain immutable after rollback and a fresh complete capture can record again. apps/node-backend/src/startup/warmup.ts excludes typed receipt owners from batch pruning."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.ts validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.ts checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. repositories/portfolioIncomeRecognitionRepository.ts validates both paired after-images, restores income first and releases active acquisition dependencies. Migration 0124 omits standard from normalized old-receipt comparisons without rewriting receipts and guards downgrade. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts removes owned adjustments only after history checks; source links delete only by parent cascade. apps/node-backend/src/services/portfolioKinesisCashScope.ts checks every owned cash component, including a quoted withdrawal fee, before atomic removal; typed source receipts remain immutable after rollback and a fresh complete capture can record again. apps/node-backend/src/startup/warmup.ts excludes typed receipt owners from batch pruning."
               }
             ],
             "docs": [
@@ -4335,7 +4335,7 @@
                 "from": "be.routes",
                 "to": "sv.agentcloaksetup",
                 "payload": "Probe Desktop, ensure reference key, save enabled preference",
-                "annotation": "apps/node-backend/src/services/agentCloakDesktopSetupService.js performs the enable sequence; an unavailable detector, invalid existing key, or storage error fails closed."
+                "annotation": "apps/node-backend/src/services/agentCloakDesktopSetupService.ts performs the enable sequence; an unavailable detector, invalid existing key, or storage error fails closed."
               },
               {
                 "from": "sv.agentcloaksetup",
@@ -4609,7 +4609,7 @@
                 "from": "be.routes",
                 "to": "sv.cashplanning",
                 "payload": "computeCommitmentAwareCash: 90-day horizon",
-                "annotation": "apps/node-backend/src/services/commitmentAwareCashService.js excludes future income and statistical forecasts."
+                "annotation": "apps/node-backend/src/services/commitmentAwareCashService.ts excludes future income and statistical forecasts."
               },
               {
                 "from": "sv.cashplanning",
@@ -4755,7 +4755,7 @@
                 "from": "be.routes",
                 "to": "sv.auditverify",
                 "payload": "authenticated checkpoint or no anchor",
-                "annotation": "apps/node-backend/src/services/auditVerificationService.js returns verified, partially_verified, unavailable, or failed."
+                "annotation": "apps/node-backend/src/services/auditVerificationService.ts returns verified, partially_verified, unavailable, or failed."
               },
               {
                 "from": "sv.auditverify",
@@ -4797,7 +4797,7 @@
                 "from": "build.electron",
                 "to": "sv.auditretention",
                 "payload": "signed /retention-prune request",
-                "annotation": "apps/node-backend/src/services/auditRetentionService.js verifies the retained history and calls migration 0118's atomic guarded function."
+                "annotation": "apps/node-backend/src/services/auditRetentionService.ts verifies the retained history and calls migration 0118's atomic guarded function."
               },
               {
                 "from": "sv.auditretention",
@@ -4922,7 +4922,7 @@
                 "title": "Apply business rules",
                 "note": "Domain services coordinate reads and mutations.",
                 "payload": "transactionService.getAllWithCount",
-                "annotation": "apps/node-backend/src/services/transactionService.js"
+                "annotation": "apps/node-backend/src/services/transactionService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5171,7 +5171,7 @@
                 "title": "Reconcile after a write",
                 "note": "Imports and manual mutations trigger the corpus-wide scan.",
                 "payload": "reconcileTransfers",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/transactionService.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/transactionService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5179,7 +5179,7 @@
                 "title": "Find candidate pairs",
                 "note": "Clean invalid auto links; find opposite equal amounts, same currency, different accounts, within three days.",
                 "payload": "listTransferCandidatePairs",
-                "annotation": "apps/node-backend/src/services/transferReconciliationService.js; apps/node-backend/src/repositories/transactionRepository.ts"
+                "annotation": "apps/node-backend/src/services/transferReconciliationService.ts; apps/node-backend/src/repositories/transactionRepository.ts"
               },
               {
                 "from": "be.repos",
@@ -5203,7 +5203,7 @@
                 "title": "Mark both legs together",
                 "note": "Guarded peer writes commit together; a partial concurrent match is reverted.",
                 "payload": "transfer_source = auto; peer IDs",
-                "annotation": "apps/node-backend/src/services/transferReconciliationService.js"
+                "annotation": "apps/node-backend/src/services/transferReconciliationService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5211,7 +5211,7 @@
                 "title": "Refresh derived state",
                 "note": "The calling mutation refreshes statistics after reconciliation.",
                 "payload": "scheduleAggregationRefresh",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/importPipeline/index.ts"
+                "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/importPipeline/index.ts"
               },
               {
                 "from": "sv.matview",
@@ -5219,7 +5219,7 @@
                 "title": "Separate balance from spending",
                 "note": "Omit transfers from income/spending totals; include actual movements in balances.",
                 "payload": "materialized summaries and account ledger",
-                "annotation": "apps/node-backend/src/services/materializedViewService.js"
+                "annotation": "apps/node-backend/src/services/materializedViewService.ts"
               },
               {
                 "from": "be.routes",
@@ -5227,7 +5227,7 @@
                 "title": "Optional API resolution",
                 "note": "API capability: confirm ambiguous or cross-currency pairs, or dismiss a wrong pair. Current frontend has no dedicated transfer controls.",
                 "payload": "GET /api/transactions/transfer-suggestions; POST /api/transactions/transfers; DELETE /api/transactions/transfers/:id",
-                "annotation": "apps/node-backend/src/routes/transactions.ts; apps/node-backend/src/services/transferReconciliationService.js"
+                "annotation": "apps/node-backend/src/routes/transactions.ts; apps/node-backend/src/services/transferReconciliationService.ts"
               }
             ],
             "docs": [
@@ -5266,7 +5266,7 @@
                 "title": "Validate the allocation",
                 "note": "Validate all rows before writing.",
                 "payload": "createSplitsBatchAtomic",
-                "annotation": "apps/node-backend/src/routes/splits.ts; apps/node-backend/src/services/splitService.js"
+                "annotation": "apps/node-backend/src/routes/splits.ts; apps/node-backend/src/services/splitService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5274,7 +5274,7 @@
                 "title": "Save shares atomically",
                 "note": "Lock the parent, enforce four-decimal allocation precision and save creation audits.",
                 "payload": "splits and split_audit",
-                "annotation": "apps/node-backend/src/services/splitService.js"
+                "annotation": "apps/node-backend/src/services/splitService.ts"
               },
               {
                 "from": "fe.pages",
@@ -5298,7 +5298,7 @@
                 "title": "Check the debt",
                 "note": "Lock the split, recompute paid total and reject overpayment.",
                 "payload": "addPayment",
-                "annotation": "apps/node-backend/src/services/splitService.js"
+                "annotation": "apps/node-backend/src/services/splitService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5306,7 +5306,7 @@
                 "title": "Store payment and audit",
                 "note": "Payment, optional settled state and audit record commit together.",
                 "payload": "split_payments and split_audit",
-                "annotation": "apps/node-backend/src/services/splitService.js"
+                "annotation": "apps/node-backend/src/services/splitService.ts"
               },
               {
                 "from": "fe.hooks",
@@ -5345,7 +5345,7 @@
                 "title": "Try matching after a real write",
                 "note": "Imports and manual mutations call the same service.",
                 "payload": "autoLinkTransactions",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/plannedMatchService.js; apps/node-backend/src/services/importPipeline/commit.ts"
+                "annotation": "apps/node-backend/src/services/transactionService.ts; apps/node-backend/src/services/plannedMatchService.ts; apps/node-backend/src/services/importPipeline/commit.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5353,7 +5353,7 @@
                 "title": "Read matching candidates",
                 "note": "Match recipient cluster and sign, a five-day window and amount tolerance.",
                 "payload": "active plans and posted transactions",
-                "annotation": "apps/node-backend/src/services/plannedMatchService.js"
+                "annotation": "apps/node-backend/src/services/plannedMatchService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5361,7 +5361,7 @@
                 "title": "Keep ambiguity reviewable",
                 "note": "Auto execution needs mutual uniqueness and enabled auto-clear. Other plans stay unchanged.",
                 "payload": "GET /api/planned-transactions/match-suggestions",
-                "annotation": "apps/node-backend/src/services/plannedMatchService.js; apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx"
+                "annotation": "apps/node-backend/src/services/plannedMatchService.ts; apps/frontend/src/features/planned/MatchSuggestionsBanner.tsx"
               },
               {
                 "from": "browser",
@@ -5385,7 +5385,7 @@
                 "title": "Lock and record execution",
                 "note": "The same transaction-plan pair is an idempotent replay.",
                 "payload": "executePlanned",
-                "annotation": "apps/node-backend/src/services/plannedExecutionService.js"
+                "annotation": "apps/node-backend/src/services/plannedExecutionService.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5393,7 +5393,7 @@
                 "title": "Advance or finish the plan",
                 "note": "Record execution, inherit tags and advance unless recurrence bounds are reached.",
                 "payload": "execution history; nextOccurrenceYmd",
-                "annotation": "apps/node-backend/src/services/plannedExecutionService.js"
+                "annotation": "apps/node-backend/src/services/plannedExecutionService.ts"
               },
               {
                 "from": "fe.hooks",
@@ -5424,7 +5424,7 @@
                 "title": "Preview selected evidence",
                 "note": "Choose exact evidence and an approved model.",
                 "payload": "POST /api/ai-research/disclosures/preview",
-                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.js"
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.ts"
               },
               {
                 "from": "be.routes",
@@ -5432,7 +5432,7 @@
                 "title": "Protect selected identifiers",
                 "note": "Replace explicit markers and optional Desktop detections.",
                 "payload": "prepareReferencePreview",
-                "annotation": "apps/node-backend/src/services/aiReferenceService.js"
+                "annotation": "apps/node-backend/src/services/aiReferenceService.ts"
               },
               {
                 "from": "be.routes",
@@ -5440,7 +5440,7 @@
                 "title": "Check the final payload",
                 "note": "Optional preflight checks exact text and digest.",
                 "payload": "disclosurePayload",
-                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/services/agentCloakPreflight.js"
+                "annotation": "apps/node-backend/src/services/aiDisclosureService.ts; apps/node-backend/src/services/agentCloakPreflight.ts"
               },
               {
                 "from": "fe.pages",
@@ -5448,7 +5448,7 @@
                 "title": "Grant the bounded disclosure",
                 "note": "The user approves a mode-specific grant.",
                 "payload": "POST /api/ai-research/disclosures/grants",
-                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.js"
+                "annotation": "apps/node-backend/src/routes/aiResearch.ts; apps/node-backend/src/services/aiDisclosureService.ts"
               },
               {
                 "from": "be.routes",
@@ -5456,7 +5456,7 @@
                 "title": "Persist the approved grant",
                 "note": "The disclosure service writes the grant through its repository.",
                 "payload": "createDisclosureGrant",
-                "annotation": "apps/node-backend/src/services/aiDisclosureService.js; apps/node-backend/src/repositories/aiDisclosureRepository.ts"
+                "annotation": "apps/node-backend/src/services/aiDisclosureService.ts; apps/node-backend/src/repositories/aiDisclosureRepository.ts"
               },
               {
                 "from": "be.routes",
@@ -5464,7 +5464,7 @@
                 "title": "Create the investigation",
                 "note": "Claim the optional reference scope for the job.",
                 "payload": "investigation and disclosure grant",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
               },
               {
                 "from": "sv.airesearch",
@@ -5480,7 +5480,7 @@
                 "title": "Send the approved payload",
                 "note": "Fixed Responses broker, no tools, response storage disabled (store:false), rejected redirects and macOS sandbox.",
                 "payload": "generateProvider; callOpenAiBroker; store: false",
-                "annotation": "apps/node-backend/src/services/aiProviderAdapters.js; apps/node-backend/src/integrations/openai/brokerClient.ts; apps/node-backend/src/integrations/openai/egress-helper.mjs"
+                "annotation": "apps/node-backend/src/services/aiProviderAdapters.ts; apps/node-backend/src/integrations/openai/brokerClient.ts; apps/node-backend/src/integrations/openai/egress-helper.mjs"
               },
               {
                 "from": "ex.openai",
@@ -5488,7 +5488,7 @@
                 "title": "Validate the provider answer",
                 "note": "Schema-check before restoration.",
                 "payload": "resolveProviderAnswer / parseModelAnswer",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
               },
               {
                 "from": "sv.airesearch",
@@ -5496,7 +5496,7 @@
                 "title": "Checkpoint the protected answer",
                 "note": "Persist provider output before replacing references.",
                 "payload": "provider answer checkpoint",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
               },
               {
                 "from": "sv.airesearch",
@@ -5504,7 +5504,7 @@
                 "title": "Restore allowed same-job references",
                 "note": "Fail closed on malformed or cross-scope tokens. A definite synthesis failure does not silently switch providers.",
                 "payload": "restoreAnswerForJob",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.js; apps/node-backend/src/services/aiReferenceService.js"
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts; apps/node-backend/src/services/aiReferenceService.ts"
               },
               {
                 "from": "sv.airesearch",
@@ -5512,7 +5512,7 @@
                 "title": "Show the restored result",
                 "note": "Publish after local validation and restoration.",
                 "payload": "result or explicit failure",
-                "annotation": "apps/node-backend/src/services/aiInvestigationService.js"
+                "annotation": "apps/node-backend/src/services/aiInvestigationService.ts"
               }
             ],
             "docs": [

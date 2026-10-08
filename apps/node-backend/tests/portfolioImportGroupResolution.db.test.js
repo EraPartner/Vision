@@ -15,7 +15,7 @@ import {
   releaseDbSuiteLock,
 } from './setup/db.js';
 import { closePool } from '../src/database/connection.ts';
-import { resolveInvestmentRows } from '../src/services/portfolioImportBatchService.js';
+import { resolveInvestmentRows } from '../src/services/portfolioImportBatchService.ts';
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

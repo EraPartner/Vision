@@ -3,7 +3,7 @@ import {
   analysisScenarioModelSchema,
   applyScenarioInputs,
   validateScenarioBindings,
-} from "../src/services/analysisScenarioInputs.js";
+} from "../src/services/analysisScenarioInputs.ts";
 
 const model = {
   attachments: [

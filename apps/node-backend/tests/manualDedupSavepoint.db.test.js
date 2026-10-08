@@ -24,16 +24,16 @@ import { closePool, withTransaction } from "../src/database/connection.ts";
 import {
   isManualDuplicate,
   recordManualTransactionDedupClaim,
-} from "../src/services/deduplication.js";
+} from "../src/services/deduplication.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 
-vi.mock("../src/services/plannedMatchService.js", () => ({
+vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({
     autoLinkedCount: 0,
     links: [],
   }),
 }));
-vi.mock("../src/services/transferReconciliationService.js", () => ({
+vi.mock("../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
   getTransferSuggestions: vi.fn(),
   markTransfer: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock("../src/services/transferReconciliationService.js", () => ({
 }));
 
 const { default: transactionService } =
-  await import("../src/services/transactionService.js");
+  await import("../src/services/transactionService.ts");
 
 const describeDb = hasTestDatabase() ? describe : describe.skip;
 const originalTable = "manual_transaction_dedup_claims";

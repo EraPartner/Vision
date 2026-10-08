@@ -31,7 +31,7 @@ aliases:
 related_code:
   [
     "apps/node-backend/src/routes/ai.ts",
-    "apps/node-backend/src/services/aiChatService.js",
+    "apps/node-backend/src/services/aiChatService.ts",
     "apps/node-backend/src/repositories/aiChatRepository.ts",
     "apps/node-backend/src/integrations/ollama/client.ts",
     "packages/types/src/aiChat.ts",
@@ -216,7 +216,7 @@ Frontend /ai-chat
 
 Backend /api/ai
   ├── routes/ai.ts             (SSE pass-through + CRUD + terminal events)
-  ├── services/aiChatService.js (orchestrator; emits public stream events)
+  ├── services/aiChatService.ts (orchestrator; emits public stream events)
   ├── integrations/ollama/client.ts (HTTP wrapper, stream)
   └── services/aiChat/tools/*  (registry → existing repositories)
 

@@ -56,7 +56,7 @@ const mockInflationService = {
 };
 
 vi.mock(
-  "../../src/services/belgianInflationService.js",
+  "../../src/services/belgianInflationService.ts",
   () => mockInflationService,
 );
 
@@ -71,11 +71,11 @@ const mockGetInsightsDigest = vi.fn();
 const mockGetInsightsCount = vi.fn();
 const mockDismissInsight = vi.fn();
 
-vi.mock("../../src/services/recurringDetectionService.js", () => ({
+vi.mock("../../src/services/recurringDetectionService.ts", () => ({
   detectRecurringPatterns: mockDetectRecurringPatterns,
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () => ({
+vi.mock("../../src/services/materializedViewService.ts", () => ({
   refreshMaterializedViews: mockRefreshMaterializedViews,
 }));
 
@@ -86,7 +86,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: mockListLatestStoredRates,
 }));
 
-vi.mock("../../src/services/portfolioPerformanceSnapshotService.js", () => ({
+vi.mock("../../src/services/portfolioPerformanceSnapshotService.ts", () => ({
   getSnapshots: mockGetSnapshots,
   computeMetrics: vi.fn(() => ({
     currentValue: 0,
@@ -105,12 +105,12 @@ vi.mock("../../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: mockGetPortfolioSummary,
 }));
 
-vi.mock("../../src/services/insightsDigestService.js", () => ({
+vi.mock("../../src/services/insightsDigestService.ts", () => ({
   getInsightsDigest: mockGetInsightsDigest,
   getInsightsCount: mockGetInsightsCount,
 }));
 
-vi.mock("../../src/services/insightDismissalService.js", () => ({
+vi.mock("../../src/services/insightDismissalService.ts", () => ({
   dismissInsight: mockDismissInsight,
 }));
 

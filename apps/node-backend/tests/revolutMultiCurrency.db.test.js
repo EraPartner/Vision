@@ -49,7 +49,7 @@ import {
   runImportPipeline,
   commitImport,
 } from "../src/services/importPipeline/index.ts";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 import { closePool } from "../src/database/connection.ts";
 
 // Neither the MV refresh (this database has no materialized views) nor the
@@ -57,15 +57,15 @@ import { closePool } from "../src/database/connection.ts";
 // try/caught inside the pipeline, so stubbing them keeps the assertions about
 // the import itself. Transfer reconciliation is left REAL: it can deactivate
 // rows, and "the USD row survived" must mean survived everything.
-vi.mock("../src/services/aggregationRefresh.js", () => ({
+vi.mock("../src/services/aggregationRefresh.ts", () => ({
   clearForecastMcCaches: vi.fn().mockResolvedValue(undefined),
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
-vi.mock("../src/services/materializedViewService.js", () => ({
+vi.mock("../src/services/materializedViewService.ts", () => ({
   scheduleRefresh: vi.fn(),
   refreshMaterializedViews: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock("../src/services/plannedMatchService.js", () => ({
+vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 

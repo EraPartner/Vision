@@ -7,7 +7,7 @@ const mockGetPortfolioSummary = vi.fn(async () => ({
   totals: {},
 }));
 
-vi.mock("../src/services/portfolioPerformanceSnapshotService.js", () => ({
+vi.mock("../src/services/portfolioPerformanceSnapshotService.ts", () => ({
   computeMetrics: mockComputeMetrics,
   computeHeatmap: mockComputeHeatmap,
 }));

@@ -4,7 +4,7 @@ import {
   __runtimeRequest as runtimeRequest,
   __resolveFormulaModel,
   __finalizeSavedAnalysisResult,
-} from "../src/services/savedAnalysisService.js";
+} from "../src/services/savedAnalysisService.ts";
 
 describe("saved analysis definitions", () => {
   it("builds a strict, versioned visual definition for every workspace", () => {

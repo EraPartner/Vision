@@ -9,7 +9,7 @@ import { query, withTransaction } from "../src/database/connection.ts";
 import {
   __normalizeReconcile as normalizeReconcile,
   reconcileAccount,
-} from "../src/services/reconcileService.js";
+} from "../src/services/reconcileService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -40,14 +40,14 @@ related_code:
     "apps/node-backend/src/routes/importRoutes.ts",
     "apps/node-backend/src/routes/portfolioImportRoutes.ts",
     "apps/node-backend/src/routes/investments.ts",
-    "apps/node-backend/src/services/accountService.js",
+    "apps/node-backend/src/services/accountService.ts",
     "apps/node-backend/src/lib/filterBuilder.ts",
     "apps/node-backend/src/routes/aggregations.ts",
     "apps/node-backend/src/routes/transactions.ts",
     "apps/node-backend/src/services/aiChat/tools/_validate.ts",
     "apps/node-backend/src/lib/csv.ts",
     "apps/node-backend/src/lib/urlSafety.ts",
-    "apps/node-backend/src/services/investmentService.js",
+    "apps/node-backend/src/services/investmentService.ts",
     "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts",
     "apps/node-backend/src/services/prices/priceProviderRegistry.ts",
   ]
@@ -348,7 +348,7 @@ validateInt4Ids(ids, fieldName); // → number[], throws ValidationError
 
 ### Bulk-action filter selector (`normalizeBulkFilter`)
 
-`apps/node-backend/src/services/bulkSelection.js` — the `filter` half of the `{ ids } | { filter }`
+`apps/node-backend/src/services/bulkSelection.ts` — the `filter` half of the `{ ids } | { filter }`
 selector shared by `POST /api/transactions/bulk-delete`, `/bulk-update` and `/bulk-export`. The
 `ids` half was made strict earlier the same day (see `validateInt4Ids` above); this is its sibling.
 
@@ -611,7 +611,7 @@ The one intended difference from a plain `validateId` call is the **upper bound*
 
 `POST /api/investments/:id/transactions` and
 `PATCH /api/investments/transactions/:txnId` use one loose Zod body schema in
-`services/investmentService.js`. POST adds its `type` and `date` requiredness after the shared
+`services/investmentService.ts`. POST adds its `type` and `date` requiredness after the shared
 parse; every PATCH field remains optional. The repository normalizer still owns type-specific unit
 math, oversell checks, and recurrence-window validation.
 

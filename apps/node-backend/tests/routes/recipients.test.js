@@ -26,11 +26,11 @@ vi.mock("../../src/repositories/recipientRepository.ts", () => ({
   },
 }));
 
-vi.mock("../../src/services/recipientMergeService.js", () => ({
+vi.mock("../../src/services/recipientMergeService.ts", () => ({
   mergeRecipients: vi.fn(),
 }));
 
-vi.mock("../../src/services/recipientPatternService.js", () => ({
+vi.mock("../../src/services/recipientPatternService.ts", () => ({
   listPatternsForRecipient: vi.fn(),
   createPattern: vi.fn(),
   updatePattern: vi.fn(),
@@ -39,11 +39,11 @@ vi.mock("../../src/services/recipientPatternService.js", () => ({
   suggestPatternFromNames: vi.fn(() => null),
 }));
 
-vi.mock("../../src/services/recipientClusterService.js", () => ({
+vi.mock("../../src/services/recipientClusterService.ts", () => ({
   findRecipientClusters: vi.fn(),
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () => ({
+vi.mock("../../src/services/materializedViewService.ts", () => ({
   scheduleRefresh: vi.fn(),
 }));
 
@@ -52,11 +52,11 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 import recipientRepository from "../../src/repositories/recipientRepository.ts";
-import { mergeRecipients as mergeRecipientsAtomic } from "../../src/services/recipientMergeService.js";
+import { mergeRecipients as mergeRecipientsAtomic } from "../../src/services/recipientMergeService.ts";
 import {
   updatePattern,
   deletePattern,
-} from "../../src/services/recipientPatternService.js";
+} from "../../src/services/recipientPatternService.ts";
 
 const { default: recipientsRouter } =
   await import("../../src/routes/recipients.ts");
