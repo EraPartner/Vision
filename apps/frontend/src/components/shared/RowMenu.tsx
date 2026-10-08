@@ -19,6 +19,8 @@ export interface RowMenuProps {
     align?: "start" | "center" | "end";
     /** Trigger square: 32px by default, 36px for header rows, 28px for dense tables. */
     size?: "icon" | "icon-sm" | "icon-xs";
+    /** `ghost` for rows and cards; `outline` for the page-header ••• menu. */
+    variant?: "ghost" | "outline";
     className?: string;
     contentClassName?: string;
     /** Disables the trigger, for example while a row action is in flight. */
@@ -40,6 +42,7 @@ export const RowMenu = forwardRef<HTMLButtonElement, RowMenuProps>(
             label,
             align = "end",
             size = "icon-sm",
+            variant = "ghost",
             className,
             contentClassName,
             disabled,
@@ -53,11 +56,14 @@ export const RowMenu = forwardRef<HTMLButtonElement, RowMenuProps>(
                     <Button
                         ref={ref}
                         type="button"
-                        variant="ghost"
+                        variant={variant}
                         size={size}
                         aria-label={label}
                         disabled={disabled}
-                        className={cn("text-label-secondary", className)}
+                        className={cn(
+                            variant === "ghost" && "text-label-secondary",
+                            className,
+                        )}
                         onClick={stop}
                         onKeyDown={stop}
                     >
