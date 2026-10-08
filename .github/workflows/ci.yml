@@ -21,6 +21,10 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+    # ready_for_review re-runs CI when a draft is marked ready, so the jobs
+    # skipped on drafts (Test (Live API Contracts)) run before "CI Complete"
+    # can pass for a merge, including an auto-merge.
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions: {}
 
