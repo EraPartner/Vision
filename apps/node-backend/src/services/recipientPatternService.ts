@@ -63,6 +63,36 @@ function makeLruCache(maxSize: number) {
 const patternCache = makeLruCache(512);
 
 /**
+ * Build the RegExp for a pattern. Throws on an invalid regex: validation
+ * rejects it on save, and compilePattern turns it into a never-match at
+ * match time so one bad stored row cannot break matching.
+ */
+function buildPatternRegExp(row: {
+  pattern: string;
+  pattern_kind: string;
+  case_sensitive?: boolean;
+}): RegExp {
+  const flags = row.case_sensitive ? '' : 'i';
+  switch (row.pattern_kind) {
+    case 'literal_prefix': {
+      const escaped = row.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`^${escaped}`, flags);
+    }
+    case 'glob': {
+      const translated = row.pattern
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/\?/g, '.');
+      return new RegExp(`^${translated}$`, flags);
+    }
+    case 'regex':
+    default:
+      // User-authored regex by design; validatePattern screens ReDoS shapes.
+      return new RegExp(row.pattern, flags);
+  }
+}
+
+/**
  * Compile a pattern DB row into a RegExp.
  * Cached by `${id}:${updated_at}` so stale entries are evicted on update.
  */
@@ -77,33 +107,12 @@ function compilePattern(row: {
   const cached = patternCache.get(cacheKey);
   if (cached) return cached;
 
-  const flags = row.case_sensitive ? '' : 'i';
   let re: RegExp;
-
-  switch (row.pattern_kind) {
-    case 'literal_prefix': {
-      const escaped = row.pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      re = new RegExp(`^${escaped}`, flags);
-      break;
-    }
-    case 'glob': {
-      const translated = row.pattern
-        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
-        .replace(/\*/g, '.*')
-        .replace(/\?/g, '.');
-      re = new RegExp(`^${translated}$`, flags);
-      break;
-    }
-    case 'regex':
-    default: {
-      try {
-        re = new RegExp(row.pattern, flags);
-      } catch (err) {
-        logger.warn('Skipping invalid regex pattern', { patternId: row.id, pattern: row.pattern, error: (err as Error).message });
-        re = /(?!)/;
-      }
-      break;
-    }
+  try {
+    re = buildPatternRegExp(row);
+  } catch (err) {
+    logger.warn('Skipping invalid regex pattern', { patternId: row.id, pattern: row.pattern, error: (err as Error).message });
+    re = /(?!)/;
   }
 
   patternCache.set(cacheKey, re);
@@ -148,13 +157,7 @@ function validatePattern(row: {
     return { valid: false, error: 'Regex pattern contains nested quantifiers or quantified alternation that could cause catastrophic backtracking' };
   }
   try {
-    if (row.pattern_kind === 'literal_prefix' || row.pattern_kind === 'glob') {
-      compilePattern({ id: 0, updated_at: '0', case_sensitive: false, ...row });
-    } else {
-      // compilePattern swallows a bad regex so one stored row cannot break
-      // matching; on save it must be rejected instead of stored as never-match.
-      new RegExp(row.pattern);
-    }
+    buildPatternRegExp(row);
     return { valid: true };
   } catch (err) {
     return { valid: false, error: `Invalid pattern: ${(err as Error).message}` };

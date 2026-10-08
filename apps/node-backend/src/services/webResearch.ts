@@ -211,9 +211,10 @@ function extractPageText(html: string) {
     .replace(/<br\s*\/?>|<\/(?:p|div|li|h[1-6]|section|article)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    // Last, so "&amp;lt;" stays the literal text "&lt;".
+    .replace(/&amp;/gi, "&")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
