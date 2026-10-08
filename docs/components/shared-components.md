@@ -50,11 +50,13 @@ related_code:
 ## RowMenu
 
 `RowMenu` (`components/shared/RowMenu.tsx`) is the ••• menu every list row, card and page header
-uses: a ghost icon `Button` (`size="icon-sm"` by default, `icon` for headers) with the
-`MoreHorizontal` glyph, a required `label` (`aria-label`, usually the `*.rowMenu` "Actions for
-{name}" string), `align="end"` content and `stopPropagation` on click and keydown so the row
-behind it does not activate. Children are ordinary `DropdownMenuItem`s; destructive ones use
-`variant="destructive"` and sit last after a `DropdownMenuSeparator` (ADR-187).
+uses ([[docs/adr/190-primitives-follow-up|ADR-190]]): an icon `Button` (`variant="ghost"` and
+`size="icon-sm"` by default; `variant="outline" size="icon"` for the page-header menu; `icon-xs`
+for dense tables) with the `MoreHorizontal` glyph, a required `label` (`aria-label`, usually the
+`*.rowMenu` "Actions for {name}" string), `align="end"` content and `stopPropagation` on click and
+keydown so the row behind it does not activate. It forwards its ref to the trigger for focus
+restore and takes `disabled` for busy rows. Children are ordinary `DropdownMenuItem`s; destructive
+ones use `variant="destructive"` and sit last after a `DropdownMenuSeparator` (ADR-187).
 
 ## VirtualDataTable
 

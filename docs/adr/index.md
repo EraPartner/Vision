@@ -28,6 +28,12 @@ counterparty, *excluded* for a transaction left out of totals, *income tax* inst
 
 ## Current screen redesign decision
 
+[[docs/adr/190-primitives-follow-up|ADR-190]] turns the sweep's primitive wishes into shared
+primitives (ListRow actions and selection, RowMenu, destructive menu items, mini sizes, labelled
+segmented controls, Disclosure, Select none-sentinel helpers, PageHeader back, Alert role by
+variant) and moves the last native selects, in the portfolio import session, to the design-system
+Select.
+
 [[docs/adr/187-completeness-sweep|ADR-187]] closes the redesign roadmap: every remaining screen
 and dialog (money pages, taxes, portfolio assets and imports, research, analysis, AI chat, admin
 and shared components) adopts PageHeader with one primary action and a ••• menu, List rows with
@@ -242,6 +248,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-10-08: The sweep's primitive wishes become shared primitives
+
+[[docs/adr/190-primitives-follow-up|ADR-190]] extends ListRow, Button, menu items,
+SegmentedControl, Alert and PageHeader, adds Disclosure, RowMenu and the Select none-sentinel
+helpers, adopts them on every screen and dialog, and moves the five native selects in the
+portfolio import session to the design-system Select.
 
 ### 2026-10-07: Proved brokerage cash history
 

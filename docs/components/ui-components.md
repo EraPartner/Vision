@@ -149,8 +149,8 @@ primitives from the same change: `SegmentedControl`, `List`/`ListRow`, `Inspecto
 `undoToast` helper (see [[docs/components/shared-components|Shared Components]] and
 [[docs/features/transactions|Transactions]]).
 
-The follow-ups to [[docs/adr/187-completeness-sweep|ADR-187]] (October 2026) extend those
-primitives instead of adding screen-local copies: `ListRow` takes an `actions` slot rendered
+[[docs/adr/190-primitives-follow-up|ADR-190]] (October 2026) extends those primitives instead of
+adding screen-local copies: `ListRow` takes an `actions` slot rendered
 beside, not inside, the activatable element (so a row menu or switch can sit on a clickable row
 without nested buttons) and a `selected` flag (tint, `aria-current="true"`, `data-selected`);
 `DropdownMenuItem` has `variant="destructive"`; `Button` adds the `xs` (28px), `icon-sm` (32px)
