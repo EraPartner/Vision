@@ -6,17 +6,6 @@ import { cn } from "@/lib/utils";
 
 const Select = SelectPrimitive.Root;
 
-/**
- * Radix Select refuses an empty-string item value, so a "none" choice needs a
- * sentinel. `toSelectValue` maps an empty or missing model value onto it and
- * `fromSelectValue` maps it back, so callers keep storing "" for "none".
- */
-const SELECT_NONE = "__none__";
-const toSelectValue = (value: string | null | undefined): string =>
-    value ? value : SELECT_NONE;
-const fromSelectValue = (value: string): string =>
-    value === SELECT_NONE ? "" : value;
-
 const SelectGroup = SelectPrimitive.Group;
 
 const SelectValue = SelectPrimitive.Value;
@@ -155,9 +144,6 @@ const SelectSeparator = React.forwardRef<
 SelectSeparator.displayName = SelectPrimitive.Separator.displayName;
 
 export {
-    SELECT_NONE,
-    toSelectValue,
-    fromSelectValue,
     Select,
     SelectGroup,
     SelectValue,
