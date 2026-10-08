@@ -11,7 +11,7 @@ vi.mock("../src/services/categoryService.js", () => ({
 
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import { listCategoryNodes } from "../src/services/categoryService.js";
-import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.js";
+import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.ts";
 
 beforeEach(() => {
   vi.resetAllMocks();

@@ -16,36 +16,36 @@ vi.mock("../src/database/connection.ts", () =>
     query: vi.fn().mockResolvedValue({ rows: [{ is_brokerage: false }] }),
   }),
 );
-vi.mock("../src/services/info/cache.js", () => ({
+vi.mock("../src/services/info/cache.ts", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
-vi.mock("../src/services/portfolioImportPipeline/stage.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/stage.ts", () => ({
   createBatch: vi.fn().mockResolvedValue(42),
   stageBatch: vi.fn(),
 }));
-vi.mock("../src/services/portfolioImportPipeline/validate.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/validate.ts", () => ({
   validateBatch: vi.fn().mockResolvedValue({ errors: 0 }),
 }));
-vi.mock("../src/services/portfolioImportPipeline/matchInvestments.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/matchInvestments.ts", () => ({
   matchBatch: vi
     .fn()
     .mockResolvedValue({ matchSourceCounts: { symbol: 5 }, unresolved: 0 }),
 }));
-vi.mock("../src/services/portfolioImportPipeline/commit.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/commit.ts", () => ({
   commitBatch: vi
     .fn()
     .mockResolvedValue({ imported: 5, duplicates: 0, errors: 0 }),
 }));
 
 import { query } from "../src/database/connection.ts";
-import { stageBatch } from "../src/services/portfolioImportPipeline/stage.js";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
+import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
+import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
+import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import {
   prepareImport,
   runPortfolioImportPipeline,
-} from "../src/services/portfolioImportPipeline/index.js";
+} from "../src/services/portfolioImportPipeline/index.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -32,7 +32,7 @@ vi.mock("../src/repositories/infoRepository.ts", () => ({
   default: { getMonthlyFinancialSummary: vi.fn() },
 }));
 
-vi.mock("../src/services/aiChat/tools/_financialMetrics.js", () => ({
+vi.mock("../src/services/aiChat/tools/_financialMetrics.ts", () => ({
   getAiDisplayCurrency: vi.fn(),
   loadCanonicalPortfolioSummary: vi.fn(),
 }));
@@ -45,7 +45,7 @@ import infoRepository from "../src/repositories/infoRepository.ts";
 import {
   getAiDisplayCurrency,
   loadCanonicalPortfolioSummary,
-} from "../src/services/aiChat/tools/_financialMetrics.js";
+} from "../src/services/aiChat/tools/_financialMetrics.ts";
 import {
   getSpendByCategory,
   getMonthlySpend,
@@ -53,33 +53,33 @@ import {
   getTransactionsInRange,
   getMonthlyCategoryBreakdown,
   getNetCashflow,
-} from "../src/services/aiChat/tools/expenses.js";
+} from "../src/services/aiChat/tools/expenses.ts";
 import {
   getPortfolioHoldings,
   getReturnsForRange,
   getDividendIncome,
   getAssetAllocation,
-} from "../src/services/aiChat/tools/portfolio.js";
+} from "../src/services/aiChat/tools/portfolio.ts";
 import {
   getUpcomingPlanned,
   getSubscriptionTotal,
   getLoanSchedule,
-} from "../src/services/aiChat/tools/planned.js";
+} from "../src/services/aiChat/tools/planned.ts";
 import {
   getTaxableIncomeSummary,
   getCapitalGainsForYear,
   getDeductibles,
-} from "../src/services/aiChat/tools/tax.js";
-import { DEDUCTION_TYPES } from "../src/services/tax/deductionClassifier.js";
+} from "../src/services/aiChat/tools/tax.ts";
+import { DEDUCTION_TYPES } from "../src/services/tax/deductionClassifier.ts";
 import {
   dispatchTool,
   getToolSchemas,
   getToolNames,
-} from "../src/services/aiChat/tools/index.js";
+} from "../src/services/aiChat/tools/index.ts";
 import {
   parsePositiveInt,
   ToolValidationError,
-} from "../src/services/aiChat/tools/_validate.js";
+} from "../src/services/aiChat/tools/_validate.ts";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -199,6 +199,7 @@ describe("getMonthlySpend", () => {
       false,
       "2025-01-01",
       "2025-02-28",
+      [],
     );
     expect(result.meta.currency).toBe("USD");
     expect(result.meta.groupBy).toBe("month");
@@ -323,6 +324,30 @@ describe("getNetCashflow", () => {
     });
 
     expect(result.data.map((d) => d.period)).toEqual(["2026-Q1", "2026-Q2"]);
+  });
+
+  it.each([
+    ["getNetCashflow", () => getNetCashflow],
+    ["getMonthlySpend", () => getMonthlySpend],
+  ])("%s limits the summary to the scoped accounts", async (_name, tool) => {
+    getAiDisplayCurrency.mockResolvedValueOnce("EUR");
+
+    await tool().run(
+      { from: "2026-01-01", to: "2026-06-30" },
+      { scope: { accountIds: [3] } },
+    );
+
+    // The scope used to land in the first parameter, excludedCategoryIds:
+    // category 3 was dropped and every account was still counted.
+    expect(infoRepository.getMonthlyFinancialSummary).toHaveBeenCalledWith(
+      [],
+      "EUR",
+      [],
+      false,
+      "2026-01-01",
+      "2026-06-30",
+      [3],
+    );
   });
 });
 
@@ -1205,11 +1230,11 @@ describe("tool write-method denylist", () => {
     "../src/services/aiChat/tools",
   );
   const toolFiles = [
-    "expenses.js",
-    "portfolio.js",
-    "planned.js",
-    "tax.js",
-    "insights.js",
+    "expenses.ts",
+    "portfolio.ts",
+    "planned.ts",
+    "tax.ts",
+    "insights.ts",
   ];
 
   const BANNED_CALL_PATTERNS = [
@@ -1329,4 +1354,26 @@ describe("parsePositiveInt — the AI-chat tools' id/bound parser", () => {
     // The old parse would have answered 200 about category 12.
     expect(transactionRepository.getAll).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["getYearOverYearComparison", "year"],
+    ["getTaxableIncomeSummary", "year"],
+    ["getCapitalGainsForYear", "year"],
+    ["getDeductibles", "year"],
+    ["getLoanSchedule", "plannedId"],
+    ["getSpendTrendForCategory", "categoryId"],
+  ])(
+    "%s rejects a missing required %s with a VALIDATION_ERROR",
+    async (name, field) => {
+      const { result } = await dispatchTool(name, {});
+
+      expect(result.ok).toBe(false);
+      expect(result.error.code).toBe("VALIDATION_ERROR");
+      expect(result.error.field).toBe(field);
+      expect(result.error.message).toBe(`${field} is required`);
+      // Before, a missing value ran as year "null" or id null.
+      expect(transactionRepository.getAll).not.toHaveBeenCalled();
+      expect(plannedTransactionRepository.getById).not.toHaveBeenCalled();
+    },
+  );
 });

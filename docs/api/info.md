@@ -2,12 +2,12 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.ts", "apps/node-backend/src/repositories/infoRepository.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/repositories/infoRepositoryStatistics.ts", "apps/node-backend/src/repositories/infoRepositoryMonthly.ts", "apps/node-backend/src/repositories/infoRepositoryBanks.ts", "apps/node-backend/src/repositories/infoRepositoryNetWorth.ts", "apps/node-backend/src/repositories/infoRepositoryPlanned.ts", "apps/node-backend/src/repositories/infoRepositoryRecipients.ts", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.js", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.js"]
+related_code: ["apps/node-backend/src/routes/info.ts", "apps/node-backend/src/repositories/infoRepository.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/repositories/infoRepositoryStatistics.ts", "apps/node-backend/src/repositories/infoRepositoryMonthly.ts", "apps/node-backend/src/repositories/infoRepositoryBanks.ts", "apps/node-backend/src/repositories/infoRepositoryNetWorth.ts", "apps/node-backend/src/repositories/infoRepositoryPlanned.ts", "apps/node-backend/src/repositories/infoRepositoryRecipients.ts", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.js", "apps/node-backend/src/services/info/performanceHelpers.ts"]
 ---
 
 # Info & Analytics API
@@ -625,7 +625,7 @@ Notes:
   value-only spike-smoothing pass. This preserves real one-day cash movements
   and the stored value decomposition. `gain_loss` and `return_pct` are derived
   again from the value actually served, so the three fields cannot contradict
-  each other ([[apps/node-backend/src/services/info/performanceHelpers.js]],
+  each other ([[apps/node-backend/src/services/info/performanceHelpers.ts]],
   [[docs/reference/algorithms#spike-sanitization|Spike Sanitization]]).
 - Every returned snapshot includes `is_provisional`. It is `true` only on the newest returned
   point. That endpoint remains raw until a later snapshot supplies the right-hand neighbour needed
@@ -790,4 +790,4 @@ These endpoints are optimized using:
 - [[docs/features/transactions]] - Transactions Feature
 - [[docs/performance/materialized-views]] - Materialized Views
 
-Code links: [[apps/node-backend/src/repositories/infoRepository.ts]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.ts]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.ts]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.ts]] (recipients), [[apps/node-backend/src/lib/dateKeys.ts]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/tests/infoRepository.test.js]]
+Code links: [[apps/node-backend/src/repositories/infoRepository.ts]] (barrel), [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts]] (repository-specific shared helpers), [[apps/node-backend/src/repositories/infoRepositoryMonthly.ts]] (monthly), [[apps/node-backend/src/repositories/infoRepositoryBanks.ts]] (banks), [[apps/node-backend/src/repositories/infoRepositoryNetWorth.ts]] (net worth), [[apps/node-backend/src/repositories/infoRepositoryStatistics.ts]] (stats), [[apps/node-backend/src/repositories/infoRepositoryPlanned.ts]] (planned), [[apps/node-backend/src/repositories/infoRepositoryRecipients.ts]] (recipients), [[apps/node-backend/src/lib/dateKeys.ts]] (UTC date keys), [[apps/node-backend/src/lib/calculations/netWorthSanitizer.ts]] (spike sanitization), [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/belgianInflationService.js]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/tests/infoRepository.test.js]]

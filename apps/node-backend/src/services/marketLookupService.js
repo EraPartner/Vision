@@ -12,8 +12,8 @@
 
 import { ApiErrorCode } from '@vision/types/errors';
 import { AppError } from '../middleware/errorHandler.ts';
-import { createResearchCache } from './research/researchCache.js';
-import { getYahooClient } from './prices/yahooClient.js';
+import { createResearchCache } from './research/researchCache.ts';
+import { getYahooClient } from './prices/yahooClient.ts';
 import { toAppTz } from '../lib/timezone.ts';
 import { forEachConcurrent } from '../lib/concurrency.ts';
 

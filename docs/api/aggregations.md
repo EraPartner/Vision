@@ -2,8 +2,8 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
@@ -13,13 +13,13 @@ aliases: [aggregations, stats aggregation, computed stats, aggregation endpoints
 related_code:
   - apps/node-backend/src/routes/aggregations.ts
   - apps/node-backend/src/services/calculations/aggregation/
-  - apps/node-backend/src/services/calculations/aggregation/recipient.js
-  - apps/node-backend/src/services/calculations/aggregation/recipientPivot.js
-  - apps/node-backend/src/services/calculations/forecast/index.js
-  - apps/node-backend/src/services/calculations/forecast/methods/ensemble.js
-  - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.js
+  - apps/node-backend/src/services/calculations/aggregation/recipient.ts
+  - apps/node-backend/src/services/calculations/aggregation/recipientPivot.ts
+  - apps/node-backend/src/services/calculations/forecast/index.ts
+  - apps/node-backend/src/services/calculations/forecast/methods/ensemble.ts
+  - apps/node-backend/src/services/calculations/forecast/categoryBreakdown.ts
   - apps/node-backend/src/repositories/infoRepositoryTags.ts
-  - apps/node-backend/src/services/calculations/aggregation/tagPivot.js
+  - apps/node-backend/src/services/calculations/aggregation/tagPivot.ts
   - apps/frontend/src/hooks/useTagPivot.ts
   - apps/node-backend/src/repositories/infoRepositoryRecipients.ts
   - apps/node-backend/src/repositories/infoRepositoryMonthly.ts
@@ -39,7 +39,7 @@ related_code:
   - apps/frontend/src/features/dashboard/ForecastInnerRolling.tsx
   - apps/frontend/src/features/dashboard/CashFlowForecastDiagnostics.tsx
   - apps/frontend/src/components/charts/LineChart.tsx
-  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.js
+  - apps/node-backend/src/services/calculations/aggregation/cashflowForecast.ts
   - alembic/versions/0012_cashflow_forecast_accuracy.py
   - alembic/versions/0013_cashflow_forecast_mc.py
   - alembic/versions/0017_saved_charts_recipients_variants.py
@@ -591,7 +591,7 @@ const allTagsEnvelope = await getAggregationTagPivot({
 **Implementation:**
 
 - Repository: `apps/node-backend/src/repositories/infoRepositoryTags.ts` — `tagInsightsRepository.getTagPivot`; when `allTags=true`, the tag-id filter is dropped and the short-circuit is bypassed, returning all active tags.
-- Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.js` — `computeTagPivot`; passes `allTags` flag through to the repository.
+- Service: `apps/node-backend/src/services/calculations/aggregation/tagPivot.ts` — `computeTagPivot`; passes `allTags` flag through to the repository.
 - Route: wired in `apps/node-backend/src/routes/aggregations.ts`; accepts the `all` query parameter and rejects the retired `all_tags` alias.
 - Frontend hook: `apps/frontend/src/hooks/useTagPivot.ts`; enabled when `tag_ids.length > 0` **or** `all_tags = true`; cache key includes `'all'` token when all-flag is active.
 - Frontend API client: `getAggregationTagPivot` in `apps/frontend/src/lib/api/aggregations.ts`; when `all=true`, omits `tag_ids` from the request; `TagPivotItem` type in `apps/frontend/src/lib/api/types.ts`.
@@ -1201,7 +1201,7 @@ Each Monte Carlo method uses a seeded PRNG derived from `hash(userId | yyyymm | 
   `APP_TIMEZONE` date, so a cached monthly payload cannot cross midnight with stale
   actual-versus-scheduled classification
 
-See [[apps/node-backend/src/services/calculations/forecast/index.js|Forecast Service]] for implementation details.
+See [[apps/node-backend/src/services/calculations/forecast/index.ts|Forecast Service]] for implementation details.
 
 **Caching (Phase E):**
 

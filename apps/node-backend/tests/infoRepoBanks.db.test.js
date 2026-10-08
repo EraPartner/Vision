@@ -33,7 +33,7 @@ import {
 } from "./setup/db.js";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
-import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import { todayAppDateString } from "../src/lib/timezone.ts";
 

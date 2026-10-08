@@ -8,10 +8,10 @@
 
 import { logger } from '../config/logger.ts';
 import providerHealthRepository from '../repositories/providerHealthRepository.ts';
-import twelveDataAdapter from './research/adapters/twelveDataAdapter.js';
-import finnhubAdapter from './research/adapters/finnhubAdapter.js';
-import fmpAdapter from './research/adapters/fmpAdapter.js';
-import alphaVantageAdapter from './research/adapters/alphaVantageAdapter.js';
+import twelveDataAdapter from './research/adapters/twelveDataAdapter.ts';
+import finnhubAdapter from './research/adapters/finnhubAdapter.ts';
+import fmpAdapter from './research/adapters/fmpAdapter.ts';
+import alphaVantageAdapter from './research/adapters/alphaVantageAdapter.ts';
 
 /** @typedef {import('../repositories/providerHealthRepository.ts').ProviderHealth} ProviderHealth */
 

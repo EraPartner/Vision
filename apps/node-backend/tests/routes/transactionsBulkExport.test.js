@@ -30,7 +30,7 @@ vi.mock("../../src/services/materializedViewService.js", () =>
   mockMaterializedViews(),
 );
 
-vi.mock("../../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 

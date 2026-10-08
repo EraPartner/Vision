@@ -22,7 +22,7 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
 vi.mock("../src/services/accountService.js", () => ({
   default: { get: mocks.getAccount },
 }));
-vi.mock("../src/services/portfolioImportPipeline/index.js", () => ({
+vi.mock("../src/services/portfolioImportPipeline/index.ts", () => ({
   commitPortfolioImport: mocks.commitPortfolioImport,
 }));
 vi.mock("../src/services/portfolioImportReadinessService.js", () => ({

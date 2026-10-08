@@ -2,8 +2,8 @@
 title: Statistics Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-09-27
 tags:
   [
@@ -513,7 +513,7 @@ A fourth tab showing income allocation flow to spending categories via d3-sankey
 - **Links**: Weighted flows showing amount allocated to each category
 - **Exclusion support**: Backend filters transactions by excluded categories/recipients when computing flows
 - **Endpoint**: `GET /api/aggregations/sankey?year=2026&currency=EUR&excluded_category_ids[]=5&excluded_category_ids[]=10`
-- **Backend service**: `apps/node-backend/src/services/calculations/aggregation/sankey.js`
+- **Backend service**: `apps/node-backend/src/services/calculations/aggregation/sankey.ts`
 - **Component integration**: `SankeyTab` receives `graphExclusions`, `onToggleExclusion`, `exclusionsApply` props from parent `StatisticsPage`
 
 See [[docs/features/sankey-flow|Sankey Flow Feature]].

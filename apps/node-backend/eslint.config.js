@@ -193,7 +193,7 @@ const SANCTIONED_REPO_SERVICE_IMPORTS = {
 };
 
 const SANCTIONED_SERVICE_MODULE =
-  "services/currency/currencyConversionService.js";
+  "services/currency/currencyConversionService.ts";
 
 const noServiceImportFromRepo = {
   meta: {

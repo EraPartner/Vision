@@ -14,7 +14,7 @@ import {
   recordSuccess as recordProviderSuccess,
   recordError as recordProviderError,
 } from "./providerHealthService.js";
-import { convertRowsToEur } from "./currency/currencyConversionService.js";
+import { convertRowsToEur } from "./currency/currencyConversionService.ts";
 import {
   cacheGet,
   cacheSet,
@@ -26,7 +26,7 @@ import {
   countChangedPointPrices,
   toNumber,
   isValidPrice,
-} from "./prices/priceCache.js";
+} from "./prices/priceCache.ts";
 import {
   PROVIDERS,
   resolveYahooSymbol,
@@ -34,12 +34,12 @@ import {
   resolveKinesisConfig,
   sanitizeKinesisIsolatedSpikes,
   parseCustomHistoryPoints,
-} from "./prices/priceProviderRegistry.js";
-import { getYahooClient } from "./prices/yahooClient.js";
+} from "./prices/priceProviderRegistry.ts";
+import { getYahooClient } from "./prices/yahooClient.ts";
 
 /** @typedef {import('../types/rows.ts').InvestmentRow} InvestmentRow */
 /** @typedef {import('../types/rows.ts').PricePoint} PricePoint */
-/** @typedef {import('./prices/priceProviderRegistry.js').LivePriceQuote} LivePriceQuote */
+/** @typedef {import('./prices/priceProviderRegistry.ts').LivePriceQuote} LivePriceQuote */
 
 /**
  * A resolved live-price result for one investment. `source` reflects which
@@ -56,9 +56,9 @@ import { getYahooClient } from "./prices/yahooClient.js";
 export {
   saveHistoricalPointsToDatabase,
   resetPriceCache as __resetPriceCache,
-} from "./prices/priceCache.js";
+} from "./prices/priceCache.ts";
 
-export { getHistoricalPriceAt } from "./prices/priceProviderRegistry.js";
+export { getHistoricalPriceAt } from "./prices/priceProviderRegistry.ts";
 
 export const SUPPORTED_PROVIDERS = [
   { key: "manual", name: "Manual", description: "Set price manually" },
@@ -361,7 +361,7 @@ async function _persistAndResolve(
   { fromMs, toMs } = {},
 ) {
   const { saveHistoricalPointsToDatabase } =
-    await import("./prices/priceCache.js");
+    await import("./prices/priceCache.ts");
   // Only persist points within the requested range — providers (Yahoo, Binance, Kinesis)
   // return data beyond the window bounds, which would otherwise accumulate and be deleted
   // by cleanupStaleQuotes on every restart.
@@ -425,7 +425,7 @@ export async function fetchHistoricalPrices(
       const changed = countChangedPointPrices(cachedDbPoints, sanitized);
       if (changed > 0) {
         const { saveHistoricalPointsToDatabase } =
-          await import("./prices/priceCache.js");
+          await import("./prices/priceCache.ts");
         await saveHistoricalPointsToDatabase(
           investment.id,
           sanitized,
@@ -571,7 +571,7 @@ export async function fetchHistoricalPrices(
         }
 
         const { _parseKinesisTrendlinePoints } =
-          await import("./prices/priceProviderRegistry.js");
+          await import("./prices/priceProviderRegistry.ts");
         points = _parseKinesisTrendlinePoints(rawPoints);
         cacheSet(cacheKey, { points, source: "live" });
       } catch (err) {
@@ -683,7 +683,7 @@ export async function sanitizePersistedKinesisHistory() {
   }
 
   const { saveHistoricalPointsToDatabase } =
-    await import("./prices/priceCache.js");
+    await import("./prices/priceCache.ts");
   let updated = 0;
   let correctedPoints = 0;
   let failed = 0;

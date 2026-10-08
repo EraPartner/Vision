@@ -37,12 +37,12 @@ import {
 } from "./setup/db.js";
 
 import { closePool } from "../src/database/connection.ts";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
-import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.js";
+import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
+import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
+import { commitPortfolioImport } from "../src/services/portfolioImportPipeline/index.ts";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
 import { accountService } from "../src/services/accountService.js";
-import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 
 const pool = getTestPool();
 const describeDb = hasTestDatabase() ? describe : describe.skip;

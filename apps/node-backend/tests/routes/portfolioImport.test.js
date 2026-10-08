@@ -51,7 +51,7 @@ vi.mock("os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
-vi.mock("../../src/services/portfolioImportPipeline/index.js", () => ({
+vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 

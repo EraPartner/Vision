@@ -9,8 +9,8 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import {
   parseKinesisTransactionHistory,
   parseKinesisSourceRecordForBasisPolicy,
-} from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js";
-import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+} from "../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
+import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

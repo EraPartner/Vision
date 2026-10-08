@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildThemeCss,
   HSL_COMPONENT_RE,
-} from "../src/services/reports/themeCss.js";
+} from "../src/services/reports/themeCss.ts";
 
 describe("HSL_COMPONENT_RE", () => {
   it("accepts the HSL component triples the theme system emits", () => {

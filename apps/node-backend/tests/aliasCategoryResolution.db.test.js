@@ -44,7 +44,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { getMonthlyFinancialSummary } from "../src/repositories/infoRepositoryMonthly.ts";
-import { computeSankeyFlow } from "../src/services/calculations/aggregation/sankey.js";
+import { computeSankeyFlow } from "../src/services/calculations/aggregation/sankey.ts";
 import {
   detectRecurringPatterns,
   __clearRecurringCacheForTests,
@@ -52,7 +52,7 @@ import {
 import { createMaterializedViews } from "../src/services/materializedViewService.js";
 import transactionRepository from "../src/repositories/transactionRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
-import { clearMemoryCache } from "../src/services/currency/currencyConversionService.js";
+import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 import {
   __buildIdListWhere as buildIdListWhere,

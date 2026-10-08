@@ -1587,7 +1587,7 @@
           {
             "id": "sv.research",
             "label": "Research aggregation",
-            "sub": "services/research/researchAggregator.js",
+            "sub": "services/research/researchAggregator.ts",
             "kind": "service",
             "path": "apps/node-backend/src/services/research/",
             "desc": "Provider-agnostic research surface (ADR-079 + ADR-081 + ADR-082). Capability map routes (dataType, assetClass) to ordered provider preference chains; quota governor token-buckets guard free-tier limits; type-aware TTL cache. Fundamentals: merged FMP+Yahoo in parallel. Macro vertical (ADR-082): searchMacro() fans out across FRED+Eurostat in parallel; fetchMacroSeries() is provider-pinned. All research data in-memory only, never persisted to asset_price_history.",
@@ -1641,7 +1641,7 @@
             "kind": "service",
             "x": 760,
             "y": 960,
-            "path": "apps/node-backend/src/services/portfolio/portfolioExposureService.js",
+            "path": "apps/node-backend/src/services/portfolio/portfolioExposureService.ts",
             "desc": "ADR-150: combines direct positions with exact-identifier matched, supported fund constituents. Decimal weights preserve unclassified and uncovered value; no economic FX exposure is inferred."
           },
           {
@@ -1695,7 +1695,7 @@
             "label": "Portfolio projection",
             "sub": "Research \u00b7 matched scenario paths",
             "kind": "service",
-            "path": "apps/node-backend/src/services/research/projection/portfolioProjection.js",
+            "path": "apps/node-backend/src/services/research/projection/portfolioProjection.ts",
             "desc": "Simulates aggregate portfolio value using snapshot risk and optional provider drift. A monthly contribution schedule and goal month support income-interruption comparisons with one explicit seed.",
             "x": 400,
             "y": 1060
@@ -1850,7 +1850,7 @@
             "kind": "service",
             "x": 40,
             "y": 1060,
-            "path": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js",
+            "path": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.ts",
             "desc": "Canonical partial custody events carry original purchase lots and FX; asset fees consume source units and basis."
           },
           {
@@ -1860,7 +1860,7 @@
             "kind": "service",
             "x": 40,
             "y": 1160,
-            "path": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js",
+            "path": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts",
             "desc": "Dated yield reversals consume only source-proven zero-basis yield lots. Asset fees consume original lots and purchase FX. Per-method allocations and restrictive source links retain evidence."
           }
         ],
@@ -2118,7 +2118,7 @@
                 "title": "Run the import phases",
                 "note": "Stage, validate and match prepare a reviewable batch.",
                 "payload": "runImportPipeline",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts"
               },
               {
                 "from": "sv.import",
@@ -2126,7 +2126,7 @@
                 "title": "Parse bank records",
                 "note": "Interpret financial fields while retaining exact logical CSV records.",
                 "payload": "adapter parsing",
-                "annotation": "apps/node-backend/src/services/importPipeline/stage.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts"
               },
               {
                 "from": "sv.import",
@@ -2134,7 +2134,7 @@
                 "title": "Persist staging and identity evidence",
                 "note": "Validation separates provenance hashes and occurrence fingerprints; matching resolves recipient candidates.",
                 "payload": "import_batches and import_staging_rows",
-                "annotation": "apps/node-backend/src/services/importPipeline/stage.js; apps/node-backend/src/services/importPipeline/validate.js; apps/node-backend/src/services/importPipeline/match.js; apps/node-backend/src/services/importIdentity.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts; apps/node-backend/src/services/importPipeline/validate.ts; apps/node-backend/src/services/importPipeline/match.ts; apps/node-backend/src/services/importIdentity.js"
               },
               {
                 "from": "sv.import",
@@ -2142,7 +2142,7 @@
                 "title": "Choose review or automatic commit",
                 "note": "Uncertain rows go to review; eligible rows use the commit pipeline.",
                 "payload": "batch result and review status",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/frontend/src/pages/ImportReviewPage.tsx"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/frontend/src/pages/ImportReviewPage.tsx"
               }
             ],
             "takeaway": "Duplicate identity and exact source provenance are separate. Staging preserves reviewable source evidence.",
@@ -2193,7 +2193,7 @@
                 "title": "Prepare reviewed rows",
                 "note": "Unresolved recipients become row errors.",
                 "payload": "commitImport / commitBatch",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/importPipeline/commit.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/importPipeline/commit.ts"
               },
               {
                 "from": "sv.import",
@@ -2201,7 +2201,7 @@
                 "title": "Commit bounded chunks",
                 "note": "Canonical accounts, fingerprints, row savepoints and chunk checkpoints preserve successful work.",
                 "payload": "transactions, provenance and per-row outcomes",
-                "annotation": "apps/node-backend/src/services/importPipeline/commit.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/commit.ts"
               },
               {
                 "from": "sv.import",
@@ -2209,7 +2209,7 @@
                 "title": "Link real payments and transfers",
                 "note": "Plan matching uses inserted rows; transfer reconciliation includes earlier imports.",
                 "payload": "autoLinkTransactions / reconcileTransfers",
-                "annotation": "apps/node-backend/src/services/importPipeline/commit.js; apps/node-backend/src/services/importPipeline/index.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/commit.ts; apps/node-backend/src/services/importPipeline/index.ts"
               },
               {
                 "from": "sv.import",
@@ -2217,7 +2217,7 @@
                 "title": "Refresh derived totals",
                 "note": "Attempt forecast invalidation and schedule one coalesced asynchronous refresh.",
                 "payload": "scheduleMaterializedViewRefresh()",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/aggregationRefresh.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/aggregationRefresh.js"
               },
               {
                 "from": "be.routes",
@@ -2360,7 +2360,7 @@
                 "title": "Shape the chart response",
                 "note": "Filter series, compute metrics and heatmap, and retrieve current summary.",
                 "payload": "buildPortfolioPerformancePayload",
-                "annotation": "apps/node-backend/src/services/info/performanceHelpers.js"
+                "annotation": "apps/node-backend/src/services/info/performanceHelpers.ts"
               },
               {
                 "from": "be.routes",
@@ -2368,7 +2368,7 @@
                 "title": "Return history and current totals",
                 "note": "The response combines historical series and live summary.",
                 "payload": "snapshots, metrics, heatmap, breakdownSummary, totals",
-                "annotation": "apps/node-backend/src/services/info/performanceHelpers.js"
+                "annotation": "apps/node-backend/src/services/info/performanceHelpers.ts"
               },
               {
                 "from": "fe.hooks",
@@ -2765,7 +2765,7 @@
                 "title": "Validate requested tools",
                 "note": "Reject unknown tools, coerce once and delegate argument validation.",
                 "payload": "dispatchTool",
-                "annotation": "apps/node-backend/src/services/aiChat/tools/index.js"
+                "annotation": "apps/node-backend/src/services/aiChat/tools/index.ts"
               },
               {
                 "from": "sv.aichat",
@@ -3788,7 +3788,7 @@
                 "from": "be.routes",
                 "to": "sv.forecast",
                 "payload": "forecast({ months, paths, method? })",
-                "annotation": "services/calculations/forecast/index.js."
+                "annotation": "services/calculations/forecast/index.ts."
               },
               {
                 "from": "sv.forecast",
@@ -3948,25 +3948,25 @@
                 "from": "be.routes",
                 "to": "sv.portfolioimport",
                 "payload": "runPortfolioImportPipeline({ filePath, customConfig, onProgress })",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.js stages, validates, and matches records. The Saxo adapter joins Transacties, _Transacties, and Bookings by account and booking-record ID; inconsistent workbook detail rejects. onProgress reports the existing phase events."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.ts stages, validates, and matches records. The Saxo adapter joins Transacties, _Transacties, and Bookings by account and booking-record ID; inconsistent workbook detail rejects. onProgress reports the existing phase events."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "INSERT INTO portfolio_import_batches; INSERT INTO portfolio_import_staging_rows (migration 0040)",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.js retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Fresh Kinesis staging also captures the full literal hash and ordered event context through services/portfolioKinesisAdoptionScope.js before any selection; all bounded Kinesis scopes reject filters or incomplete capture. Narrowed UI staging explicitly uses zero yield basis before review. Explicit included_symbols otherwise excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/stage.ts retains literal CSV records or typed Saxo workbook provenance with joined sheet rows and source-byte hash. Fresh Kinesis staging also captures the full literal hash and ordered event context through services/portfolioKinesisAdoptionScope.js before any selection; all bounded Kinesis scopes reject filters or incomplete capture. Narrowed UI staging explicitly uses zero yield basis before review. Explicit included_symbols otherwise excludes unselected parsed assets and unrelated cash, records scope_excluded_rows, and retains parsing errors. validate.js uses apps/node-backend/src/services/importIdentity.js for provenance hashes and versioned account/currency/route-aware occurrence fingerprints."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "be.repos",
                 "payload": "resolve one active exact symbol, explicit provider alias, or exact name",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.js keeps exact-symbol priority, then explicit Yahoo crypto / Kinesis provider asset aliases, then exact name. Ambiguous symbol or alias candidates block name fallback. Stored match_source is symbol, name_exact, or null; no ISIN or fuzzy matching."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/matchInvestments.ts keeps exact-symbol priority, then explicit Yahoo crypto / Kinesis provider asset aliases, then exact name. Ambiguous symbol or alias candidates block name fallback. Stored match_source is symbol, name_exact, or null; no ISIN or fuzzy matching."
               },
               {
                 "from": "sv.portfolioimport",
                 "to": "be.routes",
                 "payload": "{ batchId, requires_review, match_source_counts }  OR  { batchId, total, imported, duplicates, errors }",
-                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.js always sends maintained brokerage formats to awaiting_review. Only non-brokerage generic imports with no errors, unresolved rows, or name matches auto-commit; aliases use the symbol match source."
+                "annotation": "apps/node-backend/src/services/portfolioImportPipeline/index.ts always sends maintained brokerage formats to awaiting_review. Only non-brokerage generic imports with no errors, unresolved rows, or name matches auto-commit; aliases use the symbol match source."
               },
               {
                 "from": "be.routes",
@@ -3996,7 +3996,7 @@
                 "from": "sv.portfolioreconciliation",
                 "to": "sv.portfoliocustody",
                 "payload": "validate full proposed dated custody and account holdings before commit",
-                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js requires distinct active source/destination accounts, resolved original acquisition history, and consistent gross/fee units. Missing origin or basis and downstream oversell/custody conflicts block the complete plan."
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.ts requires distinct active source/destination accounts, resolved original acquisition history, and consistent gross/fee units. Missing origin or basis and downstream oversell/custody conflicts block the complete plan."
               },
               {
                 "from": "sv.portfoliocustody",
@@ -4008,7 +4008,7 @@
                 "from": "sv.portfolioreconciliation",
                 "to": "sv.portfolioadjustment",
                 "payload": "adjustment action + summary.adjustment; explicit eligible zero-yield or carried-basis removal",
-                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js requires explicit zero-yield policy/source history for reversals and sufficient dated holdings for fees. Adjustment staging has route asset_adjustment and no financial type; source fingerprints remain canonical."
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts requires explicit zero-yield policy/source history for reversals and sufficient dated holdings for fees. Adjustment staging has route asset_adjustment and no financial type; source fingerprints remain canonical."
               },
               {
                 "from": "sv.portfolioadjustment",
@@ -4026,7 +4026,7 @@
                 "from": "sv.portfolioimport",
                 "to": "db.postgres",
                 "payload": "atomic selected adoption receipts/source counters; full scope also writes repairs + missing trades/cash + dated custody/adjustments",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. Attachment/correction scopes write only proven existing attachments, financial corrections or whole-group payment-date corrections and newly settled receipt-backed duplicates. The separate income scope records literal paired dividends with read-only included_in_units, incomeProof and recordedIncome counts; services/portfolioKinesisIncomePairs.js and repositories/portfolioIncomeRecognitionRepository.js retain complete pair proof and immutable record/restore receipts, without changing acquired units or gains. Group date actions change only date and retain distinct source/canonical identities; unchanged anchors are proof context, not correction counts. Pending progress does not declare remaining history complete. Existing immutable adoption/restore receipts verify full after-images before rollback, including original group dates. Full-scope duplicate repair retains dual images/counters; services/portfolioImportPipeline/commit.js routes each new event once. Full history records the Gift once, then verifies its actual canonical after-image before writing the paired income receipt; typed unitRowId and canonical identity are bound in the review fingerprint. recordedIncome/recordedCash are additive subsets of full imported totals, with exact owned repeats writing neither again. All writers share trade, transfer and adjustment locks. apps/node-backend/src/services/portfolioImportCashService.js orchestrates the selected writer/rollback and apps/node-backend/src/repositories/portfolioImportCashRepository.js owns signed main/fee persistence and image locks. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete source/account closure and retains typed immutable cash envelopes in source staging with primary and optional fee after-images. Brokerage origin prevents automatic re-pairing/orphan clearing; complete groups and component images are fingerprint-bound."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js preserves adopted transaction IDs. Attachment/correction scopes write only proven existing attachments, financial corrections or whole-group payment-date corrections and newly settled receipt-backed duplicates. The separate income scope records literal paired dividends with read-only included_in_units, incomeProof and recordedIncome counts; services/portfolioKinesisIncomePairs.js and repositories/portfolioIncomeRecognitionRepository.ts retain complete pair proof and immutable record/restore receipts, without changing acquired units or gains. Group date actions change only date and retain distinct source/canonical identities; unchanged anchors are proof context, not correction counts. Pending progress does not declare remaining history complete. Existing immutable adoption/restore receipts verify full after-images before rollback, including original group dates. Full-scope duplicate repair retains dual images/counters; services/portfolioImportPipeline/commit.ts routes each new event once. Full history records the Gift once, then verifies its actual canonical after-image before writing the paired income receipt; typed unitRowId and canonical identity are bound in the review fingerprint. recordedIncome/recordedCash are additive subsets of full imported totals, with exact owned repeats writing neither again. All writers share trade, transfer and adjustment locks. apps/node-backend/src/services/portfolioImportCashService.js orchestrates the selected writer/rollback and apps/node-backend/src/repositories/portfolioImportCashRepository.ts owns signed main/fee persistence and image locks. apps/node-backend/src/services/portfolioKinesisCashScope.js proves complete source/account closure and retains typed immutable cash envelopes in source staging with primary and optional fee after-images. Brokerage origin prevents automatic re-pairing/orphan clearing; complete groups and component images are fingerprint-bound."
               },
               {
                 "from": "fe.hooks",
@@ -4038,13 +4038,13 @@
                 "from": "be.routes",
                 "to": "fe.pages",
                 "payload": "eight-decimal quantities plus target-currency gains, totalInKindIncome / archivedInKindIncome and assignment state",
-                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.js includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay. Archived included income alone uses archivedInKindIncome dated conversion; ordinary archived gains/basis remain local, and missing foreign dated income remains unavailable."
+                "annotation": "apps/node-backend/src/services/portfolio/portfolioSummaryService.ts includes canonical transfers and adjustments. apps/frontend/src/pages/portfolio/CryptoPage.tsx shows eight-decimal units; useFxAwarePnl.ts respects canonical target-currency gains without a second ordinary-only replay. Archived included income alone uses archivedInKindIncome dated conversion; ordinary archived gains/basis remain local, and missing foreign dated income remains unavailable."
               },
               {
                 "from": "sv.portfolioreconciliation",
                 "to": "db.postgres",
                 "payload": "guarded batch rollback: remove owned rows; compare-and-set restore original adopted history",
-                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. repositories/portfolioIncomeRecognitionRepository.js validates both paired after-images, restores income first and releases active acquisition dependencies. Migration 0124 omits standard from normalized old-receipt comparisons without rewriting receipts and guards downgrade. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js removes owned adjustments only after history checks; source links delete only by parent cascade. apps/node-backend/src/services/portfolioKinesisCashScope.js checks every owned cash component, including a quoted withdrawal fee, before atomic removal; typed source receipts remain immutable after rollback and a fresh complete capture can record again. apps/node-backend/src/startup/warmup.ts excludes typed receipt owners from batch pruning."
+                "annotation": "apps/node-backend/src/services/portfolioImportReconciliationService.js validates remaining custody/sale history and adopted after-images. apps/node-backend/src/services/portfolioImportDuplicateRepairService.js checks all repair images, then restores the removed copy ID/timestamps and original manual/source state with an inverse receipt. repositories/portfolioIncomeRecognitionRepository.ts validates both paired after-images, restores income first and releases active acquisition dependencies. Migration 0124 omits standard from normalized old-receipt comparisons without rewriting receipts and guards downgrade. Changes block the entire rollback. Referenced new and original batches survive pruning. apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.ts removes owned adjustments only after history checks; source links delete only by parent cascade. apps/node-backend/src/services/portfolioKinesisCashScope.js checks every owned cash component, including a quoted withdrawal fee, before atomic removal; typed source receipts remain immutable after rollback and a fresh complete capture can record again. apps/node-backend/src/startup/warmup.ts excludes typed receipt owners from batch pruning."
               }
             ],
             "docs": [
@@ -4705,7 +4705,7 @@
                 "from": "be.routes",
                 "to": "sv.portfolioprojection",
                 "payload": "runPortfolioForecast twice",
-                "annotation": "apps/node-backend/src/services/research/projection/portfolioProjection.js applies per-month contributions and optional goal probability."
+                "annotation": "apps/node-backend/src/services/research/projection/portfolioProjection.ts applies per-month contributions and optional goal probability."
               },
               {
                 "from": "sv.portfolioprojection",
@@ -5029,7 +5029,7 @@
                 "title": "Calculate the summary",
                 "note": "The calculation delegates to the financial summary repository and checks invariants.",
                 "payload": "computeMonthlySummary / getMonthlyFinancialSummary",
-                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js; apps/node-backend/src/repositories/infoRepository.ts"
+                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.ts; apps/node-backend/src/repositories/infoRepository.ts"
               },
               {
                 "from": "be.repos",
@@ -5037,7 +5037,7 @@
                 "title": "Choose derived or live data",
                 "note": "Default scope can use a materialized view; exclusions or custom dates use live SQL.",
                 "payload": "monthly totals; source = mv or live",
-                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.js"
+                "annotation": "apps/node-backend/src/services/calculations/aggregation/monthly.ts"
               },
               {
                 "from": "be.routes",
@@ -5171,7 +5171,7 @@
                 "title": "Reconcile after a write",
                 "note": "Imports and manual mutations trigger the corpus-wide scan.",
                 "payload": "reconcileTransfers",
-                "annotation": "apps/node-backend/src/services/importPipeline/index.js; apps/node-backend/src/services/transactionService.js"
+                "annotation": "apps/node-backend/src/services/importPipeline/index.ts; apps/node-backend/src/services/transactionService.js"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5195,7 +5195,7 @@
                 "title": "Require mutual uniqueness",
                 "note": "Leave ambiguity open and preserve manual pairs.",
                 "payload": "resolveTransferMatches",
-                "annotation": "apps/node-backend/src/services/calculations/transfers.js"
+                "annotation": "apps/node-backend/src/services/calculations/transfers.ts"
               },
               {
                 "from": "sv.transactiondomains",
@@ -5211,7 +5211,7 @@
                 "title": "Refresh derived state",
                 "note": "The calling mutation refreshes statistics after reconciliation.",
                 "payload": "scheduleAggregationRefresh",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/importPipeline/index.js"
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/importPipeline/index.ts"
               },
               {
                 "from": "sv.matview",
@@ -5345,7 +5345,7 @@
                 "title": "Try matching after a real write",
                 "note": "Imports and manual mutations call the same service.",
                 "payload": "autoLinkTransactions",
-                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/plannedMatchService.js; apps/node-backend/src/services/importPipeline/commit.js"
+                "annotation": "apps/node-backend/src/services/transactionService.js; apps/node-backend/src/services/plannedMatchService.js; apps/node-backend/src/services/importPipeline/commit.ts"
               },
               {
                 "from": "sv.transactiondomains",

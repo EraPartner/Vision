@@ -2,8 +2,8 @@
 title: AI Data Access Policy
 type: security
 status: active
-date: 2026-10-07
-updated: 2026-10-03
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     security,
@@ -23,12 +23,12 @@ related_code:
   [
     "apps/node-backend/src/routes/ai.ts",
     "apps/node-backend/src/services/aiChatService.js",
-    "apps/node-backend/src/services/aiChat/tools/index.js",
+    "apps/node-backend/src/services/aiChat/tools/index.ts",
     "apps/node-backend/src/integrations/ollama/client.ts",
     "apps/node-backend/tests/aiChatService.test.js",
     "apps/node-backend/tests/aiChatTools.test.js",
-    "apps/node-backend/src/services/aiEvaluation/localReliability.js",
-    "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.js",
+    "apps/node-backend/src/services/aiEvaluation/localReliability.ts",
+    "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts",
     "apps/node-backend/src/services/aiReferenceService.js",
     "apps/node-backend/src/services/agentCloakPreflight.js",
     "apps/node-backend/src/repositories/aiReferenceRepository.ts",
@@ -186,7 +186,7 @@ The registry contains **30 read-only tools** across **6 domains**: Expenses (11)
 All inputs validated before reaching the service layer:
 
 - Chat request body — Zod schema: `{conversationId: uuid, message: string (1–4000 chars), model: string}`.
-- Tool args — each tool's JSON Schema plus the dispatcher validators in `services/aiChat/tools/_validate.js`.
+- Tool args — each tool's JSON Schema plus the dispatcher validators in `services/aiChat/tools/_validate.ts`.
 - Conversation IDs — UUID v4 validation (reuse [[docs/security/input-validation|Input Validation]] helpers).
 - Dates — strict calendar-valid `YYYY-MM-DD`; tools with year arguments apply their own documented bounds.
 - Topic/category/recipient IDs — positive 32-bit integers via `validateId()`.

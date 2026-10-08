@@ -3,11 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CLOUD_PRIVACY_EVALUATION_CASES,
   CLOUD_PRIVACY_SYNTHETIC_POLICY,
-} from "../src/services/aiEvaluation/cloudPrivacyCases.js";
+} from "../src/services/aiEvaluation/cloudPrivacyCases.ts";
 import {
   createInspectionFetch,
   evaluateCloudPrivacyTrace,
-} from "../src/services/aiEvaluation/cloudPrivacy.js";
+} from "../src/services/aiEvaluation/cloudPrivacy.ts";
 
 describe("cloud-assistance privacy evaluation", () => {
   it.each(CLOUD_PRIVACY_EVALUATION_CASES)(

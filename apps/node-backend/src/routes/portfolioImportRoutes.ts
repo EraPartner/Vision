@@ -27,7 +27,7 @@ import {
   assertPortfolioUploadSupported,
 } from "../lib/portfolioUpload.ts";
 import { streamImport } from "../lib/importProgress.ts";
-import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.js";
+import { runPortfolioImportPipeline } from "../services/portfolioImportPipeline/index.ts";
 import { VALID_PORTFOLIO_TXN_TYPES } from "../lib/portfolioTxnTypes.ts";
 import {
   listBatches,
@@ -47,7 +47,7 @@ import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import {
   CSV_NUMBER_FORMATS,
   normalizeCsvEncoding,
-} from "../services/importPipeline/adapters/_shared.js";
+} from "../services/importPipeline/adapters/_shared.ts";
 import { registerParserRoutes } from "./parserConfigRoutes.ts";
 import { registerImportBatchRoutes } from "./importBatchRoutes.ts";
 import {
@@ -61,12 +61,16 @@ const router = Router();
 const PARSER_KIND = "portfolio";
 const MAX_BULK_RESOLUTION_ROWS = 5000;
 
-function parseTypeMapping(raw: unknown): object {
+// The raw label → canonical type map is only shape-checked here; the type
+// normalizer rejects any mapped value that is not a valid canonical type.
+function parseTypeMapping(raw: unknown): Record<string, string> {
   if (!raw) return {};
-  if (typeof raw === "object") return raw;
+  if (typeof raw === "object") return raw as Record<string, string>;
   try {
     const parsed: unknown = JSON.parse(String(raw));
-    return parsed && typeof parsed === "object" ? parsed : {};
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, string>)
+      : {};
   } catch {
     return {};
   }

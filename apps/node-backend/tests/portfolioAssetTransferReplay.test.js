@@ -8,7 +8,7 @@ import {
 import {
   previewPortfolioAssetTransfer,
   validatePortfolioAssetTransferHistory,
-} from "../src/services/portfolio/portfolioAssetTransferService.js";
+} from "../src/services/portfolio/portfolioAssetTransferService.ts";
 
 const buy = (id, date, account, units, amount, fxMultiplier = 1) => ({
   id,

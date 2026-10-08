@@ -20,7 +20,7 @@ import {
   buildExclusionClauses,
   validateInt4Ids,
 } from "../lib/filterBuilder.ts";
-import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   buildPeriodPivot,
   mapRowsForAmountConversion,

@@ -24,7 +24,7 @@ const { mockConvertToCurrency } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({ convertToCurrency: mockConvertToCurrency }),
 );
 
@@ -38,7 +38,7 @@ import { settingsRepository } from "../src/repositories/settingsRepository.ts";
 import {
   getPortfolioSummary,
   getBreakdownSummary,
-} from "../src/services/portfolio/portfolioSummaryService.js";
+} from "../src/services/portfolio/portfolioSummaryService.ts";
 
 const investmentRow = (overrides = {}) =>
   makeInvestmentRow({

@@ -6,10 +6,10 @@
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import twelveData from '../../src/services/research/adapters/twelveDataAdapter.js';
-import finnhub from '../../src/services/research/adapters/finnhubAdapter.js';
-import fmp from '../../src/services/research/adapters/fmpAdapter.js';
-import alphaVantage from '../../src/services/research/adapters/alphaVantageAdapter.js';
+import twelveData from '../../src/services/research/adapters/twelveDataAdapter.ts';
+import finnhub from '../../src/services/research/adapters/finnhubAdapter.ts';
+import fmp from '../../src/services/research/adapters/fmpAdapter.ts';
+import alphaVantage from '../../src/services/research/adapters/alphaVantageAdapter.ts';
 
 const ENV = {
   TWELVE_DATA_API_KEY: 'td',

@@ -2,12 +2,12 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-09-09
-updated: 2026-09-09
+date: 2026-10-08
+updated: 2026-10-08
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
 related_code:
-  [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
+  [[apps/node-backend/src/services/importPipeline/adapters/index.ts]]
 ---
 
 # Integration: Bank Adapters

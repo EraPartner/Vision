@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getSaxoCsvCompanionEvidence,
   getSaxoWorkbookReconciliationEvidence,
-} from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js";
+} from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
 import { syntheticSaxoWorkbook } from "./helpers/saxoWorkbook.js";
 import {

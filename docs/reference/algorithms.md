@@ -2,8 +2,8 @@
 title: Algorithms & Data Structures
 type: algorithm-doc
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     algorithms,
@@ -261,7 +261,7 @@ The algorithm uses **temporal pattern analysis** on transaction sequences.
 
 ## Currency Conversion Service
 
-**Location:** [[apps/node-backend/src/services/currency/currencyConversionService.js]]
+**Location:** [[apps/node-backend/src/services/currency/currencyConversionService.ts]]
 
 ### Problem Statement
 
@@ -365,7 +365,7 @@ Multi-pass normalization pipeline:
 
 ## Net Worth Snapshot Algorithm
 
-**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.js]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.ts]] (liquid component + cache layer)
+**Location:** [[apps/node-backend/src/services/portfolio/snapshotBuilder.ts]] (day walk + non-unit valuation), [[apps/node-backend/src/repositories/infoRepository.ts]] (liquid component + cache layer)
 
 ### Problem Statement
 

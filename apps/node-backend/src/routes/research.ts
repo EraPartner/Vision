@@ -21,15 +21,15 @@ import {
   assertOptionalId,
   assertIdParam,
 } from "../middleware/validation.ts";
-import { researchAggregator } from "../services/research/researchAggregator.js";
-import { researchMappingService } from "../services/research/researchMappingService.js";
-import * as researchProviderKeyService from "../services/research/researchProviderKeyService.js";
-import { runPortfolioForecast } from "../services/research/projection/portfolioProjection.js";
-import { fundamentalsScorecard } from "../services/research/fundamentalsScorecard.js";
+import { researchAggregator } from "../services/research/researchAggregator.ts";
+import { researchMappingService } from "../services/research/researchMappingService.ts";
+import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
+import { runPortfolioForecast } from "../services/research/projection/portfolioProjection.ts";
+import { fundamentalsScorecard } from "../services/research/fundamentalsScorecard.ts";
 import {
   MACRO_PROVIDERS,
   isValidSeriesId,
-} from "../services/research/adapters/macroCatalog.js";
+} from "../services/research/adapters/macroCatalog.ts";
 
 const router = Router();
 

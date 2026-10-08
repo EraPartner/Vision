@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __aggregatePortfolioExposure as aggregatePortfolioExposure } from "../src/services/portfolio/portfolioExposureService.js";
+import { __aggregatePortfolioExposure as aggregatePortfolioExposure } from "../src/services/portfolio/portfolioExposureService.ts";
 
 const fundDocument = (weight = "4") => ({
   contractVersion: 1,

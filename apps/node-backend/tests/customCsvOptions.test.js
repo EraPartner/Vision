@@ -6,8 +6,8 @@ import { mockLogger } from "./helpers/mockLogger.js";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import { parse as parseTransactions } from "../src/services/importPipeline/adapters/generic.js";
-import { parseWithConfig as parsePortfolio } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+import { parse as parseTransactions } from "../src/services/importPipeline/adapters/generic.ts";
+import { parseWithConfig as parsePortfolio } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 const paths = [];
 function fixture(bytes) {

@@ -1,7 +1,7 @@
 /** Complete-source native cash chains and immutable owned ledger after-images. */
 import { createHash } from "node:crypto";
 import { toDecimal } from "../lib/money.ts";
-import { parseCsvText } from "./importPipeline/adapters/_shared.js";
+import { parseCsvText } from "./importPipeline/adapters/_shared.ts";
 import { portfolioPrimaryRawData } from "./portfolioPerformanceReferenceEvidence.js";
 import { proveKinesisAdoptionSources } from "./portfolioKinesisAdoptionScope.js";
 import {
@@ -14,7 +14,7 @@ import {
  * @typedef {import('decimal.js').default} Decimal
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} ReconciliationSourceRow
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow} ReconciliationBatchScopeRow
- * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.ts').ParsedPortfolioRow} ParsedPortfolioRow
  */
 /**
  * Proven ledger values of one native cash movement (or its funding fee).
@@ -377,7 +377,7 @@ export function proveKinesisCashSources(rows, batches, fundingPolicy) {
  * @param {ReconciliationBatchScopeRow[]} input.batches
  * @param {KinesisCashContext} input.context
  * @param {string} input.fundingPolicy
- * @param {{ currency: string, date: string, rate: string | number | null }[]} [input.historicalFxContext]
+ * @param {{ currency: string, date: string | null, rate: string | number | null | undefined }[]} [input.historicalFxContext]
  */
 export function classifyKinesisCash({
   rows,

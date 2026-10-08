@@ -23,7 +23,7 @@ import {
   FINANCIAL_SECTION_CATALOG,
   PORTFOLIO_SECTION_CATALOG,
   TAX_SECTION_CATALOG,
-} from '../src/services/reports/sectionCatalog.js';
+} from '../src/services/reports/sectionCatalog.ts';
 import {
   FINANCIAL_SECTIONS,
   PORTFOLIO_SECTIONS,

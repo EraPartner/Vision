@@ -23,7 +23,7 @@ import { logger } from "../config/logger.ts";
 import {
   runImportPipeline,
   commitImport,
-} from "../services/importPipeline/index.js";
+} from "../services/importPipeline/index.ts";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
 import {
   csvUpload,
@@ -49,7 +49,7 @@ import { registerImportBatchRoutes } from "./importBatchRoutes.ts";
 import {
   normalizeCsvEncoding,
   CSV_NUMBER_FORMATS,
-} from "../services/importPipeline/adapters/_shared.js";
+} from "../services/importPipeline/adapters/_shared.ts";
 
 /** The shape `runImportPipeline` resolves with (services/importPipeline/index.js). */
 type ImportPipelineResult = Awaited<ReturnType<typeof runImportPipeline>>;

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { createResearchCache } from '../src/services/research/researchCache.js';
+import { createResearchCache } from '../src/services/research/researchCache.ts';
 
 describe('createResearchCache — per-instance self-sweep', () => {
   afterEach(() => {

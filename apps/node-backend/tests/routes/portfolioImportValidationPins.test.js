@@ -55,7 +55,7 @@ vi.mock("os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
-vi.mock("../../src/services/portfolioImportPipeline/index.js", () => ({
+vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 
@@ -94,11 +94,11 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.js";
+import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
 import { commitReviewedPortfolioImport } from "../../src/services/portfolioImportCommitService.js";
 // NOT mocked: only .../portfolioImportPipeline/index.js is. This is the real
 // boundary function, run here over the mocked pg connection.
-import { createBatch } from "../../src/services/portfolioImportPipeline/stage.js";
+import { createBatch } from "../../src/services/portfolioImportPipeline/stage.ts";
 import { query as dbQuery } from "../../src/database/connection.ts";
 import {
   getBatch,

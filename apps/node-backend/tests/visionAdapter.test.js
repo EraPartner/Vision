@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createAdapter } from "../src/services/importPipeline/adapters/index.js";
-import { detect } from "../src/services/importPipeline/adapters/vision.js";
+import { createAdapter } from "../src/services/importPipeline/adapters/index.ts";
+import { detect } from "../src/services/importPipeline/adapters/vision.ts";
 
 import { useTempCSV } from "./helpers/tempFile.js";
 

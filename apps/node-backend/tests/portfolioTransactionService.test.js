@@ -13,11 +13,11 @@ const writes = vi.hoisted(() => ({
 
 vi.mock("../src/repositories/portfolioTxRepo.reads.ts", () => reads);
 vi.mock("../src/repositories/portfolioTxRepo.writes.ts", () => writes);
-vi.mock("../src/services/portfolio/portfolioHistoryWriteService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioHistoryWriteService.ts", () => ({
   withPortfolioHistoryWrite: (_accounts, work) => work(),
 }));
 
-import { __update as update } from "../src/services/portfolio/portfolioTransactionService.js";
+import { __update as update } from "../src/services/portfolio/portfolioTransactionService.ts";
 
 describe("portfolioTransactionService recurrence compatibility", () => {
   beforeEach(() => {

@@ -64,7 +64,7 @@ vi.mock("os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
-vi.mock("../../src/services/importPipeline/index.js", () => ({
+vi.mock("../../src/services/importPipeline/index.ts", () => ({
   runImportPipeline: vi.fn(),
   commitImport: vi.fn(),
 }));
@@ -118,7 +118,7 @@ vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
 
-import { runImportPipeline } from "../../src/services/importPipeline/index.js";
+import { runImportPipeline } from "../../src/services/importPipeline/index.ts";
 import {
   importRecipientsCSV,
   importCategoriesCSV,

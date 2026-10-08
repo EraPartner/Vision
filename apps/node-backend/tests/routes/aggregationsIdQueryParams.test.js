@@ -36,32 +36,32 @@ const recipientByYearSpy = vi.fn(envelope);
 const recipientPivotSpy = vi.fn(envelope);
 const tagPivotSpy = vi.fn(envelope);
 
-vi.mock('../../src/services/calculations/aggregation/monthly.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/monthly.ts', () => ({
   computeMonthlySummary: (...a) => monthlySpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/recipient.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/recipient.ts', () => ({
   computeRecipientInsights: (...a) => recipientInsightsSpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/cashflow.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/cashflow.ts', () => ({
   computeCashflowComparison: (...a) => cashflowComparisonSpy(...a),
 }));
-vi.mock('../../src/services/calculations/forecast/index.js', () => ({
+vi.mock('../../src/services/calculations/forecast/index.ts', () => ({
   computeCashflowForecast: (...a) => forecastMethodsSpy(...a),
   computeCashflowForecastRolling: (...a) => forecastRollingSpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/sankey.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/sankey.ts', () => ({
   computeSankeyFlow: (...a) => sankeySpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/categoryPivot.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/categoryPivot.ts', () => ({
   computeCategoryPivot: (...a) => categoryPivotSpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/recipientByYear.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/recipientByYear.ts', () => ({
   computeRecipientByYear: (...a) => recipientByYearSpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/recipientPivot.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/recipientPivot.ts', () => ({
   computeRecipientPivot: (...a) => recipientPivotSpy(...a),
 }));
-vi.mock('../../src/services/calculations/aggregation/tagPivot.js', () => ({
+vi.mock('../../src/services/calculations/aggregation/tagPivot.ts', () => ({
   computeTagPivot: (...a) => tagPivotSpy(...a),
 }));
 

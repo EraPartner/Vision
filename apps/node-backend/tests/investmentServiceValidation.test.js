@@ -28,11 +28,11 @@ vi.mock("../src/services/quoteBackfillService.js", () => ({
 vi.mock("../src/config/kinesisConfig.ts", () => ({
   getKinesisAssetConfig: vi.fn(),
 }));
-vi.mock("../src/services/info/cache.js", () => ({
+vi.mock("../src/services/info/cache.ts", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 vi.mock("../src/lib/urlSafety.ts", () => ({ assertPublicHttpUrl: vi.fn() }));
-vi.mock("../src/services/portfolio/fxResolve.js", () => ({
+vi.mock("../src/services/portfolio/fxResolve.ts", () => ({
   autoResolveFxRateToEur: vi.fn(),
 }));
 

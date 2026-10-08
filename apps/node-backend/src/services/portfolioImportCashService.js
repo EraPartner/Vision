@@ -7,7 +7,7 @@ import {
 import {
   insertKinesisCash,
   readCashImagesForUpdate,
-} from "../repositories/portfolioImportCashRepository.js";
+} from "../repositories/portfolioImportCashRepository.ts";
 import { portfolioPrimaryRawData } from "./portfolioPerformanceReferenceEvidence.js";
 import {
   cashReceipt,
@@ -19,7 +19,7 @@ const stale = () =>
   new ConflictError("Owned cash source or ledger image changed", {
     details: { reason: "cash_receipt_changed" },
   });
-/** @typedef {import('../repositories/portfolioImportCashRepository.js').KinesisCashValues} KinesisCashValues */
+/** @typedef {import('../repositories/portfolioImportCashRepository.ts').KinesisCashValues} KinesisCashValues */
 
 /**
  * @param {{ row: any, values: KinesisCashValues, proof: any, feeValues?: KinesisCashValues }} member

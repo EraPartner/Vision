@@ -37,7 +37,7 @@ import {
   dispatchTool,
   getToolSchemas,
   getToolNames,
-} from "./aiChat/tools/index.js";
+} from "./aiChat/tools/index.ts";
 
 /** @typedef {import('../types/rows.ts').AiConversationRow} AiConversationRow */
 /** @typedef {import('../types/rows.ts').AiMessageRow} AiMessageRow */

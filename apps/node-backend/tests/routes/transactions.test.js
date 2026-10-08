@@ -38,7 +38,7 @@ vi.mock("../../src/services/materializedViewService.js", () =>
   mockMaterializedViews(),
 );
 
-vi.mock("../../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 
@@ -71,7 +71,7 @@ import {
 } from "../../src/services/transferReconciliationService.js";
 import { query as dbQuery } from "../../src/database/connection.ts";
 import { isManualDuplicate } from "../../src/services/deduplication.js";
-import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
 import { attachmentRepository } from "../../src/services/attachmentRecordService.js";
 import { removeAttachmentFile } from "../../src/services/attachmentService.js";
 

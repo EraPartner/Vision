@@ -37,7 +37,7 @@ import {
 import { getMetrics } from "../middleware/requestMetrics.ts";
 import { getRouteManifest } from "../services/routeManifest.js";
 import { adminMutateLimiter } from "../middleware/rateLimiter.ts";
-import { isAccuracyTableHealthy } from "../services/calculations/forecast/accuracyStore.js";
+import { isAccuracyTableHealthy } from "../services/calculations/forecast/accuracyStore.ts";
 import {
   getTableMeta,
   readRows,

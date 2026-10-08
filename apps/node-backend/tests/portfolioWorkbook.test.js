@@ -14,8 +14,8 @@ import {
   readPortfolioWorkbook,
   isLikelyPortfolioFile,
 } from "../src/lib/portfolioUpload.ts";
-import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js";
-import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+import { parseSaxoTransactionHistory } from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
+import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 let directory;
 let file;

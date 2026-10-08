@@ -5,7 +5,7 @@ vi.mock("../src/database/connection.ts", () => mockTxConnection());
 vi.mock("../src/config/logger.ts", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock("../src/services/currency/currencyConversionService.js", () => ({
+vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
   convertToCurrency: vi.fn(async (value) => value),
 }));
 

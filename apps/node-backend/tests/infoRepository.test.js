@@ -12,7 +12,7 @@ import {
 } from "./helpers/mockCurrencyConversion.js";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({
     convertRowsToEur: mockRowsAlreadyInTargetCurrency(),
   }),
@@ -30,7 +30,7 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
 }));
 
 import { query, queryPrepared } from "../src/database/connection.ts";
-import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepository.ts";
 import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
@@ -1007,6 +1007,36 @@ describe("InfoRepository", () => {
       expect(mvSql).toBeTruthy();
       expect(mvSql).toContain("GROUP BY month_start, month, year, currency");
       expect(mvSql).not.toContain("category_id,");
+    });
+
+    it("limits the live path to the given accounts and skips the account-less MV", async () => {
+      const calls = [];
+      query.mockImplementation(async (sql, params) => {
+        if (typeof sql !== "string") return { rows: [] };
+        calls.push({ sql, params });
+        if (sql.includes("SELECT 1 FROM mv_monthly_summary LIMIT 1")) {
+          return { rows: [{ "?column?": 1 }] };
+        }
+        return { rows: [] };
+      });
+
+      await infoRepository.getMonthlyFinancialSummary(
+        [],
+        "EUR",
+        [],
+        false,
+        "2026-01-01",
+        "2026-06-30",
+        [3, 7],
+      );
+
+      expect(
+        calls.some(({ sql }) => sql.includes("SUM(transaction_count)")),
+      ).toBe(false);
+      const live = calls.find(({ sql }) => sql.includes("WITH months AS"));
+      expect(live).toBeTruthy();
+      expect(live.sql).toContain("t.account_id = ANY($3::int[])");
+      expect(live.params).toEqual(["2026-01-01", "2026-06-30", [3, 7]]);
     });
 
     it("should build filtered fallback SQL without referencing recipients alias before join", async () => {

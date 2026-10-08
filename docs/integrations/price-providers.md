@@ -2,9 +2,9 @@
 title: Integration - Price Providers
 type: integration
 description: Live and historical price feeds for stocks, crypto, and other investments. Startup price refresh is skipped when the host is offline (2026-05-03).
-date: 2026-10-07
+date: 2026-10-08
 last_modified: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-08
 tags:
   [
     integration,
@@ -49,7 +49,7 @@ related_code:
   [
     [apps/node-backend/src/services/priceProviderService.js],
     [apps/node-backend/src/services/quoteBackfillService.js],
-    [apps/node-backend/src/services/prices/priceProviderRegistry.js],
+    [apps/node-backend/src/services/prices/priceProviderRegistry.ts],
     [apps/node-backend/tests/priceProviderRegistry.test.js],
     [apps/node-backend/src/lib/network.ts],
   ]
@@ -299,7 +299,7 @@ Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves
 - Previously relied on lazy-delete only; large portfolios over extended uptime could accumulate orphaned cache entries
 - Entries expire based on provider-specific TTLs (typically 60 minutes for live quotes)
 
-Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.js]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
 
 **Price History & Report Timestamp Metadata (Apr 2026):**
 
@@ -345,7 +345,7 @@ compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The cu
 
 **Backend**
 
-1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.js`.
+1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.ts`.
 2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.js`.
 3. Extend live-price fetching in the same file: add the provider's key to the
    `stale = { … }` bucket and to either `idBasedProviders` or `investmentBasedProviders`.

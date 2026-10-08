@@ -14,8 +14,8 @@ import {
   perfResponseCache,
   PERF_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from "../../services/info/cache.js";
-import { buildPortfolioPerformancePayload } from "../../services/info/performanceHelpers.js";
+} from "../../services/info/cache.ts";
+import { buildPortfolioPerformancePayload } from "../../services/info/performanceHelpers.ts";
 import { optionalQueryString } from "../../lib/httpParams.ts";
 
 // The fields of a getBrokerSnapshots row this route reads; the JS service's

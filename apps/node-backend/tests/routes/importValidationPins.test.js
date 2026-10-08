@@ -52,7 +52,7 @@ vi.mock("os", () => ({
   tmpdir: vi.fn(() => "/tmp"),
 }));
 
-vi.mock("../../src/services/importPipeline/index.js", () => ({
+vi.mock("../../src/services/importPipeline/index.ts", () => ({
   runImportPipeline: vi.fn(),
   commitImport: vi.fn(),
 }));
@@ -97,10 +97,10 @@ vi.mock("../../src/database/connection.ts", () => mockConnection());
 import {
   runImportPipeline,
   commitImport,
-} from "../../src/services/importPipeline/index.js";
+} from "../../src/services/importPipeline/index.ts";
 // NOT mocked: only .../importPipeline/index.js is. This is the real boundary
 // function, run here over the mocked pg connection.
-import { createBatch } from "../../src/services/importPipeline/stage.js";
+import { createBatch } from "../../src/services/importPipeline/stage.ts";
 import {
   importCategoriesCSV,
   importRecipientsCSV,

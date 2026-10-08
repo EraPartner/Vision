@@ -8,8 +8,8 @@ vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 import {
   parseNexoProSpotHistory,
   getNexoProSpotReconciliationEvidence,
-} from "../src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js";
-import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+} from "../src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.ts";
+import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 import {
   portfolioIdentityBase,
   assignImportIdentities,

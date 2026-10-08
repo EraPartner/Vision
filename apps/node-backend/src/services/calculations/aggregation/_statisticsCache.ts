@@ -1,0 +1,45 @@
+/**
+ * Shared TTL cache wrapper for the all-time statistics pivots
+ * (category / recipient-by-year / recipient / tag).
+ *
+ * These endpoints group by t.date over the whole transactions table and then
+ * push two conversion legs per row in JS, producing a near-transaction-cardinality
+ * intermediate set on every statistics-page load with no date bound. The exact
+ * per-date FX semantics are binding (DECIDED 2026-07-10 — no month-grain
+ * pre-aggregation), so this is a pure memoization: same inputs → same output,
+ * served from a short-lived process cache. Transaction reconciliation/refresh
+ * and category/recipient mutation funnels bust it synchronously; the five-minute
+ * TTL bounds staleness for tag-only label/activation changes.
+ */
+
+import {
+  statisticsResponseCache,
+  STATISTICS_CACHE_TTL_MS,
+  resolveCacheWithInflight,
+} from "../../info/cache.ts";
+
+/**
+ * Stable key fragment for an optional numeric-id array (order-independent).
+ * Empty/absent → '' so `[]`, `null`, and `undefined` all share one cache slot.
+ */
+export function statsKeyPart(arr: number[] | null | undefined): string {
+  if (!arr || arr.length === 0) return "";
+  return [...arr]
+    .map(Number)
+    .sort((a, b) => a - b)
+    .join(",");
+}
+
+/**
+ * Memoize a pivot compute behind the shared statistics cache + inflight dedup.
+ * @param key — fully-qualified, collision-free cache key (prefix per endpoint)
+ * @param loader — recomputes the envelope on a miss
+ */
+export function withStatisticsCache<T>(key: string, loader: () => Promise<T>) {
+  return resolveCacheWithInflight(statisticsResponseCache, key, {
+    ttlMs: STATISTICS_CACHE_TTL_MS,
+    requireData: true,
+    keepPreviousData: true,
+    loader,
+  });
+}

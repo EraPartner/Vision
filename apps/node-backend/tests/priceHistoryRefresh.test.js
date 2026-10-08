@@ -16,7 +16,7 @@ vi.mock("yahoo-finance2", () => ({
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/lib/urlSafety.ts", () => ({ assertPublicHttpUrl: vi.fn() }));
-vi.mock("../src/services/prices/priceCache.js", async (importOriginal) => ({
+vi.mock("../src/services/prices/priceCache.ts", async (importOriginal) => ({
   ...(await importOriginal()),
   loadHistoricalPointsFromDatabase: loadHistory,
   saveHistoricalPointsToDatabase: saveHistory,

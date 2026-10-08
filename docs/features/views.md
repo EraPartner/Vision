@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -771,7 +771,7 @@ Post-upload review screen for ambiguous import rows.
 - Cancel returns to ImportPage without committing
 - Commit triggers `commitBatch()` → bulk insert → aggregation refresh
 
-**Code**: [[apps/frontend/src/pages/ImportReviewPage.tsx]], [[apps/node-backend/src/services/importPipeline/commit.js]]
+**Code**: [[apps/frontend/src/pages/ImportReviewPage.tsx]], [[apps/node-backend/src/services/importPipeline/commit.ts]]
 
 **Related**: [[docs/features/import|Import Feature]], [[docs/adr/046-import-review-category-assignment|ADR-046]]
 

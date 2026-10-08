@@ -46,11 +46,11 @@ import { readReconciliationSources } from "../src/repositories/portfolioImportRe
 import { portfolioReferenceStagingBinding } from "../src/services/portfolioPerformanceReferenceEvidence.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
-import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import {
   getSaxoCsvCompanionEvidence,
   getSaxoWorkbookReconciliationEvidence,
-} from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.js";
+} from "../src/services/portfolioImportPipeline/saxoTransactionHistoryAdapter.ts";
 import { pruneOldImportBatches } from "../src/startup/warmup.ts";
 import {
   retainedEvent,
@@ -61,7 +61,7 @@ import {
 
 const historicalWarm = vi.hoisted(() => vi.fn());
 vi.mock(
-  "../src/services/currency/currencyConversionService.js",
+  "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) =>
     mockCurrencyConversion({
       ...(await importOriginal()),

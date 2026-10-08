@@ -8,7 +8,7 @@ import {
   createAdapter,
   getSupportedBanks,
   detectBank,
-} from "../src/services/importPipeline/adapters/index.js";
+} from "../src/services/importPipeline/adapters/index.ts";
 
 import { useTempCSV } from "./helpers/tempFile.js";
 

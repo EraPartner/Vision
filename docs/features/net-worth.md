@@ -2,8 +2,8 @@
 title: Net Worth Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -46,7 +46,7 @@ related_code:
   - apps/node-backend/src/routes/info/_liveSummary.js
   - apps/node-backend/src/repositories/infoRepositoryNetWorth.ts
   - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
-  - apps/node-backend/src/services/portfolio/snapshotBuilder.js
+  - apps/node-backend/src/services/portfolio/snapshotBuilder.ts
 ---
 
 # Net Worth Feature

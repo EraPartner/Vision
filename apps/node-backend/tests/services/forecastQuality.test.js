@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { forecast } from "../../src/services/calculations/forecast/methods/prophetLite.js";
+import { forecast } from "../../src/services/calculations/forecast/methods/prophetLite.ts";
 import {
   walkForwardBacktest,
   walkForwardBacktestRolling,
-} from "../../src/services/calculations/forecast/backtest.js";
+} from "../../src/services/calculations/forecast/backtest.ts";
 const dateAt = (i) =>
   new Date(Date.UTC(2023, 0, 1 + i)).toISOString().slice(0, 10);
 const patterns = [

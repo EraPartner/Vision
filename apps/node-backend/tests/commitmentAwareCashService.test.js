@@ -6,7 +6,7 @@ vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
 vi.mock("../src/services/crossWorkspaceDataService.js", () => ({
   assembleRebalanceInputs: vi.fn(),
 }));
-vi.mock("../src/services/currency/currencyConversionService.js", () => ({
+vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: vi.fn().mockResolvedValue({
     rows: [
       { currency_code: "USD", rate_to_eur: "0.5", rate_date: "2026-09-18" },
@@ -22,7 +22,7 @@ import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataServi
 import {
   convertWithRates,
   listLatestStoredRates,
-} from "../src/services/currency/currencyConversionService.js";
+} from "../src/services/currency/currencyConversionService.ts";
 import { computeCommitmentAwareCash } from "../src/services/commitmentAwareCashService.js";
 
 beforeEach(() => {

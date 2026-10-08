@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const ctor = vi.fn(function MockYahoo() {});
 vi.mock('yahoo-finance2', () => ({ default: ctor }));
 
-import { getYahooClient, __resetYahooClientForTests } from '../src/services/prices/yahooClient.js';
+import { getYahooClient, __resetYahooClientForTests } from '../src/services/prices/yahooClient.ts';
 
 beforeEach(() => {
   __resetYahooClientForTests();

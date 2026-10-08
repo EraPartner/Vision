@@ -25,7 +25,7 @@ import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
   getRateToEurForDate,
-} from "../src/services/currency/rateFetcher.js";
+} from "../src/services/currency/rateFetcher.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

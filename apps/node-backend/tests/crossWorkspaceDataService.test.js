@@ -3,10 +3,10 @@ import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 import { mockConnection } from "./helpers/repoMocks.js";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
-vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: vi.fn(),
 }));
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion({
     // Identity conversion keeps the arithmetic checkable; per-currency behaviour is
     // exercised by asserting it is only called for non-target currencies.
@@ -15,11 +15,11 @@ vi.mock("../src/services/currency/currencyConversionService.js", () =>
 );
 
 import { query } from "../src/database/connection.ts";
-import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import {
   convertToCurrency,
   convertWithRates,
-} from "../src/services/currency/currencyConversionService.js";
+} from "../src/services/currency/currencyConversionService.ts";
 import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
 
 beforeEach(() => {

@@ -4,16 +4,16 @@ vi.mock("../src/repositories/settingsRepository.ts", () => ({
   settingsRepository: { get: vi.fn() },
 }));
 
-vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: vi.fn(),
 }));
 
 import { settingsRepository } from "../src/repositories/settingsRepository.ts";
-import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../src/services/portfolio/portfolioSummaryService.ts";
 import {
   getAiDisplayCurrency,
   loadCanonicalPortfolioSummary,
-} from "../src/services/aiChat/tools/_financialMetrics.js";
+} from "../src/services/aiChat/tools/_financialMetrics.ts";
 
 beforeEach(() => vi.resetAllMocks());
 

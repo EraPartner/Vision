@@ -45,7 +45,7 @@ describe("parseBooleanQueryParam — default-aware boolean query param", () => {
 const methodsSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 const rollingSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 
-vi.mock("../../src/services/calculations/forecast/index.js", () => ({
+vi.mock("../../src/services/calculations/forecast/index.ts", () => ({
   computeCashflowForecast: (...a) => methodsSpy(...a),
   computeCashflowForecastRolling: (...a) => rollingSpy(...a),
 }));

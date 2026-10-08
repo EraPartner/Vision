@@ -16,7 +16,7 @@
  * The result becomes the `cashForecast` slice of the combined insights digest.
  */
 
-import { computeCashflowForecast } from "./calculations/forecast/index.js";
+import { computeCashflowForecast } from "./calculations/forecast/index.ts";
 import { roundMoney } from "../lib/money.ts";
 import insightCashProjectionRepository from "../repositories/insightCashProjectionRepository.ts";
 

@@ -540,13 +540,13 @@ Gift behavior (unit-based assets):
 Create-path compatibility:
 
 - `portfolio_transactions` is one flat table on every supported install. Migration 0087 converts the former inheritance layout before the backend starts accepting requests ([[docs/adr/109-flat-investments-schema-canonical|ADR-109]]).
-- `investmentService` validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js]]).
+- `investmentService` validates request field shapes. `portfolioTransactionService.create` and `portfolioTransactionRules` own type-specific normalization, unit math, recurrence hygiene, and sell-availability policy before the repository performs a parameterized insert ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts]]).
 - Optional `fx_rate_to_eur` is accepted and persisted for portfolio transactions, enabling transaction-level FX locking for later P&L calculations ([[apps/node-backend/src/services/investmentService.js]], [[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[apps/frontend/src/types/api.ts]]).
-- `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
+- `POST /api/investments/:id/transactions` forwards the investment lookup's `asset_class` into `portfolioTransactionService.create` as `preloaded_asset_class`, so the service can skip a duplicate metadata query while preserving validation and response behavior ([[apps/node-backend/src/services/investmentService.js]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]]).
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.ts]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
-- If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/main.js]]).
+- If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.js]]).
 
 ### ~~POST /api/investments/:id/move~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
 
@@ -586,7 +586,7 @@ Update endpoint notes:
   while an absent key leaves it unchanged. This includes the UI edit flow
   ([[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]],
   [[apps/node-backend/src/services/investmentService.js]],
-  [[apps/node-backend/src/services/portfolio/portfolioTransactionService.js]]).
+  [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]]).
 - `null` clears `recurrence_interval` and `recurrence_end_date`; absent keys leave them unchanged.
 - Oversell protection also applies on update: edited `sell` rows are rejected when resulting sold units exceed holdings for the effective transaction date.
 

@@ -8,7 +8,7 @@ import {
   mvAvailable,
   clearMvCache,
 } from "../src/repositories/infoRepositoryHelpers.ts";
-import { sanitizeIsolatedValueSpikes } from "../src/services/calculations/portfolioMath.js";
+import { sanitizeIsolatedValueSpikes } from "../src/services/calculations/portfolioMath.ts";
 import { sanitizeIsolatedDailyInvestmentSpikes } from "../src/lib/calculations/netWorthSanitizer.ts";
 
 describe("sanitizeIsolatedValueSpikes", () => {

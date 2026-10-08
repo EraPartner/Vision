@@ -6,12 +6,12 @@ const repository = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/repositories/portfolioExposureRepository.ts", () => repository);
-vi.mock("../src/services/portfolio/portfolioSummaryService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: vi.fn(),
 }));
 
 const { upsertPortfolioExposureBundle } =
-  await import("../src/services/portfolio/portfolioExposureService.js");
+  await import("../src/services/portfolio/portfolioExposureService.ts");
 
 const fundDocument = {
   contractVersion: 1,

@@ -4,12 +4,12 @@ import { mockCurrencyConversion } from "../helpers/mockCurrencyConversion.js";
 vi.mock("../../src/repositories/infoRepositorySankey.ts", () => ({
   getSankeyAggregates: vi.fn(),
 }));
-vi.mock("../../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 import { getSankeyAggregates } from "../../src/repositories/infoRepositorySankey.ts";
-import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.js";
-import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.js";
+import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
+import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.ts";
 
 beforeEach(() => {
   getSankeyAggregates.mockReset();

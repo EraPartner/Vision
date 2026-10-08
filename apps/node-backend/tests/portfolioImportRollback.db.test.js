@@ -50,7 +50,7 @@ vi.mock('../src/database/connection.ts', async (importOriginal) => {
 });
 
 import { query, closePool } from '../src/database/connection.ts';
-import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
+import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.ts';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 import { __resetPortfolioTransactionSchemaCache } from '../src/repositories/portfolioTransactionRepository.ts';
 

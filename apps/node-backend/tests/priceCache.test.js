@@ -26,7 +26,7 @@ import {
   saveHistoricalPointsToDatabase,
   loadLatestHistoricalPointByInvestmentIds,
   __PRICE_CACHE_TTL_MS as PRICE_CACHE_TTL_MS,
-} from "../src/services/prices/priceCache.js";
+} from "../src/services/prices/priceCache.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 
 beforeEach(() => {

@@ -20,19 +20,19 @@ vi.mock("../src/repositories/portfolioTransactionRepository.ts", () => ({
   },
 }));
 
-vi.mock("../src/services/portfolio/portfolioTransactionService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: {
     validateImportBatchRemoval:
       portfolioRemovalMocks.validateImportBatchRemoval,
   },
 }));
 
-vi.mock("../src/services/portfolio/portfolioAssetTransferService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioAssetTransferService.ts", () => ({
   rollbackPortfolioAssetTransfersForBatch: vi.fn().mockResolvedValue(0),
   previewPortfolioAssetTransfer: vi.fn(),
   validatePortfolioAssetTransferHistory: vi.fn(),
 }));
-vi.mock("../src/services/portfolio/portfolioAssetAdjustmentService.js", () => ({
+vi.mock("../src/services/portfolio/portfolioAssetAdjustmentService.ts", () => ({
   rollbackPortfolioAssetAdjustmentsForBatch: vi.fn().mockResolvedValue(0),
   previewPortfolioAssetAdjustment: vi.fn(),
 }));

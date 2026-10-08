@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - api
   - reports
@@ -31,11 +31,11 @@ aliases:
   - financial report
   - report download
 related_code:
-  - apps/node-backend/src/services/reports/index.js
-  - apps/node-backend/src/services/reports/sectionHelpers.js
-  - apps/node-backend/src/services/reports/dataFetcher.js
+  - apps/node-backend/src/services/reports/index.ts
+  - apps/node-backend/src/services/reports/sectionHelpers.ts
+  - apps/node-backend/src/services/reports/dataFetcher.ts
   - apps/node-backend/src/services/reports/sections/
-  - apps/node-backend/src/services/reports/puppeteerRenderer.js
+  - apps/node-backend/src/services/reports/puppeteerRenderer.ts
   - apps/node-backend/src/routes/reports.ts
   - apps/frontend/src/lib/api/reports.ts
   - apps/frontend/src/lib/themeTokens.ts
@@ -404,9 +404,9 @@ No `apiRequest` wrapper is used because the response is a binary stream.
 
 ### Architecture
 
-- **Dispatcher** (`apps/node-backend/src/services/reports/index.js`): Routes by report type, builds HTML, invokes Puppeteer
+- **Dispatcher** (`apps/node-backend/src/services/reports/index.ts`): Routes by report type, builds HTML, invokes Puppeteer
 - **HTTP route** (`apps/node-backend/src/routes/reports.ts`): Receives `{ pdf, filename }` from the dispatcher and owns the binary download headers and response body
-- **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.js`): Parallel Promise.allSettled loads all data; graceful degradation
+- **Data fetcher** (`apps/node-backend/src/services/reports/dataFetcher.ts`): Parallel Promise.allSettled loads all data; graceful degradation
 - **Section renderers** (`apps/node-backend/src/services/reports/sections/`): Pure functions; each section independent
 - **Theme system** (`themeCss.js` + `sectionHelpers.js`): CSS tokens, formatters, SVG chart builders
 - **Puppeteer renderer** (`puppeteerRenderer.js`): Headless Chrome → PDF buffer

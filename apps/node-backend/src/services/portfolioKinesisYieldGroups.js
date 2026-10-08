@@ -1,7 +1,7 @@
 /** Closed original-document intervals bind a whole payment without a date window. */
 import { createHash } from "node:crypto";
 import { toDecimal } from "../lib/money.ts";
-import { parseCsvText } from "./importPipeline/adapters/_shared.js";
+import { parseCsvText } from "./importPipeline/adapters/_shared.ts";
 import {
   portfolioPrimaryRawData,
   verifiedPortfolioPerformanceBasisReference,
@@ -15,7 +15,7 @@ import { proveKinesisCorrectionSources } from "./portfolioKinesisAdoptionScope.j
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationReceiptContext} ReconciliationReceiptContext
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationJournalRow} ReconciliationJournalRow
  * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').PortfolioTransactionSnapshot} PortfolioTransactionSnapshot
- * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.ts').ParsedPortfolioRow} ParsedPortfolioRow
  * @typedef {ReturnType<typeof proveKinesisCorrectionSources>} KinesisCorrectionEvidence
  */
 /**

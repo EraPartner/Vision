@@ -7,23 +7,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { mockGetJson } = vi.hoisted(() => ({ mockGetJson: vi.fn() }));
 
-vi.mock('../src/services/research/adapters/httpClient.js', async () => {
+vi.mock('../src/services/research/adapters/httpClient.ts', async () => {
   // Keep the real num() coercion; only stub the network call.
-  const actual = await vi.importActual('../src/services/research/adapters/httpClient.js');
+  const actual = await vi.importActual('../src/services/research/adapters/httpClient.ts');
   return { ...actual, getJson: mockGetJson };
 });
 
 const { mockRequireProviderKey } = vi.hoisted(() => ({ mockRequireProviderKey: vi.fn() }));
-vi.mock('../src/services/research/providerKeys.js', async () => {
-  const actual = await vi.importActual('../src/services/research/providerKeys.js');
+vi.mock('../src/services/research/providerKeys.ts', async () => {
+  const actual = await vi.importActual('../src/services/research/providerKeys.ts');
   return {
     ...actual,
     requireProviderKey: mockRequireProviderKey,
   };
 });
 
-import fredAdapter from '../src/services/research/adapters/fredAdapter.js';
-import dbnomicsAdapter from '../src/services/research/adapters/dbnomicsAdapter.js';
+import fredAdapter from '../src/services/research/adapters/fredAdapter.ts';
+import dbnomicsAdapter from '../src/services/research/adapters/dbnomicsAdapter.ts';
 
 describe('fredAdapter', () => {
   beforeEach(() => {

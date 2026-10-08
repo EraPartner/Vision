@@ -14,7 +14,7 @@ import {
   normalizeTransactionPayload,
   __validateSellUnitsAvailability as validateSellUnitsAvailability,
   validatePortfolioUnitMutation,
-} from "../src/services/portfolio/portfolioTransactionRules.js";
+} from "../src/services/portfolio/portfolioTransactionRules.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

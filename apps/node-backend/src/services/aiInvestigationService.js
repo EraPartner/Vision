@@ -4,7 +4,7 @@ import {
   aiInvestigationRequestSchema,
   aiInvestigationScopeSchema,
 } from "@vision/types/aiResearch";
-import { dispatchTool } from "./aiChat/tools/index.js";
+import { dispatchTool } from "./aiChat/tools/index.ts";
 import {
   generateWithProvider,
   generateLocalSynthesis,

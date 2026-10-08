@@ -4,7 +4,7 @@
 
 import type { Decimal } from "decimal.js";
 import { query } from "../database/connection.ts";
-import { convertRowsToEur } from "../services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   todayAppDateString,
   firstOfMonthYmd,

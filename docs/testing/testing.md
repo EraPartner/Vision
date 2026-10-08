@@ -2,8 +2,8 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last-updated: 2026-10-07
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -550,7 +550,7 @@ import { mockConnection } from "./helpers/repoMocks.js";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 ```
@@ -773,7 +773,7 @@ tests/golden/__fixtures__/
 ```javascript
 import { describe, it } from "vitest";
 import { runGolden } from "../golden/runGolden.js";
-import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.js";
+import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.ts";
 
 describe("loanSchedule golden", () => {
   it("amortizing-standard", async () => {
@@ -867,7 +867,7 @@ Property tests complement golden fixtures by locking **invariants** rather than 
 
 ```javascript
 import { describe, it, expect } from "vitest";
-import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.js";
+import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
 
 const CENT = 0.01;
 
@@ -1406,7 +1406,7 @@ Validation runs (passed):
 - `bun vitest run tests/currencyConversionService.test.js tests/routes/plannedTransactions.test.js tests/routes/transactions.test.js`
 - `npm test -- --coverage`
 
-Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
+Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/routes/plannedTransactions.ts]], [[apps/node-backend/src/routes/transactions.ts]]
 
 ### Additional backend repository/schema coverage (2026-04-11)
 
@@ -1423,7 +1423,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 ### Incremental coverage addendum (2026-04-11)
 
 - [[apps/node-backend/tests/currencyConversionService.test.js]] now includes historical miss-cache coverage to ensure duplicate historical-rate DB lookups are avoided for repeated misses.
-- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.js]]
+- Related code: [[apps/node-backend/src/services/currency/currencyConversionService.ts]]
 - Validation context (passed): `bun vitest run tests/currencyConversionService.test.js`; `npm test -- --coverage` (`74.18/59.54/78.47/77.68`).
 
 ### Incremental backend repository coverage addendum (2026-04-11)
@@ -1472,7 +1472,7 @@ Validation run (passed): `bun vitest run tests/categoryRepository.test.js tests/
 - `iban.test.js` — Deleted (orphan; `iban.js` removed)
 - `importService.test.js` — Superseded by route tests
 
-Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.js]], [[apps/node-backend/src/services/importPipeline/index.js]]
+Related code: [[apps/node-backend/src/services/importPipeline/adapters/index.ts]], [[apps/node-backend/src/services/importPipeline/index.ts]]
 
 Validation runs (Phase C):
 
@@ -1484,7 +1484,7 @@ Validation runs (Phase C):
   - [[apps/node-backend/src/database/connection.ts]] query behavior
   - [[apps/node-backend/src/services/recurringDetectionService.js]]
   - [[apps/node-backend/src/services/materializedViewService.js]]
-  - [[apps/node-backend/src/services/currency/currencyConversionService.js]] cache helpers
+  - [[apps/node-backend/src/services/currency/currencyConversionService.ts]] cache helpers
   - [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]]
 - Added assertions for:
   - `GET /recurring-patterns` success + detector-failure fallback (`{ patterns: [], total: 0 }`)
@@ -2006,7 +2006,7 @@ Covers portfolio cost basis calculations (FIFO/LIFO), accrued interest computati
 - Immutability assertions: `sanitizeSnapshotSpikes(input)` does not mutate input array
 - `setUTCDate()` always steps exactly 24 hours regardless of local DST changes
 
-**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts]], [[docs/features/portfolio|Portfolio Feature]]
+**Related code:** [[apps/node-backend/src/services/calculations/portfolioMath.ts]], [[packages/shared-utils/src/portfolio.ts]], [[docs/features/portfolio|Portfolio Feature]]
 
 ### Import Pipeline Tests
 
@@ -2044,6 +2044,6 @@ Covers all four import pipeline phases with comprehensive mocking and error path
 
 **Test execution:** <1 second (pure unit tests, no jsdom or database)
 
-**Related code:** [[apps/node-backend/src/services/importPipeline/validate.js]], [[apps/node-backend/src/services/importPipeline/stage.js]], [[apps/node-backend/src/services/importPipeline/match.js]], [[apps/node-backend/src/services/importPipeline/commit.js]], [[docs/features/import|CSV Import Feature]]
+**Related code:** [[apps/node-backend/src/services/importPipeline/validate.ts]], [[apps/node-backend/src/services/importPipeline/stage.ts]], [[apps/node-backend/src/services/importPipeline/match.ts]], [[apps/node-backend/src/services/importPipeline/commit.ts]], [[docs/features/import|CSV Import Feature]]
 
 **Impact:** Eliminates gaps in portfolio math calculation coverage and completes the import pipeline orchestration test suite across all four phases.

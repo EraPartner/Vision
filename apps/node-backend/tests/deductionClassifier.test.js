@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEDUCTION_TYPES,
   classifyDeduction,
-} from "../src/services/tax/deductionClassifier.js";
+} from "../src/services/tax/deductionClassifier.ts";
 
 describe("DEDUCTION_TYPES", () => {
   it("exposes the stable frozen key set", () => {

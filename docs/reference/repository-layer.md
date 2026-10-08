@@ -2,8 +2,8 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-09-04
+date: 2026-10-08
+updated: 2026-10-08
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
 description: Complete reference for all 21 backend repository domains (plus infoRepository's 7 sub-modules and portfolioTransactionRepository's 3 split files). Phase 3.1: infoRepository split into 7 domain sub-modules with batch FX optimization. Phase Q: transactionRepository supports recipientGroupId filtering via filterBuilder.
@@ -669,7 +669,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 - [[apps/node-backend/src/repositories/portfolioTxRepo.reads.ts|portfolioTxRepo.reads.js]] — parameterized read paths and the small query primitives used by portfolio transaction policy. Exports `mapPortfolioTxRow` so write paths can reuse the NUMERIC/DATE coercion.
 - [[apps/node-backend/src/repositories/portfolioTxRepo.writes.ts|portfolioTxRepo.writes.js]] — parameterized insert, field update, delete, and account-repoint operations. It does not own portfolio transaction rules.
 
-[[apps/node-backend/src/services/portfolio/portfolioTransactionService.js|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
+[[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts|portfolioTransactionService.js]] owns create/update orchestration. [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.js]] owns normalization, buy/sell unit math, recurrence values, and projected account-partition validation. The repository returns the investment's complete ordered unit-event history in one query; the service derives both current availability and downstream oversell effects from it. Both use [[apps/node-backend/src/lib/repositoryErrors.ts|repositoryErrors.js]] for the stable `VALIDATION_ERROR` contract.
 
 ---
 

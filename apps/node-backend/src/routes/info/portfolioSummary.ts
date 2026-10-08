@@ -6,14 +6,14 @@
  */
 
 import { Router } from "express";
-import { getPortfolioSummary } from "../../services/portfolio/portfolioSummaryService.js";
+import { getPortfolioSummary } from "../../services/portfolio/portfolioSummaryService.ts";
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
 import { getTargetCurrency } from "./_queryParams.ts";
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
   resolveCacheWithInflight,
-} from "../../services/info/cache.js";
+} from "../../services/info/cache.ts";
 
 const router = Router();
 

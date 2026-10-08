@@ -5,12 +5,12 @@ import path from "node:path";
 
 import settings from "../src/config/config.ts";
 import { getOllamaClient } from "../src/integrations/ollama/client.ts";
-import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.js";
+import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.ts";
 import {
   runLocalAiCase,
   scoreLocalAiRun,
   summarizeLocalAiEvaluation,
-} from "../src/services/aiEvaluation/localReliability.js";
+} from "../src/services/aiEvaluation/localReliability.ts";
 
 function option(name, fallback) {
   const index = process.argv.indexOf(name);

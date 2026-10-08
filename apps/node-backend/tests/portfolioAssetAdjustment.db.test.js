@@ -12,16 +12,16 @@ import {
   closeTestPool,
 } from "./setup/db.js";
 import { closePool, withTransaction } from "../src/database/connection.ts";
-import transactionService from "../src/services/portfolio/portfolioTransactionService.js";
-import { stageBatch } from "../src/services/portfolioImportPipeline/stage.js";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
-import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.js";
+import transactionService from "../src/services/portfolio/portfolioTransactionService.ts";
+import { stageBatch } from "../src/services/portfolioImportPipeline/stage.ts";
+import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
+import { matchBatch } from "../src/services/portfolioImportPipeline/matchInvestments.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
-import { commitPortfolioAssetTransfer } from "../src/services/portfolio/portfolioAssetTransferService.js";
+import { commitPortfolioAssetTransfer } from "../src/services/portfolio/portfolioAssetTransferService.ts";
 import { toDecimal } from "../src/lib/money.ts";
-import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.js";
+import { commitPortfolioAssetAdjustment } from "../src/services/portfolio/portfolioAssetAdjustmentService.ts";
 import { getUnitEventsForInvestment } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
 

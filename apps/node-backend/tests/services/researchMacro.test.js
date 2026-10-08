@@ -5,18 +5,18 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { __createResearchAggregator as createResearchAggregator } from "../../src/services/research/researchAggregator.js";
-import { createResearchCache } from "../../src/services/research/researchCache.js";
+import { __createResearchAggregator as createResearchAggregator } from "../../src/services/research/researchAggregator.ts";
+import { createResearchCache } from "../../src/services/research/researchCache.ts";
 import {
   trimToRange,
   periodToMs,
-} from "../../src/services/research/adapters/macroRange.js";
+} from "../../src/services/research/adapters/macroRange.ts";
 import {
   searchCatalog,
   isValidSeriesId,
   MACRO_CATALOG,
-} from "../../src/services/research/adapters/macroCatalog.js";
-import { __parseJsonStat as parseJsonStat } from "../../src/services/research/adapters/eurostatAdapter.js";
+} from "../../src/services/research/adapters/macroCatalog.ts";
+import { __parseJsonStat as parseJsonStat } from "../../src/services/research/adapters/eurostatAdapter.ts";
 
 const monthly = (n, lastY, lastM) => {
   // n ascending monthly points ending at lastY-lastM (1-based month).
@@ -98,6 +98,17 @@ describe("eurostat parseJsonStat", () => {
     expect(out.map((p) => p.period)).toEqual(["2020-01", "2020-02"]);
     expect(out[1].value).toBe(101.5);
     expect(out[0].time).toBeLessThan(out[1].time);
+  });
+
+  it("parses a time index given as a dense array of ids", () => {
+    const out = parseJsonStat({
+      dimension: { time: { category: { index: ["2024-01", "2024-02"] } } },
+      value: { 0: 1.5, 1: 2 },
+    });
+    expect(out.map((p) => [p.period, p.value])).toEqual([
+      ["2024-01", 1.5],
+      ["2024-02", 2],
+    ]);
   });
 
   it("returns [] for a malformed payload", () => {

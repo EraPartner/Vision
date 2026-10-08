@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/services/reports/puppeteerRenderer.js', () => ({
+vi.mock('../src/services/reports/puppeteerRenderer.ts', () => ({
   renderHtmlToPdf: vi.fn(),
 }));
 
-import { renderHtmlToPdf } from '../src/services/reports/puppeteerRenderer.js';
-import { generateReport } from '../src/services/reports/index.js';
+import { renderHtmlToPdf } from '../src/services/reports/puppeteerRenderer.ts';
+import { generateReport } from '../src/services/reports/index.ts';
 
 describe('generateReport', () => {
   beforeEach(() => {

@@ -30,15 +30,15 @@ import { withTransaction } from "../src/database/connection.ts";
 import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
-import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 import {
   getRowsForPortfolioMath,
   mapPortfolioTxRow,
 } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
-import { commitBatch as commit } from "../src/services/portfolioImportPipeline/commit.js";
+import { commitBatch as commit } from "../src/services/portfolioImportPipeline/commit.ts";
 const historicalWarm = vi.hoisted(() => ({ available: true }));
-import { clearHistoricalCache } from "../src/services/currency/rateFetcher.js";
+import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
 const pool = getTestPool();
 const owned = { investments: [], accounts: [], batches: [] };
 const describeDb = hasTestDatabase() ? describe : describe.skip;

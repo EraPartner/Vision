@@ -13,7 +13,7 @@ vi.mock("../src/config/logger.ts", () => ({
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query } from "../src/database/connection.ts";
-import { validateBatch } from "../src/services/portfolioImportPipeline/validate.js";
+import { validateBatch } from "../src/services/portfolioImportPipeline/validate.ts";
 
 /** Wire query() to respond by SQL shape, returning the given pending rows. */
 function wireQuery(pending) {

@@ -8,8 +8,8 @@ import { mockLogger } from "./helpers/mockLogger.js";
 
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
 
-import { parseNexoTransactionHistory } from "../src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js";
-import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.js";
+import { parseNexoTransactionHistory } from "../src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.ts";
+import { parseWithConfig } from "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts";
 
 const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),

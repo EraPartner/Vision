@@ -26,8 +26,8 @@ vi.mock("../src/config/config.ts", () => ({
 }));
 
 import { disclosurePayload } from "../src/services/aiProviderAdapters.js";
-import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.js";
-import { CLOUD_PRIVACY_SYNTHETIC_POLICY } from "../src/services/aiEvaluation/cloudPrivacyCases.js";
+import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.ts";
+import { CLOUD_PRIVACY_SYNTHETIC_POLICY } from "../src/services/aiEvaluation/cloudPrivacyCases.ts";
 
 const preload = fileURLToPath(
   new URL("./fixtures/openai-egress-inspection.mjs", import.meta.url),

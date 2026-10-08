@@ -4,12 +4,12 @@ const recipientPivotSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 const tagPivotSpy = vi.fn(async () => ({ data: {}, meta: {} }));
 
 vi.mock(
-  "../../src/services/calculations/aggregation/recipientPivot.js",
+  "../../src/services/calculations/aggregation/recipientPivot.ts",
   () => ({
     computeRecipientPivot: (...args) => recipientPivotSpy(...args),
   }),
 );
-vi.mock("../../src/services/calculations/aggregation/tagPivot.js", () => ({
+vi.mock("../../src/services/calculations/aggregation/tagPivot.ts", () => ({
   computeTagPivot: (...args) => tagPivotSpy(...args),
 }));
 

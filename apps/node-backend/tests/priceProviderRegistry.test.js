@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeKinesisIsolatedSpikes } from '../src/services/prices/priceProviderRegistry.js';
+import { sanitizeKinesisIsolatedSpikes } from '../src/services/prices/priceProviderRegistry.ts';
 
 function pts(...prices) {
   return prices.map((price, i) => ({ timestampMs: i * 3_600_000, price }));

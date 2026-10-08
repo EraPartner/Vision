@@ -9,10 +9,10 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
-import { walkForwardBacktestRolling } from "../../src/services/calculations/forecast/backtest.js";
+import { walkForwardBacktestRolling } from "../../src/services/calculations/forecast/backtest.ts";
 import mcRollingCacheRepo from "../../src/repositories/cashflowForecastMcRollingRepository.ts";
 import { infoRepository } from "../../src/repositories/infoRepository.ts";
-import { __filterHash as filterHash } from "../../src/services/calculations/forecast/index.js";
+import { __filterHash as filterHash } from "../../src/services/calculations/forecast/index.ts";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -225,7 +225,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
 
   it("cache miss with default MC params → live compute + upsert called", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const result = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -261,7 +261,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
     mcRollingCacheRepo.isFresh.mockReturnValue(true);
 
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const result = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -279,7 +279,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
 
   it("non-default mcPaths → cache check skipped entirely", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -296,7 +296,7 @@ describe("computeCashflowForecastRolling — MC cache", () => {
   // the setting kept serving the pre-toggle forecast for the cache's 6h TTL.
   it("includeTransfers is a cache-key input → toggling it misses the cache", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const args = {
       daysBack: 10,
       daysForward: 10,
@@ -367,7 +367,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
 
   it("includeBacktest=false → diagnostics is null", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const result = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -380,7 +380,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
 
   it("includeBacktest=true → diagnostics non-null with per-method backtest entries", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const result = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -405,7 +405,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
 
   it("includeBacktest=true → per_month entries have month (ISO), mae, rmse, mape, sample_days", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const result = await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,
@@ -423,7 +423,7 @@ describe("computeCashflowForecastRolling — diagnostics", () => {
 
   it("includeBacktest=true with default MC params → cache skipped (no get or upsert)", async () => {
     const { computeCashflowForecastRolling } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     await computeCashflowForecastRolling({
       daysBack: 10,
       daysForward: 10,

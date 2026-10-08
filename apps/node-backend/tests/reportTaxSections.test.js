@@ -1,14 +1,14 @@
 import { describe, it, expect } from "vitest";
 
-import { renderTaxExecutiveSummary } from "../src/services/reports/sections/taxExecutiveSummary.js";
-import { renderPortfolioExecutiveSummary } from "../src/services/reports/sections/portfolioExecutiveSummary.js";
-import { renderTaxTypeBreakdown } from "../src/services/reports/sections/taxTypeBreakdown.js";
-import { renderFeeBreakdown } from "../src/services/reports/sections/feeBreakdown.js";
-import { renderTaxByAssetClass } from "../src/services/reports/sections/taxByAssetClass.js";
-import { renderTaxMonthlyTrend } from "../src/services/reports/sections/taxMonthlyTrend.js";
-import { renderTopInvestmentsByCost } from "../src/services/reports/sections/topInvestmentsByCost.js";
-import { renderBelgianRulesSummary } from "../src/services/reports/sections/belgianRulesSummary.js";
-import { getTaxTable } from "../src/services/reports/belgianTaxTables.js";
+import { renderTaxExecutiveSummary } from "../src/services/reports/sections/taxExecutiveSummary.ts";
+import { renderPortfolioExecutiveSummary } from "../src/services/reports/sections/portfolioExecutiveSummary.ts";
+import { renderTaxTypeBreakdown } from "../src/services/reports/sections/taxTypeBreakdown.ts";
+import { renderFeeBreakdown } from "../src/services/reports/sections/feeBreakdown.ts";
+import { renderTaxByAssetClass } from "../src/services/reports/sections/taxByAssetClass.ts";
+import { renderTaxMonthlyTrend } from "../src/services/reports/sections/taxMonthlyTrend.ts";
+import { renderTopInvestmentsByCost } from "../src/services/reports/sections/topInvestmentsByCost.ts";
+import { renderBelgianRulesSummary } from "../src/services/reports/sections/belgianRulesSummary.ts";
+import { getTaxTable } from "../src/services/reports/belgianTaxTables.ts";
 
 // fmtCurrency renders "EUR<nbsp>1,234.56".
 const eur = (s) => `EUR ${s}`;

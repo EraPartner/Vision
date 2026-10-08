@@ -2,8 +2,8 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-10-03
 tags:
   [
@@ -67,11 +67,11 @@ aliases:
 description: Import transactions from bank CSV files with versioned occurrence-aware deduplication, exact source-record provenance, fuzzy/pattern recipient matching, per-row category review, and saved named custom CSV parsers.
 related_code:
   [
-    "apps/node-backend/src/services/importPipeline/index.js",
-    "apps/node-backend/src/services/importPipeline/stage.js",
-    "apps/node-backend/src/services/importPipeline/validate.js",
-    "apps/node-backend/src/services/importPipeline/match.js",
-    "apps/node-backend/src/services/importPipeline/commit.js",
+    "apps/node-backend/src/services/importPipeline/index.ts",
+    "apps/node-backend/src/services/importPipeline/stage.ts",
+    "apps/node-backend/src/services/importPipeline/validate.ts",
+    "apps/node-backend/src/services/importPipeline/match.ts",
+    "apps/node-backend/src/services/importPipeline/commit.ts",
     "apps/node-backend/src/services/importIdentity.js",
     "apps/node-backend/src/services/importBatchService.js",
     "apps/node-backend/src/services/dataImportService.js",
@@ -310,7 +310,7 @@ Phase C (April 2026) unified import processing into a **single orchestrator pipe
 
 ### Import Pipeline Orchestrator
 
-**File:** [[apps/node-backend/src/services/importPipeline/index.js]]
+**File:** [[apps/node-backend/src/services/importPipeline/index.ts]]
 
 **Main export:** `runImportPipeline({ filePath, adapterName, customConfig?, filename?, sizeBytes?, onProgress? })`
 
@@ -375,7 +375,7 @@ sequence. Their adapters and staging INSERT schemas remain domain-specific.
 #### 4. **Commit** (`commitBatch`)
 
 - Insert canonical transactions with per-row SAVEPOINT protection (if insert fails, transaction stays usable for remaining rows)
-- **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.js]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
+- **BIGSERIAL Validation (2026-05-12):** [[apps/node-backend/src/services/importPipeline/commit.ts]] (lines 101–105) validates staging row IDs via regex `/^\d+$/` instead of `Number.isInteger()`. Root cause: `import_staging_rows.id` is BIGSERIAL; the `pg` driver returns BIGINT values as strings to preserve int64 precision. The old `Number.isInteger("123")` check failed silently, counting all rows as errors before any INSERT. New regex accepts string-form bigints and is injection-safe for SAVEPOINT identifiers.
 - **Versioned import identity (2026-09-09):** migration 0103 adds a partial unique index over
   `(dedup_fingerprint_version, dedup_fingerprint)`. Commit treats that index as the race guard.
   Since the maintained-installation cutover on 2026-09-13, the active import path uses only this
@@ -491,7 +491,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 ### 2. Parsing & Normalization
 
 - CSV parsed with configurable separator
-- **UTF-8 BOM stripping (Bug-Hunt Sweep 2026-05-08):** `splitCsvLines()` in [[apps/node-backend/src/services/importPipeline/adapters/_shared.js]] strips the UTF-8 BOM character (U+FEFF) that Excel and Windows tools prepend to CSV exports. Without stripping, the first header field becomes `﻿field_name` (invalid key), breaking the column mapping. Implementation: Regex `^﻿` applied before line split.
+- **UTF-8 BOM stripping (Bug-Hunt Sweep 2026-05-08):** `splitCsvLines()` in [[apps/node-backend/src/services/importPipeline/adapters/_shared.ts]] strips the UTF-8 BOM character (U+FEFF) that Excel and Windows tools prepend to CSV exports. Without stripping, the first header field becomes `﻿field_name` (invalid key), breaking the column mapping. Implementation: Regex `^﻿` applied before line split.
 - Date formats converted to YYYY-MM-DD
 - Amounts normalized (handle different decimal separators)
 - Text normalized (trimming, encoding)
@@ -661,7 +661,7 @@ The name the user assigns (e.g. `"My Savings Bank"`) is used as `adapterName` in
 
 ### `stageBatch` Generic-Adapter Fallback (Latent Bug Fix)
 
-`apps/node-backend/src/services/importPipeline/stage.js` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.js`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to the `generic` adapter. Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
+`apps/node-backend/src/services/importPipeline/stage.ts` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.js`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to the `generic` adapter. Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
 
 This fix applies to all callers, not only the saved-parser path, and closes a latent failure mode for any typed free-form bank name passed with a custom config.
 

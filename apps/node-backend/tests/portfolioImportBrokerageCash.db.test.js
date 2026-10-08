@@ -33,7 +33,7 @@ import {
 } from './setup/db.js';
 
 import { closePool } from '../src/database/connection.ts';
-import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.js';
+import { commitPortfolioImport } from '../src/services/portfolioImportPipeline/index.ts';
 import { rollbackBatch } from '../src/services/portfolioImportBatchService.js';
 
 const pool = getTestPool();

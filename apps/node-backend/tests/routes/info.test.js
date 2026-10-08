@@ -79,7 +79,7 @@ vi.mock("../../src/services/materializedViewService.js", () => ({
   refreshMaterializedViews: mockRefreshMaterializedViews,
 }));
 
-vi.mock("../../src/services/currency/currencyConversionService.js", () => ({
+vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
   FALLBACK_RATES: { USD: 1.1 },
   warmCache: mockWarmCache,
   clearMemoryCache: mockClearMemoryCache,
@@ -101,7 +101,7 @@ vi.mock("../../src/services/portfolioPerformanceSnapshotService.js", () => ({
   getBreakdownSummary: vi.fn(async () => []),
 }));
 
-vi.mock("../../src/services/portfolio/portfolioSummaryService.js", () => ({
+vi.mock("../../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: mockGetPortfolioSummary,
 }));
 
@@ -119,7 +119,7 @@ import { logger } from "../../src/config/logger.ts";
 import {
   invalidatePortfolioCaches,
   invalidateStatisticsCaches,
-} from "../../src/services/info/cache.js";
+} from "../../src/services/info/cache.ts";
 const { default: infoRouter } = await import("../../src/routes/info.ts");
 const { warmInfoCaches } = await import("../../src/routes/info.ts");
 

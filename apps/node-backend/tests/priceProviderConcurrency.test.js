@@ -12,17 +12,17 @@ vi.mock('../src/config/kinesisConfig.ts', () => ({
   KINESIS_DEFAULT_FROM_DATE: '2020-01-01',
   getKinesisAssetConfig: vi.fn(() => null),
 }));
-vi.mock('../src/services/currency/currencyConversionService.js', () => ({
+vi.mock('../src/services/currency/currencyConversionService.ts', () => ({
   convertToCurrency: vi.fn(async (v) => v),
 }));
 vi.mock('../src/lib/urlSafety.ts', () => ({ assertPublicHttpUrl: vi.fn() }));
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), chart: vi.fn() }));
-vi.mock("../src/services/prices/yahooClient.js", () => ({
+vi.mock("../src/services/prices/yahooClient.ts", () => ({
   getYahooClient: vi.fn(async () => yahoo),
 }));
 
-import { PROVIDERS } from '../src/services/prices/priceProviderRegistry.js';
+import { PROVIDERS } from '../src/services/prices/priceProviderRegistry.ts';
 
 const kinesisPayload = (symbol, price) => ({
   ok: true,

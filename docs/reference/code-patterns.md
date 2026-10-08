@@ -2,8 +2,8 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
 aliases: [code patterns, coding patterns, conventions, patterns, delete response pattern, 204 no content, delete convention, how to write code, repository pattern, route pattern, hook pattern, error handling, type-safe error handling, type annotations, filter builder, golden fixture, aggregation envelope, calculation services, import concurrency, motion pattern, surface shell pattern, gradient icon pattern, money pattern, decimal pattern, timezone pattern, domain split, openapi, typescript types, csv export, safe csv, formula injection, cwe-1236, date utilities, immutability, aggregation optimization, Map pattern, recipient group filter, recipientGroupId, portfolio totals, single source of truth, parseLocaleNumber, number parsing, locale-aware number parsing, thousands separator, decimal separator, belgian-tax-pattern, freeze-display-pattern, as-filed-calculation, engine-drift-protection, shared-utils, workspace, plural, tc, scoped-skin-behind-a-flag-pattern-adr-104, skin-v2 pattern, visual skin flag, unlayered css pattern, inline token constraint, wire casing convention, snake_case bodies, api casing, camelCase grandfathered routers, database naming, enum discipline, text plus check, constraint naming, index naming, chk prefix, uq prefix, idx prefix]
@@ -476,7 +476,7 @@ Within either form, use `get*` for one value, `list*` for collections, and a spe
 >
 > - **CSV import adapters** (`services/importPipeline/adapters/*.js`, `_shared.js`) return `null`
 >   for an unparseable row so the pipeline can count it as skipped rather than treating it as data.
-> - **Rate fetching** (`services/currency/rateFetcher.js`) returns `null` when a provider has no
+> - **Rate fetching** (`services/currency/rateFetcher.ts`) returns `null` when a provider has no
 >   rate for a currency/date.
 >
 > Both are deliberate "miss" sentinels, not the "optional value" case — new code at these two
@@ -588,7 +588,7 @@ two lists must be edited together.
 
 > [!note] Accepted exception — seven read-repositories may import currency conversion
 > Every current repository→service import goes to
-> [[apps/node-backend/src/services/currency/currencyConversionService.js|currencyConversionService.js]]
+> [[apps/node-backend/src/services/currency/currencyConversionService.ts|currencyConversionService.ts]]
 > and is a **sanctioned exception**, not a bug:
 >
 > - Seven `repositories/info*` files import `convertRowsToEur` —
@@ -1718,7 +1718,7 @@ const totalHistory = [...totalsByMonth.keys()]
 
 ## Pure Calculation Services (Phase 3)
 
-**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/services/calculations/portfolioMath.js|portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts|shared portfolio calculations]]
+**Source:** [[apps/node-backend/src/services/calculations/|services/calculations/]], [[apps/node-backend/src/services/calculations/portfolioMath.ts|portfolioMath.js]], [[packages/shared-utils/src/portfolio.ts|shared portfolio calculations]]
 
 As of Phase 3, business logic for non-trivial calculations has been extracted into **pure, stateless functions** with no I/O side effects. Backend-owned functions live in `services/calculations/`; cross-workspace portfolio calculations live in `@vision/shared-utils/portfolio`. Both are suitable for golden-fixture testing.
 
@@ -1726,10 +1726,10 @@ As of Phase 3, business logic for non-trivial calculations has been extracted in
 
 | Module                                                                              | Purpose                                                                                                          |
 | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `services/calculations/loanSchedule.js`                                             | Loan amortization schedule generation (amortizing, fixed_principal, interest_only)                               |
+| `services/calculations/loanSchedule.ts`                                             | Loan amortization schedule generation (amortizing, fixed_principal, interest_only)                               |
 | `lib/calculations/recurrence.ts` _(moved from `services/calculations/` in Wave A2)_ | Recurring payment date calculation (daily, weekly, monthly, yearly, custom)                                      |
 | `lib/calculations/splits.ts` _(moved from `services/calculations/` in Wave A2)_     | Transaction-split allocation/payment validation and owed-summary projection                                      |
-| `services/calculations/portfolioMath.js`                                            | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation                         |
+| `services/calculations/portfolioMath.ts`                                            | Backend portfolio metrics, date helpers, interest accrual, and snapshot-spike sanitation                         |
 | `@vision/shared-utils/portfolio`                                                    | Cost basis calculations (weighted average, FIFO, LIFO) and immutable lot-event handling shared with the frontend |
 
 **Immutability in shared portfolio math (2026-04-25):**
@@ -1784,7 +1784,7 @@ tests/golden/__fixtures__/
 ```js
 import { describe, it } from "vitest";
 import { runGolden } from "../golden/runGolden.js";
-import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.js";
+import { generateLoanSchedule } from "../../src/services/calculations/loanSchedule.ts";
 
 describe("loanSchedule golden", () => {
   it("amortizing-standard", async () => {
@@ -1837,7 +1837,7 @@ See [[docs/testing/testing#Property Test Pattern (Phase 8)|Property Test Pattern
 
 ## Aggregation Envelope Pattern (Phase 2, Updated Phase 1)
 
-**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.js|_envelope.js]], [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]]
+**Source:** [[apps/node-backend/src/services/calculations/aggregation/_envelope.ts|_envelope.js]], [[apps/node-backend/src/routes/aggregations.ts|aggregations.js]]
 
 All `/api/aggregations/*` endpoints follow the unified transport envelope (ADR-026) with a nested aggregation domain envelope. Calculation modules return `{ data, meta: { source, computedAt } }`, and routes pass this directly to `res.ok()`.
 
@@ -2569,7 +2569,7 @@ const query = buildQuery({
 
 ## Import Batch Concurrency Pattern (Phase 1, Phase 3.1, Phase C)
 
-**Source:** [[apps/node-backend/src/services/importPipeline/index.js|importPipeline/index.js]], [[apps/node-backend/src/services/importPipeline/validate.js|validate.js]], [[apps/node-backend/src/services/importPipeline/commit.js|commit.js]]
+**Source:** [[apps/node-backend/src/services/importPipeline/index.ts|importPipeline/index.js]], [[apps/node-backend/src/services/importPipeline/validate.ts|validate.js]], [[apps/node-backend/src/services/importPipeline/commit.ts|commit.js]]
 
 > [!info] Phase C Refactor
 > Import batch concurrency was consolidated into the unified `importPipeline` orchestrator (Phase C, April 2026). The pattern remains unchanged; the three legacy services are deprecated.
@@ -2917,7 +2917,7 @@ export async function complexMultiStepOperation(primaryId, aliasIds) {
 
 ### Sanctioned resumable pipeline alternative
 
-Large imports may use **chunk-atomic, row-isolated, chunk-resumable** processing instead of one transaction for the entire file. Both [[apps/node-backend/src/services/importPipeline/commit.js|transaction import commit]] and [[apps/node-backend/src/services/portfolioImportPipeline/commit.js|portfolio import commit]] wrap each chunk in `withTransaction` and isolate bad rows with savepoints. They update progress checkpoints only after the chunk commits. This is the accepted alternative when one global transaction would hold locks too long and a failed row must not discard prior committed chunks.
+Large imports may use **chunk-atomic, row-isolated, chunk-resumable** processing instead of one transaction for the entire file. Both [[apps/node-backend/src/services/importPipeline/commit.ts|transaction import commit]] and [[apps/node-backend/src/services/portfolioImportPipeline/commit.ts|portfolio import commit]] wrap each chunk in `withTransaction` and isolate bad rows with savepoints. They update progress checkpoints only after the chunk commits. This is the accepted alternative when one global transaction would hold locks too long and a failed row must not discard prior committed chunks.
 
 The alternative is not permission for arbitrary partial writes: every chunk must preserve invariants, row failures must roll back to a savepoint, and persisted counters/checkpoints must advance only after commit.
 
@@ -3915,7 +3915,7 @@ function PortfolioPage() {
 
 - [[docs/api/portfolio-summary|Portfolio Summary API]]
 - [[docs/adr/044-portfolio-summary-single-source-of-truth|ADR-044]]
-- [[apps/node-backend/src/services/portfolio/portfolioSummaryService.js|Service Implementation]]
+- [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts|Service Implementation]]
 
 ---
 

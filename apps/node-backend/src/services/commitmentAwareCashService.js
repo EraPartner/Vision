@@ -8,7 +8,7 @@ import { toWireDate } from "../lib/dateFormat.ts";
 import {
   convertWithRates,
   listLatestStoredRates,
-} from "./currency/currencyConversionService.js";
+} from "./currency/currencyConversionService.ts";
 import { assembleRebalanceInputs } from "./crossWorkspaceDataService.js";
 import { projectCommitmentAwareCash } from "./commitmentAwareCash.js";
 

@@ -19,7 +19,7 @@ import { closePool } from "../src/database/connection.ts";
 import {
   clearHistoricalCache,
   getRateToEurForDate,
-} from "../src/services/currency/rateFetcher.js";
+} from "../src/services/currency/rateFetcher.ts";
 
 describe.skipIf(!hasTestDatabase())("historical FX database fallback", () => {
   beforeAll(async () => {

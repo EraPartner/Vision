@@ -11,7 +11,7 @@
  * can be triggered manually or in integration tests.
  */
 
-import { computeCashflowForecast } from '../services/calculations/forecast/index.js';
+import { computeCashflowForecast } from '../services/calculations/forecast/index.ts';
 import { getActiveUserIds } from '../repositories/cashflowForecastMcRepository.ts';
 import { logger } from '../config/logger.ts';
 import { forEachConcurrent } from '../lib/concurrency.ts';

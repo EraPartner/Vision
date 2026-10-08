@@ -61,7 +61,7 @@ The main table always requests `include_balance=true`; **Currency** and **Runnin
 
 > [!warning] `balance` is written exclusively by the import pipeline
 > `transactions.balance` is now a **read-only** field from the perspective of the API and the UI.
-> It is stamped by `services/importPipeline/commit.js` as a running balance when rows are imported
+> It is stamped by `services/importPipeline/commit.ts` as a running balance when rows are imported
 > from a bank CSV. Manually-created transactions leave `balance = NULL`, which is correct and
 > intentional.
 >

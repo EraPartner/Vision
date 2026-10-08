@@ -14,7 +14,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/services/research/researchAggregator.js", () => ({
+vi.mock("../../src/services/research/researchAggregator.ts", () => ({
   researchAggregator: {
     fetch: vi.fn(),
     fetchFundamentals: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock("../../src/services/research/researchAggregator.js", () => ({
   },
 }));
 
-vi.mock("../../src/services/research/researchMappingService.js", () => ({
+vi.mock("../../src/services/research/researchMappingService.ts", () => ({
   researchMappingService: {
     list: vi.fn(),
     resolve: vi.fn(),
@@ -33,30 +33,30 @@ vi.mock("../../src/services/research/researchMappingService.js", () => ({
   },
 }));
 
-vi.mock("../../src/services/research/researchProviderKeyService.js", () => ({
+vi.mock("../../src/services/research/researchProviderKeyService.ts", () => ({
   listKeyStatuses: vi.fn(),
   setKey: vi.fn(),
   clearKey: vi.fn(),
 }));
 
 vi.mock(
-  "../../src/services/research/projection/portfolioProjection.js",
+  "../../src/services/research/projection/portfolioProjection.ts",
   () => ({
     runPortfolioForecast: vi.fn(),
   }),
 );
 
-vi.mock("../../src/services/research/fundamentalsScorecard.js", () => ({
+vi.mock("../../src/services/research/fundamentalsScorecard.ts", () => ({
   fundamentalsScorecard: vi.fn(() => ({ score: 1 })),
 }));
 
-import { researchAggregator } from "../../src/services/research/researchAggregator.js";
-import { researchMappingService } from "../../src/services/research/researchMappingService.js";
+import { researchAggregator } from "../../src/services/research/researchAggregator.ts";
+import { researchMappingService } from "../../src/services/research/researchMappingService.ts";
 import {
   clearKey,
   listKeyStatuses,
-} from "../../src/services/research/researchProviderKeyService.js";
-import { runPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.js";
+} from "../../src/services/research/researchProviderKeyService.ts";
+import { runPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.ts";
 
 const { default: researchRouter } =
   await import("../../src/routes/research.ts");

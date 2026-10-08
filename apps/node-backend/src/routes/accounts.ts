@@ -27,7 +27,7 @@ import {
   previewAccountPortfolioLots,
 } from "../services/accountCloseService.js";
 import { scheduleAggregationRefresh } from "../services/aggregationRefresh.js";
-import { invalidatePortfolioCaches } from "../services/info/cache.js";
+import { invalidatePortfolioCaches } from "../services/info/cache.ts";
 import {
   validateIdParam,
   validateId,

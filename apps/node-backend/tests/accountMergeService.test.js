@@ -7,7 +7,7 @@ vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
 // Real conversion arithmetic, fixed rate table: 1 USD = 0.5 EUR (the canonical
 // fixture from the cross-currency finding).
 vi.mock(
-  "../src/services/currency/currencyConversionService.js",
+  "../src/services/currency/currencyConversionService.ts",
   async (importOriginal) => ({
     .../** @type {object} */ (await importOriginal()),
     loadCurrentRates: vi.fn(async () => ({ EUR: 1, USD: 0.5 })),

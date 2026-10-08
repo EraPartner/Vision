@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyPortfolioAssetScope } from "../src/services/portfolioImportPipeline/stage.js";
+import { applyPortfolioAssetScope } from "../src/services/portfolioImportPipeline/stage.ts";
 import { __buildPortfolioConfig } from "../src/routes/portfolioImportRoutes.ts";
 
 describe("explicit portfolio statement asset scope", () => {

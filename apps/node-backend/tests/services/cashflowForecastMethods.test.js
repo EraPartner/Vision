@@ -10,38 +10,38 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildCategoryBreakdown,
   __reconcileCategoryForecasts as reconcileCategoryForecasts,
-} from "../../src/services/calculations/forecast/categoryBreakdown.js";
+} from "../../src/services/calculations/forecast/categoryBreakdown.ts";
 
-import * as simpleAverage from "../../src/services/calculations/forecast/methods/simpleAverage.js";
-import * as weightedAverage from "../../src/services/calculations/forecast/methods/weightedAverage.js";
-import * as ewma from "../../src/services/calculations/forecast/methods/ewma.js";
-import * as holtWinters from "../../src/services/calculations/forecast/methods/holtWinters.js";
-import * as prophetLite from "../../src/services/calculations/forecast/methods/prophetLite.js";
-import * as monteCarloParametric from "../../src/services/calculations/forecast/methods/monteCarloParametric.js";
-import * as monteCarloBlockBootstrap from "../../src/services/calculations/forecast/methods/monteCarloBlockBootstrap.js";
-import * as ensemble from "../../src/services/calculations/forecast/methods/ensemble.js";
+import * as simpleAverage from "../../src/services/calculations/forecast/methods/simpleAverage.ts";
+import * as weightedAverage from "../../src/services/calculations/forecast/methods/weightedAverage.ts";
+import * as ewma from "../../src/services/calculations/forecast/methods/ewma.ts";
+import * as holtWinters from "../../src/services/calculations/forecast/methods/holtWinters.ts";
+import * as prophetLite from "../../src/services/calculations/forecast/methods/prophetLite.ts";
+import * as monteCarloParametric from "../../src/services/calculations/forecast/methods/monteCarloParametric.ts";
+import * as monteCarloBlockBootstrap from "../../src/services/calculations/forecast/methods/monteCarloBlockBootstrap.ts";
+import * as ensemble from "../../src/services/calculations/forecast/methods/ensemble.ts";
 import {
   buildSeasonalityBuckets,
   lookupBucket,
   __dayOfWeek as dayOfWeek,
   dayOfMonth,
-} from "../../src/services/calculations/forecast/seasonality.js";
-import { walkForwardBacktest } from "../../src/services/calculations/forecast/backtest.js";
+} from "../../src/services/calculations/forecast/seasonality.ts";
+import { walkForwardBacktest } from "../../src/services/calculations/forecast/backtest.ts";
 import {
   recordAccuracy,
   getLatestAccuracyByMethod,
   __getAccuracyHistory as getAccuracyHistory,
   __resetForTests as _resetForTests,
-} from "../../src/services/calculations/forecast/accuracyStore.js";
+} from "../../src/services/calculations/forecast/accuracyStore.ts";
 import {
   fnv1aHash,
   makeRng,
   gaussian,
-} from "../../src/services/calculations/forecast/prng.js";
+} from "../../src/services/calculations/forecast/prng.ts";
 import {
   monthKey,
   orderedMonthKeys,
-} from "../../src/services/calculations/forecast/months.js";
+} from "../../src/services/calculations/forecast/months.ts";
 
 // accuracyStore silently degrades to an in-memory Map when its table is missing
 // OR when Postgres is simply unreachable (ECONNREFUSED). The `accuracyStore`
@@ -627,7 +627,7 @@ describe("orchestrator computeCashflowForecast", () => {
     });
 
     const { computeCashflowForecast } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecast({
       mcPaths: 100,
       includeBacktest: true,
@@ -673,7 +673,7 @@ describe("orchestrator computeCashflowForecast", () => {
       };
     });
     const { computeCashflowForecast } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecast({
       mcPaths: 50,
       includeBacktest: false,
@@ -702,7 +702,7 @@ describe("orchestrator computeCashflowForecast", () => {
     });
 
     const { computeCashflowForecast } =
-      await import("../../src/services/calculations/forecast/index.js");
+      await import("../../src/services/calculations/forecast/index.ts");
     const env = await computeCashflowForecast({
       mcPaths: 50,
       includeBacktest: false,

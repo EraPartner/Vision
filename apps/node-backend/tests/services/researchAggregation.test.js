@@ -10,12 +10,12 @@ import {
   PROVIDERS,
   __providerChain as providerChain,
   resolveProviderChain,
-} from "../../src/services/research/capabilityMap.js";
+} from "../../src/services/research/capabilityMap.ts";
 import {
   createQuotaGovernor,
   __dayKeyUtc as dayKeyUtc,
   __PROVIDER_LIMITS as PROVIDER_LIMITS,
-} from "../../src/services/research/quotaGovernor.js";
+} from "../../src/services/research/quotaGovernor.ts";
 
 // ─── capabilityMap ─────────────────────────────────────────────────────────────
 

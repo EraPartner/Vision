@@ -22,7 +22,7 @@ vi.mock('yahoo-finance2', () => ({
   }),
 }));
 
-import yahooAdapter from '../src/services/research/adapters/yahooAdapter.js';
+import yahooAdapter from '../src/services/research/adapters/yahooAdapter.ts';
 
 describe('yahooAdapter', () => {
   beforeEach(() => {

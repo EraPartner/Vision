@@ -1,4 +1,4 @@
-import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.js";
+import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
 import { validateKinesisCashRollback } from "./portfolioImportCashService.js";
 import { scheduleRefresh } from "./materializedViewService.js";
 import {
@@ -8,7 +8,7 @@ import {
 import {
   restorePairedPortfolioIncomeForBatch,
   readPairedIncomeRollbackBatchIds,
-} from "../repositories/portfolioIncomeRecognitionRepository.js";
+} from "../repositories/portfolioIncomeRecognitionRepository.ts";
 /**
  * Portfolio import batch service — the route-facing seam over
  * portfolioImportBatchRepository (eslint vision-local/no-repo-direct-from-route).
@@ -18,11 +18,11 @@ import {
  * creating a holding from a row and rollback — live here.
  */
 
-import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
+import portfolioTransactionService from "./portfolio/portfolioTransactionService.ts";
 import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.ts";
 import investmentRepository from "../repositories/investmentRepository.ts";
-import { rollbackPortfolioAssetTransfersForBatch } from "./portfolio/portfolioAssetTransferService.js";
-import { rollbackPortfolioAssetAdjustmentsForBatch } from "./portfolio/portfolioAssetAdjustmentService.js";
+import { rollbackPortfolioAssetTransfersForBatch } from "./portfolio/portfolioAssetTransferService.ts";
+import { rollbackPortfolioAssetAdjustmentsForBatch } from "./portfolio/portfolioAssetAdjustmentService.ts";
 import {
   getActiveDuplicateRepairReceipts,
   restoreDuplicatePortfolioRepairs,

@@ -2,8 +2,8 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-07
-updated: 2026-09-05
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     security,
@@ -44,12 +44,12 @@ related_code:
     "apps/node-backend/src/lib/filterBuilder.ts",
     "apps/node-backend/src/routes/aggregations.ts",
     "apps/node-backend/src/routes/transactions.ts",
-    "apps/node-backend/src/services/aiChat/tools/_validate.js",
+    "apps/node-backend/src/services/aiChat/tools/_validate.ts",
     "apps/node-backend/src/lib/csv.ts",
     "apps/node-backend/src/lib/urlSafety.ts",
     "apps/node-backend/src/services/investmentService.js",
     "apps/node-backend/src/repositories/portfolioTxRepo.reads.ts",
-    "apps/node-backend/src/services/prices/priceProviderRegistry.js",
+    "apps/node-backend/src/services/prices/priceProviderRegistry.ts",
   ]
 ---
 
@@ -675,7 +675,7 @@ The id **route params** above are only half of what a write addresses. The other
 
 ### parsePositiveInt (AI-chat tool arguments)
 
-The AI-chat tools' arguments arrive as JSON emitted by the model, not from a browser, and are validated by hand-rolled helpers in `services/aiChat/tools/_validate.js` (no zod — see `parseDate`, `parseEnum`, `parsePositiveInt`). Each throws `ToolValidationError`, which `dispatchTool` turns into `{ ok: false, error: { code: 'VALIDATION_ERROR', field, message } }` and feeds back to the model so it can correct its arguments and retry.
+The AI-chat tools' arguments arrive as JSON emitted by the model, not from a browser, and are validated by hand-rolled helpers in `services/aiChat/tools/_validate.ts` (no zod — see `parseDate`, `parseEnum`, `parsePositiveInt`). Each throws `ToolValidationError`, which `dispatchTool` turns into `{ ok: false, error: { code: 'VALIDATION_ERROR', field, message } }` and feeds back to the model so it can correct its arguments and retry.
 
 ```javascript
 parsePositiveInt(value, field, { min = 1, max = 1000, defaultValue = null })

@@ -20,8 +20,8 @@ import {
   backfillPortfolioHistoricalRates,
   clearMemoryCache,
   convertRowsToEur,
-} from "../src/services/currency/currencyConversionService.js";
-import { clearHistoricalCache } from "../src/services/currency/rateFetcher.js";
+} from "../src/services/currency/currencyConversionService.ts";
+import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
 import { PORTFOLIO_TRANSACTION_SNAPSHOT_SQL } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 
 // Isolate stamping and cache filling from the separate one-time repair job.

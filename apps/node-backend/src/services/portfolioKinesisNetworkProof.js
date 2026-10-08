@@ -5,7 +5,7 @@ import {
   parseCsvText,
   parseDateWithFormat,
   parseCustomAmount,
-} from "./importPipeline/adapters/_shared.js";
+} from "./importPipeline/adapters/_shared.ts";
 import { parsedDateToYmd } from "../lib/importDates.ts";
 import {
   portfolioPrimaryRawData,

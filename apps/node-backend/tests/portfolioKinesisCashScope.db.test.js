@@ -20,10 +20,10 @@ import { previewPortfolioImportReconciliation } from "../src/services/portfolioI
 import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
 import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
 import { readReconciliationSources } from "../src/repositories/portfolioImportReconciliationRepository.ts";
-import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.js";
+import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.ts";
 import { cashReceipt } from "../src/services/portfolioKinesisCashScope.js";
 import { reconcileTransfers } from "../src/services/transferReconciliationService.js";
-import { commitBatch } from "../src/services/portfolioImportPipeline/commit.js";
+import { commitBatch } from "../src/services/portfolioImportPipeline/commit.ts";
 import { pruneOldImportBatches } from "../src/startup/warmup.ts";
 const warming = vi.hoisted(() => ({ available: true, calls: [] }));
 const refreshCash = vi.hoisted(() => vi.fn());
@@ -31,7 +31,7 @@ vi.mock("../src/services/materializedViewService.js", async (original) => ({
   ...(await original()),
   scheduleRefresh: refreshCash,
 }));
-vi.mock("../src/services/currency/rateFetcher.js", async (original) => {
+vi.mock("../src/services/currency/rateFetcher.ts", async (original) => {
   const real = await original();
   return {
     ...real,
@@ -53,7 +53,7 @@ vi.mock("../src/services/currency/rateFetcher.js", async (original) => {
     },
   };
 });
-import { clearHistoricalCache } from "../src/services/currency/rateFetcher.js";
+import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
 const pool = getTestPool();
 const owned = { batches: [], accounts: [], investments: [] };
 async function stage(account, investment) {

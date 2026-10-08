@@ -15,8 +15,8 @@ import investmentRepository, {
   pickInvestmentCreateFields,
 } from "../repositories/investmentRepository.ts";
 import portfolioTransactionRepository from "../repositories/portfolioTransactionRepository.ts";
-import portfolioTransactionService from "./portfolio/portfolioTransactionService.js";
-import portfolioBrokerRetagService from "./portfolio/portfolioBrokerRetagService.js";
+import portfolioTransactionService from "./portfolio/portfolioTransactionService.ts";
+import portfolioBrokerRetagService from "./portfolio/portfolioBrokerRetagService.ts";
 import {
   fetchHistoricalPrices,
   fetchLivePricesDetailed,
@@ -35,9 +35,9 @@ import {
   validateIntArray,
 } from "../lib/validation.ts";
 import { assertIdParam } from "../middleware/validation.ts";
-import { invalidatePortfolioCaches } from "./info/cache.js";
+import { invalidatePortfolioCaches } from "./info/cache.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
-import { autoResolveFxRateToEur } from "./portfolio/fxResolve.js";
+import { autoResolveFxRateToEur } from "./portfolio/fxResolve.ts";
 import { parsePagination, parseIntClamped } from "../lib/pagination.ts";
 import { PORTFOLIO_TXN_TYPES } from "@vision/types/portfolioTxnTypes";
 import { PORTFOLIO_RECURRENCE_INTERVALS } from "@vision/types/recurrence";

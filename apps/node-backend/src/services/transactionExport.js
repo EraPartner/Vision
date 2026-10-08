@@ -9,7 +9,7 @@ import { getClient, query as dbQuery } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import { toDecimal } from "../lib/money.ts";
-import { toYmd } from "./calculations/portfolioMath.js";
+import { toYmd } from "./calculations/portfolioMath.ts";
 import { escapeCsvValue } from "../lib/csv.ts";
 import { buildTransactionWhere } from "../lib/filterBuilder.ts";
 import {

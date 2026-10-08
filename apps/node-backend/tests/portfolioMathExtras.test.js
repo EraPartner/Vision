@@ -10,7 +10,7 @@ import {
   computeMetrics,
   computeHeatmap,
   toYmd,
-} from "../src/services/calculations/portfolioMath.js";
+} from "../src/services/calculations/portfolioMath.ts";
 
 describe("calculateCostBasis (weighted average)", () => {
   it("produces zero result when no transactions", () => {

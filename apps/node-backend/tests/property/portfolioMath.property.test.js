@@ -16,7 +16,7 @@ import {
   annualizedReturn,
   __contributionAdjustedMonthlyReturn as contributionAdjustedMonthlyReturn,
   sanitizeSnapshotSpikes,
-} from "../../src/services/calculations/portfolioMath.js";
+} from "../../src/services/calculations/portfolioMath.ts";
 
 // ── Seeded RNG (same pattern as currencyRoundTrip.property.test.js) ──────────
 

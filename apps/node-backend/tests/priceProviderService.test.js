@@ -45,7 +45,7 @@ import {
 } from "../src/services/priceProviderService.js";
 import { query } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
-import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.js";
+import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";
 
 describe("Price Provider Service", () => {
   beforeEach(() => {

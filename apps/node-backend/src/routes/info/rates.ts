@@ -14,7 +14,7 @@ import {
   warmCache,
   clearMemoryCache,
   listLatestStoredRates,
-} from "../../services/currency/currencyConversionService.js";
+} from "../../services/currency/currencyConversionService.ts";
 import {
   getInflationRates,
   clearInflationMemoryCache,

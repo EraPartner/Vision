@@ -32,7 +32,7 @@ async function loadMaterializedViewService() {
   );
   vi.doMock("../src/config/logger.ts", () => ({ logger }));
   const invalidateStatisticsCaches = vi.fn();
-  vi.doMock("../src/services/info/cache.js", () => ({
+  vi.doMock("../src/services/info/cache.ts", () => ({
     invalidateStatisticsCaches,
   }));
 

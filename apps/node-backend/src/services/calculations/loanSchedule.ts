@@ -1,0 +1,231 @@
+/**
+ * Loan schedule calculation module (Phase 3 relocation).
+ *
+ * Moved from services/loanRepaymentService.js. Pure calc — no IO, no DB.
+ * Date math still uses UTC baseline: loan_start_date / loan_payment_day are
+ * DATE columns (no TZ), so installment due_date is independent of viewer TZ.
+ * TZ-aware rewrite per Phase 0 ADR is logged as a follow-up.
+ *
+ * Contract:
+ *   generateLoanRepaymentSchedule(config) → { regular_payment_amount, first_due_date, schedule[] }
+ *   validateLoanConfig(config) → { errors[], normalized }
+ */
+
+import { roundMoney } from "../../lib/money.ts";
+import { epochMsToUtcYmd } from "../../lib/dateFormat.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
+
+const EPSILON = 0.0000001;
+
+/**
+ * Raw loan config as received from the planned-transactions request body
+ * (JSON, so numeric fields may arrive as `number` or numeric `string`);
+ * `validateLoanConfig` coerces every field before use.
+ */
+export interface LoanConfig {
+  loan_type?: unknown;
+  loan_principal?: unknown;
+  loan_annual_interest_rate?: unknown;
+  loan_term_months?: unknown;
+  loan_start_date?: unknown;
+  loan_payment_day?: unknown;
+}
+
+export interface NormalizedLoanConfig {
+  loan_type: string;
+  loan_principal: number;
+  loan_annual_interest_rate: number;
+  loan_term_months: number;
+  loan_start_date: unknown;
+  loan_payment_day: number;
+}
+
+export interface LoanInstallment {
+  installment_number: number;
+  due_date: string;
+  payment_amount: number;
+  principal_amount: number;
+  interest_amount: number;
+  remaining_principal: number;
+}
+
+/**
+ * Returns the YYYY-MM-DD string `monthOffset` months after `baseDateStr`,
+ * clamped to the last day of the target month if `preferredDay` exceeds it
+ * (e.g. Jan 31 + 1 month → Feb 28/29).
+ */
+function addMonthsAtDay(
+  baseDateStr: string,
+  monthOffset: number,
+  preferredDay: number,
+) {
+  const [year, month] = baseDateStr.split("-").map(Number);
+  const firstOfTarget = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
+  const lastDay = new Date(
+    Date.UTC(
+      firstOfTarget.getUTCFullYear(),
+      firstOfTarget.getUTCMonth() + 1,
+      0,
+    ),
+  ).getUTCDate();
+  const day = Math.max(1, Math.min(Number(preferredDay) || 1, lastDay));
+  const result = new Date(
+    Date.UTC(
+      firstOfTarget.getUTCFullYear(),
+      firstOfTarget.getUTCMonth(),
+      day,
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+  return epochMsToUtcYmd(result.getTime());
+}
+
+function validateLoanConfig(config: LoanConfig): {
+  errors: string[];
+  normalized: NormalizedLoanConfig;
+} {
+  const errors: string[] = [];
+  const principal = Number(config.loan_principal);
+  const annualRate = Number(config.loan_annual_interest_rate ?? 0);
+  const termMonths = Number(config.loan_term_months);
+  const paymentDay = Number(config.loan_payment_day);
+  const loanType = String(config.loan_type || "").trim();
+
+  if (!loanType)
+    errors.push("loan_type is required for loan planned transactions");
+  if (!Number.isFinite(principal) || principal <= 0)
+    errors.push("loan_principal must be a positive number");
+  if (!Number.isFinite(annualRate) || annualRate < 0 || annualRate > 100)
+    errors.push("loan_annual_interest_rate must be between 0 and 100");
+  if (!Number.isInteger(termMonths) || termMonths < 1 || termMonths > 600)
+    errors.push("loan_term_months must be an integer between 1 and 600");
+  if (
+    !config.loan_start_date ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(String(config.loan_start_date))
+  )
+    errors.push("loan_start_date must be in YYYY-MM-DD format");
+  if (!Number.isInteger(paymentDay) || paymentDay < 1 || paymentDay > 31)
+    errors.push("loan_payment_day must be an integer between 1 and 31");
+
+  return {
+    errors,
+    normalized: {
+      loan_type: loanType,
+      loan_principal: principal,
+      loan_annual_interest_rate: annualRate,
+      loan_term_months: termMonths,
+      loan_start_date: config.loan_start_date,
+      loan_payment_day: paymentDay,
+    },
+  };
+}
+
+export function generateLoanRepaymentSchedule(config: LoanConfig) {
+  const { errors, normalized } = validateLoanConfig(config);
+  if (errors.length > 0) {
+    // ValidationError, not a plain Error with `statusCode`: both reach the
+    // client as 400, but only an AppError's message survives. A bare
+    // `statusCode` makes this error "not ours" to the handler, which then
+    // replaces the enumerated reasons with the generic "Bad Request" reason
+    // phrase (errorHandler.js THE RULE, clause 2) — the text is authored here
+    // and safe, so it should reach the caller intact.
+    throw new ValidationError(
+      `Invalid loan configuration: ${errors.join(", ")}`,
+    );
+  }
+
+  const {
+    loan_type: loanType,
+    loan_principal: principal,
+    loan_annual_interest_rate: annualRate,
+    loan_term_months: termMonths,
+    loan_start_date: startDate,
+    loan_payment_day: paymentDay,
+  } = normalized;
+
+  const monthlyRate = annualRate / 100 / 12;
+  let remaining = principal;
+  const schedule: LoanInstallment[] = [];
+
+  let regularPayment: number;
+  if (loanType === "amortizing") {
+    if (Math.abs(monthlyRate) < EPSILON) {
+      regularPayment = principal / termMonths;
+    } else {
+      regularPayment =
+        (principal * monthlyRate) /
+        (1 - Math.pow(1 + monthlyRate, -termMonths));
+    }
+  } else if (loanType === "fixed_principal") {
+    regularPayment = principal / termMonths;
+  } else if (loanType === "interest_only") {
+    regularPayment = principal * monthlyRate;
+  } else {
+    // Same reasoning as the config-validation throw above: authored, safe text
+    // that only survives the handler as an AppError.
+    throw new ValidationError(
+      `Unsupported loan_type '${loanType}'. Use amortizing, fixed_principal, or interest_only.`,
+    );
+  }
+
+  // If the payment day lands before the loan's start within the start month
+  // (e.g. start 2026-06-20, payment day 5 → 2026-06-05), the first installment
+  // would be dated before the loan exists. Shift the whole schedule one month.
+  // addMonthsAtDay returns YYYY-MM-DD, so the comparison is lexicographic-safe.
+  const startDateStr = String(startDate);
+  const startYmd = startDateStr.slice(0, 10);
+  const monthOffset =
+    addMonthsAtDay(startDateStr, 0, paymentDay) < startYmd ? 1 : 0;
+
+  for (let i = 1; i <= termMonths; i++) {
+    const dueDate = addMonthsAtDay(
+      startDateStr,
+      i - 1 + monthOffset,
+      paymentDay,
+    );
+    // Whole-month convention: installment 1 charges a full month of interest
+    // even when the loan started mid-month (start 06-05, payment day 20 → 15
+    // days of life, one month of interest). Standard simplification — no
+    // day-count proration. Documented in the planned-transactions feature spec.
+    const interestAmount = roundMoney(remaining * monthlyRate);
+    let principalAmount: number;
+    let paymentAmount: number;
+
+    if (loanType === "amortizing") {
+      principalAmount = roundMoney(regularPayment - interestAmount);
+      if (i === termMonths || principalAmount > remaining) {
+        principalAmount = roundMoney(remaining);
+      }
+      paymentAmount = roundMoney(principalAmount + interestAmount);
+    } else if (loanType === "fixed_principal") {
+      principalAmount = roundMoney(principal / termMonths);
+      if (i === termMonths || principalAmount > remaining) {
+        principalAmount = roundMoney(remaining);
+      }
+      paymentAmount = roundMoney(principalAmount + interestAmount);
+    } else {
+      principalAmount = i === termMonths ? roundMoney(remaining) : 0;
+      paymentAmount = roundMoney(principalAmount + interestAmount);
+    }
+
+    remaining = roundMoney(Math.max(0, remaining - principalAmount));
+
+    schedule.push({
+      installment_number: i,
+      due_date: dueDate,
+      payment_amount: paymentAmount,
+      principal_amount: principalAmount,
+      interest_amount: interestAmount,
+      remaining_principal: remaining,
+    });
+  }
+
+  return {
+    regular_payment_amount: roundMoney(regularPayment),
+    first_due_date: schedule[0]?.due_date,
+    schedule,
+  };
+}

@@ -4,12 +4,12 @@ import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.js";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/services/currency/currencyConversionService.js", () =>
+vi.mock("../src/services/currency/currencyConversionService.ts", () =>
   mockCurrencyConversion(),
 );
 
 import { query } from "../src/database/connection.ts";
-import { convertRowsToEur } from "../src/services/currency/currencyConversionService.js";
+import { convertRowsToEur } from "../src/services/currency/currencyConversionService.ts";
 import { recipientInsightsRepository } from "../src/repositories/infoRepositoryRecipients.ts";
 
 beforeEach(() => vi.clearAllMocks());

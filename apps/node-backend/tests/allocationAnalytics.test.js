@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   __backtestReturn as backtestReturn, __allocationDrift as allocationDrift, normalizeWeights, CLASSIC_PORTFOLIOS, foldTargetSleeves,
-} from '../src/services/portfolio/allocationAnalytics.js';
+} from '../src/services/portfolio/allocationAnalytics.ts';
 
 describe('backtestReturn (ADR-097)', () => {
   it('is the fractional return from add-date to current price', () => {

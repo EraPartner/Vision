@@ -2,7 +2,7 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-07
+date: 2026-10-08
 last_modified: 2026-09-27
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
@@ -57,7 +57,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 > in places — convert as you touch them.
 >
 > `AiChatServiceError` extends `AppError` and passes through `routes/ai.ts` to the middleware
-> untranslated (no per-route shim). `ToolValidationError` (`services/aiChat/tools/_validate.js`)
+> untranslated (no per-route shim). `ToolValidationError` (`services/aiChat/tools/_validate.ts`)
 > deliberately stays **outside** `AppError`: it is an in-band tool-result error — `dispatchTool`
 > catches it and feeds `{ok: false, error}` back to the model for retry; it never maps to an HTTP
 > response. New service errors that DO represent an HTTP outcome should extend `AppError`
@@ -67,7 +67,7 @@ Top-level modules such as `priceProviderService`, `providerHealthService`, `quot
 
 ## 1. Import adapter registry
 
-**File:** [[apps/node-backend/src/services/importPipeline/adapters/index.js]]
+**File:** [[apps/node-backend/src/services/importPipeline/adapters/index.ts]]
 **Purpose:** Parses bank-specific CSV files into a unified transaction format.
 
 The compatibility entrypoint `services/bankAdapters.js` was removed in September 2026. Adapters
@@ -157,7 +157,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ## 3. currency/currencyConversionService.js
 
-**File:** [[apps/node-backend/src/services/currency/currencyConversionService.js]]  
+**File:** [[apps/node-backend/src/services/currency/currencyConversionService.ts]]  
 **Purpose:** Converts amounts between currencies using ECB (primary), open.er-api.com (supplementary), database, and hardcoded fallbacks.
 
 **Status:** Live canonical implementation (moved to `services/currency/` in Phase 0). Direct imports use this path.
@@ -259,7 +259,7 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 
 ## 7. importPipeline/ (Phase C)
 
-**File:** [[apps/node-backend/src/services/importPipeline/index.js]]  
+**File:** [[apps/node-backend/src/services/importPipeline/index.ts]]  
 **Purpose:** Unified orchestrator for all CSV transaction imports (standard, custom, and streaming). Replaced legacy `importService`, `streamingImportService`, and `rawTransactionImportService` in Phase C.
 
 ### Exported Functions
@@ -329,7 +329,7 @@ retains its adapter selection and domain-specific staging INSERT.
 
 ## 8. calculations/loanSchedule.js _(formerly loanRepaymentService.js)_
 
-**File:** [[apps/node-backend/src/services/calculations/loanSchedule.js]]  
+**File:** [[apps/node-backend/src/services/calculations/loanSchedule.ts]]  
 **Purpose:** Generates loan repayment schedules for planned transactions.
 
 ### Exported Functions
@@ -1001,7 +1001,7 @@ All 15 Express route files now import **only** from `services/<domain>Service.js
 
 **Pre-existing substantial services** (not newly added) remain unchanged: `portfolioPerformanceSnapshotService`, `recipientMergeService`, `aiChatService`, `importPipeline`, `bankAdapters`, `priceProviderService`, `quoteBackfillService`, `currencyConversionService`, `aggregationRefresh`, `attachmentService`, `transactionExport`, `bulkSelection`, etc.
 
-Portfolio transaction domain rules are kept beside the orchestrator in [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.js|portfolioTransactionRules.js]]. This module owns payload normalization, buy/sell unit math, recurrence validation, and account-aware unit-history policy. One ordered unit-event read supplies assignment state, sell availability, and before/after partition-deficit comparison. New or worsened oversells are rejected; unchanged or improving legacy-invalid histories remain editable for repair. Repository modules expose only parameterized reads and writes needed to apply those rules.
+Portfolio transaction domain rules are kept beside the orchestrator in [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts|portfolioTransactionRules.js]]. This module owns payload normalization, buy/sell unit math, recurrence validation, and account-aware unit-history policy. One ordered unit-event read supplies assignment state, sell availability, and before/after partition-deficit comparison. New or worsened oversells are rejected; unchanged or improving legacy-invalid histories remain editable for repair. Repository modules expose only parameterized reads and writes needed to apply those rules.
 
 `plannedTransactionService` owns input normalization and the transaction boundaries for create-with-tags/schedule, update-with-tags, loan schedule replacement, and idempotent execute-and-advance. `splitService` owns split allocation and payment policy, maps raw owed rows to API projections, and writes each lifecycle audit record in the same transaction as its mutation. The corresponding repositories expose parameterized reads/writes and transaction-client primitives only.
 
@@ -1028,7 +1028,7 @@ The inverse edge is now guarded too. `vision-local/no-service-import-from-repo` 
 ```javascript
 // repositories/tagRepository.ts
 // ESLint ERROR — no-service-import-from-repo
-import { convertToCurrency } from "../services/currency/currencyConversionService.js";
+import { convertToCurrency } from "../services/currency/currencyConversionService.ts";
 ```
 
 The rule carries a **closed allowlist** (`SANCTIONED_REPO_SERVICE_IMPORTS` in `eslint.config.js`) pinning both the service module and the exact binding names, so it also fires when a sanctioned repository reaches for a _different_ service or _widens_ its import. The seven sanctioned importers and the reasoning behind each are documented in [[docs/reference/code-patterns|Code Patterns → Layering: repositories must not import services]]; the allowlist and that callout must be edited together. Do not add entries — put the helper in `lib/`, or lift the call into the service that calls the repository.
