@@ -319,9 +319,14 @@ function assertSingleCurrency(entries: FormulaEntry[]) {
       "Numeric aggregates cannot combine rows with different currencies",
     );
 }
-function compare(left: unknown, op: string, right: unknown): boolean {
+function compare(left: unknown, op: string, right: unknown): boolean | null {
   if (left instanceof Decimal || right instanceof Decimal) {
-    const ordering = decimal(left)!.comparedTo(decimal(right)!);
+    // A numeric comparison with an empty cell gives an empty result, like
+    // arithmetic does; IF and COUNTIF read that as not matching.
+    const a = decimal(left);
+    const b = decimal(right);
+    if (a === null || b === null) return null;
+    const ordering = a.comparedTo(b);
     if (op === "==") return ordering === 0;
     if (op === "!=") return ordering !== 0;
     if (op === "<") return ordering < 0;

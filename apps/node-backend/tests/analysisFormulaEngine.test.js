@@ -84,6 +84,26 @@ describe("analysisFormulaEngine", () => {
     expect(result.summaries.middle).toBe("3");
   });
 
+  it("gives an empty result when a numeric comparison has an empty cell", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ value: null }, { value: "" }, { value: "3" }],
+      formulas: [
+        { id: "positive", scope: "row", expression: "value > 0" },
+        { id: "label", scope: "row", expression: 'IF(value > 0, "yes", "no")' },
+        {
+          id: "count",
+          scope: "summary",
+          expression: 'COUNTIF(value, ">", 0)',
+        },
+      ],
+    });
+    // Before: each empty row failed with an evaluation error.
+    expect(result.errors).toEqual([]);
+    expect(result.rows.map((row) => row.positive)).toEqual([null, null, true]);
+    expect(result.rows.map((row) => row.label)).toEqual(["no", "no", "yes"]);
+    expect(result.summaries.count).toBe(1);
+  });
+
   it("blocks aggregates over incomplete input and propagates their errors", () => {
     const result = evaluateAnalysisFormulas({
       rows: [{ value: "2" }],
