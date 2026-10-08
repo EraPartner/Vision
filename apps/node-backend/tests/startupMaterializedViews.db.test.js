@@ -1,7 +1,7 @@
 /**
  * Boot-ordering test for the deferred materialized-view lifecycle.
  *
- * `main.js` used to `await createMaterializedViews()` + `ensureMaterializedViewIndexes()`
+ * `main.ts` used to `await createMaterializedViews()` + `ensureMaterializedViewIndexes()`
  * between alembic and `app.listen()`. `CREATE MATERIALIZED VIEW IF NOT EXISTS` is a
  * metadata no-op once the views exist, but a fresh install has none of them (0045
  * dropped all three and 0084/0085 drop two more to redefine them, and nothing in the
@@ -9,7 +9,7 @@
  * migrations, full aggregation scans of `transactions` sat inside the pre-`/health`
  * window the Electron 60s poll budget is racing. They now run in the post-listen warmup.
  *
- * Booting `main.js` in-process is not possible (it calls `start()` at import and installs
+ * Booting `main.ts` in-process is not possible (it calls `start()` at import and installs
  * `process.exit` handlers — it is excluded from coverage for the same reason), so this
  * spawns the real entrypoint as a child process against a throwaway database of its own.
  * Nothing here touches TEST_DATABASE_URL's tables.
@@ -36,7 +36,7 @@ const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../..",
 );
-const MAIN_JS = path.join(REPO_ROOT, "apps/node-backend/src/main.js");
+const MAIN_JS = path.join(REPO_ROOT, "apps/node-backend/src/main.ts");
 const DB_MIGRATE_JS = path.join(
   REPO_ROOT,
   "apps/node-backend/scripts/db-migrate.js",

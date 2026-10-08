@@ -527,4 +527,4 @@ Code link: [[apps/frontend/src/pages/research/WatchlistPage.tsx]], [[apps/fronte
 - [[apps/node-backend/src/services/belgianInflationService.ts]] - Statbel-backed monthly inflation service with memory cache, DB persistence, and remote fallback behavior.
 - [[apps/node-backend/src/routes/info.ts]] - Exposes `GET /api/info/inflation-rates` and admin-limited `POST /api/info/inflation-rates/refresh`.
 - [[alembic/versions/0001_initial_database_schema.py]] - Creates `belgian_inflation_rates` table and indexes via Alembic baseline migration.
-- [[apps/node-backend/src/main.js]] - Warms and schedules Belgian inflation cache refresh during backend startup lifecycle.
+- [[apps/node-backend/src/main.ts]] - Warms and schedules Belgian inflation cache refresh during backend startup lifecycle.

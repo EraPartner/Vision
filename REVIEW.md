@@ -30,7 +30,7 @@ behind each item is in `AGENTS.md` (Conventions, Verification, Security) and `do
 ## Tests & validation
 
 - [ ] `bun run lint` and `bun run lint:backend` — ESLint clean (frontend + backend).
-- [ ] `bun run typecheck` (frontend strict) and `cd apps/node-backend && bunx tsc -p tsconfig.check.json`.
+- [ ] `bun run typecheck` (frontend strict) and `cd apps/node-backend && bunx tsc -p tsconfig.json`.
 - [ ] `bun run test` (backend vitest) and `bun run test:frontend` — scale depth to risk per AGENTS.md.
 - [ ] `bun run validate-locales` and `bun run check-endpoint-matrix` pass.
 - [ ] High-risk (security / migration / destructive) also: `bun run build`. One-shot: `bun run check`.

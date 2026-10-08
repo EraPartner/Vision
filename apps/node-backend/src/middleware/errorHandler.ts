@@ -8,7 +8,7 @@
  *   { ok: false, error: { code, message, details? }, meta? }
  *
  * Untyped errors fall through to a 500 with the production-safe message used by
- * the previous inline handler in main.js. Production mode hides raw messages.
+ * the previous inline handler in main.ts. Production mode hides raw messages.
  *
  * One exception: an untyped error that carries its own 4xx status (body-parser's
  * http-errors, raised before any route runs) keeps that status. See THE RULE
@@ -128,7 +128,7 @@ export class UpstreamError extends AppError {
 /* ── Non-AppError errors that carry their own HTTP status ─────────────────
  *
  * Some errors reaching this handler are not ours and never will be: body-parser
- * (mounted by `express.json()` in main.js:130) rejects a request BEFORE any
+ * (mounted by `express.json()` in main.ts:123) rejects a request BEFORE any
  * route runs and raises an `http-errors` instance carrying the correct status —
  * 400 for truncated JSON, 413 for a body over the 1 MB cap. Collapsing those to
  * 500 reports a client typo as a server fault, and in production the 5xx

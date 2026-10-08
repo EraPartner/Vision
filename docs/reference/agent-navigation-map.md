@@ -245,7 +245,7 @@ aliases: [agent navigation, codebase map, file map, navigation guide]
 
 | File                              | Purpose                                               |
 | --------------------------------- | ----------------------------------------------------- |
-| [[apps/node-backend/src/main.js]] | Express server setup, middleware, routes, CSP headers |
+| [[apps/node-backend/src/main.ts]] | Express server setup, middleware, routes, CSP headers |
 
 ### Backend Routes (14 files)
 
@@ -312,7 +312,7 @@ Full reference: [[docs/reference/service-layer|Service Layer Reference]]
 | File                                             | Purpose                                    |
 | ------------------------------------------------ | ------------------------------------------ |
 | [[apps/node-backend/src/database/connection.ts]] | Database connection setup                  |
-| [[apps/node-backend/src/main.js]]                | DB readiness retry loop + server startup   |
+| [[apps/node-backend/src/main.ts]]                | DB readiness retry loop + server startup   |
 | [[apps/node-backend/src/database/migrate.ts]]    | Alembic migrations (schema initialization) |
 
 ### Migrations
@@ -333,7 +333,7 @@ Directory: `alembic/versions/` — active revisions; read each file's
 1. Read [[docs/guides/how-to-add-api-endpoint|How to Add an API Endpoint]]
 2. Add route file in `apps/node-backend/src/routes/`
 3. Add repository method in `apps/node-backend/src/repositories/`
-4. Register route in [[apps/node-backend/src/main.js]]
+4. Register route in [[apps/node-backend/src/main.ts]]
 5. Add API client method in [[apps/frontend/src/lib/api.ts]]
 6. Create/update API doc in `docs/api/`
 

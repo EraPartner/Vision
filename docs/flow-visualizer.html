@@ -2408,7 +2408,7 @@
                 "from": "db.alembic",
                 "to": "db.postgres",
                 "payload": "after successful migrations: validate executor and grant six approved views",
-                "annotation": "apps/node-backend/src/main.js calls database/analysisRoleBootstrap.ts after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
+                "annotation": "apps/node-backend/src/main.ts calls database/analysisRoleBootstrap.ts after runMigrations(); a restricted owner validates the preprovisioned role and resets relation grants without ALTER ROLE.",
                 "title": "Grant approved views after migration"
               },
               {
@@ -3391,7 +3391,7 @@
                 "title": "Show data or access guidance",
                 "note": "No onboarding redirect. Tokenless non-loopback startup needs explicit acknowledgement of external access controls.",
                 "payload": "data or UNAUTHORIZED",
-                "annotation": "apps/frontend/src/components/shared/AdminErrorState.tsx; apps/node-backend/src/main.js"
+                "annotation": "apps/frontend/src/components/shared/AdminErrorState.tsx; apps/node-backend/src/main.ts"
               }
             ],
             "takeaway": "There is no global startup sign-in. UI visibility is a preference; server authorization depends on the configured token and deployment controls.",
@@ -4906,7 +4906,7 @@
                 "title": "Check the API boundary",
                 "note": "Host, cross-origin, rate and mutation-origin checks apply before routes. Admin requests also use token authentication.",
                 "payload": "HTTP request and X-Request-Id",
-                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/middleware/csrfGuard.ts"
+                "annotation": "apps/node-backend/src/main.ts; apps/node-backend/src/middleware/csrfGuard.ts"
               },
               {
                 "from": "be.middleware",
@@ -5112,7 +5112,7 @@
                 "title": "Run guarded migrations",
                 "note": "Use the reviewed migration path before normal requests.",
                 "payload": "runMigrations",
-                "annotation": "apps/node-backend/src/main.js; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120–0125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
+                "annotation": "apps/node-backend/src/main.ts; apps/node-backend/src/database/migrate.ts recognizes exact reviewed 0120–0125 current revisions and pins their automatic additive target to 0125. Existing financial values, legacy objects and old receipt JSON remain unchanged. Older 0118/0119 bridge maintenance remains deferred; unknown successor revisions refuse automatic upgrade. Fresh baseline installs follow the normal chain, and warm boot at 0125 does not request 0118. Migration 0125 extends brokerage origin and typed staging cash receipt protection without creating cash history."
               },
               {
                 "from": "db.alembic",
@@ -5120,7 +5120,7 @@
                 "title": "Finish database initialization",
                 "note": "Ensure the analysis role and application grants after migrations.",
                 "payload": "ensureAnalysisRole",
-                "annotation": "apps/node-backend/src/main.js"
+                "annotation": "apps/node-backend/src/main.ts"
               },
               {
                 "from": "build.electron",

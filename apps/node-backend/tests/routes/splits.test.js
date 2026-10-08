@@ -2,7 +2,7 @@
  * Split route tests.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). Mount is /api/splits (main.js:332, no
+ * tests/helpers/routeApp.js). Mount is /api/splits (main.ts:296, no
  * per-mount `before` middleware). validateIdParam
  * (routes/splits.js:168,178,193,247,263,271,285,299) now runs for real on
  * every id-bearing route — every test here already used a valid numeric id,

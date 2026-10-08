@@ -288,7 +288,7 @@ describe('forwarded 4xx from non-AppError errors', () => {
 
 /**
  * Same rule end-to-end over real Express + real body-parser (the harness that
- * main.js's data plane is modelled on), so the behaviour is proven against the
+ * main.ts's data plane is modelled on), so the behaviour is proven against the
  * actual http-errors objects rather than hand-built look-alikes.
  */
 describe('forwarded 4xx over real Express (supertest)', () => {

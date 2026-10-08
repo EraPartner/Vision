@@ -58,7 +58,7 @@ test("treats a production namespace import as a runtime surface", () => {
   write(root, "src/helper.js", "export function seam() {}\n");
   write(
     root,
-    "src/main.js",
+    "src/main.ts",
     "import * as helper from './helper.js';\nexport default helper;\n",
   );
   write(

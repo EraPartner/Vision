@@ -2,8 +2,8 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     architecture,
@@ -111,7 +111,7 @@ related_code:
     "apps/frontend/src/lib/accentColor.ts",
     "apps/frontend/src/hooks/useUpdateStatus.ts",
     "apps/frontend/src/features/settings/sections/AboutSection.tsx",
-    "apps/node-backend/src/main.js",
+    "apps/node-backend/src/main.ts",
     "alembic/versions/0001_initial_database_schema.py",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
@@ -290,7 +290,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 ### Backend Startup
 
-6. **Backend startup** (`apps/node-backend/src/main.js`, native Bun):
+6. **Backend startup** (`apps/node-backend/src/main.ts`, native Bun):
    - **Database connection** — `checkConnection()` polls with exponential backoff (40 attempts, 50ms→1s)
    - **Alembic migrations** — JS runner checks DB version + migrations fingerprint; skips if at
      head. The version-table preflight uses the owner connection in split-role mode, while the

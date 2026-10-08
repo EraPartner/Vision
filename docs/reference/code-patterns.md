@@ -1376,7 +1376,7 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ## Express App Setup
 
-**Source:** [[apps/node-backend/src/main.js|main.js]], [[apps/node-backend/src/middleware/cors.ts|cors.js]], [[apps/node-backend/src/middleware/compression.ts|compression.js]]
+**Source:** [[apps/node-backend/src/main.ts|main.ts]], [[apps/node-backend/src/middleware/cors.ts|cors.js]], [[apps/node-backend/src/middleware/compression.ts|compression.js]]
 
 ### Middleware Stack (in order)
 

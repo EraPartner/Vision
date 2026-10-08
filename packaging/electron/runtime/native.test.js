@@ -1303,7 +1303,7 @@ test("native first start persists and unreferences an argument-array backend chi
     assert.equal(result.status, "started");
     assert.equal(unreferenced, true);
     assert.equal(spawned.bin, "/bin/echo");
-    assert.deepEqual(spawned.args, ["run", "apps/node-backend/src/main.js"]);
+    assert.deepEqual(spawned.args, ["run", "apps/node-backend/src/main.ts"]);
     assert.equal(spawned.options.env.SERVER_HOST, "127.0.0.1");
     assert.equal((await runtime.readState()).activeRuntime, "native");
   } finally {

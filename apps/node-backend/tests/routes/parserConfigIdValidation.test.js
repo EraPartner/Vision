@@ -38,7 +38,7 @@ vi.mock('../../src/repositories/customParserConfigRepository.ts', () => ({
 import customParserConfigRepository from '../../src/repositories/customParserConfigRepository.ts';
 const { registerParserRoutes } = await import('../../src/routes/parserConfigRoutes.ts');
 
-// Mirrors main.js's two mounts and each router's registerParserRoutes call.
+// Mirrors main.ts's two mounts and each router's registerParserRoutes call.
 const MOUNTS = [
   { label: 'transaction', mountPath: '/api/import', kind: 'transaction' },
   { label: 'portfolio', mountPath: '/api/portfolio/import', kind: 'portfolio' },

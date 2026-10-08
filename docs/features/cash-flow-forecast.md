@@ -735,10 +735,10 @@ Modular forecast orchestrator with 7 pluggable methods:
 
 **New Job:** `refreshCashflowForecastMc` (`apps/node-backend/src/jobs/refreshCashflowForecastMc.ts`)
 
-- Runs nightly (every 24 hours, scheduled in main.js via `setInterval`)
+- Runs nightly (every 24 hours, scheduled in main.ts via `setInterval`)
 - Calls `computeCashflowForecast()` for each active user with `includeBacktest: true, _forceCache: true`
 - Writes successful computations to cache table; logs per-user success/failure
-- Export: `refreshCashflowForecastMc()` (callable from main.js or tests)
+- Export: `refreshCashflowForecastMc()` (callable from main.ts or tests)
 
 **Cache-Aware Forecast Orchestrator:** Updated `apps/node-backend/src/services/calculations/forecast/index.ts`
 

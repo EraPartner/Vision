@@ -117,7 +117,7 @@ fi
 
 (
   cd "$repo_root/apps/node-backend"
-  exec bun run src/main.js
+  exec bun run src/main.ts
 ) >"$backend_log" 2>&1 &
 backend_pid=$!
 ready=0

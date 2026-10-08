@@ -52,9 +52,8 @@
  * argument of `withTransaction()`, and the `{ query }` stand-in `writeAudit`
  * falls back to.
  *
- * Deliberately structural rather than `import('pg').PoolClient`: the legacy
- * checkJs program resolves `pg` to the ambient `any` shim in
- * thirdPartyModules.d.ts, so JavaScript callers cannot use `@types/pg` yet.
+ * Structural rather than `import('pg').PoolClient`: written when a legacy
+ * checkJs program still saw `pg` as `any` (ADR-191).
  */
 export type QueryRunner = {
   query: (

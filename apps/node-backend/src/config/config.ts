@@ -74,7 +74,7 @@ const settings = deepFreeze({
     version: "1.0.0",
     description: "Import and manage financial transactions from various banks",
     // Always string[]: env.CORS_ORIGINS is parsed by csvEnv. The union type
-    // this used to carry existed only to satisfy main.js's unreachable
+    // this used to carry existed only to satisfy main.ts's unreachable
     // `corsOrigins === '*'` wildcard branch, which has since been deleted.
     corsOrigins: env.CORS_ORIGINS,
   },

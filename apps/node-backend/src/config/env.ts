@@ -188,7 +188,7 @@ const envSchema = z
     LOG_LEVEL: optionalStringEnv, // config/logger.ts
     ENABLE_LOGGING: optionalStringEnv, // config/logger.ts
     PUPPETEER_EXECUTABLE_PATH: optionalStringEnv, // services/reports/puppeteerRenderer.js
-    VISION_BOOT_TRACE: optionalStringEnv, // main.js (disabled when '0')
+    VISION_BOOT_TRACE: optionalStringEnv, // main.ts (disabled when '0')
     VISION_MIGRATE_TIMEOUT_MS: optionalStringEnv, // database/migrate.ts
     ALEMBIC_BIN: optionalStringEnv, // database/migrate.ts
     ALEMBIC_CONFIG: optionalStringEnv, // database/migrate.ts

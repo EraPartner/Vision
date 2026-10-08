@@ -1,7 +1,7 @@
 /**
  * Startup warmup tasks.
  *
- * Extracted from main.js so the boot path stays focused on Express wiring.
+ * Extracted from main.ts so the boot path stays focused on Express wiring.
  * Runs after the HTTP server is listening; builds the materialized views and
  * populates exchange-rate / inflation / portfolio-snapshot / info caches, then
  * schedules recurring refreshes.
@@ -52,9 +52,9 @@ import type { ResolvedPrice } from "../services/priceProviderService.ts";
 /**
  * Each value is tri-state: 'pending' | 'ready' | 'failed' (see module doc
  * comment above). Typed as a plain string index signature, not named
- * literal-union properties, to match what main.js actually constructs and
+ * literal-union properties, to match what main.ts actually constructs and
  * passes in by reference: `Object.fromEntries(WARMUP_KEYS.map((k) => [k,
- * 'pending']))`, which TS infers as `{ [k: string]: string }` (main.js is
+ * 'pending']))`, which TS infers as `{ [k: string]: string }` (main.ts is
  * outside this ratchet slice, so that construction site isn't itself typed
  * more precisely).
  */

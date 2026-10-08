@@ -158,7 +158,7 @@ describe("destination Host boundary", () => {
   );
   it("mounts the guard before CORS, body parsing, health and routes", () => {
     const source = readFileSync(
-      new URL("../src/main.js", import.meta.url),
+      new URL("../src/main.ts", import.meta.url),
       "utf8",
     );
     const mount = source.indexOf("createHostGuard({");

@@ -828,7 +828,7 @@ See [[docs/features/net-worth|Net Worth Feature]] for details on the new snapsho
 
 - **Independent debounce windows:** forecast cache invalidation uses a 1-second timer; materialized views use the service's 5-second trailing delay and 10-second maximum wait
 - **Deferred refresh timing:** both timers are `.unref()`-ed so background scheduling does not hold the process open
-- **Graceful shutdown** — `main.js` calls `cancelPendingAggregationRefresh()` during shutdown to clear pending timers before exit
+- **Graceful shutdown** — `main.ts` calls `cancelPendingAggregationRefresh()` during shutdown to clear pending timers before exit
 - **No blocking:** All timers are `.unref()`-ed, so SIGTERM exits cleanly even with pending aggregation work
 
 ### Dependencies

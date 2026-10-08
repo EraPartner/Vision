@@ -1,7 +1,7 @@
 ---
 title: Backend Configuration & Infrastructure
 type: guide
-date: 2026-10-07
+date: 2026-10-08
 tags:
   [guide, backend, configuration, logging, database, infrastructure, phase-1]
 status: active
@@ -10,7 +10,7 @@ related_code:
   [
     "apps/node-backend/src/config/config.ts",
     "apps/node-backend/src/config/logger.ts",
-    "apps/node-backend/src/main.js",
+    "apps/node-backend/src/main.ts",
     "apps/node-backend/src/database/migrate.ts",
   ]
 ---
@@ -147,7 +147,7 @@ Several services have been optimized to use `debug` level for high-frequency or 
 
 ## Database Startup Behavior
 
-**Files:** [[apps/node-backend/src/main.js]], [[apps/node-backend/src/database/migrate.ts]]
+**Files:** [[apps/node-backend/src/main.ts]], [[apps/node-backend/src/database/migrate.ts]]
 
 The backend process connects to `DATABASE_URL` and waits for readiness. Native Electron manages its
 private PostgreSQL process and supplies that URL. In a custom source deployment the database

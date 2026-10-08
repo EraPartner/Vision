@@ -85,7 +85,7 @@ describe("Main Application", () => {
   // ── Route Registration ─────────────────────────────────────
   describe("Route Registration", () => {
     it("should register all expected route prefixes", () => {
-      // These are the route prefixes from main.js
+      // These are the route prefixes from main.ts
       const expectedPrefixes = [
         "/api/transactions",
         "/api/categories",
@@ -107,7 +107,7 @@ describe("Main Application", () => {
   // ── Error Handling ─────────────────────────────────────────
   describe("Error Handling", () => {
     it("should return 500 JSON for unhandled errors", () => {
-      // Simulate the global error handler logic from main.js
+      // Simulate the global error handler logic from main.ts
       const err = new Error("Test error");
       const detail = settings.isProduction()
         ? "An internal server error occurred. Please try again later."

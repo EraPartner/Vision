@@ -275,7 +275,7 @@ describe("materializedViewService", () => {
     ).not.toHaveLength(0);
   });
 
-  // The boot-wide ANALYZE in main.js runs pre-listen, so it no longer covers
+  // The boot-wide ANALYZE in main.ts runs pre-listen, so it no longer covers
   // views created afterwards — and a matview is never auto-analyzed.
   it("analyzes each view after creating it", async () => {
     const { createMaterializedViews, query } =

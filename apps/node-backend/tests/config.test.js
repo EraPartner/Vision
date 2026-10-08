@@ -147,7 +147,7 @@ describe('Configuration Management', () => {
   });
 
   describe('CORS origins are always a list, never a wildcard', () => {
-    // main.js used to carry a `corsOrigins === '*'` wildcard-dev-bypass branch
+    // main.ts used to carry a `corsOrigins === '*'` wildcard-dev-bypass branch
     // that reflected `Access-Control-Allow-Origin: *`. csvEnv can never produce
     // the bare string '*', so the branch was unreachable and was deleted rather
     // than made reachable. These pin the parse so it cannot come back by

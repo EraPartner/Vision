@@ -10,34 +10,34 @@
  * error handler.
  *
  * This module mounts the REAL router on a throwaway `express()` app wired the
- * way `src/main.js` wires the data plane, and hands back a supertest agent.
+ * way `src/main.ts` wires the data plane, and hands back a supertest agent.
  * Repositories/services are still mocked per suite — only the HTTP edge is real.
  *
  * ── Fidelity map (what is reproduced, and from where) ──────────────────────
- *   requestId                 main.js:82   `req.id` → envelope `meta.requestId`
+ *   requestId                 main.ts:104  `req.id` → envelope `meta.requestId`
  *                                          + the `X-Request-Id` response header
- *   requestMetrics            main.js:85   passive `res.on('finish')` recorder
- *   express.json({limit})     main.js:130  body parsing (1 MB limit, as prod)
- *   csrfGuard                 main.js:315  mounted on the whole `/api` plane
- *   mountRouter(app, path, …) main.js:317+ real router, real middleware chain,
+ *   requestMetrics            main.ts:115  passive `res.on('finish')` recorder
+ *   express.json({limit})     main.ts:123  body parsing (1 MB limit, as prod)
+ *   csrfGuard                 main.ts:252  mounted on the whole `/api` plane
+ *   mountRouter(app, path, …) main.ts:254+ real router, real middleware chain,
  *                                          real `req.baseUrl` / `req.route`
- *   404 → NotFoundError       main.js:395  unmatched paths funnel through the
+ *   404 → NotFoundError       main.ts:389  unmatched paths funnel through the
  *                                          error handler so the envelope is
  *                                          uniform
- *   createErrorHandler(...)   main.js:401  typed errors → `{ ok:false, error }`
+ *   createErrorHandler(...)   main.ts:395  typed errors → `{ ok:false, error }`
  *
  * ── Deliberately NOT reproduced (and why) ─────────────────────────────────
- *   CORS reflection           main.js:92-127   response headers only; needs the
+ *   CORS reflection           main.ts:117      response headers only; needs the
  *                                              real settings allowlist.
- *   security headers          main.js:133-144  response headers only.
- *   gzip response compression main.js:150-223  wraps `res.write`/`res.end`;
+ *   security headers          main.ts:125-146  response headers only.
+ *   gzip response compression main.ts:148      wraps `res.write`/`res.end`;
  *                                              would obscure streamed-body and
  *                                              Content-Length assertions.
  *                                              Pass it via `before` if a suite
  *                                              needs it.
- *   request logging           main.js:226-229  noise.
+ *   request logging           main.ts:150-156  noise.
  *   globalRateLimiter and the per-mount limiters
- *                             main.js:307, 323-335
+ *                             main.ts:244, 261-338
  *                                              module-level counters keyed by
  *                                              IP, shared by every request in a
  *                                              worker — a suite with more tests
@@ -51,7 +51,7 @@
  *                                              `before` when that is the thing
  *                                              under test.
  *   static SPA / health / /api root
- *                             main.js:244-390  not reachable from a router.
+ *                             main.ts:161-237, 344-384  not reachable from a router.
  *
  * Usage:
  *   import { routeAgent } from '../helpers/routeApp.js';
@@ -77,23 +77,23 @@ import { createErrorHandler, NotFoundError } from '../../src/middleware/errorHan
  *   production path (`/api/transactions`, `/api/planned-transactions`, …) so
  *   `req.baseUrl` and the request paths in the test read like real traffic.
  * @property {import('express').RequestHandler[]} [before=[]]  Extra middleware
- *   mounted on `mountPath` BEFORE the router — the slot `main.js` uses for
- *   per-mount rate limiters and the admin auth guard (main.js:323-335).
+ *   mounted on `mountPath` BEFORE the router — the slot `main.ts` uses for
+ *   per-mount rate limiters and the admin auth guard (main.ts:261-338).
  * @property {import('express').RequestHandler[]} [after=[]]   Extra middleware
  *   mounted after the router but before the 404 handler.
- * @property {boolean} [csrf=true]      Mount the CSRF guard (main.js:315).
+ * @property {boolean} [csrf=true]      Mount the CSRF guard (main.ts:252).
  *   supertest sends neither `Origin` nor `Sec-Fetch-Site`, so it is treated as
  *   a non-browser client and passes; set false only to prove the guard's effect.
  * @property {string|string[]} [corsOrigins=[]]  Allowlist handed to the CSRF
- *   guard (main.js:35 passes `settings.api.corsOrigins`).
- * @property {string} [jsonLimit='1mb'] Body-size limit (main.js:130).
+ *   guard (main.ts:49 passes `settings.api.corsOrigins`).
+ * @property {string} [jsonLimit='1mb'] Body-size limit (main.ts:123).
  * @property {() => boolean} [isProduction]  Predicate handed to the error
- *   handler (main.js:401). Defaults to false so 5xx messages stay visible,
+ *   handler (main.ts:395). Defaults to false so 5xx messages stay visible,
  *   matching a dev/test run.
  */
 
 /**
- * Build a throwaway Express app with `router` mounted the way main.js mounts
+ * Build a throwaway Express app with `router` mounted the way main.ts mounts
  * the data plane.
  *
  * @param {import('express').Router} router
@@ -113,26 +113,26 @@ export function createRouteApp(router, options = {}) {
 
   const app = express();
 
-  // main.js:82 — must run first so every later middleware and the envelope see req.id.
+  // main.ts:104 — must run first so every later middleware and the envelope see req.id.
   app.use(requestId);
-  // main.js:85
+  // main.ts:115
   app.use(requestMetrics);
-  // main.js:130
+  // main.ts:123
   app.use(express.json({ limit: jsonLimit }));
-  // main.js:315 — CSRF backstop across the whole /api data plane.
+  // main.ts:252 — CSRF backstop across the whole /api data plane.
   if (csrf) app.use(createCsrfGuard(() => corsOrigins));
-  // main.js:232 — attaches res.ok(data, meta?) before any router runs.
+  // main.ts:159 — attaches res.ok(data, meta?) before any router runs.
   app.use(wrapResponse);
 
-  // main.js:317+ — mountRouter(app, path, ...perMountMiddleware, router)
+  // main.ts:254+ — mountRouter(app, path, ...perMountMiddleware, router)
   app.use(mountPath, ...before, router);
   for (const mw of after) app.use(mountPath, mw);
 
-  // main.js:395 — unmatched paths funnel through the error handler.
+  // main.ts:389 — unmatched paths funnel through the error handler.
   app.use((req, _res, next) => {
     next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
   });
-  // main.js:401
+  // main.ts:395
   app.use(createErrorHandler(isProduction));
 
   return app;

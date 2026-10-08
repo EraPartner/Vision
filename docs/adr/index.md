@@ -249,6 +249,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-08: Backend source is fully strict TypeScript
+
+[[docs/adr/191-retire-backend-checkjs|ADR-191]] converts the backend entry point to `main.ts` and
+retires the checkJs program, its `noImplicitAny` ratchet and the ambient module shims, leaving the
+strict `tsconfig.json` as the only backend type check.
+
 ### 2026-10-08: The sweep's primitive wishes become shared primitives
 
 [[docs/adr/190-primitives-follow-up|ADR-190]] extends ListRow, Button, menu items,

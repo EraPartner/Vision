@@ -16,7 +16,7 @@
  * parsing that raw string instead of inspecting `res.write.mock.calls`.
  *
  * Per the routeApp.js fidelity map, the app-level `/api/ai/chat` rate limiter
- * (main.js:342-348, only mounted when `settings.aiChat.enabled`) is a
+ * (main.ts:325-338, only mounted when `settings.aiChat.enabled`) is a
  * module-scoped per-IP counter and is deliberately NOT reproduced here — it
  * would 429 this suite's own many `/chat` requests. It is a real gap this
  * suite cannot see; not exercised in either the old or new harness.

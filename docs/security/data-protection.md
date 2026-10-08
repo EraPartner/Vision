@@ -7,7 +7,7 @@ updated: 2026-10-08
 tags: [security, csp, cors, data-protection, privacy, content-security-policy, xss, dangerouslySetInnerHTML, path-traversal, rfc-5987, backup-encryption, passphrase, phase-7, phase-c, pre-restore-confirmation, concurrent-backup-guard, watchdog-pause, bug-hunt-2026-05-05, bug-hunt-2026-05-06, electron-hardening, window-open-handler, will-navigate, checksum-verification, backup-directory-restrictions, csv-filename-sanitization, safe-storage, keychain, lazy-safeStorage, csrf-guard, sec-fetch-site, admin-auth, token-or-open, zip-bomb, response-cap, content-length]
 description: Content Security Policy, CORS, data protection, path traversal prevention, backup security, and privacy considerations for Vision. Phase 7 adds pre-restore confirmation dialog and concurrent-backup guard. May 2026 bug hunt hardens Electron with setWindowOpenHandler denial, will-navigate whitelist, mandatory installer checksum verification, and backup directory restrictions. safeStorage is now accessed lazily to avoid macOS Keychain prompts when no passphrase is configured. 2026-05-29: admin auth replaced with token-or-open + CSRF guard (ADR-063). June 2026: zip-bomb guard on restore, 5 MB Content-Length response cap on external fetches.
 aliases: [CSP, data protection, privacy, content security policy, security headers, XSS prevention, path traversal]
-related_code: ["apps/node-backend/src/main.js", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/database/analysisRoleBootstrap.ts", "apps/node-backend/src/middleware/adminAuth.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
+related_code: ["apps/node-backend/src/main.ts", "apps/frontend/src/lib/api.ts", "apps/node-backend/src/services/attachmentService.ts", "apps/node-backend/src/services/analysisExecutor.ts", "apps/node-backend/src/database/analysisRoleBootstrap.ts", "apps/node-backend/src/middleware/adminAuth.ts", "apps/node-backend/src/middleware/csrfGuard.ts"]
 ---
 
 # Security: Data Protection & CSP
@@ -22,7 +22,7 @@ Vision is a desktop-first financial application handling sensitive financial dat
 
 ### Backend Configuration (Main App)
 
-The Express server sets CSP headers in `main.js`:
+The Express server sets CSP headers in `main.ts`:
 
 ```javascript
 app.use((req, res, next) => {
@@ -489,7 +489,7 @@ Blocks cross-site state-changing browser requests across `/api`. Strategy (zero-
 
 CORS alone does not stop cross-site requests from executing — it only hides the response. The CSRF guard prevents the request body from reaching the route handler.
 
-Mount order in `main.js`:
+Mount order in `main.ts`:
 
 ```
 mountRouter(app, '/api/admin', adminRateLimiter, adminCsrfGuard, adminAuthMiddleware, adminRouter);

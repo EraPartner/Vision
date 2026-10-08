@@ -10,7 +10,7 @@
  * silently dropped/bypassed by the old mock-router harness.
  *
  * Mount path is /api/import, behind importRateLimiter at the app level
- * (main.js:325) — a module-scoped per-IP counter deliberately NOT reproduced
+ * (main.ts:284) — a module-scoped per-IP counter deliberately NOT reproduced
  * here per the routeApp.js fidelity map (it would 429 this suite's own many
  * requests).
  *
@@ -144,7 +144,7 @@ const { default: importRouter } =
 
 const BASE = "/api/import";
 const api = routeAgent(importRouter, { mountPath: BASE });
-// Same router behind an error handler in production mode (main.js:401 passes
+// Same router behind an error handler in production mode (main.ts:395 passes
 // `settings.isProduction`) — used only for the one test below that pins the
 // message-sanitization branch (errorHandler.js:234-235); the harness defaults
 // isProduction to false so unsanitized 5xx messages stay visible elsewhere,

@@ -1,5 +1,5 @@
 {
-  "//": "Strict check for backend TypeScript sources. JavaScript files that are not converted yet are type-checked by tsconfig.check.json (checkJs) and its noImplicitAny ratchet; here they are only imported (checkJs off), so diagnostics come from .ts files.",
+  "//": "Strict check for all backend source (src/**/*.ts). Backend tests are still JavaScript and are not type-checked until they convert (ADR-191).",
   "compilerOptions": {
     "target": "es2022",
     "lib": [
@@ -26,8 +26,5 @@
   },
   "include": [
     "src/**/*.ts"
-  ],
-  "exclude": [
-    "src/types/thirdPartyModules.d.ts"
   ]
 }
