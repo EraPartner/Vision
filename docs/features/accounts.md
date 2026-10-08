@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -104,19 +104,16 @@ Lazy-loaded like every page (`routePreload.ts` → `App.tsx`). Content:
 
 ### Running balance semantics
 
-The ledger queries `GET /api/transactions?account_id=<id>&include_balance=true&sort_by=date&sort_dir=desc`. `include_balance=true` makes the repository add
-
-```sql
-SUM(t.amount) OVER (
-  PARTITION BY t.account_id, COALESCE(t.currency, 'EUR')
-  ORDER BY t.date ASC, t.id ASC
-) AS running_balance
-```
+The ledger queries `GET /api/transactions?account_id=<id>&include_balance=true&sort_by=date&sort_dir=desc`.
+`include_balance=true` starts with cumulative amounts and carries the latest preceding statement
+stamp's offset: `running_balance = cumulative + (stamped balance - cumulative at that stamp)`.
+A zero-amount opening balance therefore resets the ledger to its recorded balance; subsequent
+unstamped entries advance it. With no preceding stamp, the balance is the cumulative amount.
 
 - The window is **partitioned by account and currency**. Unlike currencies are never added. A NULL legacy currency belongs to the EUR partition. It is **always ordered chronologically**, independent of display sort — each row's `running_balance` is the balance _after_ that transaction.
 - It is evaluated over the full filtered set **before** LIMIT/OFFSET, so values stay correct across pages.
-- Because the window only sees WHERE-filtered rows, the route never applies a server-side date filter to the ledger — a `start_date` would restate history from zero. The `?since=` narrowing (below) is client-side for exactly this reason.
-- The wire field is `running_balance` (present only under `include_balance=true`); it is distinct from the row's stored `balance` column, which is import-pipeline-only (see [[docs/features/transactions|Transactions]]).
+- Because the window only sees WHERE-filtered rows, the route never applies a server-side date filter to the ledger. Excluding preceding stamps or entries would change its opening context. The `?since=` narrowing (below) is client-side for exactly this reason.
+- The wire field is `running_balance` (present only under `include_balance=true`); it is distinct from the row's stored `balance` statement stamp, which supplies the reset (see [[docs/features/transactions|Transactions]]).
 - The header sparkline uses only rows in the account's declared currency because one line cannot compare distinct currency balances. The ledger still exposes every row with its own currency and balance.
 
 The full-prefix window and OFFSET pagination are retained deliberately. A

@@ -19,6 +19,7 @@ import { todayYmd } from "@/lib/timezone";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useExchangeRates } from "@/hooks/useExchangeRates";
 import { toNumber, multiply, addAll } from "@vision/shared-utils/money";
+import { hasForeignCurrencyAmounts } from "./localPortfolioCurrency";
 
 interface BuildSummaryOpts {
     costBasisMethod: CostBasisMethod;
@@ -180,6 +181,15 @@ export function usePortfolioSummaries({
                     },
                 ];
             }
+            // A booking currency can differ from the investment's quote currency.
+            // Wait for the dated canonical projection rather than price that basis
+            // or its fees using the local current-rate cache. Archived holdings
+            // never receive a canonical summary, so they always stay local.
+            if (
+                inv.is_active &&
+                hasForeignCurrencyAmounts(txns, inv.currency || "EUR")
+            )
+                return [];
             const local = buildSummary(inv, txns, {
                 costBasisMethod,
                 targetCurrency,

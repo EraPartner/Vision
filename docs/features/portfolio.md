@@ -45,7 +45,7 @@ Layout, top to bottom:
   `totalReturnPct`; for a bounded period it is
   `(value_end − value_start) − (invested_end − invested_start)` over the first snapshot value plus
   net contributions.
-- **Return figures**: Total return (all-time), Per year (annualized since the first transaction
+- **Return figures**: Investment return (all-time), Per year (annualized since the first transaction
   date), After inflation (`—` plus "Inflation data missing" when no inflation data) and Realized
   (`—` plus "No sales yet" when nothing was sold). Each has an ⓘ disclosure.
 - **Holdings**: list rows with an asset-class glyph, name, "class · symbol", trailing value and
@@ -57,6 +57,13 @@ Layout, top to bottom:
 - **Widgets** (hideable via Customize…, page key `portfolio`): ticker, Gains, income and costs,
   exposure, value by class chart with the FX-neutral toggle, value by broker, relative performance,
   monthly returns and top performers, market news, and archived investments (with restore).
+
+The Gains, income and costs breakdown shows proved imported broker account fees separately
+from security fees, plus `gainAfterFees` from [[docs/api/portfolio-summary]]. Investment returns,
+per-holding cost basis, realized/unrealized gains and charts retain their security scope. Account
+fees convert at their transaction dates, count once and are not allocated to stocks. A missing
+historical fee rate uses a disclosed current-rate fallback. Older summary responses omit these
+rows because their account cost subtotal is unavailable.
 
 When no snapshot history exists yet the hero chart slot shows "No performance history yet" with a
 Refresh prices action; when there are no investments at all the page shows the empty state with
@@ -1038,6 +1045,20 @@ Code links: [[apps/node-backend/src/services/importPipeline/brokerageRouting.ts]
 
 Multi-currency portfolios now expose a decomposition of total gain into **asset gain** (pure performance in the investment's native currency) and **FX gain** (currency movement). The identity `gainLoss = assetGain + fxGain` holds per investment and in totals.
 
+When a transaction was booked in a different currency from the investment's quote, the native
+calculation converts its principal, fees, taxes and income to the quote currency at the transaction
+date. Custody replay carries that normalized native basis. The target-currency calculation keeps
+the original booked amounts and their transaction-date rates. Daily on-or-before quote rates
+separate asset and currency effects; this attribution does not reconstruct a broker's intraday
+conversion price or isolate its conversion markup. Missing dated quote rates use the existing
+fallback disclosure below.
+
+Local frontend calculations have only current rates. For mixed booking currencies, the UI waits
+for the canonical server summary instead of estimating historical basis with those current rates.
+The investment detail headline uses `gainLoss` for both its amount and direction, matching the
+total-return percentage, including income and standalone deductions. Trading realized and
+unrealized gains remain separate in the breakdown.
+
 ### Where it appears in the UI
 
 | Surface                                       | What is shown                                                                                                                       |
@@ -1050,7 +1071,7 @@ Multi-currency portfolios now expose a decomposition of total gain into **asset 
 
 ### Fallback rate disclosure
 
-When a transaction lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
+When a transaction or quote currency lacked a transaction-date rate and the backend fell back to today's rate, the `usedFallbackRate` flag is `true` in the API response. The UI surfaces this as a small warning callout on the relevant card or row, indicating that the FX attribution figures may be approximate for that investment.
 
 > [!warning]
 > The FX-neutral chart toggle on the Portfolio page requires migration `0039_add_value_fx_neutral_to_snapshots` to be applied (`bun run db:upgrade`) and snapshots to be recomputed (happens automatically on next startup after migration). Until then, the toggle is hidden.

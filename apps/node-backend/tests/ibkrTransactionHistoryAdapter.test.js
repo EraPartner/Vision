@@ -77,6 +77,106 @@ describe("IBKR Transaction History portfolio adapter", () => {
     expect(cashRows.every((row) => row.note.length > 0)).toBe(true);
   });
 
+  it("imports only explicit forex charges as an instrument-less base-currency fee, retaining raw identity", async () => {
+    const chargedStatement = (csv) =>
+      `${csv}\nTransaction History,Data,2026-01-10,U0000000,Net Amount in Base from Forex Trade,Forex Trade Component,EUR.USD,300,1.2,USD,0,-1.73,-1.73,0.833333,-0.02,-,1\n`;
+    const rows = await parseModifiedFixture(chargedStatement);
+    expect(rows).toHaveLength(10);
+    expect(rows.skipped).toBe(2);
+    expect(rows.at(-1)).toMatchObject({
+      typeRaw: "Fee",
+      symbolRaw: "",
+      nameRaw: "",
+      units: null,
+      pricePerUnit: null,
+      amount: 1.75,
+      fees: null,
+      taxes: null,
+      currency: "EUR",
+      fxRateToEur: null,
+    });
+    expect(rows.at(-1).rawData).toContain("Forex Trade Component,EUR.USD,300");
+    const repeated = await parseModifiedFixture(chargedStatement);
+    expect(repeated.ibkrSourceContext.record_hashes).toEqual(
+      rows.ibkrSourceContext.record_hashes,
+    );
+  });
+
+  it.each(["invalid", "1.73"])(
+    "rejects an ambiguous forex commission %s instead of inventing an expense",
+    async (commission) => {
+      await expect(
+        parseModifiedFixture(
+          (csv) =>
+            `${csv}\nTransaction History,Data,2026-01-10,U0000000,Net Amount in Base from Forex Trade,Forex Trade Component,EUR.USD,300,1.2,USD,0,${commission},0,0.833333,-,-,1\n`,
+        ),
+      ).rejects.toThrow("unsupported Commission");
+    },
+  );
+
+  it.each([12.34, -12.34])(
+    "skips an FX Translations P&L valuation adjustment of %s without adding cash",
+    async (amount) => {
+      const baseline = await parseIbkrTransactionHistory(fixture);
+      const rows = await parseModifiedFixture(
+        (csv) =>
+          `${csv}\nTransaction History,Data,2026-01-10,U0000000,FX Translations P&L,Adjustment,-,-,-,-,${amount},-,${amount},1.0,-,-,1\n`,
+      );
+
+      expect(rows).toHaveLength(baseline.length);
+      expect(rows.skipped).toBe(baseline.skipped + 1);
+      expect(rows.map((row) => row.rawData)).toEqual(
+        baseline.map((row) => row.rawData),
+      );
+      expect(rows.ibkrSourceContext.record_hashes).toEqual(
+        baseline.ibkrSourceContext.record_hashes,
+      );
+      expect(rows.ibkrSourceContext.source_file_hash).not.toBe(
+        baseline.ibkrSourceContext.source_file_hash,
+      );
+    },
+  );
+
+  it.each([
+    ["Rounding adjustment", "Withdrawal", 0.01],
+    ["Positive adjustment", "Deposit", 0.02],
+  ])(
+    "keeps the genuine %s as base-currency cash",
+    async (description, typeRaw, amount) => {
+      const rows = await parseIbkrTransactionHistory(fixture);
+
+      expect(rows.find((row) => row.note === description)).toMatchObject({
+        typeRaw,
+        amount,
+        currency: "EUR",
+        symbolRaw: "",
+        nameRaw: "",
+      });
+    },
+  );
+
+  it.each([
+    ["Cash adjustment", "Adjustment"],
+    ["FX Translations P&L", "Deposit"],
+  ])(
+    "does not skip %s with transaction type %s",
+    async (description, originalType) => {
+      const rows = await parseModifiedFixture(
+        (csv) =>
+          `${csv}\nTransaction History,Data,2026-01-10,U0000000,${description},${originalType},-,-,-,-,1.23,-,1.23,1.0,-,-,1\n`,
+      );
+
+      expect(rows).toHaveLength(10);
+      expect(rows.skipped).toBe(2);
+      expect(rows.at(-1)).toMatchObject({
+        typeRaw: "Deposit",
+        amount: 1.23,
+        currency: "EUR",
+        note: description,
+      });
+    },
+  );
+
   it("rejects a CSV without the IBKR Transaction History section", async () => {
     await expect(
       parseIbkrTransactionHistory(

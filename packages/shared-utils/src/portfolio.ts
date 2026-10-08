@@ -45,6 +45,9 @@ export interface PortfolioTxnLike {
   type: string;
   date: string;
   fxMultiplier?: number | string;
+  /** Transaction currency → investment quote currency at the transaction date. */
+  nativeFxMultiplier?: number | string;
+  nativeCurrency?: string;
   units?: TxnNumeric;
   amount?: TxnNumeric;
   fees?: TxnNumeric;
@@ -278,13 +281,14 @@ export function calculateCostBasis(
     const taxes = toDecimal(txn.taxes || 0);
     const fx =
       txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
+    const nativeFx = toDecimal(txn.nativeFxMultiplier ?? 1);
 
     if (txn.type === "buy" || txn.type === "gift") {
       const buyCost = amount.plus(fees).plus(taxes);
       totalUnits = totalUnits.plus(units);
-      totalCost = totalCost.plus(buyCost);
+      totalCost = totalCost.plus(buyCost.times(nativeFx));
       totalCostConv = totalCostConv.plus(buyCost.times(fx));
-      totalBuyCost = totalBuyCost.plus(buyCost);
+      totalBuyCost = totalBuyCost.plus(buyCost.times(nativeFx));
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
     } else if (txn.type === "transfer_in") {
       totalUnits = totalUnits.plus(units);
@@ -310,14 +314,18 @@ export function calculateCostBasis(
           .times(sellUnits)
           .dividedBy(totalUnits);
         const netProceeds = amount.minus(fees).minus(taxes).times(sellRatio);
-        realizedGain = realizedGain.plus(netProceeds.minus(costOfSoldUnits));
+        realizedGain = realizedGain.plus(
+          netProceeds.times(nativeFx).minus(costOfSoldUnits),
+        );
         realizedGainConv = realizedGainConv.plus(
           netProceeds.times(fx).minus(costOfSoldConv),
         );
         totalUnits = totalUnits.minus(sellUnits);
         totalCost = totalCost.minus(costOfSoldUnits);
         totalCostConv = totalCostConv.minus(costOfSoldConv);
-        totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
+        totalSellProceeds = totalSellProceeds.plus(
+          amount.times(sellRatio).times(nativeFx),
+        );
         totalSellProceedsConv = totalSellProceedsConv.plus(
           amount.times(sellRatio).times(fx),
         );
@@ -326,7 +334,10 @@ export function calculateCostBasis(
       // units = new total post-split; cost basis is unchanged
       totalUnits = units;
     } else if (txn.type === "return_of_capital" && totalUnits.gt(0)) {
-      const reduced = Decimal.max(ZERO, totalCost.minus(amount));
+      const reduced = Decimal.max(
+        ZERO,
+        totalCost.minus(amount.times(nativeFx)),
+      );
       // Proportional reduction keeps the converted track at purchase-date FX.
       const factor = totalCost.gt(0) ? reduced.dividedBy(totalCost) : ZERO;
       totalCost = reduced;
@@ -400,19 +411,20 @@ function calculateCostBasisLotBased(
     const taxes = toDecimal(txn.taxes || 0);
     const fx =
       txn.fxMultiplier !== undefined ? toDecimal(txn.fxMultiplier) : defaultFx;
+    const nativeFx = toDecimal(txn.nativeFxMultiplier ?? 1);
 
     if (txn.type === "buy" || txn.type === "gift") {
       const buyCost = amount.plus(fees).plus(taxes);
       lots.push({
         units,
-        costBasis: buyCost,
+        costBasis: buyCost.times(nativeFx),
         costBasisConv: buyCost.times(fx),
         acquiredDate: txn.date,
         acquisitionId: txn.id ?? 0,
         acquisitionType: txn.type,
       });
       totalUnits = totalUnits.plus(units);
-      totalBuyCost = totalBuyCost.plus(buyCost);
+      totalBuyCost = totalBuyCost.plus(buyCost.times(nativeFx));
       totalBuyCostConv = totalBuyCostConv.plus(buyCost.times(fx));
     } else if (txn.type === "transfer_in") {
       lots = lots.slice(head);
@@ -496,11 +508,15 @@ function calculateCostBasisLotBased(
         realizedGainConv = realizedGainConv.minus(txn.assetFeeBasisConv || 0);
         continue;
       }
-      realizedGain = realizedGain.plus(netProceeds.minus(costOfSold));
+      realizedGain = realizedGain.plus(
+        netProceeds.times(nativeFx).minus(costOfSold),
+      );
       realizedGainConv = realizedGainConv.plus(
         netProceeds.times(fx).minus(costOfSoldConv),
       );
-      totalSellProceeds = totalSellProceeds.plus(amount.times(sellRatio));
+      totalSellProceeds = totalSellProceeds.plus(
+        amount.times(sellRatio).times(nativeFx),
+      );
       totalSellProceedsConv = totalSellProceedsConv.plus(
         amount.times(sellRatio).times(fx),
       );
@@ -516,7 +532,7 @@ function calculateCostBasisLotBased(
         lots.slice(head),
         txn.type,
         units,
-        amount,
+        amount.times(nativeFx),
         totalUnits,
       );
       totalUnits = result.totalUnits;
@@ -716,15 +732,19 @@ export function buildInvestmentSummaryCore(
       (txn.type !== "dividend" || !isUnitBased)
     )
       throw new Error("In-kind income requires a unit-based dividend");
-    const amount = toDecimal(txn.amount);
+    const rawAmount = toDecimal(txn.amount);
+    const nativeFx = toDecimal(txn.nativeFxMultiplier ?? 1);
+    const amount = rawAmount.times(nativeFx);
     const fx = txnFx(txn);
-    feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees));
-    taxesFieldAmount = taxesFieldAmount.plus(toDecimal(txn.taxes));
+    feesFieldAmount = feesFieldAmount.plus(toDecimal(txn.fees).times(nativeFx));
+    taxesFieldAmount = taxesFieldAmount.plus(
+      toDecimal(txn.taxes).times(nativeFx),
+    );
     feesFieldAmountC = feesFieldAmountC.plus(toDecimal(txn.fees).times(fx));
     taxesFieldAmountC = taxesFieldAmountC.plus(toDecimal(txn.taxes).times(fx));
     if (!LOT_TXN_TYPES.has(txn.type)) {
       const expenses = toDecimal(txn.fees).plus(toDecimal(txn.taxes));
-      nonBasisExpenses = nonBasisExpenses.plus(expenses);
+      nonBasisExpenses = nonBasisExpenses.plus(expenses.times(nativeFx));
       nonBasisExpensesC = nonBasisExpensesC.plus(expenses.times(fx));
     }
 
@@ -732,41 +752,41 @@ export function buildInvestmentSummaryCore(
       case "buy":
         totalBuyAmount = totalBuyAmount.plus(amount);
         totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
-        totalBuyAmountC = totalBuyAmountC.plus(amount.times(fx));
-        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx));
+        totalBuyAmountC = totalBuyAmountC.plus(rawAmount.times(fx));
+        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(rawAmount.times(fx));
         break;
       case "gift":
         totalBuyOrGiftAmount = totalBuyOrGiftAmount.plus(amount);
-        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(amount.times(fx));
+        totalBuyOrGiftAmountC = totalBuyOrGiftAmountC.plus(rawAmount.times(fx));
         break;
       case "sell":
         totalSellAmount = totalSellAmount.plus(amount);
-        totalSellAmountC = totalSellAmountC.plus(amount.times(fx));
+        totalSellAmountC = totalSellAmountC.plus(rawAmount.times(fx));
         break;
       case "fee":
         feeTxnAmount = feeTxnAmount.plus(amount);
-        feeTxnAmountC = feeTxnAmountC.plus(amount.times(fx));
+        feeTxnAmountC = feeTxnAmountC.plus(rawAmount.times(fx));
         break;
       case "tax":
         taxTxnAmount = taxTxnAmount.plus(amount);
-        taxTxnAmountC = taxTxnAmountC.plus(amount.times(fx));
+        taxTxnAmountC = taxTxnAmountC.plus(rawAmount.times(fx));
         break;
       case "dividend":
         if (incomeRole === "included_in_units") {
           totalInKindIncome = totalInKindIncome.plus(amount);
-          totalInKindIncomeC = totalInKindIncomeC.plus(amount.times(fx));
+          totalInKindIncomeC = totalInKindIncomeC.plus(rawAmount.times(fx));
         } else {
           totalDividends = totalDividends.plus(amount);
-          totalDividendsC = totalDividendsC.plus(amount.times(fx));
+          totalDividendsC = totalDividendsC.plus(rawAmount.times(fx));
         }
         break;
       case "interest":
         totalInterestPaid = totalInterestPaid.plus(amount);
-        totalInterestPaidC = totalInterestPaidC.plus(amount.times(fx));
+        totalInterestPaidC = totalInterestPaidC.plus(rawAmount.times(fx));
         break;
       case "rent_income":
         totalRent = totalRent.plus(amount);
-        totalRentC = totalRentC.plus(amount.times(fx));
+        totalRentC = totalRentC.plus(rawAmount.times(fx));
         break;
       case "appreciation":
         totalAppreciation = totalAppreciation.plus(amount);
@@ -776,7 +796,7 @@ export function buildInvestmentSummaryCore(
       // no lot machinery, so accumulate it here and subtract from invested below.
       case "return_of_capital":
         totalReturnOfCapital = totalReturnOfCapital.plus(amount);
-        totalReturnOfCapitalC = totalReturnOfCapitalC.plus(amount.times(fx));
+        totalReturnOfCapitalC = totalReturnOfCapitalC.plus(rawAmount.times(fx));
         break;
     }
   }

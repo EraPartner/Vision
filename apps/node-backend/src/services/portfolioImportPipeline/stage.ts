@@ -104,6 +104,17 @@ export async function stageBatch({
       ),
     parseRows: async () => {
       const parsed = await parseWithConfig(filePath, customConfig);
+      if (customConfig.format === "ibkr_funding_history") {
+        if (customConfig.included_symbols)
+          throw new Error(
+            "IBKR funding history cannot be filtered by investment symbol",
+          );
+        const context = parsed.ibkrFundingSourceContext;
+        await query(
+          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('ibkr_funding_source_context',$2::jsonb) WHERE id=$1",
+          [batchId, JSON.stringify(context)],
+        );
+      }
       if (customConfig.format === "kinesis_transaction_history") {
         const context = await captureKinesisSourceContext(filePath, parsed);
         await query(

@@ -88,6 +88,102 @@ describe("getPortfolioSummary", () => {
     query.mockResolvedValue({ rows: [] });
   });
 
+  it.each(["weighted_avg", "fifo", "lifo"])(
+    "normalizes EUR-booked USD quote basis at historical FX (%s)",
+    async (method) => {
+      settingsRepository.get.mockResolvedValue(method);
+      query
+        .mockResolvedValueOnce({ rows: [investmentRow({ current_price: 20 })] })
+        .mockResolvedValueOnce({
+          rows: [
+            txnRow({
+              type: "buy",
+              units: 10,
+              amount: 80,
+              currency: "EUR",
+              account_id: 7,
+            }),
+          ],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { currency_code: "USD", rate_date: "2025-12-31", rate_to_eur: 0.8 },
+          ],
+        });
+      try {
+        const {
+          summaries: [s],
+        } = await getPortfolioSummary("EUR");
+        // Booked EUR80 is USD100 basis at the prior day's0.8 daily quote rate.
+        // Current USD200 value at0.9 is EUR180: asset gain90 plus FX gain10.
+        expect(s.totalBuyCost).toBe(80);
+        expect(s.currentValue).toBe(180);
+        expect(s.gainLoss).toBe(100);
+        expect(s.assetGain).toBe(90);
+        expect(s.fxGain).toBe(10);
+        expect(s.usedFallbackRate).toBe(false);
+      } finally {
+        settingsRepository.get.mockResolvedValue(null);
+      }
+    },
+  );
+
+  it("uses stamped USD booking FX for a EUR quote without changing EUR gain", async () => {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: "EUR", current_price: 20 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            type: "buy",
+            units: 10,
+            amount: 100,
+            fx_rate_to_eur: 0.8,
+            account_id: 7,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { currency_code: "USD", rate_date: "2026-01-01", rate_to_eur: 0.75 },
+        ],
+      });
+    const {
+      summaries: [s],
+    } = await getPortfolioSummary("EUR");
+    expect(s.totalBuyCost).toBe(80);
+    expect(s.gainLoss).toBe(120);
+    expect(s.assetGain).toBe(120);
+    expect(s.fxGain).toBe(0);
+    expect(s.usedFallbackRate).toBe(false);
+  });
+
+  it("discloses missing dated quote FX even when the booked EUR headline is exact", async () => {
+    query
+      .mockResolvedValueOnce({ rows: [investmentRow({ current_price: 20 })] })
+      .mockResolvedValueOnce({
+        rows: [
+          txnRow({
+            type: "buy",
+            units: 10,
+            amount: 80,
+            currency: "EUR",
+            account_id: 7,
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const {
+      summaries: [s],
+    } = await getPortfolioSummary("EUR");
+    expect(s.totalBuyCost).toBe(80);
+    expect(s.gainLoss).toBe(100);
+    expect(s.assetGain).toBeCloseTo(100, 2);
+    expect(s.fxGain).toBeCloseTo(0, 2);
+    expect(s.usedFallbackRate).toBe(true);
+  });
+
   it("returns empty totals when no investments exist", async () => {
     query
       .mockResolvedValueOnce({ rows: [] })
@@ -701,6 +797,97 @@ describe("getPortfolioSummary", () => {
       account_id: 10,
       assignment: "account",
       oversold: true,
+    });
+  });
+});
+
+describe("separate imported broker account fees", () => {
+  beforeEach(() => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [] });
+  });
+
+  function withFees(fees, rates = []) {
+    query
+      .mockResolvedValueOnce({
+        rows: [investmentRow({ currency: "EUR", current_price: 150 })],
+      })
+      .mockResolvedValueOnce({
+        rows: [txnRow({ currency: "EUR", amount: 100, account_id: 7 })],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: fees });
+    if (rates.length) query.mockResolvedValueOnce({ rows: rates });
+  }
+
+  it("subtracts dated cash fees once without altering investment gains or account partitions", async () => {
+    withFees(
+      [
+        {
+          id: 10,
+          account_id: 7,
+          date: "2026-01-01",
+          currency: "USD",
+          amount: "10.0000",
+        },
+        {
+          id: 11,
+          account_id: 8,
+          date: "2026-01-02",
+          currency: "EUR",
+          amount: "2.0000",
+        },
+      ],
+      [{ currency_code: "USD", rate_date: "2025-12-31", rate_to_eur: 0.8 }],
+    );
+    const result = await getPortfolioSummary("EUR", {
+      throughDate: "2026-01-02",
+    });
+    expect(result.totals.totalGainLoss).toBe(50);
+    expect(result.totals.totalFees).toBe(0);
+    expect(result.summaries[0].gainLoss).toBe(50);
+    expect(result.byAccount[0].gainLoss).toBe(50);
+    expect(result.brokerageCashFees).toEqual({
+      total: 10,
+      gainAfterFees: 40,
+      usedFallbackRate: false,
+      byAccount: [
+        { account_id: 7, total: 8 },
+        { account_id: 8, total: 2 },
+      ],
+    });
+    expect(
+      query.mock.calls.find(([sql]) => sql.includes("WITH owned_fee_ids"))[1],
+    ).toEqual(["2026-01-02"]);
+  });
+
+  it("discloses current-rate fallback for missing historical account fee rates", async () => {
+    withFees([
+      {
+        id: 10,
+        account_id: 7,
+        date: "2026-01-01",
+        currency: "USD",
+        amount: "10.0000",
+      },
+    ]);
+    const result = await getPortfolioSummary("EUR");
+    expect(result.brokerageCashFees).toMatchObject({
+      total: 9,
+      gainAfterFees: 41,
+      usedFallbackRate: true,
+    });
+    expect(result.totals.usedFallbackRate).toBe(false);
+  });
+
+  it("reports zero costs and unchanged gain when no cash fee is proved", async () => {
+    withFees([]);
+    const result = await getPortfolioSummary("EUR");
+    expect(result.brokerageCashFees).toEqual({
+      total: 0,
+      gainAfterFees: 50,
+      usedFallbackRate: false,
+      byAccount: [],
     });
   });
 });

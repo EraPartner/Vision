@@ -665,12 +665,21 @@ export default function TransactionsPage() {
     // A row that left the loaded list (deleted, filtered out) closes the
     // inspector rather than showing stale details.
     useEffect(() => {
-        if (selectedId != null && !isLoading && allItems.length > 0 && !selectedTransaction) {
+        if (
+            selectedId != null &&
+            !isLoading &&
+            allItems.length > 0 &&
+            !selectedTransaction
+        ) {
             setSelectedId(null);
         }
     }, [selectedId, selectedTransaction, isLoading, allItems.length]);
 
-    const datePreset = datePresetFor(startDateFilter, endDateFilter, new Date());
+    const datePreset = datePresetFor(
+        startDateFilter,
+        endDateFilter,
+        new Date(),
+    );
     const customDateLabel =
         startDateFilter || endDateFilter
             ? `${startDateFilter ? formatDateStringWithAppSettings(startDateFilter, appSettings.dateFormat) : "…"} – ${endDateFilter ? formatDateStringWithAppSettings(endDateFilter, appSettings.dateFormat) : "…"}`
@@ -881,20 +890,40 @@ export default function TransactionsPage() {
                             isColumnVisible={columnVisibility.isVisible}
                             actions={
                                 selectedIds.size === 0 ? undefined : (
-                                <BulkActionsBar
-                                    selectedIds={selectedIds}
-                                    selectionMode={selectionMode}
-                                    totalMatching={totalItems}
-                                    visibleItemCount={allItems.length}
-                                    filter={currentFilter}
-                                    onClearSelection={() => {
-                                        setSelectedIds(new Set());
-                                        setSelectionMode("ids");
-                                    }}
-                                    onPromoteToFilterMode={() =>
-                                        setSelectionMode("filter")
-                                    }
-                                />
+                                    <BulkActionsBar
+                                        selectedIds={selectedIds}
+                                        selectedTransactions={transactions
+                                            .filter((row) =>
+                                                selectedIds.has(row.id),
+                                            )
+                                            .map((row) => {
+                                                const peer = allItems.find(
+                                                    (item) =>
+                                                        item.id === row.id,
+                                                )?.transfer_peer_id;
+                                                return {
+                                                    ...row,
+                                                    transferPeerId:
+                                                        peer == null
+                                                            ? undefined
+                                                            : typeof peer ===
+                                                                "number"
+                                                              ? peer
+                                                              : -1,
+                                                };
+                                            })}
+                                        selectionMode={selectionMode}
+                                        totalMatching={totalItems}
+                                        visibleItemCount={allItems.length}
+                                        filter={currentFilter}
+                                        onClearSelection={() => {
+                                            setSelectedIds(new Set());
+                                            setSelectionMode("ids");
+                                        }}
+                                        onPromoteToFilterMode={() =>
+                                            setSelectionMode("filter")
+                                        }
+                                    />
                                 )
                             }
                             updatePending={updateMutation.isPending}

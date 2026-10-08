@@ -3,8 +3,9 @@
  *
  * This export is a multi-section statement, not a flat CSV. Monetary totals
  * are expressed in the statement base currency, while trade prices are in the
- * per-row Price Currency. Forex Trade Component rows are conversion details
- * for securities trades, not independent portfolio positions.
+ * per-row Price Currency. Forex Trade Component rows are fiat conversion
+ * details, not independent portfolio positions. Their explicit
+ * commissions are separate base-currency cash expenses.
  */
 
 import { createHash } from "node:crypto";
@@ -107,14 +108,48 @@ function parseTransaction(
   rawData: string,
 ): ParsedPortfolioRow | null {
   const originalType = cleanCell(record["Transaction Type"]);
-  if (!originalType || originalType === "Forex Trade Component") return null;
+  if (!originalType) return null;
+  const description = cleanCell(record.Description);
+  if (originalType === "Forex Trade Component") {
+    const feeColumns = ["Commission", "Transaction Fees"];
+    const charges = feeColumns.map((column) => {
+      const text = cleanCell(record[column]);
+      const value = text ? signedNumber(text) : 0;
+      if (value == null || !Number.isFinite(value) || value > 0)
+        throw new Error(
+          `IBKR Forex Trade Component has an unsupported ${column}`,
+        );
+      return -value;
+    });
+    const amount = charges[0] + charges[1];
+    if (!amount) return null;
+    return {
+      date: parseDateWithFormat(cleanCell(record.Date), "%Y-%m-%d"),
+      typeRaw: "Fee",
+      symbolRaw: "",
+      nameRaw: "",
+      units: null,
+      pricePerUnit: null,
+      amount,
+      fees: null,
+      taxes: null,
+      currency: baseCurrency,
+      fxRateToEur: null,
+      note: `${description} (FX commission)`,
+      rawData,
+      sourceAccountIdentity: cleanCell(record.Account) || null,
+      sourceId: null,
+    };
+  }
+  // This adjustment reports a base-currency valuation change, not cash.
+  if (originalType === "Adjustment" && description === "FX Translations P&L")
+    return null;
 
   const grossSigned = signedNumber(record["Gross Amount"]);
   const typeRaw = normalizeType(originalType, grossSigned);
   if (!typeRaw) return null;
 
   const symbol = cleanCell(record.Symbol);
-  const description = cleanCell(record.Description);
   const isTrade = typeRaw === "Buy" || typeRaw === "Sell";
   const priceCurrency = cleanCell(record["Price Currency"]).toUpperCase();
   const exportedFxRate = magnitude(record["Exchange Rate"]);

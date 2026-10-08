@@ -247,6 +247,10 @@ export interface Transaction {
     // cash legs), and a PATCH null-to-clear leaves NULL behind.
     bank_account: string | null;
     account_id?: number | null;
+    is_transfer?: boolean;
+    transfer_peer_id?: number | null;
+    transfer_source?:
+        "auto" | "manual" | "opening" | "adjustment" | "brokerage" | null;
     recipient_id?: number | null;
     recipient_name?: string; // Recipient name
     memo?: string | null;

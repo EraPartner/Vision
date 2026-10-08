@@ -12,6 +12,13 @@ related_code: ["apps/node-backend/src/services/portfolio/portfolioSummaryService
 
 # Portfolio Summary API
 
+For mixed-currency bookings, native asset gain converts the transaction's principal, fees, taxes
+and income to the investment's quote currency using dated on-or-before rates. Target-currency
+totals retain the original booked amounts and their dated conversion. This daily-rate attribution
+does not isolate broker intraday conversion markup; a missing quote rate sets `usedFallbackRate`.
+Frontend fallback calculations defer mixed-currency holdings to this canonical summary because
+their local rate cache cannot reconstruct dated quote-currency basis.
+
 > [!abstract] Overview
 > Realtime endpoint computing portfolio totals (value, invested, gain/loss, returns) with FX conversion applied server-side. Single source of truth for dashboard overview cards, performance page headline metrics, and (from 2026-05-31) the Net Worth endpoint's _current_ investments value. Eliminates divergence from dual compute paths and ensures consistent FX timing across all three UI surfaces.
 >
@@ -31,6 +38,27 @@ frontend overrides only the archived income subtotal, keeping archived ordinary 
 Foreign income without canonical dated metadata is disclosed as unavailable rather than converted
 using the investment currency or current rate. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and
 [[docs/features/portfolio]].
+
+## Imported account fees
+
+The optional additive `brokerageCashFees` object contains `total`, `gainAfterFees`,
+`usedFallbackRate` and `byAccount: [{ account_id, total }]`, all amounts in the response currency.
+`gainAfterFees = totals.totalGainLoss - brokerageCashFees.total`. Current responses always return
+this object; absent older metadata means unavailable. This is a non-breaking response addition.
+
+Only active, negative, non-transfer cash fees with committed brokerage source ownership qualify.
+Ownership must still match account, date, currency, amount, source hash and fingerprint. The
+Kinesis own-account funding receipt can own a separate fee component. Canonical IDs are deduplicated;
+aborted owners, balance anchors, future records and source-overlapping portfolio fees are excluded.
+Category and memo edits do not remove proved costs. A batch need not be complete if the relevant
+row is committed. The subtotal uses transaction-date, on-or-before foreign exchange rates and
+flags a missing historical rate that requires today's conversion.
+
+These fees stay in the cash ledger. Investment `totals`, `summaries`, `byAccount`, cost basis,
+asset/FX decomposition and performance series retain their existing scope. The overview labels
+those returns as investment returns and separately shows broker account fees and gain after
+account fees. It does not allocate account fees to individual securities or reconstruct cash FX
+principal. See [[docs/features/portfolio]] and [[docs/adr/095-brokerage-account-import|ADR-095]].
 
 ## Endpoint Details
 

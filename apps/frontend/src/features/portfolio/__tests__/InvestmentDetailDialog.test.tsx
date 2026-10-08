@@ -99,6 +99,29 @@ afterEach(() => {
 });
 
 describe("InvestmentDetailDialog", () => {
+    it("shows total return including income and standalone deductions in the headline amount, percentage and direction", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <InvestmentDetailDialog
+                investment={{
+                    ...INVESTMENT,
+                    totalGain: 55,
+                    totalIncome: 10,
+                    totalTaxes: 77.34,
+                    gainLoss: -12.34,
+                    gainLossPercent: -1.37,
+                }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        const headline = screen.getByText("Total gain or loss").closest("div");
+        expect(headline).toHaveTextContent(/-\s*12\s*[.,]\s*34/);
+        expect(headline).toHaveTextContent(/-1[.,]37%/);
+        expect(headline?.querySelector("svg")).toHaveClass("text-loss");
+    });
+
     it("keeps literal in-kind income visible with a distinct accounting label and unchanged units and ordinary gains", async () => {
         const user = userEvent.setup();
         renderWithApp(

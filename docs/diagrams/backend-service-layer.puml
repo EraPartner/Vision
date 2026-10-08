@@ -349,6 +349,12 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +restorePortfolioImportAdoptions(receipts)
     +bounded paired-income proof + record/restore
   }
+  class PortfolioIbkrCashReconciliation {
+    +proveIbkrCashCorrections(rows, batches, context)
+    +applyIbkrCashCorrection(action)
+    +validateIbkrCashCorrectionRollback(receipts)
+    +guarded original-fingerprint repeat aliases
+  }
   class PortfolioKinesisCashScope <<ADR-189>> {
     +proveKinesisCashSources(rows, batches, fundingPolicy)
     +classifyKinesisCash(context)
@@ -499,6 +505,8 @@ PortfolioImportCommitService --> PortfolioImportBatchRepository : batch lock + a
 PortfolioImportReadinessService --> PortfolioImportBatchRepository : complete staging
 PortfolioImportCommitService --> PortfolioImportReconciliationService : current reviewed plan
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : CAS + immutable receipts
+PortfolioImportReconciliationService --> PortfolioIbkrCashReconciliation : native funding correction + cash restore
+PortfolioIbkrCashReconciliation --> PortfolioImportCashRepository : financial images + typed journal
 PortfolioImportReconciliationService --> PortfolioKinesisCashScope : closed cash-only source proof
 PortfolioImportReconciliationService --> PortfolioImportCashService : selected cash writer + guarded rollback
 PortfolioImportCashService --> PortfolioKinesisCashScope : typed proof + component image comparison

@@ -49,6 +49,166 @@ const sell = (accountId, units, amount, date, extra = {}) => ({
 });
 
 describe.each(["weighted_avg", "fifo", "lifo"])(
+  "mixed transaction and quote currencies (%s)",
+  (costBasisMethod) => {
+    const opts = { ...OPTS, costBasisMethod, fxMultiplierNow: 0.8 };
+    const bookedEur = {
+      currency: "EUR",
+      nativeCurrency: "USD",
+      nativeFxMultiplier: 1.25,
+      fxMultiplier: 1,
+    };
+
+    it("has no FX gain when a EUR-booked USD investment uses constant FX", () => {
+      const { core } = buildInvestmentSummaryCorePartitioned(
+        stock(20),
+        [buy(1, 10, 80, "2026-01-01", bookedEur)],
+        opts,
+      );
+      expect(n(core.totalBuyCost)).toBe(100);
+      expect(n(core.gainLoss)).toBe(100);
+      expect(n(core.converted.totalBuyCost)).toBe(80);
+      expect(n(core.converted.gainLoss)).toBe(80);
+      expect(n(core.converted.assetGain)).toBe(80);
+      expect(n(core.converted.fxGain)).toBe(0);
+    });
+
+    it("normalizes sale, income and separate expenses without changing booked EUR gain", () => {
+      const rows = [
+        buy(1, 10, 80, "2026-01-01", bookedEur),
+        sell(1, 10, 150, "2026-02-01", {
+          currency: "USD",
+          nativeCurrency: "USD",
+          nativeFxMultiplier: 1,
+          fxMultiplier: 0.8,
+          fees: 10,
+        }),
+        {
+          ...bookedEur,
+          type: "dividend",
+          amount: 16,
+          fees: 2,
+          taxes: 4,
+          date: "2026-02-02",
+          account_id: 1,
+        },
+        {
+          ...bookedEur,
+          type: "fee",
+          amount: 4,
+          date: "2026-02-03",
+          account_id: 1,
+        },
+        {
+          ...buy(1, 1, 0, "2026-02-04", bookedEur),
+          type: "gift",
+        },
+        {
+          ...bookedEur,
+          type: "dividend",
+          amount: 16,
+          income_recognition_role: "included_in_units",
+          date: "2026-02-04",
+          account_id: 1,
+        },
+      ];
+      const { core } = buildInvestmentSummaryCorePartitioned(
+        stock(20),
+        rows,
+        opts,
+      );
+      expect(n(core.realizedGain)).toBe(40);
+      expect(n(core.converted.realizedGain)).toBe(32);
+      expect(n(core.converted.totalFees)).toBe(14);
+      expect(n(core.converted.totalTaxes)).toBe(4);
+      expect(n(core.totalIncome)).toBe(20);
+      expect(n(core.converted.totalIncome)).toBe(16);
+      expect(n(core.totalInKindIncome)).toBe(20);
+      expect(n(core.converted.totalInKindIncome)).toBe(16);
+      // EUR16 closing gift value + EUR32 sale gain + EUR10 net dividend - EUR4 fee.
+      expect(n(core.converted.gainLoss)).toBe(54);
+      expect(n(core.converted.assetGain)).toBe(54);
+      expect(n(core.converted.fxGain)).toBe(0);
+    });
+
+    it("keeps custody return-of-capital rows in booking currency for one normalization", () => {
+      const rows = [
+        buy(1, 10, 80, "2026-01-01", bookedEur),
+        {
+          ...bookedEur,
+          type: "return_of_capital",
+          amount: 16,
+          date: "2026-01-02",
+        },
+        {
+          id: 3,
+          type: "asset_transfer",
+          date: "2026-01-03",
+          units: 10,
+          fee_units: 1,
+          source_account_id: 1,
+          destination_account_id: 2,
+        },
+      ];
+      const streams = partitionTxnsByAccount(rows, costBasisMethod);
+      const reduction = streams
+        .get(1)
+        .find((row) => row.type === "return_of_capital");
+      const incoming = streams.get(2).find((row) => row.type === "transfer_in");
+      expect(n(reduction.amount)).toBe(16);
+      expect(n(incoming.transferredBasis)).toBe(72);
+      expect(n(incoming.transferredBasisConv)).toBe(57.6);
+      const { core } = buildInvestmentSummaryCorePartitioned(
+        stock(20),
+        rows,
+        opts,
+      );
+      expect(n(core.totalInvested)).toBe(72);
+      expect(n(core.converted.totalInvested)).toBe(57.6);
+      expect(n(core.converted.gainLoss)).toBe(80);
+      expect(n(core.converted.assetGain)).toBe(80);
+      expect(n(core.converted.fxGain)).toBe(0);
+    });
+
+    it("carries separate quote and booked bases through an asset transfer fee", () => {
+      const rows = [
+        buy(1, 10, 80, "2026-01-01", bookedEur),
+        {
+          id: 2,
+          type: "asset_transfer",
+          date: "2026-01-02",
+          units: 10,
+          fee_units: 1,
+          source_account_id: 1,
+          destination_account_id: 2,
+        },
+      ];
+      const streams = partitionTxnsByAccount(rows, costBasisMethod);
+      const outgoing = streams
+        .get(1)
+        .find((row) => row.type === "transfer_out");
+      const incoming = streams.get(2).find((row) => row.type === "transfer_in");
+      expect(n(outgoing.assetFeeBasis)).toBe(10);
+      expect(n(outgoing.assetFeeBasisConv)).toBe(8);
+      expect(n(incoming.transferredBasis)).toBe(90);
+      expect(n(incoming.transferredBasisConv)).toBe(72);
+      expect(incoming.transferredLots[0].currency).toBe("USD");
+      const { core } = buildInvestmentSummaryCorePartitioned(
+        stock(20),
+        rows,
+        opts,
+      );
+      expect(n(core.totalUnits)).toBe(9);
+      expect(n(core.realizedGain)).toBe(-10);
+      expect(n(core.converted.realizedGain)).toBe(-8);
+      expect(n(core.converted.gainLoss)).toBe(64);
+      expect(n(core.converted.assetGain)).toBe(64);
+      expect(n(core.converted.fxGain)).toBe(0);
+    });
+  },
+);
+
+describe.each(["weighted_avg", "fifo", "lifo"])(
   "unit-based summary expenses (%s)",
   (costBasisMethod) => {
     const opts = { ...OPTS, costBasisMethod, fxMultiplierNow: 0.8 };

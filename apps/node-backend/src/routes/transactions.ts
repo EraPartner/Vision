@@ -883,6 +883,10 @@ function formatTransaction(row: FormattableTransactionRow | null) {
     // serializes as the previous day's ISO timestamp east of UTC).
     transaction_date: toWireDate(row.date),
     bank_account: row.bank_account,
+    account_id: row.account_id,
+    is_transfer: row.is_transfer,
+    transfer_peer_id: row.transfer_peer_id,
+    transfer_source: row.transfer_source,
     recipient_id: row.recipient_id,
     recipient_name: row.recipient_name || null,
     memo: row.memo,

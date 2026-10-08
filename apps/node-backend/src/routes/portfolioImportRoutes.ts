@@ -157,6 +157,7 @@ function assertPortfolioFormatBrokerage(
 ) {
   const formatNames: Record<string, string> = {
     ibkr_transaction_history: "IBKR",
+    ibkr_funding_history: "IBKR",
     kinesis_transaction_history: "Kinesis",
     nexo_transaction_history: "Nexo",
     nexo_pro_spot_history: "Nexo Pro Spot",
@@ -347,6 +348,7 @@ const portfolioImportConfigSchema = z
       .enum(
         [
           "ibkr_transaction_history",
+          "ibkr_funding_history",
           "kinesis_transaction_history",
           "nexo_transaction_history",
           "nexo_pro_spot_history",

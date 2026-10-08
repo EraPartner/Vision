@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { hasForeignCurrencyAmounts } from "./localPortfolioCurrency";
 
 export interface FxAwarePnl {
     realizedTarget: number;
@@ -11,7 +12,8 @@ export interface FxAwarePnl {
 /**
  * Canonical holdings already contain target-currency P&L, including historical
  * FX, configured lot selection, custody fees and adjustments. Return those
- * figures directly. Archived/local callers retain the existing EUR-pool replay.
+ * figures directly. Local callers retain the existing EUR-pool replay only when
+ * booking and quote currencies agree; mixed streams need dated canonical FX.
  */
 export function useFxAwarePnl(targetCurrency: string) {
     const { ratesToEur } = useCurrencyConverter(targetCurrency);
@@ -33,7 +35,7 @@ export function useFxAwarePnl(targetCurrency: string) {
     );
 
     return useCallback(
-        (holding: InvestmentSummary): FxAwarePnl => {
+        (holding: InvestmentSummary): FxAwarePnl | undefined => {
             if (holding.summarySource === "canonical") {
                 const heldCost = holding.avgCostBasis * holding.totalUnits;
                 return {
@@ -45,6 +47,15 @@ export function useFxAwarePnl(targetCurrency: string) {
                             : 0,
                 };
             }
+            const quoteCurrency =
+                holding.originalCurrency || holding.currency || "EUR";
+            if (
+                hasForeignCurrencyAmounts(
+                    holding.transactions || [],
+                    quoteCurrency,
+                )
+            )
+                return undefined;
             const sortedTxns = [...(holding.transactions || [])].sort((a, b) =>
                 String(a.date).localeCompare(String(b.date)),
             );
@@ -66,7 +77,7 @@ export function useFxAwarePnl(targetCurrency: string) {
                 const txnRateToEur =
                     Number(txn.fx_rate_to_eur) > 0
                         ? Number(txn.fx_rate_to_eur)
-                        : getRateToEur(txn.currency || holding.currency);
+                        : getRateToEur(txn.currency || quoteCurrency);
 
                 if (txn.type === "buy" || txn.type === "gift") {
                     poolUnits += units;

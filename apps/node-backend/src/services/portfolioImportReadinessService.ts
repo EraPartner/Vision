@@ -11,6 +11,7 @@ const MAINTAINED_ADAPTERS = new Set([
   "nexo",
   "saxo",
   "ibkr_transaction_history",
+  "ibkr_funding_history",
   "kinesis_transaction_history",
   "nexo_transaction_history",
   "nexo_pro_spot_history",

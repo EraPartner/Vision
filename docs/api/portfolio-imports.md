@@ -3,7 +3,7 @@ title: API - Portfolio Imports
 type: endpoint
 method: POST, GET, PATCH, DELETE
 path: /api/portfolio/import
-description: Portfolio CSV/Saxo XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
+description: Portfolio CSV/Saxo XLSX/native IBKR funding XLS or XLSX staging, reviewed reconciliation, immutable receipts, and dated custody/unit adjustments with original basis
 date: 2026-10-08
 updated: 2026-10-08
 last_modified: 2026-10-08
@@ -70,7 +70,7 @@ related_code:
 
 ## Overview
 
-The Portfolio Imports API accepts CSV history and detailed Saxo XLSX workbooks. It imports trades
+The Portfolio Imports API accepts CSV history, detailed Saxo XLSX and native IBKR funding XLS/XLSX workbooks. It imports trades
 into `portfolio_transactions`, routes brokerage cash to `transactions`, and stores dated custody
 events in `portfolio_asset_transfers` and unit removals in `portfolio_asset_adjustments`. Reviewed
 adoption keeps the original transaction ID. Previously stored Portfolio Performance context remains secondary
@@ -101,7 +101,7 @@ All routes are mounted at `/api/portfolio/import` with `importRateLimiter`.
 
 ### POST /api/portfolio/import/csv/custom
 
-One-shot portfolio history import. The existing endpoint path accepts CSV and supported Saxo XLSX.
+One-shot portfolio history import. The existing endpoint path accepts CSV and maintained Saxo or native IBKR funding workbooks.
 It runs the pipeline synchronously and returns 201 if committed or 202 if review is required.
 
 Every mapping, adapter, format, brokerage, and account option is accepted only as a multipart
@@ -114,7 +114,7 @@ field. Query fields are ignored. This is a breaking request-contract change unde
 
 | Field                             | Type    | Required | Description                                                                                                                                                                                 |
 | --------------------------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `file`                            | File    | Yes      | CSV or detailed Saxo XLSX file (max 50 MiB); XLSX requires `portfolio_format=saxo_transaction_history`                                                                                      |
+| `file`                            | File    | Yes      | CSV or maintained workbook (max 50 MiB); Saxo XLSX requires `saxo_transaction_history`; IBKR funding XLS/XLSX requires `ibkr_funding_history`                                                                                      |
 | `adapter_name`                    | string  | No       | Display label for the import source (written as `bank_account` on portfolio_transactions)                                                                                                   |
 | `portfolio_format`                | string  | No       | Specialized parser: `ibkr_transaction_history`, `kinesis_transaction_history`, `nexo_transaction_history`, `nexo_pro_spot_history`, or `saxo_transaction_history`. Omit for generic mapping |
 | `date_format`                     | string  | No       | Python strptime format; default `%Y-%m-%d`                                                                                                                                                  |
@@ -167,9 +167,10 @@ column without the numeric value. Maintained preset numeric rules remain unchang
 (`utf-8`/`utf8`), Latin-1 (`latin1`/`latin-1`/`iso-8859-1`), and true `windows-1252` decoding.
 Unsupported encodings return 400. See [[docs/features/portfolio-import]].
 
-The upload filter accepts CSV and XLSX filename/MIME combinations. After temporary upload, byte
+The upload filter accepts CSV, XLS and XLSX filename/MIME combinations. After temporary upload, byte
 inspection identifies ZIP workbooks independently of the temporary filename. XLSX requires the
-Saxo format and a valid detailed workbook before any batch is created. Legacy XLS rejects. Bank
+Saxo or native IBKR funding format and a valid maintained workbook before batch creation. Legacy
+XLS requires native IBKR funding. Bank
 CSV upload endpoints are unchanged.
 
 Workbook parsing limits are 1,000 ZIP entries, 100 MiB expanded content, and 500,000 parsed cells.
@@ -185,8 +186,13 @@ workbook and stage review errors instead of being accepted as gross income.
 The IBKR preset supplies the compatibility mapping fields but parses the multi-section statement
 with format-specific rules. Each accepted `Transaction History,Data` record is retained literally
 in the batch staging row's `raw_data` provenance field, including the source CSV quoting and column
-order. `Forex Trade Component` records increase the returned `skipped` count; they are not imported
-as currency holdings or cash movements. This is an additive, non-breaking API option. Existing
+order. `Forex Trade Component` records with explicit negative commissions or transaction fees
+produce one instrument-less fee in the statement base currency, retaining the literal record for
+deduplication. Conversion principal and quantities are not imported as holdings; zero-charge
+components increase `skipped`. Invalid charges or positive fee credits reject rather than invent
+an expense. `Adjustment` records whose trimmed description is exactly `FX Translations P&L`
+also increase `skipped` because they report valuation, not cash. Other signed cash adjustments
+retain their deposit or withdrawal behavior. This is a non-breaking parsing correction. Existing
 generic requests are unchanged.
 
 Fresh IBKR batches retain `ibkr_source_context` in batch configuration: the literal transaction
@@ -292,6 +298,10 @@ conversion costs are not added again. Native quotes and joined booking records r
 typed provenance with sheet/row coordinates and a source-byte hash. Deposits and withdrawals are
 instrument-less cash rows. Unknown corporate actions or booking kinds remain review errors.
 
+New IBKR and detailed Saxo dividend records commit with `dividend_amount_convention = 'gross'`.
+This retains the adapter's proven amount meaning without changing principal or withholding.
+Generic imports retain the existing unknown convention unless separately reviewed.
+
 Nexo wallet, Nexo Pro, and Saxo requests have the same pre-staging brokerage-account requirement as IBKR and
 Kinesis. These maintained format options are additive. Generic mapping remains available.
 
@@ -333,7 +343,7 @@ Kinesis. These maintained format options are additive. Generic mapping remains a
 
 ### POST /api/portfolio/import/csv/stream
 
-SSE-streaming portfolio history import. Accepts the same CSV/Saxo XLSX request body as the custom
+SSE-streaming portfolio history import. Accepts the same CSV/Saxo XLSX/native IBKR funding XLS or XLSX request body as the custom
 endpoint. Workbook preflight happens before streaming, so invalid input returns an HTTP 400
 rather than creating a batch. Valid input uses the existing progress and terminal events.
 
@@ -708,7 +718,7 @@ committed rows are not recategorized.
 ## Multi-batch reconciliation
 
 Portfolio Performance XML upload and reference application are unavailable. Primary imports accept
-supported broker CSV/Saxo XLSX files. Existing stored source context, corrections and immutable
+supported broker CSV/Saxo XLSX/native IBKR funding XLS or XLSX files. Existing stored source context, corrections and immutable
 receipts remain readable and must still satisfy their original proof and after-image guards.
 The XML parser, reference planner and reference write repository are removed. The retained JSON
 proof reader validates existing evidence without parsing or applying a document. This does not
@@ -819,6 +829,34 @@ paired income can be recorded separately through the bounded in-kind income scop
 This scope performs no insertion, duplicate repair, cash movement, custody transfer, or unit
 adjustment. Ambiguous eligible history and changed fresh source evidence still block the plan.
 Qualifying repeats also block the plan when their receipt or canonical after-image has changed.
+
+#### IBKR native funding correction scope
+
+The additive `portfolio_format=ibkr_funding_history` accepts original Transaction Status & History
+Deposit/Withdrawal XLS/XLSX. Sheet direction and completed status are mandatory; literal account,
+reference, dates, amount and currency are authenticated against retained file/header/row context.
+No formula is evaluated. This is not a generic workbook mapping.
+
+A separate native funding scope with `reconciliation_scope=correct_existing_only` and explicit
+`prefer_source` corrects exact existing Transaction History cash imports. Native amount times
+retained CSV exchange rate must equal its base-currency amount to four decimals; date, direction,
+Vision account and literal broker account must also agree. Ambiguous or changed source/ledger
+records block the atomic write. Preview actions have `isCash=true`, null `investmentId`, existing
+cash `existingTransactionId`, and flat source/existing amount and currency values. Only `amount`
+and `currency` corrections are allowed. Existing IDs, dates, notes and original source provenance
+remain unchanged. `imported=0` and `adopted` counts existing corrections.
+
+Missing legacy header context can be supplied only by a literal-identical, economic-identical
+retained CSV reference with authenticated original context. The receipt keeps the owner and primary
+reference separate and binds both plus the native row. Unknown or altered legacy context blocks.
+
+Typed cash adoption/restoration envelopes reuse the immutable reconciliation journal. Native
+staging is duplicate with no committed ownership pointer; repeats cannot remove or insert the
+original cash. Original CSV repeats resolve through a guarded old-fingerprint alias. A fresh CSV
+funding insert without native proof fails closed. Rollback partitions cash from portfolio IDs,
+locks the original source batch, verifies both sources and the financial after-image, and restores
+atomically. Transfer/category metadata is outside the financial image. Retention keeps both
+source batches. Successful correction/restore schedules ordinary transfer detection and refresh.
 
 #### Kinesis existing correction scope
 

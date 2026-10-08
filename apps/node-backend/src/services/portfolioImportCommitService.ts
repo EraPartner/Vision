@@ -60,6 +60,7 @@ function assertReviewable(
 
 import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.ts";
 import { scheduleRefresh } from "./materializedViewService.ts";
+import { scheduleReconcile } from "./transferReconciliationService.ts";
 
 async function commitLockedScope(
   batches: LockedBatch[],
@@ -102,6 +103,9 @@ async function commitLockedScope(
     await assertPortfolioImportAccount(accountId);
   await lockReconciliationAccountsAndHistory(accountIds);
   if (
+    batches.some(
+      (batch) => batch.custom_config?.format === "ibkr_funding_history",
+    ) ||
     reconciliationScope === "record_cash_only" ||
     (reconciliationScope === "full" &&
       batches.some(
@@ -439,7 +443,9 @@ export async function commitReviewedPortfolioImports({
     );
   }).then((result) => {
     invalidatePortfolioCaches();
-    if ((result.recordedCash ?? 0) > 0) scheduleRefresh();
+    const adopted = result.adopted ?? 0;
+    if ((result.recordedCash ?? 0) > 0 || adopted > 0) scheduleRefresh();
+    if (adopted > 0) scheduleReconcile();
     return result;
   });
 }

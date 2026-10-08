@@ -8,6 +8,7 @@ import { server } from "@/test/msw/server";
 import { ACCOUNT_LIST_ITEM_STUB, ok } from "@/test/msw/handlers";
 import PortfolioImportPage from "../PortfolioImportPage";
 import workbookFixtures from "./fixtures/portfolioDetectionWorkbooks";
+import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
 
 const api = "http://localhost:3002/api";
 const headers = {
@@ -120,6 +121,33 @@ async function chooseBroker(
 }
 
 describe("automatic portfolio upload", () => {
+    it.each(["biff8", "xlsx"] as const)(
+        "routes an IBKR native %s funding workbook to its distinct maintained parser",
+        async (format) => {
+            serveAccounts([broker(8, "IBKR", "SYNTHETIC-ACCOUNT")]);
+            const user = userEvent.setup();
+            const { container } = await renderAdvanced(user);
+            await user.upload(
+                fileInput(container),
+                ibkrFundingStatement(format),
+            );
+            await waitFor(() => {
+                expect(brokerField()).toHaveTextContent("SYNTHETIC-ACCOUNT");
+                expect(importButton()).toBeEnabled();
+            });
+            expect(
+                screen.queryByLabelText(/Date column/),
+            ).not.toBeInTheDocument();
+            await user.click(importButton());
+            await waitFor(() => expect(submissions).toHaveLength(1));
+            expect(submissions[0]).toMatchObject({
+                portfolio_format: "ibkr_funding_history",
+                adapter_name: "ibkr_funding_history",
+                account_id: "8",
+                is_brokerage: "true",
+            });
+        },
+    );
     it("detects a real Saxo workbook and submits it to its exported broker account", async () => {
         serveAccounts([broker(8, "Saxo", "SYNTHETIC-ACCOUNT")]);
         const bytes = Uint8Array.from(atob(workbookFixtures.saxo), (value) =>

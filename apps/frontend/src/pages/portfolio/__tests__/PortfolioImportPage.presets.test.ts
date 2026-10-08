@@ -30,6 +30,13 @@ describe("PortfolioImportPage maintained presets", () => {
     });
     it.each([
         {
+            source: "ibkr_funding_history",
+            format: "ibkr_funding_history",
+            dateColumn: "Request Date",
+            symbolColumn: "Reference Number",
+            hint: "portfolioImport.ibkrFundingParserHint",
+        },
+        {
             source: "nexo",
             format: "nexo_transaction_history",
             dateColumn: "Date / Time (UTC)",

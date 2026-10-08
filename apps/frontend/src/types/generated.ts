@@ -4896,6 +4896,18 @@ export interface components {
             };
             summaries: components["schemas"]["PortfolioSummaryItem"][];
             byAccount: components["schemas"]["PortfolioSummaryByAccountItem"][];
+            /** @description Imported, source-owned account fees without an instrument, converted at transaction-date rates and counted once per canonical cash transaction. Separate from investment totals, cost basis and return series. Optional for compatibility with older responses; absence means unavailable. */
+            brokerageCashFees?: {
+                total: number;
+                /** @description totals.totalGainLoss minus this account fee subtotal. */
+                gainAfterFees: number;
+                /** @description A missing historical fee rate required a current-rate fallback. */
+                usedFallbackRate: boolean;
+                byAccount: {
+                    account_id: number;
+                    total: number;
+                }[];
+            };
             /** @description Separate archived holding income subtotals, converted from each literal income currency at its transaction date to the response currency. Always present on current responses, empty when none; optional for older-reader compatibility. Absence means unknown, not a current-rate conversion. Active totals and archived ordinary units, basis, gains and income remain unchanged. */
             archivedInKindIncome?: {
                 id: number;
@@ -5562,6 +5574,12 @@ export interface components {
             transaction_date: string;
             /** @description Stable linked account identity */
             account_id?: number | null;
+            /** @description True when ordinary income/spending statistics exclude this internal movement. */
+            is_transfer?: boolean;
+            /** @description Existing transaction on the other account, when a reciprocal transfer is paired. */
+            transfer_peer_id?: number | null;
+            /** @description Origin of transfer classification, including automatic, manual, system or brokerage. */
+            transfer_source?: string | null;
             /** @description Canonical display name projected from the linked account; use account_id as the stable identity */
             bank_account: string;
             recipient_id?: number;
@@ -5576,7 +5594,7 @@ export interface components {
             balance?: number;
             /**
              * Format: double
-             * @description Per-account, per-currency running balance (SQL window over the filtered set); present only when the list endpoint is queried with include_balance=true. Rows with no currency are treated as EUR.
+             * @description Per-account, per-currency running balance over the filtered set before pagination. The latest preceding stored statement balance resets the cumulative amount; later unstamped rows advance it. Present only when include_balance=true. Rows with no currency are treated as EUR.
              */
             running_balance?: number;
             category_id?: number;
@@ -6360,6 +6378,8 @@ export interface components {
                  * @description Existing canonical identity for adoption or owned duplicate/settled actions. Full paired income requires distinct existing income and unit identities on repeats.
                  */
                 existingTransactionId?: number;
+                /** @description True for proven native IBKR funding corrections. existingTransactionId identifies the cash ledger; investmentId is null. Only amount and currency can change, retaining the original date, notes and financial provenance. */
+                isCash?: boolean;
                 dateProof?: components["schemas"]["PortfolioImportReconciliationDateProof"];
                 incomeProof?: components["schemas"]["PortfolioImportReconciliationIncomeProof"];
                 cashProof?: components["schemas"]["PortfolioImportReconciliationCashProof"];
@@ -6409,7 +6429,7 @@ export interface components {
         PortfolioImportUpload: {
             /**
              * Format: binary
-             * @description CSV history or detailed Saxo XLSX workbook, maximum 50 MiB. XLSX requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. Workbook archive, identifier, and accounting detail validation runs before staging; legacy XLS and unsupported workbooks reject with 400.
+             * @description CSV history, detailed Saxo XLSX, or original IBKR funding XLS/XLSX, maximum 50 MiB. Saxo requires portfolio_format=saxo_transaction_history and the Transacties, _Transacties, and Bookings sheets. IBKR funding requires portfolio_format=ibkr_funding_history and original Deposit and Withdrawal sheet headers. Workbook structure, size, identifiers, formulas and accounting detail are validated before staging. Legacy XLS is accepted only for native IBKR funding history.
              */
             file: string;
             /** @description Display label for the import source */
@@ -6426,10 +6446,10 @@ export interface components {
              */
             yield_basis_policy?: "zero";
             /**
-             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
+             * @description Specialized portfolio statement parser; omit for generic column mapping. Maintained IBKR, Kinesis, Nexo, Nexo Pro, and Saxo formats require is_brokerage=true and account_id because their transaction histories include or affect sleeve cash movements. Automatic source selection is a frontend convenience; API callers provide this field. Saxo accepts CSV and detailed XLSX; net-only CSV dividends remain review errors because gross income and withholding taxes are unavailable. IBKR Transaction History funding values are statement-base amounts; the native funding workbook proves original amounts and currencies. A separate funding correction scope with prefer_source updates exact existing cash matches and creates no new financial records. Unproved new Transaction History funding records cannot be committed. Nexo Pro Spot uses filled quantities, execution prices and literal fee currency. Its timestamp retains the exported calendar date; the adapter does not establish that it is an execution timestamp.
              * @enum {string}
              */
-            portfolio_format?: "ibkr_transaction_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
+            portfolio_format?: "ibkr_transaction_history" | "ibkr_funding_history" | "kinesis_transaction_history" | "nexo_transaction_history" | "nexo_pro_spot_history" | "saxo_transaction_history";
             /** @description Python strptime format, default: %Y-%m-%d */
             date_format?: string;
             /** @description Single-character CSV delimiter, default ',' */
@@ -14630,7 +14650,7 @@ export interface operations {
                      */
                     adopt_policy?: "preserve_existing" | "prefer_source";
                     /**
-                     * @description Optional additive scope. adopt_existing_only requires Kinesis sources, explicit global preserve_existing, no conflicting overrides, no included_symbols/skipped source rows, and verified complete source capture. Row IDs cannot be supplied by callers. correct_existing_only instead requires explicit global prefer_source and proved financial or closed yield-group date correction evidence under the same full-source guards. record_in_kind_income_only requires explicit global preserve_existing, zero yield basis and a proved existing zero-basis income/units pair; retained source proof remains readable and other events remain pending. record_cash_only requires complete unfiltered Kinesis source, explicit preserve_existing and cash_funding_policy=own_account_transfer; only the complete proved cash chain is selected, with no XML application.
+                     * @description Optional additive scope. adopt_existing_only requires Kinesis sources, explicit global preserve_existing, no conflicting overrides, no included_symbols/skipped source rows, and verified complete source capture. Row IDs cannot be supplied by callers. correct_existing_only instead requires explicit global prefer_source and either complete Kinesis financial/date proof or a separate native IBKR funding scope proving exact existing base-currency cash corrections. record_in_kind_income_only requires explicit global preserve_existing, zero yield basis and a proved existing zero-basis income/units pair; retained source proof remains readable and other events remain pending. record_cash_only requires complete unfiltered Kinesis source, explicit preserve_existing and cash_funding_policy=own_account_transfer; only the complete proved cash chain is selected, with no XML application.
                      * @default full
                      * @enum {string}
                      */

@@ -124,6 +124,11 @@ import {
   getStoredRateToEurOnOrBefore,
   getUnindexedRatesToEurForDates,
 } from "../currency/rateFetcher.ts";
+import {
+  originalCashFingerprintAlreadyCorrected,
+  readIbkrCashCorrectionContext,
+} from "../portfolioIbkrCashReconciliation.ts";
+import { getIbkrFundingPrimaryEvidence } from "./ibkrFundingHistoryAdapter.ts";
 import type { PortfolioImportStagingRow } from "../../types/rows.ts";
 import type {
   PortfolioImportBatchId,
@@ -158,6 +163,12 @@ function signedCashAmount(
 
 const CASH_CATEGORY_SETTING_KEY = "brokerage_cash_category_ids";
 const CASH_CATEGORY_KINDS = ["dividend", "interest", "fee", "tax"];
+// These adapters accept a gross dividend principal, retaining withholding
+// inline (Saxo) or as a separate tax event (IBKR).
+const GROSS_DIVIDEND_FORMATS = new Set([
+  "saxo_transaction_history",
+  "ibkr_transaction_history",
+]);
 
 /**
  * Run the commit phase: drain 'matched' staging rows into
@@ -234,6 +245,18 @@ export async function commitBatch({
       row.status === "matched" &&
       (selectedRowIds === undefined || selectedRowIds.has(Number(row.id))),
   );
+  const ibkrCashFormat = batchRows[0]?.custom_config?.format;
+  const ibkrCashSources = new Map();
+  if (
+    ["ibkr_transaction_history", "ibkr_funding_history"].includes(
+      ibkrCashFormat,
+    ) &&
+    matched.some((row) => row.route === "cash")
+  ) {
+    const sources = await readReconciliationSources([Number(batchId)]);
+    for (const source of sources)
+      ibkrCashSources.set(Number(source.id), source);
+  }
 
   if (
     batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
@@ -496,6 +519,7 @@ export async function commitBatch({
       chunkErrors = 0;
 
       cashReproved = false;
+      let ibkrCashAliasContext;
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
 
@@ -589,6 +613,44 @@ export async function commitBatch({
             );
             continue;
           }
+          const ibkrSource = {
+            ...ibkrCashSources.get(Number(row.id)),
+            ...row,
+            account_id: batchAccountId,
+            custom_config: batchRows[0]?.custom_config,
+          };
+          const originalIbkrFunding =
+            ibkrCashFormat === "ibkr_transaction_history" &&
+            ["deposit", "withdrawal"].includes(
+              String(row.type_raw).toLowerCase(),
+            );
+          if (originalIbkrFunding) {
+            if (!ibkrCashAliasContext) {
+              await client.query(
+                "LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE",
+              );
+              ibkrCashAliasContext = await readIbkrCashCorrectionContext();
+            }
+            const correctedAlias = originalCashFingerprintAlreadyCorrected(
+              ibkrSource,
+              ibkrCashAliasContext,
+            );
+            if (correctedAlias != null) {
+              chunkDuplicates++;
+              await markRow(row.id, "duplicate");
+              continue;
+            }
+          }
+          if (
+            ibkrCashFormat === "ibkr_funding_history" &&
+            !getIbkrFundingPrimaryEvidence(ibkrSource)
+          )
+            throw new ConflictError(
+              "IBKR cash requires intact native funding workbook evidence",
+              {
+                details: { reason: "ibkr_native_funding_required" },
+              },
+            );
           const identity = cashIdentityKey(row);
           const occurrence = cashSeenByIdentity.get(identity) ?? 0;
           cashSeenByIdentity.set(identity, occurrence + 1);
@@ -620,6 +682,13 @@ export async function commitBatch({
             await markRow(row.id, "duplicate");
             continue;
           }
+          if (originalIbkrFunding)
+            throw new ConflictError(
+              "IBKR Transaction History funding amounts require a native funding export",
+              {
+                details: { reason: "ibkr_native_funding_required" },
+              },
+            );
           const sp = savepointFor(row.id);
           if (!sp) {
             chunkErrors++;
@@ -783,6 +852,11 @@ export async function commitBatch({
             fees: row.fees != null ? Number(row.fees) : 0,
             taxes: row.taxes != null ? Number(row.taxes) : 0,
             currency,
+            dividend_amount_convention:
+              row.type === "dividend" &&
+              GROSS_DIVIDEND_FORMATS.has(batchRows[0]?.custom_config?.format)
+                ? "gross"
+                : undefined,
             note: row.note || undefined,
             fx_rate_to_eur: fxRate,
             account_id: batchAccountId,

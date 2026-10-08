@@ -86,7 +86,21 @@ import {
   proveKinesisCashSources,
 } from "./portfolioKinesisCashScope.ts";
 import { readKinesisCashContext } from "../repositories/portfolioImportCashRepository.ts";
+import type {
+  IbkrCashCorrectionAction,
+  IbkrCashCorrectionContext,
+  IbkrCashFinancialImage,
+} from "../repositories/portfolioImportCashRepository.ts";
 import { recordKinesisCash } from "./portfolioImportCashService.ts";
+import {
+  readIbkrCashCorrectionContext,
+  proveIbkrCashCorrections,
+  applyIbkrCashCorrection,
+  settleIbkrCashCorrectionRepeat,
+  isIbkrCashCorrectionReceipt,
+  validateIbkrCashCorrectionRollback,
+  restoreIbkrCashCorrection,
+} from "./portfolioIbkrCashReconciliation.ts";
 import { proveKinesisFullYieldCandidates } from "./portfolioKinesisFullImport.ts";
 import {
   proveKinesisNetworkBindings,
@@ -184,7 +198,9 @@ export interface PlanAction {
   action: string;
   reason?: string;
   candidateTransactionIds?: number[];
-  investmentId?: number;
+  investmentId?: number | null;
+  /** IBKR native funding corrections act on cash, not a holding. */
+  isCash?: boolean;
   source?: Record<string, unknown>;
   existing?: Record<string, unknown>;
   existingTransactionId?: number;
@@ -256,6 +272,7 @@ export interface ReconciliationPlanInput {
   historicalFxContext?: HistoricalFxRate[];
   incomeRecognitionContext?: IncomeContext;
   cashContext?: CashContext;
+  ibkrCashContext?: IbkrCashCorrectionContext;
   cashFundingPolicy?: string;
   networkContext?: ReconciliationContext;
   nativeGiftContext?: ReconciliationReceiptContext;
@@ -308,6 +325,8 @@ export interface ReconciliationPlanResult {
   nativeGiftGroups: NativeGiftGroup[];
   incomeRecords?: ReturnType<typeof proveKinesisIncomePairs>["records"];
   cashRecords?: ReturnType<typeof classifyKinesisCash>["records"];
+  cashCorrections?: IbkrCashCorrectionAction[];
+  cashCorrectionRepeats?: IbkrCashCorrectionAction[];
 }
 /** The batch selection and policies every locked plan read takes. */
 export interface ReconciliationScopeOptions {
@@ -887,6 +906,7 @@ export function buildPortfolioImportReconciliationPlan({
     sources: [],
     batches: [],
   },
+  ibkrCashContext = { ledger: [], sources: [], batches: [], receipts: [] },
   cashFundingPolicy = undefined,
   networkContext = {
     sources: [],
@@ -916,6 +936,23 @@ export function buildPortfolioImportReconciliationPlan({
       "adopt_policy must be preserve_existing or prefer_source",
     );
   const canonicalPolicies = canonicalBatchPolicies(batchPolicies, batches);
+  if (batches.some((batch) => formatOf(batch) === "ibkr_funding_history")) {
+    if (
+      batches.some((batch) => formatOf(batch) !== "ibkr_funding_history") ||
+      !["full", "correct_existing_only"].includes(reconciliationScope)
+    )
+      throw new ValidationError(
+        "IBKR native funding corrections require a separate funding source scope",
+      );
+    return ibkrFundingCorrectionPlan(
+      rows,
+      batches,
+      ibkrCashContext,
+      adoptPolicy,
+      canonicalPolicies,
+      reconciliationScope,
+    );
+  }
   const scopedPolicy =
     reconciliationScope === "correct_existing_only"
       ? "prefer_source"
@@ -1898,6 +1935,132 @@ export function buildPortfolioImportReconciliationPlan({
               cashContext,
               historicalFxContext,
             );
+}
+
+function ibkrFundingCorrectionPlan(
+  rows: ReconciliationSourceRow[],
+  batches: ReconciliationBatchScopeRow[],
+  context: IbkrCashCorrectionContext,
+  adoptPolicy: string | undefined,
+  batchPolicies: BatchPolicy[],
+  scope: string,
+): ReconciliationPlanResult {
+  const proved = proveIbkrCashCorrections(rows, batches, context);
+  const overrides = new Map(
+    batchPolicies.map((item) => [item.batchId, item.adoptPolicy]),
+  );
+  const blockers: PlanIssue[] = [...proved.blockers];
+  const values = (
+    snapshot: IbkrCashFinancialImage,
+    row: ReconciliationSourceRow,
+  ) => ({
+    date: snapshot.date,
+    type: row.type_raw,
+    amount: snapshot.amount,
+    currency: snapshot.currency,
+    memo: snapshot.memo,
+  });
+  const actions: PlanAction[] = [...proved.actions, ...proved.duplicates].map(
+    (item): PlanAction => {
+    const policy = overrides.get(Number(item.row.batch_id)) ?? adoptPolicy;
+    const requiresPolicy =
+      item.action === "adopt" && policy !== "prefer_source";
+    if (requiresPolicy)
+      blockers.push({
+        reason: "source_policy_required",
+        batchId: Number(item.row.batch_id),
+        rowId: Number(item.row.id),
+        rowOrdinal: Number(item.row.row_index) + 1,
+        candidateTransactionIds: [item.transactionId],
+      });
+    return {
+      batchId: Number(item.row.batch_id),
+      rowId: Number(item.row.id),
+      rowOrdinal: Number(item.row.row_index) + 1,
+      investmentId: null,
+      isCash: true,
+      action: requiresPolicy
+        ? "policy_required"
+        : "settled" in item && item.settled
+          ? "settled"
+          : item.action,
+      existingTransactionId: item.transactionId,
+      candidateTransactionIds: [item.transactionId],
+      policy: "prefer_source",
+      economicsProven: true,
+      existing: values(item.before.snapshot, item.row),
+      source: values(item.after.snapshot, item.row),
+      corrections: item.corrections.map((correction) => correction.field),
+    };
+    },
+  );
+  for (const issue of proved.blockers)
+    actions.push({
+      batchId: issue.batchId,
+      rowId: issue.rowId,
+      rowOrdinal: issue.rowOrdinal,
+      investmentId: null,
+      isCash: true,
+      action: "blocked",
+      candidateTransactionIds: issue.candidateTransactionIds,
+    });
+  const summary = Object.fromEntries(
+    [
+      "insert",
+      "record_income",
+      "adopt",
+      "repair_duplicate",
+      "duplicate",
+      "duplicate_source",
+      "cash",
+      "transfer",
+      "adjustment",
+      "internal_annotation",
+      "settled",
+      "blocked",
+      "policy_required",
+    ].map((kind) => [
+      kind,
+      actions.filter((item) => item.action === kind).length,
+    ]),
+  );
+  return {
+    adoptions: [],
+    companions: [],
+    cashCorrections: proved.actions,
+    cashCorrectionRepeats: proved.duplicates,
+    sourceOverrides: new Map(),
+    networkBindings: [],
+    nativeGiftGroups: [],
+    plan: {
+      batchIds: batches.map((batch) => Number(batch.id)),
+      adoptPolicy: adoptPolicy ?? null,
+      batchPolicies,
+      reconciliationScope: scope,
+      actions,
+      blockers,
+      summary,
+      ready: blockers.length === 0,
+      planFingerprint: fingerprint({
+        context: proved.contextFingerprint,
+        adoptPolicy,
+        batchPolicies,
+        scope,
+        actions,
+        blockers,
+      }),
+      selectedRowIds: rows.map((row) => Number(row.id)),
+      pending: 0,
+      complete: true,
+      deferredCounts: {},
+      batchProgress: batches.map((batch) => ({
+        batchId: Number(batch.id),
+        pending: 0,
+        complete: true,
+        deferredCounts: {},
+      })),
+    },
+  };
 }
 
 function completeKinesisCashRepeatPlan(
@@ -3047,6 +3210,30 @@ async function loadPlan(
     throw new ValidationError(
       "Reconciliation scope contains a missing import batch",
     );
+  if (batches.some((batch) => formatOf(batch) === "ibkr_funding_history")) {
+    const ibkrCashContext = await readIbkrCashCorrectionContext();
+    return {
+      ...buildPortfolioImportReconciliationPlan({
+        rows,
+        history: [],
+        batches,
+        adoptPolicy,
+        batchPolicies,
+        reconciliationScope,
+        ibkrCashContext,
+      }),
+      history: [],
+      rows,
+      referenceOriginalBatchIds: [],
+      priorSaxoBatchIds: [],
+      priorKinesisBatchIds: [],
+      priorIncomeBatchIds: [],
+      priorNetworkBatchIds: [],
+      priorCashBatchIds: ibkrCashContext.batches.map((batch) =>
+        Number(batch.id),
+      ),
+    };
+  }
   if (
     ["record_in_kind_income_only", "record_cash_only"].includes(
       reconciliationScope,
@@ -3428,6 +3615,8 @@ export async function applyPortfolioImportReconciliation({
     priorIncomeBatchIds,
     incomeRecords = [],
     cashRecords = [],
+    cashCorrections = [],
+    cashCorrectionRepeats = [],
     priorCashBatchIds = [],
     priorNetworkBatchIds = [],
     sourceOverrides = new Map(),
@@ -3523,6 +3712,17 @@ export async function applyPortfolioImportReconciliation({
   const adoptedByBatch = new Map<number, number>();
   const repairedByBatch = new Map<number, number>();
   const companionsByBatch = new Map<number, number>();
+  for (const correction of cashCorrections) {
+    await applyIbkrCashCorrection(correction);
+    const batchId = Number(correction.row.batch_id);
+    adoptedByBatch.set(batchId, (adoptedByBatch.get(batchId) ?? 0) + 1);
+  }
+  for (const repeated of cashCorrectionRepeats) {
+    await settleIbkrCashCorrectionRepeat(repeated);
+    const batchId = Number(repeated.row.batch_id);
+    if (!repeated.settled)
+      companionsByBatch.set(batchId, (companionsByBatch.get(batchId) ?? 0) + 1);
+  }
   for (const { row } of companions) {
     if (!(await markSaxoCompanionSourceDuplicate(row)))
       throw new ConflictError(
@@ -3574,6 +3774,7 @@ export async function applyPortfolioImportReconciliation({
   for (const action of plan.actions.filter(
     (action) =>
       action.action === "duplicate" &&
+      !action.isCash &&
       (reconciliationScope !== "full" ||
         action.incomeProof ||
         action.cashProof ||
@@ -3710,18 +3911,22 @@ export async function validatePortfolioImportAdoptionRollback(
   removalRows: readonly { id: number | string; investment_id?: unknown }[],
 ): Promise<ReconciliationJournalRow[]> {
   const receipts = await getActiveAdoptionReceipts(batchId);
+  await validateIbkrCashCorrectionRollback(receipts);
+  const portfolioReceipts = receipts.filter(
+    (receipt) => !isIbkrCashCorrectionReceipt(receipt),
+  );
   const repairs = await getActiveDuplicateRepairReceipts(batchId);
   await validateDuplicatePortfolioRepairRollback(repairs);
   const sourceRows = await readReconciliationSources([batchId]);
   const history = await readReconciliationHistory([
     ...new Set([
-      ...receipts.map((receipt) => receipt.before_data.investment_id),
+      ...portfolioReceipts.map((receipt) => receipt.before_data.investment_id),
       ...repairs.map((receipt) => receipt.before_data.legacy.investment_id),
       ...sourceRows.map((row) => Number(row.investment_id)).filter(Boolean),
       ...removalRows.map((row) => Number(row.investment_id)).filter(Boolean),
     ]),
   ]);
-  for (const receipt of receipts) {
+  for (const receipt of portfolioReceipts) {
     const current = history.find(
       (row) => Number(row.id) === Number(receipt.transaction_id),
     );
@@ -3733,7 +3938,7 @@ export async function validatePortfolioImportAdoptionRollback(
   }
   const removed = new Set(removalRows.map((row) => Number(row.id)));
   const restored = new Map<number, ProjectedHistoryEvent>([
-    ...receipts.map((receipt): [number, ProjectedHistoryEvent] => [
+    ...portfolioReceipts.map((receipt): [number, ProjectedHistoryEvent] => [
       Number(receipt.transaction_id),
       receipt.before_data,
     ]),
@@ -3762,6 +3967,10 @@ export async function restorePortfolioImportAdoptions(
   receipts: readonly ReconciliationJournalRow[],
 ): Promise<void> {
   for (const receipt of receipts) {
+    if (isIbkrCashCorrectionReceipt(receipt)) {
+      await restoreIbkrCashCorrection(receipt);
+      continue;
+    }
     const restored = await compareAndSetReconciledTransaction(
       receipt.after_data,
       receipt.before_data,

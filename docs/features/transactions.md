@@ -579,3 +579,10 @@ Amount quick filters use the configured number format, including decimal commas.
 Date ranges reject an end date before the start date with field-linked feedback. One-sided dates remain supported. The active-filter summary includes each identity constraint when scopes are combined; category groups use a count when names are unavailable. A single named scope keeps its readable label.
 
 The initial transaction-load error exposes Retry, which refetches the existing query without navigating away or clearing the selected filters.
+
+Select exactly two existing active transactions on different owned accounts and with opposite
+signs to use **Mark as internal transfer**. The confirmation shows both record IDs, accounts,
+dates, amounts and currencies. Already paired records and filter-wide selections are excluded.
+The existing validated endpoint links the two records without creating any new transaction.
+It permits explicitly confirmed currency conversion or net-of-fee movements. Separate fees stay
+expenses. See [[docs/api/transactions]].

@@ -29,6 +29,9 @@ export interface RawApiTransaction {
     recipient_name?: string | null;
     bank?: string;
     account_id?: number | null;
+    is_transfer?: boolean;
+    transfer_peer_id?: number | null;
+    transfer_source?: string | null;
     amount?: number;
     currency?: string | null;
     running_balance?: number | null;

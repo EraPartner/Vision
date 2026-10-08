@@ -287,6 +287,10 @@ history. This group uses the aggregation rate limiter.
 
 ## Transactions (18 endpoints — incl. 4 Tags endpoints)
 
+With `include_balance=true`, transaction lists carry the latest preceding statement balance and
+then apply subsequent amounts, independently per account and currency. This corrects zero-amount
+opening anchors without changing request fields, response shape or operation count.
+
 > [!warning] Breaking transaction response cleanup (2026-09-11)
 > Transaction list, single-row, create, and update responses expose only `transaction_date`. The undocumented duplicate `date` property and the frontend fallback were removed under [[docs/adr/135-compatibility-cutoff-for-september-retirements|ADR-135]]. Request-side date compatibility is unchanged. The operation count did not change.
 
@@ -459,8 +463,8 @@ in ascending order and preserves source order within a date. See
 
 | Method | Path                                                                | Description                                                                                           | Rate Limit        | Doc                                               |
 | ------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------- |
-| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/Saxo XLSX portfolio import; multipart options; returns 201 or 202                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/Saxo XLSX import; workbook preflight before SSE progress/review/terminal events                   | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/maintained workbook portfolio import; multipart options; returns 201 or 202                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/maintained workbook import; workbook preflight before SSE progress/review/terminal events                   | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/parsers`                                     | Create saved portfolio parser; 409 on duplicate name                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | PATCH  | `/api/portfolio/import/parsers/:id`                                 | Update saved portfolio parser name/config                                                             | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
@@ -472,7 +476,7 @@ in ascending order and preserves source order within a date. See
 | POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis attachment/correction scopes with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis scopes or native IBKR funding corrections with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 | POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle       | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
@@ -635,6 +639,9 @@ Aggregation routes removed in Phase 9 as migration to `/api/aggregations/*` is c
 | GET    | `/api/info/portfolio-performance/by-broker` | Forward-only daily account partitions with frozen names and an explicit unassigned series; no historical backfill (ADR-143)                                                                                                                                                                           | 30 req/min | [[docs/api/info\|Info]]                           |
 | GET    | `/api/info/portfolio-summary`               | Realtime portfolio totals and active holdings (eight-decimal units; canonical custody/adjustments). ADR-074: transaction-date FX attribution. ADR-108: partitioned `byAccount` P&L with machine-readable assignment identity and oversold repair state; per-investment `fullyAssigned` and `oversold` | 60 req/min | [[docs/api/portfolio-summary\|Portfolio Summary]] |
 
+`portfolio-summary` also returns optional additive `brokerageCashFees` (dated source-owned cash costs,
+`gainAfterFees` and account subtotals). Existing investment totals and return series keep their scope.
+
 ## AI Chat (9 endpoints + 30 tool-calling tools)
 
 | Method | Path                        | Description                                                                                                 | Rate Limit | Doc                      |
@@ -767,3 +774,8 @@ counts. Brokerage-origin movements and expenses have no invented peer. Other por
 rows remain pending; repeated proved cash is a no-op. These optional fields are additive with no
 operation changes. See [[docs/api/portfolio-imports]] and
 [[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+
+Native IBKR funding workbooks use the additive `ibkr_funding_history` format on the existing
+portfolio upload paths. Its separate source-preferred correction scope preserves cash IDs,
+authenticates original/native evidence, and creates no new financial rows. Bank uploads remain
+CSV-only. See [[docs/api/portfolio-imports#IBKR native funding correction scope]].

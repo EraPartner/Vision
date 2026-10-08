@@ -8,10 +8,43 @@ export type PortfolioImportSource =
 export interface DetectedPortfolioImport {
     source: PortfolioImportSource;
     sourceAccountIdentities: string[];
+    presetKey?: "ibkr_funding_history";
 }
 
 // Match the upload endpoint's limit before reading a complete statement.
 const MAX_STATEMENT_BYTES = 50 * 1024 * 1024;
+const MAX_WORKBOOK_CELLS = 500000;
+const FUNDING_CURRENCIES = new Set(Intl.supportedValuesOf("currency"));
+
+const IBKR_FUNDING_HEADERS = {
+    Deposit: [
+        "Request Date",
+        "Reference Number",
+        "Method",
+        "Account ID",
+        "Account Title",
+        "Delivering Institution",
+        "From Account Number",
+        "Routing Number",
+        "Date Received",
+        "Date Available for Trading",
+        "Date Available for Withdrawal - Original Bank",
+        "Date Available for Withdrawal - Other Bank",
+        "Amount",
+        "Status",
+    ],
+    Withdrawal: [
+        "Request Date",
+        "Reference Number",
+        "Method",
+        "Account ID",
+        "Account Title",
+        "Receiving Institution",
+        "Date Processed",
+        "Amount",
+        "Status",
+    ],
+};
 
 const HEADER_SIGNATURES: Record<
     Exclude<PortfolioImportSource, "ibkr" | "native_receipts">,
@@ -214,7 +247,42 @@ export async function detectPortfolioImportFile(
     if (file.size > MAX_STATEMENT_BYTES)
         throw new Error("Portfolio statement exceeds the upload limit");
     const bytes = await readFileBytes(file);
-    if (file.name.toLowerCase().endsWith(".xlsx")) {
+    const fileName = file.name.toLowerCase();
+    if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
+        const signature = new Uint8Array(
+            bytes,
+            0,
+            Math.min(8, bytes.byteLength),
+        );
+        const xls =
+            signature.length === 8 &&
+            [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1].every(
+                (value, index) => value === signature[index],
+            );
+        const xlsx =
+            signature.length >= 4 &&
+            [0x50, 0x4b, 0x03, 0x04].every(
+                (value, index) => value === signature[index],
+            );
+        if (!xls && !xlsx) return undefined;
+        const XLSX = await import("xlsx");
+        const workbook = XLSX.read(bytes, {
+            type: "array",
+            cellDates: false,
+            cellFormula: true,
+            cellText: false,
+            bookVBA: true,
+            WTF: true,
+        });
+        const funding = detectIbkrFundingWorkbook(workbook, XLSX.utils);
+        if (funding) return funding;
+        if (
+            xls ||
+            workbook.SheetNames.some((name) =>
+                Object.hasOwn(IBKR_FUNDING_HEADERS, name),
+            )
+        )
+            return undefined;
         const { default: readExcelFile } =
             await import("read-excel-file/browser");
         const sheets = await readExcelFile(bytes, {
@@ -242,6 +310,126 @@ export async function detectPortfolioImportFile(
     // source account and assign its transactions to the wrong broker account.
     const records = parse(text, options) as string[][];
     return detectPortfolioImportRecords(records);
+}
+
+function detectIbkrFundingWorkbook(
+    workbook: import("xlsx").WorkBook,
+    utils: typeof import("xlsx").utils,
+): DetectedPortfolioImport | undefined {
+    if (
+        workbook.vbaraw ||
+        !workbook.SheetNames.length ||
+        workbook.SheetNames.length > 2 ||
+        new Set(workbook.SheetNames).size !== workbook.SheetNames.length ||
+        workbook.Workbook?.Sheets?.some((sheet) => sheet.Hidden)
+    )
+        return undefined;
+    const identities = new Set<string>();
+    const references = new Set<string>();
+    let cellCount = 0;
+    for (const sheetName of workbook.SheetNames) {
+        if (!Object.hasOwn(IBKR_FUNDING_HEADERS, sheetName)) return undefined;
+        const sheet = workbook.Sheets[sheetName];
+        if (
+            !sheet["!ref"] ||
+            sheet["!merges"]?.length ||
+            (sheet["!type"] && sheet["!type"] !== "sheet")
+        )
+            return undefined;
+        const range = utils.decode_range(sheet["!ref"]);
+        cellCount += (range.e.r + 1) * (range.e.c + 1);
+        if (
+            range.s.r !== 0 ||
+            range.s.c !== 0 ||
+            range.e.c > 99 ||
+            cellCount > MAX_WORKBOOK_CELLS
+        )
+            return undefined;
+        for (const [coordinate, value] of Object.entries(sheet)) {
+            if (
+                !coordinate.startsWith("!") &&
+                (value.f != null ||
+                    value.F != null ||
+                    !["s", "z"].includes(value.t))
+            )
+                return undefined;
+        }
+        const records = utils.sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            raw: true,
+            defval: null,
+        });
+        const headers =
+            IBKR_FUNDING_HEADERS[
+                sheetName as keyof typeof IBKR_FUNDING_HEADERS
+            ];
+        if (JSON.stringify(records[0]) !== JSON.stringify(headers))
+            return undefined;
+        for (const record of records.slice(1)) {
+            if (record.every((value) => value == null || value === ""))
+                continue;
+            if (
+                record.length !== headers.length ||
+                record.some(
+                    (value) => value != null && typeof value !== "string",
+                )
+            )
+                return undefined;
+            const field = (key: string) => cell(record[headers.indexOf(key)]);
+            const original = (key: string) => record[headers.indexOf(key)];
+            if (
+                [
+                    "Request Date",
+                    "Reference Number",
+                    "Method",
+                    "Account ID",
+                    "Account Title",
+                    "Amount",
+                    "Status",
+                ].some((key) => !field(key) || field(key) !== original(key))
+            )
+                return undefined;
+            const requested = field("Request Date");
+            const completed = field(
+                sheetName === "Deposit" ? "Date Received" : "Date Processed",
+            );
+            if (
+                ![requested, completed].every(validIsoDate) ||
+                completed < requested ||
+                field("Method") !== "Wire" ||
+                field("Status") !==
+                    (sheetName === "Deposit" ? "Available" : "Sent") ||
+                !/^[A-Z][A-Z0-9-]{2,49}$/.test(field("Account ID")) ||
+                !/^[A-Za-z0-9-]{1,100}$/.test(field("Reference Number")) ||
+                !/^[A-Z]{3} (?:0|[1-9]\d*|[1-9]\d{0,2}(?:,\d{3})+)\.\d{2}$/.test(
+                    field("Amount"),
+                ) ||
+                !FUNDING_CURRENCIES.has(field("Amount").slice(0, 3)) ||
+                Number(field("Amount").slice(4).replaceAll(",", "")) <= 0
+            )
+                return undefined;
+            const reference = `${field("Account ID")}\u0000${field("Reference Number")}`;
+            if (references.has(reference)) return undefined;
+            references.add(reference);
+            identities.add(field("Account ID"));
+        }
+    }
+    return references.size && identities.size === 1
+        ? {
+              source: "ibkr",
+              sourceAccountIdentities: [...identities],
+              presetKey: "ibkr_funding_history",
+          }
+        : undefined;
+}
+
+function validIsoDate(value: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(`${value}T00:00:00Z`);
+    return (
+        Number.isFinite(date.getTime()) &&
+        date.toISOString().slice(0, 10) === value
+    );
 }
 
 async function readFileBytes(file: File): Promise<ArrayBuffer> {

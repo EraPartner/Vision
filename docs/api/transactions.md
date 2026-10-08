@@ -6,7 +6,7 @@ path: /api/transactions
 description: CRUD operations for financial transactions, including CSV and NDJSON export, bulk operations
 date: 2026-10-08
 updated: 2026-10-08
-last_modified: 2026-09-27
+last_modified: 2026-10-08
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
@@ -73,7 +73,7 @@ Notes:
 - `category_ids` accepts comma-separated integers (e.g., `category_ids=5,7,12`). Ignored if `category_id` is set. Enables pivot table drillthrough to multiple category groups (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
 - **Id params are strict (changed 2026-08-11, breaking for malformed ids).** `transaction_id`, `category_id`, `recipient_id`, `recipient_group_id` and `account_id` accept only a plain base-10 integer in 1..2,147,483,647; every element of `category_ids` must satisfy the same rule. Anything else — `12abc`, `12.5`, `1e3`, `0x10`, `+5`, `-4`, `0`, `5`, `NaN` — returns `400 VALIDATION_ERROR`. Absent and empty (`?category_id=`, `?category_ids=`) still mean _no filter_ and answer `200`. See the warning under [[docs/api/transactions#GET /api/transactions/export/csv|the export endpoints]] and [[docs/security/input-validation#Comma-separated ID Query Params (transactions list + export)|Input Validation]].
 - `transaction_type` filters by amount sign: `income` (positive amounts) or `expense` (negative amounts). Used by pivot table drillthrough to isolate income-only or expense-only views (Phase 13) ([[apps/node-backend/src/lib/filterBuilder.ts]]).
-- `include_balance=true` adds `running_balance` with `SUM(amount) OVER (PARTITION BY account_id, COALESCE(currency, 'EUR') ORDER BY date ASC, id ASC)`. It never adds unlike currencies. The window runs over the filtered set before pagination; legacy NULL currencies use EUR ([[apps/node-backend/src/repositories/transactionRepository.ts]]).
+- `include_balance=true` adds `running_balance` by accumulating amounts and carrying the latest preceding stored statement balance. A stamped row resets the balance, including zero-amount opening rows; later unstamped rows advance it. Account/currency partitions use chronological date/id ordering and never add unlike currencies. The window runs over the filtered set before pagination; legacy NULL currencies use EUR ([[apps/node-backend/src/repositories/transactionRepository.ts]]).
 - Route query parsing was refactored into a shared helper (`parseTransactionListQuery`) to reduce duplication while preserving default values, clamping rules, and sort-direction constraints ([[apps/node-backend/src/routes/transactions.ts]]).
 - Non-`uncategorised` list requests use a top-N data query plus a narrow count query (`getAllWithCount`) instead of `COUNT(*) OVER ()`, so PostgreSQL can stop the row query at `LIMIT`. Identical normalized filters share their count for two seconds across page and page-size changes, including concurrent requests. Transaction CRUD and committed imports clear the cache. Merge repoints and other direct SQL writers can leave `total` briefly stale until the two-second bound expires. Filters and response shape remain unchanged ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/repositories/transactionRepository.ts]]).
 - `uncategorised=true` uses one repository round trip. Page rows and `total` now share the same active queue filters and full three-level effective-category NULL predicate. `total` is the filtered queue size, including when offset exceeds it; limit/offset affect rows only.
@@ -670,3 +670,9 @@ Related services:
 
 - [[apps/node-backend/src/services/currency/currencyConversionService.ts]]
 - [[apps/node-backend/src/lib/filterBuilder.ts]] (shared filter construction)
+
+The transaction list and detail responses retain `account_id`, `is_transfer`, `transfer_peer_id`,
+and `transfer_source`. These additive fields let the transaction page confirm two existing
+records through the existing transfer endpoint without creating cash or detaching old peers.
+Ordinary income and spending exclude both linked records; separately recorded fees remain
+expenses. See [[docs/features/transactions]].

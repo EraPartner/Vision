@@ -304,6 +304,7 @@ export default function PortfolioPage() {
     const totalGainLoss = totals?.totalGainLoss ?? 0;
     const totalReturnPct = totals?.totalReturnPct ?? 0;
     const totalRealizedGain = totals?.totalRealizedGain ?? 0;
+    const brokerageCashFees = portfolioSummary?.brokerageCashFees;
     const fxRateFellBack = totals?.usedFallbackRate === true;
     const hasFxExposure = (portfolioSummary?.summaries ?? []).some(
         (s) =>
@@ -744,6 +745,29 @@ export default function PortfolioPage() {
             value: 0 - (totals?.totalTaxes ?? 0),
             tone: "text-loss",
         },
+        ...(brokerageCashFees && brokerageCashFees.total > 0
+            ? [
+                  {
+                      key: "accountFees",
+                      label: t("portfolio.brokerAccountFees"),
+                      value: 0 - brokerageCashFees.total,
+                      tone: "text-loss",
+                      warning: brokerageCashFees.usedFallbackRate
+                          ? t("portfolio.fxFallbackNote")
+                          : undefined,
+                  },
+                  {
+                      key: "gainAfterAccountFees",
+                      label: t("portfolio.gainAfterAccountFees"),
+                      value: brokerageCashFees.gainAfterFees,
+                      tone: toneClass(brokerageCashFees.gainAfterFees),
+                      signed: true,
+                      warning: fxRateFellBack || brokerageCashFees.usedFallbackRate
+                          ? t("portfolio.fxFallbackNote")
+                          : undefined,
+                  },
+              ]
+            : []),
     ];
 
     return (
@@ -1048,7 +1072,7 @@ export default function PortfolioPage() {
                             className="grid grid-cols-2 gap-4 lg:grid-cols-4"
                         >
                             <Figure
-                                label={t("portfolio.totalReturn")}
+                                label={t("portfolio.investmentReturn")}
                                 value={formatPercent(totalReturnPct, {
                                     digits: 1,
                                     signed: true,

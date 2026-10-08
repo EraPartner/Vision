@@ -721,7 +721,7 @@ export function InvestmentDetailDialog({
                                 </div>
                                 <div className="min-w-0">
                                     <p className="flex items-center gap-1.5 type-caption text-label-tertiary">
-                                        {investment.totalGain >= 0 ? (
+                                        {investment.gainLoss >= 0 ? (
                                             <TrendingUp
                                                 className="h-3.5 w-3.5 text-gain"
                                                 aria-hidden
@@ -737,11 +737,11 @@ export function InvestmentDetailDialog({
                                     <p
                                         className={cn(
                                             "truncate type-title-1 tabular-nums",
-                                            toneClass(investment.totalGain),
+                                            toneClass(investment.gainLoss),
                                         )}
                                     >
                                         <Money
-                                            amount={investment.totalGain}
+                                            amount={investment.gainLoss}
                                             currency={investment.currency}
                                             signed
                                         />

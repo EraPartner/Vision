@@ -186,7 +186,8 @@ export default function StocksPage({
         > = {};
         for (const holding of holdings) {
             if (enableFxAwarePnl) {
-                map[holding.id] = computeFxAwarePnl(holding);
+                const pnl = computeFxAwarePnl(holding);
+                if (pnl) map[holding.id] = pnl;
                 continue;
             }
 
@@ -399,7 +400,9 @@ export default function StocksPage({
                         <div
                             className={cn(
                                 "grid grid-cols-2 gap-x-6 gap-y-4 lg:col-span-3",
-                                showDividends ? "sm:grid-cols-3" : "sm:grid-cols-2",
+                                showDividends
+                                    ? "sm:grid-cols-3"
+                                    : "sm:grid-cols-2",
                             )}
                         >
                             <Figure
@@ -515,7 +518,9 @@ export default function StocksPage({
                                                             )}
                                                             className="-mr-2 h-7 gap-1 px-2 type-footnote font-medium text-label-secondary"
                                                         >
-                                                            {t("portfolio.price")}
+                                                            {t(
+                                                                "portfolio.price",
+                                                            )}
                                                             <Info
                                                                 className="h-3 w-3"
                                                                 aria-hidden
@@ -544,7 +549,9 @@ export default function StocksPage({
                                         <TableHead className={headCellClass}>
                                             <TouchDisclosure
                                                 label={t("portfolio.fxEffect")}
-                                                content={t("portfolio.fxEffect")}
+                                                content={t(
+                                                    "portfolio.fxEffect",
+                                                )}
                                             >
                                                 {t("portfolio.fxPnl")}
                                             </TouchDisclosure>
@@ -565,7 +572,8 @@ export default function StocksPage({
                             <TableBody>
                                 {holdings.map((h) => {
                                     const pnl = displayedPnlByHoldingId[h.id];
-                                    const unrealized = pnl?.unrealizedTarget || 0;
+                                    const unrealized =
+                                        pnl?.unrealizedTarget || 0;
                                     const realized = pnl?.realizedTarget || 0;
                                     const researchHref = h.symbol
                                         ? `/research/market?symbol=${encodeURIComponent(h.symbol)}&investmentId=${h.id}`
@@ -581,7 +589,9 @@ export default function StocksPage({
                                                         <span className="inline-flex flex-wrap items-center gap-2">
                                                             {researchHref ? (
                                                                 <TextLink
-                                                                    to={researchHref}
+                                                                    to={
+                                                                        researchHref
+                                                                    }
                                                                     className="font-medium"
                                                                 >
                                                                     {h.name}
@@ -597,7 +607,9 @@ export default function StocksPage({
                                                             >
                                                                 {h.assetClass ===
                                                                 "etf"
-                                                                    ? t("stocks.etf")
+                                                                    ? t(
+                                                                          "stocks.etf",
+                                                                      )
                                                                     : h.assetClass ===
                                                                         "metals"
                                                                       ? t(
@@ -608,7 +620,9 @@ export default function StocksPage({
                                                                         )}
                                                             </Badge>
                                                             <PortfolioOversoldBadge
-                                                                oversold={h.oversold}
+                                                                oversold={
+                                                                    h.oversold
+                                                                }
                                                             />
                                                         </span>
                                                     </TableCell>
@@ -624,11 +638,14 @@ export default function StocksPage({
                                                         </span>
                                                         <span className="flex min-w-0 flex-col">
                                                             <span className="font-mono">
-                                                                {h.symbol || "?"}
+                                                                {h.symbol ||
+                                                                    "?"}
                                                             </span>
                                                             {researchHref ? (
                                                                 <TextLink
-                                                                    to={researchHref}
+                                                                    to={
+                                                                        researchHref
+                                                                    }
                                                                     tone="muted"
                                                                     className="type-footnote"
                                                                 >
@@ -641,7 +658,9 @@ export default function StocksPage({
                                                             )}
                                                         </span>
                                                         <PortfolioOversoldBadge
-                                                            oversold={h.oversold}
+                                                            oversold={
+                                                                h.oversold
+                                                            }
                                                         />
                                                     </div>
                                                 </TableCell>
@@ -649,7 +668,8 @@ export default function StocksPage({
                                             <TableCell
                                                 className={cn(
                                                     "text-right tabular-nums",
-                                                    unitsMonospace && "font-mono",
+                                                    unitsMonospace &&
+                                                        "font-mono",
                                                 )}
                                             >
                                                 {h.totalUnits.toFixed(
@@ -697,10 +717,12 @@ export default function StocksPage({
                                                 />
                                                 <DeltaPill
                                                     value={
-                                                        pnl?.unrealizedPercent || 0
+                                                        pnl?.unrealizedPercent ||
+                                                        0
                                                     }
                                                     label={formatPercent(
-                                                        pnl?.unrealizedPercent || 0,
+                                                        pnl?.unrealizedPercent ||
+                                                            0,
                                                         {
                                                             digits: 2,
                                                             signed: true,
@@ -720,7 +742,9 @@ export default function StocksPage({
                                                 {realized !== 0 ? (
                                                     <Money
                                                         amount={realized}
-                                                        currency={targetCurrency}
+                                                        currency={
+                                                            targetCurrency
+                                                        }
                                                         signed
                                                     />
                                                 ) : (
@@ -730,7 +754,9 @@ export default function StocksPage({
                                             {pageHasFxExposure && (
                                                 <FxPnlCell
                                                     holding={h}
-                                                    fxInfo={fxInfoById.get(h.id)}
+                                                    fxInfo={fxInfoById.get(
+                                                        h.id,
+                                                    )}
                                                     targetCurrency={
                                                         targetCurrency
                                                     }

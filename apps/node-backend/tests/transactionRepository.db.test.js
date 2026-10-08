@@ -33,7 +33,9 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import transactionRepository from "../src/repositories/transactionRepository.ts";
+import transactionRepository, {
+  clearTransactionCountCache,
+} from "../src/repositories/transactionRepository.ts";
 import { closePool } from "../src/database/connection.ts";
 import { toWireDate } from "../src/lib/dateFormat.ts";
 
@@ -83,11 +85,13 @@ async function insertTxn({
   memo = null,
   isActive = true,
   isTransfer = false,
+  balance = null,
+  transferSource = null,
 }) {
   const accountId = bank ? await ensureAccount(bank) : null;
   const { rows } = await getTestPool().query(
-    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo, is_active, is_transfer)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO transactions (date, amount, currency, recipient_id, category_id, account_id, memo, is_active, is_transfer, balance, transfer_source)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       date,
@@ -99,6 +103,8 @@ async function insertTxn({
       memo,
       isActive,
       isTransfer,
+      balance,
+      transferSource,
     ],
   );
   return rows[0].id;
@@ -118,6 +124,8 @@ async function insertTxn({
  *   t6 2024-03-02   -9.99 EUR  delhaize       (INACTIVE — must be invisible everywhere)
  */
 async function seedCorpus() {
+  // Fixtures write SQL directly, outside the repository's cache invalidation.
+  clearTransactionCountCache();
   const pool = getTestPool();
 
   for (const [key, [general, detail]] of Object.entries({
@@ -464,6 +472,124 @@ describe.skipIf(!hasTestDatabase())(
         // WISE USD is its own partition — NOT a continuation of KBC's sum.
         expect(rb[T.t5]).toBe(-45.1);
       });
+    });
+
+    describe("anchored running balances", () => {
+      it.each(["getAll", "getAllWithCount", "getUncategorisedWithCount"])(
+        "%s carries stamps before pagination and keeps filtered currency partitions",
+        async (method) => {
+          const bank = "ANCHORED LEDGER";
+          const add = (values) =>
+            insertTxn({
+              bank,
+              recipientId: rec.delhaizeAlias,
+              ...values,
+            });
+          const prior = await add({ date: "2024-04-01", amount: "500" });
+          const before = await add({ date: "2024-04-02", amount: "-20" });
+          const opening = await add({
+            date: "2024-04-02",
+            amount: "0",
+            balance: "50",
+            isTransfer: true,
+            transferSource: "opening",
+          });
+          const after = await add({ date: "2024-04-02", amount: "-5" });
+          const usd = await add({
+            date: "2024-04-02",
+            amount: "100",
+            currency: "USD",
+          });
+          const usdStamp = await add({
+            date: "2024-04-03",
+            amount: "0",
+            balance: "3",
+            currency: "USD",
+          });
+          const debit = await add({ date: "2024-04-03", amount: "-7" });
+          const reset = await add({
+            date: "2024-04-04",
+            amount: "2",
+            balance: "-4",
+          });
+          const zero = await add({
+            date: "2024-04-05",
+            amount: "0",
+            balance: "0",
+          });
+          const later = await add({ date: "2024-04-05", amount: "1" });
+          const inactive = await add({
+            date: "2024-04-06",
+            amount: "0",
+            balance: "900",
+            isActive: false,
+          });
+          const future = await add({
+            date: "2100-01-01",
+            amount: "0",
+            balance: "12",
+          });
+          const otherAccount = await insertTxn({
+            date: "2024-04-03",
+            amount: "20",
+            currency: "USD",
+            recipientId: rec.delhaizeAlias,
+            bank: "OTHER ANCHORED LEDGER",
+          });
+          const expected = {
+            [prior]: 500,
+            [before]: 480,
+            [opening]: 50,
+            [after]: 45,
+            [usd]: 100,
+            [usdStamp]: 3,
+            [debit]: 38,
+            [reset]: -4,
+            [zero]: 0,
+            [later]: 1,
+            [future]: 12,
+            [otherAccount]: 20,
+          };
+          const read = async (options) => {
+            const result = await transactionRepository[method](options);
+            return Array.isArray(result) ? result : result.rows;
+          };
+          const rows = await read({ includeBalance: true, limit: 100 });
+          const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+          for (const [id, balance] of Object.entries(expected)) {
+            expect(Number(byId[id].running_balance)).toBe(balance);
+            expect(byId[id]).not.toHaveProperty("cumulative");
+            expect(byId[id]).not.toHaveProperty("stamp");
+          }
+          expect(byId[inactive]).toBeUndefined();
+
+          const accountId = await ensureAccount(bank);
+          const options = {
+            accountId,
+            includeBalance: true,
+            startDate: "2024-04-02",
+            sortBy: "amount",
+            sortDir: "asc",
+            limit: 100,
+          };
+          const filtered = await read(options);
+          expect(filtered.some((row) => row.id === prior)).toBe(false);
+          expect(
+            Number(filtered.find((row) => row.id === before).running_balance),
+          ).toBe(-20);
+          expect(
+            Number(filtered.find((row) => row.id === opening).running_balance),
+          ).toBe(50);
+          const page = await read({ ...options, limit: 2, offset: 2 });
+          expect(page.map((row) => [row.id, row.running_balance])).toEqual(
+            filtered.slice(2, 4).map((row) => [row.id, row.running_balance]),
+          );
+          const withoutBalance = await read({ accountId });
+          expect(
+            withoutBalance.every((row) => !("running_balance" in row)),
+          ).toBe(true);
+        },
+      );
     });
 
     // ───────────────────────────────────────────────────────────────────────────

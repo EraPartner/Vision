@@ -110,7 +110,7 @@ export function projectAssetTransferPartitions(
         .plus(row.taxes || 0);
       lotsAt(key).push({
         units,
-        costBasis: cost,
+        costBasis: cost.times(row.nativeFxMultiplier ?? 1),
         costBasisConv: cost.times(
           row.fxMultiplier ?? opts.defaultFxMultiplier ?? 1,
         ),
@@ -118,7 +118,7 @@ export function projectAssetTransferPartitions(
         acquisitionId: row.id ?? 0,
         acquisitionType: row.type,
         sourceRecordHash: row.source_record_hash,
-        currency: row.currency,
+        currency: row.nativeCurrency ?? row.currency,
         fxResolved:
           row.currency === "EUR" ||
           (row.fxMultiplier != null && toDecimal(row.fxMultiplier).gt(0)),
@@ -276,12 +276,13 @@ export function projectAssetTransferPartitions(
       const perUnit = total.gt(0)
         ? toDecimal(row.amount || 0).div(total)
         : ZERO;
+      const perUnitNative = perUnit.times(row.nativeFxMultiplier ?? 1);
       for (const [account, lots] of custody) {
         const local = held(lots);
         if (local.lte(0)) continue;
         const basis = lots.reduce((sum, lot) => sum.plus(lot.costBasis), ZERO);
         const weightedFactor = basis.gt(0)
-          ? Decimal.max(0, basis.minus(perUnit.times(local))).div(basis)
+          ? Decimal.max(0, basis.minus(perUnitNative.times(local))).div(basis)
           : ZERO;
         for (const lot of lots) {
           if (method === "weighted_avg") {
@@ -291,7 +292,7 @@ export function projectAssetTransferPartitions(
           }
           const reduced = Decimal.max(
             0,
-            lot.costBasis.minus(perUnit.times(lot.units)),
+            lot.costBasis.minus(perUnitNative.times(lot.units)),
           );
           lot.costBasisConv = lot.costBasis.gt(0)
             ? lot.costBasisConv.times(reduced.div(lot.costBasis))

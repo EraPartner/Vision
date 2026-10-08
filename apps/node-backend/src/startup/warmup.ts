@@ -95,7 +95,9 @@ export async function pruneOldImportBatches() {
       // The detail columns are json, which has no `?` operator; cast to jsonb.
       const preserveReconciliation =
         table === "portfolio_import_batches"
-          ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id)
+          ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id
+               OR (journal.after_data->>'ledgerKind'='cash' AND
+                 journal.after_data->'proof'->'sourceBindings' @> jsonb_build_array(jsonb_build_object('batch_id',${table}.id))))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_income_recognition_journal income
                JOIN portfolio_import_staging_rows unit_source ON unit_source.id=income.unit_staging_row_id
                WHERE income.batch_id=${table}.id OR unit_source.batch_id=${table}.id)

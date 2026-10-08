@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
     ChevronDown,
+    ArrowLeftRight,
     Download,
     FolderTree,
     Split,
@@ -36,6 +37,12 @@ import { useBulkSplitTransactions } from "@/hooks/useSplits";
 import type { BulkSplitMode } from "@/lib/api/splits";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { toast } from "sonner";
+import {
+    eligibleExistingTransferPair,
+    useMarkTransfer,
+    type ExistingTransferLeg,
+} from "@/features/transactions/hooks/useMarkTransfer";
 import { BulkRecategorizeDialog } from "./BulkRecategorizeDialog";
 import { BulkRecipientDialog } from "./BulkRecipientDialog";
 import { BulkTagDialog } from "./BulkTagDialog";
@@ -52,6 +59,7 @@ interface BulkActionsBarProps {
     filter: BulkTransactionFilter;
     onClearSelection: () => void;
     onPromoteToFilterMode: () => void;
+    selectedTransactions?: readonly ExistingTransferLeg[];
 }
 
 export function BulkActionsBar({
@@ -62,6 +70,7 @@ export function BulkActionsBar({
     filter,
     onClearSelection,
     onPromoteToFilterMode,
+    selectedTransactions = [],
 }: BulkActionsBarProps) {
     const { t, tc } = useLanguage();
     const { confirm, ConfirmDialog } = useConfirmDialog();
@@ -71,6 +80,7 @@ export function BulkActionsBar({
     const bulkExport = useBulkExportTransactions();
     const bulkTag = useBulkTagTransactions();
     const bulkSplit = useBulkSplitTransactions();
+    const markTransfer = useMarkTransfer();
 
     const [tagOpen, setTagOpen] = useState(false);
     const [categoryOpen, setCategoryOpen] = useState(false);
@@ -80,6 +90,20 @@ export function BulkActionsBar({
 
     const idCount = selectedIds.size;
     const effectiveCount = selectionMode === "filter" ? totalMatching : idCount;
+    const transferLegs = selectedTransactions.filter((row) =>
+        selectedIds.has(row.id),
+    );
+    const canMarkTransfer =
+        selectionMode === "ids" &&
+        idCount === 2 &&
+        eligibleExistingTransferPair(transferLegs);
+    const transferSelectionKey = JSON.stringify({
+        selectionMode,
+        ids: [...selectedIds].sort((a, b) => a - b),
+        legs: transferLegs,
+    });
+    const latestTransferSelectionKey = useRef(transferSelectionKey);
+    latestTransferSelectionKey.current = transferSelectionKey;
 
     if (idCount === 0) return null;
 
@@ -104,6 +128,38 @@ export function BulkActionsBar({
         });
         if (!ok) return;
         bulkDelete.mutate(buildSelector(), {
+            onSuccess: () => onClearSelection(),
+        });
+    }
+
+    async function handleMarkTransfer() {
+        if (!canMarkTransfer || !eligibleExistingTransferPair(transferLegs))
+            return;
+        const [first, second] = transferLegs;
+        const confirmed = await confirm({
+            title: t("txPage.bulk.confirmTransferTitle"),
+            description: t("txPage.bulk.confirmTransferBody", {
+                firstId: first.id,
+                firstAccount: first.bank || String(first.accountId),
+                firstDate: first.date,
+                firstAmount: first.amount,
+                firstCurrency: first.currency,
+                secondId: second.id,
+                secondAccount: second.bank || String(second.accountId),
+                secondDate: second.date,
+                secondAmount: second.amount,
+                secondCurrency: second.currency,
+            }),
+            confirmLabel: t("txPage.bulk.markTransfer"),
+        });
+        if (!confirmed) return;
+        if (latestTransferSelectionKey.current !== transferSelectionKey) {
+            toast.error(t("txPage.bulk.failed"), {
+                description: t("txPage.bulk.transferSelectionChanged"),
+            });
+            return;
+        }
+        markTransfer.mutate(transferLegs, {
             onSuccess: () => onClearSelection(),
         });
     }
@@ -206,7 +262,12 @@ export function BulkActionsBar({
     const tagBusy = bulkTag.isPending;
     const splitBusy = bulkSplit.isPending;
     const anyBusy =
-        updateBusy || deleteBusy || exportBusy || tagBusy || splitBusy;
+        updateBusy ||
+        deleteBusy ||
+        exportBusy ||
+        tagBusy ||
+        splitBusy ||
+        markTransfer.isPending;
 
     return (
         <>
@@ -240,6 +301,14 @@ export function BulkActionsBar({
                             {t("txPage.bulk.menuLabel")}
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
+                        {canMarkTransfer && (
+                            <DropdownMenuItem
+                                onClick={() => void handleMarkTransfer()}
+                            >
+                                <ArrowLeftRight className="h-4 w-4 mr-2" />
+                                {t("txPage.bulk.markTransfer")}
+                            </DropdownMenuItem>
+                        )}
                         {selectionMode === "filter" && (
                             <p className="max-w-64 px-2 py-1.5 type-footnote text-label-secondary">
                                 {t("txPage.bulk.tagSelectionHint")}

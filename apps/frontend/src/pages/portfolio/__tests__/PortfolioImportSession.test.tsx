@@ -14,6 +14,7 @@ import {
 } from "@/lib/api/portfolioImports";
 import { PortfolioImportSession } from "../PortfolioImportSession";
 import { portfolioImportPresetConfig } from "../portfolioImportPresets";
+import { ibkrFundingStatement } from "./fixtures/ibkrFundingStatement";
 
 const api = "http://localhost:3002/api/portfolio/import";
 const nexoHeader =
@@ -311,10 +312,7 @@ async function selectAndStage(
     user: ReturnType<typeof userEvent.setup>,
     files: File[] = [statement()],
 ) {
-    await user.upload(
-        await screen.findByLabelText("Statements (CSV or XLSX)"),
-        files,
-    );
+    await user.upload(await screen.findByLabelText(/Statements \(CSV/), files);
     await waitFor(() =>
         expect(
             screen.getByRole("button", { name: "Stage statements" }),
@@ -559,6 +557,116 @@ function cashPlan(
 }
 
 describe("reviewed portfolio import sessions", () => {
+    it("stages native IBKR funding with the distinct parser and restores a cash-only correction review", async () => {
+        const response = {
+            ...plan([11], "prefer_source"),
+            reconciliationScope: "correct_existing_only",
+            pending: 0,
+            complete: true,
+            deferredCounts: {},
+            selectedRowIds: [1],
+            actions: [
+                {
+                    batchId: 11,
+                    rowId: 1,
+                    rowOrdinal: 1,
+                    action: "adopt",
+                    isCash: true,
+                    investmentId: null,
+                    policy: "prefer_source",
+                    existingTransactionId: 99,
+                    source: {
+                        date: "2025-01-02",
+                        type: "deposit",
+                        amount: "123.4500",
+                        currency: "USD",
+                        memo: "Deposit",
+                    },
+                    existing: {
+                        date: "2025-01-02",
+                        type: "deposit",
+                        amount: "110.0000",
+                        currency: "EUR",
+                        memo: "Deposit",
+                    },
+                    corrections: ["amount", "currency"],
+                    economicsProven: true,
+                },
+            ],
+            summary: { adopt: 1 },
+        };
+        server.use(
+            http.post(`${api}/reconciliation/preview`, async ({ request }) => {
+                previews.push(
+                    (await request.json()) as Record<string, unknown>,
+                );
+                return ok(response);
+            }),
+        );
+        const user = userEvent.setup();
+        const ibkrAccounts = [account(1, "IBKR", "SYNTHETIC-ACCOUNT")];
+        const first = renderWithApp(
+            <PortfolioImportSession accounts={ibkrAccounts} />,
+        );
+        await user.upload(
+            await screen.findByLabelText(/Statements \(CSV/),
+            ibkrFundingStatement(),
+        );
+        await waitForScopeOption(user, scopeLabels.correct_existing_only);
+        await chooseScope(user, "correct_existing_only");
+        expect(policyField()).toHaveTextContent(policyLabels.prefer_source);
+        await user.click(
+            screen.getByRole("button", { name: "Stage statements" }),
+        );
+        await waitFor(() =>
+            expect(
+                screen.getByRole("button", { name: "Review reconciliation" }),
+            ).toBeEnabled(),
+        );
+        expect(uploads[0]).toContain(
+            'name="portfolio_format"\r\n\r\nibkr_funding_history',
+        );
+        expect(uploads[0]).not.toContain('name="yield_basis_policy"');
+        const checkpoint = JSON.parse(
+            sessionStorage.getItem(
+                "vision.portfolio-import.latest-session.v1",
+            )!,
+        );
+        expect(checkpoint[0].detected).toMatchObject({
+            source: "ibkr",
+            presetKey: "ibkr_funding_history",
+        });
+        first.unmount();
+        renderWithApp(<PortfolioImportSession accounts={ibkrAccounts} />);
+        expect(scopeField()).toHaveTextContent(
+            scopeLabels.correct_existing_only,
+        );
+        expect(policyField()).toHaveTextContent(policyLabels.prefer_source);
+        await user.click(
+            screen.getByRole("button", { name: "Review reconciliation" }),
+        );
+        await user.click(
+            await screen.findByText("Source evidence and proposed changes"),
+        );
+        expect(screen.getByText("123.4500")).toBeVisible();
+        expect(screen.getByText("110.0000")).toBeVisible();
+        expect(screen.getByText("USD")).toBeVisible();
+        expect(screen.getByText("EUR")).toBeVisible();
+        expect(screen.getByRole("rowheader", { name: "Amount" })).toBeVisible();
+        expect(
+            screen.getByRole("rowheader", { name: "Description" }),
+        ).toBeVisible();
+        expect(screen.queryByText("Units")).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("button", { name: "Apply reviewed corrections" }),
+        ).toBeEnabled();
+        expect(previews[0]).toEqual({
+            batch_ids: [11],
+            adopt_policy: "prefer_source",
+            reconciliation_scope: "correct_existing_only",
+        });
+        expect(commits).toHaveLength(0);
+    });
     it.each([false, true])(
         "records a complete proved cash chain after source-bound confirmation and resumes the same scoped no-op review (retained=%s)",
         async (retained) => {
@@ -643,7 +751,7 @@ describe("reviewed portfolio import sessions", () => {
             );
             if (!retained)
                 await user.upload(
-                    await screen.findByLabelText("Statements (CSV or XLSX)"),
+                    await screen.findByLabelText(/Statements \(CSV/),
                     kinesisStatement(),
                 );
             await waitForScopeOption(user, "Record proven cash history");
@@ -784,7 +892,7 @@ describe("reviewed portfolio import sessions", () => {
             <PortfolioImportSession accounts={[account(1, "Kinesis")]} />,
         );
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
         await waitFor(() =>
@@ -823,7 +931,7 @@ describe("reviewed portfolio import sessions", () => {
             <PortfolioImportSession accounts={kinesisAccounts} />,
         );
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
         await waitForScopeOption(user, "Record proven cash history");
@@ -987,7 +1095,7 @@ describe("reviewed portfolio import sessions", () => {
             );
             if (!retained)
                 await user.upload(
-                    await screen.findByLabelText("Statements (CSV or XLSX)"),
+                    await screen.findByLabelText(/Statements \(CSV/),
                     kinesisStatement(),
                 );
             await waitForScopeOption(user, "Record proven in-kind income");
@@ -1150,7 +1258,7 @@ describe("reviewed portfolio import sessions", () => {
             <PortfolioImportSession accounts={[account(1, "Kinesis")]} />,
         );
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             kinesisStatement("fresh-repeat.csv"),
         );
         await waitForScopeOption(user, "Record proven in-kind income");
@@ -1209,7 +1317,7 @@ describe("reviewed portfolio import sessions", () => {
             />,
         );
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
         const option = "Record proven in-kind income";
@@ -1227,7 +1335,7 @@ describe("reviewed portfolio import sessions", () => {
         await chooseScope(user, "record_in_kind_income_only");
         expect(screen.getByLabelText("Assets to include")).toBeDisabled();
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             statement(),
         );
         expect(
@@ -1255,7 +1363,7 @@ describe("reviewed portfolio import sessions", () => {
             />,
         );
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
         const option = "Correct proven existing records";
@@ -1273,7 +1381,7 @@ describe("reviewed portfolio import sessions", () => {
         await chooseScope(user, "correct_existing_only");
         expect(screen.getByLabelText("Assets to include")).toBeDisabled();
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             statement(),
         );
         await screen.findByText(
@@ -1372,7 +1480,7 @@ describe("reviewed portfolio import sessions", () => {
                 <PortfolioImportSession accounts={[account(1, "Kinesis")]} />,
             );
             await user.upload(
-                await screen.findByLabelText("Statements (CSV or XLSX)"),
+                await screen.findByLabelText(/Statements \(CSV/),
                 kinesisStatement(),
             );
             await waitForScopeOption(user, "Attach proven source records");
@@ -1609,7 +1717,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.queryByRole("button", { name: "Import reviewed history" }),
         ).not.toBeInTheDocument();
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             statement(),
         );
         await screen.findByText(
@@ -1635,7 +1743,7 @@ describe("reviewed portfolio import sessions", () => {
             />,
         );
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
         const option = "Attach proven source records";
@@ -2103,7 +2211,7 @@ describe("reviewed portfolio import sessions", () => {
             />,
         );
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             nativeReceiptStatement(),
         );
         expect(
@@ -2113,7 +2221,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByRole("button", { name: "Stage statements" }),
         ).toBeDisabled();
         await user.upload(
-            screen.getByLabelText("Statements (CSV or XLSX)"),
+            screen.getByLabelText(/Statements \(CSV/),
             new File(
                 [
                     "Date,Type,Symbol,Units,Amount,Currency\n2025-01-01,gift,KAU,1,2,USD",
@@ -2338,7 +2446,7 @@ describe("reviewed portfolio import sessions", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioImportSession accounts={accounts} />);
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             statement(),
         );
         await pickOption(
@@ -2440,7 +2548,7 @@ describe("reviewed portfolio import sessions", () => {
             />,
         );
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             statement(),
         );
         expect(
@@ -2450,7 +2558,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByRole("button", { name: "Stage statements" }),
         ).toBeDisabled();
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             new File(["Date,Amount"], "unknown.csv", { type: "text/csv" }),
         );
         expect(
@@ -2473,7 +2581,7 @@ describe("reviewed portfolio import sessions", () => {
         const user = userEvent.setup();
         renderWithApp(<PortfolioImportSession accounts={accounts} />);
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             statement(),
         );
         await waitFor(() =>
@@ -2691,7 +2799,7 @@ describe("reviewed portfolio import sessions", () => {
         await screen.findByRole("button", { name: "Import reviewed history" });
         expect(previews.at(-1)).toEqual({ batch_ids: [12] });
         await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
+            await screen.findByLabelText(/Statements \(CSV/),
             statement("another.csv"),
         );
         expect(
@@ -2756,10 +2864,10 @@ describe("reviewed portfolio import sessions", () => {
         const first = renderWithApp(
             <PortfolioImportSession accounts={accounts} />,
         );
-        await user.upload(
-            await screen.findByLabelText("Statements (CSV or XLSX)"),
-            [statement("one.csv"), statement("two.csv")],
-        );
+        await user.upload(await screen.findByLabelText(/Statements \(CSV/), [
+            statement("one.csv"),
+            statement("two.csv"),
+        ]);
         await waitFor(() =>
             expect(
                 screen.getByRole("button", { name: "Stage statements" }),

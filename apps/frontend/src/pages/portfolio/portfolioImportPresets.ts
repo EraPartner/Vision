@@ -54,6 +54,18 @@ const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
         noteColumn: "Description",
         typeMapping: { "Foreign Tax Withholding": "tax" },
     },
+    ibkr_funding_history: {
+        ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+        format: "ibkr_funding_history",
+        dateColumn: "Request Date",
+        typeColumn: "Method",
+        symbolColumn: "Reference Number",
+        amountColumn: "Amount",
+        sourceIdColumn: "Reference Number",
+        sourceAccountColumn: "Account ID",
+        noteColumn: "Method",
+        number_format: "decimal_dot",
+    },
     kinesis: {
         ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
         format: "kinesis_transaction_history",
@@ -115,6 +127,7 @@ const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
 
 type SpecializedHintKey =
     | "portfolioImport.ibkrParserHint"
+    | "portfolioImport.ibkrFundingParserHint"
     | "portfolioImport.kinesisParserHint"
     | "portfolioImport.nexoParserHint"
     | "portfolioImport.nexoProParserHint"
@@ -124,6 +137,7 @@ const SPECIALIZED_HINT_KEYS: Partial<
     Record<NonNullable<PortfolioCustomConfig["format"]>, SpecializedHintKey>
 > = {
     ibkr_transaction_history: "portfolioImport.ibkrParserHint",
+    ibkr_funding_history: "portfolioImport.ibkrFundingParserHint",
     kinesis_transaction_history: "portfolioImport.kinesisParserHint",
     nexo_transaction_history: "portfolioImport.nexoParserHint",
     nexo_pro_spot_history: "portfolioImport.nexoProParserHint",

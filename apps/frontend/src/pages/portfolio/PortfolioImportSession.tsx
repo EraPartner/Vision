@@ -87,6 +87,7 @@ const storedSessionSchema = z
                         "native_receipts",
                     ]),
                     sourceAccountIdentities: z.array(z.string()),
+                    presetKey: z.literal("ibkr_funding_history").optional(),
                 })
                 .optional(),
             transferDestinationAccountId: z
@@ -165,6 +166,7 @@ function sourceRoutingKey(statements: Statement[]) {
             kind: item.kind,
             originalBatchId: item.originalBatchId,
             source: item.detected?.source,
+            presetKey: item.detected?.presetKey,
             identities: item.detected?.sourceAccountIdentities,
             accountId: item.accountId,
             adoptPolicy: item.adoptPolicy,
@@ -245,6 +247,7 @@ const fields = [
     "dividend_amount_convention",
     "income_recognition_role",
 ];
+const cashFields = ["date", "type", "amount", "currency", "memo"];
 const blockerKeys: Record<string, string> = {
     incomplete_source: "incomplete",
     invalid_source_values: "invalid",
@@ -388,7 +391,15 @@ export function PortfolioImportSession({ accounts }: Props) {
         kinesisOnly &&
         statements.every((item) => item.adoptPolicy !== "prefer_source");
     const correctionEligible =
-        kinesisOnly &&
+        (kinesisOnly ||
+            (statements.length > 0 &&
+                statements.every(
+                    (item) =>
+                        !item.kind &&
+                        item.detected?.source === "ibkr" &&
+                        item.detected.presetKey === "ibkr_funding_history" &&
+                        !item.includedSymbols?.trim(),
+                ))) &&
         statements.every((item) => item.adoptPolicy !== "preserve_existing");
     const attachmentOnly = reconciliationMode === "adopt_existing_only";
     const correctionOnly = reconciliationMode === "correct_existing_only";
@@ -728,7 +739,9 @@ export function PortfolioImportSession({ accounts }: Props) {
             );
             try {
                 const config = {
-                    ...portfolioImportPresetConfig(item.detected!.source)!,
+                    ...portfolioImportPresetConfig(
+                        item.detected!.presetKey ?? item.detected!.source,
+                    )!,
                     accountId: item.accountId,
                     includedSymbols: item.includedSymbols,
                     transferDestinationAccountId:
@@ -942,7 +955,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                     <Input
                         id="portfolio-session-files"
                         type="file"
-                        accept=".csv,.xlsx"
+                        accept=".csv,.xlsx,.xls"
                         multiple
                         disabled={locked}
                         className="mt-2"
@@ -1114,9 +1127,14 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                   )
                                                 : item.detected
                                                   ? t(
-                                                        sourceLabels[
-                                                            item.detected.source
-                                                        ],
+                                                        item.detected
+                                                            .presetKey ===
+                                                            "ibkr_funding_history"
+                                                            ? "portfolioImport.ibkrFundingParser"
+                                                            : sourceLabels[
+                                                                  item.detected
+                                                                      .source
+                                                              ],
                                                     )
                                                   : t(
                                                         "portfolioImport.session.detecting",
@@ -2081,7 +2099,10 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            {fields
+                                                            {(action.isCash
+                                                                ? cashFields
+                                                                : fields
+                                                            )
                                                                 .filter(
                                                                     (field) =>
                                                                         action
@@ -2114,9 +2135,19 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                                                     : undefined
                                                                             }
                                                                         >
-                                                                            <th className="p-1 font-normal">
+                                                                            <th
+                                                                                scope="row"
+                                                                                className="p-1 font-normal"
+                                                                            >
                                                                                 {t(
-                                                                                    `portfolioImport.session.fields.${field}`,
+                                                                                    field ===
+                                                                                        "memo"
+                                                                                        ? "txPage.field.description"
+                                                                                        : action.isCash &&
+                                                                                            field ===
+                                                                                                "amount"
+                                                                                          ? "txPage.field.amount"
+                                                                                          : `portfolioImport.session.fields.${field}`,
                                                                                 )}
                                                                             </th>
                                                                             <td className="p-1">

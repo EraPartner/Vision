@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err, INVESTMENT_STUB } from "@/test/msw/handlers";
 import PortfolioPage from "@/pages/portfolio/PortfolioPage";
+import type { PortfolioSummaryResponse } from "@/lib/api/info";
 
 const API_BASE = "http://localhost:3002";
 
@@ -116,7 +117,10 @@ const PERFORMANCE = {
 };
 
 /** Two holdings across two brokers; Fund B also has unassigned and #30 rows. */
-function useTwoHoldings(options: { performance?: unknown } = {}) {
+function useTwoHoldings(options: {
+    performance?: unknown;
+    cashFees?: PortfolioSummaryResponse["brokerageCashFees"];
+} = {}) {
     server.use(
         http.get(`${API_BASE}/api/investments/exposure`, () =>
             err(503, "Exposure unavailable"),
@@ -164,6 +168,7 @@ function useTwoHoldings(options: { performance?: unknown } = {}) {
                 currency: "EUR",
                 computed_at: "2026-09-08T00:00:00Z",
                 totals: TOTALS,
+                brokerageCashFees: options.cashFees,
                 summaries: [
                     {
                         ...CANONICAL_INVESTMENT,
@@ -545,7 +550,7 @@ describe("PortfolioPage (integration)", () => {
         );
         const figure = (label: string) =>
             figures.getByText(label).closest("div")!.parentElement as HTMLElement;
-        const totalReturn = figure("Total return");
+        const totalReturn = figure("Investment return");
         expect(totalReturn).toHaveTextContent(/\+11,1\s?%/);
         expect(totalReturn).toHaveTextContent(/\+120,00/);
         const perYear = figure("Per year");
@@ -558,9 +563,9 @@ describe("PortfolioPage (integration)", () => {
         expect(realized).toHaveTextContent("—");
         expect(realized).toHaveTextContent("No sales yet");
 
-        await user.click(screen.getByRole("button", { name: "About Total return" }));
+        await user.click(screen.getByRole("button", { name: "About Investment return" }));
         expect(
-            await screen.findByText(/net profit or loss on everything you ever invested/i),
+            await screen.findByText(/separate broker account fees appear in the breakdown below/i),
         ).toBeInTheDocument();
     }, 20_000);
 
@@ -739,6 +744,28 @@ describe("PortfolioPage (integration)", () => {
         );
     }, 20_000);
 
+    it("shows account fees and gain after fees without changing investment return", async () => {
+        useTwoHoldings({ cashFees: {
+            total: 10,
+            gainAfterFees: 110,
+            usedFallbackRate: false,
+            byAccount: [{ account_id: 10, total: 10 }],
+        } });
+        renderWithApp(<PortfolioPage />);
+        const card = (await screen.findByRole("heading", { name: "Gains, income and costs" })).closest(
+            ".glass-thin",
+        ) as HTMLElement;
+        expect(card).toHaveTextContent(/Broker account fees\s*-10,00/);
+        expect(card).toHaveTextContent(/Gain after account fees\s*\+110,00/);
+        const figures = within(
+            (await screen.findByText("Per year")).closest(".glass-thin") as HTMLElement,
+        );
+        const investmentReturn = figures.getByText("Investment return").closest("div")!
+            .parentElement as HTMLElement;
+        expect(investmentReturn).toHaveTextContent(/\+120,00/);
+        expect(card).toHaveTextContent(/Unrealized gains\s*\+120,00/);
+    }, 20_000);
+
     it("keeps the gains, income and costs breakdown and the period charts", async () => {
         useTwoHoldings();
         renderWithApp(<PortfolioPage />);
@@ -748,6 +775,7 @@ describe("PortfolioPage (integration)", () => {
         expect(card).toHaveTextContent(/Total invested\s*1[.\s]?080,00/);
         expect(card).toHaveTextContent(/Unrealized gains\s*\+120,00/);
         expect(card).toHaveTextContent(/Total fees/);
+        expect(within(card).queryByText("Broker account fees")).not.toBeInTheDocument();
         expect(
             await screen.findByRole("heading", { name: "Portfolio value over time" }),
         ).toBeInTheDocument();

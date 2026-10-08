@@ -259,6 +259,33 @@ const CATEGORY_NAME_SQL = `CASE
              END`;
 const RECIPIENT_NAME_SQL = "COALESCE(pr.name, r.name)";
 
+/** Carry stamped balances over the same filtered rows used by the list. */
+function runningBalanceCtes(where: string, joins: string): string {
+  // Same identity as accountBalanceSql's daily series: cumulative amount plus
+  // the latest stamp's (balance - cumulative amount). A zero-amount opening
+  // row resets the balance, and later unstamped rows advance it normally.
+  return `
+    ledger_amounts AS (
+      SELECT t.id, t.date, t.account_id,
+             COALESCE(t.currency, 'EUR') AS currency, t.balance,
+             SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative
+      FROM transactions t
+      ${joins}
+      WHERE ${where}
+    ),
+    ledger_carry AS (
+      SELECT id, cumulative,
+             MAX(CASE WHEN balance IS NOT NULL
+                      THEN ARRAY[(date - DATE '2000-01-01')::numeric, id::numeric, balance - cumulative]
+                 END) OVER (PARTITION BY account_id, currency ORDER BY date ASC, id ASC) AS stamp
+      FROM ledger_amounts
+    ),
+    ledger_balances AS (
+      SELECT id, cumulative + COALESCE(stamp[3], 0) AS running_balance
+      FROM ledger_carry
+    )`;
+}
+
 // Stamped-balance date range per account, keyed on the ORIGINAL account_id —
 // the account-merge guard (§1 F2) must read this before the repoint.
 const STAMP_RANGES_SQL = `
@@ -428,11 +455,10 @@ export const transactionRepository = {
     // set, before LIMIT/OFFSET, so each currency balance stays correct across
     // pages. Legacy NULL currency rows are treated as EUR consistently with the
     // rest of the transaction API.
-    const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance`
-      : "";
+    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
 
     const sql = `
+      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
       SELECT t.*,
              ${ACCOUNT_LABEL_SQL},
              COALESCE(pr.name, r.name) AS recipient_name,
@@ -445,6 +471,7 @@ export const transactionRepository = {
              END AS category_name${runningBalanceCol}
       FROM transactions t
       ${TRANSACTION_JOINS}
+      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
       WHERE ${where}
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
@@ -636,21 +663,23 @@ export const transactionRepository = {
       sortBy && TRANSACTION_SORT_COLUMNS[sortBy]
         ? `${sortCol} ${sortDirection}, t.date DESC, t.id DESC`
         : "t.date DESC, t.id DESC";
-    const runningBalanceCol = includeBalance
-      ? ", SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance"
-      : "";
+    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
 
     // Full 3-level effective-category IS NULL (see getUncategorised) — requires
     // the pr join in both CTEs below.
     const uncategorisedWhere = `${rowsWhere}
       AND ${EFFECTIVE_CATEGORY_ID_SQL} IS NULL`;
+    const uncategorisedJoins = `
+      LEFT JOIN recipients r ON t.recipient_id = r.id
+      LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
+      LEFT JOIN accounts acct ON t.account_id = acct.id`;
 
     const limitParam = rowsNextParam;
     const offsetParam = rowsNextParam + 1;
     params.push(limit, offset);
 
     const sql = `
-      WITH total_cte AS (
+      ${includeBalance ? `WITH ${runningBalanceCtes(uncategorisedWhere, uncategorisedJoins)},` : "WITH"} total_cte AS (
         SELECT count(*)::int AS total
         FROM transactions t
         ${COUNT_JOINS}
@@ -664,9 +693,8 @@ export const transactionRepository = {
                NULL AS category_name${runningBalanceCol},
                ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS _row_order
         FROM transactions t
-        LEFT JOIN recipients r ON t.recipient_id = r.id
-        LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
-        LEFT JOIN accounts acct ON t.account_id = acct.id
+        ${uncategorisedJoins}
+        ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
         WHERE ${uncategorisedWhere}
         ORDER BY ${orderBy}
         LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -861,9 +889,7 @@ export const transactionRepository = {
         : `t.date DESC, t.id DESC`;
 
     // Partition by account and currency — see getAll for the rationale.
-    const runningBalanceCol = includeBalance
-      ? `, SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance`
-      : "";
+    const runningBalanceCol = includeBalance ? ", lb.running_balance" : "";
 
     // Count as a SEPARATE query rather than `COUNT(*) OVER ()`: the window
     // function forced the planner to fully materialize + sort the whole filtered
@@ -875,6 +901,7 @@ export const transactionRepository = {
     // join (`r`); the omitted LEFT JOINs target primary keys and therefore
     // cannot drop or multiply transaction rows.
     const dataSql = `
+      ${includeBalance ? `WITH ${runningBalanceCtes(where, TRANSACTION_JOINS)}` : ""}
       SELECT t.*,
              ${ACCOUNT_LABEL_SQL},
              COALESCE(pr.name, r.name) AS recipient_name,
@@ -887,6 +914,7 @@ export const transactionRepository = {
              END AS category_name${runningBalanceCol}
       FROM transactions t
       ${TRANSACTION_JOINS}
+      ${includeBalance ? "JOIN ledger_balances lb ON lb.id = t.id" : ""}
       WHERE ${where}
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;

@@ -403,6 +403,13 @@ export interface PortfolioSummaryResponse {
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
     byAccount: PortfolioSummaryByAccountItem[];
+    /** Source-owned account fees, separate from security fees and investment returns. */
+    brokerageCashFees?: {
+        total: number;
+        gainAfterFees: number;
+        usedFallbackRate: boolean;
+        byAccount: Array<{ account_id: number; total: number }>;
+    };
     /** Dated, target-currency income subtotal only; archived ordinary gains stay local. */
     archivedInKindIncome?: Array<{ id: number; totalInKindIncome: number }>;
 }

@@ -86,7 +86,7 @@ related_code:
 
 ## Overview
 
-Portfolio Import loads brokerage and exchange history from CSV files and detailed Saxo XLSX
+Portfolio Import loads brokerage and exchange history from CSV files, native IBKR funding XLS/XLSX, and detailed Saxo XLSX
 workbooks into portfolio transactions and brokerage cash. It is parallel to the budgeting import
 (`/api/import`), with the same stage, validate, match, review, and commit phases. The historical
 `/api/portfolio/import/csv/*` endpoint paths accept both supported file types; bank-statement
@@ -144,12 +144,13 @@ Parses an ordinary uploaded CSV using `portfolioGenericAdapter`, which reads `co
 the config. The maintained `format` values delegate to IBKR, Kinesis, Nexo wallet, Nexo Pro, or Saxo
 transaction-history adapters. Raw rows from every path are stored in `portfolio_import_staging_rows`.
 The portfolio upload boundary accepts files up to 50 MiB and inspects their bytes rather than
-Multer's extension-free temporary filename. XLSX is supported only with the Saxo format. Its
-workbook structure and accounting detail are checked before creating a batch.
+Multer's extension-free temporary filename. Detailed Saxo XLSX and native IBKR funding XLS/XLSX
+are supported only with their maintained formats. Workbook structure and accounting detail are
+checked before creating a batch.
 
 Workbook ZIP input is limited to 1,000 entries, 100 MiB of expanded content, and 500,000 parsed
 cells. Duplicate or encrypted entries, unsupported archive layouts, invalid expansion sizes, and
-non-workbook archives reject. Legacy XLS is unsupported. Parsing does not extract files, execute
+non-workbook archives reject. Legacy XLS is accepted only for native IBKR funding history. Parsing does not extract files, execute
 macros, evaluate formulas, or follow external links. See [[docs/api/portfolio-imports]].
 
 The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's
@@ -166,8 +167,16 @@ applies these format-specific rules:
   `Foreign Tax Withholding` normalizes to `tax`; signed instrument-less adjustments normalize to a
   deposit or withdrawal. Descriptions remain notes, so a cash-row description cannot masquerade as
   an investment name.
-- `Forex Trade Component` rows are skipped and included in `rowsSkipped`. They describe the
-  base-currency side of a securities transaction and are not independent portfolio holdings.
+- Newly committed IBKR and detailed Saxo dividends retain the proven `gross` amount convention.
+  Generic imports do not infer a convention. Saxo withholding stays inline; IBKR withholding stays
+  in its separately exported tax event.
+- An `Adjustment` whose trimmed description is exactly `FX Translations P&L` is skipped and
+  included in `rowsSkipped`. It reports a base-currency valuation change rather than a cash
+  movement. Other signed cash adjustments remain deposits or withdrawals.
+- `Forex Trade Component` principal and quantities are not independent portfolio holdings.
+  Explicit commissions and transaction fees become a single instrument-less cash fee in the
+  statement base currency, with literal source identity for repeat-import deduplication.
+  Zero-charge rows are skipped. Invalid charges or positive fee credits reject for review.
 
 Batch configuration retains the literal transaction header, Summary base-currency record, source
 file hash, ordered column names and transaction-record hashes as `ibkr_source_context`. Repeated
@@ -269,6 +278,38 @@ The date is the literal calendar prefix of the exported timestamp, without a hos
 The timestamp describes an exported order record and aggregated execution; it is not verified as
 an execution timestamp or an individual fill history. Establish that source's timestamp semantics
 before treating it as complete dated trade history.
+
+### IBKR native funding currencies
+
+`ibkr_funding_history` reads the original **Transaction Status & History** Excel export. Its
+Deposit and Withdrawal sheets prove the native amount, currency, account, reference number,
+request date, completion date and completed status. Detection chooses the maintained preset
+without manual column or currency mapping. Formula cells, unsupported sheet headers, duplicate
+references and unfinished movements reject. Source file hashes and literal sheet-row envelopes
+remain in staging.
+
+Transaction History CSV funding uses the statement base currency and cannot prove native currency
+from its exchange rate alone. New unproved CSV funding cannot be committed. Existing source
+identities remain recognized on repeat import after a correction through a validated receipt.
+
+For existing imported funding, select **Correct proven existing records** and `prefer_source`.
+The complete native funding scope must be separate from trade statements. Each event needs exactly
+one original retained CSV owner row on the same Vision account, matching date, direction, broker account,
+and native amount multiplied by the original exchange rate, rounded to four decimals. Changed
+ledger images or ambiguous matches block the whole correction. Seven records are not a special
+case; matching is based on source facts, never private amounts or IDs.
+
+The writer updates only the existing cash amount, currency and canonical import fingerprint.
+It keeps the ID, date, notes and original CSV provenance. A typed `ledgerKind: cash` envelope in the
+existing immutable reconciliation journal binds both sources and financial before/after images.
+If legacy import context is absent, an exact literal and economic match to a later authenticated
+retained CSV row supplies the missing header proof. The receipt explicitly distinguishes the
+original owner from that reference and binds all three source rows; it never invents a lost file hash.
+Category and transfer-pair metadata may change independently. Repeats create no cash or journal
+copies. Rollback checks the financial after-image and both retained sources before restoring it;
+the original source batch and any primary reference batch cannot be undone while an active correction depends on them. Retention
+preserves both batches. Successful corrections and restorations schedule transfer reconciliation
+and statistics refresh. See [[docs/api/portfolio-imports]].
 
 The Saxo adapter accepts localized Transactions CSV exports and detailed XLSX workbooks. It
 normalizes ordinary and non-breaking header spaces, reads Dutch and English trade actions, and
@@ -721,7 +762,7 @@ include the ledger and its evidence links. See [[docs/reference/data-model]] and
 ### Retained historical evidence
 
 Portfolio Performance XML upload and reference application are unavailable. The import UI accepts
-supported original broker CSV/Saxo XLSX files. Existing stored original-document context remains
+supported original broker CSV, native IBKR funding XLS/XLSX, or Saxo XLSX files. Existing stored original-document context remains
 readable for strict historical source matching, repeats and rollback. It does not authorize a new
 upload, supplemental history, managed clone or alteration of immutable receipts. Removing the
 workflow leaves all historical transactions and proof intact. The XML parser, reference planner
@@ -890,7 +931,7 @@ Portfolio Import is accessible under **Portfolio → Tools → Import portfolio 
 
 ### Multi-statement session
 
-`PortfolioImportSession` accepts up to 100 maintained CSV or Saxo XLSX statements. It detects each
+`PortfolioImportSession` accepts up to 100 maintained CSV, native IBKR funding XLS/XLSX, or Saxo XLSX statements. It detects each
 source and automatically chooses an account only when one candidate is unambiguous. Each statement
 can set an account, transfer counterpart, and policy override; a global adoption policy applies to
 statements without an override. Nexo's other-custody-account control configures both incoming origin
@@ -940,10 +981,10 @@ Complete sessions clear the queued metadata. Partial attachment does not complet
 
 ### Single-file upload and mapping layout
 
-The upload page starts with a CSV/XLSX dropzone and **Detect automatically** selected. Header
+The upload page starts with a CSV/XLS/XLSX dropzone and **Detect automatically** selected. Header
 signatures select IBKR, Kinesis, Nexo wallet, Nexo Pro, Saxo, or native wallet receipts only when one signature matches. Detection reads the complete file within the 50 MiB upload limit, so CSV account selection includes
 all records rather than a preview prefix. Malformed CSV quotes fail instead of being repaired.
-XLSX detection requires one Saxo header signature across workbook sheets; unsupported or unreadable
+Workbook detection requires one maintained Saxo or native IBKR funding header signature; unsupported or unreadable
 workbooks disable upload. The server independently enforces the workbook contract. Unknown CSVs remain available for custom mapping. Automatic detection is a
 frontend convenience; API callers supply the required mapping fields and `portfolio_format` only for specialized adapters.
 

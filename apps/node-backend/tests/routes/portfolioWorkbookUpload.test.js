@@ -124,17 +124,35 @@ describe("portfolio workbook multipart boundary", () => {
     expect(response.body.error.message).toContain("do not reconcile");
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
-  it("rejects workbook with an unrelated selected parser and rejects legacy Excel uploads", async () => {
+  it("rejects workbook with an unrelated selected parser and rejects legacy Excel outside IBKR funding", async () => {
     await writeSyntheticWorkbook(file);
     await request("/csv/custom", "nexo_transaction_history").expect(400);
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
+    // A legacy OLE2 workbook is accepted only as IBKR funding history.
+    const legacy = path.join(directory, "history.xls");
+    await fs.writeFile(
+      legacy,
+      Buffer.concat([
+        Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]),
+        Buffer.alloc(504),
+      ]),
+    );
     const rejected = await api
       .post(`${BASE}/csv/custom`)
-      .attach("file", file, {
+      .field("date_column", "Transactiedatum")
+      .field("symbol_column", "Instrumentsymbool")
+      .field("default_asset_class", "stock")
+      .field("is_brokerage", "true")
+      .field("account_id", "7")
+      .field("portfolio_format", "saxo_transaction_history")
+      .attach("file", legacy, {
         filename: "history.xls",
         contentType: "application/vnd.ms-excel",
       })
       .expect(400);
-    expect(rejected.body.error.message).toContain("CSV or XLSX");
+    expect(rejected.body.error.message).toContain(
+      "IBKR XLS/XLSX funding history",
+    );
+    expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
 });

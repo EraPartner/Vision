@@ -51,6 +51,57 @@ function gainLossOf(
 }
 
 describe("usePortfolioSummaries — gainLoss does not double-count (FE mirror of backend)", () => {
+    it("waits for canonical dated FX when monetary rows use another booking currency", () => {
+        const { result } = renderHook(
+            () =>
+                usePortfolioSummaries({
+                    investments: [
+                        inv({ id: 1, currency: "USD", current_price: 20 }),
+                        inv({ id: 2, currency: "USD", is_active: false }),
+                        inv({ id: 3, current_price: 20 }),
+                    ],
+                    transactions: [
+                        txn({
+                            id: 1,
+                            investment_id: 1,
+                            amount: 80,
+                            units: 10,
+                            fx_rate_to_eur: 1,
+                        }),
+                        txn({ id: 2, investment_id: 2, amount: 80, units: 10 }),
+                        txn({ id: 3, investment_id: 3, amount: 10, units: 1 }),
+                    ],
+                }),
+            { wrapper: makeWrapper() },
+        );
+        // Archived holdings never get a canonical summary, so they stay local.
+        expect(
+            result.current.allSummaries.map((summary) => summary.id),
+        ).toEqual([2, 3]);
+        expect(result.current.totals.totalGainLoss).toBe(10);
+    });
+
+    it("ignores zero-money currency labels on unit-only events in the local fallback", () => {
+        const { result } = renderHook(
+            () =>
+                usePortfolioSummaries({
+                    investments: [inv({ current_price: 20 })],
+                    transactions: [
+                        txn({ amount: 10, units: 1 }),
+                        txn({
+                            id: 2,
+                            type: "split",
+                            units: 2,
+                            currency: "USD",
+                        }),
+                    ],
+                }),
+            { wrapper: makeWrapper() },
+        );
+        expect(result.current.summaries[0].totalUnits).toBe(2);
+        expect(result.current.summaries[0].gainLoss).toBe(30);
+    });
+
     it("keeps archived history discoverable but excludes it from current totals", () => {
         const { result } = renderHook(
             () =>

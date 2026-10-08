@@ -110,11 +110,17 @@ export async function validateBatch({
   const unitBased = defaultAssetClass
     ? UNIT_BASED_ASSET_CLASSES.has(defaultAssetClass)
     : false;
+  // Native funding is a new source-ID format. Keep its calendar date on the
+  // wire without changing legacy field fingerprints already stored by CSV imports.
+  const dateProjection =
+    config.format === "ibkr_funding_history"
+      ? "to_char(tx_date, 'YYYY-MM-DD') AS tx_date"
+      : "tx_date";
 
   const { rows: allRows } = await query<
     PendingPortfolioStagingRow & Pick<PortfolioImportStagingRow, "status">
   >(
-    `SELECT id, row_index, status, tx_date, type_raw, symbol_raw, name_raw, units,
+    `SELECT id, row_index, status, ${dateProjection}, type_raw, symbol_raw, name_raw, units,
             price_per_unit, amount, fees, taxes, currency, note, raw_data,
             source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details
        FROM portfolio_import_staging_rows

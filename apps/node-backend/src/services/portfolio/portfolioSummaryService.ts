@@ -71,11 +71,16 @@ export type RawInvestmentRow = Omit<
 /** The per-transaction FX annotation `annotateTransactionFxMultipliers` adds. */
 type FxAnnotation = {
   fxMultiplier?: number;
+  nativeFxMultiplier?: number;
+  nativeCurrency?: string;
   _fxFellBack?: boolean;
 };
 
 /** The columns `annotateTransactionFxMultipliers` reads, plus its output. */
-type FxAnnotatableRow = Pick<PortfolioMathTxRow, "date" | "fx_rate_to_eur"> & {
+type FxAnnotatableRow = Pick<
+  PortfolioMathTxRow,
+  "date" | "fx_rate_to_eur" | "investment_id"
+> & {
   currency: string | null;
 } & FxAnnotation;
 
@@ -137,6 +142,7 @@ export async function getPortfolioSummary(
   summaries: InvestmentSummary[];
   byAccount: AccountBreakdownRow[];
   archivedInKindIncome: { id: number; totalInKindIncome: number }[];
+  brokerageCashFees: Awaited<ReturnType<typeof getBrokerageCashFees>>;
   brokerSnapshotParity?: { totalValue: string; partitionValue: string };
 }> {
   const target = (targetCurrency || "EUR").toUpperCase();
@@ -208,6 +214,12 @@ export async function getPortfolioSummary(
     target,
     historicalIndex,
     multiplierByCurrency,
+    new Map(
+      investmentsResult.rows.map((inv) => [
+        Number(inv.id),
+        (inv.currency || "EUR").toUpperCase(),
+      ]),
+    ),
   );
 
   const perInvestment = investmentsResult.rows.map((inv) =>
@@ -292,6 +304,12 @@ export async function getPortfolioSummary(
       }));
   }
 
+  const brokerageCashFees = await getBrokerageCashFees(
+    target,
+    throughDate ?? todayYmd,
+    totals.totalGainLoss,
+  );
+
   return {
     currency: target,
     computed_at: new Date().toISOString(),
@@ -299,6 +317,7 @@ export async function getPortfolioSummary(
     summaries,
     byAccount,
     archivedInKindIncome,
+    brokerageCashFees,
     // Snapshot parity must compare the same unrounded valuation tracks. Public
     // totals sum individually rounded investments; account rows round once.
     ...(includeBrokerSnapshotParity
@@ -315,6 +334,157 @@ export async function getPortfolioSummary(
           },
         }
       : {}),
+  };
+}
+
+/**
+ * Imported costs with no security allocation stay in the cash ledger. Report
+ * only source-owned fees, once per canonical ID, separately from investment
+ * returns. Economic ownership survives category and memo edits.
+ */
+async function getBrokerageCashFees(
+  target: string,
+  throughDate: string,
+  investmentGain: Parameters<typeof toDecimal>[0],
+) {
+  const { rows } = await query<{
+    id: number;
+    account_id: number;
+    date: string;
+    currency: string;
+    amount: string;
+  }>(
+    `WITH owned_fee_ids AS (
+        SELECT t.id
+        FROM transactions t
+        WHERE EXISTS (
+          SELECT 1
+          FROM portfolio_import_staging_rows s
+          JOIN portfolio_import_batches b ON b.id = s.batch_id
+          WHERE s.committed_txn_id = t.id
+            AND s.status = 'committed'
+            AND s.route = 'cash'
+            AND s.type = 'fee'
+            AND b.is_brokerage = true
+            AND b.status <> 'aborted'
+            AND b.account_id = t.account_id
+            AND s.resolved_investment_id IS NULL
+            AND s.user_override_investment_id IS NULL
+            AND NULLIF(BTRIM(COALESCE(s.symbol_raw, '')), '') IS NULL
+            AND NULLIF(BTRIM(COALESCE(s.name_raw, '')), '') IS NULL
+            AND COALESCE(s.units, 0) = 0
+            AND COALESCE(s.price_per_unit, 0) = 0
+            AND COALESCE(s.fees, 0) = 0
+            AND COALESCE(s.taxes, 0) = 0
+            AND s.tx_date = t.date
+            AND s.currency = t.currency
+            AND t.amount = -ABS(s.amount)
+            AND NULLIF(s.source_record_hash, '') IS NOT NULL
+            AND s.source_record_hash = t.source_record_hash
+            AND NULLIF(s.dedup_fingerprint, '') IS NOT NULL
+            AND s.dedup_fingerprint = t.dedup_fingerprint
+            AND s.dedup_fingerprint_version = t.dedup_fingerprint_version
+        )
+        UNION
+        SELECT fee.id
+        FROM portfolio_import_staging_rows s
+        JOIN portfolio_import_batches b ON b.id = s.batch_id
+        CROSS JOIN LATERAL (SELECT portfolio_cash_receipt(s.raw_data) AS receipt) r
+        JOIN transactions main
+          ON main.id = s.committed_txn_id
+         AND main.id::text = r.receipt->'after'->>'id'
+        JOIN transactions fee
+          ON fee.id::text = r.receipt->'feeAfter'->>'id'
+        WHERE s.status = 'committed'
+          AND s.route = 'cash'
+          AND s.type IS NULL
+          AND b.is_brokerage = true
+          AND b.status <> 'aborted'
+          AND b.custom_config->>'format' = 'kinesis_transaction_history'
+          AND r.receipt->>'version' = '1'
+          AND r.receipt->'proof'->>'kind' = 'closed_kinesis_cash'
+          AND r.receipt->'proof'->>'eventKind' = 'own_account_funding'
+          AND r.receipt->'proof'->>'componentCount' = '2'
+          AND r.receipt->'feeValues'->>'isTransfer' = 'false'
+          AND main.id <> fee.id
+          AND main.is_active = true
+          AND main.is_transfer = true
+          AND main.transfer_source = 'brokerage'
+          AND main.account_id = b.account_id
+          AND main.source_record_hash = s.source_record_hash
+          AND main.dedup_fingerprint = s.dedup_fingerprint
+          AND main.dedup_fingerprint_version = s.dedup_fingerprint_version
+          AND fee.account_id = b.account_id
+          AND fee.account_id::text = r.receipt->'feeAfter'->>'account_id'
+          AND to_char(fee.date, 'YYYY-MM-DD') = r.receipt->'feeAfter'->>'date'
+          AND fee.currency = r.receipt->'feeAfter'->>'currency'
+          AND fee.amount::text = r.receipt->'feeAfter'->>'amount'
+          AND fee.source_record_hash = s.source_record_hash
+          AND fee.source_record_hash = r.receipt->'feeAfter'->>'source_record_hash'
+          AND fee.dedup_fingerprint = r.receipt->'feeAfter'->>'dedup_fingerprint'
+          AND fee.dedup_fingerprint_version::text = r.receipt->'feeAfter'->>'dedup_fingerprint_version'
+          AND fee.transfer_source = 'brokerage'
+      )
+      SELECT t.id, t.account_id, to_char(t.date, 'YYYY-MM-DD') AS date,
+             t.currency, (-t.amount)::text AS amount
+      FROM transactions t
+      JOIN owned_fee_ids owned ON owned.id = t.id
+      WHERE t.is_active = true
+        AND t.amount < 0
+        AND t.is_transfer = false
+        AND t.balance IS NULL
+        AND COALESCE(t.transfer_source, '') IN ('', 'brokerage')
+        AND t.date <= $1::date
+        AND NOT EXISTS (
+          SELECT 1 FROM portfolio_transactions pt
+          WHERE pt.source_record_hash = t.source_record_hash
+            AND (COALESCE(pt.fees, 0) <> 0 OR pt.type = 'fee')
+        )
+      ORDER BY t.date, t.id`,
+    [throughDate],
+  );
+  const currencies = [...new Set(rows.map((row) => row.currency))];
+  const historicalIndex = await loadHistoricalRateIndex(currencies, target);
+  const fallbackMultipliers = new Map<string, number>();
+  let usedFallbackRate = false;
+  const accounts = new Map<number, Decimal>();
+  for (const row of rows) {
+    let multiplier = 1;
+    if (row.currency !== target) {
+      const from = findRateOnOrBeforeInIndex(
+        historicalIndex,
+        row.currency,
+        row.date,
+      );
+      const to = findRateOnOrBeforeInIndex(historicalIndex, target, row.date);
+      if (from !== undefined && to !== undefined && to > 0) {
+        multiplier = from / to;
+      } else {
+        usedFallbackRate = true;
+        if (!fallbackMultipliers.has(row.currency)) {
+          fallbackMultipliers.set(
+            row.currency,
+            await convertToCurrency(1, row.currency, target),
+          );
+        }
+        multiplier = fallbackMultipliers.get(row.currency)!;
+      }
+    }
+    const account = Number(row.account_id);
+    accounts.set(
+      account,
+      addAll([accounts.get(account) ?? 0, multiply(row.amount, multiplier)]),
+    );
+  }
+  const total = round2(addAll([...accounts.values()]));
+  return {
+    total,
+    gainAfterFees: round2(toDecimal(investmentGain).minus(total)),
+    usedFallbackRate,
+    byAccount: [...accounts].map(([account_id, amount]) => ({
+      account_id,
+      total: round2(amount),
+    })),
   };
 }
 
@@ -437,19 +607,48 @@ function annotateTransactionFxMultipliers(
   target: string,
   historicalIndex: HistoricalRateIndex,
   multiplierByCurrency: Map<string, number>,
+  investmentCurrencyById: Map<number, string> = new Map(),
 ): void {
   for (const txn of txns) {
     const txnCurrency = (txn.currency || "EUR").toUpperCase();
+    const nativeCurrency =
+      investmentCurrencyById.get(Number(txn.investment_id)) ?? txnCurrency;
+    txn.nativeCurrency = nativeCurrency;
+    const stampedRate = Number(txn.fx_rate_to_eur);
+    const rateFrom =
+      txnCurrency === "EUR"
+        ? 1
+        : Number.isFinite(stampedRate) && stampedRate > 0
+          ? stampedRate
+          : findRateOnOrBeforeInIndex(historicalIndex, txnCurrency, txn.date);
+    if (txnCurrency === nativeCurrency) {
+      txn.nativeFxMultiplier = 1;
+    } else {
+      // Booked amounts stay untouched. Reconstruct quote-currency basis with
+      // daily on-or-before FX; this does not isolate broker execution markups.
+      const rateNative = findRateOnOrBeforeInIndex(
+        historicalIndex,
+        nativeCurrency,
+        txn.date,
+      );
+      if (
+        rateFrom !== undefined &&
+        rateNative !== undefined &&
+        rateNative > 0
+      ) {
+        txn.nativeFxMultiplier = rateFrom / rateNative;
+      } else {
+        txn.nativeFxMultiplier =
+          (multiplierByCurrency.get(txnCurrency) ?? 1) /
+          (multiplierByCurrency.get(nativeCurrency) ?? 1);
+        txn._fxFellBack = true;
+      }
+    }
     if (txnCurrency === target) {
       txn.fxMultiplier = 1;
       continue;
     }
 
-    const stampedRate = Number(txn.fx_rate_to_eur);
-    const rateFrom =
-      Number.isFinite(stampedRate) && stampedRate > 0
-        ? stampedRate
-        : findRateOnOrBeforeInIndex(historicalIndex, txnCurrency, txn.date);
     const rateTo =
       target === "EUR"
         ? 1

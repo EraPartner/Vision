@@ -55,6 +55,7 @@ export interface PortfolioCustomConfig {
     /** Format-specific parser. Omit for the generic column mapper. */
     format?:
         | "ibkr_transaction_history"
+        | "ibkr_funding_history"
         | "kinesis_transaction_history"
         | "nexo_transaction_history"
         | "nexo_pro_spot_history"
@@ -632,6 +633,7 @@ const reconciliationPlanSchema = z.looseObject({
                     .max(Number.MAX_SAFE_INTEGER)
                     .nullable()
                     .optional(),
+                isCash: z.boolean().optional(),
                 policy: z
                     .enum(["exact", "preserve_existing", "prefer_source"])
                     .optional(),
@@ -718,6 +720,34 @@ const reconciliationPlanSchema = z.looseObject({
                     .optional(),
             })
             .superRefine((action, context) => {
+                if (
+                    action.isCash &&
+                    action.action === "adopt" &&
+                    (action.investmentId != null ||
+                        action.policy !== "prefer_source" ||
+                        !action.existingTransactionId ||
+                        !action.corrections?.length ||
+                        action.corrections.some(
+                            (field) => !["amount", "currency"].includes(field),
+                        ) ||
+                        action.source?.date !== action.existing?.date ||
+                        [action.source, action.existing].some(
+                            (values) =>
+                                !values ||
+                                !z.iso.date().safeParse(values.date).success ||
+                                typeof values.currency !== "string" ||
+                                !/^[A-Z]{3}$/.test(values.currency) ||
+                                values.amount == null ||
+                                (typeof values.amount === "string" &&
+                                    !values.amount.trim()) ||
+                                !Number.isFinite(Number(values.amount)) ||
+                                Number(values.amount) === 0,
+                        ))
+                )
+                    context.addIssue({
+                        code: "custom",
+                        message: "Incomplete cash correction evidence",
+                    });
                 if (
                     action.action === "repair_duplicate" &&
                     (!action.existingTransactionId ||

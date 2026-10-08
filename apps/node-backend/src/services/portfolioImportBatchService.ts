@@ -2,6 +2,11 @@ import { lockKinesisCashLedger } from "../repositories/portfolioImportCashReposi
 import { validateKinesisCashRollback } from "./portfolioImportCashService.ts";
 import { scheduleRefresh } from "./materializedViewService.ts";
 import {
+  guardOriginalIbkrCashRollback,
+  isIbkrCashCorrectionReceipt,
+} from "./portfolioIbkrCashReconciliation.ts";
+import { scheduleReconcile } from "./transferReconciliationService.ts";
+import {
   proveKinesisNetworkBindings,
   proveKinesisNativeGiftGroups,
 } from "./portfolioKinesisNetworkProof.ts";
@@ -464,6 +469,9 @@ export async function rollbackBatch(batchId: number) {
   const repairScope = await getActiveDuplicateRepairReceipts(batchId);
   const pairedScope = await readPairedIncomeRollbackBatchIds(batchId);
   const nativeScope = await readReconciliationSources([batchId]);
+  const cashScope = (await getActiveAdoptionReceipts(batchId)).filter(
+    isIbkrCashCorrectionReceipt,
+  );
   const nativeBatchIds = nativeScope
     .map((row) =>
       Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
@@ -480,6 +488,11 @@ export async function rollbackBatch(batchId: number) {
         batchId,
         ...pairedScope,
         ...nativeBatchIds,
+        ...cashScope.flatMap((receipt) =>
+          receipt.after_data.proof.sourceBindings.map(
+            (binding) => Number(binding.batch_id),
+          ),
+        ),
         ...repairScope.map((receipt) =>
           Number(receipt.original_import_batch_id),
         ),
@@ -531,6 +544,21 @@ export async function rollbackBatch(batchId: number) {
       });
     const rows = await getCommittedRows(batchId);
     const activeAdoptions = await getActiveAdoptionReceipts(batchId);
+    if (
+      activeAdoptions.some(
+        (receipt) =>
+          isIbkrCashCorrectionReceipt(receipt) &&
+          receipt.after_data.proof.sourceBindings.some(
+            (binding) => !lockIds.includes(Number(binding.batch_id)),
+          ),
+      )
+    )
+      throw new ConflictError(
+        "IBKR cash correction provenance changed. Refresh before undoing this import.",
+        {
+          details: { reason: "stale_reconciliation_plan" },
+        },
+      );
     const custodySourceRows = await readReconciliationSources([batchId]);
     if (lockedBatch)
       await lockReconciliationAccountsAndHistory(
@@ -545,10 +573,17 @@ export async function rollbackBatch(batchId: number) {
                 row.asset_transfer_details?.networkBinding
                   ?.destinationAccountId,
               ]),
-              ...activeAdoptions.flatMap((receipt) => [
-                receipt.before_data.account_id,
-                receipt.after_data.account_id,
-              ]),
+              ...activeAdoptions.flatMap((receipt) =>
+                isIbkrCashCorrectionReceipt(receipt)
+                  ? [
+                      receipt.before_data.snapshot.account_id,
+                      receipt.after_data.snapshot.account_id,
+                    ]
+                  : [
+                      receipt.before_data.account_id,
+                      receipt.after_data.account_id,
+                    ],
+              ),
               ...activeRepairs.flatMap((receipt) => [
                 receipt.before_data.legacy.account_id,
                 receipt.after_data.legacy.account_id,
@@ -612,6 +647,7 @@ export async function rollbackBatch(batchId: number) {
         );
     }
     await lockKinesisCashLedger();
+    await guardOriginalIbkrCashRollback(batchId);
     const ownedCashIds = await validateKinesisCashRollback(batchId);
 
     // Brokerage flag for the route guard (see docstring). Committed cash rows
@@ -714,7 +750,8 @@ export async function rollbackBatch(batchId: number) {
         : {}),
     };
   }).then((result) => {
-    if (deletedCash > 0) scheduleRefresh();
+    if (deletedCash > 0 || cashScope.length > 0) scheduleRefresh();
+    if (cashScope.length > 0) scheduleReconcile();
     return result;
   });
 }

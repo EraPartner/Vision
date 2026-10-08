@@ -60,7 +60,14 @@ describe("transaction list ORDER BY tiebreaker", () => {
       await transactionRepository[method]({ includeBalance: true });
       const sql = query.mock.calls[0][0];
       expect(sql).toContain(
-        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance",
+        "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
+      );
+      expect(sql).toContain("balance - cumulative");
+      expect(sql).toContain(
+        "OVER (PARTITION BY account_id, currency ORDER BY date ASC, id ASC) AS stamp",
+      );
+      expect(sql).toContain(
+        "cumulative + COALESCE(stamp[3], 0) AS running_balance",
       );
     },
   );
@@ -107,7 +114,11 @@ describe("transaction list ORDER BY tiebreaker", () => {
     });
     const sql = query.mock.calls[0][0];
     expect(sql).toContain(
-      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS running_balance",
+      "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
+    );
+    expect(sql).toContain("balance - cumulative");
+    expect(sql).toContain(
+      "cumulative + COALESCE(stamp[3], 0) AS running_balance",
     );
   });
 });

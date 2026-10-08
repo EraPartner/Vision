@@ -20,6 +20,7 @@ import {
   parseDateWithFormat,
 } from "../importPipeline/adapters/_shared.ts";
 import { parseIbkrTransactionHistory } from "./ibkrTransactionHistoryAdapter.ts";
+import { parseIbkrFundingHistory } from "./ibkrFundingHistoryAdapter.ts";
 import { parseKinesisTransactionHistory } from "./kinesisTransactionHistoryAdapter.ts";
 import { parseNexoTransactionHistory } from "./nexoTransactionHistoryAdapter.ts";
 import { parseNexoProSpotHistory } from "./nexoProTransactionHistoryAdapter.ts";
@@ -28,6 +29,7 @@ import { verifyKinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts"
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import type { KinesisNetworkReceipt } from "../portfolioKinesisNetworkProof.ts";
 import type { IbkrSourceContext } from "../portfolioIbkrPrimaryProof.ts";
+import type { IbkrFundingSourceContext } from "./ibkrFundingHistoryAdapter.ts";
 
 /**
  * One raw row as this adapter extracts it — field names are the staging
@@ -82,6 +84,8 @@ export type ParsedPortfolioRows = ParsedPortfolioRow[] & {
   sourceColumns?: string[];
   /** literal statement context the IBKR adapter attaches for primary proof */
   ibkrSourceContext?: IbkrSourceContext;
+  /** retained workbook context the IBKR funding adapter attaches */
+  ibkrFundingSourceContext?: IbkrFundingSourceContext;
 };
 
 /**
@@ -109,6 +113,7 @@ export interface PortfolioParserConfig {
   /** specialized statement format */
   format?:
     | "ibkr_transaction_history"
+    | "ibkr_funding_history"
     | "kinesis_transaction_history"
     | "nexo_transaction_history"
     | "nexo_pro_spot_history"
@@ -260,6 +265,9 @@ export async function parseWithConfig(
   filePath: string,
   config: PortfolioParserConfig,
 ): Promise<ParsedPortfolioRows> {
+  if (config.format === "ibkr_funding_history") {
+    return parseIbkrFundingHistory(filePath);
+  }
   if (config.format === "ibkr_transaction_history") {
     return parseIbkrTransactionHistory(filePath, config);
   }

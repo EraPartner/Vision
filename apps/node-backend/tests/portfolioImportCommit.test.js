@@ -57,6 +57,7 @@ let cashDuplicate;
 let accountInstitution;
 let accountName;
 let fingerprintDuplicate;
+let batchFormat;
 
 function dispatch(sql, params) {
   if (/SELECT b\.account_id, b\.is_brokerage/.test(sql)) {
@@ -67,6 +68,7 @@ function dispatch(sql, params) {
           is_brokerage: isBrokerage,
           account_institution: accountInstitution,
           account_name: accountName,
+          custom_config: batchFormat ? { format: batchFormat } : {},
         },
       ],
     };
@@ -125,6 +127,7 @@ beforeEach(() => {
   accountInstitution = "IBKR";
   accountName = "IBKR SLEEVE";
   fingerprintDuplicate = false;
+  batchFormat = undefined;
   query.mockClear();
   poolQuery.mockReset();
   poolQuery.mockImplementation((sql, params) =>
@@ -152,6 +155,39 @@ beforeEach(() => {
 });
 
 describe("commitBatch (portfolio)", () => {
+  it.each(["saxo_transaction_history", "ibkr_transaction_history"])(
+    "retains the proven gross dividend convention for %s",
+    async (format) => {
+      batchFormat = format;
+      matchedRows = [
+        row({
+          type: "dividend",
+          units: null,
+          price_per_unit: null,
+          amount: 100,
+          taxes: format === "saxo_transaction_history" ? 30 : 0,
+        }),
+      ];
+      await commitBatch({ batchId: 5 });
+      expect(portfolioTransactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 100,
+          taxes: format === "saxo_transaction_history" ? 30 : 0,
+          dividend_amount_convention: "gross",
+        }),
+      );
+    },
+  );
+
+  it("does not infer a dividend convention for a generic import", async () => {
+    matchedRows = [
+      row({ type: "dividend", units: null, price_per_unit: null, amount: 100 }),
+    ];
+    await commitBatch({ batchId: 5 });
+    expect(portfolioTransactionRepository.create.mock.calls[0][0])
+      .not.toMatchObject({ dividend_amount_convention: "gross" });
+  });
+
   it("commits a matched row via the repo", async () => {
     matchedRows = [row()];
     const res = await commitBatch({ batchId: 5 });
