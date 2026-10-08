@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { toDecimal } from "../../src/lib/money.ts";
-import { portfolioReferenceStagingBinding } from "../../src/services/portfolioPerformanceReferenceEvidence.js";
+import { portfolioReferenceStagingBinding } from "../../src/services/portfolioPerformanceReferenceEvidence.ts";
 
 const minor = (value, factor) => toDecimal(value).times(factor).toFixed(0);
 

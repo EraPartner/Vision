@@ -448,7 +448,7 @@ return <div>Total: {data.totals.currentValue}</div>;
 - **New per-investment fields:** `assetGain`, `fxGain`, `nativeCurrentValue`, `usedFallbackRate`.
 - **Identity guaranteed:** `gainLoss = assetGain + fxGain` holds per-investment and in totals.
 - `fx_rate_to_eur` is now auto-resolved from stored `exchange_rates` (on-or-before ≤7 days) on transaction create/edit when not explicitly provided and currency ≠ EUR.
-- Source: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/services/investmentService.js]]
+- Source: [[apps/node-backend/src/services/portfolio/portfolioSummaryService.ts]], [[apps/node-backend/src/services/investmentService.ts]]
 
 ### 2026-05-31 — Net Worth overlay extended single source of truth
 

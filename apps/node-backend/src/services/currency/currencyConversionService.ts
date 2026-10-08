@@ -17,7 +17,7 @@ import { toDecimal, toNumber } from "../../lib/money.ts";
 import {
   recordSuccess as recordProviderSuccess,
   recordError as recordProviderError,
-} from "../providerHealthService.js";
+} from "../providerHealthService.ts";
 import {
   CACHE_LIFETIME_MS,
   normalizeDateInput,

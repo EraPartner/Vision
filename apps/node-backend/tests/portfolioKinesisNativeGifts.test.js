@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { nativeGiftFixture } from "./helpers/kinesisNativeGifts.js";
-import { proveKinesisNativeGiftGroups } from "../src/services/portfolioKinesisNetworkProof.js";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { proveKinesisNativeGiftGroups } from "../src/services/portfolioKinesisNetworkProof.ts";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 const proof = (source) =>
   proveKinesisNativeGiftGroups(
     source.rows,

@@ -55,15 +55,15 @@ vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 
-vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
+vi.mock("../../src/services/portfolioImportCommitService.ts", () => ({
   commitReviewedPortfolioImport: vi.fn(),
   commitReviewedPortfolioImports: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportReconciliationService.js", () => ({
+vi.mock("../../src/services/portfolioImportReconciliationService.ts", () => ({
   previewPortfolioImportReconciliation: vi.fn(),
 }));
 
-vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
+vi.mock("../../src/services/portfolioImportBatchService.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPreviewRows: vi.fn(),
@@ -74,7 +74,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
   rollbackBatch: vi.fn(),
 }));
 
-vi.mock("../../src/services/accountService.js", () => ({
+vi.mock("../../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
 }));
 
@@ -102,9 +102,9 @@ import {
   createInvestmentForRow,
   resolveInvestmentRows,
   rollbackBatch,
-} from "../../src/services/portfolioImportBatchService.js";
-import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.js";
-import { previewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.js";
+} from "../../src/services/portfolioImportBatchService.ts";
+import { commitReviewedPortfolioImports } from "../../src/services/portfolioImportCommitService.ts";
+import { previewPortfolioImportReconciliation } from "../../src/services/portfolioImportReconciliationService.ts";
 import { ConflictError } from "../../src/middleware/errorHandler.ts";
 
 const { default: portfolioImportRouter } =

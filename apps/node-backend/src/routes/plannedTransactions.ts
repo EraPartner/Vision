@@ -11,9 +11,9 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import plannedTransactionService from "../services/plannedTransactionService.js";
-import { resolveRecipientIdByName } from "../services/recipientService.js";
-import { resolveCategoryIdByName } from "../services/categoryService.js";
+import plannedTransactionService from "../services/plannedTransactionService.ts";
+import { resolveRecipientIdByName } from "../services/recipientService.ts";
+import { resolveCategoryIdByName } from "../services/categoryService.ts";
 import {
   validateIdParam,
   assertYmd,
@@ -26,8 +26,8 @@ import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
 import { generateLoanRepaymentSchedule } from "../services/calculations/loanSchedule.ts";
 import { isValidPattern } from "../lib/calculations/recurrence.ts";
-import { executePlanned } from "../services/plannedExecutionService.js";
-import { getMatchSuggestions } from "../services/plannedMatchService.js";
+import { executePlanned } from "../services/plannedExecutionService.ts";
+import { getMatchSuggestions } from "../services/plannedMatchService.ts";
 import {
   AppError,
   NotFoundError,
@@ -735,12 +735,7 @@ router.post("/:id/execute", validateIdParam, async (req, res) => {
   });
 
   if (duplicate) res.set("Idempotent-Replay", "true");
-  // executePlanned's own @returns widens `current` to `object` at the service
-  // seam, but it is a pass-through of plannedTransactionService.getById()'s
-  // HydratedPlannedTransactionRow|null.
-  res.ok(
-    formatPlannedTransaction(current as HydratedPlannedTransactionRow | null),
-  );
+  res.ok(formatPlannedTransaction(current));
 });
 
 router.delete("/:id", validateIdParam, async (req, res) => {

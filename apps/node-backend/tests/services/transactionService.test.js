@@ -26,19 +26,19 @@ vi.mock("../../src/repositories/accountRepository.ts", () => ({
     findActiveId: mocks.findActiveId,
   },
 }));
-vi.mock("../../src/services/recipientService.js", () => ({
+vi.mock("../../src/services/recipientService.ts", () => ({
   resolveRecipientIdByName: mocks.resolveRecipientIdByName,
 }));
-vi.mock("../../src/services/categoryService.js", () => ({
+vi.mock("../../src/services/categoryService.ts", () => ({
   resolveCategoryIdByName: mocks.resolveCategoryIdByName,
 }));
-vi.mock("../../src/services/transferReconciliationService.js", () => ({
+vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: mocks.scheduleReconcile,
   getTransferSuggestions: mocks.getTransferSuggestions,
   markTransfer: mocks.markTransfer,
   unmarkTransfer: mocks.unmarkTransfer,
 }));
-vi.mock("../../src/services/deduplication.js", () => ({
+vi.mock("../../src/services/deduplication.ts", () => ({
   isManualDuplicate: mocks.isManualDuplicate,
   lockManualTransactionIdentity: mocks.lockManualTransactionIdentity,
   recordManualTransactionDedupClaim: mocks.recordManualTransactionDedupClaim,
@@ -46,13 +46,13 @@ vi.mock("../../src/services/deduplication.js", () => ({
 vi.mock("../../src/database/connection.ts", () =>
   mockConnection({ withTransaction: mocks.withTransaction }),
 );
-vi.mock("../../src/services/plannedMatchService.js", () => ({
+vi.mock("../../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: mocks.autoLinkTransactions,
 }));
-vi.mock("../../src/services/attachmentRecordService.js", () => ({
+vi.mock("../../src/services/attachmentRecordService.ts", () => ({
   attachmentRepository: { listPathsByTransactionIds: vi.fn() },
 }));
-vi.mock("../../src/services/attachmentCleanup.js", () => ({
+vi.mock("../../src/services/attachmentCleanup.ts", () => ({
   removeAttachmentFilesBestEffort: vi.fn(),
 }));
 vi.mock("../../src/config/logger.ts", () => ({
@@ -60,7 +60,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 const { default: transactionService } =
-  await import("../../src/services/transactionService.js");
+  await import("../../src/services/transactionService.ts");
 
 beforeEach(() => {
   vi.clearAllMocks();

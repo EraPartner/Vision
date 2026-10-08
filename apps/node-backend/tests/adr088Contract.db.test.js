@@ -15,11 +15,11 @@ import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
-import * as plannedTransactionService from "../src/services/plannedTransactionService.js";
+import * as plannedTransactionService from "../src/services/plannedTransactionService.ts";
 import { commitBatch } from "../src/services/importPipeline/commit.ts";
-import { isManualDuplicate } from "../src/services/deduplication.js";
+import { isManualDuplicate } from "../src/services/deduplication.ts";
 
-vi.mock("../src/services/plannedMatchService.js", () => ({
+vi.mock("../src/services/plannedMatchService.ts", () => ({
   autoLinkTransactions: vi.fn().mockResolvedValue({ autoLinkedCount: 0 }),
 }));
 

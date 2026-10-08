@@ -30,7 +30,7 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () =>
 
 import { query } from "../src/database/connection.ts";
 import accountRepository from "../src/repositories/accountRepository.ts";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 
 const listAccounts = async (opts = {}) =>
   (await accountService.list(opts)).items;

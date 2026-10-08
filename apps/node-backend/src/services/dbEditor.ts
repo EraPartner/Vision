@@ -1,0 +1,1051 @@
+/**
+ * DB data-editor service — powers the JetBrains-style table browser/editor in
+ * the admin DB Maintenance UI.
+ *
+ * Safety model (see docs/adr for rationale):
+ *   - Table/column identifiers are validated against pg_stat_user_tables /
+ *     information_schema and double-quoted — never interpolated raw.
+ *   - Reads accept only structured, parameterized filters[] (the raw WHERE
+ *     escape hatch was removed, ADR-101 2026-07-10 — any `where` param now 400s)
+ *     and run inside a READ ONLY transaction with a short statement_timeout, so a
+ *     browse can neither mutate nor hang the DB.
+ *   - Writes run in one transaction. Each edited row is locked (FOR UPDATE) and
+ *     its version (the `xmin` system column) is compared against the token the
+ *     client loaded — a mismatch is a 409 conflict, never a silent overwrite.
+ *   - Postgres still enforces every structural constraint (FK / CHECK / NOT
+ *     NULL / UNIQUE); violations are mapped to friendly errors in mapDbError().
+ *   - Edits to a materialized-view base table schedule a debounced refresh.
+ *
+ * This bypasses app-level domain logic by design (it is a raw data editor); the
+ * deeper trade-offs are documented in the ADR.
+ */
+
+import crypto from "node:crypto";
+import { query, getClient } from "../database/connection.ts";
+import { logger } from "../config/logger.ts";
+import { scheduleAggregationRefresh } from "./aggregationRefresh.ts";
+import {
+  AppError,
+  ValidationError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "../middleware/errorHandler.ts";
+import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
+import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
+import type { QueryRunner } from "../types/rows.ts";
+
+export type { QueryRunner };
+
+/**
+ * Column metadata for one table column, as introspected from
+ * `information_schema.columns` + the primary-key query. Genuinely dynamic —
+ * this editor works against any public table, so there is no fixed row shape
+ * to type against; `ColumnMeta`/`TableMeta` describe the editor's own
+ * bookkeeping, not the tables it edits.
+ */
+export interface ColumnMeta {
+  name: string;
+  dataType: string;
+  udtName: string;
+  nullable: boolean;
+  hasDefault: boolean;
+  generated: boolean;
+  writable: boolean;
+}
+
+export interface TableMeta {
+  table: string;
+  columns: ColumnMeta[];
+  primaryKey: string[];
+}
+
+/**
+ * A structured filter clause from the browse UI (see the ADR-101 note on
+ * `readRows` — the raw-WHERE escape hatch was removed).
+ */
+export interface Filter {
+  column: string;
+  /** one of FILTER_OPS; defaults to 'eq'. */
+  op?: string;
+  value?: unknown;
+}
+
+/**
+ * A pending row edit from the DB editor UI. `values`/`set`/`pk` are raw
+ * column-name → value maps — genuinely dynamic (any editable table, any
+ * column set), typed as `Record<string, unknown>` rather than a fixed shape.
+ */
+export interface Change {
+  op: "insert" | "update" | "delete";
+  /** insert only. */
+  values?: Record<string, unknown>;
+  /** update only — changed columns. */
+  set?: Record<string, unknown>;
+  /** update/delete — primary-key column values identifying the row. */
+  pk?: Record<string, unknown>;
+  /** optimistic-concurrency token (the row's `xmin`) from the row the client loaded. */
+  xmin?: unknown;
+}
+
+/** Per-change context threaded through the mutation builders. */
+export interface MutationCtx {
+  colMeta: Map<string, ColumnMeta>;
+  primaryKey: string[];
+  index: number;
+}
+
+/**
+ * One row of the `db_editor_audit` sink (both the DB table and the
+ * structured-logger mirror) — mirrors whatever table/row was edited, so
+ * `pk`/`before`/`after` are the same dynamic row shape as `Change`.
+ */
+export interface AuditEntry {
+  table: string;
+  op: string;
+  pk: Record<string, unknown> | undefined;
+  before: Record<string, unknown> | undefined;
+  after: Record<string, unknown> | undefined;
+  statement: string;
+}
+
+/** A row of `information_schema.columns` as `getTableMeta` selects it. */
+export type RawColumnRow = {
+  column_name: string;
+  data_type: string;
+  udt_name: string;
+  is_nullable: string;
+  column_default: string | null;
+  is_generated: string;
+  is_identity: string;
+  ordinal_position: number;
+};
+
+/** Options accepted by `readRows`. */
+export interface ReadRowsOptions {
+  limit?: number;
+  cursor?: string;
+  orderBy?: string;
+  dir?: string;
+  filters?: Filter[];
+  /** accepted only to be rejected (400) — the raw-WHERE escape hatch was removed. */
+  where?: string;
+}
+
+/** A decoded pagination cursor, before it is checked against the request. */
+type CursorPayload = {
+  v?: unknown;
+  table?: unknown;
+  dir?: unknown;
+  filters?: unknown;
+  orderColumns?: unknown;
+  values?: unknown;
+} | null;
+
+/** The fields of a pg driver error that `mapDbError` reads. */
+type PgDriverError = {
+  code?: string;
+  detail?: string;
+  column?: string;
+  constraint?: string;
+  message?: string;
+};
+
+const DEFAULT_PAGE_SIZE = 100;
+const MAX_PAGE_SIZE = 500;
+const READ_TIMEOUT_MS = 15_000;
+const WRITE_TIMEOUT_MS = 30_000;
+
+// The editor bypasses domain services and has no authenticated external audit
+// receipt. Keep audit history out of its generic read and write paths until a
+// dedicated viewer verifies the exact history before showing it.
+const PROTECTED_AUDIT_TABLES = new Set([
+  "audit_chain_entries",
+  "audit_chain_head",
+  "audit_chain_checkpoints",
+  "db_editor_audit",
+  "split_audit",
+  "portfolio_retag_audit",
+]);
+
+// Base tables whose rows feed the dashboard materialized views. Editing any of
+// these leaves the views stale until refreshed (see materializedViewService).
+const MATVIEW_BASE_TABLES = new Set([
+  "transactions",
+  "recipients",
+  "categories",
+]);
+
+const FILTER_OPS = new Set([
+  "eq",
+  "ne",
+  "lt",
+  "lte",
+  "gt",
+  "gte",
+  "contains",
+  "startsWith",
+  "isnull",
+  "notnull",
+]);
+
+// ── Identifier safety ───────────────────────────────────────────────────────
+
+function quoteIdent(name: unknown): string {
+  return `"${String(name).replace(/"/g, '""')}"`;
+}
+
+/**
+ * Resolve a caller-supplied identifier to the catalog's OWN copy of that name.
+ *
+ * Every identifier that reaches SQL text goes through here first, so the string
+ * that gets interpolated always originates from pg's catalog (listUserTables /
+ * information_schema) rather than from the request — the request value is only
+ * ever used as a lookup key. That is stricter than validate-then-use-the-input:
+ * it holds by construction even if a membership check upstream is later
+ * loosened, and it is what makes the safety legible to static taint analysis,
+ * which cannot see a `Set.has()` test as a sanitizer and therefore reports the
+ * read query below as a high-severity injection sink.
+ *
+ * @param allowed catalog-derived names
+ * @returns the catalog's string, or null when there is no match
+ */
+function resolveIdent(name: unknown, allowed: Iterable<string>): string | null {
+  if (typeof name !== "string" || name.length === 0) return null;
+  for (const candidate of allowed) {
+    if (candidate === name) return candidate;
+  }
+  return null;
+}
+
+function clampInt(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  // String(value): Number.parseInt already ToStrings a non-string argument
+  // internally (same algorithm), so this is a no-op for behavior — it only
+  // satisfies parseInt's string-typed signature.
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(n, min), max);
+}
+
+// The catalog IS the injection allowlist, so it must stay correct — but table
+// column/PK metadata is static within a running backend (this editor only does
+// data DML, never DDL; a schema migration restarts the process). A short TTL
+// memo removes the ~5 catalog round-trips per browse tick / mutation without
+// weakening the allowlist semantics.
+const META_TTL_MS = 60_000;
+let userTablesCache: { value: Set<string> | null; expiresAt: number } = {
+  value: null,
+  expiresAt: 0,
+};
+const tableMetaCache = new Map<
+  string,
+  { value: TableMeta; expiresAt: number }
+>();
+
+export function __clearDbEditorMetadataCacheForTests() {
+  userTablesCache = { value: null, expiresAt: 0 };
+  tableMetaCache.clear();
+}
+
+async function listUserTables(): Promise<Set<string>> {
+  const now = Date.now();
+  if (userTablesCache.value && userTablesCache.expiresAt > now)
+    return userTablesCache.value;
+  const r = await query<{ relname: string }>(
+    `SELECT relname FROM pg_stat_user_tables WHERE schemaname = 'public'`,
+    [],
+  );
+  const set = new Set(r.rows.map((row) => row.relname));
+  userTablesCache = { value: set, expiresAt: now + META_TTL_MS };
+  return set;
+}
+
+/**
+ * @returns the catalog's own copy of the table name
+ */
+async function resolveEditableTable(table: unknown): Promise<string> {
+  if (typeof table !== "string" || table.length === 0) {
+    throw new ValidationError("Table name is required");
+  }
+  const resolved = resolveIdent(table, await listUserTables());
+  if (resolved === null) {
+    throw new NotFoundError(`Unknown table: ${table}`);
+  }
+  return resolved;
+}
+
+// ── Introspection ───────────────────────────────────────────────────────────
+
+/**
+ * Column + primary-key metadata for a public table.
+ */
+export async function getTableMeta(table: string): Promise<TableMeta> {
+  if (PROTECTED_AUDIT_TABLES.has(table)) {
+    throw new ForbiddenError("Audit tables require verified audit history");
+  }
+  // `safeTable` is the catalog's string, not the caller's — see resolveIdent.
+  // Everything downstream (meta.table, and through it every quoteIdent call in
+  // this module) is built from it.
+  const safeTable = await resolveEditableTable(table);
+
+  const now = Date.now();
+  const cached = tableMetaCache.get(safeTable);
+  if (cached && cached.expiresAt > now) return cached.value;
+
+  const [colsRes, pkRes] = await Promise.all([
+    query<RawColumnRow>(
+      `SELECT column_name, data_type, udt_name, is_nullable, column_default,
+              is_generated, is_identity, ordinal_position
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position`,
+      [safeTable],
+    ),
+    query<{ column_name: string }>(
+      `SELECT a.attname AS column_name
+         FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indrelid
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE n.nspname = 'public' AND c.relname = $1 AND i.indisprimary
+        ORDER BY array_position(i.indkey, a.attnum)`,
+      [safeTable],
+    ),
+  ]);
+
+  const columns: ColumnMeta[] = colsRes.rows.map((r) => {
+    const generatedAlways =
+      r.is_generated === "ALWAYS" || r.is_identity === "YES";
+    return {
+      name: r.column_name,
+      dataType: r.data_type,
+      udtName: r.udt_name,
+      nullable: r.is_nullable === "YES",
+      hasDefault: r.column_default !== null,
+      generated: generatedAlways,
+      // GENERATED ALWAYS (incl. identity-always) columns cannot be written.
+      writable: r.is_generated !== "ALWAYS",
+    };
+  });
+
+  const meta: TableMeta = {
+    table: safeTable,
+    columns,
+    primaryKey: pkRes.rows.map((r) => r.column_name),
+  };
+  tableMetaCache.set(safeTable, { value: meta, expiresAt: now + META_TTL_MS });
+  return meta;
+}
+
+// ── Reads (browse / filter / sort / paginate) ───────────────────────────────
+
+function buildFilterFragment(
+  filter: Filter,
+  params: unknown[],
+  columnNames: Set<string>,
+): string {
+  const column = resolveIdent(filter.column, columnNames);
+  if (column === null) {
+    throw new ValidationError(`Unknown filter column: ${filter.column}`);
+  }
+  const op = filter.op ?? "eq";
+  if (!FILTER_OPS.has(op)) {
+    throw new ValidationError(`Unknown filter operator: ${op}`);
+  }
+  const col = quoteIdent(column);
+  switch (op) {
+    case "isnull":
+      return `${col} IS NULL`;
+    case "notnull":
+      return `${col} IS NOT NULL`;
+    case "contains":
+      params.push(`%${filter.value}%`);
+      return `${col}::text ILIKE $${params.length}`;
+    case "startsWith":
+      params.push(`${filter.value}%`);
+      return `${col}::text ILIKE $${params.length}`;
+    default: {
+      const sqlOpByOp: Record<string, string> = {
+        eq: "=",
+        ne: "<>",
+        lt: "<",
+        lte: "<=",
+        gt: ">",
+        gte: ">=",
+      };
+      const sqlOp = sqlOpByOp[op];
+      params.push(filter.value);
+      return `${col} ${sqlOp} $${params.length}`;
+    }
+  }
+}
+
+/**
+ * Read a page of rows. Runs inside a READ ONLY transaction.
+ *
+ * Only the structured, parameterized `filters[]` path exists — the ADR-101
+ * raw-WHERE escape hatch was removed (2026-07-10): concatenating a caller
+ * string into the SQL was a blind-SQLi timing oracle (pg_sleep in the WHERE
+ * survives CORS on this CSRF-exempt GET), and a bare `--` silently truncated
+ * the rest of the statement past the `;` guard.
+ * @param opts `where` is accepted only to be rejected (400) — the raw-WHERE
+ *          escape hatch was removed.
+ */
+export async function readRows(table: string, opts: ReadRowsOptions = {}) {
+  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
+  const columnNames = new Set(columns.map((c) => c.name));
+
+  const limit = clampInt(opts.limit, DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE);
+  const params: unknown[] = [];
+  const whereParts: string[] = [];
+
+  for (const filter of opts.filters ?? []) {
+    whereParts.push(buildFilterFragment(filter, params, columnNames));
+  }
+
+  if (opts.where !== undefined && String(opts.where).trim() !== "") {
+    throw new ValidationError(
+      "The raw WHERE parameter has been removed. Use the structured filters[] parameter instead.",
+    );
+  }
+
+  const dir = String(opts.dir).toLowerCase() === "desc" ? "DESC" : "ASC";
+  const orderColumns: string[] = [];
+  if (opts.orderBy !== undefined && String(opts.orderBy) !== "") {
+    const orderCol = resolveIdent(opts.orderBy, columnNames);
+    if (orderCol === null) {
+      throw new ValidationError(`Unknown sort column: ${opts.orderBy}`);
+    }
+    orderColumns.push(orderCol);
+  }
+  for (const pk of primaryKey) {
+    if (!orderColumns.includes(pk)) orderColumns.push(pk);
+  }
+  const cursorColumns = orderColumns.map((column) => ({
+    expression: quoteIdent(column),
+    contextKey: column,
+    ctid: false,
+    valueKey: "",
+  }));
+  if (primaryKey.length === 0) {
+    cursorColumns.push({
+      expression: "ctid",
+      contextKey: "__system_ctid",
+      ctid: true,
+      valueKey: "",
+    });
+  }
+  const reservedAliases = new Set(columnNames);
+  for (let index = 0; index < cursorColumns.length; index += 1) {
+    const base = `__vision_cursor_value_${index + 1}`;
+    let alias = base;
+    let suffix = 2;
+    while (reservedAliases.has(alias)) {
+      alias = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    cursorColumns[index].valueKey = alias;
+    reservedAliases.add(alias);
+  }
+  const orderSql = `ORDER BY ${cursorColumns
+    .map((column) => `${column.expression} ${dir} NULLS LAST`)
+    .join(", ")}`;
+
+  const cursorContext = {
+    v: 2,
+    table: safeTable,
+    orderColumns: cursorColumns.map((column) => column.contextKey),
+    dir,
+    filters: crypto
+      .createHash("sha256")
+      .update(JSON.stringify(opts.filters ?? []))
+      .digest("hex"),
+  };
+  if (opts.cursor) {
+    let decoded: CursorPayload;
+    try {
+      decoded = JSON.parse(
+        Buffer.from(String(opts.cursor), "base64url").toString("utf8"),
+      ) as CursorPayload;
+    } catch {
+      throw new ValidationError("Invalid pagination cursor");
+    }
+    if (
+      decoded?.v !== cursorContext.v ||
+      decoded?.table !== cursorContext.table ||
+      decoded?.dir !== cursorContext.dir ||
+      decoded?.filters !== cursorContext.filters ||
+      JSON.stringify(decoded?.orderColumns) !==
+        JSON.stringify(cursorContext.orderColumns) ||
+      !Array.isArray(decoded?.values) ||
+      decoded.values.length !== cursorColumns.length
+    ) {
+      throw new ValidationError(
+        "Pagination cursor does not match the current table, sort, or filters",
+      );
+    }
+    if (
+      decoded.values.some(
+        (value: unknown) => value !== null && typeof value !== "string",
+      )
+    ) {
+      throw new ValidationError("Invalid pagination cursor");
+    }
+    const cursorValues: Array<string | null> = decoded.values;
+    const branches: string[] = [];
+    for (let index = 0; index < cursorColumns.length; index += 1) {
+      const prefix: string[] = [];
+      for (let prior = 0; prior < index; prior += 1) {
+        params.push(cursorValues[prior]);
+        prefix.push(
+          cursorColumns[prior].ctid
+            ? `${cursorColumns[prior].expression} = $${params.length}::tid`
+            : `${cursorColumns[prior].expression} IS NOT DISTINCT FROM $${params.length}`,
+        );
+      }
+      const value = cursorValues[index];
+      if (value === null || value === undefined) continue;
+      params.push(value);
+      const comparison = cursorColumns[index].ctid
+        ? `${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length}::tid`
+        : `(${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length} OR ${cursorColumns[index].expression} IS NULL)`;
+      branches.push(`(${[...prefix, comparison].join(" AND ")})`);
+    }
+    if (branches.length === 0) {
+      whereParts.push("FALSE");
+    } else {
+      whereParts.push(`(${branches.join(" OR ")})`);
+    }
+  }
+
+  const cursorWhereSql = whereParts.length
+    ? `WHERE ${whereParts.join(" AND ")}`
+    : "";
+
+  const tbl = quoteIdent(safeTable);
+  // xmin (the row version) rides along as a hidden optimistic-concurrency token.
+  // Cursor boundaries come from PostgreSQL text projections, not node-postgres
+  // decoded values. This preserves timestamp microseconds and exact bytea,
+  // numeric, array, and special floating-point representations.
+  const cursorSelect = cursorColumns
+    .map(
+      (column) =>
+        `, (${column.expression})::text AS ${quoteIdent(column.valueKey)}`,
+    )
+    .join("");
+  const dataSql = `SELECT *, xmin::text AS __xmin${cursorSelect} FROM ${tbl} ${cursorWhereSql} ${orderSql} LIMIT ${limit + 1}`;
+
+  const client = await getClient();
+  try {
+    await client.query("BEGIN");
+    await client.query("SET TRANSACTION READ ONLY");
+    await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
+    const dataRes = await client.query(dataSql, [...params]);
+    const hasMore = dataRes.rows.length > limit;
+    const rows = dataRes.rows.slice(0, limit);
+    const last = rows.at(-1);
+    const nextCursor =
+      hasMore && last
+        ? Buffer.from(
+            JSON.stringify({
+              ...cursorContext,
+              values: cursorColumns.map((column) => last[column.valueKey]),
+            }),
+          ).toString("base64url")
+        : null;
+    for (const row of rows) {
+      for (const column of cursorColumns) delete row[column.valueKey];
+    }
+    await client.query("COMMIT");
+    return {
+      table: safeTable,
+      columns,
+      primaryKey,
+      rows,
+      total: !opts.cursor && !hasMore ? rows.length : undefined,
+      limit,
+      hasMore,
+      nextCursor,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw mapDbError(err);
+  } finally {
+    client.release();
+  }
+}
+
+// ── Mutation building ───────────────────────────────────────────────────────
+
+function literalForDisplay(value: unknown): string {
+  if (value === undefined || value === null) return "NULL";
+  if (typeof value === "number") return String(value);
+  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value === "object")
+    return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function renderPreview(sql: string, params: unknown[]): string {
+  return sql.replace(/\$(\d+)/g, (_: string, n: string) =>
+    literalForDisplay(params[Number(n) - 1]),
+  );
+}
+
+function normalizeWrite(value: unknown): unknown {
+  return value === undefined ? null : value;
+}
+
+/**
+ * Build the primary mutation statement (INSERT/UPDATE/DELETE) for a change.
+ * Used both for dry-run previews and for execution, so the SQL shown to the
+ * user is exactly what runs.
+ *
+ * @param table must already be catalog-resolved (resolveEditableTable)
+ */
+function buildMutationSql(
+  table: string,
+  change: Change,
+  ctx: MutationCtx,
+): { sql: string; params: unknown[] } {
+  const tbl = quoteIdent(table);
+
+  // Domain guard: getIncludeTransfers reads user_settings with a strict
+  // `=== true`, so a jsonb number 1/0 (or any non-boolean) written for the
+  // includeTransfers key would silently be interpreted as false. The API PUT
+  // layer already rejects this; close the same gap on the admin editor path.
+  if (table === "user_settings") {
+    const key = change.op === "insert" ? change.values?.key : change.pk?.key;
+    const value =
+      change.op === "insert" ? change.values?.value : change.set?.value;
+    if (
+      key === "includeTransfers" &&
+      value !== undefined &&
+      typeof value !== "boolean"
+    ) {
+      throw new ValidationError(
+        "user_settings.includeTransfers must be a JSON boolean",
+      );
+    }
+  }
+
+  // validateChange has already required every primary-key column in `pk` for
+  // update/delete, so `pk` is only empty here when there is no key to read.
+  const pk = change.pk ?? {};
+
+  if (change.op === "insert") {
+    const values = change.values ?? {};
+    // Only columns present in the catalog survive this filter, so every
+    // colMeta lookup below hits.
+    const cols = Object.keys(values).filter((c) => ctx.colMeta.has(c));
+    if (!cols.length)
+      throw new ValidationError(`Insert #${ctx.index} has no values`);
+    for (const c of cols) {
+      if (!ctx.colMeta.get(c)!.writable) {
+        throw new ValidationError(
+          `Column "${c}" is generated and cannot be written`,
+        );
+      }
+    }
+    const params = cols.map((c) => normalizeWrite(values[c]));
+    const placeholders = cols.map((_, i) => `$${i + 1}`);
+    const sql = `INSERT INTO ${tbl} (${cols.map((c) => quoteIdent(ctx.colMeta.get(c)!.name)).join(", ")}) VALUES (${placeholders.join(", ")}) RETURNING *`;
+    return { sql, params };
+  }
+
+  if (change.op === "update") {
+    const set = change.set ?? {};
+    const cols = Object.keys(set).filter((c) => ctx.colMeta.has(c));
+    if (!cols.length)
+      throw new ValidationError(`Update #${ctx.index} has no changed columns`);
+    for (const c of cols) {
+      if (ctx.primaryKey.includes(c)) {
+        throw new ValidationError(`Primary-key column "${c}" cannot be edited`);
+      }
+      if (!ctx.colMeta.get(c)!.writable) {
+        throw new ValidationError(
+          `Column "${c}" is generated and cannot be written`,
+        );
+      }
+    }
+    const params: unknown[] = [];
+    const assigns = cols.map((c) => {
+      params.push(normalizeWrite(set[c]));
+      return `${quoteIdent(ctx.colMeta.get(c)!.name)} = $${params.length}`;
+    });
+    const where = ctx.primaryKey
+      .map((k) => {
+        params.push(pk[k]);
+        return `${quoteIdent(k)} = $${params.length}`;
+      })
+      .join(" AND ");
+    const sql = `UPDATE ${tbl} SET ${assigns.join(", ")} WHERE ${where} RETURNING *`;
+    return { sql, params };
+  }
+
+  if (change.op === "delete") {
+    const params: unknown[] = [];
+    const where = ctx.primaryKey
+      .map((k) => {
+        params.push(pk[k]);
+        return `${quoteIdent(k)} = $${params.length}`;
+      })
+      .join(" AND ");
+    return { sql: `DELETE FROM ${tbl} WHERE ${where}`, params };
+  }
+
+  throw new ValidationError(`Unknown op: ${change.op}`);
+}
+
+function validateChange(change: Change, ctx: MutationCtx): void {
+  if (!change || typeof change !== "object") {
+    throw new ValidationError(`Change #${ctx.index} is malformed`);
+  }
+  if (change.op === "update" || change.op === "delete") {
+    const pk = change.pk ?? {};
+    for (const k of ctx.primaryKey) {
+      if (!(k in pk)) {
+        throw new ValidationError(
+          `Change #${ctx.index} is missing primary-key column "${k}"`,
+        );
+      }
+    }
+  } else if (change.op !== "insert") {
+    throw new ValidationError(`Unknown op: ${change.op}`);
+  }
+}
+
+// ── Mutation execution ──────────────────────────────────────────────────────
+
+function pickPk(
+  row: Record<string, unknown> | null | undefined,
+  primaryKey: string[],
+): Record<string, unknown> {
+  const pk: Record<string, unknown> = {};
+  for (const k of primaryKey) pk[k] = row?.[k];
+  return pk;
+}
+
+/**
+ * @param table must already be catalog-resolved (resolveEditableTable)
+ */
+async function applyOne(
+  client: QueryRunner,
+  table: string,
+  change: Change,
+  ctx: MutationCtx,
+): Promise<{
+  op: string;
+  after?: Record<string, unknown>;
+  audit: AuditEntry;
+}> {
+  // INSERT: no row to lock; structural constraints enforced by Postgres.
+  if (change.op === "insert") {
+    const { sql, params } = buildMutationSql(table, change, ctx);
+    const res = await client.query(sql, params);
+    const after: Record<string, unknown> | undefined = res.rows[0];
+    return {
+      op: "insert",
+      after,
+      audit: {
+        table,
+        op: "insert",
+        pk: pickPk(after, ctx.primaryKey),
+        before: undefined,
+        after,
+        statement: renderPreview(sql, params),
+      },
+    };
+  }
+
+  // UPDATE / DELETE: lock the row, verify its version, then mutate.
+  const tbl = quoteIdent(table);
+  const lockParams: unknown[] = [];
+  // validateChange required every primary-key column in `pk`.
+  const pk = change.pk ?? {};
+  const pkWhere = ctx.primaryKey
+    .map((k) => {
+      lockParams.push(pk[k]);
+      return `${quoteIdent(k)} = $${lockParams.length}`;
+    })
+    .join(" AND ");
+
+  const cur = await client.query(
+    `SELECT *, xmin::text AS __xmin FROM ${tbl} WHERE ${pkWhere} FOR UPDATE`,
+    lockParams,
+  );
+  if (cur.rowCount === 0) {
+    throw new ConflictError(
+      "Row no longer exists — it was deleted since you loaded it",
+      {
+        details: { table, pk: change.pk, index: ctx.index },
+      },
+    );
+  }
+  const before: Record<string, unknown> = { ...cur.rows[0] };
+  const currentXmin = before.__xmin;
+  delete before.__xmin;
+  if (
+    change.xmin !== undefined &&
+    String(change.xmin) !== String(currentXmin)
+  ) {
+    throw new ConflictError(
+      "Row changed since it was loaded — refresh and retry",
+      {
+        details: { table, pk: change.pk, index: ctx.index },
+      },
+    );
+  }
+
+  const { sql, params } = buildMutationSql(table, change, ctx);
+  const res = await client.query(sql, params);
+
+  if (change.op === "delete") {
+    return {
+      op: "delete",
+      audit: {
+        table,
+        op: "delete",
+        pk: change.pk,
+        before,
+        after: undefined,
+        statement: renderPreview(sql, params),
+      },
+    };
+  }
+  const after: Record<string, unknown> | undefined = res.rows[0];
+  return {
+    op: "update",
+    after,
+    audit: {
+      table,
+      op: "update",
+      pk: change.pk,
+      before,
+      after,
+      statement: renderPreview(sql, params),
+    },
+  };
+}
+
+async function writeAuditRows(
+  client: QueryRunner,
+  audit: AuditEntry[],
+): Promise<void> {
+  for (const a of audit) {
+    const result = await client.query(
+      `INSERT INTO db_editor_audit (table_name, op, pk_json, before_json, after_json, statement)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, pk_json::text AS pk_text, before_json::text AS before_text,
+                 after_json::text AS after_text, statement,
+                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at`,
+      [
+        a.table,
+        a.op,
+        a.pk ?? undefined,
+        a.before ?? undefined,
+        a.after ?? undefined,
+        a.statement,
+      ],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("DB editor audit insert did not return a row");
+    const auditDigest = crypto
+      .createHash("sha256")
+      .update(
+        JSON.stringify([
+          a.table,
+          a.op,
+          row.pk_text,
+          row.before_text,
+          row.after_text,
+          row.statement,
+          row.occurred_at,
+        ]),
+      )
+      .digest("hex");
+    await appendAuditEvent(
+      {
+        stream: "db_editor",
+        event: a.op,
+        auditRowId: String(row.id),
+        table: a.table,
+        occurred_at: row.occurred_at,
+        auditDigest,
+      },
+      client,
+    );
+  }
+}
+
+/**
+ * Apply a batch of changes. With dryRun, returns the statements that *would*
+ * run without touching the DB. Otherwise executes the whole batch in one
+ * transaction (all-or-nothing) and writes an audit row per change.
+ */
+export async function applyMutations(
+  table: string,
+  changes: Change[],
+  { dryRun = false }: { dryRun?: boolean } = {},
+) {
+  if (PROTECTED_AUDIT_TABLES.has(table)) {
+    throw new ForbiddenError("Audit tables cannot be edited");
+  }
+  const { table: safeTable, columns, primaryKey } = await getTableMeta(table);
+  if (!primaryKey.length) {
+    throw new ValidationError(
+      `Table "${table}" has no primary key and cannot be edited`,
+    );
+  }
+  if (!Array.isArray(changes) || changes.length === 0) {
+    throw new ValidationError("No changes provided");
+  }
+
+  const colMeta = new Map<string, ColumnMeta>(columns.map((c) => [c.name, c]));
+
+  const statements = changes.map((change, index) => {
+    const ctx = { colMeta, primaryKey, index };
+    validateChange(change, ctx);
+    const { sql, params } = buildMutationSql(safeTable, change, ctx);
+    return { op: change.op, sql, params, preview: renderPreview(sql, params) };
+  });
+
+  if (dryRun) {
+    return {
+      dryRun: true,
+      count: statements.length,
+      statements: statements.map(({ op, preview }) => ({ op, preview })),
+    };
+  }
+
+  const client = await getClient();
+  const audit: AuditEntry[] = [];
+  try {
+    await client.query("BEGIN");
+    await client.query(`SET LOCAL statement_timeout = ${WRITE_TIMEOUT_MS}`);
+
+    // The editor deliberately bypasses account-domain validation, but it must
+    // still join the graph-wide lock protocol before taking any account row
+    // lock. Otherwise an admin edit can race a normal PATCH or merge, validate
+    // against stale graph state, or deadlock through opposite lock ordering.
+    if (safeTable === "accounts") {
+      await lockAccountFundingGraph((sql, params) =>
+        client.query(sql, [...params]),
+      );
+    }
+
+    const results: Array<{
+      op: string;
+      after: Record<string, unknown> | undefined;
+    }> = [];
+    for (let index = 0; index < changes.length; index++) {
+      const ctx = { colMeta, primaryKey, index };
+      const result = await applyOne(client, safeTable, changes[index], ctx);
+      results.push({ op: result.op, after: result.after });
+      audit.push(result.audit);
+    }
+
+    await writeAuditRows(client, audit);
+    await client.query("COMMIT");
+
+    // Structured-logger audit sink (in addition to the db_editor_audit table).
+    for (const a of audit) {
+      logger.info("db-editor mutation committed", {
+        table: a.table,
+        op: a.op,
+        pk: a.pk,
+      });
+    }
+
+    const refreshed = MATVIEW_BASE_TABLES.has(safeTable);
+    if (refreshed) scheduleAggregationRefresh();
+
+    return {
+      dryRun: false,
+      applied: results.length,
+      results,
+      refreshScheduled: refreshed,
+    };
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw mapDbError(err);
+  } finally {
+    client.release();
+  }
+}
+
+// ── Error mapping ───────────────────────────────────────────────────────────
+
+/**
+ * Translate raw Postgres error codes into friendly, typed API errors so the
+ * UI can show "Column X cannot be null" instead of an opaque SQLSTATE.
+ *
+ * @param error raw pg driver error — shape (code/detail/column/constraint) is upstream-defined.
+ * @returns the mapped AppError, or the original error when its code is unmapped
+ */
+function mapDbError(error: unknown): unknown {
+  if (error instanceof AppError) return error;
+
+  const err = error as PgDriverError | null | undefined;
+  const detail = err?.detail ? { pgDetail: err.detail } : undefined;
+  switch (err?.code) {
+    case "23502": // not_null_violation
+      return new ValidationError(`Column "${err.column}" cannot be empty`, {
+        details: detail,
+      });
+    case "23503": // foreign_key_violation
+      return new ValidationError(
+        "References a row that does not exist (foreign key)",
+        {
+          details: { constraint: err.constraint, ...detail },
+        },
+      );
+    case "23505": // unique_violation
+      return new ConflictError(
+        "Duplicate value violates a uniqueness constraint",
+        {
+          details: { constraint: err.constraint, ...detail },
+        },
+      );
+    case "23514": // check_violation
+      return new ValidationError("Value violates a check constraint", {
+        details: { constraint: err.constraint, ...detail },
+      });
+    case "22P02": // invalid_text_representation
+    case "22003": // numeric_value_out_of_range
+    case "22007": // invalid_datetime_format
+      return new ValidationError(
+        `Invalid value for column type: ${err.message}`,
+      );
+    case "42601": // syntax_error
+    case "42703": // undefined_column
+    case "42883": // undefined_function / operator
+    case "42P01": // undefined_table
+      // Never echo raw driver text back to the client: with identifiers
+      // allowlisted these are unreachable in normal use, and leaking the
+      // message hands schema/column names to a prober (data-protection policy,
+      // docs/security/data-protection.md). Full detail still goes to the logs
+      // via the caught error.
+      return new ValidationError("Invalid query");
+    case "42501": // insufficient_privilege
+      return new ForbiddenError(
+        "Insufficient database privileges for this operation",
+      );
+    case "25006": // read_only_sql_transaction
+      return new ForbiddenError("Write attempted inside a read-only query");
+    case "57014": // query_canceled (statement timeout)
+      return new AppError("Query timed out", {
+        status: 504,
+        code: "QUERY_TIMEOUT",
+      });
+    default:
+      return err;
+  }
+}
+
+export default { getTableMeta, readRows, applyMutations };

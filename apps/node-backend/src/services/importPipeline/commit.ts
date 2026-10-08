@@ -31,7 +31,7 @@ import {
 } from "../../repositories/importBatchRepository.ts";
 import { logger } from "../../config/logger.ts";
 import { formatDateToYmd } from "../../lib/dateFormat.ts";
-import { autoLinkTransactions } from "../plannedMatchService.js";
+import { autoLinkTransactions } from "../plannedMatchService.ts";
 import { getAdapter } from "./adapters/index.ts";
 import type { ImportStagingRow } from "../../types/rows.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";

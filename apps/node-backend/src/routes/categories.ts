@@ -4,7 +4,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import categoryService from "../services/categoryService.js";
+import categoryService from "../services/categoryService.ts";
 import {
   listCategoryNodes,
   getCategoryNode,
@@ -12,7 +12,7 @@ import {
   updateCategoryNode,
   deleteCategoryNode,
   mergeCategoryNodes,
-} from "../services/categoryService.js";
+} from "../services/categoryService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
@@ -25,7 +25,7 @@ import {
 // recipient default-category mapping, so category mutations must schedule a
 // refresh — otherwise renamed/reassigned categories serve stale until an
 // unrelated transaction mutation happens to refresh the views.
-import { scheduleRefresh } from "../services/materializedViewService.js";
+import { scheduleRefresh } from "../services/materializedViewService.ts";
 
 const router = Router();
 

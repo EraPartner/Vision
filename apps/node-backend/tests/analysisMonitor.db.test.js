@@ -16,15 +16,15 @@ import {
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
 import { ensureAnalysisRole } from "../src/database/analysisRoleBootstrap.ts";
-import { closeAnalysisPool } from "../src/services/analysisExecutor.js";
+import { closeAnalysisPool } from "../src/services/analysisExecutor.ts";
 import {
   createSavedAnalysis,
   updateSavedAnalysis,
-} from "../src/services/savedAnalysisService.js";
+} from "../src/services/savedAnalysisService.ts";
 import {
   createResearchDossier,
   updateResearchDossier,
-} from "../src/services/researchDossierService.js";
+} from "../src/services/researchDossierService.ts";
 import {
   checkAnalysisMonitor,
   checkDueAnalysisMonitors,
@@ -32,7 +32,7 @@ import {
   listMonitorNotifications,
   listMonitorObservations,
   patchAnalysisMonitor,
-} from "../src/services/analysisMonitorService.js";
+} from "../src/services/analysisMonitorService.ts";
 
 const content = {
   title: "Monitor fixture",

@@ -16,7 +16,7 @@ import {
   __extractDocument,
   ingestResearchDocument,
   searchResearchDocuments,
-} from "../src/services/aiResearchDocuments.js";
+} from "../src/services/aiResearchDocuments.ts";
 
 describe("local research documents", () => {
   beforeEach(() => vi.clearAllMocks());

@@ -20,7 +20,7 @@ import {
   __getLatestSnapshot as getLatestSnapshot,
   computeMetrics,
   computeHeatmap,
-} from "../src/services/portfolioPerformanceSnapshotService.js";
+} from "../src/services/portfolioPerformanceSnapshotService.ts";
 
 function buildQueryResponses({ includeData = true, emptyLatest = false } = {}) {
   if (!includeData) {

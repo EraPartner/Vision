@@ -7,7 +7,7 @@ updated: 2026-10-08
 tags: [integration, ollama, llm, local-ai, streaming, tool-calling, idle-timeout, tool-call-accumulation]
 description: HTTP client wrapper around local Ollama for AI chat — health, model discovery, chat/stream, abort support. June 2026: per-chunk idle timeout replaces single total budget; tool calls accumulated and deduped across NDJSON chunks; request/response logs downgraded to debug.
 aliases: [ollama, ollama-client, local-llm]
-related_code: ["apps/node-backend/src/integrations/ollama/client.ts", "apps/node-backend/src/integrations/ollama/prompts.ts", "apps/node-backend/src/services/aiChatService.js"]
+related_code: ["apps/node-backend/src/integrations/ollama/client.ts", "apps/node-backend/src/integrations/ollama/prompts.ts", "apps/node-backend/src/services/aiChatService.ts"]
 ---
 
 # Ollama Integration

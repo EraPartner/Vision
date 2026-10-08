@@ -47,16 +47,16 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/priceProviderService.js", () => ({
+vi.mock("../../src/services/priceProviderService.ts", () => ({
   sanitizePersistedKinesisHistory: vi.fn(),
 }));
 
-vi.mock("../../src/services/providerHealthService.js", () => ({
+vi.mock("../../src/services/providerHealthService.ts", () => ({
   listProviderHealth: vi.fn(),
   probeProvider: vi.fn(),
 }));
 
-vi.mock("../../src/services/routeManifest.js", () => ({
+vi.mock("../../src/services/routeManifest.ts", () => ({
   getRouteManifest: vi.fn(),
 }));
 
@@ -64,9 +64,9 @@ import {
   checkConnection,
   getTableCount,
 } from "../../src/database/connection.ts";
-import { sanitizePersistedKinesisHistory } from "../../src/services/priceProviderService.js";
-import { listProviderHealth } from "../../src/services/providerHealthService.js";
-import { getRouteManifest } from "../../src/services/routeManifest.js";
+import { sanitizePersistedKinesisHistory } from "../../src/services/priceProviderService.ts";
+import { listProviderHealth } from "../../src/services/providerHealthService.ts";
+import { getRouteManifest } from "../../src/services/routeManifest.ts";
 import https from "https";
 
 const { default: adminRouter } = await import("../../src/routes/admin.ts");

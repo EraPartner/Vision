@@ -7,7 +7,7 @@ last_modified: 2026-04-25
 tags: [performance, caching, optimization, startup, dependency-ordering]
 description: In-memory caching implementation for exchange rates and price feeds
 aliases: [caching, cache layers, in-memory cache, ttl, cache invalidation]
-related_code: ["apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/priceProviderService.js"]
+related_code: ["apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/priceProviderService.ts"]
 ---
 
 # Caching Strategies
@@ -60,7 +60,7 @@ Vision implements multi-layer caching to minimize external API calls and improve
 - Automatic expiration
 - Stale-while-revalidate pattern
 - Provider-consistent keying for investment-scoped providers (`custom`, `kinesis`) across lookup/set paths
-- Kinesis trendline sanitization runs before latest/history cache writes to prevent isolated one-point needles from polluting short-lived memory cache or persisted history ([[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/tests/priceProviderService.test.js]])
+- Kinesis trendline sanitization runs before latest/history cache writes to prevent isolated one-point needles from polluting short-lived memory cache or persisted history ([[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/tests/priceProviderService.test.js]])
 - DB-backed historical quote persistence for `yahoo`/`custom` provider history
 - Read-through history fetch (`DB -> provider -> DB upsert`)
 - Startup background backfill for held market-priced assets
@@ -133,7 +133,7 @@ Code link: [[apps/node-backend/src/routes/investments.ts]]
 - Spike sanitization: isolated one-day anomalies replaced with geometric interpolation
 - Frontend reads from persisted DB table instead of computing on-demand
 
-Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.js]], [[alembic/versions/0023_portfolio_performance_snapshots.py]], [[alembic/versions/0024_per_class_invested_columns.py]]
+Code links: [[apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts]], [[alembic/versions/0023_portfolio_performance_snapshots.py]], [[alembic/versions/0024_per_class_invested_columns.py]]
 
 ---
 

@@ -7,7 +7,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
-import { executePlanned } from "../src/services/plannedExecutionService.js";
+import { executePlanned } from "../src/services/plannedExecutionService.ts";
 
 describe.skipIf(!hasTestDatabase())(
   "planned execution concurrency (real DB)",

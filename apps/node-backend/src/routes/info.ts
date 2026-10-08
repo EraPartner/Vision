@@ -14,9 +14,9 @@
  */
 
 import { Router } from "express";
-import infoService from "../services/infoService.js";
+import infoService from "../services/infoService.ts";
 import { logger } from "../config/logger.ts";
-import { getSnapshots } from "../services/portfolioPerformanceSnapshotService.js";
+import { getSnapshots } from "../services/portfolioPerformanceSnapshotService.ts";
 import { getPortfolioSummary } from "../services/portfolio/portfolioSummaryService.ts";
 import {
   netWorthResponseCache,

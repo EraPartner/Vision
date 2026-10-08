@@ -2,9 +2,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closePool } from "../src/database/connection.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
-import { reconcileAccount } from "../src/services/reconcileService.js";
+import { reconcileAccount } from "../src/services/reconcileService.ts";
 import { closeTestPool, getTestPool, hasTestDatabase } from "./setup/db.js";
 
 const describeDb =

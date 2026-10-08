@@ -5,7 +5,7 @@ import { mockTxConnection } from "./helpers/repoMocks.js";
 import {
   getIbkrPrimaryReconciliationEvidence,
   ibkrPrimaryEvidenceIdentifiesLegacy,
-} from "../src/services/portfolioIbkrPrimaryProof.js";
+} from "../src/services/portfolioIbkrPrimaryProof.ts";
 vi.mock("../src/config/logger.ts", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

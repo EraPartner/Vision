@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { evaluateAnalysisFormulas } from "../src/services/analysisFormulaEngine.js";
+import { evaluateAnalysisFormulas } from "../src/services/analysisFormulaEngine.ts";
 import {
   prepareAnalysisData,
   compareAnalysisTime,
   runAnalysisScenarios,
   buildAnalysisSensitivity,
   seekAnalysisGoal,
-} from "../src/services/analysisExtensions.js";
+} from "../src/services/analysisExtensions.ts";
 const columns = [
   { id: "date", type: "date" },
   { id: "amount", type: "decimal", unit: { kind: "money", currency: "EUR" } },

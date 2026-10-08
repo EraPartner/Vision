@@ -13,7 +13,7 @@ import accountRepository from "../src/repositories/accountRepository.ts";
 import {
   __normalizeOpeningBalance as normalizeOpeningBalance,
   setOpeningBalance,
-} from "../src/services/openingBalanceService.js";
+} from "../src/services/openingBalanceService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import {
   verifiedPortfolioPerformanceBasisReference,
   portfolioPerformanceReferenceIdentifiesLegacy,
-} from "../src/services/portfolioPerformanceReferenceEvidence.js";
+} from "../src/services/portfolioPerformanceReferenceEvidence.ts";
 import {
   retainedEvent,
   retainedReference,

@@ -4,7 +4,7 @@ import {
   createAuditEntry,
   AUDIT_CHAIN_GENESIS_HASH,
 } from "../src/lib/auditChainCore.ts";
-import { verifyAuditHistory } from "../src/services/auditVerificationService.js";
+import { verifyAuditHistory } from "../src/services/auditVerificationService.ts";
 
 const digest = (values) =>
   createHash("sha256").update(JSON.stringify(values)).digest("hex");

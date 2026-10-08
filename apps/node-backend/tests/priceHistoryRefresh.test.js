@@ -25,7 +25,7 @@ vi.mock("../src/services/prices/priceCache.ts", async (importOriginal) => ({
 import {
   __resetPriceCache,
   fetchHistoricalPrices,
-} from "../src/services/priceProviderService.js";
+} from "../src/services/priceProviderService.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const fromMs = Date.UTC(2026, 0, 1);

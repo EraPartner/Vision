@@ -8,7 +8,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { closePool } from "../src/database/connection.ts";
-import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.js";
+import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.ts";
 import portfolioTransactionService from "../src/services/portfolio/portfolioTransactionService.ts";
 
 const pool = getTestPool();

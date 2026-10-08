@@ -11,7 +11,7 @@ import {
   listResearchDossiers,
   restoreResearchDossier,
   updateResearchDossier,
-} from "../services/researchDossierService.js";
+} from "../services/researchDossierService.ts";
 
 const router = Router();
 

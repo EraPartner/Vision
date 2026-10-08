@@ -511,7 +511,7 @@ try {
   process.env.DATABASE_URL = targetOwnerUrl;
   process.env.VISION_SKIP_CONFIG_ENV_LOCAL = "true";
   const [{ verifyAuditHistory }, { closePool }] = await Promise.all([
-    import("../apps/node-backend/src/services/auditVerificationService.js"),
+    import("../apps/node-backend/src/services/auditVerificationService.ts"),
     import("../apps/node-backend/src/database/connection.ts"),
   ]);
   try {

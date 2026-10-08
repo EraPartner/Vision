@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { __computeOutliers as computeOutliers } from "../apps/node-backend/src/services/categoryOutlierService.js";
+import { __computeOutliers as computeOutliers } from "../apps/node-backend/src/services/categoryOutlierService.ts";
 
 const baseUrl = process.env.VISION_CALIBRATION_API_BASE_URL;
 if (!baseUrl) {

@@ -3,7 +3,7 @@ import { runGolden } from '../golden/runGolden.js';
 import {
   __createTransactionHash as createTransactionHash,
   __createManualTransactionHash as createManualTransactionHash,
-} from '../../src/services/deduplication.js';
+} from '../../src/services/deduplication.ts';
 
 /**
  * Golden-fixture regression suite for services/deduplication hash functions.

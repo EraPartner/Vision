@@ -23,7 +23,7 @@ import {
 import settings from "../config/config.ts";
 import { env } from "../config/env.ts";
 import { logger } from "../config/logger.ts";
-import { sanitizePersistedKinesisHistory } from "../services/priceProviderService.js";
+import { sanitizePersistedKinesisHistory } from "../services/priceProviderService.ts";
 import {
   AppError,
   ForbiddenError,
@@ -33,17 +33,17 @@ import {
 import {
   listProviderHealth,
   probeProvider,
-} from "../services/providerHealthService.js";
+} from "../services/providerHealthService.ts";
 import { getMetrics } from "../middleware/requestMetrics.ts";
-import { getRouteManifest } from "../services/routeManifest.js";
+import { getRouteManifest } from "../services/routeManifest.ts";
 import { adminMutateLimiter } from "../middleware/rateLimiter.ts";
 import { isAccuracyTableHealthy } from "../services/calculations/forecast/accuracyStore.ts";
 import {
   getTableMeta,
   readRows,
   applyMutations,
-} from "../services/dbEditor.js";
-import type { Filter } from "../services/dbEditor.js";
+} from "../services/dbEditor.ts";
+import type { Filter } from "../services/dbEditor.ts";
 import { optionalQueryString } from "../lib/httpParams.ts";
 
 const GITHUB_OWNER = "EraPartner";

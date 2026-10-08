@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import pg from "pg";
-import { compileVisualAnalysis } from "../src/services/analysisCatalog.js";
+import { compileVisualAnalysis } from "../src/services/analysisCatalog.ts";
 import {
   __validateAnalysisSql,
   executeAnalysisSql,
-} from "../src/services/analysisExecutor.js";
+} from "../src/services/analysisExecutor.ts";
 
 describe("analysis result dates", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -193,6 +193,14 @@ describe("analysis SQL boundary", () => {
     'SELECT * FROM "public"."transactions"',
   ])("rejects unsafe SQL: %s", (sql) => {
     expect(() => __validateAnalysisSql(sql, ["accounts"])).toThrow();
+  });
+
+  it("rejects an inherited object key as a dataset id", () => {
+    expect(() =>
+      __validateAnalysisSql("SELECT * FROM vision_analysis.accounts_v1", [
+        "constructor",
+      ]),
+    ).toThrow("Dataset is not approved: constructor");
   });
 
   it("rejects approved but undeclared datasets", () => {

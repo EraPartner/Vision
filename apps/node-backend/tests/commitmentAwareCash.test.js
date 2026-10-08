@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { projectCommitmentAwareCash } from "../src/services/commitmentAwareCash.js";
+import { projectCommitmentAwareCash } from "../src/services/commitmentAwareCash.ts";
 
 describe("projectCommitmentAwareCash", () => {
   it("uses the lowest projected end-of-day balance and an editable reserve floor", () => {

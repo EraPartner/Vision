@@ -22,7 +22,7 @@ import {
   updateTransaction,
   getInvestmentSummary,
   bulkRetagTransactions,
-} from "../services/investmentService.js";
+} from "../services/investmentService.ts";
 import {
   getPortfolioExposure,
   upsertPortfolioExposureBundle,

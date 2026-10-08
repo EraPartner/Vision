@@ -13,10 +13,10 @@ import { Router } from "express";
 import {
   rebalanceDeployment,
   resolveDeployableCash,
-} from "../services/crossWorkspaceAnalytics.js";
-import { assembleRebalanceInputs } from "../services/crossWorkspaceDataService.js";
+} from "../services/crossWorkspaceAnalytics.ts";
+import { assembleRebalanceInputs } from "../services/crossWorkspaceDataService.ts";
 import { resolveRebalanceTargetWeights } from "../services/portfolio/rebalanceTargets.ts";
-import { computeCommitmentAwareCash } from "../services/commitmentAwareCashService.js";
+import { computeCommitmentAwareCash } from "../services/commitmentAwareCashService.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 const router = Router();

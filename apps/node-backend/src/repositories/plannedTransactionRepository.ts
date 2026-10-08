@@ -231,11 +231,21 @@ function buildPlannedTransactionWhereClause({
   return { whereClause, params };
 }
 
+/** One installment to write: a `LoanScheduleRow` or a computed `LoanInstallment`. */
+export type LoanScheduleEntryInput = {
+  installment_number: unknown;
+  due_date: unknown;
+  payment_amount: unknown;
+  principal_amount: unknown;
+  interest_amount: unknown;
+  remaining_principal: unknown;
+};
+
 /** @param scheduleEntries `LoanScheduleRow`s or freshly computed installments. */
 export async function insertLoanScheduleBatch(
   client: QueryRunner,
   plannedTransactionId: number,
-  scheduleEntries: ReadonlyArray<Record<string, unknown>> = [],
+  scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ): Promise<void> {
   if (!Array.isArray(scheduleEntries) || scheduleEntries.length === 0) return;
 
@@ -364,7 +374,7 @@ export async function updatePlannedFields(
 export async function replaceLoanScheduleInTransaction(
   client: QueryRunner,
   plannedTransactionId: number,
-  scheduleEntries: ReadonlyArray<Record<string, unknown>> = [],
+  scheduleEntries: ReadonlyArray<LoanScheduleEntryInput> = [],
 ): Promise<void> {
   await client.query(
     "DELETE FROM planned_transaction_loan_schedule WHERE planned_transaction_id = $1",

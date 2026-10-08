@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.js";
+import { buildPortfolioImportReconciliationPlan } from "../src/services/portfolioImportReconciliationService.ts";
 import {
   proveKinesisCashSources,
   cashFeeFingerprint,
-} from "../src/services/portfolioKinesisCashScope.js";
+} from "../src/services/portfolioKinesisCashScope.ts";
 import { cashSource } from "./helpers/kinesisCashScope.js";
 import fs from "node:fs/promises";
 import os from "node:os";

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/services/recurringDetectionService.js", () => ({
+vi.mock("../src/services/recurringDetectionService.ts", () => ({
   detectRecurringPatterns: vi.fn(),
 }));
 
-import { detectRecurringPatterns } from "../src/services/recurringDetectionService.js";
+import { detectRecurringPatterns } from "../src/services/recurringDetectionService.ts";
 import {
   __buildSubscriptionCreep as buildSubscriptionCreep,
   detectSubscriptionCreep,
-} from "../src/services/subscriptionCreepService.js";
+} from "../src/services/subscriptionCreepService.ts";
 
 /** Recurring pattern as returned by detectRecurringPatterns (relevant fields). */
 const pattern = (overrides = {}) => ({

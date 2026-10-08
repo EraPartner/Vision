@@ -18,7 +18,7 @@ import {
   createMaterializedViews,
   ensureMaterializedViewIndexes,
   refreshMaterializedViews,
-} from "../services/materializedViewService.js";
+} from "../services/materializedViewService.ts";
 import {
   warmCache as warmExchangeRateCache,
   clearMemoryCache as clearExchangeRateCache,
@@ -27,27 +27,27 @@ import {
 import {
   warmInflationCache,
   clearInflationMemoryCache,
-} from "../services/belgianInflationService.js";
+} from "../services/belgianInflationService.ts";
 import {
   fetchLivePricesDetailed,
   sanitizePersistedKinesisHistory,
-} from "../services/priceProviderService.js";
+} from "../services/priceProviderService.ts";
 import { getKinesisAssetConfig } from "../config/kinesisConfig.ts";
-import { computeAndStoreSnapshots } from "../services/portfolioPerformanceSnapshotService.js";
+import { computeAndStoreSnapshots } from "../services/portfolioPerformanceSnapshotService.ts";
 import {
   backfillHistoricalAssetQuotes,
   refreshActiveHoldingQuotes,
   backfillHoldingGaps,
-} from "../services/quoteBackfillService.js";
+} from "../services/quoteBackfillService.ts";
 import { warmInfoCaches } from "../routes/info.ts";
-import { backfillTransfersOnce } from "../services/transferReconciliationService.js";
+import { backfillTransfersOnce } from "../services/transferReconciliationService.ts";
 import { refreshCashflowForecastMc } from "../jobs/refreshCashflowForecastMc.ts";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
 import { isInternetReachable } from "../lib/network.ts";
 import { createDailyJob } from "./dailyJobs.ts";
 import investmentRepository from "../repositories/investmentRepository.ts";
 import type { InvestmentRow } from "../types/rows.ts";
-import type { ResolvedPrice } from "../services/priceProviderService.js";
+import type { ResolvedPrice } from "../services/priceProviderService.ts";
 
 /**
  * Each value is tri-state: 'pending' | 'ready' | 'failed' (see module doc

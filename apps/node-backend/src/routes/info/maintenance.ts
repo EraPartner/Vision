@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { refreshMaterializedViews } from "../../services/materializedViewService.js";
+import { refreshMaterializedViews } from "../../services/materializedViewService.ts";
 import { adminRateLimiter } from "../../middleware/rateLimiter.ts";
 
 const router = Router();

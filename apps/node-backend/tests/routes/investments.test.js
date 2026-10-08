@@ -47,7 +47,7 @@ vi.mock("../../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
-vi.mock("../../src/services/priceProviderService.js", () => ({
+vi.mock("../../src/services/priceProviderService.ts", () => ({
   fetchLivePricesDetailed: vi.fn(),
   fetchHistoricalPrices: vi.fn(),
   SUPPORTED_PROVIDERS: [
@@ -59,7 +59,7 @@ vi.mock("../../src/services/priceProviderService.js", () => ({
   ],
 }));
 
-vi.mock("../../src/services/quoteBackfillService.js", () => ({
+vi.mock("../../src/services/quoteBackfillService.ts", () => ({
   refreshQuotesForInvestment: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -86,7 +86,7 @@ import portfolioTransactionService from "../../src/services/portfolio/portfolioT
 import {
   fetchHistoricalPrices,
   fetchLivePricesDetailed,
-} from "../../src/services/priceProviderService.js";
+} from "../../src/services/priceProviderService.ts";
 
 const { default: investmentsRouter } =
   await import("../../src/routes/investments.ts");

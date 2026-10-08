@@ -12,9 +12,9 @@ import {
   readReconciliationHistory,
   PORTFOLIO_TRANSACTION_SNAPSHOT_SQL,
 } from "../src/repositories/portfolioImportReconciliationRepository.ts";
-import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 const pool = getTestPool();
 const owned = { batches: [], accounts: [], investments: [] };
 const describeDb = hasTestDatabase() ? describe : describe.skip;

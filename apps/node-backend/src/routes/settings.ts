@@ -10,7 +10,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import settingsService from "../services/settingsService.js";
+import settingsService from "../services/settingsService.ts";
 import { validateIntArray } from "../middleware/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 

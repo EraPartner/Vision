@@ -13,7 +13,7 @@
  */
 
 import { Router } from "express";
-import infoService from "../../services/infoService.js";
+import infoService from "../../services/infoService.ts";
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
 import { getTargetCurrency } from "./_queryParams.ts";
 import {

@@ -10,7 +10,7 @@ import { query } from "../../database/connection.ts";
 import {
   getSnapshots,
   getBreakdownSummary,
-} from "../portfolioPerformanceSnapshotService.js";
+} from "../portfolioPerformanceSnapshotService.ts";
 import {
   convertWithRates,
   loadCurrentRates,

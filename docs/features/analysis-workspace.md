@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -20,8 +20,8 @@ aliases: [manual analysis, visual query builder, SQL workspace]
 related_code:
   - apps/frontend/src/pages/AnalysisWorkspacePage.tsx
   - apps/node-backend/src/routes/analysis.ts
-  - apps/node-backend/src/services/analysisExecutor.js
-  - apps/node-backend/src/services/savedAnalysisService.js
+  - apps/node-backend/src/services/analysisExecutor.ts
+  - apps/node-backend/src/services/savedAnalysisService.ts
 ---
 
 # Analysis Workspace

@@ -619,7 +619,7 @@ See [[docs/adr/035-remove-feature-flags|ADR-035]]
 - **Provider Health Tracking**: Passive success/error recording from 7 data sources (Binance, Yahoo, Kinesis, ECB, open.er-api, Statbel, Eurostat) + on-demand probe endpoints
 - **Request Metrics**: In-memory rolling window (15 min / 1 min buckets) with p50/p95 per route via `requestMetrics` middleware
 - **Endpoint Manifest**: Static Express router scan returning all registered routes with methods + descriptions
-- **New Backend Modules**: `services/providerHealth/`, `middleware/requestMetrics.ts`, `services/routeManifest.js`
+- **New Backend Modules**: `services/providerHealth/`, `middleware/requestMetrics.ts`, `services/routeManifest.ts`
 - **4 New API Endpoints**: `GET /api/admin/providers/health`, `POST /api/admin/providers/:provider/probe`, `GET /api/admin/metrics/requests`, `GET /api/admin/endpoints`
 - **API Total**: 148 endpoints across 20 routes (Admin: 13 endpoints after feature flags removal)
 

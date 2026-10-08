@@ -11,7 +11,7 @@ import { logger } from "../../config/logger.ts";
 import {
   assignImportIdentities,
   budgetingIdentityBase,
-} from "../importIdentity.js";
+} from "../importIdentity.ts";
 import type { ImportStagingRow } from "../../types/rows.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
 

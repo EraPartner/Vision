@@ -2,8 +2,8 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     database,
@@ -200,7 +200,7 @@ ADR-004 inheritance layout, as specified by
 
 ## Materialized Views
 
-**Service:** [[apps/node-backend/src/services/materializedViewService.js]]
+**Service:** [[apps/node-backend/src/services/materializedViewService.ts]]
 
 | View            | Query Complexity                    | Refresh Strategy           |
 | --------------- | ----------------------------------- | -------------------------- |

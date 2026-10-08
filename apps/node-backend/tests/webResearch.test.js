@@ -3,7 +3,7 @@ import {
   __assertPublicResearchQuery,
   searchPublicWeb,
   fetchPublicWebPage,
-} from "../src/services/webResearch.js";
+} from "../src/services/webResearch.ts";
 
 describe("controlled web research", () => {
   it("blocks private financial patterns before a provider call", () => {

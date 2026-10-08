@@ -13,12 +13,12 @@ import {
   getNews,
   getQuotes,
   searchSymbols,
-} from "../services/marketLookupService.js";
+} from "../services/marketLookupService.ts";
 
 const router = Router();
 
 /** Test-only re-export: clear the per-symbol quote cache between cases. */
-export { __clearQuoteCacheForTests } from "../services/marketLookupService.js";
+export { __clearQuoteCacheForTests } from "../services/marketLookupService.ts";
 
 /**
  * Coerce a query-string param to a single trimmed string. Express parses a

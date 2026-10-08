@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evaluateAnalysisFormulas } from "../src/services/analysisFormulaEngine.js";
+import { evaluateAnalysisFormulas } from "../src/services/analysisFormulaEngine.ts";
 
 describe("analysisFormulaEngine", () => {
   it("rejects mixed-currency numeric aggregates, including derived columns", () => {
@@ -65,6 +65,23 @@ describe("analysisFormulaEngine", () => {
       expect(result.complete).toBe(true);
       expect(result.summaries.total).toBe("30");
     }
+  });
+
+  it("treats an empty-string cell as missing in arithmetic and aggregates", () => {
+    const result = evaluateAnalysisFormulas({
+      rows: [{ value: "" }, { value: "2" }, { value: null }, { value: "4" }],
+      formulas: [
+        { id: "plus", scope: "row", expression: "value + 1" },
+        { id: "total", scope: "summary", expression: "SUM(value)" },
+        { id: "middle", scope: "summary", expression: "MEDIAN(value)" },
+      ],
+    });
+    // "" used to reach Decimal as null: a TypeError per row and a
+    // DecimalError for the summaries.
+    expect(result.errors).toEqual([]);
+    expect(result.rows.map((row) => row.plus)).toEqual([null, "3", null, "5"]);
+    expect(result.summaries.total).toBe("6");
+    expect(result.summaries.middle).toBe("3");
   });
 
   it("blocks aggregates over incomplete input and propagates their errors", () => {

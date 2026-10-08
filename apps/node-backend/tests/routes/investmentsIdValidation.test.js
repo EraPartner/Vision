@@ -58,13 +58,13 @@ vi.mock("../../src/services/portfolio/portfolioTransactionService.ts", () => ({
   default: { create: vi.fn(), update: vi.fn(), remove: vi.fn() },
 }));
 
-vi.mock("../../src/services/priceProviderService.js", () => ({
+vi.mock("../../src/services/priceProviderService.ts", () => ({
   fetchLivePricesDetailed: vi.fn(),
   fetchHistoricalPrices: vi.fn(),
   SUPPORTED_PROVIDERS: [{ key: "manual", name: "Manual" }],
 }));
 
-vi.mock("../../src/services/quoteBackfillService.js", () => ({
+vi.mock("../../src/services/quoteBackfillService.ts", () => ({
   refreshQuotesForInvestment: vi.fn().mockResolvedValue(undefined),
 }));
 

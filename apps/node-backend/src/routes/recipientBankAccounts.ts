@@ -3,7 +3,7 @@
  */
 
 import { Router } from "express";
-import recipientBankAccountService from "../services/recipientBankAccountService.js";
+import recipientBankAccountService from "../services/recipientBankAccountService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,

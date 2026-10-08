@@ -10,25 +10,25 @@ vi.mock("../src/repositories/insightDismissalRepository.ts", () => ({
   default: repository,
 }));
 
-vi.mock("../src/services/subscriptionCreepService.js", () => ({
+vi.mock("../src/services/subscriptionCreepService.ts", () => ({
   detectSubscriptionCreep: vi.fn(),
 }));
 
-vi.mock("../src/services/categoryOutlierService.js", () => ({
+vi.mock("../src/services/categoryOutlierService.ts", () => ({
   detectCategoryOutliers: vi.fn(),
 }));
 
-vi.mock("../src/services/cashForecastInsightService.js", () => ({
+vi.mock("../src/services/cashForecastInsightService.ts", () => ({
   getCashForecastInsight: vi.fn(),
 }));
 
-import { detectSubscriptionCreep } from "../src/services/subscriptionCreepService.js";
-import { detectCategoryOutliers } from "../src/services/categoryOutlierService.js";
-import { getCashForecastInsight } from "../src/services/cashForecastInsightService.js";
+import { detectSubscriptionCreep } from "../src/services/subscriptionCreepService.ts";
+import { detectCategoryOutliers } from "../src/services/categoryOutlierService.ts";
+import { getCashForecastInsight } from "../src/services/cashForecastInsightService.ts";
 import {
   getInsightsCount,
   getInsightsDigest,
-} from "../src/services/insightsDigestService.js";
+} from "../src/services/insightsDigestService.ts";
 
 beforeEach(() => {
   vi.resetAllMocks();

@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/accounts
 description: Account entity management (ADR-088) — the user's own accounts spanning budgeting cash, portfolio holdings, and liabilities
-date: 2026-10-07
-updated: 2026-09-13
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, accounts, account-entity, adr-088, net-worth, cash-sleeve, rename-propagation, lifecycle, normalized-identity]
 status: active
 aliases: [accounts-api, account-management, account-entity]
-related_code: [[apps/node-backend/src/routes/accounts.ts]], [[apps/node-backend/src/services/accountService.js]], [[apps/node-backend/src/services/accountCloseService.js]], [[apps/node-backend/src/services/accountMergeService.js]], [[apps/node-backend/src/repositories/accountRepository.ts]]
+related_code: [[apps/node-backend/src/routes/accounts.ts]], [[apps/node-backend/src/services/accountService.ts]], [[apps/node-backend/src/services/accountCloseService.ts]], [[apps/node-backend/src/services/accountMergeService.ts]], [[apps/node-backend/src/repositories/accountRepository.ts]]
 ---
 
 # Accounts API
@@ -88,7 +88,7 @@ Delete one currency's statement reading. This does not delete ledger entries or 
 currency's reading.
 
 **`funding_account_id` validation** (`assertFundingAccountValid`,
-`apps/node-backend/src/services/accountService.js`), all 400:
+`apps/node-backend/src/services/accountService.ts`), all 400:
 
 - Not a positive integer (and not `null`): `funding_account_id must be a positive integer`. The
   shape rule is `validateId`'s — a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11,

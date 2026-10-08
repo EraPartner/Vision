@@ -8,7 +8,7 @@ vi.mock("../src/services/prices/yahooClient.ts", () => ({
 import {
   __clearQuoteCacheForTests,
   getQuotes,
-} from "../src/services/marketLookupService.js";
+} from "../src/services/marketLookupService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

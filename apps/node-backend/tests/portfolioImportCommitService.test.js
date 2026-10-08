@@ -19,18 +19,18 @@ vi.mock("../src/repositories/portfolioImportBatchRepository.ts", () => ({
   lockBatchForUpdate: mocks.lockBatchForUpdate,
   setBatchAccount: mocks.setBatchAccount,
 }));
-vi.mock("../src/services/accountService.js", () => ({
+vi.mock("../src/services/accountService.ts", () => ({
   default: { get: mocks.getAccount },
 }));
 vi.mock("../src/services/portfolioImportPipeline/index.ts", () => ({
   commitPortfolioImport: mocks.commitPortfolioImport,
 }));
-vi.mock("../src/services/portfolioImportReadinessService.js", () => ({
+vi.mock("../src/services/portfolioImportReadinessService.ts", () => ({
   assertPortfolioImportReadiness: mocks.assertPortfolioImportReadiness,
   isMaintainedPortfolioImport: () => false,
 }));
 
-import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.js";
+import { commitReviewedPortfolioImport } from "../src/services/portfolioImportCommitService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

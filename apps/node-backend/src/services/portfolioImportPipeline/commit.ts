@@ -119,7 +119,7 @@ import {
   classifyKinesisCash,
   proveKinesisCashSources,
   cashImageEqual,
-} from "../portfolioKinesisCashScope.js";
+} from "../portfolioKinesisCashScope.ts";
 import {
   getStoredRateToEurOnOrBefore,
   getUnindexedRatesToEurForDates,

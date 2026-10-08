@@ -25,11 +25,11 @@ vi.mock("../src/repositories/transactionRepository.ts", () => ({
   },
 }));
 
-vi.mock("../src/services/recurringDetectionService.js", () => ({
+vi.mock("../src/services/recurringDetectionService.ts", () => ({
   detectRecurringPatterns: vi.fn(),
 }));
 
-vi.mock("../src/services/marketLookupService.js", () => ({
+vi.mock("../src/services/marketLookupService.ts", () => ({
   getQuotes: vi.fn(),
 }));
 
@@ -37,8 +37,8 @@ import { infoRepository } from "../src/repositories/infoRepository.ts";
 import { watchlistRepository } from "../src/repositories/watchlistRepository.ts";
 import { categoryRepository } from "../src/repositories/categoryRepository.ts";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
-import { detectRecurringPatterns } from "../src/services/recurringDetectionService.js";
-import { getQuotes } from "../src/services/marketLookupService.js";
+import { detectRecurringPatterns } from "../src/services/recurringDetectionService.ts";
+import { getQuotes } from "../src/services/marketLookupService.ts";
 import {
   getBankBalances,
   getSpendingPace,

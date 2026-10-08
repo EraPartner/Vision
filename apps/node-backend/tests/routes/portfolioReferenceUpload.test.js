@@ -6,14 +6,14 @@ import { routeAgent } from "../helpers/routeApp.js";
 vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
+vi.mock("../../src/services/portfolioImportCommitService.ts", () => ({
   commitReviewedPortfolioImport: vi.fn(),
   commitReviewedPortfolioImports: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportReconciliationService.js", () => ({
+vi.mock("../../src/services/portfolioImportReconciliationService.ts", () => ({
   previewPortfolioImportReconciliation: vi.fn(),
 }));
-vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
+vi.mock("../../src/services/portfolioImportBatchService.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPortfolioImportBatchPreview: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
   resolveInvestmentRows: vi.fn(),
   rollbackBatch: vi.fn(),
 }));
-vi.mock("../../src/services/accountService.js", () => ({
+vi.mock("../../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
 }));
 vi.mock("../../src/repositories/customParserConfigRepository.ts", () => ({

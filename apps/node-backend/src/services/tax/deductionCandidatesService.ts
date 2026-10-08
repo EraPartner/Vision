@@ -17,7 +17,7 @@
 
 import { parseCategoryName } from "@vision/shared-utils";
 import { transactionRepository } from "../../repositories/transactionRepository.ts";
-import { listCategoryNodes } from "../categoryService.js";
+import { listCategoryNodes } from "../categoryService.ts";
 import { toDecimal, roundToCents } from "../../lib/money.ts";
 import { classifyDeduction } from "./deductionClassifier.ts";
 

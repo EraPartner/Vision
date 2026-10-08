@@ -8,7 +8,7 @@
 import {
   computeMetrics,
   computeHeatmap,
-} from "../portfolioPerformanceSnapshotService.js";
+} from "../portfolioPerformanceSnapshotService.ts";
 import { toWireDate } from "../../lib/dateFormat.ts";
 import { getPortfolioSummary } from "../portfolio/portfolioSummaryService.ts";
 import { todayAppDateString, addDaysYmd } from "../../lib/timezone.ts";

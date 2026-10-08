@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/services/accountService.js", () => ({
+vi.mock("../../src/services/accountService.ts", () => ({
   default: {
     list: vi.fn(),
     get: vi.fn(),
@@ -24,25 +24,25 @@ vi.mock("../../src/services/accountService.js", () => ({
   },
 }));
 
-vi.mock("../../src/services/accountMergeService.js", () => ({
+vi.mock("../../src/services/accountMergeService.ts", () => ({
   MAX_ACCOUNT_MERGE_SOURCES: 500,
   mergeAccounts: vi.fn(),
   previewMerge: vi.fn(),
 }));
 
-vi.mock("../../src/services/openingBalanceService.js", () => ({
+vi.mock("../../src/services/openingBalanceService.ts", () => ({
   setOpeningBalance: vi.fn(),
 }));
 
-vi.mock("../../src/services/reconcileService.js", () => ({
+vi.mock("../../src/services/reconcileService.ts", () => ({
   reconcileAccount: vi.fn(),
 }));
 
-vi.mock("../../src/services/accountCloseService.js", () => ({
+vi.mock("../../src/services/accountCloseService.ts", () => ({
   closeAccount: vi.fn(),
 }));
 
-vi.mock("../../src/services/aggregationRefresh.js", () => ({
+vi.mock("../../src/services/aggregationRefresh.ts", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 
@@ -50,15 +50,15 @@ vi.mock("../../src/services/info/cache.ts", () => ({
   invalidatePortfolioCaches: vi.fn(),
 }));
 
-import accountService from "../../src/services/accountService.js";
+import accountService from "../../src/services/accountService.ts";
 import {
   mergeAccounts,
   previewMerge,
-} from "../../src/services/accountMergeService.js";
-import { setOpeningBalance } from "../../src/services/openingBalanceService.js";
-import { reconcileAccount } from "../../src/services/reconcileService.js";
-import { closeAccount } from "../../src/services/accountCloseService.js";
-import { scheduleAggregationRefresh } from "../../src/services/aggregationRefresh.js";
+} from "../../src/services/accountMergeService.ts";
+import { setOpeningBalance } from "../../src/services/openingBalanceService.ts";
+import { reconcileAccount } from "../../src/services/reconcileService.ts";
+import { closeAccount } from "../../src/services/accountCloseService.ts";
+import { scheduleAggregationRefresh } from "../../src/services/aggregationRefresh.ts";
 import { invalidatePortfolioCaches } from "../../src/services/info/cache.ts";
 
 const { default: accountsRouter } =

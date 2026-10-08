@@ -47,8 +47,8 @@ aliases:
 status: active
 related_code:
   [
-    [apps/node-backend/src/services/priceProviderService.js],
-    [apps/node-backend/src/services/quoteBackfillService.js],
+    [apps/node-backend/src/services/priceProviderService.ts],
+    [apps/node-backend/src/services/quoteBackfillService.ts],
     [apps/node-backend/src/services/prices/priceProviderRegistry.ts],
     [apps/node-backend/tests/priceProviderRegistry.test.js],
     [apps/node-backend/src/lib/network.ts],
@@ -143,7 +143,7 @@ process-wide traffic limits are separate concerns.
 
 - Historical quotes for provider-backed assets are persisted in `asset_price_history` (daily close per investment).
 - `GET /api/investments/:id/price-history` uses read-through behavior: read DB first, fetch provider when coverage is missing, then upsert refreshed rows.
-- Startup backfill for held unit-based assets (`stock`, `etf`, `crypto`, `metals`) is orchestrated by [[apps/node-backend/src/services/quoteBackfillService.js|quoteBackfillService]]:
+- Startup backfill for held unit-based assets (`stock`, `etf`, `crypto`, `metals`) is orchestrated by [[apps/node-backend/src/services/quoteBackfillService.ts|quoteBackfillService]]:
   - Computes **holding windows** (periods where units > 0) from transaction history
   - Fetches and sanitizes historical prices (provider-agnostic spike detection)
   - Persists quotes only within holding windows
@@ -165,10 +165,10 @@ process-wide traffic limits are separate concerns.
 - If provider fetch fails, history requests fall back to persisted DB rows.
 - `fetchLivePricesDetailed` uses provider-consistent cache keys, including investment-scoped keys for `custom`/`kinesis` to keep cache reads and writes aligned.
 - Live refresh keeps an explicit Binance batch fetch block in `fetchLivePricesDetailed` for crypto provider efficiency.
-- Kinesis sanitization is applied before latest extraction and before historical cache/persist writes so cached history avoids isolated trendline needles ([[apps/node-backend/src/services/priceProviderService.js]]).
-- `fetchHistoricalPrices` sanitizes Kinesis points and persists through `saveHistoricalPointsToDatabase()` before returning (moved from `_saveHistoricalPointsToDatabase`, now exported) ([[apps/node-backend/src/services/priceProviderService.js]]).
+- Kinesis sanitization is applied before latest extraction and before historical cache/persist writes so cached history avoids isolated trendline needles ([[apps/node-backend/src/services/priceProviderService.ts]]).
+- `fetchHistoricalPrices` sanitizes Kinesis points and persists through `saveHistoricalPointsToDatabase()` before returning (moved from `_saveHistoricalPointsToDatabase`, now exported) ([[apps/node-backend/src/services/priceProviderService.ts]]).
 - Persisted Kinesis history can be re-sanitized in place via `sanitizePersistedKinesisHistory()`: it scans `investments.price_provider='kinesis'`, loads persisted `asset_price_history` points, applies isolated spike sanitization, upserts corrected points with source `kinesis`, and returns `{ processed, updated, correctedPoints, failed }`.
-- Internal historical-fetch refactor in `fetchHistoricalPrices` extracts shared range-filter and persist+resolve helpers to reduce duplication while preserving provider-specific behavior, cache keys, and fallback semantics ([[apps/node-backend/src/services/priceProviderService.js]]).
+- Internal historical-fetch refactor in `fetchHistoricalPrices` extracts shared range-filter and persist+resolve helpers to reduce duplication while preserving provider-specific behavior, cache keys, and fallback semantics ([[apps/node-backend/src/services/priceProviderService.ts]]).
 - **Range-filtering on persist (2026-04-26):** `_persistAndResolve()` now filters historical points to the requested `[fromMs, toMs]` window before saving to the database via `saveHistoricalPointsToDatabase()`. Providers (Yahoo, Binance, Kinesis) return data beyond the requested bounds; previously, all points were persisted unfiltered, causing `cleanupStaleQuotes` to delete thousands of out-of-window rows on every startup, which were then re-inserted on the next startup. The in-memory provider cache still retains the full response for reuse across multiple window calls, but only the relevant subset is persisted to the DB.
 
 ## Usage
@@ -299,7 +299,7 @@ Scheduled hourly refreshes (`refreshActiveHoldingQuotes()`) also skip themselves
 - Previously relied on lazy-delete only; large portfolios over extended uptime could accumulate orphaned cache entries
 - Entries expire based on provider-specific TTLs (typically 60 minutes for live quotes)
 
-Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/services/prices/priceProviderRegistry.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
 **Price History & Report Timestamp Metadata (Apr 2026):**
 
@@ -346,11 +346,11 @@ compact offline/loading fallback catalog in `usePriceProviderCatalog.ts`. The cu
 **Backend**
 
 1. Add the fetch strategy to `PROVIDERS` in `services/prices/priceProviderRegistry.ts`.
-2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.js`.
+2. Add a `SUPPORTED_PROVIDERS` entry (key/name/description) in `services/priceProviderService.ts`.
 3. Extend live-price fetching in the same file: add the provider's key to the
    `stale = { … }` bucket and to either `idBasedProviders` or `investmentBasedProviders`.
-4. Add per-provider handling in `fetchHistoricalPrices` (`services/priceProviderService.js`).
-5. Add a probe entry in `services/providerHealthService.js` when the provider supports a useful
+4. Add per-provider handling in `fetchHistoricalPrices` (`services/priceProviderService.ts`).
+5. Add a probe entry in `services/providerHealthService.ts` when the provider supports a useful
    health probe.
 
 **Database** 6. Add the value to the `price_provider` PostgreSQL enum via a **new** Alembic revision (the enum is
@@ -382,4 +382,4 @@ they need no separate per-dialog catalog edits.
 - [[docs/adr/079-multi-provider-research-aggregation|ADR-079]] — Research aggregation architectural decision
 - [[docs/adr/082-macroeconomic-indicators-data-vertical|ADR-082]] — Macro data vertical (FRED + Eurostat + DBnomics, provider-pinned, in-memory only)
 
-Code links: [[apps/node-backend/src/services/priceProviderService.js]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]
+Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/admin.ts]], [[apps/frontend/src/features/portfolio/usePriceProviderCatalog.ts]], [[apps/frontend/src/features/portfolio/PriceProviderFields.tsx]], [[alembic/legacy_versions/0019_asset_price_history_cache.py]]

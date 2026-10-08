@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../src/repositories/plannedTransactionRepository.ts", () => ({
   default: { getForCommitmentProjection: vi.fn() },
 }));
-vi.mock("../src/services/crossWorkspaceDataService.js", () => ({
+vi.mock("../src/services/crossWorkspaceDataService.ts", () => ({
   assembleRebalanceInputs: vi.fn(),
 }));
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
@@ -18,12 +18,12 @@ vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
 }));
 
 import plannedTransactionRepository from "../src/repositories/plannedTransactionRepository.ts";
-import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
+import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.ts";
 import {
   convertWithRates,
   listLatestStoredRates,
 } from "../src/services/currency/currencyConversionService.ts";
-import { computeCommitmentAwareCash } from "../src/services/commitmentAwareCashService.js";
+import { computeCommitmentAwareCash } from "../src/services/commitmentAwareCashService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

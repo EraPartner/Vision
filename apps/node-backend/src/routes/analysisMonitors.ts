@@ -10,7 +10,7 @@ import {
   listMonitorObservations,
   patchAnalysisMonitor,
   readMonitorNotification,
-} from "../services/analysisMonitorService.js";
+} from "../services/analysisMonitorService.ts";
 
 const router = Router();
 

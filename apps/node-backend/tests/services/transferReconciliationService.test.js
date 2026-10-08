@@ -15,7 +15,7 @@ import {
   markTransfer,
   reconcileTransfers,
   getTransferSuggestions,
-} from "../../src/services/transferReconciliationService.js";
+} from "../../src/services/transferReconciliationService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

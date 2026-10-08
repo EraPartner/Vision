@@ -23,19 +23,19 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 
 const listAccounts = async () => (await accountService.list()).items;
 import {
   recipientRepository,
   __SYSTEM_RECIPIENT_NAME as SYSTEM_RECIPIENT_NAME,
 } from "../src/repositories/recipientRepository.ts";
-import { reconcileAccount } from "../src/services/reconcileService.js";
-import { setOpeningBalance } from "../src/services/openingBalanceService.js";
+import { reconcileAccount } from "../src/services/reconcileService.ts";
+import { setOpeningBalance } from "../src/services/openingBalanceService.ts";
 import {
   mergeAccounts,
   previewMerge,
-} from "../src/services/accountMergeService.js";
+} from "../src/services/accountMergeService.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";

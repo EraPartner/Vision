@@ -35,9 +35,9 @@ import { closeBrowser as closePuppeteerBrowser } from "./services/reports/puppet
 import { wrapResponse } from "./middleware/envelope.ts";
 import { requestId } from "./middleware/requestId.ts";
 import { requestMetrics } from "./middleware/requestMetrics.ts";
-import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.js";
+import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.ts";
 import { runWarmupTasks } from "./startup/warmup.ts";
-import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.js";
+import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.ts";
 
 /**
  * @typedef {import('./types/express.ts').ExpressRequest} ExpressRequest
@@ -86,7 +86,7 @@ import researchDossiersRouter from "./routes/researchDossiers.ts";
 import { startAnalysisMonitorScheduler } from "./startup/analysisMonitorScheduler.ts";
 import aiResearchDocumentsRouter from "./routes/aiResearchDocuments.ts";
 import aiResearchRouter from "./routes/aiResearch.ts";
-import { closeAnalysisPool } from "./services/analysisExecutor.js";
+import { closeAnalysisPool } from "./services/analysisExecutor.ts";
 import {
   rateLimiter,
   globalRateLimiter,
@@ -99,7 +99,7 @@ import {
   investmentRateLimiter,
   aggregationRateLimiter,
 } from "./middleware/rateLimiter.ts";
-import { buildRouteManifest, mountRouter } from "./services/routeManifest.js";
+import { buildRouteManifest, mountRouter } from "./services/routeManifest.ts";
 
 const app = express();
 

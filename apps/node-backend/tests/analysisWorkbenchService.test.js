@@ -4,13 +4,13 @@ import {
   applyAnalysisFormulaModel,
   applyAnalysisScenarioModel,
   evaluateAnalysisExtension,
-} from "../src/services/analysisWorkbenchService.js";
+} from "../src/services/analysisWorkbenchService.ts";
 import {
   __buildDefinition as buildDefinition,
   __finalizeSavedAnalysisResult as finalize,
   __runtimeRequest as runtimeRequest,
-} from "../src/services/savedAnalysisService.js";
-import { compileVisualAnalysis } from "../src/services/analysisCatalog.js";
+} from "../src/services/savedAnalysisService.ts";
+import { compileVisualAnalysis } from "../src/services/analysisCatalog.ts";
 const raw = {
   rows: [{ amount: "10", currency: "EUR" }],
   columns: [
@@ -342,3 +342,13 @@ it("prepares calendar previews once in the full-run order", () => {
   expect(preview.columns).toEqual(full.columns);
   expect(preview.rows[0].double).toBe("20");
 });
+
+it.each(["constructor", "toString", "__proto__"])(
+  "rejects inherited object key %s as an extension operation",
+  (operation) => {
+    // "constructor" used to resolve to Object and echo the request back.
+    expect(() =>
+      evaluateAnalysisExtension({ operation, rows: [], columns: [] }),
+    ).toThrow("Unsupported analysis operation");
+  },
+);

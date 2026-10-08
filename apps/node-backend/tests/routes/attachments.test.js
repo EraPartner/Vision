@@ -14,7 +14,7 @@ import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.js';
 
 const uploadState = vi.hoisted(() => ({ file: null, error: null }));
 
-vi.mock('../../src/services/attachmentRecordService.js', () => ({
+vi.mock('../../src/services/attachmentRecordService.ts', () => ({
   attachmentRepository: {
     transactionExists: vi.fn(),
     create: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('../../src/middleware/attachmentUpload.ts', () => ({
   },
 }));
 
-vi.mock('../../src/services/attachmentService.js', () => ({
+vi.mock('../../src/services/attachmentService.ts', () => ({
   storeAttachment: vi.fn(),
   resolveAbsolutePath: vi.fn(),
   removeAttachmentFile: vi.fn(),
@@ -46,8 +46,8 @@ vi.mock('../../src/config/logger.ts', () => ({
   logger: mockLogger(),
 }));
 
-import { attachmentRepository } from '../../src/services/attachmentRecordService.js';
-import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.js';
+import { attachmentRepository } from '../../src/services/attachmentRecordService.ts';
+import { storeAttachment, removeAttachmentFile, verifyAttachmentContent } from '../../src/services/attachmentService.ts';
 import { logger } from '../../src/config/logger.ts';
 
 const { default: attachmentsRouter } = await import('../../src/routes/attachments.ts');

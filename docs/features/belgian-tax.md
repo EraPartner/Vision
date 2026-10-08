@@ -22,7 +22,7 @@ related_code:
   - apps/frontend/src/lib/belgianTax/costBreakdown.ts
   - apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts
   - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
-  - apps/node-backend/src/services/belgianInflationService.js
+  - apps/node-backend/src/services/belgianInflationService.ts
 ---
 
 # Feature: Belgian Tax

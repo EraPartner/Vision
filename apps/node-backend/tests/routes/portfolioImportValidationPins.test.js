@@ -59,11 +59,11 @@ vi.mock("../../src/services/portfolioImportPipeline/index.ts", () => ({
   runPortfolioImportPipeline: vi.fn(),
 }));
 
-vi.mock("../../src/services/portfolioImportCommitService.js", () => ({
+vi.mock("../../src/services/portfolioImportCommitService.ts", () => ({
   commitReviewedPortfolioImport: vi.fn(),
 }));
 
-vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
+vi.mock("../../src/services/portfolioImportBatchService.ts", () => ({
   listBatches: vi.fn(),
   getBatch: vi.fn(),
   getPreviewRows: vi.fn(),
@@ -73,7 +73,7 @@ vi.mock("../../src/services/portfolioImportBatchService.js", () => ({
   rollbackBatch: vi.fn(),
 }));
 
-vi.mock("../../src/services/accountService.js", () => ({
+vi.mock("../../src/services/accountService.ts", () => ({
   default: { get: vi.fn() },
 }));
 
@@ -95,7 +95,7 @@ vi.mock("../../src/config/logger.ts", () => ({
 }));
 
 import { runPortfolioImportPipeline } from "../../src/services/portfolioImportPipeline/index.ts";
-import { commitReviewedPortfolioImport } from "../../src/services/portfolioImportCommitService.js";
+import { commitReviewedPortfolioImport } from "../../src/services/portfolioImportCommitService.ts";
 // NOT mocked: only .../portfolioImportPipeline/index.js is. This is the real
 // boundary function, run here over the mocked pg connection.
 import { createBatch } from "../../src/services/portfolioImportPipeline/stage.ts";
@@ -103,8 +103,8 @@ import { query as dbQuery } from "../../src/database/connection.ts";
 import {
   getBatch,
   overrideInvestment,
-} from "../../src/services/portfolioImportBatchService.js";
-import accountService from "../../src/services/accountService.js";
+} from "../../src/services/portfolioImportBatchService.ts";
+import accountService from "../../src/services/accountService.ts";
 import customParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
 
 const { default: portfolioImportRouter } =

@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.js";
 
 vi.mock("../../src/database/connection.ts", () => mockConnection());
-vi.mock("../../src/services/aggregationRefresh.js", () => ({
+vi.mock("../../src/services/aggregationRefresh.ts", () => ({
   scheduleAggregationRefresh: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ import {
   getTableMeta,
   readRows,
   applyMutations,
-} from "../../src/services/dbEditor.js";
+} from "../../src/services/dbEditor.ts";
 
 const CATALOG_TABLE = "transactions";
 const CATALOG_COLUMNS = ["id", "amount", "memo"];

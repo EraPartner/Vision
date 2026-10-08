@@ -20,13 +20,13 @@ vi.mock("../../src/repositories/transactionRepository.ts", () =>
   mockTransactionRepository(),
 );
 
-vi.mock("../../src/services/deduplication.js", () => mockDeduplication());
+vi.mock("../../src/services/deduplication.ts", () => mockDeduplication());
 
 vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/transferReconciliationService.js", () =>
+vi.mock("../../src/services/transferReconciliationService.ts", () =>
   mockTransferReconciliation(),
 );
 
@@ -40,7 +40,7 @@ const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
 import { getClient, query as dbQuery } from "../../src/database/connection.ts";
-import { scheduleReconcile } from "../../src/services/transferReconciliationService.js";
+import { scheduleReconcile } from "../../src/services/transferReconciliationService.ts";
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
 const bulkUpdate = (body) =>

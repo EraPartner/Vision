@@ -5,8 +5,8 @@ import {
   syntheticKinesisScope,
   syntheticKinesisManual,
 } from "./kinesisAdoptionScope.js";
-import { portfolioReferenceStagingBinding } from "../../src/services/portfolioPerformanceReferenceEvidence.js";
-import { kinesisYieldReferenceDigest } from "../../src/services/portfolioKinesisYieldGroups.js";
+import { portfolioReferenceStagingBinding } from "../../src/services/portfolioPerformanceReferenceEvidence.ts";
+import { kinesisYieldReferenceDigest } from "../../src/services/portfolioKinesisYieldGroups.ts";
 import { toDecimal } from "../../src/lib/money.ts";
 import {
   retainedEvent,

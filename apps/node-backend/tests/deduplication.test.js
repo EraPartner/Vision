@@ -20,7 +20,7 @@ import {
   isManualDuplicate,
   lockManualTransactionIdentity,
   recordManualTransactionDedupClaim,
-} from "../src/services/deduplication.js";
+} from "../src/services/deduplication.ts";
 import { query } from "../src/database/connection.ts";
 import { withSavepointIfInTransaction } from "../src/database/connection.ts";
 

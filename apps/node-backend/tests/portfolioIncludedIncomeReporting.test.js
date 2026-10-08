@@ -3,7 +3,7 @@ import { mockConnection } from "./helpers/repoMocks.js";
 import { mockLogger } from "./helpers/mockLogger.js";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 vi.mock("../src/config/logger.ts", () => ({ logger: mockLogger() }));
-vi.mock("../src/services/portfolioPerformanceSnapshotService.js", () => ({
+vi.mock("../src/services/portfolioPerformanceSnapshotService.ts", () => ({
   getSnapshots: vi.fn(async () => []),
   getBreakdownSummary: vi.fn(async () => [
     {

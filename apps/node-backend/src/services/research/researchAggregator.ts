@@ -19,7 +19,7 @@ import { resolveProviderChain } from "./capabilityMap.ts";
 import { isProviderKeyed } from "./providerKeys.ts";
 import { researchCache, ttlForType } from "./researchCache.ts";
 import type { ResearchCache } from "./researchCache.ts";
-import * as providerHealth from "../providerHealthService.js";
+import * as providerHealth from "../providerHealthService.ts";
 import {
   ADAPTERS,
   defaultGovernor,

@@ -49,7 +49,7 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import splitPersistence from "../src/repositories/splitRepository.ts";
-import splitService from "../src/services/splitService.js";
+import splitService from "../src/services/splitService.ts";
 import { closePool } from "../src/database/connection.ts";
 
 const pool = getTestPool();

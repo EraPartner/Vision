@@ -24,10 +24,10 @@ import {
 } from "./setup/db.js";
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
 import plannedTransactionPersistence from "../src/repositories/plannedTransactionRepository.ts";
-import plannedTransactionService from "../src/services/plannedTransactionService.js";
+import plannedTransactionService from "../src/services/plannedTransactionService.ts";
 import splitPersistence from "../src/repositories/splitRepository.ts";
-import splitService from "../src/services/splitService.js";
-import { streamCsvExport } from "../src/services/transactionExport.js";
+import splitService from "../src/services/splitService.ts";
+import { streamCsvExport } from "../src/services/transactionExport.ts";
 import { buildTransactionWhere } from "../src/lib/filterBuilder.ts";
 import { closePool } from "../src/database/connection.ts";
 

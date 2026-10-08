@@ -18,7 +18,7 @@ import {
 import {
   getInflationRates,
   clearInflationMemoryCache,
-} from "../../services/belgianInflationService.js";
+} from "../../services/belgianInflationService.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
 import { formatDateToYmd } from "../../lib/dateFormat.ts";
 import { getMonthParam, getCurrentDateString } from "./_queryParams.ts";

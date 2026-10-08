@@ -56,7 +56,7 @@ import { recipientBankAccountRepository } from "../src/repositories/recipientBan
 import {
   importRecipientsCSV,
   importCategoriesCSV,
-} from "../src/services/dataImportService.js";
+} from "../src/services/dataImportService.ts";
 
 describe("Data Import Service", () => {
   beforeEach(() => {

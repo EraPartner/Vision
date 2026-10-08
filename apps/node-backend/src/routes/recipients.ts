@@ -3,8 +3,8 @@
  */
 
 import { Router } from "express";
-import recipientService from "../services/recipientService.js";
-import { mergeRecipients as mergeRecipientsAtomic } from "../services/recipientMergeService.js";
+import recipientService from "../services/recipientService.ts";
+import { mergeRecipients as mergeRecipientsAtomic } from "../services/recipientMergeService.ts";
 import {
   listPatternsForRecipient,
   createPattern,
@@ -12,8 +12,8 @@ import {
   deletePattern,
   previewPatternMatches,
   suggestPatternFromNames,
-} from "../services/recipientPatternService.js";
-import { findRecipientClusters } from "../services/recipientClusterService.js";
+} from "../services/recipientPatternService.ts";
+import { findRecipientClusters } from "../services/recipientClusterService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
   validateIdParam,
@@ -33,7 +33,7 @@ import {
 // where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
 // deletes must schedule a refresh — otherwise the dashboard serves the old
 // grouping until an unrelated transaction mutation.
-import { scheduleRefresh } from "../services/materializedViewService.js";
+import { scheduleRefresh } from "../services/materializedViewService.ts";
 
 const router = Router();
 

@@ -27,7 +27,7 @@ aliases:
 related_code:
   [
     "apps/node-backend/src/routes/splits.ts",
-    "apps/node-backend/src/services/splitService.js",
+    "apps/node-backend/src/services/splitService.ts",
     "apps/node-backend/src/repositories/splitRepository.ts",
     "apps/node-backend/src/lib/calculations/splits.ts",
     "apps/node-backend/src/lib/money.ts",
@@ -207,7 +207,7 @@ Implementation notes:
 - Route-level ID parsing is standardized through `parseRouteId(req)` and reused across `:id` handlers ([[apps/node-backend/src/routes/splits.ts]]).
 - Owed CSV export uses shared helpers (`OWED_EXPORT_HEADER`, `escapeCsvValue`, `buildOwedExportCsvRow`, `buildOwedExportCsv`, `buildOwedExportFilename`) for centralized CSV formatting with full escape support ([[apps/node-backend/src/routes/splits.ts]]).
 - `splitService` validates allocation through the pure calculation module, persists single or batch rows through repository primitives, and writes each create audit row in the same transaction.
-- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert, conditional auto-settlement, and audit in one transaction ([[apps/node-backend/src/services/splitService.js]]).
+- POST `/api/splits/:id/pay` delegates to `splitService.addPayment`, which repeats the exact cap check under `SELECT ... FOR UPDATE` and runs insert, conditional auto-settlement, and audit in one transaction ([[apps/node-backend/src/services/splitService.ts]]).
 - Settlement and hard deletion also delegate to service transactions, so the mutation and its audit record commit or roll back together. DELETE returns 404 when the service reports no row.
 
 ---

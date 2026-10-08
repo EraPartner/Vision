@@ -25,7 +25,7 @@ import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/services/aiChatService.js", async () => {
+vi.mock("../../src/services/aiChatService.ts", async () => {
   // Mirror the real class's hierarchy: AiChatServiceError extends AppError, so
   // the route's `err instanceof AppError` passthrough (no translation shim)
   // behaves the same here as against the real service module.
@@ -86,7 +86,7 @@ import {
   listConversations,
   renameConversation,
   runChatTurn,
-} from "../../src/services/aiChatService.js";
+} from "../../src/services/aiChatService.ts";
 import settings from "../../src/config/config.ts";
 
 const { default: aiRouter } = await import("../../src/routes/ai.ts");

@@ -6,7 +6,7 @@ import {
   FINANCIAL_ANALYSIS_DATASETS,
   executeFinancialAnalysis,
   __strictDatedConversion as strictDatedConversion,
-} from "../src/services/analysisFinancialDatasets.js";
+} from "../src/services/analysisFinancialDatasets.ts";
 import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets";
 
 describe("canonical financial analysis", () => {

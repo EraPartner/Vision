@@ -6,7 +6,7 @@ import { parseWithConfig } from "../../src/services/portfolioImportPipeline/port
 import {
   assignImportIdentities,
   portfolioIdentityBase,
-} from "../../src/services/importIdentity.js";
+} from "../../src/services/importIdentity.ts";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
 import { syntheticKinesisManual } from "./kinesisAdoptionScope.js";
 export async function nativeGiftFixture({

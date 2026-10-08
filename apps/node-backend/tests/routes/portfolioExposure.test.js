@@ -9,7 +9,7 @@ vi.mock(
   "../../src/services/portfolio/portfolioExposureService.ts",
   () => exposure,
 );
-vi.mock("../../src/services/investmentService.js", () =>
+vi.mock("../../src/services/investmentService.ts", () =>
   Object.fromEntries(
     [
       "listInvestments",

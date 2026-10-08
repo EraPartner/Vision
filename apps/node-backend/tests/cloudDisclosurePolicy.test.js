@@ -32,8 +32,8 @@ import {
   buildDisclosurePreview,
   __canonicalJson,
   validateDisclosureGrant,
-} from "../src/services/cloudDisclosurePolicy.js";
-import { disclosurePayload } from "../src/services/aiProviderAdapters.js";
+} from "../src/services/cloudDisclosurePolicy.ts";
+import { disclosurePayload } from "../src/services/aiProviderAdapters.ts";
 import { createHash } from "node:crypto";
 
 describe("cloud disclosure policy", () => {

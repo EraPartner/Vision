@@ -20,7 +20,7 @@ import {
   mergeAccounts,
   previewMerge,
   __stampRangesOverlap as stampRangesOverlap,
-} from "../src/services/accountMergeService.js";
+} from "../src/services/accountMergeService.ts";
 import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
 import {
   ValidationError,

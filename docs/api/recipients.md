@@ -4,12 +4,12 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/recipients
 description: Recipient (payee/payer) management with atomic merge and normalization-based matching
-date: 2026-10-07
-updated: 2026-09-27
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, recipients, payees, merge, atomic, phase-6, recipient-clusters]
 status: active
 aliases: [recipients-api, payee, payer, counterparty, recipient-management]
-related_code: [[apps/node-backend/src/routes/recipients.ts]], [[apps/node-backend/src/repositories/recipientRepository.ts]], [[apps/node-backend/src/services/recipientMergeService.js]], [[apps/node-backend/src/services/recipientClusterService.js]]
+related_code: [[apps/node-backend/src/routes/recipients.ts]], [[apps/node-backend/src/repositories/recipientRepository.ts]], [[apps/node-backend/src/services/recipientMergeService.ts]], [[apps/node-backend/src/services/recipientClusterService.ts]]
 ---
 
 # Recipients API
@@ -362,6 +362,9 @@ Create a new matching pattern for a recipient.
   "notes": "Matches all supermarket transactions"
 }
 ```
+
+An omitted `pattern_kind` is stored and validated as `literal_prefix`. A `regex` pattern that does not
+compile, or that risks catastrophic backtracking, is rejected with `400 VALIDATION_ERROR`.
 
 **Error Response (400):**
 

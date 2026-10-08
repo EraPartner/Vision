@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   compileVisualAnalysis,
   getAnalysisCatalog,
-} from "../src/services/analysisCatalog.js";
+} from "../src/services/analysisCatalog.ts";
 
 describe("analysis catalog compiler", () => {
   it("compiles the no-AI monthly spending workflow with typed values", () => {
@@ -236,4 +236,36 @@ describe("analysis catalog compiler", () => {
       "integer[]",
     ]);
   });
+
+  it.each(["toString", "constructor", "__proto__"])(
+    "rejects inherited object key %s as a dataset, field, measure or operator",
+    (key) => {
+      const base = {
+        datasetId: "cash-flows",
+        fields: ["month", "currency"],
+        groups: ["month", "currency"],
+        measures: ["sum_spending"],
+        filters: [],
+        joins: [],
+        orderBy: [],
+        limit: 500,
+      };
+      expect(() => compileVisualAnalysis({ ...base, datasetId: key })).toThrow(
+        "Unsupported analysis dataset",
+      );
+      expect(() =>
+        compileVisualAnalysis({ ...base, fields: [key], groups: [key] }),
+      ).toThrow("Unsupported analysis field");
+      expect(() => compileVisualAnalysis({ ...base, measures: [key] })).toThrow(
+        "Unsupported analysis measure",
+      );
+      // Before: the operator compiled into the SQL as native function source.
+      expect(() =>
+        compileVisualAnalysis({
+          ...base,
+          filters: [{ fieldId: "currency", operator: key, value: "EUR" }],
+        }),
+      ).toThrow("Unsupported analysis filter");
+    },
+  );
 });

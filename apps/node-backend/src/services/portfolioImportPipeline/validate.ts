@@ -18,7 +18,7 @@ import { classifyBrokerageRow } from "../importPipeline/brokerageRouting.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,
-} from "../importIdentity.js";
+} from "../importIdentity.ts";
 import type {
   PortfolioImportBatchRow,
   PortfolioImportStagingRow,

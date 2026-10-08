@@ -20,17 +20,17 @@ vi.mock("../src/config/config.ts", () => ({
     },
   },
 }));
-vi.mock("../src/services/agentCloakPreflight.js", () => ({
+vi.mock("../src/services/agentCloakPreflight.ts", () => ({
   detectAgentCloakDesktopSpans: calls.detect,
 }));
-vi.mock("../src/services/agentCloakRuntimeConfig.js", () => ({
+vi.mock("../src/services/agentCloakRuntimeConfig.ts", () => ({
   getAgentCloakConfig: calls.getConfig,
   setAgentCloakDesktopEnabled: calls.setEnabled,
 }));
-vi.mock("../src/services/aiReferenceKeySetup.js", () => ({
+vi.mock("../src/services/aiReferenceKeySetup.ts", () => ({
   ensureReferenceMappingKey: calls.ensureKey,
 }));
-vi.mock("../src/services/aiReferenceService.js", () => ({
+vi.mock("../src/services/aiReferenceService.ts", () => ({
   mappingKey: vi.fn(() => Buffer.alloc(32)),
 }));
 
@@ -38,7 +38,7 @@ import {
   agentCloakDesktopStatus,
   configureAgentCloakDesktop,
   __probeAgentCloakDesktop,
-} from "../src/services/agentCloakDesktopSetupService.js";
+} from "../src/services/agentCloakDesktopSetupService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

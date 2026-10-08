@@ -31,7 +31,7 @@ describe("materialized-view housekeeping", () => {
 
   it("keeps the removed view out of the current runtime-managed set", () => {
     const service = readRepoFile(
-      "apps/node-backend/src/services/materializedViewService.js",
+      "apps/node-backend/src/services/materializedViewService.ts",
     );
     const currentRuntime = service.slice(
       service.indexOf("const MATERIALIZED_VIEWS"),

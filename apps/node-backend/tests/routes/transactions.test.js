@@ -29,12 +29,12 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../../src/services/deduplication.js", () => ({
+vi.mock("../../src/services/deduplication.ts", () => ({
   ...mockDeduplication(),
   lockManualTransactionIdentity: vi.fn(async () => undefined),
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () =>
+vi.mock("../../src/services/materializedViewService.ts", () =>
   mockMaterializedViews(),
 );
 
@@ -49,15 +49,15 @@ vi.mock("../../src/repositories/accountRepository.ts", () => {
   return { accountRepository, default: accountRepository };
 });
 
-vi.mock("../../src/services/attachmentRecordService.js", () =>
+vi.mock("../../src/services/attachmentRecordService.ts", () =>
   mockAttachmentRecordService(),
 );
 
-vi.mock("../../src/services/attachmentService.js", () =>
+vi.mock("../../src/services/attachmentService.ts", () =>
   mockAttachmentService(),
 );
 
-vi.mock("../../src/services/transferReconciliationService.js", () => ({
+vi.mock("../../src/services/transferReconciliationService.ts", () => ({
   scheduleReconcile: vi.fn(),
   getTransferSuggestions: vi.fn(async () => []),
   markTransfer: vi.fn(),
@@ -68,12 +68,12 @@ import transactionRepository from "../../src/repositories/transactionRepository.
 import {
   unmarkTransfer,
   scheduleReconcile,
-} from "../../src/services/transferReconciliationService.js";
+} from "../../src/services/transferReconciliationService.ts";
 import { query as dbQuery } from "../../src/database/connection.ts";
-import { isManualDuplicate } from "../../src/services/deduplication.js";
+import { isManualDuplicate } from "../../src/services/deduplication.ts";
 import { convertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
-import { attachmentRepository } from "../../src/services/attachmentRecordService.js";
-import { removeAttachmentFile } from "../../src/services/attachmentService.js";
+import { attachmentRepository } from "../../src/services/attachmentRecordService.ts";
+import { removeAttachmentFile } from "../../src/services/attachmentService.ts";
 
 const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");

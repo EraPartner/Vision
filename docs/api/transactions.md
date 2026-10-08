@@ -10,7 +10,7 @@ last_modified: 2026-09-27
 tags: [api, transactions, finance, phase-5a, phase-9, phase-13, phase-q, decimal, money, export, drillthrough, filters, recipient-groups, bulk-actions, amount-filter, date-search, tag-search]
 status: active
 aliases: [transactions-api, transaction-crud, financial-records, income, expenses]
-related_code: [[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/repositories/transactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/bulkSelection.js]], [[apps/node-backend/src/services/transactionExport.js]]
+related_code: [[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/repositories/transactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/services/bulkSelection.ts]], [[apps/node-backend/src/services/transactionExport.ts]]
 ---
 
 # Transactions API
@@ -178,12 +178,12 @@ Date,Bank Account,Recipient,Memo,Amount,Currency,Balance,Category,Comment,Runnin
 
 Implementation note:
 
-- Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.js` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.js]]).
+- Route-owned CSV/JSON request parsing (`buildExportFilters`) returns a validated domain filter model. `transactionExport.js` converts that model with the shared `buildTransactionWhere` and owns SQL construction and streaming. Both export endpoints therefore accept the same filter set as `GET /api/transactions` without putting database access in the route (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
 - Export filters include newly supported params: `transaction_id`, `recipient_id`, `recipient_name`, `search`, `transaction_type` (Phase 13). Existing params (`start_date`, `end_date`, `bank_account`, `bank_accounts`, `category_id`, `category_ids`) continue to work as before.
 - CSV/JSON export request parsing supports both singular (`bank_account`, `category_id`) and plural (`bank_accounts`, `category_ids`) parameters. Plural parameters take precedence when both are provided (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]]).
-- Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting ([[apps/node-backend/src/services/transactionExport.js]]).
-- CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.js]]).
-- CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.js]]).
+- Shared SQL and streaming helpers in `transactionExport.js` ensure existence probes and chunk queries use the same recipient/category joins, preventing `recipient_name` and `search` filters from drifting ([[apps/node-backend/src/services/transactionExport.ts]]).
+- CSV escaping, row assembly, filename creation, and database streaming are owned by `transactionExport.js`; the route validates the request and passes the response stream to that service ([[apps/node-backend/src/services/transactionExport.ts]]).
+- CSV export neutralizes formula-like cell prefixes (`=`, `+`, `-`, `@`) before writing values to reduce spreadsheet formula-injection risk when opening exports in Excel/Sheets ([[apps/node-backend/src/services/transactionExport.ts]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.ts]]).
 
 ### GET /api/transactions/export/json
@@ -238,7 +238,7 @@ Both export endpoints share `buildExportFilters`, so the strict id-param contrac
 
 Implementation note:
 
-- JSON export uses route-level filter parsing plus the shared SQL/streaming pipeline in `transactionExport.js`, including the 50-entry list cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.js]]).
+- JSON export uses route-level filter parsing plus the shared SQL/streaming pipeline in `transactionExport.js`, including the 50-entry list cap and whitespace trimming on `bank_accounts` (Phase 13) ([[apps/node-backend/src/routes/transactions.ts]], [[apps/node-backend/src/services/transactionExport.ts]]).
 - Export route errors are sanitized to generic error details (no internal exception leakage) while preserving status semantics; if headers have already been sent, connection is closed cleanly ([[apps/node-backend/src/routes/transactions.ts]]).
 
 ### GET /api/transactions/:id
@@ -342,7 +342,7 @@ Update an existing transaction.
 Implementation notes:
 
 - Internal PATCH flow delegates payload normalization to route helpers and passes the validated model to `transactionService`, which owns name resolution, persistence, and reconciliation while preserving status codes and response messages.
-- Recipient/category name-resolution checks in PATCH run concurrently inside `transactionService` through the recipient/category service seams and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without database or write orchestration in the route ([[apps/node-backend/src/services/transactionService.js]]).
+- Recipient/category name-resolution checks in PATCH run concurrently inside `transactionService` through the recipient/category service seams and preserve existing recipient-first then category error precedence in responses, reducing avoidable sequential lookup latency without database or write orchestration in the route ([[apps/node-backend/src/services/transactionService.ts]]).
 - Repository update path now returns the enriched updated row in a single CTE query (`WITH updated ... SELECT ...`) instead of `UPDATE` + follow-up `getById` round-trip; response shape and not-found semantics are unchanged ([[apps/node-backend/src/repositories/transactionRepository.ts]]).
 - PATCH route internal errors now return sanitized generic details instead of leaking backend exception strings ([[apps/node-backend/src/routes/transactions.ts]]).
 
@@ -401,14 +401,14 @@ or
 
 Implementation note:
 
-- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]` with caps enforced up front.
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.ts]]` with caps enforced up front.
 - Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
 - Ids and filter fields are validated before any SQL runs: a malformed id or filter field rejects the whole request (400) rather than being stripped, so the delete never covers a narrower _or wider_ set than the caller named. All resolved rows are deleted in a single `DELETE` statement.
 
 ### Bulk filter selector
 
 The `filter` object accepted by `bulk-delete`, `bulk-update` and `bulk-export` (all three share one
-normaliser, `normalizeBulkFilter` in `[[apps/node-backend/src/services/bulkSelection.js]]`).
+normaliser, `normalizeBulkFilter` in `[[apps/node-backend/src/services/bulkSelection.ts]]`).
 
 Accepted fields — this list is closed, and each may also be given in camelCase, but not in both
 spellings at once:
@@ -501,7 +501,7 @@ or
 
 Implementation note:
 
-- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]`.
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.ts]]`.
 - `category_id` and `recipient_id` are validated against the database in parallel before any `UPDATE` executes.
 - Runs inside a `withTransaction()` to guarantee atomicity; `scheduleRefresh()` signals materialized-view refresh on success.
 
@@ -555,8 +555,8 @@ or
 
 Implementation note:
 
-- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.js]]`.
-- CSV/NDJSON streaming and balance computation delegate to `[[apps/node-backend/src/services/transactionExport.js]]` (shared with GET export endpoints).
+- Resolves `ids | filter` via `[[apps/node-backend/src/services/bulkSelection.ts]]`.
+- CSV/NDJSON streaming and balance computation delegate to `[[apps/node-backend/src/services/transactionExport.ts]]` (shared with GET export endpoints).
 - CSV escape, formula-neutralization, and filename generation reuse the same helpers as `GET /api/transactions/export/csv`.
 - Streaming behavior, chunk size (1000 rows), and error handling are identical to GET export endpoints.
 

@@ -170,7 +170,7 @@ SIGTERM handler in `apps/node-backend/src/main.js` clears all background timers 
    - `quotesRefreshInterval` (added 2026-04-29; clears hourly active-holding quotes refresh)
    - `cashflowForecastRefreshInterval` (added 2026-04-29; clears 24h cashflow forecast refresh)
 
-2. **Debounced aggregation refresh** — cleared via `cancelPendingAggregationRefresh()` from [[apps/node-backend/src/services/aggregationRefresh.js]]:
+2. **Debounced aggregation refresh** — cleared via `cancelPendingAggregationRefresh()` from [[apps/node-backend/src/services/aggregationRefresh.ts]]:
    - All `setTimeout` calls in aggregationRefresh are `.unref()`-ed (added 2026-04-29) so they don't block exit
    - Pending debounce timer explicitly cancelled on shutdown
 

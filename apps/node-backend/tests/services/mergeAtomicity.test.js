@@ -87,7 +87,7 @@ describe("account merge atomicity (ADR-088)", () => {
     });
 
     const { accountService } =
-      await import("../../src/services/accountService.js");
+      await import("../../src/services/accountService.ts");
     await expect(accountService.remove(7)).resolves.toBe(7);
 
     const sqls = client.query.mock.calls.map(([sql]) => sql);
@@ -115,7 +115,7 @@ describe("account merge atomicity (ADR-088)", () => {
     });
 
     const { accountService } =
-      await import("../../src/services/accountService.js");
+      await import("../../src/services/accountService.ts");
     await expect(
       accountService.update(1, { funding_account_id: 2 }),
     ).rejects.toThrow("late account update failure");
@@ -154,7 +154,7 @@ describe("account merge atomicity (ADR-088)", () => {
     });
 
     const { mergeAccounts } =
-      await import("../../src/services/accountMergeService.js");
+      await import("../../src/services/accountMergeService.ts");
     await expect(mergeAccounts(2, [1])).rejects.toThrow(
       "23503 foreign key violation",
     );
@@ -206,7 +206,7 @@ describe("recipient merge atomicity (ADR-014)", () => {
     });
 
     const { mergeRecipients } =
-      await import("../../src/services/recipientMergeService.js");
+      await import("../../src/services/recipientMergeService.ts");
     await expect(mergeRecipients(1, [3])).rejects.toThrow("deadlock detected");
 
     const sqls = expectRolledBackOnOneConnection(client, pool);
@@ -252,7 +252,7 @@ describe("transfer mark atomicity (ADR-083)", () => {
     });
 
     const { markTransfer } =
-      await import("../../src/services/transferReconciliationService.js");
+      await import("../../src/services/transferReconciliationService.ts");
     await expect(markTransfer(10, 20)).rejects.toThrow("serialization failure");
 
     const sqls = expectRolledBackOnOneConnection(client, pool);

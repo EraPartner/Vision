@@ -12,7 +12,7 @@ vi.mock("../src/config/logger.ts", () => ({
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
-vi.mock("../src/services/priceProviderService.js", () => ({
+vi.mock("../src/services/priceProviderService.ts", () => ({
   fetchHistoricalPrices: vi.fn(),
   saveHistoricalPointsToDatabase: vi.fn(),
 }));
@@ -26,12 +26,12 @@ import {
   cleanupStaleQuotes,
   __holdingWindowsNeedBackfill as holdingWindowsNeedBackfill,
   backfillHoldingGaps,
-} from "../src/services/quoteBackfillService.js";
+} from "../src/services/quoteBackfillService.ts";
 import { query } from "../src/database/connection.ts";
 import {
   fetchHistoricalPrices,
   saveHistoricalPointsToDatabase,
-} from "../src/services/priceProviderService.js";
+} from "../src/services/priceProviderService.ts";
 
 describe("Quote Backfill Service", () => {
   beforeEach(() => {

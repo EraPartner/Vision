@@ -7,7 +7,7 @@ vi.mock("../src/database/connection.ts", () =>
 );
 
 import { query } from "../src/database/connection.ts";
-import { resolveCategoryIdByName } from "../src/services/categoryService.js";
+import { resolveCategoryIdByName } from "../src/services/categoryService.ts";
 
 beforeEach(() => {
   vi.clearAllMocks();

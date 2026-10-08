@@ -2,8 +2,8 @@
 title: Admin API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-09-20
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - api
   - admin
@@ -24,7 +24,7 @@ aliases:
 related_code:
   - apps/node-backend/src/routes/admin.ts
   - apps/node-backend/src/routes/codexExperimental.ts
-  - apps/node-backend/src/services/dbEditor.js
+  - apps/node-backend/src/services/dbEditor.ts
   - apps/node-backend/src/main.js
   - apps/node-backend/src/config/config.ts
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
@@ -862,7 +862,7 @@ See [[docs/security/rate-limiting|Rate Limiting]] for full details and response 
 - [[docs/api/index]] - API Index
 - [[docs/adr/002-database-schema]] - Database Schema
 
-Code links: [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/services/priceProviderService.js]]
+Code links: [[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
 ## Test Coverage Notes (2026-04-10)
 

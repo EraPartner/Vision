@@ -577,7 +577,7 @@ UPDATE transactions SET is_active = false WHERE id = $1
 ## 15. attachmentRepository.js
 
 **File:** [[apps/node-backend/src/repositories/attachmentRepository.ts]]
-**Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.js|attachmentService.js]].
+**Purpose:** Persists receipt attachment metadata (stored path, mime type, size). The on-disk file lifecycle lives in [[apps/node-backend/src/services/attachmentService.ts|attachmentService.js]].
 
 | Method                                    | Returns     |
 | ----------------------------------------- | ----------- |

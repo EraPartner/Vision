@@ -53,7 +53,7 @@
       "disposition": "Migration 0108 preserves all provider rows and links in the ADR-141 neutral model. The guarded maintenance contract removed the provider-specific and manual raw relations from the maintained installation; the contract remains for other installations.",
       "paths": [
         "alembic/versions/0001_initial_database_schema.py",
-        "apps/node-backend/src/services/deduplication.js",
+        "apps/node-backend/src/services/deduplication.ts",
         "apps/node-backend/src/backup/coverage.ts"
       ],
       "readers": "Current runtime reads provider-neutral source records, links, and manual duplicate claims; no current reader requires the retired relations.",
@@ -364,8 +364,8 @@
       "classification": "retain-with-reason",
       "disposition": "This facade is an active orchestrator and provider boundary, not a dead adapter shim.",
       "paths": [
-        "apps/node-backend/src/services/priceProviderService.js",
-        "apps/node-backend/src/services/quoteBackfillService.js"
+        "apps/node-backend/src/services/priceProviderService.ts",
+        "apps/node-backend/src/services/quoteBackfillService.ts"
       ],
       "readers": "Investment, quote backfill, startup warmup, and admin paths.",
       "writers": "Coordinates live and historical price persistence.",
@@ -383,8 +383,8 @@
       "classification": "retain-with-reason",
       "disposition": "The materialized views remain current aggregation infrastructure; legacy wording describes an older service split, not obsolete behavior.",
       "paths": [
-        "apps/node-backend/src/services/aggregationRefresh.js",
-        "apps/node-backend/src/services/materializedViewService.js"
+        "apps/node-backend/src/services/aggregationRefresh.ts",
+        "apps/node-backend/src/services/materializedViewService.ts"
       ],
       "readers": "Dashboard and statistics refresh paths.",
       "writers": "Refreshes current materialized views and aggregation state.",
@@ -824,7 +824,7 @@
       "disposition": "Removed. Portfolio and planned-transaction runtime paths accept and emit only biweekly; migration 0099 rewrites and constrains stored values.",
       "paths": [
         "packages/types/src/recurrence.ts",
-        "apps/node-backend/src/services/investmentService.js",
+        "apps/node-backend/src/services/investmentService.ts",
         "apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts"
       ],
       "readers": "Current runtime readers accept only canonical recurrence values.",

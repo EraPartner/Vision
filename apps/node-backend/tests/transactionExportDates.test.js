@@ -18,7 +18,7 @@ import {
   streamBulkTransactionExport,
   streamCsvExport,
   streamNdjsonExport,
-} from "../src/services/transactionExport.js";
+} from "../src/services/transactionExport.ts";
 
 // A pg DATE arrives as a LOCAL-midnight Date object; this is the shape the
 // export must turn back into a plain calendar day regardless of process TZ.

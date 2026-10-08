@@ -7,7 +7,7 @@
 
 import { Router } from "express";
 import { z } from "zod";
-import savedChartsService from "../services/savedChartsService.js";
+import savedChartsService from "../services/savedChartsService.ts";
 import {
   validateIntArray,
   validateIdParam,

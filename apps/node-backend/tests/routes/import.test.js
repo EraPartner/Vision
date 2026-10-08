@@ -69,12 +69,12 @@ vi.mock("../../src/services/importPipeline/index.ts", () => ({
   commitImport: vi.fn(),
 }));
 
-vi.mock("../../src/services/dataImportService.js", () => ({
+vi.mock("../../src/services/dataImportService.ts", () => ({
   importRecipientsCSV: vi.fn(),
   importCategoriesCSV: vi.fn(),
 }));
 
-vi.mock("../../src/services/materializedViewService.js", () => ({
+vi.mock("../../src/services/materializedViewService.ts", () => ({
   scheduleRefresh: vi.fn(),
   refreshMaterializedViews: vi.fn(),
   createMaterializedViews: vi.fn(),
@@ -100,7 +100,7 @@ vi.mock("../../src/repositories/importBatchRepository.ts", () => ({
   categoryExists: vi.fn(),
 }));
 
-vi.mock("../../src/services/aggregationRefresh.js", () => ({
+vi.mock("../../src/services/aggregationRefresh.ts", () => ({
   clearForecastMcCaches: vi.fn().mockResolvedValue(undefined),
   scheduleMaterializedViewRefresh: vi.fn(),
 }));
@@ -122,7 +122,7 @@ import { runImportPipeline } from "../../src/services/importPipeline/index.ts";
 import {
   importRecipientsCSV,
   importCategoriesCSV,
-} from "../../src/services/dataImportService.js";
+} from "../../src/services/dataImportService.ts";
 import {
   listBatches,
   getBatch,
@@ -137,7 +137,7 @@ import customParserConfigRepository from "../../src/repositories/customParserCon
 import {
   clearForecastMcCaches,
   scheduleMaterializedViewRefresh,
-} from "../../src/services/aggregationRefresh.js";
+} from "../../src/services/aggregationRefresh.ts";
 
 const { default: importRouter } =
   await import("../../src/routes/importRoutes.ts");

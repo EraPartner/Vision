@@ -69,7 +69,7 @@ import {
 import {
   importCategoriesCSV,
   importRecipientsCSV,
-} from "../src/services/dataImportService.js";
+} from "../src/services/dataImportService.ts";
 import { useTempCSV } from "./helpers/tempFile.js";
 
 const pool = getTestPool();

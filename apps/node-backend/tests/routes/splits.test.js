@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.js";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.js";
 
-vi.mock("../../src/services/splitService.js", () => ({
+vi.mock("../../src/services/splitService.ts", () => ({
   default: {
     getOwedSummary: vi.fn(),
     getOwedByRecipient: vi.fn(),
@@ -40,7 +40,7 @@ vi.mock("../../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-import splitService from "../../src/services/splitService.js";
+import splitService from "../../src/services/splitService.ts";
 import {
   ValidationError,
   NotFoundError,

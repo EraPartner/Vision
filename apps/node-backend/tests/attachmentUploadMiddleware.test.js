@@ -11,7 +11,7 @@ vi.mock('multer', () => {
   return { default: multer };
 });
 
-vi.mock('../src/services/attachmentService.js', () => ({
+vi.mock('../src/services/attachmentService.ts', () => ({
   ATTACHMENT_MAX_SIZE_BYTES: 10 * 1024 * 1024,
   isAllowedAttachmentMime: (mimeType) => mimeType.startsWith('image/') || mimeType === 'application/pdf',
 }));

@@ -12,11 +12,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { routeAgent, errEnvelope } from '../helpers/routeApp.js';
 
-vi.mock('../../src/services/crossWorkspaceDataService.js', () => ({
+vi.mock('../../src/services/crossWorkspaceDataService.ts', () => ({
   assembleRebalanceInputs: vi.fn(),
 }));
 
-import { assembleRebalanceInputs } from '../../src/services/crossWorkspaceDataService.js';
+import { assembleRebalanceInputs } from '../../src/services/crossWorkspaceDataService.ts';
 
 const { default: crossWorkspaceRouter } = await import('../../src/routes/crossWorkspace.ts');
 

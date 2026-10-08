@@ -8,7 +8,7 @@ import {
   ingestResearchDocument,
   listResearchDocuments,
   searchResearchDocuments,
-} from "../services/aiResearchDocuments.js";
+} from "../services/aiResearchDocuments.ts";
 
 const router = Router();
 const upload = multer({

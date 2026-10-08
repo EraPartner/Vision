@@ -14,8 +14,8 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "../setup/db.js";
-import { accountService } from "../../src/services/accountService.js";
-import { mergeAccounts } from "../../src/services/accountMergeService.js";
+import { accountService } from "../../src/services/accountService.ts";
+import { mergeAccounts } from "../../src/services/accountMergeService.ts";
 import { closePool } from "../../src/database/connection.ts";
 import {
   __ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS as ACCOUNT_FUNDING_GRAPH_LOCK_PARAMS,

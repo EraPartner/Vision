@@ -2,13 +2,13 @@
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { parseKinesisTransactionHistory } from "../../src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.ts";
-import { captureKinesisSourceContext } from "../../src/services/portfolioKinesisAdoptionScope.js";
+import { captureKinesisSourceContext } from "../../src/services/portfolioKinesisAdoptionScope.ts";
 import { parsedDateToYmd } from "../../src/lib/importDates.ts";
 import { toDecimal } from "../../src/lib/money.ts";
 import {
   assignImportIdentities,
   portfolioIdentityBase,
-} from "../../src/services/importIdentity.js";
+} from "../../src/services/importIdentity.ts";
 
 export const kinesisHash = (value) =>
   createHash("sha256").update(value).digest("hex");

@@ -38,17 +38,17 @@ import {
   hasTestDatabase,
   releaseDbSuiteLock,
 } from "./setup/db.js";
-import { accountService } from "../src/services/accountService.js";
+import { accountService } from "../src/services/accountService.ts";
 import { accountRepository } from "../src/repositories/accountRepository.ts";
 
 const listAccounts = async (opts = {}) =>
   (await accountService.list(opts)).items;
-import { reconcileAccount } from "../src/services/reconcileService.js";
+import { reconcileAccount } from "../src/services/reconcileService.ts";
 import {
   mergeAccounts,
   previewMerge,
-} from "../src/services/accountMergeService.js";
-import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.js";
+} from "../src/services/accountMergeService.ts";
+import { assembleRebalanceInputs } from "../src/services/crossWorkspaceDataService.ts";
 import { netWorthRepository } from "../src/repositories/infoRepositoryNetWorth.ts";
 import { banksRepository } from "../src/repositories/infoRepositoryBanks.ts";
 import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";

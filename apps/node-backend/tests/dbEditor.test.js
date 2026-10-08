@@ -6,7 +6,7 @@ vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
 }));
 
-vi.mock("../src/services/materializedViewService.js", () => ({
+vi.mock("../src/services/materializedViewService.ts", () => ({
   scheduleRefresh: vi.fn(),
   refreshMaterializedViews: vi.fn(),
 }));
@@ -18,12 +18,12 @@ vi.mock("../src/repositories/auditChainRepository.ts", () => ({
 
 import { query, getClient } from "../src/database/connection.ts";
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
-import { scheduleRefresh } from "../src/services/materializedViewService.js";
+import { scheduleRefresh } from "../src/services/materializedViewService.ts";
 import {
   getTableMeta,
   readRows,
   applyMutations,
-} from "../src/services/dbEditor.js";
+} from "../src/services/dbEditor.ts";
 
 // ── Catalog fixtures ────────────────────────────────────────────────────────
 

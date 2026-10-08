@@ -51,7 +51,7 @@ import splitService, {
   createSplitAtomic,
   deleteSplit,
   settleSplit,
-} from "../src/services/splitService.js";
+} from "../src/services/splitService.ts";
 
 // Production reaches the bulk path through the default service object.
 const { createBulkSplitsAtomic } = splitService;

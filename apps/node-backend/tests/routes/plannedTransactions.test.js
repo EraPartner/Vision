@@ -21,7 +21,7 @@ vi.mock("../../src/repositories/plannedTransactionRepository.ts", () => ({
   },
 }));
 
-vi.mock("../../src/services/plannedTransactionService.js", () => ({
+vi.mock("../../src/services/plannedTransactionService.ts", () => ({
   default: {
     getAll: vi.fn(),
     getById: vi.fn(),
@@ -71,7 +71,7 @@ vi.mock(
   },
 );
 
-import plannedTransactionService from "../../src/services/plannedTransactionService.js";
+import plannedTransactionService from "../../src/services/plannedTransactionService.ts";
 import { query as dbQuery } from "../../src/database/connection.ts";
 import { generateLoanRepaymentSchedule } from "../../src/services/calculations/loanSchedule.ts";
 

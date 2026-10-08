@@ -25,7 +25,7 @@ vi.mock("../src/config/config.ts", () => ({
   },
 }));
 
-import { disclosurePayload } from "../src/services/aiProviderAdapters.js";
+import { disclosurePayload } from "../src/services/aiProviderAdapters.ts";
 import { evaluateCloudPrivacyTrace } from "../src/services/aiEvaluation/cloudPrivacy.ts";
 import { CLOUD_PRIVACY_SYNTHETIC_POLICY } from "../src/services/aiEvaluation/cloudPrivacyCases.ts";
 

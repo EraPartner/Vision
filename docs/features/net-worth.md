@@ -45,7 +45,7 @@ related_code:
   - apps/node-backend/src/routes/info/netWorth.ts
   - apps/node-backend/src/routes/info/_liveSummary.js
   - apps/node-backend/src/repositories/infoRepositoryNetWorth.ts
-  - apps/node-backend/src/services/portfolioPerformanceSnapshotService.js
+  - apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts
   - apps/node-backend/src/services/portfolio/snapshotBuilder.ts
 ---
 

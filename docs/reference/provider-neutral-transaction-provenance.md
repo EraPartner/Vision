@@ -2,13 +2,13 @@
 title: Provider-Neutral Transaction Provenance
 type: reference
 status: active
-date: 2026-09-12
+date: 2026-10-08
 tags: [reference, imports, provenance, migration]
 description: Durable provider-neutral source archives, provenance links, and atomic manual-transaction identity claims.
 aliases: [transaction provenance, neutral import provenance]
 related_code:
   - alembic/versions/0108_provider_neutral_provenance.py
-  - apps/node-backend/src/services/deduplication.js
+  - apps/node-backend/src/services/deduplication.ts
   - alembic/manual/contract_drop_provider_raw/up.sql
 ---
 

@@ -5,7 +5,7 @@ import {
   createTransaction,
   __parsePortfolioTransactionBody as parsePortfolioTransactionBody,
   updateTransaction,
-} from "../src/services/investmentService.js";
+} from "../src/services/investmentService.ts";
 
 afterEach(() => {
   vi.restoreAllMocks();

@@ -14,16 +14,16 @@ import {
   NotFoundError,
   UpstreamError,
 } from "../middleware/errorHandler.ts";
-import { disclosurePayload } from "../services/aiProviderAdapters.js";
+import { disclosurePayload } from "../services/aiProviderAdapters.ts";
 import {
   checkAgentCloakPreflight,
   detectAgentCloakDesktopSpans,
-} from "../services/agentCloakPreflight.js";
-import { getAgentCloakConfig } from "../services/agentCloakRuntimeConfig.js";
+} from "../services/agentCloakPreflight.ts";
+import { getAgentCloakConfig } from "../services/agentCloakRuntimeConfig.ts";
 import {
   agentCloakDesktopStatus,
   configureAgentCloakDesktop,
-} from "../services/agentCloakDesktopSetupService.js";
+} from "../services/agentCloakDesktopSetupService.ts";
 import {
   createInvestigation,
   listInvestigations,
@@ -31,28 +31,21 @@ import {
   cancelInvestigation,
   deleteInvestigation,
   resumeInvestigation,
-} from "../services/aiInvestigationService.js";
+} from "../services/aiInvestigationService.ts";
 import {
   createDisclosureGrant,
   listDisclosureGrants,
   listDisclosureRecords,
   revokeDisclosureGrant,
   deleteDisclosureHistory,
-} from "../services/aiDisclosureService.js";
+} from "../services/aiDisclosureService.ts";
 import {
   mappingKey,
   prepareReferencePreview,
   validateReferenceRequest,
-} from "../services/aiReferenceService.js";
+} from "../services/aiReferenceService.ts";
 
 const router = Router();
-// aiInvestigationService.js has no parameter JSDoc, so its `= null` defaults
-// infer `null` for both optional arguments.
-const resumeJob = resumeInvestigation as (
-  id: string,
-  clarification?: string | null,
-  scope?: unknown,
-) => ReturnType<typeof resumeInvestigation>;
 const uuid = z.string().uuid();
 const desktopPreferenceSchema = z.strictObject({ enabled: z.boolean() });
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -294,7 +287,11 @@ router.post("/investigations/:id/resume", async (req, res) => {
     }),
     req.body || {},
   );
-  const job = await resumeJob(id(req), body.clarification, body.scope);
+  const job = await resumeInvestigation(
+    id(req),
+    body.clarification,
+    body.scope,
+  );
   if (!job) throw new NotFoundError("Investigation not found");
   res.status(202);
   res.ok(job);

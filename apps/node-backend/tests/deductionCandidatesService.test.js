@@ -5,12 +5,12 @@ vi.mock("../src/repositories/transactionRepository.ts", () => ({
     getAll: vi.fn(),
   },
 }));
-vi.mock("../src/services/categoryService.js", () => ({
+vi.mock("../src/services/categoryService.ts", () => ({
   listCategoryNodes: vi.fn(),
 }));
 
 import { transactionRepository } from "../src/repositories/transactionRepository.ts";
-import { listCategoryNodes } from "../src/services/categoryService.js";
+import { listCategoryNodes } from "../src/services/categoryService.ts";
 import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.ts";
 
 beforeEach(() => {

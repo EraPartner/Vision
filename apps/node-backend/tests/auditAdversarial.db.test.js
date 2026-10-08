@@ -6,11 +6,11 @@ import {
   releaseDbSuiteLock,
 } from "./setup/db.js";
 import { appendAuditEvent } from "../src/repositories/auditChainRepository.ts";
-import { verifyAuditHistory } from "../src/services/auditVerificationService.js";
+import { verifyAuditHistory } from "../src/services/auditVerificationService.ts";
 import {
   planAuditRetention,
   pruneAuditRetention,
-} from "../src/services/auditRetentionService.js";
+} from "../src/services/auditRetentionService.ts";
 
 const pool = getTestPool();
 

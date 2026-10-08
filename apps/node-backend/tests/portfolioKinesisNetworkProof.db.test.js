@@ -9,9 +9,9 @@ import {
 import { closePool } from "../src/database/connection.ts";
 import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.js";
 import { networkSource } from "./helpers/kinesisNetwork.js";
-import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.js";
-import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.js";
-import { rollbackBatch } from "../src/services/portfolioImportBatchService.js";
+import { previewPortfolioImportReconciliation } from "../src/services/portfolioImportReconciliationService.ts";
+import { commitReviewedPortfolioImports } from "../src/services/portfolioImportCommitService.ts";
+import { rollbackBatch } from "../src/services/portfolioImportBatchService.ts";
 import { pruneOldImportBatches } from "../src/startup/warmup.ts";
 const pool = getTestPool(),
   owned = { batches: [], investments: [], accounts: [] },

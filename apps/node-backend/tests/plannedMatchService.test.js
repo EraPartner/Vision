@@ -19,7 +19,7 @@ vi.mock("../src/repositories/recipientRepository.ts", () => ({
 vi.mock("../src/repositories/settingsRepository.ts", () => ({
   default: { get: (...a) => mockSettingsGet(...a) },
 }));
-vi.mock("../src/services/plannedExecutionService.js", () => ({
+vi.mock("../src/services/plannedExecutionService.ts", () => ({
   executePlanned: (...a) => mockExecutePlanned(...a),
 }));
 vi.mock("../src/config/logger.ts", () => ({
@@ -30,7 +30,7 @@ import {
   __matchesTolerance as matchesTolerance,
   autoLinkTransactions,
   getMatchSuggestions,
-} from "../src/services/plannedMatchService.js";
+} from "../src/services/plannedMatchService.ts";
 
 const planned = (over = {}) => ({
   id: 1,

@@ -11,7 +11,7 @@
  */
 
 import { Router } from "express";
-import tagService from "../services/tagService.js";
+import tagService from "../services/tagService.ts";
 import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { withCreateOutcome } from "../lib/createOutcome.ts";

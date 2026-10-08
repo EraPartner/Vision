@@ -4,7 +4,7 @@ import {
   prepareReferencePreview,
   restoreAnswerForJob,
   validateReferenceRequest,
-} from "../src/services/aiReferenceService.js";
+} from "../src/services/aiReferenceService.ts";
 
 const KEY = Buffer.alloc(32, 7);
 const SCOPE_ID = "11111111-1111-4111-8111-111111111111";

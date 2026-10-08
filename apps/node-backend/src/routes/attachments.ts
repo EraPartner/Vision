@@ -9,13 +9,13 @@
 
 import { Router } from "express";
 import multer from "multer";
-import { attachmentRepository } from "../services/attachmentRecordService.js";
+import { attachmentRepository } from "../services/attachmentRecordService.ts";
 import {
   storeAttachment,
   resolveAbsolutePath,
   removeAttachmentFile,
   verifyAttachmentContent,
-} from "../services/attachmentService.js";
+} from "../services/attachmentService.ts";
 import { attachmentUpload } from "../middleware/attachmentUpload.ts";
 import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
