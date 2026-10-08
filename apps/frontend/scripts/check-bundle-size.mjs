@@ -79,8 +79,9 @@ const DIST_DIR = process.env.VISION_DIST_DIR
 const BUDGETS_KB = {
     // 445.33 * 1.05 = 467.60, rounded up after measured feature growth.
     preload: 468,
-    // 1117.21 * 1.05 = 1173.07, rounded to the next 10 KB (was 1100).
-    total: 1180,
+    // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
+    // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
+    total: 1340,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */
