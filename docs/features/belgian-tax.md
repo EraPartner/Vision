@@ -2,10 +2,10 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
-description: Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation.
+description: "Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation."
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
@@ -452,6 +452,16 @@ Printing `/tax` uses the current on-screen report rather than the server PDF end
 hides application chrome and interactive header controls, switches the report to a light paper
 surface, removes glass blur and shadows, and avoids breaking cards, tables, and charts where the
 browser can keep them together. The route scope prevents those rules from changing ordinary pages.
+
+## Income included in acquired units
+
+Proved Kinesis `included_in_units` income retains its literal amount and accounting role in source
+history. It is excluded from ordinary dividend withholding estimates and dividend income totals;
+this role does not establish a legal tax classification. The portfolio tax view discloses the
+separate unclassified source income for the selected year. Tax report data keeps the role-aware
+ordinary dividend exclusion; the executive summary adds no in-kind income paragraph. Explicit recorded source taxes and
+fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]],
+[[docs/features/portfolio]] and [[docs/features/pdf-report-export]].
 
 ## Related
 

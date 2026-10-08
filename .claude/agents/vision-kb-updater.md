@@ -1,7 +1,7 @@
 ---
 name: vision-kb-updater
 description: Evaluate a stable Vision implementation diff and synchronize only documentation made stale by changes to behavior, contracts, architecture, configuration, security, integrations, packaging, operations, public interfaces, or documented code locations. Do not create docs for clearly neutral tests, formatting, generated outputs, or internal refactors.
-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+tools: ["Read", "Write", "Edit", "Bash", "Skill"]
 model: sonnet
 ---
 
@@ -20,7 +20,8 @@ verification and commit. If no documented surface changed, do not edit files; re
 reason. If an update is required, follow every affected page, contract, diagram, flow-visualizer,
 index, backlink, and frontmatter requirement in the portable skill.
 
-Use plain repository file tools and the installed `obsidian:obsidian-markdown` skill. Do not depend
+Use plain repository file tools, `grep -rn` and `ls` through `Bash` for search, and the installed
+`obsidian:obsidian-markdown` skill when it is available. Do not depend
 on host-only Obsidian tools. Do not modify application code, tests, migrations, or generated product
 artifacts. Do not commit or push.
 

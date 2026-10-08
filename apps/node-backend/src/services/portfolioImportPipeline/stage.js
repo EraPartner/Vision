@@ -11,6 +11,7 @@ import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { parseWithConfig } from "./portfolioGenericAdapter.js";
+import { captureKinesisSourceContext } from "../portfolioKinesisAdoptionScope.js";
 import {
   normalizeCreatedBatchId,
   runImportStageLifecycle,
@@ -88,6 +89,13 @@ export async function stageBatch({
       ),
     parseRows: async () => {
       const parsed = await parseWithConfig(filePath, customConfig);
+      if (customConfig.format === "kinesis_transaction_history") {
+        const context = await captureKinesisSourceContext(filePath, parsed);
+        await query(
+          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('kinesis_source_context',$2::jsonb) WHERE id=$1",
+          [batchId, JSON.stringify(context)],
+        );
+      }
       const rows = applyPortfolioAssetScope(
         parsed,
         customConfig.included_symbols,
@@ -101,6 +109,15 @@ export async function stageBatch({
         await query(
           "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('source_columns',$2::text[]) WHERE id=$1",
           [batchId, rows.sourceColumns],
+        );
+      const ibkrSourceContext =
+        /** @type {{ ibkrSourceContext?: import('../portfolioIbkrPrimaryProof.js').IbkrSourceContext }} */ (
+          rows
+        ).ibkrSourceContext;
+      if (ibkrSourceContext)
+        await query(
+          "UPDATE portfolio_import_batches SET custom_config=COALESCE(custom_config,'{}'::jsonb)||jsonb_build_object('ibkr_source_context',$2::jsonb) WHERE id=$1",
+          [batchId, JSON.stringify(ibkrSourceContext)],
         );
       return rows;
     },
@@ -149,6 +166,12 @@ export function applyPortfolioAssetScope(rows, symbols) {
     );
   result.skipped = rows.skipped;
   result.sourceColumns = rows.sourceColumns;
+  Object.assign(result, {
+    ibkrSourceContext:
+      /** @type {{ ibkrSourceContext?: import('../portfolioIbkrPrimaryProof.js').IbkrSourceContext }} */ (
+        rows
+      ).ibkrSourceContext,
+  });
   return result;
 }
 

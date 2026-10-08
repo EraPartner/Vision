@@ -39,13 +39,11 @@ it("starts with file selection and reveals mappings after choosing a CSV", async
             type: "text/csv",
         }),
     );
-    expect(await screen.findByLabelText(/Date column/)).toBeVisible();
-    await waitFor(() =>
-        expect(screen.getByLabelText(/Date column/)).toHaveAttribute(
-            "role",
-            "combobox",
-        ),
-    );
+    await waitFor(() => {
+        const dateColumn = screen.getByLabelText(/Date column/);
+        expect(dateColumn).toBeVisible();
+        expect(dateColumn).toHaveAttribute("role", "combobox");
+    });
     expect(
         screen.getByText("Additional columns").closest("details"),
     ).not.toHaveAttribute("open");

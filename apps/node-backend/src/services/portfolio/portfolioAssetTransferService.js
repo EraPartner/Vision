@@ -38,7 +38,10 @@ export function previewPortfolioAssetTransfer(row, batch) {
   const incoming = details.direction === "in";
   const ownAccount = Number(batch?.account_id ?? row.account_id);
   const source = incoming
-    ? Number(config.transfer_origin_account_id)
+    ? Number(
+        details.networkBinding?.originAccountId ??
+          config.transfer_origin_account_id,
+      )
     : ownAccount;
   const destination = incoming
     ? ownAccount

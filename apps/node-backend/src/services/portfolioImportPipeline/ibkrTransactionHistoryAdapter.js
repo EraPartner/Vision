@@ -7,10 +7,13 @@
  * for securities trades, not independent portfolio positions.
  */
 
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { logger } from "../../config/logger.ts";
 import {
+  decodeCsvBuffer,
   parseAmountField,
-  parseCsvFile,
+  parseCsvText,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.js";
@@ -57,14 +60,18 @@ function recordFrom(columns, values) {
 }
 
 function findBaseCurrency(sourceRecords) {
-  const row = sourceRecords.find(
+  const records = sourceRecords.filter(
     ({ values }) =>
       values[0] === "Summary" &&
       values[1] === "Data" &&
       String(values[2]).trim() === "Base Currency",
   );
+  if (records.length > 1) {
+    throw new Error("IBKR CSV has multiple Summary base currency records");
+  }
+  const row = records[0];
   const currency = cleanCell(row?.values[3]).toUpperCase();
-  return /^[A-Z]{3}$/.test(currency) ? currency : null;
+  return { currency: /^[A-Z]{3}$/.test(currency) ? currency : null, row };
 }
 
 function normalizeType(typeRaw, grossAmount) {
@@ -130,11 +137,12 @@ function parseTransaction(record, baseCurrency, rawData) {
 /**
  * @param {string} filePath
  * @param {{ encoding?: string }} [config]
- * @returns {Promise<import('./portfolioGenericAdapter.js').ParsedPortfolioRows>}
+ * @returns {Promise<import('./portfolioGenericAdapter.js').ParsedPortfolioRows & { ibkrSourceContext?: import('../portfolioIbkrPrimaryProof.js').IbkrSourceContext }>}
  */
 export async function parseIbkrTransactionHistory(filePath, config = {}) {
-  const parsedRecords = await parseCsvFile(
-    filePath,
+  const sourceBytes = await readFile(filePath);
+  const parsedRecords = await parseCsvText(
+    decodeCsvBuffer(sourceBytes, config.encoding || "utf-8"),
     {
       skip_empty_lines: true,
       relax_column_count: true,
@@ -142,23 +150,31 @@ export async function parseIbkrTransactionHistory(filePath, config = {}) {
       info: true,
       raw: true,
     },
-    config.encoding || "utf-8",
   );
   const sourceRecords = parsedRecords.map((record) => ({
     values: record,
     rawData: rawDataForCsvRecord(record),
   }));
 
-  const headerIndex = sourceRecords.findIndex(
+  const headers = sourceRecords.filter(
     ({ values }) => values[0] === SECTION && values[1] === "Header",
   );
-  if (headerIndex < 0) {
+  if (headers.length === 0) {
     throw new Error('IBKR CSV is missing the "Transaction History" header');
   }
+  if (headers.length > 1) {
+    throw new Error('IBKR CSV has multiple "Transaction History" headers');
+  }
+  const header = headers[0];
+  const headerIndex = sourceRecords.indexOf(header);
 
-  const columns = sourceRecords[headerIndex].values
-    .slice(2)
-    .map((column) => String(column).trim());
+  const columns = header.values.slice(2).map((column) => String(column).trim());
+  if (columns.some((column) => !column)) {
+    throw new Error("IBKR Transaction History has blank column names");
+  }
+  if (new Set(columns).size !== columns.length) {
+    throw new Error("IBKR Transaction History has duplicate column names");
+  }
   const missing = [...REQUIRED_COLUMNS].filter(
     (column) => !columns.includes(column),
   );
@@ -168,13 +184,14 @@ export async function parseIbkrTransactionHistory(filePath, config = {}) {
     );
   }
 
-  const baseCurrency = findBaseCurrency(sourceRecords);
+  const { currency: baseCurrency, row: baseCurrencyRecord } =
+    findBaseCurrency(sourceRecords);
   if (!baseCurrency) {
     throw new Error("IBKR CSV is missing a valid Summary base currency");
   }
 
   const rows =
-    /** @type {import('./portfolioGenericAdapter.js').ParsedPortfolioRows} */ ([]);
+    /** @type {import('./portfolioGenericAdapter.js').ParsedPortfolioRows & { ibkrSourceContext?: import('../portfolioIbkrPrimaryProof.js').IbkrSourceContext }} */ ([]);
   let skipped = 0;
   for (const { values, rawData } of sourceRecords.slice(headerIndex + 1)) {
     if (values[0] !== SECTION || values[1] !== "Data") continue;
@@ -190,6 +207,18 @@ export async function parseIbkrTransactionHistory(filePath, config = {}) {
     rows.push(parsed);
   }
   rows.skipped = skipped;
+  rows.sourceColumns = columns;
+  rows.ibkrSourceContext = {
+    version: 1,
+    source_file_hash: createHash("sha256").update(sourceBytes).digest("hex"),
+    source_columns: columns,
+    base_currency: baseCurrency,
+    header_record: header.rawData,
+    summary_base_currency_record: baseCurrencyRecord.rawData,
+    record_hashes: rows.map((row) =>
+      createHash("sha256").update(row.rawData, "utf8").digest("hex"),
+    ),
+  };
   logger.info(
     `IBKR Transaction History parsed: ${rows.length} rows, ${skipped} skipped`,
   );

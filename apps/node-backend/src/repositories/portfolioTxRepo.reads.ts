@@ -65,17 +65,17 @@ export async function getUnitEventsForInvestment(
              (SELECT er.rate_to_eur FROM exchange_rates er WHERE er.currency_code=portfolio_transactions.currency AND er.rate_date<=portfolio_transactions.date ORDER BY er.rate_date DESC LIMIT 1)) END AS "fxMultiplier", NULL::int AS source_account_id,
            NULL::int AS destination_account_id, 0 AS fee_units, NULL::bigint AS transfer_id, currency,
            source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
-           NULL::text[] AS eligible_source_record_hashes, NULL::bigint AS adjustment_id
+           NULL::text[] AS eligible_source_record_hashes, NULL::bigint AS adjustment_id, income_recognition_role
     FROM portfolio_transactions WHERE investment_id = $1
     UNION ALL
     SELECT id, 'asset_transfer', to_char(date,'YYYY-MM-DD'), units, NULL::int,
            0,0,0,NULL::numeric,source_account_id,destination_account_id,fee_units,id,NULL::text,
-           source_record_hash,NULL::text,NULL::text,NULL::text[],NULL::bigint
+           source_record_hash,NULL::text,NULL::text,NULL::text[],NULL::bigint,'standard'::text
     FROM portfolio_asset_transfers WHERE investment_id = $1
     UNION ALL
     SELECT id,'asset_adjustment',to_char(date,'YYYY-MM-DD'),units,account_id,
            0,0,0,NULL::numeric,NULL::int,NULL::int,0,NULL::bigint,NULL::text,
-           source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id
+           source_record_hash,adjustment_kind,basis_policy,eligible_source_record_hashes,id,'standard'::text
     FROM portfolio_asset_adjustments WHERE investment_id=$1
     ORDER BY date ASC, id ASC
   `;
@@ -140,6 +140,7 @@ export const mapPortfolioTxRow = (
     const value = mapped[field];
     if (value instanceof Date) mapped[field] = toYmd(value);
   }
+  mapped["income_recognition_role"] ??= "standard";
   // coerceNumericFields and the loop above convert the raw pg row in place.
   return mapped as PortfolioTransactionRow;
 };
@@ -418,7 +419,7 @@ export async function getRowsForPortfolioMath({
            pt.account_id, NULL::int AS source_account_id,
            NULL::int AS destination_account_id, 0 AS fee_units,
            pt.source_record_hash, NULL::text AS adjustment_kind, NULL::text AS basis_policy,
-           NULL::text[] AS eligible_source_record_hashes
+           NULL::text[] AS eligible_source_record_hashes, pt.income_recognition_role
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     ${where}
@@ -428,14 +429,14 @@ export async function getRowsForPortfolioMath({
             to_char(at.date,'YYYY-MM-DD') AS day, COALESCE(i.currency,'EUR') AS currency,
             NULL::numeric AS fx_rate_to_eur, NULL::int AS account_id,
             at.source_account_id, at.destination_account_id, at.fee_units,
-            at.source_record_hash,NULL::text,NULL::text,NULL::text[]
+            at.source_record_hash,NULL::text,NULL::text,NULL::text[],'standard'::text
        FROM portfolio_asset_transfers at JOIN investments i ON i.id=at.investment_id
        ${where.replace(/pt\.date/g, "at.date")}
     UNION ALL
     SELECT aa.id,aa.investment_id,'asset_adjustment',0,aa.units,0,0,
            to_char(aa.date,'YYYY-MM-DD'),to_char(aa.date,'YYYY-MM-DD'),COALESCE(i.currency,'EUR'),
            NULL::numeric,aa.account_id,NULL::int,NULL::int,0,aa.source_record_hash,
-           aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes
+           aa.adjustment_kind,aa.basis_policy,aa.eligible_source_record_hashes,'standard'::text
       FROM portfolio_asset_adjustments aa JOIN investments i ON i.id=aa.investment_id
       ${where.replace(/pt\.date/g, "aa.date")}
     ) events ${orderBy}`,
@@ -458,7 +459,7 @@ export async function getSummary(
   const result = await query<Record<string, unknown> & { count: string }>(
     `
     SELECT
-      type,
+      type, income_recognition_role,
       SUM(amount) as total_amount,
       SUM(units) as total_units,
       SUM(fees) as total_fees,
@@ -466,7 +467,7 @@ export async function getSummary(
       COUNT(*) as count
     FROM portfolio_transactions
     WHERE investment_id = $1
-    GROUP BY type
+    GROUP BY type, income_recognition_role
   `,
     [investmentId],
   );

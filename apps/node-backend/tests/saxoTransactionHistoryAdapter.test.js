@@ -20,6 +20,7 @@ describe("Saxo transaction history portfolio adapter", () => {
 
     expect(rows).toHaveLength(6);
     expect(rows.skipped).toBe(0);
+    expect(rows.sourceColumns).toContain("Bk\u00a0Record\u00a0Id");
     expect(rows.slice(0, 2).map((row) => row.typeRaw)).toEqual(["Buy", "Sell"]);
     expect(rows[0]).toMatchObject({
       symbolRaw: "EXM",

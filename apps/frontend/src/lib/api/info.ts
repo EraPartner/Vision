@@ -312,6 +312,8 @@ export interface PortfolioSummaryTotals {
     totalUnrealizedGain: number;
     totalGain: number;
     totalIncome: number;
+    /** Read-only subtotal; already represented by units, excluded from totalIncome/gain. */
+    totalInKindIncome?: number;
     totalFees: number;
     totalTaxes: number;
     /** Portion of totalGainLoss from native asset performance (at today's rates). */
@@ -359,6 +361,7 @@ export interface PortfolioSummaryItem {
     totalTaxes: number;
     totalDividends: number;
     totalIncome: number;
+    totalInKindIncome?: number;
     avgCostBasis: number;
     realizedGain: number;
     unrealizedGain: number;
@@ -400,6 +403,8 @@ export interface PortfolioSummaryResponse {
     totals: PortfolioSummaryTotals;
     summaries: PortfolioSummaryItem[];
     byAccount: PortfolioSummaryByAccountItem[];
+    /** Dated, target-currency income subtotal only; archived ordinary gains stay local. */
+    archivedInKindIncome?: Array<{ id: number; totalInKindIncome: number }>;
 }
 
 export function getPortfolioSummary(params?: {

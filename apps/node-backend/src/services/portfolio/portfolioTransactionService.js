@@ -22,6 +22,8 @@ import {
  * @param {import('./portfolioTransactionRules.js').PortfolioTransactionInput} input
  */
 async function createUnlocked(input) {
+  if (Object.prototype.hasOwnProperty.call(input, "income_recognition_role"))
+    throw makeValidationError("income_recognition_role is read-only");
   let assetClass = input.preloaded_asset_class;
   if (!assetClass) {
     assetClass = await getAssetClassByInvestmentId(input.investment_id);
@@ -57,6 +59,8 @@ async function createUnlocked(input) {
 
 /** @param {number} id @param {Record<string, any>} fields */
 async function updateUnlocked(id, fields) {
+  if (Object.prototype.hasOwnProperty.call(fields, "income_recognition_role"))
+    throw makeValidationError("income_recognition_role is read-only");
   const existing = await getById(id);
   if (!existing) return null;
   if (

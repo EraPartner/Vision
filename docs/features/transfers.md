@@ -2,8 +2,8 @@
 title: Feature - Internal Transfers
 type: feature
 status: active
-date: 2026-10-06
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags: [feature, transfers, internal-transfer, cash-flow, reconciliation, detection, statistics, aggregations, adr-083, migration-0044, migration-0045, mark-transfer-validation, release-orphans-manual]
 description: "Automatic detection of transfers between a user's own accounts via a windowed cross-batch reconciliation pass, persisted as a transfer_peer_id pairing, and excluded from cash-flow aggregates by default with a global includeTransfers toggle. 2026-06-25: markTransfer() now validates both rows exist, are active, are on different accounts, and have opposite signs; releaseOrphans() now covers MANUAL transfers."
 aliases: [internal transfers, transfer detection, transfer exclusion]
@@ -28,10 +28,24 @@ Three columns on `transactions` (migration [[alembic/versions/0044_add_transfer_
 | ------------------ | ------------------------------------- | --------------------------------------------------------------- |
 | `is_transfer`      | BOOLEAN, default false                | Excluded from cash-flow aggregates when true                    |
 | `transfer_peer_id` | INTEGER, self-FK `ON DELETE SET NULL` | The matched leg                                                 |
-| `transfer_source`  | TEXT `auto` \| `manual`               | `manual` marks are sticky (never overwritten by auto-detection) |
+| `transfer_source`  | TEXT `auto` \| `manual` \| `opening` \| `adjustment` \| `brokerage` | Pair, system-anchor or source-owned brokerage origin |
 
 Storing the peer link (not just a flag) makes matches explicit, reversible, and re-evaluable when a
 leg is edited or deleted.
+
+## Proved source-owned brokerage cash
+
+Migration 0125 adds `transfer_source='brokerage'` for the bounded complete Kinesis cash-only import.
+Trade cash and confirmed own-account funding have `is_transfer=true`; card spending and separately
+quoted funding-withdrawal fees have `is_transfer=false`. All components retain a null peer and real
+signed amount. Source ownership prevents automatic candidate matching and auto/manual orphan
+cleanup from changing their classification. No opposite bank transaction or system balance anchor
+is generated. A separate fee component preserves spending while the net funding movement stays
+excluded from ordinary income/expenses; card gross spending includes its fee once.
+
+Complete immutable source and component after-images are required for repeat/rollback, and changing
+an owned image blocks restoration. See [[docs/adr/189-proved-brokerage-cash-history|ADR-189]],
+[[docs/features/portfolio-import]] and [[docs/api/portfolio-imports]].
 
 ## Detection — windowed, cross-batch
 
@@ -109,9 +123,9 @@ The **Transfer** kind of the Add Transaction sheet ([[docs/components/form-dialo
 MANUAL transfer (where the peer was deleted or deactivated) remained permanently excluded from
 income/spending — a silent aggregate error.
 
-The fix: `releaseOrphans()` now clears all rows where `is_transfer = true AND transfer_peer_id
-IS NULL`, regardless of `transfer_source`. A peerless transfer is invalid regardless of how it
-was marked. The clearing runs on every reconcile pass (after each import commit and after manual
+The fix clears peerless `auto` and `manual` transfers when `is_transfer = true AND transfer_peer_id
+IS NULL`. System origins and source-owned `brokerage` origins are outside this cleanup; a proved
+one-sided broker movement does not require an invented bank peer. The clearing runs on every reconcile pass (after each import commit and after manual
 transaction mutations).
 
 > [!info] Existing peerless manual transfers

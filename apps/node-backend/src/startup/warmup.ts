@@ -95,10 +95,15 @@ export async function pruneOldImportBatches() {
       const preserveReconciliation =
         table === "portfolio_import_batches"
           ? `AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal journal WHERE journal.batch_id = ${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_income_recognition_journal income
+               JOIN portfolio_import_staging_rows unit_source ON unit_source.id=income.unit_staging_row_id
+               WHERE income.batch_id=${table}.id OR unit_source.batch_id=${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_duplicate_repair_journal repair WHERE repair.batch_id = ${table}.id OR repair.original_import_batch_id = ${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_transfers transfer WHERE transfer.import_batch_id = ${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustments adjustment WHERE adjustment.import_batch_id = ${table}.id)
              AND NOT EXISTS (SELECT 1 FROM portfolio_asset_adjustment_sources evidence JOIN portfolio_import_staging_rows source ON source.id=evidence.staging_row_id WHERE source.batch_id=${table}.id)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows cash_source WHERE cash_source.batch_id=${table}.id AND portfolio_cash_receipt(cash_source.raw_data) IS NOT NULL)
+             AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows native_source WHERE native_source.batch_id=${table}.id AND (native_source.asset_transfer_details ? 'networkBinding' OR native_source.asset_transfer_details ? 'nativeGiftGroupReceipt' OR native_source.asset_adjustment_details ? 'networkReceipt'))
              AND NOT EXISTS (SELECT 1 FROM portfolio_import_staging_rows annotation WHERE annotation.batch_id = ${table}.id AND annotation.route = 'account_internal')`
           : "";
       const result = await query(

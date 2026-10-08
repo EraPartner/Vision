@@ -13,6 +13,7 @@
  * legitimate identical fills land while re-importing the statement is a no-op.
  */
 
+import { ConflictError } from "../../middleware/errorHandler.ts";
 import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import portfolioTransactionService from "../portfolio/portfolioTransactionService.js";
@@ -54,6 +55,21 @@ import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjus
  *   }} MatchedPortfolioStagingRow
  */
 
+import { readReconciliationSources } from "../../repositories/portfolioImportReconciliationRepository.ts";
+import {
+  readKinesisCashContext,
+  lockKinesisCashLedger,
+} from "../../repositories/portfolioImportCashRepository.js";
+import {
+  classifyKinesisCash,
+  proveKinesisCashSources,
+  cashImageEqual,
+} from "../portfolioKinesisCashScope.js";
+import {
+  getStoredRateToEurOnOrBefore,
+  getUnindexedRatesToEurForDates,
+} from "../currency/rateFetcher.js";
+
 const COMMIT_CHUNK = 1000;
 
 // Staging stores cash magnitudes ABSOLUTE (adapter contract); the ledger sign
@@ -91,18 +107,13 @@ const CASH_CATEGORY_KINDS = ["dividend", "interest", "fee", "tax"];
  * @returns {Promise<{ imported: number, duplicates: number, errors: number }>}
  */
 export async function commitBatch({ batchId, onProgress, rowIds }) {
-  await query(
-    `UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1`,
-    [batchId],
-  );
-
   // Batch-level brokerage account (ADR-095): every lot from this batch lands on it,
   // giving imported holdings a real per-account position (ADR-091). NULL = unassigned.
   // In brokerage mode the batch ALSO routes external cash rows into the ledger.
   // The account's institution/name ride along as the broker label for the cash
   // rows' recipient (see cashRecipientId below).
   const { rows: batchRows } = await query(
-    `SELECT b.account_id, b.is_brokerage, b.id, b.custom_config,
+    `SELECT b.account_id, b.is_brokerage, b.id, b.rows_total, b.custom_config,
             a.institution AS account_institution,
             a.name AS account_name
        FROM portfolio_import_batches b
@@ -132,6 +143,7 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
             isr.fx_rate_to_eur,
             isr.note,
             isr.source_record_hash,
+            isr.source_transaction_id,
             isr.dedup_fingerprint,
             isr.dedup_fingerprint_version,
             isr.dedup_occurrence,
@@ -156,6 +168,104 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
       (selectedRowIds === undefined || selectedRowIds.has(Number(row.id))),
   );
 
+  if (
+    batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
+    batchRows[0]?.custom_config?.yield_basis_policy === "zero" &&
+    matched.some((row) => row.type === "dividend")
+  )
+    throw new ConflictError(
+      "Paired Kinesis income requires its proved acquisition scope",
+      {
+        details: { reason: "paired_income_review_required" },
+      },
+    );
+  const kinesisCash = new Map();
+  let cashReproof;
+  let cashReproved = false;
+  if (
+    batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
+    matched.some((row) => row.route === "cash")
+  ) {
+    const source = await readReconciliationSources([Number(batchId)]);
+    const batch = batchRows[0];
+    const cashContext = await readKinesisCashContext();
+    if (
+      matched.some(
+        (row) =>
+          row.route === "cash" &&
+          !cashContext.ledger.some(
+            (current) =>
+              current.dedup_fingerprint === row.dedup_fingerprint &&
+              current.dedup_fingerprint_version ===
+                row.dedup_fingerprint_version,
+          ),
+      )
+    )
+      throw new ConflictError(
+        "New Kinesis cash requires confirmed cash-only reconciliation",
+        { details: { reason: "cash_reconciliation_required" } },
+      );
+    const proof = proveKinesisCashSources(
+      source,
+      [batch],
+      "own_account_transfer",
+    );
+    const pairs = new Map();
+    for (const member of proof.groups.flatMap((group) => group.members))
+      if (member.values.currency !== "EUR")
+        pairs.set(`${member.values.currency}:${member.values.date}`, {
+          currency: member.values.currency,
+          date: member.values.date,
+        });
+    const missing = new Map(),
+      rates = [];
+    for (const pair of pairs.values()) {
+      const rate = await getStoredRateToEurOnOrBefore(pair.currency, pair.date);
+      if (rate != null && Number.isFinite(rate) && rate > 0) continue;
+      if (!missing.has(pair.currency)) missing.set(pair.currency, []);
+      missing.get(pair.currency).push(pair.date);
+    }
+    await getUnindexedRatesToEurForDates(missing);
+    for (const pair of pairs.values())
+      rates.push({
+        ...pair,
+        rate: await getStoredRateToEurOnOrBefore(pair.currency, pair.date),
+      });
+    const cashPlan = classifyKinesisCash({
+      rows: source,
+      batches: [batch],
+      context: cashContext,
+      fundingPolicy: "own_account_transfer",
+      historicalFxContext: rates,
+    });
+    if (
+      cashPlan.blockers.length ||
+      cashPlan.records.length ||
+      cashPlan.selected.length !==
+        proof.groups.flatMap((group) => group.members).length
+    )
+      throw new ConflictError(
+        "Kinesis cash requires complete source and usable dated rates",
+        { details: { reason: "cash_reconciliation_required" } },
+      );
+    if (
+      selectedRowIds &&
+      cashPlan.records.some(
+        (record) => !selectedRowIds.has(Number(record.row.id)),
+      )
+    )
+      throw new ConflictError(
+        "A closed cash chain cannot be partially drained",
+        { details: { reason: "cash_reconciliation_required" } },
+      );
+    cashReproof = { source, batch, rates, actions: cashPlan.selected };
+    for (const action of cashPlan.selected)
+      kinesisCash.set(action.rowId, action);
+  }
+  await query(
+    "UPDATE portfolio_import_batches SET status = 'committing' WHERE id = $1",
+    [batchId],
+  );
   const total = matched.length;
   let imported = 0;
   let duplicates = 0;
@@ -185,7 +295,12 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
   // incorrectly drops the first still-matched repeated fill.
   for (const row of relevantRows) {
     if (row.status === "matched") continue;
-    if (["asset_transfer", "asset_adjustment"].includes(row.route)) continue;
+    if (
+      ["asset_transfer", "asset_adjustment", "account_internal"].includes(
+        row.route,
+      )
+    )
+      continue;
     if (isBrokerage && row.route === "cash") {
       const identity = cashIdentityKey(row);
       cashSeenByIdentity.set(
@@ -300,11 +415,14 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
     let chunkImported = 0;
     let chunkDuplicates = 0;
     let chunkErrors = 0;
+
     await withTransaction(async (client) => {
       // Reset inside the callback so a withTransaction retry recounts cleanly.
       chunkImported = 0;
       chunkDuplicates = 0;
       chunkErrors = 0;
+
+      cashReproved = false;
       for (let j = 0; j < chunk.length; j++) {
         const row = chunk[j];
 
@@ -354,6 +472,33 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
         // ── Brokerage cash row (ADR-095): an external deposit/withdrawal, or a
         // D6 instrument-less dividend/interest/fee/tax row → one signed plain
         // cash transaction on the sleeve (NOT a trade, no leg). ──
+        if (
+          isBrokerage &&
+          row.route === "cash" &&
+          kinesisCash.has(Number(row.id))
+        ) {
+          await lockKinesisCashLedger();
+          if (!cashReproved) {
+            const checked = classifyKinesisCash({
+              rows: cashReproof.source,
+              batches: [cashReproof.batch],
+              context: await readKinesisCashContext(),
+              fundingPolicy: "own_account_transfer",
+              historicalFxContext: cashReproof.rates,
+            });
+            if (
+              checked.blockers.length ||
+              !cashImageEqual(checked.selected, cashReproof.actions)
+            )
+              throw new ConflictError("Cash ledger changed during commit", {
+                details: { reason: "cash_receipt_changed" },
+              });
+            cashReproved = true;
+          }
+          await markRow(row.id, "duplicate");
+          chunkDuplicates++;
+          continue;
+        }
         if (isBrokerage && row.route === "cash") {
           if (!batchAccountId) {
             chunkErrors++;
@@ -531,7 +676,19 @@ export async function commitBatch({ batchId, onProgress, rowIds }) {
           const currency = row.currency || row.investment_currency || "EUR";
           let fxRate =
             row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
-          if (fxRate === undefined)
+          const primaryZeroYield =
+            batchRows[0].custom_config?.format ===
+              "kinesis_transaction_history" &&
+            batchRows[0].custom_config?.yield_basis_policy === "zero" &&
+            row.type === "gift" &&
+            row.source_transaction_id?.endsWith(":units") &&
+            [
+              canonical.amount,
+              canonical.price_per_unit,
+              row.fees,
+              row.taxes,
+            ].every((value) => Number(value ?? 0) === 0);
+          if (fxRate === undefined && !primaryZeroYield)
             fxRate = await resolveFx(currency, row.tx_date);
 
           const created = await portfolioTransactionService.create(

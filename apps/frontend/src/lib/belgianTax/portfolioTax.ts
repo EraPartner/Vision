@@ -16,6 +16,7 @@
  */
 import Decimal from "decimal.js";
 import type { BelgianTaxYearTable } from "./constants";
+import type { PortfolioIncomeRecognitionRole } from "@vision/types/portfolioTxnTypes";
 
 export type PortfolioTaxTxn = {
     type: string;
@@ -25,6 +26,7 @@ export type PortfolioTaxTxn = {
     fees?: number;
     currency?: string;
     dividend_amount_convention?: "gross" | "net" | "unknown";
+    income_recognition_role?: PortfolioIncomeRecognitionRole;
 };
 
 export type PortfolioTaxInvestment = {
@@ -307,7 +309,11 @@ export function computeDividendWht(
     let unknownDividendConventionCount = 0;
     for (const inv of investments) {
         for (const txn of inv.transactions) {
-            if (yearOf(txn.date) !== txYear || txn.type !== "dividend")
+            if (
+                yearOf(txn.date) !== txYear ||
+                txn.type !== "dividend" ||
+                txn.income_recognition_role === "included_in_units"
+            )
                 continue;
             const amount = convert(Number(txn.amount) || 0, txn.currency);
             const taxes = convert(Number(txn.taxes) || 0, txn.currency);

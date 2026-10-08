@@ -332,6 +332,18 @@ export default function PortfolioTaxPage() {
                             />
                         )}
                     </div>
+                    {summaries.some((investment) =>
+                        investment.transactions.some(
+                            (transaction) =>
+                                transaction.income_recognition_role ===
+                                    "included_in_units" &&
+                                transaction.date?.startsWith(`${txYear}-`),
+                        ),
+                    ) && (
+                        <p className="text-sm text-muted-foreground">
+                            {t("tax.inKindIncomeUnclassified")}
+                        </p>
+                    )}
                     {isVisible("belgianRules") && (
                         <BelgianPortfolioRulesCard
                             totalDividendIncome={totalDividendIncome}

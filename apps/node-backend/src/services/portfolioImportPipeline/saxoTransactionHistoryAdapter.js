@@ -10,6 +10,7 @@ import { ValidationError } from "../../middleware/errorHandler.ts";
 import {
   parseAmountField,
   parseCsvFile,
+  parseCsvText,
   parseDateWithFormat,
   rawDataForCsvRecord,
 } from "../importPipeline/adapters/_shared.js";
@@ -531,6 +532,210 @@ function parseWorkbookRecord(record, bookings, trades) {
   return base;
 }
 
+/** Reparse one retained, typed XLSX transaction without trusting staged economics. */
+export function getSaxoWorkbookReconciliationEvidence(rawData) {
+  try {
+    if (typeof rawData !== "string" || rawData.length > 2 * 1024 * 1024)
+      return undefined;
+    const envelope = JSON.parse(rawData);
+    if (
+      envelope.format !== "saxo_xlsx_v1" ||
+      !/^[a-f0-9]{64}$/.test(envelope.sourceFileHash) ||
+      !Array.isArray(envelope.records) ||
+      envelope.records.length < 2 ||
+      envelope.records.length > 1000
+    )
+      return undefined;
+    const groups = { Transacties: [], _Transacties: [], Bookings: [] };
+    const columns = {
+      Transacties: REQUIRED_COLUMNS,
+      _Transacties: TRADE_COLUMNS,
+      Bookings: BOOKING_COLUMNS,
+    };
+    const locations = new Set();
+    for (const retained of envelope.records) {
+      if (
+        !Object.hasOwn(groups, retained.sheet) ||
+        !Number.isSafeInteger(retained.row) ||
+        retained.row < 2 ||
+        !Array.isArray(retained.headers) ||
+        retained.headers.length > 512 ||
+        !retained.headers.every((header) => typeof header === "string") ||
+        !Array.isArray(retained.cells) ||
+        retained.cells.length > retained.headers.length
+      )
+        return undefined;
+      const location = JSON.stringify([retained.sheet, retained.row]);
+      if (locations.has(location)) return undefined;
+      locations.add(location);
+      const cells = retained.cells.map((cell) => {
+        if (
+          cell == null ||
+          typeof cell === "string" ||
+          typeof cell === "boolean"
+        )
+          return cell;
+        if (
+          cell.type === "number" &&
+          typeof cell.raw === "string" &&
+          /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(cell.raw) &&
+          Number.isFinite(Number(cell.raw))
+        )
+          return cell;
+        if (cell.type === "date" && typeof cell.value === "string") {
+          const value = new Date(cell.value);
+          if (value.toISOString() === cell.value) return value;
+        }
+        throw new ValidationError("Invalid retained Saxo cell");
+      });
+      const [record] = workbookRecords(
+        {
+          sheet: retained.sheet,
+          sourceFileHash: envelope.sourceFileHash,
+          data: [retained.headers, cells],
+        },
+        columns[retained.sheet],
+      );
+      if (!record) return undefined;
+      RECORD_METADATA.get(record).row = retained.row;
+      groups[retained.sheet].push(record);
+    }
+    if (groups.Transacties.length !== 1) return undefined;
+    const record = groups.Transacties[0];
+    const identity = joinKey(record);
+    const bookingIds = new Set();
+    for (const detail of [...groups._Transacties, ...groups.Bookings])
+      if (joinKey(detail) !== identity) return undefined;
+    for (const booking of groups.Bookings) {
+      const id = cleanCell(booking["Booking Id"]);
+      if (!id || /^0+$/.test(id) || bookingIds.has(id)) return undefined;
+      bookingIds.add(id);
+    }
+    const parsed = parseWorkbookRecord(
+      record,
+      groups.Bookings,
+      groups._Transacties,
+    );
+    if (
+      !["Buy", "Sell", "Dividend", "Deposit", "Withdrawal"].includes(
+        parsed.typeRaw,
+      )
+    )
+      return undefined;
+    return {
+      ...parsed,
+      instrumentIsin: cleanCell(record["Instrument ISIN"]),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Bind one literal CSV event to the detailed workbook's primary event. */
+export function getSaxoCsvCompanionEvidence(
+  rawData,
+  sourceColumns,
+  workbookRawData,
+) {
+  try {
+    if (
+      typeof rawData !== "string" ||
+      rawData.length > 1024 * 1024 ||
+      !Array.isArray(sourceColumns) ||
+      sourceColumns.length > 512 ||
+      !sourceColumns.every((column) => typeof column === "string")
+    )
+      return undefined;
+    const headers = sourceColumns.map(normalizeHeader);
+    if (
+      new Set(headers).size !== headers.length ||
+      REQUIRED_COLUMNS.some((column) => !headers.includes(column))
+    )
+      return undefined;
+    const tuples = parseCsvText(rawData, {
+      columns: false,
+      skip_empty_lines: false,
+      relax_column_count: false,
+    });
+    if (
+      tuples.length !== 1 ||
+      tuples[0].length !== headers.length ||
+      rawDataForCsvRecord(tuples[0]) !== rawData
+    )
+      return undefined;
+    const csv = Object.fromEntries(
+      headers.map((header, index) => [header, tuples[0][index]]),
+    );
+    if (
+      !cleanCell(csv["Rekening-ID"]) ||
+      /^0+$/.test(cleanCell(csv["Rekening-ID"])) ||
+      !cleanCell(csv["Bk Record Id"]) ||
+      /^0+$/.test(cleanCell(csv["Bk Record Id"]))
+    )
+      return undefined;
+    const workbook = getSaxoWorkbookReconciliationEvidence(workbookRawData);
+    if (!workbook) return undefined;
+    const main = JSON.parse(workbookRawData).records.find(
+      (record) => record.sheet === "Transacties",
+    );
+    const workbookHeaders = main.headers.map(normalizeHeader);
+    const record = Object.fromEntries(
+      workbookHeaders.map((header, index) => {
+        const cell = main.cells[index];
+        return [header, cell?.type === "date" ? new Date(cell.value) : cell];
+      }),
+    );
+    const monetary = new Set([
+      "Boekingsbedrag",
+      "Omrekeningskoers",
+      "Conversion cost",
+      "Totale kosten",
+      "Gerealiseerde W/V",
+    ]);
+    const dates = new Set(["Transactiedatum", "Valutadatum"]);
+    const ownerColumns = new Set(["Gebruikersnaam", "IBAN owner name"]);
+    if (
+      workbookHeaders.some(
+        (header) => !ownerColumns.has(header) && !headers.includes(header),
+      )
+    )
+      return undefined;
+    for (const header of headers) {
+      if (ownerColumns.has(header)) continue;
+      if (!workbookHeaders.includes(header)) return undefined;
+      const left = csv[header];
+      const right = record[header];
+      if (dates.has(header)) {
+        if (!cleanCell(left) && !cleanCell(right)) continue;
+        const parsed = (value) =>
+          value instanceof Date
+            ? value
+            : parseDateWithFormat(
+                cleanCell(value).replaceAll("/", "-"),
+                "%Y-%m-%d",
+              );
+        if (
+          parsed(left)?.toISOString().slice(0, 10) !==
+          parsed(right)?.toISOString().slice(0, 10)
+        )
+          return undefined;
+      } else if (monetary.has(header)) {
+        if (!cleanCell(left) && !cleanCell(right)) continue;
+        assertEqualNumber(
+          number(left),
+          number(right),
+          "Saxo companion source amount differs",
+        );
+      } else if (typeof right === "boolean") {
+        if (cleanCell(left).toLowerCase() !== String(right)) return undefined;
+      } else if (cleanCell(left) !== cleanCell(right)) return undefined;
+    }
+    return { csv: parseRecord(csv), workbook };
+  } catch {
+    return undefined;
+  }
+}
+
 /** @param {string|URL} filePath */
 async function parseWorkbook(filePath) {
   const sheets = await readPortfolioWorkbook(filePath);
@@ -601,10 +806,14 @@ async function parseWorkbook(filePath) {
 export async function parseSaxoTransactionHistory(filePath, config = {}) {
   if ((await detectPortfolioFileFormat(filePath)) === "xlsx")
     return parseWorkbook(filePath);
+  let sourceColumns;
   const records = await parseCsvFile(
     filePath,
     {
-      columns: (headers) => headers.map(normalizeHeader),
+      columns: (headers) => {
+        sourceColumns = [...headers];
+        return headers.map(normalizeHeader);
+      },
       skip_empty_lines: true,
       relax_column_count: true,
     },
@@ -634,6 +843,7 @@ export async function parseSaxoTransactionHistory(filePath, config = {}) {
     rows.push(parsed);
   }
   rows.skipped = skipped;
+  rows.sourceColumns = sourceColumns;
   logger.info(
     `Saxo transaction history parsed: ${rows.length} rows, ${skipped} source rows skipped`,
   );

@@ -1,3 +1,5 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
@@ -13,6 +15,17 @@ const fixture = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "fixtures/portfolio/ibkr-transaction-history.csv",
 );
+
+async function parseModifiedFixture(transform) {
+  const directory = await mkdtemp(path.join(tmpdir(), "vision-ibkr-adapter-"));
+  const statement = path.join(directory, "statement.csv");
+  try {
+    await writeFile(statement, transform(await readFile(fixture, "utf8")));
+    return await parseIbkrTransactionHistory(statement);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
 
 describe("IBKR Transaction History portfolio adapter", () => {
   it("parses the real multi-section schema with base-currency trade conversion", async () => {
@@ -70,6 +83,66 @@ describe("IBKR Transaction History portfolio adapter", () => {
         new URL("fixtures/portfolio/not-ibkr.csv", import.meta.url),
       ),
     ).rejects.toThrow();
+  });
+
+  it("rejects repeated Transaction History headers before parsing records", async () => {
+    await expect(
+      parseModifiedFixture((csv) =>
+        csv.replace(/^(Transaction History,Header,.*)$/m, "$1\n$1"),
+      ),
+    ).rejects.toThrow('multiple "Transaction History" headers');
+  });
+
+  it.each([
+    ["blank", "   ", "blank column names"],
+    ["duplicate after trimming", " Price ", "duplicate column names"],
+  ])("rejects %s transaction column names", async (_label, column, error) => {
+    await expect(
+      parseModifiedFixture((csv) =>
+        csv.replace(/^(Transaction History,Header,.*)$/m, `$1,${column}`),
+      ),
+    ).rejects.toThrow(error);
+  });
+
+  it.each(["EUR", "USD"])(
+    "rejects a second Summary base currency record containing %s",
+    async (currency) => {
+      await expect(
+        parseModifiedFixture((csv) =>
+          csv.replace(
+            "Summary,Data,Base Currency,EUR",
+            `Summary,Data,Base Currency,EUR\nSummary,Data,Base Currency,${currency}`,
+          ),
+        ),
+      ).rejects.toThrow("multiple Summary base currency records");
+    },
+  );
+
+  it("preserves valid reordered headers and their literal source context", async () => {
+    const rows = await parseModifiedFixture((csv) =>
+      csv
+        .replace(
+          "Transaction History,Header,Date,Account,",
+          "Transaction History,Header,Account,Date,",
+        )
+        .replace(/^(Transaction History,Data),([^,]*),([^,]*)/gm, "$1,$3,$2"),
+    );
+
+    expect(rows).toHaveLength(9);
+    expect(rows[0]).toMatchObject({
+      date: new Date("2026-01-02T00:00:00.000Z"),
+      sourceAccountIdentity: "U0000000",
+      units: 2,
+      pricePerUnit: 10,
+      currency: "USD",
+    });
+    expect(rows.sourceColumns.slice(0, 2)).toEqual(["Account", "Date"]);
+    expect(rows.ibkrSourceContext.header_record).toContain(
+      "Transaction History,Header,Account,Date,",
+    );
+    expect(rows[0].rawData).toContain(
+      "Transaction History,Data,U0000000,2026-01-02,",
+    );
   });
 
   it("is selected through the portfolio parser format contract", async () => {

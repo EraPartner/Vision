@@ -220,6 +220,7 @@ entity "portfolio_transactions" as portfolio_transactions {
   recurrence_end_date : date
   * created_at : timestamptz
   * updated_at : timestamptz
+  * income_recognition_role : text = standard (included_in_units only dividend)
 }
 
 entity "portfolio_exposure_classifications" as portfolio_exposure_classifications {
@@ -796,6 +797,24 @@ entity "portfolio_import_reconciliation_journal" as portfolio_import_reconciliat
   * created_at : timestamptz
 }
 
+entity "portfolio_import_income_recognition_journal" as portfolio_import_income_recognition_journal {
+  * id : bigserial <<PK>>
+  * batch_id : bigint <<FK RESTRICT>>
+  * staging_row_id : bigint <<FK RESTRICT>>
+  * unit_staging_row_id : bigint <<FK RESTRICT>>
+  * income_transaction_id : integer (retained)
+  * unit_transaction_id : integer (retained)
+  * action : text (record / restore)
+  previous_entry_id : bigint <<FK UQ>>
+  * income_data / unit_data / proof_data : jsonb
+  * created_at : timestamptz
+}
+note bottom of portfolio_import_income_recognition_journal
+  0124 / ADR-188: immutable literal income + existing zero-unit-basis pair.
+  Active after-images guard changes; restore income before changing acquisition.
+  Standard absent from normalized snapshots; old receipts are not rewritten.
+end note
+
 entity "portfolio_import_duplicate_repair_journal" as portfolio_import_duplicate_repair_journal {
   * id : bigserial <<PK>>
   * batch_id : bigint <<FK RESTRICT>>
@@ -979,7 +998,7 @@ end note
 
 note bottom of provider_health
   Rolling-window admin observability hub (ADR-034).
-  See providerHealthRepository.js for query patterns.
+  See providerHealthRepository.ts for query patterns.
 end note
 
 note bottom of tags
@@ -1032,6 +1051,10 @@ import_staging_rows }o--|| import_batches
 import_staging_rows }o--o| recipients : resolved_recipient_id
 import_staging_rows }o--o| recipients : user_override_recipient_id
 portfolio_import_staging_rows }o--|| portfolio_import_batches
+portfolio_import_income_recognition_journal }o--|| portfolio_import_batches : batch_id RESTRICT
+portfolio_import_income_recognition_journal }o--|| portfolio_import_staging_rows : income / units rows RESTRICT
+portfolio_import_income_recognition_journal |o--o| portfolio_import_income_recognition_journal : previous_entry_id
+portfolio_import_income_recognition_journal ..> portfolio_transactions : guarded numeric pair IDs; no FKs
 portfolio_import_reconciliation_journal }o--|| portfolio_import_batches : batch_id RESTRICT
 portfolio_import_reconciliation_journal }o--|| portfolio_import_staging_rows : staging_row_id RESTRICT
 portfolio_import_reconciliation_journal |o--o| portfolio_import_reconciliation_journal : previous_entry_id
@@ -1053,5 +1076,12 @@ portfolio_import_staging_rows }o--o| investments : user_override_investment_id
 cashflow_forecast_accuracy }o--|| cashflow_forecast_mc
 agg_recipient_totals }o--|| recipients
 agg_split_outstanding }o--|| recipients
+
+note right of transactions
+  ADR-189 / 0125: source-owned brokerage cash origin.
+  Trade/funding transfer; card/quoted withdrawal fee expense.
+  Null peer; typed immutable one/two-component source receipt.
+  No inferred opposite bank leg or holdings change.
+end note
 
 @enduml

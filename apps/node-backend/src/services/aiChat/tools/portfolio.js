@@ -228,7 +228,7 @@ export const getReturnsForRange = {
 export const getDividendIncome = {
   name: "getDividendIncome",
   description:
-    'Dividend income received in a date range, grouped by investment. Use for "how much did I earn in dividends".',
+    'Ordinary dividend income received in a date range, grouped by investment. Paired in-kind income is excluded and does not imply a tax classification. Use for "how much did I earn in dividends".',
   parameters: {
     type: "object",
     properties: {

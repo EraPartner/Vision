@@ -83,6 +83,77 @@ const TRANSACTION: PortfolioTransaction = {
 };
 
 describe("EditPortfolioTxnDialog", () => {
+    it("labels a native USD transaction in USD for a EUR investment and preserves its currency on save", async () => {
+        const user = userEvent.setup();
+        let patched: Record<string, unknown> | undefined;
+        server.use(
+            http.patch(
+                `${API_BASE}/api/investments/transactions/101`,
+                async ({ request }) => {
+                    patched = (await request.json()) as Record<string, unknown>;
+                    return ok({ ...PORTFOLIO_TXN_STUB, currency: "USD" });
+                },
+            ),
+        );
+        renderWithApp(
+            <EditPortfolioTxnDialog
+                investment={INVESTMENT}
+                transaction={{ ...TRANSACTION, currency: "USD" }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
+        expect(screen.getByLabelText(/total amount.*USD/i)).toHaveValue("900");
+        expect(
+            screen.queryByLabelText(/total amount.*EUR/i),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /save/i }));
+        await waitFor(() =>
+            expect(patched).toMatchObject({
+                amount: 900,
+                units: 10,
+                price_per_unit: 90,
+            }),
+        );
+        expect(patched).not.toHaveProperty("currency");
+    });
+
+    it("discloses the read-only income accounting role without offering a role or ordinary dividend convention input", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <EditPortfolioTxnDialog
+                investment={INVESTMENT}
+                transaction={{
+                    ...TRANSACTION,
+                    type: "dividend",
+                    units: undefined,
+                    price_per_unit: undefined,
+                    amount: 7,
+                    income_recognition_role: "included_in_units",
+                }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /^edit$/i }),
+        );
+        expect(
+            await screen.findByText(/Income included in acquired units/),
+        ).toBeVisible();
+        expect(
+            screen.getByText(
+                /It is not added again to gains. Tax treatment is not inferred/,
+            ),
+        ).toBeVisible();
+        expect(
+            screen.queryByLabelText(/income accounting role/i),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByLabelText(/dividend amount convention/i),
+        ).not.toBeInTheDocument();
+        expect(screen.getByLabelText(/total amount/i)).toHaveValue("7");
+    });
+
     afterEach(() => {
         vi.restoreAllMocks();
     });

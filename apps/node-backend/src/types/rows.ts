@@ -98,7 +98,8 @@ export type TransactionRow = {
   dedup_fingerprint_version?: number | null;
   is_transfer?: boolean;
   transfer_peer_id?: number | null;
-  transfer_source?: "auto" | "manual" | null;
+  transfer_source?:
+    "auto" | "manual" | "opening" | "adjustment" | "brokerage" | null;
   created_at?: Date | null;
   updated_at?: Date | null;
 };
@@ -586,6 +587,8 @@ export type InvestmentRow = {
  * columns are coerced to numbers and both DATE columns to 'YYYY-MM-DD' strings.
  */
 export type PortfolioTransactionRow = {
+  /** Read-only accounting role. */
+  income_recognition_role?: "standard" | "included_in_units";
   id: number;
   investment_id: number;
   /** `portfolio_txn_type` enum — see `@vision/types/portfolioTxnTypes`. */
@@ -633,6 +636,7 @@ export type PortfolioTransactionRow = {
  * transaction day is emitted under both `date` and `day` (identical values).
  */
 export type PortfolioMathTxRow = {
+  income_recognition_role?: "standard" | "included_in_units";
   id: number;
   investment_id: number;
   /** `portfolio_txn_type` enum. */
@@ -664,6 +668,7 @@ export type PortfolioMathTxRow = {
 
 /** Per-type aggregate from `portfolioTxRepo.reads.getSummary`. */
 export type PortfolioTransactionSummaryRow = {
+  income_recognition_role?: "standard" | "included_in_units";
   type: string;
   total_amount: number;
   total_units: number;

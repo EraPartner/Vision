@@ -97,6 +97,7 @@ export type ReconciliationBatchScopeRow = {
   status: string;
   custom_config: any;
   adapter_name: string;
+  rows_total: number;
 };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -114,19 +115,7 @@ export type ReconciliationJournalRow = {
 };
 
 // Numeric strings preserve the database's exact stored precision in receipts.
-export const PORTFOLIO_TRANSACTION_SNAPSHOT_SQL = `jsonb_build_object(
-  'id', pt.id, 'investment_id', pt.investment_id, 'type', pt.type,
-  'date', to_char(pt.date, 'YYYY-MM-DD'), 'amount', pt.amount::text,
-  'units', pt.units::text, 'price_per_unit', pt.price_per_unit::text,
-  'fees', pt.fees::text, 'taxes', pt.taxes::text, 'currency', pt.currency,
-  'fx_rate_to_eur', pt.fx_rate_to_eur::text, 'account_id', pt.account_id,
-  'note', pt.note, 'dividend_amount_convention', pt.dividend_amount_convention,
-  'is_recurring', pt.is_recurring, 'recurrence_interval', pt.recurrence_interval,
-  'recurrence_end_date', to_char(pt.recurrence_end_date, 'YYYY-MM-DD'),
-  'import_batch_id', pt.import_batch_id::text,
-  'source_record_hash', pt.source_record_hash,
-  'dedup_fingerprint', pt.dedup_fingerprint,
-  'dedup_fingerprint_version', pt.dedup_fingerprint_version)`;
+export const PORTFOLIO_TRANSACTION_SNAPSHOT_SQL = `portfolio_income_transaction_snapshot(pt)`;
 const SNAPSHOT = PORTFOLIO_TRANSACTION_SNAPSHOT_SQL;
 
 export async function lockReconciliationAccountsAndHistory(
@@ -212,12 +201,211 @@ export async function readReconciliationBatchScope(
   batchIds: readonly Id[],
 ): Promise<ReconciliationBatchScopeRow[]> {
   const { rows } = await query<ReconciliationBatchScopeRow>(
-    `SELECT id, account_id, status, custom_config, adapter_name
+    `SELECT id, account_id, status, custom_config, adapter_name, rows_total
        FROM portfolio_import_batches
       WHERE id = ANY($1::bigint[]) ORDER BY id`,
     [batchIds],
   );
   return rows;
+}
+
+/** Minimal history shape the Kinesis and Saxo context readers inspect. */
+export type ReconciliationHistoryLike = {
+  id: Id;
+  type: string;
+  import_batch_id?: Id | null;
+  dedup_fingerprint?: string | null;
+};
+
+export type ReconciliationContext = {
+  sources: ReconciliationSourceRow[];
+  batches: ReconciliationBatchScopeRow[];
+};
+
+export type ReconciliationReceiptContext = ReconciliationContext & {
+  receipts: ReconciliationJournalRow[];
+};
+
+/** Custody owners retain the exact supplementary native wallet source binding. */
+export async function readKinesisNetworkContext(
+  history: readonly ReconciliationHistoryLike[],
+): Promise<ReconciliationContext> {
+  const ids = [
+    ...new Set(
+      history
+        .filter((row) => row.type === "asset_transfer")
+        .map((row) => Number(row.import_batch_id))
+        .filter(Boolean),
+    ),
+  ];
+  if (!ids.length) return { sources: [], batches: [] };
+  const owners = await readReconciliationSources(ids);
+  const witnessIds = owners
+    .map((row) =>
+      Number(row.asset_transfer_details?.networkBinding?.witnessBatchId),
+    )
+    .filter(Boolean);
+  const batchIds = [...new Set([...ids, ...witnessIds])].sort((a, b) => a - b);
+  const [sources, batches] = await Promise.all([
+    readReconciliationSources(batchIds),
+    readReconciliationBatchScope(batchIds),
+  ]);
+  return { sources, batches };
+}
+
+/** Native gift group owners include generic source batches, not broker-only context. */
+export async function readKinesisNativeGiftContext(
+  history: readonly ReconciliationHistoryLike[],
+): Promise<ReconciliationReceiptContext> {
+  const ids = history
+    .filter((row) => row.type === "gift" && row.dedup_fingerprint)
+    .map((row) => Number(row.id));
+  if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  const { rows: receipts } = await query<ReconciliationJournalRow>(
+    `SELECT a.* FROM portfolio_import_reconciliation_journal a
+     JOIN portfolio_import_staging_rows s ON s.id=a.staging_row_id
+     WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
+       AND s.asset_transfer_details::jsonb ? 'nativeGiftGroupReceipt'
+       AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
+     ORDER BY a.batch_id,a.id`,
+    [ids],
+  );
+  const batchIds = [
+    ...new Set([
+      ...receipts.map((row) => Number(row.batch_id)),
+      ...history
+        .filter((row) => row.type === "gift" && row.import_batch_id != null)
+        .map((row) => Number(row.import_batch_id)),
+    ]),
+  ].sort((a, b) => a - b);
+  if (!batchIds.length) return { receipts, sources: [], batches: [] };
+  const [allSources, allBatches] = await Promise.all([
+    readReconciliationSources(batchIds),
+    readReconciliationBatchScope(batchIds),
+  ]);
+  const retainedIds = new Set(
+    allSources
+      .filter((row) => row.asset_transfer_details?.nativeGiftGroupReceipt)
+      .map((row) => Number(row.batch_id)),
+  );
+  return {
+    receipts,
+    sources: allSources.filter((row) => retainedIds.has(Number(row.batch_id))),
+    batches: allBatches.filter((row) => retainedIds.has(Number(row.id))),
+  };
+}
+
+export async function retainKinesisNetworkBinding({
+  before,
+  after,
+}: {
+  before: ReconciliationSourceRow;
+  after: Pick<ReconciliationSourceRow, "units" | "asset_transfer_details">;
+}): Promise<boolean> {
+  return (
+    (
+      await query(
+        `UPDATE portfolio_import_staging_rows SET route='asset_transfer',type=NULL,type_raw='AssetTransfer',units=$2,asset_transfer_details=$3
+     WHERE id=$1 AND status='matched' AND route=$4 AND units=$5 AND raw_data=$6 AND source_record_hash=$7 AND dedup_fingerprint=$8 RETURNING id`,
+        [
+          before.id,
+          after.units,
+          JSON.stringify(after.asset_transfer_details),
+          before.route,
+          before.units,
+          before.raw_data,
+          before.source_record_hash,
+          before.dedup_fingerprint,
+        ],
+      )
+    ).rows.length === 1
+  );
+}
+
+export async function assertNoActiveKinesisNetworkConsumers(
+  batchId: Id,
+): Promise<void> {
+  const result = await query(
+    `SELECT t.id FROM portfolio_asset_transfers t
+     JOIN portfolio_import_staging_rows s ON s.id=t.staging_row_id
+     WHERE s.asset_transfer_details->'networkBinding'->>'witnessBatchId'=$1::text LIMIT 1`,
+    [batchId],
+  );
+  if (result.rows.length)
+    throw new Error(
+      "Native wallet evidence is still used by an active broker transfer. Undo that transfer first.",
+    );
+}
+
+/** Active Kinesis adoption images and their retained complete primary sources. */
+export async function readKinesisAdoptionContext(
+  history: readonly ReconciliationHistoryLike[],
+): Promise<ReconciliationReceiptContext> {
+  const ids = history
+    .filter((row) => row.dedup_fingerprint && row.import_batch_id == null)
+    .map((row) => Number(row.id));
+  if (!ids.length) return { receipts: [], sources: [], batches: [] };
+  const { rows: receipts } = await query<ReconciliationJournalRow>(
+    `SELECT a.* FROM portfolio_import_reconciliation_journal a
+     JOIN portfolio_import_batches b ON b.id=a.batch_id
+     WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
+       AND b.custom_config->>'format'='kinesis_transaction_history'
+       AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
+     ORDER BY a.batch_id,a.id`,
+    [ids],
+  );
+  const batchIds = [
+    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
+  ];
+  if (!batchIds.length) return { receipts, sources: [], batches: [] };
+  let batches = await readReconciliationBatchScope(batchIds);
+  const referenced = [
+    ...new Set([
+      ...batchIds,
+      ...batches.flatMap(
+        (batch) =>
+          batch.custom_config?.portfolio_performance_reference
+            ?.effectiveBatchIds || [],
+      ),
+    ]),
+  ]
+    .map(Number)
+    .sort((a, b) => a - b);
+  if (referenced.length !== batchIds.length)
+    batches = await readReconciliationBatchScope(referenced);
+  const sources = await readReconciliationSources(referenced);
+  return { receipts, sources, batches };
+}
+
+/** Retained source and immutable receipts that can identify a prior Saxo adoption. */
+export async function readSaxoAdoptionContext(
+  history: readonly ReconciliationHistoryLike[],
+): Promise<ReconciliationReceiptContext> {
+  const transactionIds = history
+    .filter((row) => row.dedup_fingerprint && row.import_batch_id == null)
+    .map((row) => Number(row.id));
+  if (transactionIds.length === 0)
+    return { receipts: [], sources: [], batches: [] };
+  const { rows: receipts } = await query<ReconciliationJournalRow>(
+    `SELECT a.* FROM portfolio_import_reconciliation_journal a
+       JOIN portfolio_import_batches b ON b.id = a.batch_id
+      WHERE a.transaction_id = ANY($1::integer[]) AND a.action = 'adopt'
+        AND (b.adapter_name = 'saxo_transaction_history'
+          OR b.custom_config->>'format' = 'saxo_transaction_history')
+        AND NOT EXISTS (SELECT 1 FROM portfolio_import_reconciliation_journal r
+          WHERE r.previous_entry_id = a.id)
+      ORDER BY a.batch_id, a.id`,
+    [transactionIds],
+  );
+  const batchIds = [
+    ...new Set(receipts.map((receipt) => Number(receipt.batch_id))),
+  ];
+  if (batchIds.length === 0) return { receipts, sources: [], batches: [] };
+  const [sources, batches] = await Promise.all([
+    readReconciliationSources(batchIds),
+    readReconciliationBatchScope(batchIds),
+  ]);
+  return { receipts, sources, batches };
 }
 
 export async function readReconciledProImportAccounts(
@@ -252,12 +440,13 @@ export async function compareAndSetReconciledTransaction(
        taxes = ($2::jsonb->>'taxes')::numeric,
        currency = $2::jsonb->>'currency',
        dividend_amount_convention = $2::jsonb->>'dividend_amount_convention',
+       income_recognition_role = COALESCE($2::jsonb->>'income_recognition_role','standard'),
        fx_rate_to_eur = ($2::jsonb->>'fx_rate_to_eur')::numeric,
        account_id = ($2::jsonb->>'account_id')::integer,
        source_record_hash = $2::jsonb->>'source_record_hash',
        dedup_fingerprint = $2::jsonb->>'dedup_fingerprint',
        dedup_fingerprint_version = ($2::jsonb->>'dedup_fingerprint_version')::smallint
-     WHERE pt.id = $1 AND ${SNAPSHOT} = $3::jsonb
+     WHERE pt.id = $1 AND ${SNAPSHOT} = normalize_portfolio_income_snapshot($3::jsonb)
        AND ($4::timestamptz IS NULL OR pt.updated_at = $4::timestamptz)
      RETURNING ${SNAPSHOT} AS snapshot`,
     [
@@ -322,6 +511,24 @@ export async function markAdoptedSourceDuplicate(
   );
 }
 
+export async function markSaxoCompanionSourceDuplicate(
+  row: Pick<ReconciliationSourceRow, "id" | "batch_id" | "status">,
+): Promise<boolean> {
+  const result = await query(
+    `WITH previous AS (
+       SELECT id,status FROM portfolio_import_staging_rows
+        WHERE id=$1 AND batch_id=$2 AND status=$3 AND status IN ('matched','error')
+     ), changed AS (
+       UPDATE portfolio_import_staging_rows source SET status='duplicate',error_message=NULL
+        FROM previous WHERE source.id=previous.id RETURNING previous.status
+     ) UPDATE portfolio_import_batches SET rows_duplicate=rows_duplicate+(SELECT count(*) FROM changed),
+       rows_error=rows_error-(SELECT count(*) FROM changed WHERE status='error')
+       WHERE id=$2 AND EXISTS(SELECT 1 FROM changed) RETURNING id`,
+    [row.id, row.batch_id, row.status],
+  );
+  return result.rows.length === 1;
+}
+
 export async function getActiveAdoptionReceipts(
   batchId: Id,
 ): Promise<ReconciliationJournalRow[]> {
@@ -335,4 +542,28 @@ export async function getActiveAdoptionReceipts(
     [batchId],
   );
   return rows;
+}
+
+export async function retainKinesisNativeGiftReceipt(
+  row: ReconciliationSourceRow,
+  receipt: unknown,
+): Promise<boolean> {
+  return (
+    (
+      await query(
+        `UPDATE portfolio_import_staging_rows SET asset_transfer_details=jsonb_build_object('nativeGiftGroupReceipt',$2::jsonb)
+    WHERE id=$1 AND route='portfolio' AND type='gift' AND status IN ('committed','duplicate') AND raw_data=$3 AND source_record_hash=$4 AND dedup_fingerprint=$5 AND asset_transfer_details::jsonb IS NOT DISTINCT FROM $6::jsonb RETURNING id`,
+        [
+          row.id,
+          JSON.stringify(receipt),
+          row.raw_data,
+          row.source_record_hash,
+          row.dedup_fingerprint,
+          row.asset_transfer_details == null
+            ? null
+            : JSON.stringify(row.asset_transfer_details),
+        ],
+      )
+    ).rows.length === 1
+  );
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 import { renderTaxExecutiveSummary } from "../src/services/reports/sections/taxExecutiveSummary.js";
+import { renderPortfolioExecutiveSummary } from "../src/services/reports/sections/portfolioExecutiveSummary.js";
 import { renderTaxTypeBreakdown } from "../src/services/reports/sections/taxTypeBreakdown.js";
 import { renderFeeBreakdown } from "../src/services/reports/sections/feeBreakdown.js";
 import { renderTaxByAssetClass } from "../src/services/reports/sections/taxByAssetClass.js";
@@ -346,4 +347,53 @@ describe("renderTopInvestmentsByCost", () => {
     expect(html.indexOf("Alpha Corp")).toBeGreaterThan(-1);
     expect(html.indexOf("Alpha Corp")).toBeLessThan(html.indexOf("Beta Fund"));
   });
+});
+
+it("keeps tax summary output unchanged when descriptive paired income is present", () => {
+  const html = renderTaxExecutiveSummary(
+    { ...data, totalInKindIncome: 12, inKindIncomeCount: 2 },
+    ctx,
+  );
+  expect(html).toBe(renderTaxExecutiveSummary(data, ctx));
+});
+
+it("keeps the tax empty state when a period contains only descriptive paired income", () => {
+  const html = renderTaxExecutiveSummary(
+    { taxYear: 2024, totalInKindIncome: 12, inKindIncomeCount: 2 },
+    ctx,
+  );
+  expect(html).toContain("No tax data");
+  expect(html).not.toContain("Total Taxes Paid");
+});
+
+it("keeps portfolio summary output unchanged when descriptive paired income is present", () => {
+  const executiveSummary = {
+    totalValue: 150,
+    totalInvested: 100,
+    totalGainLoss: 50,
+    returnPct: 50,
+    inflationAdjustedValue: 140,
+    totalDividends: 7,
+    holdingsCount: 1,
+    topHoldings: [
+      {
+        name: "Synthetic Fund",
+        symbol: "SYN",
+        currentValue: 150,
+        gainLoss: 50,
+      },
+    ],
+  };
+  const original = renderPortfolioExecutiveSummary({ executiveSummary }, ctx);
+  const withPairedIncome = renderPortfolioExecutiveSummary(
+    {
+      executiveSummary: {
+        ...executiveSummary,
+        totalInKindIncome: 12,
+        inKindIncomeCount: 2,
+      },
+    },
+    ctx,
+  );
+  expect(withPairedIncome).toBe(original);
 });

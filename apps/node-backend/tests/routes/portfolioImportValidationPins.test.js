@@ -739,3 +739,49 @@ describe("batch_id wire type", () => {
     );
   });
 });
+
+describe("literal generic source identity HTTP mappings", () => {
+  it("passes both trimmed source columns to the generic pipeline", async () => {
+    await runCustom({
+      ...minimalBody,
+      source_id_column: " Source_ID ",
+      source_account_column: " Source_Account ",
+    }).expect(201);
+    expect(runPortfolioImportPipeline).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        customConfig: expect.objectContaining({
+          column_mapping: expect.objectContaining({
+            date: "D",
+            name: "N",
+            source_id: "Source_ID",
+            source_account: "Source_Account",
+          }),
+        }),
+        filePath: UPLOAD.path,
+      }),
+    );
+    expect(
+      runPortfolioImportPipeline.mock.lastCall[0].customConfig,
+    ).not.toHaveProperty("format");
+  });
+  it("preserves the omitted mapping shape for old and blank requests", async () => {
+    for (const optional of [
+      {},
+      { source_id_column: " ", source_account_column: "" },
+    ]) {
+      await runCustom({ ...minimalBody, ...optional }).expect(201);
+      const mapping =
+        runPortfolioImportPipeline.mock.lastCall[0].customConfig.column_mapping;
+      expect(mapping).not.toHaveProperty("source_id");
+      expect(mapping).not.toHaveProperty("source_account");
+    }
+  });
+  it.each(["source_id_column", "source_account_column"])(
+    "rejects malformed or oversized %s before staging",
+    async (field) => {
+      for (const value of [false, 7, ["Source_ID"], {}, "x".repeat(201)])
+        await runCustom({ ...minimalBody, [field]: value }).expect(400);
+      expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
+    },
+  );
+});

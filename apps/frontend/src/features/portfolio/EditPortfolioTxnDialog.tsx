@@ -334,13 +334,20 @@ export function EditPortfolioTxnDialog({
                         {t("txnEdit.title")}
                     </DialogDescription>
                 </DialogHeader>
+                {transaction.income_recognition_role ===
+                    "included_in_units" && (
+                    <p className="text-sm text-muted-foreground">
+                        {t("portfolio.inKindIncome")}.{" "}
+                        {t("portfolio.inKindIncomeHint")}
+                    </p>
+                )}
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <PortfolioTxnFormFields
                         idPrefix="edit-txn"
                         form={form}
                         setForm={setForm}
-                        currency={investment.currency}
+                        currency={transaction.currency ?? investment.currency}
                         t={t}
                         typeField={
                             <div className="space-y-2">
@@ -356,7 +363,11 @@ export function EditPortfolioTxnDialog({
                         }
                         showUnits={showUnits}
                         showFeesTaxes={showFeesTaxes}
-                        showDividendConvention={transaction.type === "dividend"}
+                        showDividendConvention={
+                            transaction.type === "dividend" &&
+                            transaction.income_recognition_role !==
+                                "included_in_units"
+                        }
                         showRecurring={showRecurring}
                         derivedAmount={derivedAmount}
                         isBuySell={isBuySell}

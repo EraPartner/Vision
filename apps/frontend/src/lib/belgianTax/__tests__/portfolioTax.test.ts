@@ -375,3 +375,52 @@ describe("dividend withholding", () => {
         expect(unknown.unknownDividendConventionCount).toBe(1);
     });
 });
+
+describe("in-kind income tax boundaries", () => {
+    it("excludes the accounting role from ordinary dividend estimates without erasing literal recorded taxes or fees", () => {
+        const source: PortfolioTaxInvestment[] = [
+            {
+                id: 1,
+                assetClass: "metals",
+                currency: "EUR",
+                realizedGain: 0,
+                currentValue: 100,
+                transactions: [
+                    {
+                        type: "dividend",
+                        date: "2025-01-01",
+                        amount: 10,
+                        taxes: 1,
+                        fees: 0,
+                        dividend_amount_convention: "gross",
+                    },
+                    {
+                        type: "dividend",
+                        date: "2025-02-01",
+                        amount: 100,
+                        taxes: 3,
+                        fees: 2,
+                        currency: "USD",
+                        income_recognition_role: "included_in_units",
+                    },
+                    {
+                        type: "dividend",
+                        date: "2024-02-01",
+                        amount: 200,
+                        income_recognition_role: "included_in_units",
+                    },
+                ],
+            },
+        ];
+        expect(
+            computeDividendWht(source, 2025, table2025, convert),
+        ).toMatchObject({
+            totalDividendIncome: 10,
+            dividendWhtRecorded: 1,
+            grossDividendBase: 10,
+            unknownDividendConventionCount: 0,
+        });
+        expect(recordedTaxesForYear(source[0], 2025, convert)).toBe(3.7);
+        expect(recordedFeesForYear(source[0], 2025, convert)).toBe(1.8);
+    });
+});

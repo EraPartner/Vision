@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -938,6 +938,15 @@ The report fetches all data in parallel via `fetchFinancialData()`:
 
 - **Data**: 6-month rolling average vs current month YTD pace
 - **Comparison**: Variance % (↑ if pace exceeds rolling avg, ↓ if below)
+
+## Separate in-kind income history
+
+Portfolio breakdown exports retain the literal `included_in_units` income and read-only accounting
+role. Ordinary dividend income charts, AI income totals and tax dividend metrics exclude it because
+its value is already represented by acquired units. Portfolio and tax executive summaries have no
+added in-kind income paragraph or panel. The accounting role does not determine legal tax treatment. Source tax/fee facts
+remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and
+[[docs/features/belgian-tax]].
 
 ## Related Features
 

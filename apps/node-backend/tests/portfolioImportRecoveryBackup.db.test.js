@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { installFreshBaseline } from "../src/database/freshBaseline.ts";
 import { hasTestDatabase } from "./setup/db.js";
+import { __CASH_SNAPSHOT_SQL as CASH_SNAPSHOT_SQL } from "../src/repositories/portfolioImportCashRepository.js";
 
 const run = promisify(execFile);
 const repoRoot = path.resolve(
@@ -20,11 +21,13 @@ const { createBundle, encryptBundle, openBundle } = require(
   path.join(repoRoot, "packaging/electron/backup/bundle.js"),
 );
 const tableNames = [
+  "transactions",
   "portfolio_transactions",
   "portfolio_import_batches",
   "portfolio_import_staging_rows",
   "portfolio_import_reconciliation_journal",
   "portfolio_import_duplicate_repair_journal",
+  "portfolio_import_income_recognition_journal",
   "portfolio_asset_transfers",
   "portfolio_asset_adjustments",
   "portfolio_asset_adjustment_sources",
@@ -215,6 +218,90 @@ describe.skipIf(
       "INSERT INTO portfolio_asset_adjustment_sources(adjustment_id,staging_row_id,source_record_hash) SELECT id,$1,$2 FROM portfolio_asset_adjustments WHERE staging_row_id=$3",
       [rows[0], "d".repeat(64), rows[3]],
     );
+    const incomeBatch = Number(
+      (
+        await source.query(
+          "INSERT INTO portfolio_import_batches(adapter_name,status,account_id,custom_config) VALUES('kinesis_transaction_history','awaiting_review',$1,$2) RETURNING id",
+          [
+            accounts[0],
+            JSON.stringify({
+              format: "kinesis_transaction_history",
+              yield_basis_policy: "zero",
+              kinesis_source_context: { source_file_hash: "1".repeat(64) },
+            }),
+          ],
+        )
+      ).rows[0].id,
+    );
+    const incomeSource = (
+      await source.query(
+        "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,raw_data,type,route) VALUES($1,0,'committed','Synthetic paired backup source','dividend','portfolio') RETURNING id",
+        [incomeBatch],
+      )
+    ).rows[0].id;
+    await source.query("BEGIN");
+    const income = (
+      await source.query(
+        "INSERT INTO portfolio_transactions(investment_id,account_id,type,date,amount,fees,taxes,currency,import_batch_id,income_recognition_role) VALUES($1,$2,'dividend','2026-01-01',5,0,0,'EUR',$3,'included_in_units') RETURNING id",
+        [investment, accounts[0], incomeBatch],
+      )
+    ).rows[0].id;
+    await source.query(
+      `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,income_data,unit_data,proof_data)
+      SELECT $1,$2,$3,i.id,u.id,'record',portfolio_income_transaction_snapshot(i),portfolio_income_transaction_snapshot(u),$4 FROM portfolio_transactions i,portfolio_transactions u WHERE i.id=$5 AND u.id=$6`,
+      [
+        incomeBatch,
+        incomeSource,
+        rows[0],
+        JSON.stringify({ sourceFileHash: "1".repeat(64) }),
+        income,
+        transaction.id,
+      ],
+    );
+    await source.query("COMMIT");
+    const cashBatch = Number(
+      (
+        await source.query(
+          "INSERT INTO portfolio_import_batches(adapter_name,status,account_id) VALUES('synthetic_cash_recovery','complete',$1) RETURNING id",
+          [accounts[0]],
+        )
+      ).rows[0].id,
+    );
+    const cashRecipient = (
+      await source.query(
+        "INSERT INTO recipients(name,normalized_name) VALUES('Synthetic cash backup recipient','synthetic cash backup recipient') RETURNING id",
+      )
+    ).rows[0].id;
+    const cashIds = (
+      await source.query(
+        "INSERT INTO transactions(account_id,recipient_id,date,amount,currency,memo,is_transfer,transfer_source) VALUES($1,$2,'2026-01-04',-9,'EUR','Synthetic net funding',true,'brokerage'),($1,$2,'2026-01-04',-1,'EUR','Synthetic funding fee',false,'brokerage') RETURNING id",
+        [accounts[0], cashRecipient],
+      )
+    ).rows.map((row) => row.id);
+    const cashImages = (
+      await source.query(
+        `SELECT ${CASH_SNAPSHOT_SQL} AS data FROM transactions t WHERE id=ANY($1::integer[]) ORDER BY id`,
+        [cashIds],
+      )
+    ).rows.map((row) => row.data);
+    // Synthetic full images exercise dump restoration and evidence protection;
+    // literal source validation is covered by the cash scope lifecycle tests.
+    await source.query(
+      "INSERT INTO portfolio_import_staging_rows(batch_id,row_index,status,route,committed_txn_id,raw_data) VALUES($1,0,'committed','cash',$2,$3)",
+      [
+        cashBatch,
+        cashIds[0],
+        JSON.stringify({
+          primaryRawData: "Synthetic cash backup source",
+          portfolioCashReceipt: {
+            version: 1,
+            proof: { kind: "closed_kinesis_cash", componentCount: 2 },
+            after: cashImages[0],
+            feeAfter: cashImages[1],
+          },
+        }),
+      ],
+    );
   }, 180000);
 
   afterAll(async () => {
@@ -295,6 +382,36 @@ describe.skipIf(
       restored.query("DELETE FROM portfolio_import_duplicate_repair_journal"),
     ).rejects.toThrow("immutable");
     await expect(
+      restored.query(
+        "UPDATE portfolio_import_income_recognition_journal SET proof_data=proof_data",
+      ),
+    ).rejects.toThrow("immutable");
+    await expect(
+      restored.query(
+        "UPDATE portfolio_transactions SET note='Break active unit image' WHERE type='gift'",
+      ),
+    ).rejects.toThrow(/paired income/);
+    await expect(
+      restored.query(
+        "DELETE FROM portfolio_transactions WHERE income_recognition_role='included_in_units'",
+      ),
+    ).rejects.toThrow(/paired income/);
+    expect(
+      Number(
+        (
+          await restored.query(
+            "SELECT nextval('portfolio_import_income_recognition_journal_id_seq') AS id",
+          )
+        ).rows[0].id,
+      ),
+    ).toBeGreaterThan(
+      Math.max(
+        ...expected.portfolio_import_income_recognition_journal.map((row) =>
+          Number(row.id),
+        ),
+      ),
+    );
+    await expect(
       restored.query("UPDATE portfolio_asset_transfers SET units=3"),
     ).rejects.toThrow("immutable");
     await expect(
@@ -311,7 +428,35 @@ describe.skipIf(
     ).rejects.toThrow("immutable");
     await expect(
       restored.query("DELETE FROM portfolio_import_batches"),
-    ).rejects.toThrow(/foreign key constraint/);
+    ).rejects.toThrow(/foreign key constraint|immutable/);
+    await expect(
+      restored.query(
+        "UPDATE portfolio_import_staging_rows SET raw_data='Changed cash receipt' WHERE route='cash'",
+      ),
+    ).rejects.toThrow(/immutable/);
+    await expect(
+      restored.query(
+        "DELETE FROM portfolio_import_staging_rows WHERE route='cash'",
+      ),
+    ).rejects.toThrow(/immutable/);
+    expect(
+      (
+        await restored.query(
+          "SELECT is_transfer,transfer_source,transfer_peer_id FROM transactions ORDER BY id",
+        )
+      ).rows,
+    ).toEqual([
+      {
+        is_transfer: true,
+        transfer_source: "brokerage",
+        transfer_peer_id: null,
+      },
+      {
+        is_transfer: false,
+        transfer_source: "brokerage",
+        transfer_peer_id: null,
+      },
+    ]);
     const maximum = Math.max(
       ...[
         "portfolio_transactions",

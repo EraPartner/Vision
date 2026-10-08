@@ -2,13 +2,13 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-04
-last_modified: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
+last_modified: 2026-10-08
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
-api_operation_count: 300
+api_operation_count: 299
 tags:
   [
     reference,
@@ -94,7 +94,7 @@ aliases:
 >
 > **Phase G Update (April 2026):** Six legacy `/api/info/*` endpoints removed in favor of `/api/aggregations/*` alternatives. See [[#phase-g-endpoint-consolidation|Phase G Endpoint Consolidation]] below.
 >
-> **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. Shadow divergence admin endpoints (`GET /api/admin/shadow-divergences/summary`, `GET /api/admin/shadow-divergences`) removed. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes removed from wiring (see [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]]), though `info.js` persists for unrelated endpoints (portfolio-performance, net-worth, exchange-rates, inflation-rates).
+> **Phase 9 Update (April 2026):** Aggregation shadow mode validation complete. Shadow divergence admin endpoints (`GET /api/admin/shadow-divergences/summary`, `GET /api/admin/shadow-divergences`) removed. `/api/aggregations/*` is now the sole aggregation path. Legacy `/api/info/*` aggregation routes removed from wiring (see [[docs/adr/011-phase2-aggregation-envelope-standard|ADR-011]]), though `info.ts` persists for unrelated endpoints (portfolio-performance, net-worth, exchange-rates, inflation-rates).
 >
 > **2026-04-29 Security Update:** CodeQL + Dependabot remediation (ADR-042): `attachmentRateLimiter` (60 req/min) added to all attachment endpoints; `spaRateLimiter` (600 req/min) added to SPA fallback route. See [[docs/adr/042-codeql-dependabot-remediation-2026-04|ADR-042]] for full details.
 >
@@ -151,7 +151,41 @@ return `409 CONFLICT` before new writes when staging is incomplete or unstamped 
 overlap. This tightens previously accepted commit behavior; generic partial imports are unchanged.
 See [[docs/api/portfolio-imports]].
 
+Portfolio reconciliation can correct an unchanged prior Saxo workbook adoption with explicit
+`prefer_source`, the same verified literal source and its active receipt after-image. The old
+batch joins the lock scope; a new reversible receipt preserves the original transaction ID and
+notes. This adds supported reconciliation behavior without changing operation paths or shapes.
+Matching CSV rows, including net-only dividends, may settle as duplicate evidence against a
+selected detailed Saxo workbook after literal header, identity and financial proofs. Only proved
+companions receive readiness exceptions; their status/error counters update in the atomic commit.
+
+IBKR staging retains literal header and Summary currency context. Verified context can support
+currency and separate-withholding corrections for imported-copy repairs or standalone legacy sales.
+Unique same-date economic claims narrow overlapping copy candidates; proved different copies stay
+duplicates. Missing or ambiguous evidence blocks. Operation paths, response shapes and match windows
+remain unchanged.
+
+> Generic portfolio uploads accept additive optional `source_id_column` and `source_account_column` mappings for literal provider identity. Omitted mappings preserve the existing configuration shape; see [[docs/api/portfolio-imports|Portfolio imports]].
+
 > Portfolio statement uploads also accept an optional `included_symbols` scope. This additive field preserves the original file and records excluded parsed rows separately from errors; see [[docs/api/portfolio-imports|Portfolio imports]].
+
+The optional Kinesis `record_in_kind_income_only` scope records literal income paired with already
+proved zero-basis units under explicit `preserve_existing`, complete source proof and zero yield
+policy. It emits `record_income`/typed `incomeProof`, separate `recordedIncome` counts and the existing
+partial-scope progress fields. It creates no acquisitions, cash or custody and retains other pending
+source rows. Transaction DTOs add the read-only `income_recognition_role` and portfolio summaries add
+`totalInKindIncome` plus `archivedInKindIncome` dated subtotals, separate from ordinary
+dividends/income/gains. Archived ordinary calculations remain unchanged. Role setters are rejected; old
+absent role means standard. No operation is added or removed; these fields and optional scope are
+additive. See [[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/api/portfolio-imports]],
+[[docs/api/investments]] and [[docs/api/portfolio-summary]].
+
+Full history can compose paired income with its one selected zero-basis Gift action.
+Output-only `incomeProof.unitRowId` binds the same batch and investment; existing units and income
+repeats also require canonical unit identity. The unit is proved before income is written in the
+same atomic commit. Full `recordedIncome` and `recordedCash` are additive subtotals within
+`imported`; older responses may omit them. Exact owned cash repeats remain compatible, while new
+Kinesis cash still requires its confirmed bounded review. No operation or scope is added.
 
 ## Accounts (13 endpoints)
 
@@ -423,24 +457,23 @@ in ascending order and preserves source order within a date. See
 [[docs/api/portfolio-imports|Portfolio Imports API]] and
 [[docs/features/portfolio-import|Portfolio Import Feature]].
 
-| Method | Path                                                                | Description                                                                            | Rate Limit        | Doc                                               |
-| ------ | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------- |
-| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/Saxo XLSX portfolio import; multipart options; returns 201 or 202         | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/Saxo XLSX import; workbook preflight before SSE progress/review/terminal events    | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                   | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/parsers`                                     | Create saved portfolio parser; 409 on duplicate name                                   | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| PATCH  | `/api/portfolio/import/parsers/:id`                                 | Update saved portfolio parser name/config                                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| DELETE | `/api/portfolio/import/parsers/:id`                                 | Delete saved portfolio parser; 204 on success                                          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches`                                     | List portfolio import batches (limit/offset)                                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches/:id`                                 | Get portfolio import batch detail                                                      | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| DELETE | `/api/portfolio/import/batches/:id`                                 | Rollback batch (deletes committed portfolio_transactions, marks aborted)               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| GET    | `/api/portfolio/import/batches/:id/preview`                         | Rows grouped by investment; unresolved rows per distinct raw symbol/name               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409            | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/reference`                    | Stage proven Portfolio Performance context and managed prior-import review batches     | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview complete multi-file scope, existing history, corrections and custody transfers | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
-| POST   | `/api/portfolio/import/reconciliation/commit`                       | Atomically apply a reviewed scope bound to its exact preview fingerprint               | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| Method | Path                                                                | Description                                                                                           | Rate Limit        | Doc                                               |
+| ------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------- | ------------------------------------------------- |
+| POST   | `/api/portfolio/import/csv/custom`                                  | One-shot CSV/Saxo XLSX portfolio import; multipart options; returns 201 or 202                        | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/csv/stream`                                  | CSV/Saxo XLSX import; workbook preflight before SSE progress/review/terminal events                   | importRateLimiter | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/parsers`                                     | List saved portfolio parser configs (kind=portfolio)                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/parsers`                                     | Create saved portfolio parser; 409 on duplicate name                                                  | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| PATCH  | `/api/portfolio/import/parsers/:id`                                 | Update saved portfolio parser name/config                                                             | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/parsers/:id`                                 | Delete saved portfolio parser; 204 on success                                                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches`                                     | List portfolio import batches (limit/offset)                                                          | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches/:id`                                 | Get portfolio import batch detail                                                                     | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| DELETE | `/api/portfolio/import/batches/:id`                                 | Rollback batch (deletes committed portfolio_transactions, marks aborted)                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| GET    | `/api/portfolio/import/batches/:id/preview`                         | Rows grouped by investment; unresolved rows per distinct raw symbol/name                              | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/rows/investment-override`        | Atomically resolve a review group to one existing or newly created investment                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/rows/:rowId/investment-override` | Resolve unmatched row: pick existing investment or create new                                         | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/batches/:id/commit`                          | Commit reviewed batch; maintained completeness/overlap guard may return 409                           | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/preview`                      | Preview full history or derived Kinesis attachment/correction scopes with selected and pending counts | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
+| POST   | `/api/portfolio/import/reconciliation/commit`                       | Apply a fingerprint-bound scope; existing-only modes preserve pending rows and review lifecycle       | —                 | [[docs/api/portfolio-imports\|Portfolio Imports]] |
 
 ## Attachments (4 endpoints) — Phase 5A
 
@@ -718,7 +751,18 @@ See [[docs/api/info.md|Info & Analytics API]] for deprecation notes on the remov
 
 ## Related
 
+- [[docs/api/index|API Index]]
+- [[docs/api/portfolio-imports|Portfolio Imports API]] — full-history and bounded Kinesis reconciliation contracts
 - [[docs/reference/error-codes\|Error Codes Reference]]
 - [[docs/reference/code-patterns\|Code Patterns Reference]]
 - [[docs/security/rate-limiting\|Rate Limiting]]
 - [[docs/common-tasks\|Common Tasks Quick Reference]]
+
+The optional Kinesis `record_cash_only` scope requires explicit preservation and source-bound
+`cash_funding_policy='own_account_transfer'`. Complete cash chains select together through typed
+`cashProof`/`cashValues`, with separate literal withdrawal fee expenses when proved.
+`recordedCash` counts newly imported ledger components; action/duplicate counts remain source-event
+counts. Brokerage-origin movements and expenses have no invented peer. Other portfolio/income/custody
+rows remain pending; repeated proved cash is a no-op. These optional fields are additive with no
+operation changes. See [[docs/api/portfolio-imports]] and
+[[docs/adr/189-proved-brokerage-cash-history|ADR-189]].

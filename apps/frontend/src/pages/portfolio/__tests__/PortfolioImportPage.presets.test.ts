@@ -6,6 +6,28 @@ import {
 } from "../portfolioImportPresets";
 
 describe("PortfolioImportPage maintained presets", () => {
+    it("maps native receipts through the ordinary parser with explicit source identity and number/date formats", () => {
+        const config = portfolioImportPresetConfig("native_receipts");
+        expect(config).toMatchObject({
+            dateColumn: "Date",
+            typeColumn: "Type",
+            symbolColumn: "Symbol",
+            unitsColumn: "Units",
+            amountColumn: "Amount",
+            currencyColumn: "Currency",
+            noteColumn: "Note",
+            sourceIdColumn: "Source_ID",
+            sourceAccountColumn: "Source_Account",
+            dateFormat: "%Y-%m-%d",
+            number_format: "decimal_dot",
+            defaultAssetClass: "metals",
+            defaultType: "gift",
+        });
+        expect(config).not.toHaveProperty("format");
+        expect(
+            portfolioImportSpecializedHintKey(config?.format),
+        ).toBeUndefined();
+    });
     it.each([
         {
             source: "nexo",

@@ -159,6 +159,199 @@ describe("portfolioPerformanceSnapshotService", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+  const custodyBuy = (id, units, overrides = {}) => ({
+    id,
+    investment_id: 1,
+    day: "2026-01-01",
+    type: "buy",
+    amount: String(Number(units) * 100),
+    units,
+    currency: "EUR",
+    account_id: 1,
+    ...overrides,
+  });
+  const custodyTransfer = (id, units, overrides = {}) => ({
+    id,
+    investment_id: 1,
+    day: "2026-01-02",
+    type: "asset_transfer",
+    amount: "0",
+    units,
+    currency: "EUR",
+    source_account_id: 1,
+    destination_account_id: 2,
+    fee_units: "0",
+    ...overrides,
+  });
+  const expectNoSnapshotWrites = () => {
+    expect(
+      query.mock.calls.some(([sql]) =>
+        /(?:DELETE FROM|INSERT INTO) portfolio_performance_snapshots/.test(
+          String(sql),
+        ),
+      ),
+    ).toBe(false);
+  };
+
+  it("replays exact fractional full transfers, splits and sales without losing residual units", async () => {
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: "EUR", current_price: "50", asset_class: "crypto" },
+      ],
+      transactions: [
+        custodyBuy(1, "0.1"),
+        custodyBuy(2, "0.7"),
+        custodyTransfer(3, "0.8", { fee_units: "0.01" }),
+        {
+          ...custodyBuy(4, "1.58"),
+          day: "2026-01-02",
+          type: "split",
+          amount: "0",
+          account_id: 2,
+        },
+        custodyTransfer(5, "1.58", {
+          source_account_id: 2,
+          destination_account_id: 3,
+        }),
+        {
+          ...custodyBuy(6, "1.58"),
+          day: "2026-01-03",
+          type: "sell",
+          amount: "79",
+          account_id: 3,
+        },
+      ],
+      prices: [
+        { investment_id: 1, day: "2026-01-01", close_price: "100" },
+        { investment_id: 1, day: "2026-01-02", close_price: "50" },
+      ],
+    });
+    const snapshots = await computeAndStoreSnapshots("EUR");
+    expect(snapshots.map((row) => row.value)).toEqual([80, 79, 0]);
+    expect(snapshots.map((row) => row.invested)).toEqual([80, 80, 1]);
+  });
+
+  it("rejects a genuine fractional transfer overdraft before replacing any snapshots", async () => {
+    mockSnapshotQueries({
+      transactions: [
+        custodyBuy(1, "0.1"),
+        custodyBuy(2, "0.7"),
+        custodyTransfer(3, "0.80000001"),
+      ],
+    });
+    await expect(computeAndStoreSnapshots("EUR")).rejects.toThrow(
+      "Asset transfer exceeds source holdings",
+    );
+    expectNoSnapshotWrites();
+  });
+
+  it("replays only proved zero yield and consumed asset-fee lots at original purchase FX without a capital flow", async () => {
+    const yieldHash = "a".repeat(64);
+    mockSnapshotQueries({
+      investments: [
+        { id: 1, currency: "USD", current_price: "10", asset_class: "crypto" },
+      ],
+      transactions: [
+        custodyBuy(1, "10", {
+          amount: "100",
+          fees: "10",
+          currency: "USD",
+          fx_rate_to_eur: "0.5",
+        }),
+        custodyBuy(2, "10", {
+          amount: "100",
+          fees: "10",
+          currency: "USD",
+          fx_rate_to_eur: "1",
+        }),
+        custodyBuy(3, "10", {
+          type: "gift",
+          amount: "0",
+          currency: "USD",
+          source_record_hash: yieldHash,
+        }),
+        {
+          ...custodyBuy(4, "10"),
+          day: "2026-01-02",
+          type: "asset_adjustment",
+          amount: "0",
+          adjustment_kind: "yield_reversal",
+          basis_policy: "zero_yield_only",
+          eligible_source_record_hashes: [yieldHash],
+        },
+        custodyTransfer(5, "10", { currency: "USD" }),
+        {
+          ...custodyBuy(6, "2"),
+          day: "2026-01-03",
+          type: "asset_adjustment",
+          amount: "0",
+          account_id: 2,
+          adjustment_kind: "asset_fee",
+          basis_policy: "carried",
+        },
+      ],
+      prices: [{ investment_id: 1, day: "2026-01-01", close_price: "10" }],
+      fxRates: [{ currency_code: "USD", rate_to_eur: "1" }],
+    });
+    const snapshots = await computeAndStoreSnapshots("EUR");
+    expect(snapshots.map((row) => row.value)).toEqual([300, 200, 180]);
+    expect(snapshots.map((row) => row.value_fx_neutral)).toEqual([
+      225, 150, 135,
+    ]);
+    expect(snapshots.map((row) => row.invested)).toEqual([150, 150, 150]);
+  });
+
+  it.each(["missing yield proof", "wrong basis policy", "fee overdraft"])(
+    "rejects %s before snapshot writes",
+    async (kind) => {
+      const adjustment = {
+        ...custodyBuy(2, "1"),
+        day: "2026-01-02",
+        type: "asset_adjustment",
+        amount: "0",
+        adjustment_kind: "yield_reversal",
+        basis_policy: "zero_yield_only",
+        eligible_source_record_hashes: ["a".repeat(64)],
+      };
+      if (kind === "wrong basis policy") adjustment.basis_policy = "carried";
+      if (kind === "fee overdraft")
+        Object.assign(adjustment, {
+          adjustment_kind: "asset_fee",
+          basis_policy: "carried",
+          units: "3",
+        });
+      mockSnapshotQueries({ transactions: [custodyBuy(1, "2"), adjustment] });
+      await expect(computeAndStoreSnapshots("EUR")).rejects.toThrow(
+        /Asset adjustment|Yield reversal|Asset fee/,
+      );
+      expectNoSnapshotWrites();
+    },
+  );
+
+  it.each(["2", "5"])(
+    "preserves custody same-day ID order for a transfer of %s units after a sale",
+    async (units) => {
+      mockSnapshotQueries({
+        transactions: [
+          custodyBuy(1, "10"),
+          custodyBuy(4, "5", { day: "2026-01-02" }),
+          custodyTransfer(3, units),
+          custodyBuy(2, "8", { day: "2026-01-02", type: "sell" }),
+        ],
+        prices: [{ investment_id: 1, day: "2026-01-01", close_price: "10" }],
+      });
+      if (units === "2") {
+        const snapshots = await computeAndStoreSnapshots("EUR");
+        expect(snapshots[1].value).toBe(70);
+      } else {
+        await expect(computeAndStoreSnapshots("EUR")).rejects.toThrow(
+          "Asset transfer exceeds source holdings",
+        );
+        expectNoSnapshotWrites();
+      }
+    },
+  );
+
   it("carries custody and original FX across asset transfers without capital contribution", async () => {
     mockSnapshotQueries({
       investments: [

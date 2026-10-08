@@ -2,9 +2,9 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-04
-last_modified: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
+last_modified: 2026-10-08
 tags:
   [
     feature,
@@ -30,7 +30,7 @@ tags:
     adr-091,
   ]
 aliases: [portfolio-import, portfolio-csv-import, brokerage-import]
-description: Multi-statement portfolio history import with automatic detection, reviewed reconciliation, dated custody and unit adjustments, immutable receipts, and optional bounded XML reference evidence.
+description: Multi-statement portfolio history import with automatic detection, reviewed reconciliation, dated custody and unit adjustments, immutable receipts, and retained historical source evidence.
 related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/index.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/stage.js"
@@ -39,10 +39,14 @@ related_code:
   - "apps/node-backend/src/services/portfolioImportPipeline/commit.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/ibkrTransactionHistoryAdapter.js"
+  - "apps/node-backend/src/services/portfolioIbkrPrimaryProof.js"
+  - "apps/node-backend/src/services/portfolioIbkrRepairCandidates.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/kinesisTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportPipeline/nexoProTransactionHistoryAdapter.js"
   - "apps/node-backend/src/services/portfolioImportReconciliationService.js"
+  - "apps/node-backend/src/services/portfolioKinesisYieldGroups.js"
+  - "apps/node-backend/src/services/portfolioKinesisAdoptionScope.js"
   - "apps/node-backend/src/services/portfolioImportDuplicateRepairService.js"
   - "apps/node-backend/src/repositories/portfolioImportDuplicateRepairRepository.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetTransferService.js"
@@ -71,13 +75,8 @@ related_code:
   - "alembic/versions/0121_portfolio_asset_transfers.py"
   - "alembic/versions/0122_portfolio_import_duplicate_repair.py"
   - "alembic/versions/0123_portfolio_asset_adjustments.py"
-  - "apps/node-backend/src/services/portfolioImportReferenceService.js"
-  - "apps/node-backend/src/services/portfolioPerformanceXmlParser.js"
   - "apps/node-backend/src/services/portfolioPerformanceReferenceEvidence.js"
-  - "apps/node-backend/src/services/portfolioReferenceYieldCoverage.js"
-  - "apps/node-backend/src/repositories/portfolioImportReferenceRepository.ts"
   - "apps/node-backend/src/repositories/portfolioAssetAdjustmentRepository.ts"
-  - "apps/node-backend/src/lib/portfolioReferenceUpload.ts"
   - "apps/node-backend/src/services/portfolio/portfolioAssetAdjustmentService.js"
   - "alembic/versions/0040_add_portfolio_import_staging.py"
   - "alembic/versions/0041_add_parser_config_kind.py"
@@ -170,6 +169,12 @@ applies these format-specific rules:
 - `Forex Trade Component` rows are skipped and included in `rowsSkipped`. They describe the
   base-currency side of a securities transaction and are not independent portfolio holdings.
 
+Batch configuration retains the literal transaction header, Summary base-currency record, source
+file hash, ordered column names and transaction-record hashes as `ibkr_source_context`. Repeated
+headers or base-currency records and blank or duplicate trimmed column names reject. A valid
+reordered header remains supported. Retained batches without this context cannot supply currency
+proof by assuming a historical column layout; a fresh original statement can provide that proof.
+
 Regression coverage uses `tests/fixtures/portfolio/ibkr-transaction-history.csv`, a synthetic file
 that preserves the real section framing, exact headers, locale-comma decimals, dash placeholders,
 and row kinds without retaining account or transaction data from the supplied export.
@@ -199,6 +204,16 @@ Review-time holding creation infers KAU and KAG as `metals`; other Kinesis asset
 preset's `crypto` fallback so mixed statements create the expected asset classes. Kinesis-created
 holdings use USD as their valuation currency, including asset-deposit rows that carry no quote
 currency.
+
+Full review can select the complete original Kinesis statement together with a complete generic
+source receipt CSV. Verified native sender fees use `asset_fee` with carried original basis;
+`asset_transfer_witness` retains owned transfer evidence for a unique broker deposit without
+creating another movement. A closed group of exactly two distinct incoming native gift receipts,
+each bound to literal recorded native basis, can attach one qualified existing manual gift and
+insert only the missing gift. This group association does not infer an individual legacy identity.
+The existing gift keeps its financial values, date, type, units, note and FX. Strict repeats require
+both owned group members and unchanged after-images; incomplete or contested evidence blocks.
+This path does not authorize new cash in full history.
 
 Regression coverage uses `tests/fixtures/portfolio/kinesis-transaction-history.csv`, a synthetic
 file preserving the real headers, UTC timestamp style, dot-decimal values, paired trade legs,
@@ -281,6 +296,19 @@ corporate actions and workbook booking kinds also remain review errors. Syntheti
 coverage is in [[apps/node-backend/tests/saxoTransactionHistoryAdapter.test.js]] and
 [[apps/node-backend/tests/portfolioWorkbook.test.js]].
 
+When both Saxo files are selected, a uniquely proved CSV counterpart instead becomes
+`duplicate_source` evidence for the detailed workbook event. Proof reparses the literal CSV with
+its captured ordered headers, verifies both source hashes and complete workbook joins, and binds
+the nonzero source account/booking identity, financial cells, dates and instrument metadata.
+Owner labels may differ. The Vision account must match and any resolved CSV investment must agree.
+Other errors, missing context, mismatches or ambiguous workbook counterparts remain blockers.
+
+Only those locked-plan companion rows receive a readiness exception. Commit marks them duplicate
+before draining financial rows, clears their errors and updates duplicate/error counters atomically.
+Their literal net values and unsupported dividend fields remain evidence; no gross dividend is
+invented for the CSV. Completed statement cards use the verified commit error counts. A companion-only
+rollback changes no financial rows. CSV-only dividend uploads still require detailed evidence.
+
 The transaction and portfolio pipelines share `importStageLifecycle.js` for the staging status
 transition, BIGSERIAL batch-id normalization, 500-row chunk loop, persisted total, and progress
 sequence. Portfolio parsing and its INSERT column set stay in this module.
@@ -354,8 +382,8 @@ can still be retried with an explicit batch account under the batch lock.
 [[apps/node-backend/src/services/portfolioImportCommitService.js]], and
 [[apps/node-backend/src/repositories/portfolioImportReconciliationRepository.ts]].
 
-A session previews all selected batches together. Pending, validated, unresolved, and error rows
-block commit. The planner checks existing source fingerprints, repeated source identities across
+A full-history session previews all selected batches together. Pending, validated, unresolved, and
+error rows block its commit. The planner checks existing source fingerprints, repeated source identities across
 selected statements, and nearby legacy history. A legacy candidate must be uniquely attributable:
 the same investment within seven calendar days and plausible units or proven equivalent economics.
 Literal Nexo Pro evidence can extend the candidate date window to 31 days only with exact executed
@@ -389,6 +417,20 @@ explicit global policy or per-statement override:
 Unknown-basis incoming events cannot manufacture a new acquisition. They can preserve a unique
 existing acquisition with positive known basis under `preserve_existing`; otherwise review blocks.
 
+An unchanged prior Saxo workbook adoption can be corrected later with a freshly staged copy of
+the same detailed workbook and explicit `prefer_source`. The retained typed source must reparse
+successfully, match its literal SHA-256 and staged financial values, and identify exactly one
+active adoption receipt. Its original source row and the canonical transaction's full after-image
+must still match. This proof supplies booked currency, principal, commission and withholding;
+it does not infer an exchange rate from the previously preserved values. Automatic matching and
+`preserve_existing` remain duplicates. Changed source, history or receipt context blocks correction.
+
+The correction preserves the original transaction ID, type and notes and writes a new adoption
+receipt in the fresh batch. The old batch, its receipts and its cash records stay unchanged.
+Original adoption batches join the sorted lock scope and receipt/source context joins the plan
+fingerprint. Rolling back the correction restores its previous after-image. Rolling back the old
+adoption while that correction is active rejects because its after-image has changed.
+
 Preview returns actions, blockers, counts, and a SHA-256 `planFingerprint` covering the selected
 batches, source rows, policies, relevant current history, and companion-Pro evidence. Commit of an
 explicit policy requires that reviewed fingerprint. Any relevant state change makes it stale.
@@ -405,6 +447,183 @@ complete. Before commit, the writer validates complete persisted history for eve
 investment under all three basis methods and checks that every approved custody event retained its
 exact source and financial facts. A changed event, invalid final history, or row failure rolls
 back the entire selected scope. Ordinary custody writes still validate full history.
+
+### Attach proven Kinesis source records
+
+The optional **Attach proven source records** scope links a safe, server-derived subset of a fresh
+full Kinesis statement to existing history under `preserve_existing`. It keeps existing financial
+values, dates, type and notes while adding assignment and source provenance. An ordinary uniquely
+proved buy or gift needs the exact existing date and eight-decimal quantity. A buy's
+literal principal, currency, price, fees and taxes must also match stored financial values.
+Meaningful gifts require matching literal original basis and currency. Source
+financial mismatches and missing basis remain pending even under `preserve_existing`.
+Financial qualification comes before repeat-receipt validation. A unique repeated record that
+fails it stays pending even if its older receipt lacks complete source context. Qualifying repeated
+source records settle only when one active adoption receipt, retained source proof and the full
+canonical after-image still agree. An ambiguous eligible record remains a blocker.
+
+[[apps/node-backend/src/services/portfolioKinesisAdoptionScope.js]] verifies the complete literal
+CSV capture, SHA-256, ordered headers/events, identities, account and occurrence context before
+any selection. Skipped rows, asset filters, old captures without this context, or changed staging
+evidence prevent a ready plan. The full source is classified first; callers cannot provide row IDs
+or asset filters to select records within that staged statement. This proves the uploaded statement
+context, not that the broker export contains every historical event.
+
+The selected actions are `adopt`, receipt-proven `duplicate`, and already `settled`. The writer
+returns before the ordinary drain and inserts no trades, income, cash, custody or adjustments. It
+does not repair an imported duplicate. Proven existing zero-basis yield-unit acquisitions can be
+attached when the recorded amount, unit price, fees and taxes are also zero, without changing any
+recorded values.
+
+Already-retained complete original-document evidence can prove a closed yield group between independent
+meaningful deposit receipts. [[apps/node-backend/src/services/portfolioKinesisYieldGroups.js]]
+requires complete primary, reference and canonical interval membership, a same-file settled yield
+anchor, and globally unique eight-decimal unit pairing. It does not choose a subset by quantity or
+infer an individual date. All eligible members are reviewed together or blocked together. Each
+new adoption joins one distinct source-unit row to one distinct existing record; an already-settled
+anchor remains a duplicate or settled action. Attachment keeps the original recorded dates even
+when the broker payment date differs. Quantities, financial values, types, notes and IDs also stay
+unchanged. Fresh repeats require retained group proof and unchanged full-image receipts.
+
+New yield acquisitions and paired new income remain pending in this attachment scope. The
+separate bounded in-kind income scope can record proven paired income without adding units again. Other excluded events remain unsettled for a
+later review;
+the preview reports their event kinds and counts separately from selected actions.
+
+The commit is atomic for its selected records. `pending` counts excluded unsettled rows;
+`complete` means that this count is zero. If any source remains pending, all selected batches stay
+`awaiting_review` without completion timestamps, even when one batch's own progress is complete.
+Existing immutable adoption/restore receipts provide guarded rollback; a changed after-image
+blocks restoration. This mode adds no schema or journal.
+
+Full-history review can compose literal paired income with its one zero-basis Gift insertion or
+proved existing acquisition. The preview shows **Record paired income** separately from the Gift
+action. `incomeProof.unitRowId` binds the selected Gift in the same batch, investment and payment
+date; existing units also have `unitTransactionId`. The atomic writer proves the actual unit before
+recording its informational income, so units and gains are not counted twice. Repeated income and
+already-owned cash create no new records. Full `recordedIncome` and `recordedCash` are subtotals of
+all imported records. This adds no mode, row picker or upload workflow; the bounded income choice
+below continues to record only income against already-existing proved units.
+
+### Record proven in-kind Kinesis income
+
+**Record proven in-kind income** uses `record_in_kind_income_only` with `preserve_existing` and
+zero yield basis. Choose it before staging the complete original Kinesis CSV; the UI sends the zero
+policy automatically. It also reviews retained complete source batches without another file upload,
+while preserving stored historical source proof.
+
+The server proves each literal income event against an already-proved existing zero-basis unit
+acquisition using the full source, unique event/asset/account/date/occurrence identity and current
+receipt after-images. It records only the paired income. The preview distinguishes **zero new
+acquisitions** from new income records, displays the literal source amount and read-only accounting
+role, and reports excluded pending event counts. There is no row picker, custom source file or
+manual accounting-role choice.
+
+Historical currency conversion is prepared automatically for proved income dates. Missing usable
+stored rates leave those events pending, while independently ready events can proceed. The reviewed
+fingerprint binds dated rate evidence; current rates never authorize recording, and the original
+source FX remains unstamped.
+
+New rows remain visible in active and archived transaction history as **Income included in acquired
+units**. Their separate `totalInKindIncome` subtotal does not increase ordinary dividend/income totals,
+units, value, cost basis or gain again. It does not imply tax status. Ordinary dividend tax estimates
+and ordinary dividend/AI report totals exclude it; literal history and a separate unclassified tax
+subtotal remain available. See [[docs/features/portfolio]] and [[docs/features/belgian-tax]].
+
+The atomic commit reports `recordedIncome` equal to newly `imported` income rows, with no new
+acquisitions, corrections, duplicate repairs, cash, custody or adjustments. Repeat review records no
+new income. Other events remain pending; partial batches and reference context stay queued on remount.
+Same-batch settled retries and freshly staged duplicates retain their paired-income proof and
+existing income identity. Review accepts those proved repeats without claiming new income or
+acquisitions; unrelated proofs and duplicate pair claims remain invalid.
+Immutable paired record/restore receipts in migration 0124 guard both canonical after-images. Income
+rollback releases the pair before dependent acquisition changes; changed images block rollback.
+Older standard-role receipt images remain valid without rewriting. See
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]] and [[docs/api/portfolio-imports]].
+
+### Record proven Kinesis cash history
+
+New Kinesis cash in ordinary full-history commit is rejected before writes with `cash_reconciliation_required`;
+use the confirmed cash-only scope to record it. Already-owned unchanged settled cash repeats remain
+compatible with full review. Ownership confirmation is not assumed for future unclassified funding.
+
+**Record proven cash history** uses `record_cash_only`, explicit `preserve_existing` and the
+complete original unfiltered Kinesis CSV. Confirm that the source's funding deposits and withdrawals
+are transfers between your own accounts. The confirmation is bound to source/account routing;
+changing sources, routing or filters invalidates review and clears stale confirmation. Stage/review
+requires the confirmed complete source. No XML, source-row picker or handmade CSV is needed.
+Retained source batches and their stored historical proof remain available.
+
+The server proves all source cash balance chains and selects every member together.
+Unrelated active ledger rows anywhere on the routed account block the scope; existing owned
+components qualify only with their complete unchanged original-source proof.
+The zero-opening source also requires no routed-account cash statement reading,
+even a zero reading. Those rows are read, fingerprint-bound and locked alongside ledger proof;
+a new or changed statement reading invalidates the reviewed plan.
+It prepares historical conversion automatically; missing usable dated rates defer the complete
+group, while the reviewed fingerprint binds readiness. No current rate authorizes recording. Review shows
+signed amounts, dates, currencies, broker accounts and source classifications. Trade quotes and
+confirmed funding are internal transfers; card spending remains an expense. A separately quoted
+funding-withdrawal fee stays a distinct expense, while its transfer component is net of the fee.
+Card spending already includes its quoted fee. Every source-owned cash component uses brokerage
+origin with no guessed peer or invented opposite bank transaction. These classifications survive
+ordinary transfer reconciliation without automatic re-pairing or orphan clearing.
+
+The preview distinguishes source-event count from resulting cash-ledger component count. Commit
+reports `recordedCash` equal to newly `imported` ledger components, while duplicate counts remain
+source-row settlement counts. Holdings, ordinary/in-kind portfolio income, custody, basis and units
+stay unchanged. Other source events remain pending; no general event drain runs. Same-batch settled
+and fresh-file duplicate reviews require complete cash proof and unchanged component images, with
+zero new cash records. Successful new cash recording and cash deletion refresh ordinary statistics
+caches; failed operations and no-op repeats do not schedule that refresh. Guarded rollback checks every owned component before deletion and retains
+immutable source evidence. See [[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+
+Queued session settings now retain reconciliation scope, existing-facts policy and matching cash
+confirmation across reloads. The checkpoint binds selected batch identities and source/account
+routing, retains reference state, and requires fresh review after remount. Invalid or older settings
+use the existing full-history/automatic defaults. No financial source payload is copied into the
+settings checkpoint.
+
+### Correct proven existing Kinesis records
+
+The optional **Correct proven existing records** scope uses `correct_existing_only` and explicit
+`prefer_source` to repair proven financial differences or closed yield-group payment dates in unique
+existing buys/gifts.
+It uses the same complete fresh unfiltered Kinesis primary proof and server-derived selection.
+Ordinary financial corrections retain dates, types, quantities, notes and transaction IDs. Their
+allowed corrections are principal, unit price, fees, taxes, currency and original FX. Literal source
+fees replace recorded fees; no fee is added a second time.
+
+A separately proved complete zero-basis yield group can use the literal broker payment date.
+Every changed member is corrected together with a typed `dateProof` and only `date` in its
+corrections. The same independent deposit boundaries, settled yield anchor, unique unit pairing
+and interval closure prove membership. Quantities, financial values, type, notes and transaction
+IDs stay unchanged. An unchanged anchor is proof context rather than a new correction. The preview
+shows the recorded and payment dates and counts only changed existing records. Ordinary financial
+corrections still retain dates; this is not a general date-editing rule.
+
+Meaningful gift basis/currency require already-retained validated recorded-native evidence bound
+to the primary event and exact account/asset/date/quantity. No public reference upload can add or
+enrich that evidence. Original identities, selected source IDs and immutable receipts stay unchanged.
+An existing zero or nominal gift basis is not promoted into a financial basis correction.
+
+Currency corrections without literal original FX use automatic historical backfill. Preview and
+locked commit require a usable stored rate on or before the transaction date, no more than seven
+days earlier. Source FX stays unstamped, and today's rate cannot authorize the correction. If a
+gift's historical rate is unavailable, its correction remains pending while independent proved
+fee corrections can proceed. The selected rate evidence is bound to the reviewed fingerprint.
+Startup warms historical rate caches for these records but does not stamp canonical FX on rows
+with an import batch, source hash or duplicate fingerprint. Both candidate selection and the locked
+update protect that provenance, preserving source facts and immutable receipt after-images.
+
+Review shows zero new transactions, the existing correction count, and excluded pending events.
+Only proven `adopt` corrections and strict receipt-proven `duplicate`/`settled` retries are
+selected. Commit performs no insertion, duplicate repair, cash movement, custody transfer or
+adjustment, and returns before the ordinary source drain. Partial source checkpoints
+and the `awaiting_review` lifecycle remain intact. The same immutable receipt and after-image
+rollback guards restore only the corrected originals, including their original recorded dates for
+group date corrections. Complete group evidence and all before/after dates are bound into the
+preview fingerprint and rechecked under commit locks.
 
 ### Repair an already imported duplicate
 
@@ -423,6 +642,16 @@ and notes, removes the exact imported copy, changes its old staging pointer to n
 moves one old batch count from imported to duplicate. The new source also becomes a duplicate.
 Both rows' full images, old staging snapshots, and batch counters are retained in the immutable
 `portfolio_import_duplicate_repair_journal` (0122). Relevant old batches join the sorted lock scope.
+
+IBKR repairs can use authenticated literal statement context to prove native trade currency and
+principal, base-currency commission conversion, and dividend gross versus separately exported
+withholding. The proof rechecks literal hashes, ordered columns, statement currency and staged
+precision. A unique same-date economic claim narrows overlapping imported-copy candidates before
+one-to-one usage checks. A different proved imported copy remains a duplicate; it cannot become
+an insertion. Unproved or multiple claims remain blocked. The same proof can identify a standalone
+legacy sale with a copied currency label. It does not widen the ordinary seven-day match window or
+the separate Nexo Pro proof rule. Dividend adoption clears embedded withholding only when the
+unique separate source tax proves it, so withholding is recorded once.
 
 Rollback validates every after-image and the complete projected history before any mutation. It
 restores the imported copy's original ID/timestamps, the manual financial/provenance values, old
@@ -449,6 +678,12 @@ the source loses gross units and the destination receives gross units minus fees
 method-specific `fee_basis_allocations` explain the original lots and native/EUR basis consumed by
 those fee units. Missing original FX remains unresolved rather than being invented.
 
+Historical snapshots preserve calendar-date and shared-ID order for investments with custody or
+adjustments, keeping amounts and account unit balances in Decimal. A later same-day acquisition
+cannot cover an earlier transfer. Invalid source holdings or incomplete assignment rejects replay
+before stored performance snapshots are replaced. See
+[[docs/features/portfolio#Custody and adjustment snapshots (October 2026)|snapshot replay guarantees]].
+
 Manual trade edits, broker re-tags, commits, and rollback validate the complete projected history
 under shared writer locks. A change cannot introduce a broken custody chain or a new/worse account
 oversell. Whole-lot re-tagging remains an assignment correction; it no longer represents dated
@@ -472,53 +707,25 @@ basis from original purchase FX. Unresolved FX remains unresolved. The separate
 older batches. Adjustments share the trade ID sequence and full-history writer locks. Preview
 exposes `adjustment` actions and `summary.adjustment`; newly written adjustments count as imported.
 
+Snapshot replay uses the weighted-average consumed lots to remove asset-fee principal and its
+original purchase FX from neutral-value weights. It preserves the principal share when canonical
+basis also includes purchase fees/taxes. Yield reversals consume only proven zero-basis lots;
+neither adjustment creates a capital flow or sale. Missing proof, invalid policy, or insufficient
+holdings rejects computation before any performance-snapshot deletion or insertion.
+
 Ledger updates are forbidden. Source-link updates and direct deletes are forbidden; validated
 parent-event rollback removes links by cascade after projected-history checks. Retention and backup
 include the ledger and its evidence links. See [[docs/reference/data-model]] and
 [[docs/guides/migrations]] for schema and guarded downgrade details.
 
-### Optional Portfolio Performance reference
+### Retained historical evidence
 
-An original Portfolio Performance XML can supply bounded secondary evidence after the selected
-primary statements have staged. The user explicitly selects `placeholder_basis_policy='zero'`;
-there is no inferred policy. That selection also applies Kinesis's explicit zero-yield policy.
-The reference endpoint changes staging/configuration and can add review-only supplemental batches.
-It does not write trades, adoption receipts, custody, or adjustments.
-
-Primary broker execution facts retain precedence. Recorded XML values can establish missing native
-basis only when the literal asset, quantity, date, currency, and wallet/account context resolve.
-A small placeholder value is not a purchase valuation. Consistent literal XML FX may supply an
-original rate; other currency conversions are not guessed. Missing anchors, ambiguous context,
-unproven economics, and reference coverage gaps remain blockers. A coverage diagnostic describes
-the selected evidence; it does not certify a complete export or execution timestamp semantics.
-When only Nexo Pro order exports are selected, reference coverage checks executions in the mapped
-broker account. Wallet movements remain outside that execution scope. Selecting the wallet
-statement enables the full custody coverage checks; missing trade executions still block a
-Pro-only review.
-
-For wallet reviews, shared reference-account mappings retain earlier custody dependencies for the
-selected assets. Unrelated assets held in the same external wallet stay outside the selected
-coverage. An isolated withdrawal and later return can prove an exact unit loss on the return date;
-intervening same-asset movements or disposals block that inference.
-
-Nexo interest receipts can cover one grouped XML receipt only when unique, literal paired income
-and acquisition records on at most two consecutive dates establish the exact aggregate units.
-Each primary date and USD value remains unchanged. Duplicate or overlapping groups and existing
-aggregate legacy gifts block insertion. The XML value does not establish a currency conversion.
-
-Delayed XML unit removals can represent Nexo Pro base-asset trading fees already included in net
-buy quantities. Coverage requires matched literal gross buys and the complete fee total before the
-next recorded sale. Accumulated reference rounding is bounded to one eight-decimal unit per XML
-fee record and retained in provenance. Those removals do not create additional fee debits or
-change the primary execution quantities, prices, fees, or dates.
-
-Only explicitly selected terminal IBKR history with complete retained source records can become
-a fresh managed review clone. Original canonical history stays unchanged; the returned effective
-scope replaces the old selected ID with its clone. This permits reviewed adoption/repair without
-rolling back an old import that also contains unrelated history. Same XML bytes, scope, and routing
-return the same managed result. Changed XML/scope needs freshly staged primary files and a new
-managed clone; changed account routing conflicts. See
-[[docs/api/portfolio-imports#POST /api/portfolio/import/reconciliation/reference|the reference API]].
+Portfolio Performance XML upload and reference application are unavailable. The import UI accepts
+supported original broker CSV/Saxo XLSX files. Existing stored original-document context remains
+readable for strict historical source matching, repeats and rollback. It does not authorize a new
+upload, supplemental history, managed clone or alteration of immutable receipts. Removing the
+workflow leaves all historical transactions and proof intact. The XML parser, reference planner
+and reference write repository are removed; only stored JSON proof validation remains.
 
 ### 5. Commit
 
@@ -694,12 +901,9 @@ before preview loading; stopping waits for the current upload to finish and reta
 Only staged batch metadata is kept in tab-scoped `sessionStorage`, never file bytes. Restaging
 retains earlier batch IDs visibly. Staging alone creates no history.
 
-The session also accepts one optional original Portfolio Performance XML and an explicit zero
-placeholder policy. An existing-import picker adds only the terminal import the user selects.
-Reference results include managed clone/supplemental metadata and the full effective scope; policy
-overrides follow a selected original into its clone. XML, source-scope, or policy changes discard
-that managed scope, restage uploaded files, and restore the explicitly selected original for a new
-clone. Resume keeps reference result/blockers/scope metadata, never XML bytes or auto-commit.
+The existing-import picker adds only the completed IBKR source batch the user selects. Retained
+queued broker batches can be reviewed directly without reattaching file bytes. Stored server proof
+remains subject to the same validation; the session has no XML chooser or reference upload call.
 
 The combined review displays actions, existing/source values, corrections, policy, transfer
 units/fees/accounts, and adjustment kind/basis policy. Duplicate repair displays both the retained
@@ -708,14 +912,40 @@ current complete scope and sends its fingerprint. Unknown or malformed commit ou
 as unverified. The session does not prove that supplied exports contain every historical trade or
 that an order timestamp is an execution timestamp.
 
+**Full history** remains the default. **Attach proven source records** is available only when the
+session contains complete Kinesis statements, no asset filters, and no source-preferred statement
+policy. Choosing it sets the global policy to `preserve_existing` and invalidates any earlier
+review. Choose this scope before staging: Kinesis uploads then explicitly send
+`yield_basis_policy='zero'`, so already recorded zero-basis yield receipts can
+be proved without changing their financial values. New acquisitions and income remain pending.
+Choosing attachment scope after full-history staging does not reinterpret its staged events.
+Already-retained complete original-document proof can establish closed grouped yield matches. Their recorded dates stay unchanged
+in attachment mode; broker payment dates remain source evidence. Adding an incompatible source keeps the chosen scope visible and disables staging/review
+until the conflict is resolved or the user explicitly chooses full history; it never broadens the
+scope automatically.
+
+**Correct proven existing records** requires the same complete Kinesis-only source set with no
+asset filter or contrary preserving statement policy. Choosing it sets the global policy to
+`prefer_source`, invalidates the review, and explicitly sends the zero basis policy before fresh
+staging. Financial differences and proved group date changes are shown for review; quantities,
+types, notes and IDs are retained. Ordinary financial corrections retain dates. Historical queued
+sources keep their batch IDs and can use their already-stored proof without source reupload.
+
+Before confirmation, attachment review shows zero new transactions, existing records to attach,
+and pending event counts. It sends the same scope and reviewed fingerprint on commit. A partial
+response keeps every staged statement in tab-scoped storage, including batches with zero individual
+pending rows. Matching source/routing/batch checkpoints retain scope, policy and funding confirmation
+on reload and require fresh review. Old or invalid settings use full-history/automatic defaults.
+Complete sessions clear the queued metadata. Partial attachment does not complete the full import.
+
 ### Single-file upload and mapping layout
 
 The upload page starts with a CSV/XLSX dropzone and **Detect automatically** selected. Header
-signatures select IBKR, Kinesis, Nexo wallet, Nexo Pro, or Saxo only when one signature matches. Detection reads the complete file within the 50 MiB upload limit, so CSV account selection includes
+signatures select IBKR, Kinesis, Nexo wallet, Nexo Pro, Saxo, or native wallet receipts only when one signature matches. Detection reads the complete file within the 50 MiB upload limit, so CSV account selection includes
 all records rather than a preview prefix. Malformed CSV quotes fail instead of being repaired.
 XLSX detection requires one Saxo header signature across workbook sheets; unsupported or unreadable
 workbooks disable upload. The server independently enforces the workbook contract. Unknown CSVs remain available for custom mapping. Automatic detection is a
-frontend convenience; API callers still supply `portfolio_format` and required mapping fields.
+frontend convenience; API callers supply the required mapping fields and `portfolio_format` only for specialized adapters.
 
 Account selection first tries one exact exported account identity against active broker account
 names or display names, then one recognized broker institution/name. Multiple source accounts or
@@ -723,6 +953,14 @@ ambiguous candidates remain unassigned for explicit selection. An automatically 
 ambiguous or unavailable. Explicit manual choices are preserved for the current file. Replacing a
 file clears its automatic preset/account, and stale detection results cannot apply to the new file.
 Saved parsers and explicitly chosen presets retain their reusable settings across uploads.
+Native receipts require exactly the ten unique `Date`, `Type`, `Symbol`, `Units`, `Amount`,
+`Currency`, `Source_ID`, `Source_Account`, `Note` and `Receipt_JSON` headers and supported native
+receipt types. Their generic preset omits the specialized format and fixes decimal-dot numbers,
+ISO calendar dates and source identity mappings. Physical sender addresses never select an account;
+only one exact active logical CoolWallet name/display-name alias can auto-resolve, otherwise the
+wallet account must be selected explicitly. The multi-statement session stages Kinesis yield units
+with explicit zero basis in full history as well as bounded scopes; literal paired income remains
+separate. Other broker presets and the backend's default yield policy are unchanged.
 
 Custom column mappings appear
 only after a file is selected. **CSV format options** keeps delimiter, date and number formats,
@@ -806,6 +1044,15 @@ Migrations 0120–0123 add immutable adoption/duplicate-repair receipts, the dat
 and the adjustment ledger with restrictive source links. All new tables are backup-covered and
 have guarded downgrade conditions; upgrading does not rewrite existing holdings. See [[docs/reference/data-model|Data Model Reference]] for field-level schema and
 [[docs/adr/177-reviewed-history-reconciliation-and-custody-ledger|ADR-177]] for recovery limits.
+
+Migration 0124 adds the default `standard` income role and an empty paired-income receipt journal;
+it does not create income history or rewrite prior financial values or receipt JSON. Normal startup
+recognizes the exact registered 0120–0125 profiles and advances only to pinned additive 0125.
+Migration 0125 adds source-owned brokerage cash origin and typed source receipt protection; it
+creates no cash records or transfer peers during upgrade.
+Older 0118 bridge/conversion maintenance stays deferred, and unknown successor revisions refuse
+automatic upgrade. See [[docs/guides/migrations|Migration target policy]] and
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]].
 
 ---
 

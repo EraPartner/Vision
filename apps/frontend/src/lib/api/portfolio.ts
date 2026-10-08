@@ -12,6 +12,39 @@ import type {
 } from "@/types/api";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
+import { z } from "zod";
+import { PORTFOLIO_INCOME_RECOGNITION_ROLES } from "@vision/types/portfolioTxnTypes";
+
+const incomeRoleSchema = z
+    .enum(PORTFOLIO_INCOME_RECOGNITION_ROLES)
+    .default("standard");
+
+function verifiedPortfolioTransaction(
+    tx: PortfolioTransaction,
+): PortfolioTransaction {
+    const role = incomeRoleSchema.safeParse(tx.income_recognition_role);
+    if (
+        !role.success ||
+        (role.data === "included_in_units" && tx.type !== "dividend")
+    ) {
+        const error = new Error("Unverified portfolio income recognition role");
+        error.name = "PortfolioResponseError";
+        throw error;
+    }
+    const raw = tx as PortfolioTransaction & { transaction_date?: string };
+    return {
+        ...tx,
+        date: raw.date ?? raw.transaction_date ?? "",
+        income_recognition_role: role.data,
+    };
+}
+
+function rejectManualIncomeRole(
+    data: PortfolioTransactionCreate | PortfolioTransactionUpdate,
+) {
+    if (Object.hasOwn(data, "income_recognition_role"))
+        throw new Error("Portfolio income recognition role is read-only");
+}
 
 export function getInvestments(params?: {
     limit?: number;
@@ -96,12 +129,7 @@ export async function getPortfolioTransactions(
     );
     return {
         ...res,
-        items: res.items.map((tx) => {
-            const raw = tx as PortfolioTransaction & {
-                transaction_date?: string;
-            };
-            return { ...tx, date: raw.date ?? raw.transaction_date ?? "" };
-        }),
+        items: res.items.map(verifiedPortfolioTransaction),
     };
 }
 
@@ -118,38 +146,39 @@ export async function getPortfolioTransactionsBulk(params: {
     );
     return {
         ...res,
-        items: res.items.map((tx) => {
-            const raw = tx as PortfolioTransaction & {
-                transaction_date?: string;
-            };
-            return { ...tx, date: raw.date ?? raw.transaction_date ?? "" };
-        }),
+        items: res.items.map(verifiedPortfolioTransaction),
     };
 }
 
-export function createPortfolioTransaction(
+export async function createPortfolioTransaction(
     investmentId: number,
     data: PortfolioTransactionCreate,
 ): Promise<PortfolioTransaction> {
-    return apiRequest<PortfolioTransaction>(
-        `/api/investments/${investmentId}/transactions`,
-        {
-            method: "POST",
-            body: JSON.stringify(data),
-        },
+    rejectManualIncomeRole(data);
+    return verifiedPortfolioTransaction(
+        await apiRequest<PortfolioTransaction>(
+            `/api/investments/${investmentId}/transactions`,
+            {
+                method: "POST",
+                body: JSON.stringify(data),
+            },
+        ),
     );
 }
 
-export function updatePortfolioTransaction(
+export async function updatePortfolioTransaction(
     txnId: number,
     data: PortfolioTransactionUpdate,
 ): Promise<PortfolioTransaction> {
-    return apiRequest<PortfolioTransaction>(
-        `/api/investments/transactions/${txnId}`,
-        {
-            method: "PATCH",
-            body: JSON.stringify(data),
-        },
+    rejectManualIncomeRole(data);
+    return verifiedPortfolioTransaction(
+        await apiRequest<PortfolioTransaction>(
+            `/api/investments/transactions/${txnId}`,
+            {
+                method: "PATCH",
+                body: JSON.stringify(data),
+            },
+        ),
     );
 }
 

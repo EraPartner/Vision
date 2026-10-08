@@ -230,3 +230,30 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
     expect(data.sellTaxTotal).toBe(0);
   });
 });
+
+it("keeps paired in-kind source amount and costs separate from ordinary dividend and withholding totals", async () => {
+  vi.clearAllMocks();
+  clearHistoricalIndexCache();
+  query.mockResolvedValueOnce({
+    rows: [
+      dividendRow({
+        currency: "EUR",
+        amount: 40,
+        taxes: 2,
+        fees: 1,
+        income_recognition_role: "included_in_units",
+      }),
+      dividendRow({ currency: "EUR", amount: 10, taxes: 3 }),
+    ],
+  });
+  const data = await fetchTaxData("EUR", { kind: "year", year: 2024 }, {});
+  expect(data).toMatchObject({
+    totalInKindIncome: 40,
+    inKindIncomeCount: 1,
+    dividendsReceived: 10,
+    dividendWHTTotal: 3,
+    otherTaxTotal: 2,
+    feesTotal: 1,
+    unknownDividendConventionCount: 0,
+  });
+});

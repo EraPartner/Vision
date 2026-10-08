@@ -362,6 +362,7 @@ package "Feature Components - Import" {
     +optional XML + zero policy + selected prior import
     +effective managed/supplemental scope
     +current ready review + atomic commit
+    +bounded income counts + retained partial sources
   }
   class PortfolioImportDetection
   class PortfolioImportsApi
@@ -471,4 +472,5 @@ AnalysisWorkspacePage --> AnalysisChartPanel : persisted multiple series
 AnalysisWorkspacePage --> AnalysisPivotPanel : complete-source totals and drill
 AnalysisWorkspacePage --> AnalysisWorkbenchPanel : formulas, preparation and scenarios
 AnalysisWorkspacePage --> AnalysisInterchangePanel : typed snapshot values
+
 @enduml

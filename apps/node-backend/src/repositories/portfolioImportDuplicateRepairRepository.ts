@@ -209,7 +209,7 @@ export async function deleteExactImportedCopy(
   return (
     (
       await query(
-        `DELETE FROM portfolio_transactions pt WHERE pt.id=$1 AND ${FULL_TRANSACTION}=$2::jsonb RETURNING pt.id`,
+        `DELETE FROM portfolio_transactions pt WHERE pt.id=$1 AND ${FULL_TRANSACTION}=normalize_portfolio_income_snapshot($2::jsonb) RETURNING pt.id`,
         [imported.id, JSON.stringify(imported)],
       )
     ).rows.length === 1
@@ -248,7 +248,7 @@ export async function restoreExactImportedCopy(
   return (
     (
       await query(
-        `INSERT INTO portfolio_transactions SELECT restored.* FROM jsonb_populate_record(NULL::portfolio_transactions,$1::jsonb) restored ON CONFLICT DO NOTHING RETURNING id`,
+        `INSERT INTO portfolio_transactions SELECT restored.* FROM jsonb_populate_record(NULL::portfolio_transactions,$1::jsonb || jsonb_build_object('income_recognition_role',COALESCE($1::jsonb->>'income_recognition_role','standard'))) restored ON CONFLICT DO NOTHING RETURNING id`,
         [JSON.stringify(imported)],
       )
     ).rows.length === 1

@@ -24,6 +24,21 @@ export const DEFAULT_PORTFOLIO_IMPORT_CONFIG: PortfolioCustomConfig = {
 };
 
 const PORTFOLIO_IMPORT_PRESETS: Record<string, PortfolioCustomConfig> = {
+    native_receipts: {
+        ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
+        dateColumn: "Date",
+        typeColumn: "Type",
+        symbolColumn: "Symbol",
+        unitsColumn: "Units",
+        amountColumn: "Amount",
+        currencyColumn: "Currency",
+        sourceIdColumn: "Source_ID",
+        sourceAccountColumn: "Source_Account",
+        noteColumn: "Note",
+        number_format: "decimal_dot",
+        defaultAssetClass: "metals",
+        defaultType: "gift",
+    },
     ibkr: {
         ...DEFAULT_PORTFOLIO_IMPORT_CONFIG,
         format: "ibkr_transaction_history",

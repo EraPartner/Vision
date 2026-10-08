@@ -208,6 +208,7 @@ package "Investment & Portfolio" {
     +recurrence_end_date: date
     +created_at: timestamptz
     +updated_at: timestamptz
+    +income_recognition_role: standard | included_in_units (dividend only)
   }
 
   class PortfolioAssetTransfer <<ADR-177>> {
@@ -251,6 +252,14 @@ package "Investment & Portfolio" {
     +previous_entry_id: bigint <<FK, UQ>>
     +before_data: jsonb
     +after_data: jsonb
+  }
+  class PortfolioImportIncomeRecognitionJournal <<ADR-188>> {
+    +id: bigint
+    +batch_id / staging_row_id / unit_staging_row_id: bigint <<FK RESTRICT>>
+    +income_transaction_id / unit_transaction_id: integer (retained)
+    +action: record | restore
+    +previous_entry_id: bigint <<FK, UQ>>
+    +income_data / unit_data / proof_data: jsonb
   }
   class PortfolioImportDuplicateRepairJournal <<ADR-177>> {
     +id: bigint
@@ -485,6 +494,10 @@ PortfolioAssetAdjustment "1" -- "*" PortfolioAssetAdjustmentSource : parent roll
 PortfolioImportStagingRow "1" -- "*" PortfolioAssetAdjustmentSource : original yield evidence RESTRICT
 Account "1" -- "*" PortfolioAssetTransfer : source / destination
 PortfolioImportBatch "1" -- "*" PortfolioImportStagingRow : source provenance
+PortfolioImportBatch "1" -- "*" PortfolioImportIncomeRecognitionJournal : retained complete source
+PortfolioImportStagingRow "1" -- "*" PortfolioImportIncomeRecognitionJournal : paired income / units evidence
+PortfolioImportIncomeRecognitionJournal ..> PortfolioTransaction : two retained IDs + guarded after-images; no FK
+PortfolioImportIncomeRecognitionJournal --> PortfolioImportIncomeRecognitionJournal : previous recognition
 PortfolioImportBatch "1" -- "*" PortfolioImportReconciliationJournal : retained receipt
 PortfolioImportStagingRow "1" -- "*" PortfolioImportReconciliationJournal : adoption / restore
 PortfolioImportStagingRow "1" -- "0..1" PortfolioAssetTransfer : source event
@@ -510,5 +523,12 @@ ImportBatch "1" o-- "*" ImportRow : contains
 ImportRow "*" --> "0..1" Recipient : resolved / overridden recipient
 ImportRow "*" --> "0..1" RecipientBankAccount : resolved bank account
 Recipient "1" --> "0..1" AggRecipientTotals : "trigger-maintained"
+
+note right of Transaction
+  ADR-189 / 0125: source-owned brokerage cash origin.
+  Trade/funding transfer; card/quoted withdrawal fee expense.
+  Null peer; typed immutable one/two-component source receipt.
+  No inferred opposite bank leg or holdings change.
+end note
 
 @enduml

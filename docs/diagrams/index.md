@@ -2,8 +2,8 @@
 title: Diagrams Index
 type: reference
 status: active
-date: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-07
+updated: 2026-10-07
 tags: [diagrams, index, plantuml, uml, reference]
 description: Complete index of all PlantUML diagrams in Vision - organized by category with descriptions and use cases
 aliases: [diagram index, UML diagrams, plantuml diagrams]
@@ -84,7 +84,7 @@ aliases: [diagram index, UML diagrams, plantuml diagrams]
 A standalone HTML companion to these PlantUML diagrams. Journey view shows ordered handoffs; Architecture map shows the full system. Select a learning path, step through a flow, and expand payload/source details when needed.
 
 - **File:** `docs/flow-visualizer.html` — open it directly in any browser (no build step, no network calls).
-- **Coverage:** 82 components / 46 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, planned-payment execution and selected-evidence cloud disclosure. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
+- **Coverage:** 81 components / 46 flows. New journeys cover page requests, dashboard totals, desktop startup, shared expenses, internal transfers, planned-payment execution and selected-evidence cloud disclosure. Existing import, recurring, performance, backup, admin-auth and Ollama journeys reflect current source.
 - **Start here:** [[docs/guides/visual-learning|Understand Vision Visually]] has five learning paths and compact conceptual diagrams.
 - **Deep links:** use `flow-visualizer.html#flow-id`, for example [planned payment completion](../flow-visualizer.html#planned-payment-completion).
 - **Extending:** edit the embedded JSON (schema documented inline), then run `node --test scripts/tests/flow-visualizer.test.js`.

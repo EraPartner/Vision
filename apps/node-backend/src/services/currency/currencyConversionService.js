@@ -620,10 +620,12 @@ async function repairHistoricalRatesFromFullHistory(pairs) {
 }
 
 /**
- * Stamp `fx_rate_to_eur` onto non-EUR transactions that lack it, using the
+ * Stamp `fx_rate_to_eur` onto manual non-EUR transactions that lack it, using the
  * stored rate on-or-before the transaction date (≤ 7 days back — the standard
  * weekend/holiday convention). Distant nearest rates are never stamped; those
  * rows stay NULL and read paths keep resolving them per-date with a fallback flag.
+ * Source-provenance rows keep their booked FX evidence and immutable receipts;
+ * their missing historical rates are still backfilled in exchange_rates.
  */
 async function stampTransactionFxRates() {
   const result = await query(
@@ -640,10 +642,17 @@ async function stampTransactionFxRates() {
                LIMIT 1) AS rate
        FROM portfolio_transactions pt2
        WHERE pt2.fx_rate_to_eur IS NULL
+         AND pt2.import_batch_id IS NULL
+         AND pt2.source_record_hash IS NULL
+         AND pt2.dedup_fingerprint IS NULL
          AND pt2.currency IS NOT NULL
          AND UPPER(pt2.currency::text) <> 'EUR'
      ) sub
-     WHERE pt.id = sub.id AND sub.rate IS NOT NULL`,
+     WHERE pt.id = sub.id AND sub.rate IS NOT NULL
+       AND pt.fx_rate_to_eur IS NULL
+       AND pt.import_batch_id IS NULL
+       AND pt.source_record_hash IS NULL
+       AND pt.dedup_fingerprint IS NULL`,
   );
   return result.rowCount ?? 0;
 }

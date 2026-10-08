@@ -4,9 +4,9 @@ type: endpoint
 method: GET, POST, PUT, PATCH, DELETE
 path: /api/investments
 description: Investment portfolio management (stocks, crypto, real estate, savings)
-date: 2026-10-07
-last_modified: 2026-10-04
-updated: 2026-10-04
+date: 2026-10-08
+last_modified: 2026-10-08
+updated: 2026-10-08
 tags: [api, investments, portfolio, stocks, crypto, metals, phase-9, decimal, money, offline-fallback, per-account, adr-091, show-in-ticker, portfolio-ticker]
 status: active
 aliases: [investments-api, portfolio-api, holdings, stocks, crypto, real-estate, savings, bonds, metals]
@@ -32,6 +32,22 @@ input change made under the explicit cutoff in [[docs/adr/135-compatibility-cuto
 
 > [!info] Monetary Precision (Phase 9)
 > All monetary values in responses (amounts, valuations, costs, prices) use **Decimal.js** for precision. Values are serialized as JSON `number` type, safe to 2 decimal places (cents). See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] for details.
+
+## Read-only income accounting role
+
+Portfolio transaction reads add `income_recognition_role`: `standard` (default) or
+`included_in_units` (dividend only). Older responses without the field are interpreted as standard.
+The latter retains literal income already represented by a proved existing zero-basis unit
+acquisition. Its amount remains in active/archived transaction listings and portfolio breakdowns,
+while ordinary dividend/income/gain totals exclude it and expose separate `totalInKindIncome`.
+This is not a tax classification.
+
+Transaction create and update bodies reject an explicit role, including `standard`; it is assigned
+only by the proved import writer. Active paired income/acquisition receipts prevent image changes
+or deletion until guarded income rollback releases the pair. Existing ordinary CRUD behavior is
+unchanged. The read-only field is additive; see
+[[docs/adr/188-proved-in-kind-income-recognition|ADR-188]], [[docs/api/portfolio-imports]] and
+[[docs/api/portfolio-summary]].
 
 ## Endpoints
 

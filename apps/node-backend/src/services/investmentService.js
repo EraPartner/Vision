@@ -378,6 +378,11 @@ const portfolioTransactionBodySchema = z.looseObject({
  * @returns {any}
  */
 function parsePortfolioTransactionBody(body) {
+  if (
+    body &&
+    Object.prototype.hasOwnProperty.call(body, "income_recognition_role")
+  )
+    throw new ValidationError("income_recognition_role is read-only");
   const result = portfolioTransactionBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
@@ -1077,6 +1082,4 @@ export {
   parseDefaultListOptions as __parseDefaultListOptions,
 };
 
-export {
-  parseBrokerRetagBody as __parseBrokerRetagBody,
-};
+export { parseBrokerRetagBody as __parseBrokerRetagBody };

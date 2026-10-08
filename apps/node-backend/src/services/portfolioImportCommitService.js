@@ -7,6 +7,7 @@ import {
 import {
   lockBatchForUpdate,
   setBatchAccount,
+  finalizeAdoptionOnlyBatch,
 } from "../repositories/portfolioImportBatchRepository.ts";
 import { commitPortfolioImport } from "./portfolioImportPipeline/index.js";
 import { assertPortfolioImportAccount } from "./portfolioImportAccountService.js";
@@ -17,6 +18,10 @@ import {
 import {
   applyPortfolioImportReconciliation,
   getPortfolioImportRepairBatchIds,
+  getPortfolioImportCompanionRowIds,
+  getPortfolioImportScopedSelection,
+  completePortfolioImportIncome,
+  completePortfolioImportNativeGiftGroups,
 } from "./portfolioImportReconciliationService.js";
 import { lockReconciliationAccountsAndHistory } from "../repositories/portfolioImportReconciliationRepository.ts";
 import { readReconciliationSources } from "../repositories/portfolioImportReconciliationRepository.ts";
@@ -41,19 +46,37 @@ function assertReviewable(batch, batchId) {
     );
 }
 
+import { lockKinesisCashLedger } from "../repositories/portfolioImportCashRepository.js";
+import { scheduleRefresh } from "./materializedViewService.js";
+
 async function commitLockedScope(
   batches,
   adoptPolicy,
   expectedPlanFingerprint,
   batchPolicies = [],
   lockedBatchIds = batches.map((batch) => Number(batch.id)),
+  reconciliationScope = "full",
+  cashFundingPolicy = undefined,
 ) {
   const ids = batches.map((batch) => Number(batch.id));
   const sourceRows = await readReconciliationSources(ids);
+  const preliminary =
+    reconciliationScope === "full"
+      ? await getPortfolioImportScopedSelection({
+          batchIds: ids,
+          adoptPolicy,
+          batchPolicies,
+        })
+      : undefined;
   const accountIds = [
     ...new Set(
       [
         ...sourceRows.map((row) => row.asset_adjustment_details?.accountId),
+        ...(preliminary?.actions ?? []).flatMap((action) => [
+          action.transfer?.sourceAccountId,
+          action.transfer?.destinationAccountId,
+          action.adjustment?.accountId,
+        ]),
         ...batches.flatMap((batch) => [
           batch.account_id,
           batch.custom_config?.transfer_destination_account_id,
@@ -66,27 +89,138 @@ async function commitLockedScope(
   for (const accountId of accountIds)
     await assertPortfolioImportAccount(accountId);
   await lockReconciliationAccountsAndHistory(accountIds);
+  if (
+    reconciliationScope === "record_cash_only" ||
+    (reconciliationScope === "full" &&
+      batches.some(
+        (batch) =>
+          batch.custom_config?.format === "kinesis_transaction_history",
+      ))
+  )
+    await lockKinesisCashLedger(accountIds);
   // A close or type change can commit while we wait for its account row. The
   // routing decision must use the state protected by the acquired locks.
   for (const accountId of accountIds)
     await assertPortfolioImportAccount(accountId);
+  const provedCompanionRowIds = await getPortfolioImportCompanionRowIds({
+    batchIds: ids,
+    adoptPolicy,
+    batchPolicies,
+    reconciliationScope,
+    cashFundingPolicy,
+  });
+  const selection =
+    reconciliationScope !== "full"
+      ? await getPortfolioImportScopedSelection({
+          batchIds: ids,
+          adoptPolicy,
+          batchPolicies,
+          reconciliationScope,
+          cashFundingPolicy,
+        })
+      : undefined;
   for (const batch of batches)
     await assertPortfolioImportReadiness({
       batchId: Number(batch.id),
       batch,
       accountId: batch.account_id,
       reconciliationPlanned: true,
+      provedCompanionRowIds,
+      selectedRowIds: selection?.selectedRowIds,
     });
-  const { adoptedByBatch, repairedByBatch } =
-    await applyPortfolioImportReconciliation({
-      batchIds: ids,
-      adoptPolicy,
-      expectedPlanFingerprint,
-      batchPolicies,
-      lockedBatchIds,
-    });
+  const {
+    plan,
+    adoptedByBatch,
+    repairedByBatch,
+    companionsByBatch,
+    recordedIncomeByBatch,
+    recordedCashByBatch,
+    deferredIncomeRowIds,
+    nativeGiftGroups,
+  } = await applyPortfolioImportReconciliation({
+    batchIds: ids,
+    adoptPolicy,
+    expectedPlanFingerprint,
+    batchPolicies,
+    lockedBatchIds,
+    reconciliationScope,
+    cashFundingPolicy,
+  });
+  if (reconciliationScope !== "full") {
+    const results = [];
+    for (const batch of batches) {
+      const progress = plan.batchProgress.find(
+        (entry) => entry.batchId === Number(batch.id),
+      );
+      if (
+        !(await finalizeAdoptionOnlyBatch(
+          Number(batch.id),
+          progress.pending,
+          progress.complete,
+        ))
+      )
+        throw new ConflictError("Adoption scope source changed during commit", {
+          details: { reason: "stale_reconciliation_plan" },
+        });
+      const adopted = adoptedByBatch.get(Number(batch.id)) ?? 0;
+      const recordedIncome = recordedIncomeByBatch.get(Number(batch.id)) ?? 0;
+      const recordedCash = recordedCashByBatch.get(Number(batch.id)) ?? 0;
+      results.push({
+        ...(reconciliationScope === "record_cash_only" ? { recordedCash } : {}),
+        ...(reconciliationScope === "record_in_kind_income_only"
+          ? { recordedIncome }
+          : {}),
+        batch_id: Number(batch.id),
+        imported: recordedIncome + recordedCash,
+        duplicates: adopted + (companionsByBatch.get(Number(batch.id)) ?? 0),
+        adopted,
+        repaired: 0,
+        errors: 0,
+        reconciliationScope,
+        pending: progress.pending,
+        complete: progress.complete,
+        deferredCounts: progress.deferredCounts,
+      });
+    }
+    return {
+      batches: results,
+      ...(reconciliationScope === "record_cash_only"
+        ? {
+            recordedCash: results.reduce(
+              (count, result) => count + result.imported,
+              0,
+            ),
+          }
+        : {}),
+      ...(reconciliationScope === "record_in_kind_income_only"
+        ? {
+            recordedIncome: results.reduce(
+              (count, result) => count + result.imported,
+              0,
+            ),
+          }
+        : {}),
+      imported: results.reduce((count, result) => count + result.imported, 0),
+      duplicates: results.reduce(
+        (count, result) => count + result.duplicates,
+        0,
+      ),
+      adopted: results.reduce((count, result) => count + result.adopted, 0),
+      repaired: 0,
+      errors: 0,
+      reconciliationScope,
+      selectedRowIds: plan.selectedRowIds,
+      pending: plan.pending,
+      complete: plan.complete,
+      deferredCounts: plan.deferredCounts,
+    };
+  }
   const scheduledRows = (await readReconciliationSources(ids))
-    .filter((row) => row.status === "matched")
+    .filter(
+      (row) =>
+        row.status === "matched" &&
+        !deferredIncomeRowIds.includes(Number(row.id)),
+    )
     .sort(
       (left, right) =>
         left.tx_date.localeCompare(right.tx_date) ||
@@ -104,10 +238,13 @@ async function commitLockedScope(
     imported: 0,
     duplicates:
       (adoptedByBatch.get(Number(batch.id)) ?? 0) +
-      (repairedByBatch.get(Number(batch.id)) ?? 0),
+      (repairedByBatch.get(Number(batch.id)) ?? 0) +
+      (companionsByBatch.get(Number(batch.id)) ?? 0),
     adopted: adoptedByBatch.get(Number(batch.id)) ?? 0,
     repaired: repairedByBatch.get(Number(batch.id)) ?? 0,
     errors: 0,
+    recordedIncome: 0,
+    recordedCash: 0,
   }));
   const custodyEvents = [];
   for (const row of scheduledRows.filter((row) =>
@@ -157,6 +294,37 @@ async function commitLockedScope(
         total.imported += result.imported;
         total.duplicates += result.duplicates;
       }
+      await completePortfolioImportNativeGiftGroups(nativeGiftGroups);
+      // Close fully drained generic receipt batches inside this transaction.
+      // Income reproof must never treat an unfinished prior owner as active.
+      for (const batchId of [
+        ...new Set(
+          nativeGiftGroups.flatMap((group) =>
+            group.members.map((row) => Number(row.batch_id)),
+          ),
+        ),
+      ]) {
+        const result = await commitPortfolioImport({ batchId });
+        if (
+          result.errors > 0 ||
+          result.imported !== 0 ||
+          result.duplicates !== 0
+        )
+          throw new ConflictError(
+            "Native receipt batch did not finish atomically",
+            { details: { reason: "atomic_import_failed" } },
+          );
+      }
+      const incomeCounts = await completePortfolioImportIncome({
+        batchIds: ids,
+        rowIds: deferredIncomeRowIds,
+        adoptPolicy,
+        batchPolicies,
+      });
+      for (const result of results) {
+        result.recordedIncome = incomeCounts.get(result.batch_id) ?? 0;
+        result.imported += result.recordedIncome;
+      }
       // Empty/adopted-only batches still need truthful terminal status. These calls
       // find no matched rows and preserve the counters already persisted by runs.
       for (const batch of batches) {
@@ -185,6 +353,11 @@ async function commitLockedScope(
         adopted: results.reduce((count, result) => count + result.adopted, 0),
         repaired: results.reduce((count, result) => count + result.repaired, 0),
         errors: 0,
+        recordedIncome: results.reduce(
+          (count, result) => count + result.recordedIncome,
+          0,
+        ),
+        recordedCash: 0,
       };
     },
   );
@@ -196,6 +369,8 @@ export async function commitReviewedPortfolioImports({
   adoptPolicy,
   expectedPlanFingerprint,
   batchPolicies = [],
+  reconciliationScope = "full",
+  cashFundingPolicy = undefined,
 }) {
   if (
     !Array.isArray(batchIds) ||
@@ -212,6 +387,8 @@ export async function commitReviewedPortfolioImports({
       batchIds: ids,
       adoptPolicy,
       batchPolicies,
+      reconciliationScope,
+      cashFundingPolicy,
     });
     const lockedIds = [...new Set([...ids, ...repairBatchIds])].sort(
       (a, b) => a - b,
@@ -230,9 +407,12 @@ export async function commitReviewedPortfolioImports({
       expectedPlanFingerprint,
       batchPolicies,
       lockedIds,
+      reconciliationScope,
+      cashFundingPolicy,
     );
   }).then((result) => {
     invalidatePortfolioCaches();
+    if (result.recordedCash > 0) scheduleRefresh();
     return result;
   });
 }

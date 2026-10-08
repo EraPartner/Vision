@@ -2,9 +2,9 @@
 title: Vision Project Knowledge Base
 type: index
 status: active
-date: 2026-10-07
-updated: 2026-10-06
-last_modified: 2026-10-04
+date: 2026-10-08
+updated: 2026-10-08
+last_modified: 2026-10-08
 tags:
   [
     knowledge-base,
@@ -176,7 +176,7 @@ LIMIT 20
 **View all diagrams:** [[docs/diagrams/index|Diagrams Index]] | [[docs/architecture/index|Architecture Overview]] | [Interactive Flow Visualizer](flow-visualizer.html)
 
 > [!tip] Interactive Flow Visualizer
-> [Open the visualizer](flow-visualizer.html#api-request) for 82 components and 46 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
+> [Open the visualizer](flow-visualizer.html#api-request) for 81 components and 46 flows. Journey view shows one ordered handoff at a time; Architecture map shows the full system. Five learning paths cover foundations, everyday money, portfolio, research/AI, and backup/trust. Each flow links to its notes and keeps payload/source details folded until needed. Start with [[docs/guides/visual-learning|Understand Vision Visually]] for small conceptual diagrams and a reading order.
 
 | Resource                                 | Description                           |
 | ---------------------------------------- | ------------------------------------- |

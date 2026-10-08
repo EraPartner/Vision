@@ -99,6 +99,41 @@ afterEach(() => {
 });
 
 describe("InvestmentDetailDialog", () => {
+    it("keeps literal in-kind income visible with a distinct accounting label and unchanged units and ordinary gains", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <InvestmentDetailDialog
+                investment={{
+                    ...INVESTMENT,
+                    totalInKindIncome: 7,
+                    transactions: [
+                        {
+                            ...TXN,
+                            id: 102,
+                            type: "dividend",
+                            units: undefined,
+                            price_per_unit: undefined,
+                            amount: 7,
+                            note: "Literal source income",
+                            income_recognition_role: "included_in_units",
+                        },
+                    ],
+                }}
+            />,
+        );
+        await user.click(
+            await screen.findByRole("button", { name: /details/i }),
+        );
+        expect(
+            screen.queryByText("Income included in acquired units"),
+        ).not.toBeInTheDocument();
+        await user.click(screen.getByRole("tab", { name: /transactions/i }));
+        expect(
+            screen.getByText("Income included in acquired units"),
+        ).toBeVisible();
+        expect(screen.getByText("Literal source income")).toBeVisible();
+    });
+
     it("reserves transaction content height before the viewport is measured", async () => {
         virtualWindow.measured = false;
         const user = userEvent.setup();

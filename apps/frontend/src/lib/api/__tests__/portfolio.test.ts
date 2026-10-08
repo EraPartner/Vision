@@ -22,6 +22,86 @@ import {
 afterEach(() => server.resetHandlers());
 
 describe("portfolio API client", () => {
+    it("keeps literal in-kind income visible and defaults older transaction roles to standard", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/investments/4/transactions`, () =>
+                ok({
+                    items: [
+                        {
+                            id: 1,
+                            type: "dividend",
+                            amount: 5,
+                            income_recognition_role: "included_in_units",
+                            transaction_date: "2025-01-01",
+                        },
+                        {
+                            id: 2,
+                            type: "dividend",
+                            amount: 7,
+                            date: "2025-02-01",
+                        },
+                    ],
+                    total: 2,
+                }),
+            ),
+        );
+        const result = await getPortfolioTransactions(4);
+        expect(
+            result.items.map((row) => [
+                row.id,
+                row.amount,
+                row.income_recognition_role,
+                row.date,
+            ]),
+        ).toEqual([
+            [1, 5, "included_in_units", "2025-01-01"],
+            [2, 7, "standard", "2025-02-01"],
+        ]);
+    });
+
+    it.each([
+        { type: "dividend", income_recognition_role: "tax_free" },
+        { type: "gift", income_recognition_role: "included_in_units" },
+    ])("rejects invalid transaction accounting roles %j", async (row) => {
+        server.use(
+            http.get(`${API_BASE}/api/investments/transactions`, () =>
+                ok({ items: [row], total: 1 }),
+            ),
+        );
+        await expect(
+            getPortfolioTransactionsBulk({ investment_ids: "4" }),
+        ).rejects.toMatchObject({ name: "PortfolioResponseError" });
+    });
+
+    it.each(["standard", "included_in_units"])(
+        "rejects an explicit manual role setter %s before any mutation",
+        async (income_recognition_role) => {
+            let calls = 0;
+            server.use(
+                http.post(`${API_BASE}/api/investments/4/transactions`, () => {
+                    calls++;
+                    return ok({ id: 1 });
+                }),
+                http.patch(`${API_BASE}/api/investments/transactions/1`, () => {
+                    calls++;
+                    return ok({ id: 1 });
+                }),
+            );
+            const payload = {
+                type: "dividend",
+                date: "2025-01-01",
+                amount: 5,
+                income_recognition_role,
+            } as never;
+            await expect(
+                createPortfolioTransaction(4, payload),
+            ).rejects.toThrow("read-only");
+            await expect(
+                updatePortfolioTransaction(1, payload),
+            ).rejects.toThrow("read-only");
+            expect(calls).toBe(0);
+        },
+    );
     it("getSupportedPriceProviders unwraps the backend catalog", async () => {
         server.use(
             http.get(`${API_BASE}/api/investments/providers`, () =>

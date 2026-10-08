@@ -347,15 +347,17 @@ package "Thin Route Seams (ADR-067, June 2026)" {
     +applyPortfolioImportReconciliation(scope)
     +validatePortfolioImportAdoptionRollback(batchId, history)
     +restorePortfolioImportAdoptions(receipts)
+    +bounded paired-income proof + record/restore
   }
-  class PortfolioImportReferenceService <<ADR-177>> {
-    +applyPortfolioImportReference(scope, XML, zeroPolicy)
-    +primary execution precedence + literal evidence
-    +managed IBKR review clone + effective scope
+  class PortfolioKinesisCashScope <<ADR-189>> {
+    +proveKinesisCashSources(rows, batches, fundingPolicy)
+    +classifyKinesisCash(context)
+    +complete source + account-ledger closure + component images
   }
-  class PortfolioPerformanceXmlParser {
-    +readPortfolioPerformanceXml(path)
-    +bounded object graph + consistent paired facts
+  class PortfolioImportCashService <<ADR-189>> {
+    +recordKinesisCash(member)
+    +validateKinesisCashRollback(batchId)
+    +one/two-component source receipt orchestration
   }
   class PortfolioAssetAdjustmentService <<ADR-177>> {
     +previewPortfolioAssetAdjustment(row, batch)
@@ -496,11 +498,13 @@ PortfolioAssetAdjustmentService --> PortfolioCustodyImportScope : approved dated
 PortfolioImportCommitService --> PortfolioImportBatchRepository : batch lock + account
 PortfolioImportReadinessService --> PortfolioImportBatchRepository : complete staging
 PortfolioImportCommitService --> PortfolioImportReconciliationService : current reviewed plan
-PortfolioImportReferenceService --> PortfolioPerformanceXmlParser : bounded secondary source
-PortfolioImportReferenceService --> PortfolioImportReferenceRepository : staging/configuration only
-PortfolioImportReferenceService --> PortfolioImportBatchRepository : managed retained-source review
-PortfolioImportReferenceService --> PortfolioImportPipelineService : validate/match supplemental scope
 PortfolioImportReconciliationService --> PortfolioImportReconciliationRepository : CAS + immutable receipts
+PortfolioImportReconciliationService --> PortfolioKinesisCashScope : closed cash-only source proof
+PortfolioImportReconciliationService --> PortfolioImportCashService : selected cash writer + guarded rollback
+PortfolioImportCashService --> PortfolioKinesisCashScope : typed proof + component image comparison
+PortfolioImportCashService --> PortfolioImportCashRepository : canonical main/fee persistence
+PortfolioImportCashService --> PortfolioImportReconciliationRepository : source settlement + retained envelopes
+
 PortfolioImportReconciliationService --> PortfolioImportDuplicateRepairService : explicit-policy repair of prior copy
 PortfolioImportDuplicateRepairService --> PortfolioImportDuplicateRepairRepository : all-image CAS + inverse receipt
 PortfolioImportReconciliationService --> PortfolioAssetTransferService : full projected history

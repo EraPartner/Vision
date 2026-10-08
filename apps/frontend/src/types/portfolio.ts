@@ -117,7 +117,9 @@ export interface InvestmentSummary {
     feeTransactions?: number;
     taxTransactions?: number;
     totalDividends: number;
-    totalIncome: number; // All income: dividends + interest + rent
+    totalIncome: number; // Ordinary income: dividends + interest + rent
+    /** Literal income already represented by acquired units; excluded from gains. */
+    totalInKindIncome?: number;
     currentValue: number;
 
     // Computed - Advanced

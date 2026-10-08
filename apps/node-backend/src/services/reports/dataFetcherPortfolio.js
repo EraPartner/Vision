@@ -14,9 +14,11 @@ import {
 import {
   convertWithRates,
   loadCurrentRates,
+  getHistoricalRateIndex,
 } from "../currency/currencyConversionService.js";
 import { todayAppDateString, firstOfMonthYmd } from "../../lib/timezone.ts";
 import { logger } from "../../config/logger.ts";
+import { findRateOnOrBeforeInIndex } from "../currency/rateFetcher.js";
 import { addAll, toNumber } from "../../lib/money.ts";
 
 /**
@@ -50,7 +52,7 @@ import { addAll, toNumber } from "../../lib/money.ts";
  * }} DividendInvestmentRow
  */
 
-/** @typedef {{ byMonth: DividendMonthRow[]; byInvestment: DividendInvestmentRow[] }} DividendData */
+/** @typedef {{ byMonth: DividendMonthRow[]; byInvestment: DividendInvestmentRow[]; totalInKindIncome: number; inKindIncomeCount: number }} DividendData */
 
 /**
  * @typedef {{
@@ -74,6 +76,8 @@ import { addAll, toNumber } from "../../lib/money.ts";
  *   returnPct: number;
  *   inflationAdjustedValue: number;
  *   totalDividends: number;
+ *   totalInKindIncome: number;
+ *   inKindIncomeCount: number;
  *   holdingsCount: number;
  *   topHoldings: BreakdownRow[];
  * }} PortfolioExecutiveSummaryData
@@ -206,6 +210,8 @@ function buildPortfolioExecutiveSummaryData(breakdown, snapshots, dividends) {
     totalDividends: toNumber(
       addAll((dividends?.byMonth ?? []).map((month) => month.amount ?? 0)),
     ),
+    totalInKindIncome: dividends?.totalInKindIncome ?? 0,
+    inKindIncomeCount: dividends?.inKindIncomeCount ?? 0,
     holdingsCount: breakdown?.length ?? 0,
     topHoldings: [...(breakdown ?? [])]
       .sort(
@@ -269,7 +275,8 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
       EXTRACT(YEAR  FROM pt.date::date)::int AS year,
       EXTRACT(MONTH FROM pt.date::date)::int AS month,
       COALESCE(pt.amount, 0) AS amount,
-      COALESCE(pt.currency, i.currency, 'EUR') AS currency
+      COALESCE(pt.currency, i.currency, 'EUR') AS currency, pt.income_recognition_role,
+      to_char(pt.date,'YYYY-MM-DD') AS rate_date
     FROM portfolio_transactions pt
     JOIN investments i ON i.id = pt.investment_id
     WHERE pt.type = 'dividend'
@@ -284,8 +291,35 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
   const byMonthMap = new Map();
   const byInvestmentMap = new Map();
   const rates = await loadCurrentRates();
-
+  const inKind = result.rows.filter(
+    (row) => row.income_recognition_role === "included_in_units",
+  );
+  const currencies = [
+    ...new Set([...inKind.map((row) => row.currency), targetCurrency]),
+  ].filter((code) => code !== "EUR");
+  const historicalIndex =
+    inKind.length && currencies.length
+      ? await getHistoricalRateIndex(currencies)
+      : new Map();
+  let totalInKindIncome = addAll([]);
   for (const row of result.rows) {
+    if (row.income_recognition_role === "included_in_units") {
+      const dateRates = { EUR: 1 };
+      for (const code of currencies)
+        dateRates[code] =
+          findRateOnOrBeforeInIndex(historicalIndex, code, row.rate_date) ??
+          rates[code];
+      totalInKindIncome = addAll([
+        totalInKindIncome,
+        convertWithRates(
+          Number(row.amount),
+          row.currency,
+          targetCurrency,
+          dateRates,
+        ),
+      ]);
+      continue;
+    }
     const converted =
       row.currency !== targetCurrency
         ? convertWithRates(
@@ -323,7 +357,12 @@ async function fetchDividends(targetCurrency, startDate, endDate) {
     (a, b) => b.total - a.total,
   );
 
-  return { byMonth, byInvestment };
+  return {
+    byMonth,
+    byInvestment,
+    totalInKindIncome: toNumber(totalInKindIncome),
+    inKindIncomeCount: inKind.length,
+  };
 }
 
 /**
