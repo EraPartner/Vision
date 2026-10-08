@@ -148,3 +148,38 @@ test("new executable install hooks require a policy review", () => {
     /unreviewed executable install hook postinstall/,
   );
 });
+
+test("admits only the reviewed xlsx tarball with its pinned integrity", () => {
+  const url = "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz";
+  const integrity =
+    "sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==";
+  const state = fixtures();
+  state.manifests.get("apps/frontend/package.json").dependencies = {
+    xlsx: url,
+  };
+  state.rootLock.workspaces["apps/frontend"].dependencies = { xlsx: url };
+  state.rootLock.packages.xlsx = [`xlsx@${url}`, {}, integrity];
+  assert.deepEqual(
+    checkBoundaries(state.manifests, state.rootLock, state.electronLock),
+    [],
+  );
+
+  state.rootLock.packages.xlsx = [`xlsx@${url}`, {}, "sha512-AAAA"];
+  assert.match(
+    checkBoundaries(state.manifests, state.rootLock, state.electronLock).join(
+      "\n",
+    ),
+    /xlsx has an unreviewed source/,
+  );
+
+  const other = "https://cdn.sheetjs.com/xlsx-0.20.4/xlsx-0.20.4.tgz";
+  state.manifests.get("apps/frontend/package.json").dependencies = {
+    xlsx: other,
+  };
+  assert.match(
+    checkBoundaries(state.manifests, state.rootLock, state.electronLock).join(
+      "\n",
+    ),
+    /unreviewed external dependency source xlsx/,
+  );
+});
