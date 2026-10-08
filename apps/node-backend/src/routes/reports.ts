@@ -17,7 +17,7 @@ import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
 import { generateReport } from "../services/reports/index.ts";
 import { HSL_COMPONENT_RE } from "../services/reports/themeCss.ts";
-import { ValidationError } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
 
 const router = Router();
 
@@ -120,14 +120,9 @@ const reportBodySchema = z.object({
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 function parseReportBody(body: unknown) {
-  const result = reportBodySchema.safeParse(body);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((i) => `${i.path.join(".")}: ${i.message}`)
-      .join("; ");
-    throw new ValidationError(`Invalid report request: ${msg}`);
-  }
-  return result.data;
+  return parseInput(reportBodySchema, body, {
+    prefix: "Invalid report request",
+  });
 }
 
 export { parseReportBody as __parseReportBody };

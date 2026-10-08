@@ -10,6 +10,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import {
   rebalanceDeployment,
   resolveDeployableCash,
@@ -17,31 +18,52 @@ import {
 import { assembleRebalanceInputs } from "../services/crossWorkspaceDataService.ts";
 import { resolveRebalanceTargetWeights } from "../services/portfolio/rebalanceTargets.ts";
 import { computeCommitmentAwareCash } from "../services/commitmentAwareCashService.ts";
-import { ValidationError } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
 
 const router = Router();
 
+const commitmentAwareCashBodySchema = z.object({
+  reserveFloor: z
+    .number({ error: "must be a non-negative finite number" })
+    .nonnegative("must be a non-negative finite number")
+    .nullish()
+    .transform((value) => value ?? 0),
+  currency: z
+    .string({ error: "must be a three-letter code" })
+    .regex(/^[A-Z]{3}$/i, "must be a three-letter code")
+    .optional(),
+});
+
+/**
+ * The rebalance wire contract is deliberately lenient (pinned by the route
+ * tests): a non-string currency means EUR, a truthy non-object `targetWeights`
+ * falls through to `model`, and a non-numeric cash cap is ignored.
+ * `resolveRebalanceTargetWeights` validates the target itself.
+ */
+const rebalanceBodySchema = z.looseObject({
+  currency: z
+    .unknown()
+    .optional()
+    .transform((value) =>
+      typeof value === "string" ? value.toUpperCase() : "EUR",
+    ),
+  availableCash: z
+    .unknown()
+    .optional()
+    .transform((value) => {
+      const cap = Number(value);
+      return value == null || !Number.isFinite(cap) ? undefined : cap;
+    }),
+});
+
 router.post("/commitment-aware-cash", async (req, res) => {
-  const body = req.body ?? {};
-  const reserveFloor = body.reserveFloor ?? 0;
-  if (
-    typeof reserveFloor !== "number" ||
-    !Number.isFinite(reserveFloor) ||
-    reserveFloor < 0
-  ) {
-    throw new ValidationError(
-      "reserveFloor must be a non-negative finite number",
-    );
-  }
-  if (
-    body.currency !== undefined &&
-    (typeof body.currency !== "string" || !/^[A-Z]{3}$/i.test(body.currency))
-  ) {
-    throw new ValidationError("currency must be a three-letter code");
-  }
+  const { reserveFloor, currency } = parseInput(
+    commitmentAwareCashBodySchema,
+    req.body ?? {},
+  );
   res.ok(
     await computeCommitmentAwareCash({
-      currency: body.currency ?? "EUR",
+      currency: currency ?? "EUR",
       reserveFloor,
     }),
   );
@@ -55,9 +77,8 @@ router.post("/commitment-aware-cash", async (req, res) => {
  * `targetWeights` wins over `model`; both are normalized to sum to 1.
  */
 router.post("/rebalance", async (req, res) => {
-  const body = req.body ?? {};
-  const currency =
-    typeof body.currency === "string" ? body.currency.toUpperCase() : "EUR";
+  const body = parseInput(rebalanceBodySchema, req.body ?? {});
+  const { currency } = body;
 
   const targetWeights = resolveRebalanceTargetWeights(body);
 

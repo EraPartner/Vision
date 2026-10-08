@@ -16,7 +16,12 @@ vi.mock('../../src/services/crossWorkspaceDataService.ts', () => ({
   assembleRebalanceInputs: vi.fn(),
 }));
 
+vi.mock('../../src/services/commitmentAwareCashService.ts', () => ({
+  computeCommitmentAwareCash: vi.fn(),
+}));
+
 import { assembleRebalanceInputs } from '../../src/services/crossWorkspaceDataService.ts';
+import { computeCommitmentAwareCash } from '../../src/services/commitmentAwareCashService.ts';
 
 type RebalanceInputs = Awaited<ReturnType<typeof assembleRebalanceInputs>>;
 
@@ -98,5 +103,50 @@ describe('POST /rebalance validation', () => {
 
     const res2 = await rebalance({ model: 'sixty_forty', currency: 42 }).expect(200);
     expect(res2.body.data.currency).toBe('EUR');
+  });
+});
+
+describe('POST /commitment-aware-cash validation', () => {
+  const cash = (body?: object) => {
+    const request = api.post('/api/cross-workspace/commitment-aware-cash');
+    return body === undefined ? request : request.send(body);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(computeCommitmentAwareCash).mockResolvedValue(
+      {} as Awaited<ReturnType<typeof computeCommitmentAwareCash>>,
+    );
+  });
+
+  it('defaults to EUR with no reserve floor', async () => {
+    await cash().expect(200);
+    await cash({ reserveFloor: null }).expect(200);
+    expect(computeCommitmentAwareCash).toHaveBeenNthCalledWith(1, { currency: 'EUR', reserveFloor: 0 });
+    expect(computeCommitmentAwareCash).toHaveBeenNthCalledWith(2, { currency: 'EUR', reserveFloor: 0 });
+  });
+
+  it('passes a valid currency and reserve floor through', async () => {
+    await cash({ currency: 'usd', reserveFloor: 250 }).expect(200);
+    expect(computeCommitmentAwareCash).toHaveBeenCalledWith({ currency: 'usd', reserveFloor: 250 });
+  });
+
+  it('rejects a negative or non-numeric reserve floor', async () => {
+    const negative = await cash({ reserveFloor: -1 }).expect(400);
+    expect(negative.body).toEqual(errEnvelope({
+      code: 'VALIDATION_ERROR',
+      message: 'reserveFloor: must be a non-negative finite number',
+    }));
+    const text = await cash({ reserveFloor: '100' }).expect(400);
+    expect(text.body.error.message).toBe('reserveFloor: must be a non-negative finite number');
+    expect(computeCommitmentAwareCash).not.toHaveBeenCalled();
+  });
+
+  it('rejects a currency that is not a three-letter code', async () => {
+    for (const currency of ['EURO', 42, null]) {
+      const res = await cash({ currency }).expect(400);
+      expect(res.body.error.message).toBe('currency: must be a three-letter code');
+    }
+    expect(computeCommitmentAwareCash).not.toHaveBeenCalled();
   });
 });

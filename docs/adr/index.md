@@ -249,6 +249,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-08: Zod runtime contracts at the boundaries
+
+[[docs/adr/193-zod-runtime-contracts|ADR-193]] checks boundary data at runtime with zod: HTTP
+requests through one `parseInput` helper (400 on failure), adapter output, stored parser configs
+and PostgreSQL rows through data contracts (strict in tests and development, one production switch,
+never a 400), selected frontend API reads, and every Electron IPC channel.
+
 ### 2026-10-08: Backend tests move to strict TypeScript
 
 [[docs/adr/192-backend-tests-strict-typescript|ADR-192]] converts the backend Vitest suites to

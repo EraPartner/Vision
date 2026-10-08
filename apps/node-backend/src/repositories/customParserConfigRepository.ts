@@ -1,5 +1,7 @@
 import { query } from '../database/connection.ts';
 import { buildSetClauses } from '../lib/sqlClauses.ts';
+import { checkDataContract } from '../lib/dataContract.ts';
+import { storedParserConfigSchema } from '../lib/parserConfigSchema.ts';
 
 import type {
   CustomParserConfigRow,
@@ -11,12 +13,20 @@ export type { CustomParserConfigRow, FormattedCustomParserConfig };
 const COLUMNS = 'id, name, kind, config_json, created_at, updated_at';
 
 function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
+  // pg returns JSONB already parsed; tolerate a string just in case.
+  const config = typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json;
+  // Stored configs were written through the save-path schema of their kind; a
+  // row it rejects is a data-contract violation, passed through unchanged.
+  checkDataContract(
+    storedParserConfigSchema,
+    { kind: r.kind, config },
+    `custom_parser_configs row ${r.id}`,
+  );
   return {
     id: r.id,
     name: r.name,
     kind: r.kind,
-    // pg returns JSONB already parsed; tolerate a string just in case.
-    config: typeof r.config_json === 'string' ? JSON.parse(r.config_json) : r.config_json,
+    config,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };

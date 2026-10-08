@@ -394,6 +394,10 @@ Create a new saved parser configuration.
 | ----------------- | ------------------------------------------------------------------------------------------------- |
 | `201 Created`     | Parser created; body contains the created record                                                  |
 | `400 Bad Request` | `name` missing, or one of `dateColumn` / `recipientColumn` / `amountColumn` missing from `config` |
+
+A body with several problems returns them all in one `400 VALIDATION_ERROR` message, joined with
+`; `, for example an invalid `name` and a missing `config`. A body that is not a JSON object is also
+a `400`.
 | `409 Conflict`    | A parser with the same `name` already exists                                                      |
 
 **201 Body:**
@@ -438,8 +442,10 @@ Update an existing saved parser. Both `name` and `config` are optional; supply o
 | Status            | Meaning                                          |
 | ----------------- | ------------------------------------------------ |
 | `200 OK`          | Parser updated; body contains the updated record |
-| `400 Bad Request` | Malformed `id` (see the `:id` contract above)    |
+| `400 Bad Request` | Malformed `id` (see the `:id` contract above), or an invalid `name` or `config` |
 | `404 Not Found`   | No parser with the given `id`                    |
+
+A supplied `config` is validated in full, like the create route. An absent field is left unchanged.
 | `409 Conflict`    | Another parser already uses the requested `name` |
 
 ### DELETE /api/import/parsers/:id
@@ -533,7 +539,7 @@ Returns staging rows grouped by effective recipient with match-source badges and
 
 Set or clear the recipient override on a single staging row.
 
-**Body:** `{ "recipient_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than recipient 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
+**Body:** `{ "recipient_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than recipient 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]). The body must be a JSON object: a JSON array returns `400 VALIDATION_ERROR` instead of clearing the override.
 
 **Response:** `{ "row_id": number, "user_override_recipient_id": number | null }`
 
@@ -546,7 +552,7 @@ Set or clear the recipient override on a single staging row.
 
 Set or clear the per-row category override (ADR-046). Validated against `categories(id)`. The committed transaction's category is `COALESCE(staging.override_category_id, recipient.default_category_id, NULL)`.
 
-**Body:** `{ "category_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer, validated with `validateId` before the existence check: the check only ever saw the coerced value, so `"0x10"` used to pass it as the real category 16.
+**Body:** `{ "category_id": number \| null }` — `null`, or an absent field, clears the override (200). A present value must be a positive integer, validated with `validateId` before the existence check: the check only ever saw the coerced value, so `"0x10"` used to pass it as the real category 16. A JSON array body returns `400 VALIDATION_ERROR` instead of clearing the override.
 
 **Response:** `{ "row_id": number, "override_category_id": number | null }`
 

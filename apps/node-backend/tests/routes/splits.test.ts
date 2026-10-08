@@ -892,4 +892,75 @@ describe("Splits Routes", () => {
       );
     });
   });
+  describe("request validation (ADR-193)", () => {
+    const validationError = (message: string) =>
+      errEnvelope({ code: "VALIDATION_ERROR", message });
+
+    it.each([
+      ["get", "/owed/12abc"],
+      ["get", "/owed/0/export/csv"],
+      ["get", "/transaction/1e3"],
+      ["post", "/abc/pay"],
+      ["get", "/-1/payments"],
+      ["post", "/abc/settle"],
+      ["post", "/owed/abc/settle-all"],
+      ["delete", "/abc"],
+    ] as const)("rejects a malformed :id on %s %s", async (method, path) => {
+      const res = await api[method](`${BASE}${path}`)
+        .send({ amount: 5 })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("id must be a positive integer"),
+      );
+    });
+
+    it("aggregates every malformed batch row into one exact message", async () => {
+      const res = await api
+        .post(`${BASE}/batch`)
+        .send({
+          transaction_id: 1,
+          splits: [
+            { recipient_id: "abc", amount: 5 },
+            { recipient_id: 2, amount: "x" },
+          ],
+        })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError(
+          "Invalid splits, no splits were created: " +
+            "splits[0] (recipient_id: recipient_id must be a positive integer); " +
+            "splits[1] (amount: amount must be a finite number)",
+        ),
+      );
+    });
+
+    // A bare z.unknown() field rejects an absent key with zod's generic
+    // "expected nonoptional"; the id bridge now answers its own message.
+    it("names a missing batch-row recipient_id", async () => {
+      const res = await api
+        .post(`${BASE}/batch`)
+        .send({ transaction_id: 1, splits: [{ amount: 5 }] })
+        .expect(400);
+      expect(res.body.error.message).toBe(
+        "Invalid splits, no splits were created: " +
+          "splits[0] (recipient_id: recipient_id must be a positive integer)",
+      );
+    });
+
+    it("checks the batch transaction_id before any row", async () => {
+      const res = await api
+        .post(`${BASE}/batch`)
+        .send({ transaction_id: "12abc", splits: [{ amount: 5 }] })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("transaction_id must be a positive integer"),
+      );
+    });
+
+    it("keeps lenient opt-in pagination on the owed summary", async () => {
+      splitService.getOwedSummary.mockResolvedValue([]);
+      const res = await api.get(`${BASE}/owed?limit=abc`).expect(200);
+      expect(res.body.data).toMatchObject({ total: 0, offset: 0 });
+    });
+  });
 });

@@ -22,6 +22,11 @@ returns `dates`, frozen `series` identities, and daily `rows`. An unassigned hol
 the name captured on their snapshot date. No endpoint call recomputes or backfills historical broker
 assignments; see [[docs/adr/143-forward-only-broker-performance-history|ADR-143]].
 
+`from` defaults to `2000-01-01` and `to` defaults to today. An empty value also uses the default.
+Any other value must be a real `YYYY-MM-DD` calendar date. A malformed or impossible date, such as
+`2026-02-31`, or a repeated key returns `400 VALIDATION_ERROR` with `from must be a YYYY-MM-DD date`
+(or `to …`). It no longer falls back to the default window silently.
+
 > [!warning] Phase G Consolidation (April 2026)
 > Six endpoints were removed and migrated to `/api/aggregations/*` (see [[#removed-endpoints-phase-g|Removed Endpoints]] below). Remaining endpoints continue as the production API surface. Earlier phases (2-8) migrated new logic to aggregations (see [[docs/adr/010-phase1-aggregation-strategy]], [[docs/adr/011-phase2-aggregation-envelope-standard]], [[docs/adr/016-aggregation-shadow-mode]]). See [[docs/reference/api-endpoint-matrix#phase-g-endpoint-consolidation|API Endpoint Matrix Phase G]] for consolidation summary.
 
@@ -36,6 +41,8 @@ assignments; see [[docs/adr/143-forward-only-broker-performance-history|ADR-143]
 - Conversion-capable info endpoints accept `currency` (preferred) and `target_currency` (alias).
 - Values are normalized to uppercase 3-letter codes.
 - Invalid/unsupported target values fall back to EUR behavior.
+- A repeated or bracketed key (`?currency=EUR&currency=USD`) returns `400 VALIDATION_ERROR` with
+  `currency must be a single value` (or `target_currency …`).
 
 ## Monetary Precision (Phase 9)
 
@@ -548,7 +555,7 @@ Notes:
 
 - Source data is fetched from Statbel with Eurostat HICP index as fallback and cached server-side.
 - Response `source` indicates where the response came from: `memory`, `database`, `statbel`, or `eurostat`.
-- Supports optional month filtering with `start_month` and `end_month` in `YYYY-MM` (or `YYYY-MM-DD`, month part is used).
+- Supports optional month filtering with `start_month` and `end_month` in `YYYY-MM` (or `YYYY-MM-DD`, month part is used). A malformed month is ignored; a repeated key returns `400 VALIDATION_ERROR`.
 - Supports optional `db_only=true|1` to force persisted DB rates for immediate responses (decoupled from external API latency).
 - When `db_only` is enabled, the backend serves DB rates immediately and schedules background external refresh (Statbel then Eurostat fallback) without blocking the response.
 - Statbel fetch uses retry + backoff across multiple candidate Statbel base URLs.

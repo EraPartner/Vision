@@ -4724,6 +4724,97 @@ export interface components {
                 offset: number;
             };
         };
+        AnalysisVisualFilter: {
+            fieldId: string;
+            operator: string;
+            value?: (string | number | boolean) | null;
+        };
+        /** @description Visual analysis plan. The route checks these field types; the catalog compiler owns semantic validation. Unknown keys are kept. A null option means the same as leaving it out. */
+        AnalysisVisualPlan: {
+            datasetId: string;
+            fields?: string[];
+            groups?: string[];
+            measures?: string[];
+            joins?: string[];
+            filters?: components["schemas"]["AnalysisVisualFilter"][];
+            orderBy?: {
+                id: string;
+                /** @enum {string} */
+                direction: "asc" | "desc";
+            }[];
+            limit?: number | null;
+            reportingCurrency?: string | null;
+            from?: string | null;
+            to?: string | null;
+            symbol?: string | null;
+            range?: string | null;
+            costBasisMethod?: string | null;
+            generatedSql?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AnalysisColumnRef: {
+            id: string;
+        } & {
+            [key: string]: unknown;
+        };
+        AnalysisWorkbenchInput: {
+            steps?: {
+                [key: string]: unknown;
+            }[];
+            time?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
+        };
+        AnalysisQuerySpec: {
+            /** @enum {string} */
+            mode: "visual";
+            plan: components["schemas"]["AnalysisVisualPlan"];
+        } | {
+            /** @enum {string} */
+            mode: "sql";
+            sql: string;
+            datasetIds: string[];
+            columns?: components["schemas"]["AnalysisColumnRef"][];
+            visualOrigin?: components["schemas"]["AnalysisVisualPlan"];
+        };
+        AnalysisSavedFields: {
+            name?: string;
+            /** @enum {string} */
+            workspace?: "budgeting" | "portfolio" | "research" | "cross-workspace";
+            querySpec?: components["schemas"]["AnalysisQuerySpec"];
+            parameters?: {
+                [key: string]: unknown;
+            };
+            charts?: unknown[];
+            sourceReferences?: unknown[];
+            /** @enum {string} */
+            refreshMode?: "live" | "frozen";
+            formulas?: {
+                [key: string]: unknown;
+            }[];
+            assumptions?: {
+                [key: string]: unknown;
+            }[];
+            assumptionValues?: {
+                [key: string]: unknown;
+            };
+        };
+        AiAnalysisEditProposal: {
+            /** @enum {integer} */
+            schemaVersion: 1;
+            savedAnalysisId: string;
+            baseVersion: number;
+            rationale: string;
+            operations: {
+                /** @enum {string} */
+                op: "add" | "replace" | "remove";
+                path: string;
+                value?: unknown;
+            }[];
+        };
         AiInvestigationRequest: {
             question: string;
             /**
@@ -5281,13 +5372,14 @@ export interface components {
         CategoryCreate: {
             general: string;
             detail: string;
-            description?: string;
+            description?: string | null;
         };
+        /** @description `null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400. */
         CategoryUpdate: {
-            general?: string;
-            detail?: string;
-            description?: string;
-            is_active?: boolean;
+            general?: string | null;
+            detail?: string | null;
+            description?: string | null;
+            is_active?: boolean | null;
         };
         CategoryList: components["schemas"]["OptionalPaginationFields"] & {
             items: components["schemas"]["Category"][];
@@ -5346,14 +5438,17 @@ export interface components {
         };
         RecipientCreate: {
             name: string;
-            default_category_id?: number;
-            notes?: string;
-        };
-        RecipientUpdate: {
-            name?: string;
+            /** Format: int32 */
             default_category_id?: number | null;
-            notes?: string;
-            is_active?: boolean;
+            notes?: string | null;
+        };
+        /** @description `null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as "false" for is_active returns 400. */
+        RecipientUpdate: {
+            name?: string | null;
+            /** Format: int32 */
+            default_category_id?: number | null;
+            notes?: string | null;
+            is_active?: boolean | null;
         };
         RecipientList: components["schemas"]["PaginationFields"] & {
             items: components["schemas"]["Recipient"][];
@@ -5373,12 +5468,14 @@ export interface components {
             items: components["schemas"]["Tag"][];
         };
         TagCreate: {
+            /** @description Slugified by the server; empty after normalization returns 400. */
             slug: string;
             color?: string | null;
         };
+        /** @description Each field must have the stated JSON type; a string such as "false" for is_active returns 400. */
         TagUpdate: {
             color?: string | null;
-            is_active?: boolean;
+            is_active?: boolean | null;
         };
         Account: {
             id: number;
@@ -6608,8 +6705,8 @@ export interface operations {
     getTags: {
         parameters: {
             query?: {
-                /** @description Filter by active status (omit for all) */
-                is_active?: boolean;
+                /** @description Filter by active status (default true; `all` disables the filter). Accepts true/false/1/0; other values use the default. */
+                active?: "true" | "false" | "all";
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
                 /** @description Rows to skip. Omit (together with limit) to receive the whole collection. */
@@ -6674,6 +6771,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing or empty slug, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteTag: {
@@ -6731,6 +6835,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: malformed id or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Tag not found */
             404: {
                 headers: {
@@ -6769,9 +6880,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["AnalysisVisualPlan"];
             };
         };
         responses: {
@@ -6784,7 +6893,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Invalid or duplication-unsafe visual plan */
+            /** @description VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6803,7 +6912,68 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    /** @enum {string} */
+                    mode: "visual";
+                    plan: components["schemas"]["AnalysisVisualPlan"];
+                    requestId?: string;
+                    limit?: number;
+                    offset?: number;
+                    workbench?: components["schemas"]["AnalysisWorkbenchInput"];
+                    scenarioModel?: ({
+                        attachments?: unknown[];
+                        joins?: unknown[];
+                    } & {
+                        [key: string]: unknown;
+                    }) | null;
+                    formulaModel?: ({
+                        formulas?: {
+                            [key: string]: unknown;
+                        }[];
+                        assumptions?: {
+                            [key: string]: unknown;
+                        }[];
+                        assumptionValues?: {
+                            [key: string]: unknown;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    }) | null;
+                } | {
+                    /** @enum {string} */
+                    mode?: "sql";
+                    sql: string;
+                    values?: ((string | number | boolean) | null)[];
+                    datasetIds?: string[];
+                    columns?: ({
+                        id: string;
+                        label?: string;
+                        type: string;
+                    } & {
+                        [key: string]: unknown;
+                    })[];
+                    requestId?: string;
+                    limit?: number;
+                    offset?: number;
+                    workbench?: components["schemas"]["AnalysisWorkbenchInput"];
+                    scenarioModel?: ({
+                        attachments?: unknown[];
+                        joins?: unknown[];
+                    } & {
+                        [key: string]: unknown;
+                    }) | null;
+                    formulaModel?: ({
+                        formulas?: {
+                            [key: string]: unknown;
+                        }[];
+                        assumptions?: {
+                            [key: string]: unknown;
+                        }[];
+                        assumptionValues?: {
+                            [key: string]: unknown;
+                        };
+                    } & {
+                        [key: string]: unknown;
+                    }) | null;
                 };
             };
         };
@@ -6817,7 +6987,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Query rejected by the analysis boundary */
+            /** @description VALIDATION_ERROR for a malformed body; ANALYSIS_EXECUTION_REJECTED when the analysis boundary rejects the query */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6826,6 +6996,13 @@ export interface operations {
             };
             /** @description Query cancelled or timed out */
             408: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database connection */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6843,16 +7020,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    plan: {
-                        [key: string]: unknown;
-                    };
+                    plan: components["schemas"]["AnalysisVisualPlan"];
                     config: {
                         rows: string[];
                         columns: string[];
                         values: string[];
-                        filters?: {
-                            [key: string]: unknown;
-                        }[];
+                        filters?: components["schemas"]["AnalysisVisualFilter"][];
                     };
                     requestId: string;
                 };
@@ -6875,6 +7048,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Database connection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     evaluateAnalysisExtension: {
@@ -6892,10 +7072,32 @@ export interface operations {
                     rows: {
                         [key: string]: unknown;
                     }[];
-                    columns?: {
+                    columns?: components["schemas"]["AnalysisColumnRef"][];
+                    complete?: boolean;
+                    inputComplete?: boolean;
+                    window?: {
+                        [key: string]: unknown;
+                    };
+                    coverage?: {
+                        [key: string]: unknown;
+                    };
+                    workbench?: components["schemas"]["AnalysisWorkbenchInput"];
+                    formulas?: {
                         [key: string]: unknown;
                     }[];
-                    complete?: boolean;
+                    assumptions?: {
+                        [key: string]: unknown;
+                    };
+                    assumptionUnits?: {
+                        [key: string]: unknown;
+                    };
+                    dateColumn?: string;
+                    valueColumns?: string[];
+                    outcomeId?: string;
+                    variableId?: string;
+                    target?: string | number;
+                    lower?: string | number;
+                    upper?: string | number;
                 } & {
                     [key: string]: unknown;
                 };
@@ -6940,6 +7142,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description VALIDATION_ERROR: malformed requestId */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     drillAnalysis: {
@@ -6952,7 +7161,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    [key: string]: unknown;
+                    plan: components["schemas"]["AnalysisVisualPlan"];
+                    /** @description The grouped result row to resolve */
+                    row?: {
+                        [key: string]: unknown;
+                    };
+                    requestId?: string;
                 };
             };
         };
@@ -6973,6 +7187,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Database connection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     evaluateAnalysisFormulas: {
@@ -6985,6 +7206,22 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    rows: {
+                        [key: string]: unknown;
+                    }[];
+                    formulas?: {
+                        [key: string]: unknown;
+                    }[];
+                    assumptions?: {
+                        [key: string]: unknown;
+                    };
+                    /** @default true */
+                    inputComplete?: boolean;
+                    columns?: components["schemas"]["AnalysisColumnRef"][];
+                    assumptionUnits?: {
+                        [key: string]: unknown;
+                    };
+                } & {
                     [key: string]: unknown;
                 };
             };
@@ -7017,9 +7254,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["AiAnalysisEditProposal"];
             };
         };
         responses: {
@@ -7057,9 +7292,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["AiAnalysisEditProposal"];
             };
         };
         responses: {
@@ -7091,6 +7324,7 @@ export interface operations {
     listSavedAnalyses: {
         parameters: {
             query?: {
+                /** @description An empty value lists every workspace. Any other value outside the enum, or a repeated key, returns 400. */
                 workspace?: "budgeting" | "portfolio" | "research" | "cross-workspace";
             };
             header?: never;
@@ -7108,6 +7342,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description VALIDATION_ERROR: unknown workspace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     createSavedAnalysis: {
@@ -7119,9 +7360,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["AnalysisSavedFields"] & Record<string, never>;
             };
         };
         responses: {
@@ -7183,8 +7422,8 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
+                "application/json": components["schemas"]["AnalysisSavedFields"] & {
+                    expectedVersion?: (number | string) | null;
                 };
             };
         };
@@ -7275,6 +7514,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Database connection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listSavedAnalysisVersions: {
@@ -7311,8 +7557,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Trimmed before the length check. */
                     instruction: string;
-                    model?: string;
+                    model?: string | null;
                 };
             };
         };
@@ -7368,6 +7615,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: version or expectedVersion is not a positive integer */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Saved analysis or version not found */
             404: {
@@ -8304,7 +8558,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Unsupported */
+            /** @description Missing, unsupported, empty, unreadable, or oversized file, or a text field sent more than once */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8378,7 +8632,20 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": {
+                    /** @description Trimmed before use; a blank query is rejected. */
+                    query: string;
+                    /**
+                     * @default hybrid
+                     * @enum {string}
+                     */
+                    mode?: "hybrid" | "keyword" | "semantic";
+                    /**
+                     * @description The service caps results at 20.
+                     * @default 8
+                     */
+                    limit?: number;
+                };
             };
         };
         responses: {
@@ -8391,7 +8658,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Invalid search */
+            /** @description VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8577,7 +8844,7 @@ export interface operations {
                 "application/json": {
                     currency?: string;
                     /** @default 0 */
-                    reserveFloor?: number;
+                    reserveFloor?: number | null;
                 };
             };
         };
@@ -8615,7 +8882,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid reserve floor or currency */
+            /** @description VALIDATION_ERROR — body is not an object, or invalid reserve floor or currency */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8640,6 +8907,7 @@ export interface operations {
                     targetWeights?: {
                         [key: string]: number;
                     };
+                    /** @description Optional cash cap. A non-numeric value is ignored. */
                     availableCash?: number;
                 };
             };
@@ -8653,6 +8921,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description Body is not a JSON object, or the target weights are invalid */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9466,6 +9741,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing general/detail, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getCategoryTree: {
@@ -9685,6 +9967,13 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing body or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getRecipients: {
@@ -9692,8 +9981,17 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                name?: string;
+                /** @description Truncated to 200 characters. */
                 search?: string;
-                is_active?: boolean;
+                /** @description Empty means no filter; any other non-id value returns 400. */
+                default_category_id?: number;
+                /** @description Accepts true/false/1/0 (default true); other values use the default. */
+                active?: boolean;
+                uncategorized?: boolean;
+                sort_by?: string;
+                /** @description Any other value uses the default order. */
+                sort_dir?: "asc" | "desc";
             };
             header?: never;
             path?: never;
@@ -9711,6 +10009,13 @@ export interface operations {
                         data?: components["schemas"]["RecipientList"];
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: malformed default_category_id, or name/search/sort_by sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9754,6 +10059,13 @@ export interface operations {
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: missing name, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9827,12 +10139,19 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing body or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getSettings: {
         parameters: {
             query?: {
-                /** @description Return data as {settings, expected} maps from the same database read. */
+                /** @description Return data as {settings, expected} maps from the same database read. Only the literal values `true` and `false` are accepted; any other value or a repeated key returns 400. */
                 withBaselines?: boolean;
             };
             header?: never;
@@ -9853,6 +10172,13 @@ export interface operations {
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: withBaselines must be true or false */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10089,6 +10415,7 @@ export interface operations {
     getNetWorth: {
         parameters: {
             query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
                 /** @description Page size. Omit (together with offset) to receive the whole collection. Values above the endpoint's cap are clamped. */
                 limit?: components["parameters"]["OptionalLimit"];
@@ -10111,6 +10438,13 @@ export interface operations {
                         data?: components["schemas"]["NetWorthResponse"];
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: currency must be a single value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10606,6 +10940,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description One id or a list. Each id must be a positive int4 (integer or digit string); a scalar is treated as a one-element list. */
                     recipient_ids: number | number[];
                 };
             };
@@ -10625,11 +10960,21 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing recipient_ids, or recipient_ids contains invalid value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getRecipientClusters: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Minimum cluster size (at least 2, the default). A repeated key returns 400. */
+                min_count?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -10659,6 +11004,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Each id is an integer or a digit string. */
                     alias_ids: number[];
                 };
             };
@@ -10777,7 +11123,15 @@ export interface operations {
             content: {
                 "application/json": {
                     pattern: string;
-                    is_regex?: boolean;
+                    /**
+                     * @default literal_prefix
+                     * @enum {string|null}
+                     */
+                    pattern_kind?: "literal_prefix" | "glob" | "regex" | null;
+                    case_sensitive?: boolean | null;
+                    /** Format: int32 */
+                    priority?: number | null;
+                    notes?: string | null;
                 };
             };
         };
@@ -10792,6 +11146,13 @@ export interface operations {
                         data?: components["schemas"]["RecipientPattern"];
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: missing pattern, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10808,7 +11169,12 @@ export interface operations {
             content: {
                 "application/json": {
                     pattern: string;
-                    is_regex?: boolean;
+                    /**
+                     * @default literal_prefix
+                     * @enum {string|null}
+                     */
+                    pattern_kind?: "literal_prefix" | "glob" | "regex" | null;
+                    case_sensitive?: boolean | null;
                 };
             };
         };
@@ -10821,6 +11187,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: missing pattern, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10859,7 +11232,13 @@ export interface operations {
             content: {
                 "application/json": {
                     pattern?: string;
-                    is_regex?: boolean;
+                    /** @enum {string} */
+                    pattern_kind?: "literal_prefix" | "glob" | "regex";
+                    case_sensitive?: boolean;
+                    /** Format: int32 */
+                    priority?: number;
+                    notes?: string | null;
+                    is_active?: boolean;
                 };
             };
         };
@@ -10872,6 +11251,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: missing body or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10912,10 +11298,10 @@ export interface operations {
             content: {
                 "application/json": {
                     account_number: string;
-                    bank_name?: string;
-                    address?: string;
-                    account_label?: string;
-                    set_as_primary?: boolean;
+                    bank_name?: string | null;
+                    address?: string | null;
+                    account_label?: string | null;
+                    set_as_primary?: boolean | null;
                 };
             };
         };
@@ -10947,6 +11333,13 @@ export interface operations {
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: missing or over-long account_number, or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10986,9 +11379,9 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    iban?: string;
-                    bic?: string;
-                    bank_name?: string;
+                    bank_name?: string | null;
+                    address?: string | null;
+                    account_label?: string | null;
                 };
             };
         };
@@ -11001,6 +11394,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: missing body or a field of the wrong type */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11376,7 +11776,10 @@ export interface operations {
     };
     getPlannedExpensesNextMonth: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
+                currency?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11391,6 +11794,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: currency must be a single value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11542,7 +11952,12 @@ export interface operations {
     getInflationRates: {
         parameters: {
             query?: {
-                year?: number;
+                /** @description `YYYY-MM` (a full date uses its month). A malformed value is ignored; a repeated key returns 400. */
+                start_month?: string;
+                /** @description `YYYY-MM` (a full date uses its month). A malformed value is ignored; a repeated key returns 400. */
+                end_month?: string;
+                /** @description Serve persisted rates and refresh in the background (default true). Accepts true/false/1/0. */
+                db_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -11558,6 +11973,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: start_month or end_month sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11584,10 +12006,10 @@ export interface operations {
     getPortfolioPerformance: {
         parameters: {
             query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
-                start_date?: string;
-                end_date?: string;
-                investment_id?: string;
+                /** @description Chart window (`5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all`, the default). An unknown value is served unfiltered. A repeated key returns 400. */
+                period?: string;
             };
             header?: never;
             path?: never;
@@ -11604,13 +12026,23 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description VALIDATION_ERROR: currency or period sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getPortfolioPerformanceByBroker: {
         parameters: {
             query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
+                /** @description Calendar date; defaults to 2000-01-01 when absent or empty. Any other non-date value returns 400. */
                 from?: string;
+                /** @description Calendar date; defaults to today when absent or empty. Any other non-date value returns 400. */
                 to?: string;
             };
             header?: never;
@@ -11628,11 +12060,19 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description VALIDATION_ERROR: from/to is not a YYYY-MM-DD calendar date, or a parameter was sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     getPortfolioSummary: {
         parameters: {
             query?: {
+                /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
             };
             header?: never;
@@ -11649,6 +12089,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PortfolioSummaryEnvelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR: currency must be a single value */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -12551,8 +12998,9 @@ export interface operations {
     };
     marketSearch: {
         parameters: {
-            query: {
-                q: string;
+            query?: {
+                /** @description Search text. Missing or empty returns an empty `items` list. A repeated key returns 400. */
+                q?: string;
             };
             header?: never;
             path?: never;
@@ -12571,14 +13019,21 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: `q` sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     marketQuote: {
         parameters: {
             query: {
-                /** @description Comma-separated list of symbols (e.g. `AAPL,MSFT`) */
+                /** @description Comma-separated list of symbols (e.g. `AAPL,MSFT`). A repeated key is joined with commas. */
                 symbols: string;
-                /** @description `basic` returns price fields only; the default (full) also fetches fundamentals/analyst data */
+                /** @description `basic` returns price fields only; any other single value (default full) also fetches fundamentals/analyst data. A repeated key returns 400. */
                 detail?: "basic" | "full";
             };
             header?: never;
@@ -12601,14 +13056,22 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing `symbols`, or `detail` sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     marketChart: {
         parameters: {
             query: {
                 symbol: string;
-                period?: string;
-                interval?: string;
+                /** @description Lookback window. An unknown value falls back to `1mo`. */
+                range?: "1d" | "5d" | "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y" | "max";
+                interval?: "1m" | "2m" | "5m" | "15m" | "30m" | "60m" | "90m" | "1h" | "1d" | "5d" | "1wk" | "1mo" | "3mo";
             };
             header?: never;
             path?: never;
@@ -12638,12 +13101,22 @@ export interface operations {
                     };
                 };
             };
+            /** @description VALIDATION_ERROR: missing `symbol`, an `interval` outside the list, or a parameter sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     marketNews: {
         parameters: {
-            query: {
-                symbol: string;
+            query?: {
+                /** @description Comma-separated symbols; the first 10 are used. Defaults to `SPY,QQQ,DIA`. A repeated key is joined with commas. */
+                symbols?: string;
+                /** @description Articles per symbol (max 50). A non-numeric value falls back to 20. A repeated key returns 400. */
+                count?: number;
             };
             header?: never;
             path?: never;
@@ -12664,6 +13137,13 @@ export interface operations {
                         };
                     };
                 };
+            };
+            /** @description VALIDATION_ERROR: `count` sent more than once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -14122,7 +14602,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Malformed batch id, row id or recipient_id */
+            /** @description Malformed batch id, row id or recipient_id, or a body that is not a JSON object */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14169,7 +14649,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Malformed batch id, row id or category_id, or an unknown category */
+            /** @description Malformed batch id, row id or category_id, an unknown category, or a body that is not a JSON object */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14564,7 +15044,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Malformed batch id, row id or investment_id, or create_new validation failed */
+            /** @description Malformed batch id, row id or investment_id, create_new validation failed, or a body that is not a JSON object */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14792,7 +15272,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Malformed batch id or account_id, or the batch is not in a reviewable state */
+            /** @description Malformed batch id or account_id, a body that is not a JSON object, or the batch is not in a reviewable state */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15363,6 +15843,13 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
+            /** @description VALIDATION_ERROR — `force` is not a boolean, or is not `true` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     adminDatabaseStats: {
@@ -15392,9 +15879,16 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description User table to vacuum; omit or null for every table */
+                    table?: string | null;
+                };
+            };
+        };
         responses: {
-            /** @description Vacuum result */
+            /** @description Vacuum result (`data.vacuumed` is the table name or `all`) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15402,6 +15896,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Envelope"];
                 };
+            };
+            /** @description VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Insufficient database privileges to VACUUM */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -15464,7 +15972,7 @@ export interface operations {
                 cursor?: string;
                 orderBy?: string;
                 dir?: "asc" | "desc";
-                /** @description JSON-encoded array of structured column filters */
+                /** @description JSON-encoded array of `{ column, op?, value? }` objects; `column` and `op` are strings. Invalid JSON, a non-array, or a non-object entry returns 400. */
                 filters?: string;
             };
             header?: never;
@@ -15531,7 +16039,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Preview the SQL statements without applying them */
+                    /** @description Preview the SQL statements without applying them. Must be a JSON boolean; a string such as "true" returns 400. */
                     dryRun?: boolean;
                     changes: {
                         /** @enum {string} */
@@ -15543,7 +16051,7 @@ export interface operations {
                         /** @description Column values to write for an update */
                         set?: Record<string, never>;
                         /** @description Optimistic-concurrency token captured at read time */
-                        xmin?: string;
+                        xmin?: string | number;
                     }[];
                 };
             };
@@ -15558,7 +16066,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Malformed change set */
+            /** @description Malformed change set or non-boolean dryRun */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16095,6 +16603,13 @@ export interface operations {
                     "application/json": components["schemas"]["ResearchPortfolioForecastEnvelope"];
                 };
             };
+            /** @description VALIDATION_ERROR — body is not a JSON object, or an invalid contribution schedule or goal month */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     researchListMappings: {
@@ -16143,7 +16658,16 @@ export interface operations {
                      * @enum {string}
                      */
                     key_type?: "isin" | "internal";
-                    mappings: Record<string, never>[];
+                    mappings: {
+                        provider: string;
+                        providerSymbol?: string | null;
+                        provider_symbol?: string | null;
+                        resolvedName?: string | null;
+                        resolved_name?: string | null;
+                        exchange?: string | null;
+                        currency?: string | null;
+                        status?: string | null;
+                    }[];
                 };
             };
         };
@@ -16157,7 +16681,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResearchMappingsEnvelope"];
                 };
             };
-            /** @description instrument_key required or mappings must be a non-empty array */
+            /** @description instrument_key required, mappings must be a non-empty array, or a mapping has no provider or a non-string field */
             400: {
                 headers: {
                     [name: string]: unknown;

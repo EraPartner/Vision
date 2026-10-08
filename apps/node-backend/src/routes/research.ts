@@ -16,6 +16,8 @@ import { Router } from "express";
 import type { ExpressResponse } from "../types/express.ts";
 import { z } from "zod";
 import { ValidationError } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
+import { KEYED_PROVIDERS } from "../services/research/providerKeys.ts";
 import {
   validateIdParam,
   assertOptionalId,
@@ -25,6 +27,7 @@ import { researchAggregator } from "../services/research/researchAggregator.ts";
 import { researchMappingService } from "../services/research/researchMappingService.ts";
 import * as researchProviderKeyService from "../services/research/researchProviderKeyService.ts";
 import { runPortfolioForecast } from "../services/research/projection/portfolioProjection.ts";
+import type { PortfolioForecastInput } from "../services/research/projection/portfolioProjection.ts";
 import { fundamentalsScorecard } from "../services/research/fundamentalsScorecard.ts";
 import {
   MACRO_PROVIDERS,
@@ -53,10 +56,16 @@ function single(value: unknown): string {
 }
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────────
- * Query/body params are validated with zod (schema → safeParse →
- * ValidationError), the idiom established in settings.js/reports.js. single()
- * stays as the shared array/scalar normalization step feeding the schemas.
+ * Query/body params are parsed one at a time with parseInput (ADR-193), so
+ * each issue is reported at the root and keeps its established message (the
+ * messages already name their param). single() stays as the shared
+ * array/scalar normalization step feeding the schemas.
  */
+
+// An optional free-text param: single()-normalized, empty when absent.
+const optionalParamSchema = z.unknown().optional().transform(single);
+const optionalParam = (value: unknown) =>
+  parseInput(optionalParamSchema, value);
 
 // A required param: single()-normalized, must be non-empty after trimming.
 const requiredParamSchema = (message: string) =>
@@ -87,24 +96,42 @@ const macroProviderSchema = z
     }),
   );
 
+// Proposal fields may be null (MappingProposal); the repository stores null
+// and undefined alike.
+const optionalMappingText = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? undefined);
+
+// The fields researchMappingService.save() reads (camelCase or snake_case).
+// A missing provider used to reach the NOT NULL column as a 500.
+const mappingItemSchema = z.object({
+  provider: z.string().min(1),
+  providerSymbol: optionalMappingText,
+  provider_symbol: optionalMappingText,
+  resolvedName: optionalMappingText,
+  resolved_name: optionalMappingText,
+  exchange: optionalMappingText,
+  currency: optionalMappingText,
+  status: optionalMappingText,
+});
+
 const mappingsArraySchema = z
-  .array(z.unknown(), { error: "mappings must be a non-empty array" })
+  .array(mappingItemSchema, { error: "mappings must be a non-empty array" })
   .min(1, { error: "mappings must be a non-empty array" });
 
-// schema → safeParse → joined issues → ValidationError (settings.js idiom).
-// Messages already name their param, so issues join without path prefixes.
-function parseResearchParam<T>(schema: z.ZodType<T>, value: unknown): T {
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    throw new ValidationError(
-      result.error.issues.map((issue) => issue.message).join("; "),
-    );
-  }
-  return result.data;
-}
+const providerParamSchema = z
+  .string()
+  .refine((provider) => KEYED_PROVIDERS.includes(provider), {
+    error: (issue) => `Unknown keyed provider: ${String(issue.input)}`,
+  });
 
-const requireSymbol = (value: unknown) =>
-  parseResearchParam(symbolSchema, value);
+const apiKeySchema = z
+  .string({ error: "api_key must be a non-empty string" })
+  .trim()
+  .min(1, "api_key must be a non-empty string");
+
+const requireSymbol = (value: unknown) => parseInput(symbolSchema, value);
 
 /** Run an aggregator fetch and emit the unified envelope with provenance meta. */
 async function respond(
@@ -124,7 +151,7 @@ async function respond(
 
 // GET /api/research/search?q=apple
 router.get("/search", async (req, res) => {
-  const q = single(req.query.q);
+  const q = optionalParam(req.query.q);
   if (!q) {
     const meta: { provider: string | null; source: string } = {
       provider: null,
@@ -140,7 +167,7 @@ router.get("/quote", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, "quote", {
     symbol,
-    assetClass: single(req.query.asset_class) || undefined,
+    assetClass: optionalParam(req.query.asset_class) || undefined,
   });
 });
 
@@ -149,8 +176,8 @@ router.get("/chart", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, "chart", {
     symbol,
-    assetClass: single(req.query.asset_class) || undefined,
-    range: single(req.query.range) || "1mo",
+    assetClass: optionalParam(req.query.asset_class) || undefined,
+    range: optionalParam(req.query.range) || "1mo",
   });
 });
 
@@ -161,7 +188,7 @@ router.get("/fundamentals", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
-    assetClass: single(req.query.asset_class) || undefined,
+    assetClass: optionalParam(req.query.asset_class) || undefined,
   });
   const data =
     result.source === "unavailable" ? EMPTY_BY_TYPE.fundamentals : result.data;
@@ -175,7 +202,7 @@ router.get("/analyst", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   await respond(res, "analyst", {
     symbol,
-    assetClass: single(req.query.asset_class) || undefined,
+    assetClass: optionalParam(req.query.asset_class) || undefined,
   });
 });
 
@@ -191,7 +218,7 @@ router.get("/news", async (req, res) => {
 
 // GET /api/research/macro/search?q=inflation
 router.get("/macro/search", async (req, res) => {
-  const q = single(req.query.q);
+  const q = optionalParam(req.query.q);
   if (!q) {
     const meta: { provider: string | null; source: string } = {
       provider: null,
@@ -209,8 +236,8 @@ router.get("/macro/search", async (req, res) => {
 
 // GET /api/research/macro/series?provider=fred&series_id=CPIAUCSL&range=5y
 router.get("/macro/series", async (req, res) => {
-  const provider = parseResearchParam(macroProviderSchema, req.query.provider);
-  const seriesId = single(req.query.series_id);
+  const provider = parseInput(macroProviderSchema, req.query.provider);
+  const seriesId = optionalParam(req.query.series_id);
   // Cross-field: the series_id shape depends on the (validated) provider, so
   // this stays a one-line guard instead of an object schema.
   if (!isValidSeriesId(provider, seriesId)) {
@@ -218,7 +245,7 @@ router.get("/macro/series", async (req, res) => {
       "valid series_id required for the given provider",
     );
   }
-  const range = single(req.query.range) || "5y";
+  const range = optionalParam(req.query.range) || "5y";
   const result = await researchAggregator.fetchMacroSeries({
     provider,
     seriesId,
@@ -242,7 +269,7 @@ router.get("/scorecard", async (req, res) => {
   const symbol = requireSymbol(req.query.symbol);
   const result = await researchAggregator.fetchFundamentals({
     symbol,
-    assetClass: single(req.query.asset_class) || undefined,
+    assetClass: optionalParam(req.query.asset_class) || undefined,
   });
   if (result.source === "unavailable") {
     const meta: { provider: string | null; source: string } = {
@@ -263,68 +290,102 @@ router.get("/scorecard", async (req, res) => {
   res.ok({ symbol, fundamentals: result.data, scorecard }, meta);
 });
 
+// Numeric knobs stay lenient: Number() here, then the service clamps or falls
+// back to its defaults exactly as it did for the raw values. Absent stays
+// absent (goal_month in particular is only honoured when supplied).
+const lenientNumber = z
+  .unknown()
+  .optional()
+  .transform((value) => (value === undefined ? undefined : Number(value)));
+
+const portfolioForecastSchema = z
+  .object({
+    horizon_months: lenientNumber,
+    monthly_contribution: lenientNumber,
+    monthly_contribution_schedule: z.unknown().optional(),
+    paths: lenientNumber,
+    forward_blend: lenientNumber,
+    method: optionalParamSchema,
+    target_value: lenientNumber,
+    goal_month: z.unknown().optional(),
+    currency: optionalParamSchema,
+    seed: optionalParamSchema,
+  })
+  // Cross-field rules depend on the effective horizon, so they run on the
+  // whole body and report unprefixed messages.
+  .transform((body, ctx): PortfolioForecastInput => {
+    const requestedHorizon = Number(body.horizon_months);
+    const horizon = Number.isFinite(requestedHorizon)
+      ? Math.min(600, Math.max(1, Math.round(requestedHorizon)))
+      : 120;
+    let schedule: number[] | undefined;
+    if (body.monthly_contribution_schedule !== undefined) {
+      const parsed = z
+        .array(z.number().finite().min(0))
+        .max(600)
+        .safeParse(body.monthly_contribution_schedule);
+      if (!parsed.success || parsed.data.length > horizon) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "monthly_contribution_schedule must contain at most horizon_months non-negative amounts",
+        });
+        return z.NEVER;
+      }
+      schedule = parsed.data;
+    }
+    const { goal_month: goalMonth, method } = body;
+    const targetValue = Number(body.target_value);
+    if (
+      goalMonth !== undefined &&
+      (typeof goalMonth !== "number" ||
+        !Number.isInteger(goalMonth) ||
+        goalMonth < 1 ||
+        goalMonth > horizon ||
+        !Number.isFinite(targetValue) ||
+        targetValue <= 0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "goal_month must be within horizon_months and accompanied by a positive target_value",
+      });
+      return z.NEVER;
+    }
+    return {
+      horizonMonths: body.horizon_months,
+      monthlyContribution: body.monthly_contribution,
+      monthlyContributionSchedule: schedule,
+      paths: body.paths,
+      forwardBlend: body.forward_blend,
+      // Any other spelling already fell back to the service's parametric default.
+      method:
+        method === "parametric" || method === "block_bootstrap"
+          ? method
+          : undefined,
+      targetValue: body.target_value,
+      // Checked above: when present it is an integer within the horizon.
+      goalMonth: typeof goalMonth === "number" ? goalMonth : undefined,
+      currency: body.currency || undefined,
+      seed: body.seed || undefined,
+    };
+  });
+
 // POST /api/research/portfolio-forecast — Monte-Carlo portfolio value projection.
 // On-demand, never persisted (ADR-079 storage boundary). Deterministic per seed.
 // Body keys are snake_case only — the camelCase spellings this handler used to
 // also accept were a second, undocumented contract. See "Wire Casing
 // Convention" in docs/reference/code-patterns.md.
 router.post("/portfolio-forecast", async (req, res) => {
-  const body = req.body ?? {};
-  const requestedHorizon = Number(body.horizon_months);
-  const horizon = Number.isFinite(requestedHorizon)
-    ? Math.min(600, Math.max(1, Math.round(requestedHorizon)))
-    : 120;
-  const schedule = body.monthly_contribution_schedule;
-  if (schedule !== undefined) {
-    const parsed = z
-      .array(z.number().finite().min(0))
-      .max(600)
-      .safeParse(schedule);
-    if (!parsed.success || parsed.data.length > horizon) {
-      throw new ValidationError(
-        "monthly_contribution_schedule must contain at most horizon_months non-negative amounts",
-      );
-    }
-  }
-  const goalMonth = body.goal_month;
-  const targetValue = Number(body.target_value);
-  if (
-    goalMonth !== undefined &&
-    (!Number.isInteger(goalMonth) ||
-      goalMonth < 1 ||
-      goalMonth > horizon ||
-      !Number.isFinite(targetValue) ||
-      targetValue <= 0)
-  ) {
-    throw new ValidationError(
-      "goal_month must be within horizon_months and accompanied by a positive target_value",
-    );
-  }
-  const methodInput = single(body.method);
-  const result = await runPortfolioForecast({
-    horizonMonths: body.horizon_months,
-    monthlyContribution: body.monthly_contribution,
-    monthlyContributionSchedule: body.monthly_contribution_schedule,
-    paths: body.paths,
-    forwardBlend: body.forward_blend,
-    // Any other spelling already fell back to the service's parametric default.
-    method:
-      methodInput === "parametric" || methodInput === "block_bootstrap"
-        ? methodInput
-        : undefined,
-    targetValue: body.target_value,
-    goalMonth: body.goal_month,
-    currency: single(body.currency) || undefined,
-    seed: single(body.seed) || undefined,
-  });
-  res.ok(result);
+  const input = parseInput(portfolioForecastSchema, req.body ?? {});
+  res.ok(await runPortfolioForecast(input));
 });
 
 // ─── Cross-provider symbol mapping (ADR-079) ────────────────────────────────
 
-const keyType = (value: unknown) => parseResearchParam(keyTypeSchema, value);
+const keyType = (value: unknown) => parseInput(keyTypeSchema, value);
 const requireInstrumentKey = (value: unknown) =>
-  parseResearchParam(instrumentKeySchema, value);
+  parseInput(instrumentKeySchema, value);
 
 /**
  * Optional id: undefined when absent or empty, the parsed integer when valid,
@@ -359,11 +420,11 @@ router.get("/mappings", async (req, res) => {
 router.post("/mappings/resolve", async (req, res) => {
   const { instrument_key, key_type, asset_class, query, investment_id } =
     req.body ?? {};
-  const q = parseResearchParam(querySchema, query);
+  const q = parseInput(querySchema, query);
   const result = await researchMappingService.resolve({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
-    assetClass: single(asset_class) || undefined,
+    assetClass: optionalParam(asset_class) || undefined,
     query: q,
     investmentId: optionalInvestmentId(investment_id),
   });
@@ -375,18 +436,6 @@ router.post("/mappings/resolve", async (req, res) => {
   });
 });
 
-/** The mapping item shape researchMappingService.save() reads. */
-interface ResearchMappingInput {
-  provider: string;
-  providerSymbol?: string;
-  provider_symbol?: string;
-  resolvedName?: string;
-  resolved_name?: string;
-  exchange?: string;
-  currency?: string;
-  status?: string;
-}
-
 // POST /api/research/mappings  { instrument_key, key_type, mappings: [...] }
 // Answers the updated mapping set in the same canonical `{items, total}`
 // collection shape as GET /mappings (one response type for both).
@@ -395,14 +444,7 @@ router.post("/mappings", async (req, res) => {
   const rows = await researchMappingService.save({
     instrumentKey: requireInstrumentKey(instrument_key),
     keyType: keyType(key_type),
-    // mappingsArraySchema only validates "is a non-empty array" — item shape
-    // (provider/providerSymbol/...) is unchecked by zod and forwarded as-is to
-    // save(), exactly as before this annotation pass; the cast documents the
-    // shape save() actually reads instead of retyping the zod schema itself.
-    mappings: parseResearchParam(
-      mappingsArraySchema,
-      mappings,
-    ) as ResearchMappingInput[],
+    mappings: parseInput(mappingsArraySchema, mappings),
   });
   res.ok({ items: rows, total: rows.length });
 });
@@ -441,8 +483,9 @@ router.get("/provider-keys", async (_req, res) => {
 // PUT /api/research/provider-keys/:provider  { api_key }
 // Answers the refreshed statuses in the same `{items, total}` shape as the GET.
 router.put("/provider-keys/:provider", async (req, res) => {
-  const { api_key } = req.body ?? {};
-  await researchProviderKeyService.setKey(req.params.provider, api_key);
+  const provider = parseInput(providerParamSchema, req.params.provider);
+  const apiKey = parseInput(apiKeySchema, req.body?.api_key);
+  await researchProviderKeyService.setKey(provider, apiKey);
   const items = await researchProviderKeyService.listKeyStatuses();
   res.ok({ items, total: items.length });
 });
@@ -453,7 +496,9 @@ router.delete("/provider-keys/:provider", async (req, res) => {
   // Content (docs/reference/code-patterns.md, "DELETE responses"). The Settings
   // UI refetches GET /provider-keys after a clear, so the response carries no
   // key statuses of its own.
-  await researchProviderKeyService.clearKey(req.params.provider);
+  await researchProviderKeyService.clearKey(
+    parseInput(providerParamSchema, req.params.provider),
+  );
   res.status(204).send();
 });
 

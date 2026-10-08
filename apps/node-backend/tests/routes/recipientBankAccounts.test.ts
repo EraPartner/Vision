@@ -315,3 +315,64 @@ describe("Recipient Bank Account Routes", () => {
     });
   });
 });
+
+// ADR-193: the route's zod schemas type the write bodies, so a wrong JSON type
+// is a 400 before the repository runs. Before, a numeric account_number or a
+// non-string bank_name was forwarded to Postgres and coerced.
+describe("Recipient Bank Account Routes — request schemas (zod)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    [{ account_number: 12345678 }, "account_number: must be a string"],
+    [{ account_number: "" }, "account_number: Missing required field"],
+    [{ account_number: "BE1", bank_name: 5 }, "bank_name"],
+    [{ account_number: "BE1", address: {} }, "address"],
+    [{ account_number: "BE1", account_label: ["x"] }, "account_label"],
+    [{ account_number: "BE1", set_as_primary: "yes" }, "set_as_primary"],
+  ])("POST rejects %j", async (body, message) => {
+    const res = await api
+      .post(`${BASE}/1/bank-accounts`)
+      .send(body)
+      .expect(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).toContain(message);
+    expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
+  });
+
+  it("POST keeps empty optional strings mapping to null", async () => {
+    bankAccountRepo.createOrGet.mockResolvedValue({
+      bankAccount: bankAccount({ id: 3 }),
+      created: true,
+    });
+    await api
+      .post(`${BASE}/1/bank-accounts`)
+      .send({ account_number: "BE1", bank_name: "", set_as_primary: true })
+      .expect(201);
+    expect(bankAccountRepo.createOrGet).toHaveBeenCalledWith({
+      recipientId: 1,
+      accountNumber: "BE1",
+      bankName: null,
+      address: null,
+      accountLabel: null,
+      setAsPrimary: true,
+    });
+  });
+
+  it.each([{ bank_name: 5 }, { address: true }, { account_label: 1 }])(
+    "PATCH rejects %j",
+    async (body) => {
+      await api.patch(`${BASE}/1/bank-accounts/2`).send(body).expect(400);
+      expect(bankAccountRepo.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects a malformed :id on GET before reading", async () => {
+    await api.get(`${BASE}/1e3/bank-accounts`).expect(400);
+    expect(bankAccountRepo.getByRecipientId).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed :id on set-primary before writing", async () => {
+    await api.post(`${BASE}/0x10/bank-accounts/2/set-primary`).expect(400);
+    expect(bankAccountRepo.setPrimary).not.toHaveBeenCalled();
+  });
+});

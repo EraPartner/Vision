@@ -241,7 +241,7 @@ Backend Dependencies:
 (zero-dependency compression and CORS live in dedicated middleware modules)
 
 Shared:
-├── Zod (validation — frontend)
+├── Zod (request parsing, data and response contracts — backend, frontend, @vision/types)
 └── Alembic (migrations)
 ```
 
@@ -304,7 +304,7 @@ App
 
 ### Defense in Depth
 
-1. **Input validation** — Zod schemas on frontend, middleware validation on backend
+1. **Input validation** — Zod schemas on frontend; on the backend, routes parse params, query and body with zod through `parseInput` ([[docs/adr/193-zod-runtime-contracts|ADR-193]])
 2. **Parameterized queries** — All SQL uses `$1, $2` parameters
 3. **Rate limiting** — Global + per-route rate limiters
 4. **CSP headers** — Content-Security-Policy for Electron renderer

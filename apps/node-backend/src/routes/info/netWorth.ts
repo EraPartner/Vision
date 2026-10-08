@@ -15,22 +15,29 @@
 import { Router } from "express";
 import infoService from "../../services/infoService.ts";
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
-import { getTargetCurrency } from "./_queryParams.ts";
+import { targetCurrencyQuerySchema } from "./_queryParams.ts";
 import {
   netWorthResponseCache,
   NET_WORTH_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from "../../services/info/cache.ts";
 import { resolveLivePortfolioValue } from "../../services/info/liveSummary.ts";
-import { parseOptionalPagination } from "../../lib/pagination.ts";
+import { parseInput } from "../../lib/zodInput.ts";
+import { optionalPaginationQuery } from "../_inputBridges.ts";
 
 const router = Router();
+
+const pageQuerySchema = optionalPaginationQuery({
+  defaultLimit: 50,
+  maxLimit: 5000,
+});
 
 router.get(
   "/net-worth",
   rateLimiter({ windowMs: 60_000, maxRequests: 30, keyPrefix: "net-worth" }),
   async (req, res) => {
-    const targetCurrency = getTargetCurrency(req);
+    const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
+    const page = parseInput(pageQuerySchema, req.query);
     const cacheKey = targetCurrency;
 
     const data = await resolveCacheWithInflight(
@@ -49,11 +56,6 @@ router.get(
         },
       },
     );
-
-    const page = parseOptionalPagination(req.query, {
-      defaultLimit: 50,
-      maxLimit: 5000,
-    });
 
     if (!page) {
       res.ok(data);

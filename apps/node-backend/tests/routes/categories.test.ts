@@ -348,3 +348,79 @@ describe("Category Routes", () => {
     });
   });
 });
+
+describe("Category request schemas (ADR-193)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("POST / without a JSON body answers 400 instead of a destructuring 500", async () => {
+    const res = await api.post(BASE).expect(400);
+    expect(res.body).toEqual(
+      errEnvelope({
+        code: "VALIDATION_ERROR",
+        message: "Missing required fields: general, detail",
+      }),
+    );
+  });
+
+  it("POST / rejects a non-string general before the repository upper-cases it", async () => {
+    const res = await api
+      .post(BASE)
+      .send({ general: 5, detail: "FOOD" })
+      .expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+    expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
+  });
+
+  // The repository used to destructure the absent body (TypeError → 500).
+  it("PATCH /:id without a JSON body answers 400", async () => {
+    const res = await api.patch(`${BASE}/1`).expect(400);
+    expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+    expect(categoryRepository.update).not.toHaveBeenCalled();
+  });
+
+  it.each([{ general: 7 }, { is_active: "yes" }, { description: 3 }])(
+    "PATCH /:id rejects %j",
+    async (body) => {
+      const res = await api.patch(`${BASE}/1`).send(body).expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(categoryRepository.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("PATCH /:id forwards only the documented fields", async () => {
+    categoryRepository.update.mockResolvedValue(category({ id: 1 }));
+    await api
+      .patch(`${BASE}/1`)
+      .send({ general: "g", is_active: false, id: 99 })
+      .expect(200);
+    expect(categoryRepository.update).toHaveBeenCalledWith(1, {
+      general: "g",
+      is_active: false,
+    });
+  });
+
+  it("POST /:id/assign rejects malformed recipient ids", async () => {
+    const res = await api
+      .post(`${BASE}/1/assign`)
+      .send({ recipient_ids: [1, "abc"] })
+      .expect(400);
+    expect(res.body.error.message).toBe(
+      "recipient_ids contains invalid value: abc",
+    );
+    expect(categoryRepository.assignToRecipients).not.toHaveBeenCalled();
+  });
+
+  it("POST /:id/assign keeps the missing-ids message and wraps a scalar", async () => {
+    const missing = await api.post(`${BASE}/1/assign`).send({}).expect(400);
+    expect(missing.body.error.message).toBe("Missing recipient_ids");
+
+    categoryRepository.assignToRecipients.mockResolvedValue(1);
+    await api.post(`${BASE}/1/assign`).send({ recipient_ids: "7" }).expect(200);
+    expect(categoryRepository.assignToRecipients).toHaveBeenCalledWith(1, [7]);
+  });
+
+  it("POST /tree reports zod issues with their field path", async () => {
+    const res = await api.post(`${BASE}/tree`).send({ name: "" }).expect(400);
+    expect(res.body.error.message).toMatch(/^name: /);
+  });
+});

@@ -11,33 +11,54 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import tagService from "../services/tagService.ts";
-import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { withCreateOutcome } from "../lib/createOutcome.ts";
-import { parseBooleanQueryParam } from "../lib/httpParams.ts";
+import { parseInput } from "../lib/zodInput.ts";
+import { activeOrAllQuery, idParams, pageFields } from "./_requestSchemas.ts";
 
 const router = Router();
+
+// `all` is the explicit tags/accounts compatibility mode; it is not an
+// API-wide third boolean spelling.
+const listQuery = z
+  .object({ active: activeOrAllQuery, ...pageFields })
+  .transform(({ active, ...page }) => ({
+    active,
+    page: parseOptionalPagination(page, { maxLimit: 1000 }),
+  }));
+
+// tagService keeps the slug rules (required, non-empty after slugify); the
+// route pins the JSON types.
+const createBody = z.object({
+  slug: z.string().optional(),
+  color: z.string().nullable().optional(),
+});
+
+// A bodiless PATCH is a no-op update, as before.
+const updateBody = z
+  .object({
+    color: z.string().nullable().optional(),
+    is_active: z.boolean().nullable().optional(),
+  })
+  .default({});
 
 // Pagination is opt-in: without limit/offset this still answers the complete
 // list (the tag pickers/filters render all of them), so no client is truncated.
 router.get("/", async (req, res) => {
-  const { active = "true" } = req.query;
-  // `all` is the explicit tags/accounts compatibility mode; it is not an
-  // API-wide third boolean spelling.
-  const activeFilter =
-    active === "all" ? undefined : parseBooleanQueryParam(active, true);
-  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+  const { active, page } = parseInput(listQuery, req.query);
   const { items, total } = await tagService.list({
-    active: activeFilter,
+    active,
     ...(page ?? {}),
   });
   res.ok({ ...listBody(items, total, page), links: [] });
 });
 
 router.post("/", async (req, res) => {
+  const body = parseInput(createBody, req.body);
   const { tag, reactivated, wasInactive, junctionCount } =
-    await tagService.createOrReactivate(req.body);
+    await tagService.createOrReactivate(body);
 
   res.status(reactivated && !wasInactive ? 200 : 201);
   res.ok(
@@ -49,17 +70,17 @@ router.post("/", async (req, res) => {
   );
 });
 
-router.patch("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
-  const updated = await tagService.update(id, req.body);
+router.patch("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const updated = await tagService.update(id, parseInput(updateBody, req.body));
   res.ok({ ...updated, links: [] });
 });
 
 // Deactivation, not a hard delete: the row survives with is_active = false, so
 // this returns the deactivated entity rather than 204 (docs/reference/code-patterns.md,
 // "DELETE responses").
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   const deactivated = await tagService.softDelete(id);
   res.ok({ ...deactivated, links: [] });
 });

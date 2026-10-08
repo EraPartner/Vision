@@ -9,9 +9,12 @@
  * requires positive amount/units/price for buy/sell.
  */
 
+import { z } from "zod";
 import { logger } from "../../config/logger.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
+import { checkDataContract } from "../../lib/dataContract.ts";
 import {
+  isUtcMidnight,
   parseCsvFile,
   rawDataForCsvRecord,
   parseCustomAmount,
@@ -73,6 +76,60 @@ export interface ParsedPortfolioRow {
     networkReceipt?: unknown;
   };
 }
+
+const nullableNumber = z.number().nullable();
+
+/**
+ * Runtime contract for {@link ParsedPortfolioRow} as every portfolio format
+ * returns it (ADR-193), checked once in {@link parseWithConfig}. A null date
+ * is part of the contract (validate rejects it as a row error); NaN, a
+ * non-midnight date or an unknown key is an adapter bug.
+ */
+export const parsedPortfolioRowSchema = z.strictObject({
+  date: z
+    .date()
+    .refine(isUtcMidnight, "expected a UTC-midnight date")
+    .nullable(),
+  typeRaw: z.string(),
+  symbolRaw: z.string(),
+  nameRaw: z.string(),
+  units: nullableNumber,
+  pricePerUnit: nullableNumber,
+  amount: nullableNumber,
+  fees: nullableNumber,
+  taxes: nullableNumber,
+  currency: z.string().nullable(),
+  fxRateToEur: nullableNumber,
+  note: z.string(),
+  rawData: z.string(),
+  sourceAccountIdentity: z.string().nullable().optional(),
+  sourceId: z.string().nullable().optional(),
+  assetTransfer: z
+    .strictObject({
+      direction: z.enum(["in", "out", "internal"]),
+      basisStatus: z.enum(["carried", "unresolved", "not_applicable"]),
+      feeUnits: z.string().optional(),
+      receivedUnits: z.string().optional(),
+      networkReceipt: z.unknown().optional(),
+    })
+    .optional(),
+  assetAdjustment: z
+    .strictObject({
+      kind: z.enum(["yield_acquisition", "yield_reversal", "asset_fee"]),
+      basisPolicy: z.enum(["zero", "zero_yield_only", "carried"]),
+      accountId: z.number().int().positive().optional(),
+      eligibleSourceRecordHashes: z.array(z.string()).optional(),
+      networkReceipt: z.unknown().optional(),
+    })
+    .optional(),
+}) satisfies z.ZodType<ParsedPortfolioRow>;
+
+/** A format's whole result: the rows plus the counters riding on the array. */
+export const parsedPortfolioRowsSchema = z.object({
+  rows: z.array(parsedPortfolioRowSchema),
+  skipped: z.number().int().nonnegative().optional(),
+  sourceColumns: z.array(z.string()).optional(),
+});
 
 /**
  * A parsed row list carrying the adapter's count of rows it could not
@@ -259,9 +316,27 @@ function rowToParsed(
 }
 
 /**
+ * Parse with the config's format (or the generic column mapping) and check
+ * the result against {@link parsedPortfolioRowsSchema}. Formats turn rows they
+ * cannot read into `skipped`, so a contract break is an adapter bug and
+ * follows data-contract mode (lib/dataContract.ts).
+ *
  * @throws {Error} when `date_format` is not one of SUPPORTED_DATE_FORMATS
  */
 export async function parseWithConfig(
+  filePath: string,
+  config: PortfolioParserConfig,
+): Promise<ParsedPortfolioRows> {
+  const rows = await parseFormat(filePath, config);
+  checkDataContract(
+    parsedPortfolioRowsSchema,
+    { rows, skipped: rows.skipped, sourceColumns: rows.sourceColumns },
+    `portfolio adapter "${config.format ?? "portfolio_generic"}" output`,
+  );
+  return rows;
+}
+
+async function parseFormat(
   filePath: string,
   config: PortfolioParserConfig,
 ): Promise<ParsedPortfolioRows> {

@@ -40,9 +40,9 @@ describe("splitRepository owed aggregates use a per-split LATERAL sum", () => {
           amount: "30.00",
           note: null,
           is_settled: false,
-          created_at: "2026-03-01",
-          updated_at: "2026-03-01",
-          transaction_date: "2026-03-01",
+          created_at: new Date("2026-03-01T00:00:00.000Z"),
+          updated_at: new Date("2026-03-01T00:00:00.000Z"),
+          transaction_date: new Date(2026, 2, 1),
           transaction_memo: "Dinner",
           transaction_amount: "60.00",
           transaction_currency: "EUR",
@@ -69,7 +69,7 @@ describe("splitRepository owed aggregates use a per-split LATERAL sum", () => {
     query.mockResolvedValueOnce({
       rows: [
         {
-          date: "2026-03-01",
+          date: new Date(2026, 2, 1),
           bank_account: "Main",
           recipient_name: "Alice",
           memo: "Dinner",
@@ -137,7 +137,7 @@ describe("splitRepository emits coerced money on every write path", () => {
       amount: "12.50",
       note: null,
       paid_at: new Date(Date.UTC(2026, 2, 4)),
-      created_at: "2026-03-04T00:00:00.000Z",
+      created_at: new Date("2026-03-04T00:00:00.000Z"),
     };
 
     query
@@ -265,8 +265,8 @@ describe("splitRepository settle/getById carry the real amount_paid and recipien
     recipient_id: 2,
     amount: "30.00",
     note: "dinner",
-    created_at: "2026-03-01",
-    updated_at: "2026-03-05",
+    created_at: new Date("2026-03-01T00:00:00.000Z"),
+    updated_at: new Date("2026-03-05T00:00:00.000Z"),
   };
 
   /** Resolve with the joined columns only when the query selects them. */

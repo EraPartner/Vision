@@ -84,4 +84,36 @@ describe('registerImportBatchRoutes', () => {
     expect(rollback).toHaveBeenCalledWith(3);
     expect(res.ok).toHaveBeenCalledWith({ deleted: 2 });
   });
+
+  it('rejects a malformed batch id with the canonical message before any lookup', async () => {
+    const getBatch = vi.fn();
+    const rollback = vi.fn();
+    const handlers = captureRoutes({ listBatches: vi.fn(), getBatch, inProgressStatuses: [], rollback });
+    const res = response();
+
+    for (const key of ['GET /batches/:id', 'DELETE /batches/:id']) {
+      for (const id of ['12abc', '1e3', '0', '-1']) {
+        await expect(handlers.get(key)({ params: { id } }, res)).rejects.toMatchObject({
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid batch id',
+        });
+      }
+    }
+    expect(getBatch).not.toHaveBeenCalled();
+    expect(rollback).not.toHaveBeenCalled();
+  });
+
+  it('keeps BIGSERIAL batch ids above the int4 ceiling', async () => {
+    const getBatch = vi.fn().mockResolvedValue({ id: 2147483648 });
+    const handlers = captureRoutes({ listBatches: vi.fn(), getBatch, inProgressStatuses: [], rollback: vi.fn() });
+    await handlers.get('GET /batches/:id')({ params: { id: '2147483648' } }, response());
+    expect(getBatch).toHaveBeenCalledWith(2147483648);
+  });
+
+  it('keeps unparseable pagination on its fallbacks', async () => {
+    const listBatches = vi.fn().mockResolvedValue({ batches: [], total: 0 });
+    const handlers = captureRoutes({ listBatches, getBatch: vi.fn(), inProgressStatuses: [], rollback: vi.fn() });
+    await handlers.get('GET /batches')({ query: { limit: 'abc', offset: '-3' } }, response());
+    expect(listBatches).toHaveBeenCalledWith({ limit: 50, offset: 0 });
+  });
 });

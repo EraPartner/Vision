@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import { mockPooledTxConnection } from "./helpers/repoMocks.ts";
+import { plannedExecutionRow, plannedRow } from "./helpers/pgRows.ts";
 vi.mock("../src/database/connection.ts", () => mockPooledTxConnection());
 
 vi.mock("../src/middleware/validation.ts", () => ({
@@ -152,22 +153,22 @@ describe("plannedTransactionRepository.getAll", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          { id: 1, is_loan: false, total_count: "2" },
-          { id: 2, is_loan: true, total_count: "2" },
+          { ...plannedRow({ id: 1, is_loan: false }), total_count: "2" },
+          { ...plannedRow({ id: 2, is_loan: true }), total_count: "2" },
         ],
       })
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedExecutionRow({
             planned_transaction_id: 1,
             executed_transaction_id: 90,
-            execution_date: "2026-02-01",
-          },
-          {
+            execution_date: new Date(2026, 1, 1),
+          }),
+          plannedExecutionRow({
             planned_transaction_id: 2,
             executed_transaction_id: 91,
-            execution_date: "2026-02-03",
-          },
+            execution_date: new Date(2026, 1, 3),
+          }),
         ],
       })
       .mockResolvedValueOnce({
@@ -175,7 +176,7 @@ describe("plannedTransactionRepository.getAll", () => {
           {
             planned_transaction_id: 2,
             installment_number: 1,
-            due_date: "2026-03-01",
+            due_date: new Date(2026, 2, 1),
             payment_amount: "120.00",
             principal_amount: "90.00",
             interest_amount: "30.00",
@@ -259,28 +260,28 @@ describe("plannedTransactionRepository.getById", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 12,
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:MORTGAGE",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedExecutionRow({
             planned_transaction_id: 12,
             executed_transaction_id: 77,
-            execution_date: "2026-03-01",
-          },
+            execution_date: new Date(2026, 2, 1),
+          }),
         ],
       })
       .mockResolvedValueOnce({
         rows: [
           {
             installment_number: 1,
-            due_date: "2026-04-01",
+            due_date: new Date(2026, 3, 1),
             payment_amount: "100.00",
             principal_amount: "80.00",
             interest_amount: "20.00",
@@ -324,12 +325,12 @@ describe("plannedTransactionService.create", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 51,
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:MORTGAGE",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
@@ -337,7 +338,7 @@ describe("plannedTransactionService.create", () => {
         rows: [
           {
             installment_number: 1,
-            due_date: "2026-06-01",
+            due_date: new Date(2026, 5, 1),
             payment_amount: "100.00",
             principal_amount: "80.00",
             interest_amount: "20.00",
@@ -490,12 +491,12 @@ describe("plannedTransactionService.create", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 52,
             is_loan: false,
             recipient_name: "Employer",
             category_name: "INCOME:SALARY",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
@@ -565,12 +566,12 @@ describe("plannedTransactionService.update", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 33,
             is_loan: false,
             recipient_name: "Shop",
             category_name: "FOOD:GROCERIES",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
@@ -635,28 +636,28 @@ describe("plannedTransactionService.update", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 70,
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:CAR",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedExecutionRow({
             planned_transaction_id: 70,
             executed_transaction_id: 701,
-            execution_date: "2026-06-02",
-          },
+            execution_date: new Date(2026, 5, 2),
+          }),
         ],
       })
       .mockResolvedValueOnce({
         rows: [
           {
             installment_number: 2,
-            due_date: "2026-07-01",
+            due_date: new Date(2026, 6, 1),
             payment_amount: "250.00",
             principal_amount: "200.00",
             interest_amount: "50.00",
@@ -818,12 +819,12 @@ describe("plannedTransactionService.updateWithLoanSchedule", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          plannedRow({
             id: 70,
             is_loan: true,
             recipient_name: "Bank",
             category_name: "LOAN:CAR",
-          },
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
@@ -831,7 +832,7 @@ describe("plannedTransactionService.updateWithLoanSchedule", () => {
         rows: [
           {
             installment_number: 1,
-            due_date: "2026-10-01",
+            due_date: new Date(2026, 9, 1),
             payment_amount: "300.00",
             principal_amount: "250.00",
             interest_amount: "50.00",

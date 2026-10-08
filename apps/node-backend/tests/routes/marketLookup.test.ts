@@ -420,6 +420,31 @@ describe('Market Lookup Routes', () => {
     });
   });
 
+  describe('query validation', () => {
+    it('rejects an interval outside the Yahoo vocabulary before calling Yahoo', async () => {
+      const res = await api.get(`${BASE}/chart`).query({ symbol: 'AAPL', interval: '7d' }).expect(400);
+      expect(res.body).toEqual(errEnvelope({
+        code: 'VALIDATION_ERROR',
+        message: expect.stringMatching(/^interval: /),
+      }));
+      expect(mockYahooChart).not.toHaveBeenCalled();
+    });
+
+    it('rejects repeated single-value parameters', async () => {
+      const range = await api.get(`${BASE}/chart`).query('symbol=AAPL&range=1d&range=5d').expect(400);
+      expect(range.body.error.message).toMatch(/^range: /);
+      const search = await api.get(`${BASE}/search`).query('q=apple&q=msft').expect(400);
+      expect(search.body.error.message).toMatch(/^q: /);
+      const detail = await api.get(`${BASE}/quote`).query('symbols=AAPL&detail=basic&detail=basic').expect(400);
+      expect(detail.body.error.message).toMatch(/^detail: /);
+      const count = await api.get(`${BASE}/news`).query('count=5&count=6').expect(400);
+      expect(count.body.error.message).toMatch(/^count: /);
+      expect(mockYahooChart).not.toHaveBeenCalled();
+      expect(mockYahooSearch).not.toHaveBeenCalled();
+      expect(mockYahooQuote).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /chart range mapping branches', () => {
     it('handles all supported/default ranges without errors', async () => {
       mockYahooChart.mockResolvedValue({ meta: { symbol: 'AAPL', currency: 'USD' }, quotes: [] });

@@ -9,6 +9,7 @@
 import fs from "fs";
 import { parse } from "csv-parse/sync";
 import type { Options as CsvParseOptions } from "csv-parse/sync";
+import { z } from "zod";
 import { toDecimal } from "../../../lib/money.ts";
 import { ValidationError } from "../../../middleware/errorHandler.ts";
 
@@ -87,6 +88,48 @@ export interface ParsedBankTransaction {
 export type ParsedBankTransactions = ParsedBankTransaction[] & {
   skipped?: number;
 };
+
+/** True for a Date at exactly 00:00:00.000 UTC. */
+export function isUtcMidnight(date: Date): boolean {
+  return (
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0
+  );
+}
+
+/**
+ * Runtime contract for {@link ParsedBankTransaction} as an adapter returns it
+ * (ADR-193). Adapters skip rows they cannot interpret, so a row breaking this
+ * is an adapter bug; the registry (adapters/index.ts) checks every adapter's
+ * output against it. Strict: `_seq` must already be stripped.
+ */
+export const parsedBankTransactionSchema = z.strictObject({
+  date: z.date().refine(isUtcMidnight, "expected a UTC-midnight date"),
+  bankAccount: z.string().min(1),
+  recipient: z.string(),
+  memo: z.string(),
+  /** zod numbers reject NaN and ±Infinity. */
+  amount: z.number(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullable(),
+  balance: z.number().nullable(),
+  recipientAccount: z.string().nullable(),
+  recipientAddress: z.string().nullable(),
+  recipientBankName: z.string().nullable(),
+  comment: z.string().nullable(),
+  rawData: z.string(),
+  sourceId: z.string().min(1).nullable().optional(),
+}) satisfies z.ZodType<ParsedBankTransaction>;
+
+/** An adapter's whole result: the rows plus the `skipped` counter riding on the array. */
+export const parsedBankTransactionsSchema = z.object({
+  rows: z.array(parsedBankTransactionSchema),
+  skipped: z.number().int().nonnegative().optional(),
+});
 
 /**
  * Parse an already-cleaned numeric string into a number via the canonical

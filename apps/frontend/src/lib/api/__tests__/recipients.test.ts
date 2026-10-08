@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
+import { RECIPIENT_STUB } from "@/test/msw/handlers";
+import { ApiContractError } from "@/lib/api/client";
 
 import { getRecipients, getRecipient, createRecipient, updateRecipient, deleteRecipient, mergeRecipients, unmergeRecipient, listRecipientPatterns, createRecipientPattern, updateRecipientPattern, deleteRecipientPattern, previewRecipientPattern } from "@/lib/api/recipients";
 
@@ -14,7 +16,7 @@ describe("recipients API client", () => {
     server.use(
       http.get(`${API_BASE}/api/recipients`, ({ request }) => {
         url = request.url;
-        return ok({ items: [], total: 0 });
+        return ok({ items: [], total: 0, limit: 50, offset: 0, links: [] });
       }),
     );
     await getRecipients({ search: "acme", sort_by: "name", sort_dir: "desc", uncategorized: true });
@@ -25,8 +27,34 @@ describe("recipients API client", () => {
   });
 
   it("getRecipient fetches by id", async () => {
-    server.use(http.get(`${API_BASE}/api/recipients/3`, () => ok({ id: 3, name: "Acme" })));
+    server.use(
+      http.get(`${API_BASE}/api/recipients/3`, () =>
+        ok({
+          ...RECIPIENT_STUB,
+          id: 3,
+          name: "Acme",
+          default_category_name: null,
+          primary_bank_account: null,
+          primary_recipient_name: null,
+          alias_count: 0,
+        }),
+      ),
+    );
     expect((await getRecipient(3)).name).toBe("Acme");
+  });
+
+  it("getRecipient rejects a drifted body in strict mode", async () => {
+    server.use(http.get(`${API_BASE}/api/recipients/3`, () => ok({ ...RECIPIENT_STUB, id: "3" })));
+    await expect(getRecipient(3)).rejects.toThrow(ApiContractError);
+  });
+
+  it("getRecipients rejects a NUMERIC-string total", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/recipients`, () =>
+        ok({ items: [RECIPIENT_STUB], total: "1", limit: 50, offset: 0, links: [] }),
+      ),
+    );
+    await expect(getRecipients()).rejects.toThrow("total: Invalid input: expected number, received string");
   });
 
   it("createRecipient reports wasCreated=true on 201", async () => {
@@ -77,6 +105,30 @@ describe("recipients API client", () => {
   it("listRecipientPatterns fetches patterns", async () => {
     server.use(http.get(`${API_BASE}/api/recipients/5/patterns`, () => ok({ items: [], total: 0 })));
     expect((await listRecipientPatterns(5)).items).toEqual([]);
+  });
+
+  it("listRecipientPatterns rejects an unknown pattern_kind", async () => {
+    const pattern = {
+      id: 1,
+      pattern: "ACME*",
+      pattern_kind: "wildcard",
+      case_sensitive: false,
+      priority: 100,
+      is_active: true,
+      source: "user",
+      notes: null,
+      created_at: "2025-01-01T00:00:00.000Z",
+      updated_at: "2025-01-01T00:00:00.000Z",
+    };
+    server.use(http.get(`${API_BASE}/api/recipients/5/patterns`, () => ok({ items: [pattern], total: 1 })));
+    await expect(listRecipientPatterns(5)).rejects.toThrow("items[0].pattern_kind");
+
+    server.use(
+      http.get(`${API_BASE}/api/recipients/5/patterns`, () =>
+        ok({ items: [{ ...pattern, pattern_kind: "glob" }], total: 1 }),
+      ),
+    );
+    expect((await listRecipientPatterns(5)).items[0].pattern_kind).toBe("glob");
   });
 
   it("createRecipientPattern posts the pattern body", async () => {

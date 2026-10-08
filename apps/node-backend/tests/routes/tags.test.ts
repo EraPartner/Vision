@@ -303,3 +303,30 @@ describe("DELETE /api/tags/:id", () => {
     expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
   });
 });
+
+describe("tag request schemas (zod)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([{ slug: 123 }, { slug: ["a"] }])(
+    "POST rejects a non-string slug %j before the service slugifies it",
+    async (body) => {
+      const res = await api.post(BASE).send(body).expect(400);
+      expect(res.body.error.message).toContain("slug");
+      expect(repo.findOrCreateBySlug).not.toHaveBeenCalled();
+    },
+  );
+
+  it("PATCH without a body stays a no-op update", async () => {
+    repo.update.mockResolvedValue(tag({ id: 1 }));
+    await api.patch(`${BASE}/1`).expect(200);
+    expect(repo.update).toHaveBeenCalledWith(1, {
+      color: undefined,
+      is_active: undefined,
+    });
+  });
+
+  it("DELETE rejects a malformed :id before deactivating", async () => {
+    await api.delete(`${BASE}/12abc`).expect(400);
+    expect(repo.softDelete).not.toHaveBeenCalled();
+  });
+});

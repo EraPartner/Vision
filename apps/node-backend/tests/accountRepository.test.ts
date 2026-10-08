@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { accountBalanceRow, accountRow } from "./helpers/pgRows.ts";
 
 const { mockConvertWithRates, mockLoadCurrentRates } = vi.hoisted(() => ({
   mockConvertWithRates: vi.fn((amount, from, to) => {
@@ -83,25 +84,27 @@ describe("accountRepository", () => {
 
   describe("getAll", () => {
     it("returns database rows unchanged for service-layer shaping", async () => {
-      const raw = {
+      const raw = accountBalanceRow({
         id: 1,
         balance_parts: [{ currency: "USD", balance: "12.3400" }],
         statement_balances: [],
         anchor_date: null,
-      };
+      });
       query.mockResolvedValueOnce({ rows: [raw] });
       expect(await accountRepository.getAll()).toEqual([raw]);
     });
 
     it("lists all accounts without an active filter", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 1, name: "Checking" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountBalanceRow({ id: 1, name: "Checking" })],
+      });
       const rows = await listAccounts();
       // No partitions at all (an account with no active rows) → a 0 balance and
       // no drift, with the provenance fields absent rather than null.
       expect(rows).toEqual([
         {
-          id: 1,
-          name: "Checking",
+          ...accountRow({ id: 1, name: "Checking" }),
+          has_transactions: false,
           computed_balance: 0,
           balance_parts: [],
           balance_incomplete: false,
@@ -151,7 +154,7 @@ describe("accountRepository", () => {
     it("sums the currency partitions into the account currency, not across them", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Wise",
             currency: "EUR",
@@ -160,7 +163,7 @@ describe("accountRepository", () => {
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -179,14 +182,14 @@ describe("accountRepository", () => {
     it("derives drift from the account-currency partition on a multi-currency account", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Wise",
             currency: "EUR",
             statement_balances: [
               {
                 currency: "EUR",
-                balance: "120.00",
+                balance: 120,
                 balance_date: "2026-07-01",
               },
             ],
@@ -194,7 +197,7 @@ describe("accountRepository", () => {
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -213,7 +216,7 @@ describe("accountRepository", () => {
     it("excludes a partition with no rate and exposes the native balance", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Unsupported currency",
             currency: "EUR",
@@ -221,7 +224,7 @@ describe("accountRepository", () => {
               { currency: "EUR", balance: "100.0000" },
               { currency: "ZZZ", balance: "40.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -243,14 +246,14 @@ describe("accountRepository", () => {
     it("holds drift = statement − reconcilable_balance even on a sub-cent partition tail", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Wise",
             currency: "EUR",
             statement_balances: [
               {
                 currency: "EUR",
-                balance: "100.01",
+                balance: 100.01,
                 balance_date: "2026-07-01",
               },
             ],
@@ -261,7 +264,7 @@ describe("accountRepository", () => {
               { currency: "EUR", balance: "100.0150" },
               { currency: "USD", balance: "50.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -277,15 +280,15 @@ describe("accountRepository", () => {
     it("emits reconcilable_balance == computed_balance on a single-currency account", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "KBC",
             currency: "EUR",
             statement_balances: [
-              { currency: "EUR", balance: "90.00", balance_date: "2026-07-01" },
+              { currency: "EUR", balance: 90, balance_date: "2026-07-01" },
             ],
             balance_parts: [{ currency: "EUR", balance: "100.0000" }],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -301,18 +304,18 @@ describe("accountRepository", () => {
     it("emits a zero base when no partition matches the account currency", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "GBP shell",
             currency: "GBP",
             statement_balances: [
-              { currency: "GBP", balance: "50.00", balance_date: "2026-07-01" },
+              { currency: "GBP", balance: 50, balance_date: "2026-07-01" },
             ],
             balance_parts: [
               { currency: "EUR", balance: "100.0000" },
               { currency: "USD", balance: "100.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -326,15 +329,15 @@ describe("accountRepository", () => {
     it("reconciles a lone partition even when its currency differs from the account", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Wise USD",
             currency: "EUR",
             statement_balances: [
-              { currency: "USD", balance: "90.00", balance_date: "2026-07-01" },
+              { currency: "USD", balance: 90, balance_date: "2026-07-01" },
             ],
             balance_parts: [{ currency: "USD", balance: "100.0000" }],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -352,14 +355,14 @@ describe("accountRepository", () => {
     it("ignores a zero-sum partition when resolving the base", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          {
+          accountBalanceRow({
             id: 1,
             name: "Noisy",
             currency: "EUR",
             statement_balances: [
               {
                 currency: "USD",
-                balance: "100.00",
+                balance: 100,
                 balance_date: "2026-07-01",
               },
             ],
@@ -367,7 +370,7 @@ describe("accountRepository", () => {
               { currency: "GBP", balance: "0.0000" }, // offsetting pair, net 0
               { currency: "USD", balance: "100.0000" },
             ],
-          },
+          }),
         ],
       });
       const [row] = await listAccounts();
@@ -380,14 +383,19 @@ describe("accountRepository", () => {
       query.mockResolvedValueOnce({
         rows: [
           // (a) stamped anchor + entries since — count arrives as a pg bigint string
-          {
+          accountBalanceRow({
             id: 1,
             name: "KBC",
             anchor_date: "2026-06-30",
             post_anchor_count: "2",
-          },
+          }),
           // (b) nothing stamped — SQL NULL anchor, count = all active rows
-          { id: 2, name: "Cash", anchor_date: null, post_anchor_count: "3" },
+          accountBalanceRow({
+            id: 2,
+            name: "Cash",
+            anchor_date: null,
+            post_anchor_count: "3",
+          }),
         ],
       });
       const rows = await listAccounts();
@@ -433,11 +441,9 @@ describe("accountRepository", () => {
 
   describe("getById / getByName", () => {
     it("returns the row when found", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 7, name: "Savings" }] });
-      expect(await accountRepository.getById(7)).toEqual({
-        id: 7,
-        name: "Savings",
-      });
+      const row = accountRow({ id: 7, name: "Savings" });
+      query.mockResolvedValueOnce({ rows: [row] });
+      expect(await accountRepository.getById(7)).toEqual(row);
       expect(query).toHaveBeenCalledWith(
         expect.stringContaining("WHERE id = $1"),
         [7],
@@ -450,7 +456,9 @@ describe("accountRepository", () => {
     });
 
     it("getByName matches on the normalized identity (D1: case/whitespace-insensitive)", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 3, name: "Brokerage" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountRow({ id: 3, name: "Brokerage" })],
+      });
       const r = await accountRepository.getByName("Brokerage");
       expect(r!.id).toBe(3);
       expect(query).toHaveBeenCalledWith(
@@ -462,7 +470,9 @@ describe("accountRepository", () => {
 
   describe("create", () => {
     it("writes only whitelisted, defined fields", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 11, name: "New" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountRow({ id: 11, name: "New" })],
+      });
       const r = await accountRepository.create({
         name: "New",
         currency: "EUR",
@@ -481,7 +491,9 @@ describe("accountRepository", () => {
 
   describe("update", () => {
     it("builds a SET clause and appends updated_at", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 5, display_name: "X" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountRow({ id: 5, display_name: "X" })],
+      });
       const r = await accountRepository.update(5, {
         display_name: "X",
         nope: 1,
@@ -495,7 +507,9 @@ describe("accountRepository", () => {
     });
 
     it("renames the account without writing retired transaction labels", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 5, name: "Renamed" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountRow({ id: 5, name: "Renamed" })],
+      });
       const result = await accountRepository.update(5, { name: "Renamed" });
       expect(result!.name).toBe("Renamed");
       expect(query).toHaveBeenCalledTimes(1);
@@ -504,7 +518,9 @@ describe("accountRepository", () => {
     });
 
     it("falls back to getById when no writable fields are provided", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 5, name: "Same" }] });
+      query.mockResolvedValueOnce({
+        rows: [accountRow({ id: 5, name: "Same" })],
+      });
       const r = await accountRepository.update(5, { nope: 1 });
       expect(r!.name).toBe("Same");
       // Only the getById SELECT runs, not an UPDATE.

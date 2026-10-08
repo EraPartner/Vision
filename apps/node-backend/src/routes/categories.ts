@@ -13,8 +13,13 @@ import {
   deleteCategoryNode,
   mergeCategoryNodes,
 } from "../services/categoryService.ts";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
-import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
+import { NotFoundError } from "../middleware/errorHandler.ts";
+import {
+  validateIdParam,
+  assertIdParam,
+  validateIntArray,
+} from "../middleware/validation.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 import { withCreateOutcome } from "../lib/createOutcome.ts";
 import {
@@ -45,17 +50,48 @@ const hierarchyMerge = z.strictObject({
   targetId: z.number().int().positive(),
 });
 
-function parseHierarchy<T extends z.ZodType>(
-  schema: T,
-  value: unknown,
-): z.output<T> {
-  const parsed = schema.safeParse(value);
-  if (!parsed.success)
-    throw new ValidationError(
-      parsed.error.issues.map((issue) => issue.message).join("; "),
-    );
-  return parsed.data;
-}
+// Legacy flat-category bodies. The repository upper-cases general/detail, so a
+// non-string used to fail there as a TypeError 500. Presence checks run on the
+// whole body so their messages stay unprefixed, as before.
+const legacyCreate = z
+  .object({
+    general: z.string().optional(),
+    detail: z.string().optional(),
+    description: z.string().nullable().optional(),
+  })
+  .transform(({ general, detail, description }, ctx) => {
+    if (!general || !detail) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Missing required fields: general, detail",
+      });
+      return z.NEVER;
+    }
+    return { general, detail, description };
+  });
+// null general/detail/is_active mean "leave unchanged" in the repository.
+const legacyUpdate = z.object({
+  general: z.string().nullable().optional(),
+  detail: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  is_active: z.boolean().nullable().optional(),
+});
+// A scalar is wrapped into a one-element list; ids follow validateId, so junk
+// no longer reaches the int[] cast as a 500.
+const assignBody = z
+  .object({ recipient_ids: z.unknown().optional() })
+  .transform(({ recipient_ids }, ctx) => {
+    if (!recipient_ids) {
+      ctx.addIssue({ code: "custom", message: "Missing recipient_ids" });
+      return z.NEVER;
+    }
+    const result = validateIntArray(recipient_ids, "recipient_ids");
+    if (!result.valid) {
+      ctx.addIssue({ code: "custom", message: result.error });
+      return z.NEVER;
+    }
+    return result.value;
+  });
 
 // The hierarchy contract is additive. Legacy /categories list, create and CSV
 // import retain their general/detail inputs and stable category IDs.
@@ -65,7 +101,7 @@ router.get("/tree", async (_req, res) => {
 });
 
 router.post("/tree", async (req, res) => {
-  const input = parseHierarchy(hierarchyCreate, req.body);
+  const input = parseInput(hierarchyCreate, req.body);
   const node = await createCategoryNode(input);
   scheduleRefresh();
   res.status(201);
@@ -81,7 +117,7 @@ router.get("/tree/:id", validateIdParam, async (req, res) => {
 router.patch("/tree/:id", validateIdParam, async (req, res) => {
   const node = await updateCategoryNode(
     assertIdParam(req),
-    parseHierarchy(hierarchyUpdate, req.body),
+    parseInput(hierarchyUpdate, req.body),
   );
   if (!node) throw new NotFoundError(`Category ${req.params.id} not found`);
   scheduleRefresh();
@@ -97,7 +133,7 @@ router.delete("/tree/:id", validateIdParam, async (req, res) => {
 
 router.post("/tree/:id/merge", validateIdParam, async (req, res) => {
   const sourceId = assertIdParam(req);
-  const { targetId } = parseHierarchy(hierarchyMerge, req.body);
+  const { targetId } = parseInput(hierarchyMerge, req.body);
   const node = await mergeCategoryNodes(sourceId, targetId);
   if (!node) throw new NotFoundError("Source or target category not found");
   scheduleRefresh();
@@ -134,10 +170,10 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { general, detail, description } = req.body;
-  if (!general || !detail)
-    throw new ValidationError("Missing required fields: general, detail");
-
+  const { general, detail, description } = parseInput(
+    legacyCreate,
+    req.body ?? {},
+  );
   const { category, created } = await categoryService.createOrGet({
     general,
     detail,
@@ -155,7 +191,10 @@ router.get("/:id", validateIdParam, async (req, res) => {
 
 router.patch("/:id", validateIdParam, async (req, res) => {
   const id = assertIdParam(req);
-  const updated = await categoryService.update(id, req.body);
+  const updated = await categoryService.update(
+    id,
+    parseInput(legacyUpdate, req.body),
+  );
   if (!updated) throw new NotFoundError(`Category ${id} not found`);
   scheduleRefresh();
   res.ok({ ...updated, links: [] });
@@ -172,13 +211,10 @@ router.delete("/:id", validateIdParam, async (req, res) => {
 
 router.post("/:id/assign", validateIdParam, async (req, res) => {
   const categoryId = assertIdParam(req);
-  let { recipient_ids } = req.body;
-  if (!recipient_ids) throw new ValidationError("Missing recipient_ids");
-  if (!Array.isArray(recipient_ids)) recipient_ids = [recipient_ids];
-
+  const recipientIds = parseInput(assignBody, req.body ?? {});
   const updated = await categoryService.assignToRecipients(
     categoryId,
-    recipient_ids,
+    recipientIds,
   );
   scheduleRefresh();
   res.ok({ updated_recipients: updated, links: [] });

@@ -8,7 +8,8 @@
 import { Router } from "express";
 import { getPortfolioSummary } from "../../services/portfolio/portfolioSummaryService.ts";
 import { rateLimiter } from "../../middleware/rateLimiter.ts";
-import { getTargetCurrency } from "./_queryParams.ts";
+import { targetCurrencyQuerySchema } from "./_queryParams.ts";
+import { parseInput } from "../../lib/zodInput.ts";
 import {
   portfolioSummaryCache,
   PORTFOLIO_SUMMARY_CACHE_TTL_MS,
@@ -21,7 +22,7 @@ router.get(
   "/portfolio-summary",
   rateLimiter({ windowMs: 60_000, maxRequests: 60 }),
   async (req, res) => {
-    const targetCurrency = getTargetCurrency(req);
+    const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
     const cacheKey = targetCurrency;
 
     const data = await resolveCacheWithInflight(

@@ -337,3 +337,34 @@ describe("investment_ids query param on GET /transactions", () => {
     ).toHaveBeenCalledWith(expect.objectContaining({ investmentIds: [5, 12] }));
   });
 });
+
+// ADR-193: the investments router parses params and query with zod before
+// handing over to the service handlers. Single-value filters reject a
+// repeated key instead of forwarding an array as the SQL parameter.
+describe("route-level params/query schemas", () => {
+  it.each([
+    "/?asset_class=stock&asset_class=bond",
+    "/transactions?investment_ids=1&type=buy&type=sell",
+    "/1/transactions?type=buy&type=sell",
+  ])("GET %s rejects a repeated single-value filter", async (path) => {
+    const res = await api.get(`${BASE}${path}`).expect(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).toMatch(/must be a single value/);
+    expect(investmentRepository.getAll).not.toHaveBeenCalled();
+    expect(
+      portfolioTransactionPersistence.getAllByInvestmentIds,
+    ).not.toHaveBeenCalled();
+    expect(
+      portfolioTransactionPersistence.getAllWithCount,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each(["/1e3/price-history", "/0/summary", "/12abc"])(
+    "GET %s rejects a malformed :id before the service runs",
+    async (path) => {
+      const res = await api.get(`${BASE}${path}`).expect(400);
+      expect(res.body.error.message).toBe("id: must be a positive integer");
+      expect(investmentRepository.getById).not.toHaveBeenCalled();
+    },
+  );
+});

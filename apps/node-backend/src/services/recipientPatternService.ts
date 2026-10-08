@@ -356,7 +356,7 @@ export async function createPattern(opts: {
   case_sensitive?: boolean;
   priority?: number;
   source?: string;
-  notes?: string;
+  notes?: string | null;
 }): Promise<{ id: number }> {
   // Validate the kind that is stored: an omitted kind used to be compiled as a
   // regex here while the row was saved as literal_prefix.
@@ -393,7 +393,7 @@ export async function updatePattern(
     case_sensitive?: boolean;
     priority?: number;
     is_active?: boolean;
-    notes?: string;
+    notes?: string | null;
   },
 ): Promise<void> {
   if (updates.pattern !== undefined || updates.pattern_kind !== undefined || updates.case_sensitive !== undefined) {

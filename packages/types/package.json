@@ -20,7 +20,8 @@
     "./analysis": "./src/analysis.ts",
     "./analysis-datasets": "./src/analysisDatasets.ts",
     "./fund-holdings": "./src/fundHoldings.ts",
-    "./electron": "./src/electron.ts"
+    "./electron": "./src/electron.ts",
+    "./contracts": "./src/contracts/index.ts"
   },
   "files": [
     "src"

@@ -5,6 +5,7 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Router } from "express";
+import { z } from "zod";
 import type { ExpressRequest } from "../types/express.ts";
 import { isLoopbackHost } from "../middleware/adminAuth.ts";
 import {
@@ -23,28 +24,82 @@ import {
   pruneAuditRetention,
 } from "../services/auditRetentionService.ts";
 import { verifyAuditHistory } from "../services/auditVerificationService.ts";
+import { parseInput } from "../lib/zodInput.ts";
 
 const HASH = /^[0-9a-f]{64}$/;
 const MAX_BODY_BYTES = 4096;
-const UPDATE_DECISIONS = new Set([
+const UPDATE_DECISIONS = [
   "checksum_verified",
   "checksum_failed",
   "install_requested",
   "install_failed",
-]);
+] as const;
 const VERSION = /^v?[0-9][0-9A-Za-z.+-]{0,63}$/;
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
+const sequenceSchema = z.int().nonnegative();
+const hashSchema = z.string().regex(HASH);
+
+/** Every bridge body is a plain JSON object of at most MAX_BODY_BYTES. */
+const boundedBodySchema = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (body) => Buffer.byteLength(JSON.stringify(body), "utf8") <= MAX_BODY_BYTES,
+    `exceeds ${MAX_BODY_BYTES} bytes`,
+  );
+
+const verifyBodySchema = z.strictObject({
+  trustedCheckpoint: z.unknown().optional(),
+});
+
+const checkpointSchema = z.strictObject({
+  sequence: sequenceSchema,
+  hash: hashSchema,
+  retention: z.unknown().optional(),
+});
+
+const migrationHeadsSchema = z
+  .array(z.string().regex(/^[0-9a-z_]{1,64}$/))
+  .max(16)
+  .refine(
+    (heads) => JSON.stringify(heads) === JSON.stringify([...heads].sort()),
+    "must be sorted",
+  );
+
+/** A retention boundary must end strictly before the checkpoint it rides on. */
+function retentionBoundarySchema(sequence: number) {
+  return z.strictObject({
+    through: sequenceSchema
+      .min(1)
+      .refine((through) => through < sequence, "must precede the checkpoint"),
+    hash: hashSchema,
+    domainMax: z.strictObject({
+      dbEditor: sequenceSchema,
+      split: sequenceSchema,
+      retag: sequenceSchema,
+    }),
+    migrationHeads: migrationHeadsSchema,
+  });
 }
 
-function hasOnlyKeys(value: object, keys: readonly string[]): boolean {
-  return Object.keys(value).every((key) => keys.includes(key));
-}
+const readBodySchema = z.strictObject({
+  trustedCheckpoint: z.unknown().optional(),
+  afterSequence: z.unknown().optional(),
+  limit: z.unknown().optional(),
+});
 
-function isSequence(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
+const checkpointBodySchema = z.strictObject({
+  sequence: sequenceSchema,
+  headHash: hashSchema,
+  anchorKind: z.string().min(1).max(100),
+  receiptId: z.string().min(1).max(300),
+  receiptHash: hashSchema,
+});
+
+const updateDecisionBodySchema = z.strictObject({
+  decision: z.enum(UPDATE_DECISIONS),
+  mode: z.enum(["native", "dev"]),
+  version: z.string().regex(VERSION),
+});
 
 /**
  * Use fixed-length digests for comparison so a wrong token's length does not
@@ -81,136 +136,41 @@ function assertAuditBridgeAccess(
   }
 }
 
-function assertBoundedBody(
-  body: unknown,
-): asserts body is Record<string, unknown> {
-  if (
-    !isPlainObject(body) ||
-    Buffer.byteLength(JSON.stringify(body), "utf8") > MAX_BODY_BYTES
-  ) {
-    throw new ValidationError("Invalid audit bridge request body");
-  }
-}
-
-interface TrustedRetentionBoundary {
-  through: number;
-  hash: string;
-  domainMax: { dbEditor: number; split: number; retag: number };
-  migrationHeads: string[];
-}
-
-function isRetentionBoundary(
-  retention: unknown,
-  sequence: number,
-): retention is TrustedRetentionBoundary {
-  if (!isPlainObject(retention)) return false;
-  const { domainMax, migrationHeads } = retention;
-  return (
-    hasOnlyKeys(retention, [
-      "through",
-      "hash",
-      "domainMax",
-      "migrationHeads",
-    ]) &&
-    Object.keys(retention).length === 4 &&
-    isSequence(retention.through) &&
-    retention.through >= 1 &&
-    retention.through < sequence &&
-    typeof retention.hash === "string" &&
-    HASH.test(retention.hash) &&
-    isPlainObject(domainMax) &&
-    hasOnlyKeys(domainMax, ["dbEditor", "split", "retag"]) &&
-    Object.keys(domainMax).length === 3 &&
-    ["dbEditor", "split", "retag"].every((field) =>
-      isSequence(domainMax[field]),
-    ) &&
-    Array.isArray(migrationHeads) &&
-    migrationHeads.length <= 16 &&
-    migrationHeads.every(
-      (head: unknown) =>
-        typeof head === "string" && /^[0-9a-z_]{1,64}$/.test(head),
-    ) &&
-    JSON.stringify(migrationHeads) ===
-      JSON.stringify([...migrationHeads].sort())
-  );
+function parseBoundedBody(body: unknown): Record<string, unknown> {
+  return parseInput(boundedBodySchema, body, {
+    prefix: "Invalid audit bridge request body",
+  });
 }
 
 function parseVerifyBody(body: unknown) {
-  assertBoundedBody(body);
-  if (!hasOnlyKeys(body, ["trustedCheckpoint"])) {
-    throw new ValidationError("Invalid audit verification request");
-  }
-  if (body.trustedCheckpoint === undefined) return undefined;
-  const checkpoint = body.trustedCheckpoint;
-  if (
-    !isPlainObject(checkpoint) ||
-    !hasOnlyKeys(checkpoint, ["sequence", "hash", "retention"]) ||
-    !isSequence(checkpoint.sequence) ||
-    typeof checkpoint.hash !== "string" ||
-    !HASH.test(checkpoint.hash)
-  ) {
-    throw new ValidationError("Invalid trusted audit checkpoint");
-  }
-  const retention = checkpoint.retention;
-  let boundary: TrustedRetentionBoundary | undefined;
-  if (retention !== undefined) {
-    if (!isRetentionBoundary(retention, checkpoint.sequence)) {
-      throw new ValidationError("Invalid trusted audit retention boundary");
-    }
-    boundary = retention;
-  }
+  const { trustedCheckpoint } = parseInput(
+    verifyBodySchema,
+    parseBoundedBody(body),
+    { prefix: "Invalid audit verification request" },
+  );
+  if (trustedCheckpoint === undefined) return undefined;
+  const checkpoint = parseInput(checkpointSchema, trustedCheckpoint, {
+    prefix: "Invalid trusted audit checkpoint",
+  });
+  const retention =
+    checkpoint.retention === undefined
+      ? undefined
+      : parseInput(
+          retentionBoundarySchema(checkpoint.sequence),
+          checkpoint.retention,
+          { prefix: "Invalid trusted audit retention boundary" },
+        );
   return {
     sequence: checkpoint.sequence,
     hash: checkpoint.hash,
-    ...(boundary
-      ? {
-          retention: {
-            through: boundary.through,
-            hash: boundary.hash,
-            domainMax: {
-              dbEditor: boundary.domainMax.dbEditor,
-              split: boundary.domainMax.split,
-              retag: boundary.domainMax.retag,
-            },
-            migrationHeads: [...boundary.migrationHeads],
-          },
-        }
-      : {}),
+    ...(retention ? { retention } : {}),
   };
 }
 
 function parseCheckpointBody(body: unknown) {
-  assertBoundedBody(body);
-  if (
-    !hasOnlyKeys(body, [
-      "sequence",
-      "headHash",
-      "anchorKind",
-      "receiptId",
-      "receiptHash",
-    ]) ||
-    !isSequence(body.sequence) ||
-    typeof body.headHash !== "string" ||
-    !HASH.test(body.headHash) ||
-    typeof body.receiptHash !== "string" ||
-    !HASH.test(body.receiptHash) ||
-    typeof body.anchorKind !== "string" ||
-    body.anchorKind.length < 1 ||
-    body.anchorKind.length > 100 ||
-    typeof body.receiptId !== "string" ||
-    body.receiptId.length < 1 ||
-    body.receiptId.length > 300 ||
-    Object.keys(body).length !== 5
-  ) {
-    throw new ValidationError("Invalid audit checkpoint metadata");
-  }
-  return {
-    sequence: body.sequence,
-    headHash: body.headHash,
-    anchorKind: body.anchorKind,
-    receiptId: body.receiptId,
-    receiptHash: body.receiptHash,
-  };
+  return parseInput(checkpointBodySchema, parseBoundedBody(body), {
+    prefix: "Invalid audit checkpoint metadata",
+  });
 }
 
 async function executeAuditVerification(
@@ -224,32 +184,20 @@ async function executeAuditVerification(
 }
 
 function parseReadBody(body: unknown) {
-  assertBoundedBody(body);
-  if (!hasOnlyKeys(body, ["trustedCheckpoint", "afterSequence", "limit"])) {
-    throw new ValidationError("Invalid audit read request");
-  }
-  const trustedCheckpoint = parseVerifyBody({
-    trustedCheckpoint: body.trustedCheckpoint,
+  const read = parseInput(readBodySchema, parseBoundedBody(body), {
+    prefix: "Invalid audit read request",
   });
-  let afterSequence: number | undefined;
-  if (body.afterSequence !== undefined) {
-    if (!isSequence(body.afterSequence)) {
-      throw new ValidationError("Invalid audit read cursor");
-    }
-    afterSequence = body.afterSequence;
-  }
-  let limit: number | undefined;
-  if (body.limit !== undefined) {
-    if (
-      typeof body.limit !== "number" ||
-      !Number.isSafeInteger(body.limit) ||
-      body.limit < 1 ||
-      body.limit > 500
-    ) {
-      throw new ValidationError("Invalid audit read limit");
-    }
-    limit = body.limit;
-  }
+  const trustedCheckpoint = parseVerifyBody({
+    trustedCheckpoint: read.trustedCheckpoint,
+  });
+  const afterSequence = parseInput(
+    sequenceSchema.optional(),
+    read.afterSequence,
+    { prefix: "Invalid audit read cursor" },
+  );
+  const limit = parseInput(z.int().min(1).max(500).optional(), read.limit, {
+    prefix: "Invalid audit read limit",
+  });
   return {
     trustedCheckpoint,
     afterSequence,
@@ -281,24 +229,9 @@ async function executeAuditCheckpoint(
 }
 
 function parseUpdateDecisionBody(body: unknown) {
-  assertBoundedBody(body);
-  if (
-    !hasOnlyKeys(body, ["decision", "mode", "version"]) ||
-    Object.keys(body).length !== 3 ||
-    typeof body.decision !== "string" ||
-    !UPDATE_DECISIONS.has(body.decision) ||
-    typeof body.mode !== "string" ||
-    !["native", "dev"].includes(body.mode) ||
-    typeof body.version !== "string" ||
-    !VERSION.test(body.version)
-  ) {
-    throw new ValidationError("Invalid audit update decision");
-  }
-  return {
-    decision: body.decision,
-    mode: body.mode,
-    version: body.version,
-  };
+  return parseInput(updateDecisionBodySchema, parseBoundedBody(body), {
+    prefix: "Invalid audit update decision",
+  });
 }
 
 async function executeAuditUpdateDecision(

@@ -1224,3 +1224,78 @@ describe("Planned Transaction Routes", () => {
     });
   });
 });
+
+describe("Planned transaction request schemas (ADR-193)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("POST /:id/execute without a JSON body answers 400 instead of a destructuring 500", async () => {
+    const res = await api.post(`${BASE}/1/execute`).expect(400);
+    expect(res.body.error).toMatchObject({
+      code: "VALIDATION_ERROR",
+      message: "Missing required field: executed_transaction_id",
+    });
+    expect(
+      plannedTransactionRepository.executeAndAdvance,
+    ).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      { executed_transaction_id: "12abc" },
+      "executed_transaction_id must be a positive integer",
+    ],
+    [
+      { executed_transaction_id: 10, execution_date: "15/03/2026" },
+      "execution_date must be in YYYY-MM-DD format",
+    ],
+  ])("POST /:id/execute rejects %j", async (body, message) => {
+    const res = await execute(1, body).expect(400);
+    expect(res.body.error).toMatchObject({ code: "VALIDATION_ERROR", message });
+    expect(
+      plannedTransactionRepository.executeAndAdvance,
+    ).not.toHaveBeenCalled();
+  });
+
+  it("POST /:id/execute forwards the parsed numeric id", async () => {
+    plannedTransactionRepository.getById.mockResolvedValue(
+      partial({ id: 1, is_recurring: false, is_executed: false }),
+    );
+    plannedTransactionRepository.executeAndAdvance.mockResolvedValue(
+      partial({ duplicate: false }),
+    );
+    await execute(1, {
+      executed_transaction_id: "10",
+      execution_date: "2026-03-15",
+    }).expect(200);
+    expect(plannedTransactionRepository.executeAndAdvance).toHaveBeenCalledWith(
+      1,
+      10,
+      "2026-03-15",
+      expect.any(Object),
+      [],
+    );
+  });
+
+  it("PATCH /:id without a JSON body answers 400 instead of a destructuring 500", async () => {
+    plannedTransactionRepository.getById.mockResolvedValue(
+      partial({ id: 1, is_loan: false }),
+    );
+    const res = await api.patch(`${BASE}/1`).expect(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
+  });
+
+  it("GET /due-soon clamps and falls back like parsePagination", async () => {
+    plannedTransactionRepository.getDueSoon.mockResolvedValue([]);
+    for (const [days, expected] of [
+      ["", 7],
+      ["abc", 7],
+      ["0", 7],
+      ["400", 365],
+      ["14", 14],
+    ] as const) {
+      const res = await api.get(`${BASE}/due-soon`).query({ days }).expect(200);
+      expect(res.body.data.days).toBe(expected);
+    }
+  });
+});

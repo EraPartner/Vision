@@ -34,6 +34,7 @@ package "Middleware" {
     +assertIdParam(req, name): number
     +validateIdParam(req, res, next): void
     +validateIntParam(name): Middleware
+    note: remaining users: categories /tree/:id, plannedTransactions,\n  research, savedCharts, parserConfigRoutes (ADR-193)
   }
 
   class PortfolioUpload {
@@ -61,6 +62,15 @@ package "Validation library" {
     +validateNumber(value): ValidationResult
     +validateDateString(value): ValidationResult
     +validateIntArray(value): number[]
+  }
+
+  class RequestInput {
+    +parseInput(schema, value, {prefix, separator, omitPaths}): output
+    +formatZodIssues(error, separator, omitPaths): string
+    +guardField(guard) / bareMessages(schema): zod field
+    +routes/_requestSchemas.ts: idParams, idSchema, booleanQuery, clampedIntQuery, pageFields
+    +routes/_inputBridges.ts, routes/_importInput.ts: legacy-text bridges
+    note: lib/zodInput.ts; handlers parse params/query/body -> 400 VALIDATION_ERROR (ADR-193)
   }
 }
 
@@ -443,6 +453,8 @@ Main --> AttachmentsRouter
 Main --> TagsRouter
 TransactionsRouter ..> BulkActionsRoutes : mounts bulk endpoints
 ValidationMiddleware --> PureValidation : delegates
+RequestInput --> PureValidation : shared fields wrap validateId and parsers
+TransactionsRouter ..> RequestInput : parseInput (nearly every router)
 
 ' Nested route (RecipientsRouter mounts RecipientBankAccountsRouter at /recipients/:id/bank-accounts)
 RecipientsRouter ..> RecipientBankAccountsRouter : mounts at /recipients/:id/bank-accounts

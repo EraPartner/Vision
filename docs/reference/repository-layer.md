@@ -37,6 +37,13 @@ Service Layer (business logic)
 - All SQL uses parameterized queries via `connection.js` or prepared statements (Phase 0+)
 - Repositories return plain JavaScript objects, not domain models
 - Error handling is delegated to the calling service/route
+- Most reads in the transaction, planned-transaction, split and account repositories are checked
+  against zod row schemas through `queryRows`/`queryOne` (`database/rowContracts.ts`, schemas in
+  `database/rowSchemas.ts`). Rows pass through unchanged; a mismatch throws in tests and
+  development and is logged elsewhere. `customParserConfigRepository` re-checks each stored
+  `config_json` against the save-path schema of its kind with `checkDataContract`. See
+  [[docs/reference/database-query-patterns#Row contracts (ADR-193)|Row contracts]] and
+  [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 **Phase 0+ Note:** Hot-path queries now use `queryPrepared()` for plan caching. This includes frequent repository methods like `getById`, `create`, `hardDelete` in `transactionRepository`, and equivalents in `infoRepository`. The prepared-statement name is the function name + operation, e.g., `'tx_get_by_id'` for `transactionRepository.getById`. See `apps/node-backend/src/database/connection.ts` for the implementation and `docs/reference/query-patterns.md` for usage guidelines.
 
@@ -88,6 +95,7 @@ See [[docs/adr/021-decimal-arithmetic-for-monetary-values|ADR-021]] and [[docs/r
 
 - `connection.js`
 - `filterBuilder.js` (Phase Q)
+- `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 
@@ -184,6 +192,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Dependencies
 
 - `connection.js`
+- `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 
@@ -328,6 +337,7 @@ The repository exports client-aware primitives for service-owned atomic work. `p
 ### Dependencies
 
 - `connection.js`
+- `rowContracts.ts` + `rowSchemas.ts` (ADR-193 row checks)
 
 ---
 

@@ -40,8 +40,31 @@
  * the implicit index signature, so a row stays assignable to
  * `Record<string, unknown>` (as the JSDoc typedefs these replaced were).
  *
+ * The raw `*Row` types of the transaction, planned-transaction, account and
+ * split repositories are derived from the zod schemas in
+ * src/database/rowSchemas.ts, which those repositories check at runtime
+ * (ADR-193). Field documentation for them lives on the schemas.
+ *
  * @module types/rows
  */
+
+import type { z } from "zod";
+import type {
+  accountBalanceQueryRowSchema,
+  accountRowSchema,
+  enrichedTransactionDbRowSchema,
+  loanScheduleRowSchema,
+  plannedExecutionRowSchema,
+  plannedForecastRowSchema,
+  plannedMatchCandidateRowSchema,
+  plannedTransactionListRowSchema,
+  plannedTransactionRowSchema,
+  splitPaymentRowSchema,
+  transactionRowSchema,
+  transactionSplitRowSchema,
+  transactionTagRefSchema,
+  unlinkedTransactionRowSchema,
+} from "../database/rowSchemas.ts";
 
 // ---------------------------------------------------------------------------
 // Query plumbing
@@ -67,60 +90,19 @@ export type QueryRunner = {
 // ---------------------------------------------------------------------------
 
 /** A row of `transactions` as returned by `SELECT t.*`. */
-export type TransactionRow = {
-  id: number;
-  /** DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
-  date: Date;
-  /** NUMERIC(18,4) — pg emits NUMERIC as a string. */
-  amount: string;
-  /** VARCHAR(3); NOT NULL + DEFAULT 'EUR' from migration 0046, nullable on older rows. */
-  currency: string | null;
-  /** NUMERIC(18,4) since migration 0088 (ADR-060 D7); NULL on manually-created rows (import pipeline only — ADR-094). */
-  balance: string | null;
-  memo: string | null;
-  comment: string | null;
-  /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
-  bank_account?: string | null;
-  /** FK → accounts (migration 0050). */
-  account_id?: number | null;
-  recipient_id: number | null;
-  recipient_bank_account_id: number | null;
-  category_id: number | null;
-  is_active: boolean;
-  /** BIGINT FK → import_batches — pg emits BIGINT as a string. */
-  import_batch_id?: string | null;
-  matched_pattern_id?: number | null;
-  /** Internal SHA-256 of the staged literal record; omitted from API rows. */
-  source_record_hash?: string | null;
-  /** Internal versioned import identity; omitted from API rows. */
-  dedup_fingerprint?: string | null;
-  dedup_fingerprint_version?: number | null;
-  is_transfer?: boolean;
-  transfer_peer_id?: number | null;
-  transfer_source?:
-    "auto" | "manual" | "opening" | "adjustment" | "brokerage" | null;
-  created_at?: Date | null;
-  updated_at?: Date | null;
-};
+export type TransactionRow = z.output<typeof transactionRowSchema>;
 
 /** A tag as attached to a transaction / planned transaction sub-collection. */
-export type TransactionTagRef = {
-  id: number;
-  slug: string;
-  color: string | null;
-  is_active: boolean;
-};
+export type TransactionTagRef = z.output<typeof transactionTagRefSchema>;
 
 /**
  * `TransactionRow` plus the joined/derived columns every list + detail read in
  * `transactionRepository` projects, plus the `tags` sub-collection attached by
  * `attachTagsToRows`.
  */
-export type EnrichedTransactionRow = TransactionRow & {
-  recipient_name: string | null;
-  category_name: string | null;
-  effective_category_id?: number | null;
-  running_balance?: string;
+export type EnrichedTransactionRow = z.output<
+  typeof enrichedTransactionDbRowSchema
+> & {
   tags: TransactionTagRef[];
 };
 
@@ -128,91 +110,28 @@ export type EnrichedTransactionRow = TransactionRow & {
  * Projection of `transactionRepository.listRecentUnlinked` — the planned-match
  * candidate shape. `transaction_date` is `t.date` aliased, so still a `Date`.
  */
-export type UnlinkedTransactionRow = {
-  id: number;
-  recipient_id: number | null;
-  recipient_cluster_id: number | null;
-  /** NUMERIC */
-  amount: string;
-  transaction_date: Date;
-  currency: string | null;
-  memo: string | null;
-  recipient_name: string | null;
-};
+export type UnlinkedTransactionRow = z.output<
+  typeof unlinkedTransactionRowSchema
+>;
 
 // ---------------------------------------------------------------------------
 // Planned transactions
 // ---------------------------------------------------------------------------
 
 /** A row of `planned_transactions` as returned by `SELECT pt.*`. */
-export type PlannedTransactionRow = {
-  id: number;
-  /** DATE */
-  planned_date: Date;
-  /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-  amount: string;
-  currency: string | null;
-  memo: string | null;
-  comment: string | null;
-  url: string | null;
-  /** Compatibility label projected from accounts.name; not stored after the ADR-088 contract operation. */
-  bank_account?: string | null;
-  account_id?: number | null;
-  recipient_id: number | null;
-  category_id: number | null;
-  is_recurring: boolean;
-  recurrence_pattern: string | null;
-  recurrence_end_date?: Date | null;
-  max_occurrences?: number | null;
-  reminder_days_before?: number | null;
-  is_loan: boolean;
-  loan_type: string | null;
-  /** NUMERIC */
-  loan_principal: string | null;
-  /** NUMERIC */
-  loan_annual_interest_rate: string | null;
-  loan_term_months: number | null;
-  loan_start_date: Date | null;
-  loan_payment_day: number | null;
-  /** NUMERIC */
-  loan_regular_payment_amount: string | null;
-  loan_first_payment_date: Date | null;
-  is_executed: boolean;
-  last_executed_date: Date | null;
-  is_active: boolean;
-  created_at?: Date | null;
-  updated_at?: Date | null;
-};
+export type PlannedTransactionRow = z.output<
+  typeof plannedTransactionRowSchema
+>;
 
 /** A row of `planned_transaction_executions` (`SELECT *`, migration 0001). */
-export type PlannedExecutionRow = {
-  id: number;
-  planned_transaction_id: number;
-  executed_transaction_id: number;
-  /** DATE */
-  execution_date: Date;
-  /** TIMESTAMPTZ DEFAULT NOW(). */
-  created_at?: Date | null;
-};
+export type PlannedExecutionRow = z.output<typeof plannedExecutionRowSchema>;
 
 /**
  * One installment of `planned_transaction_loan_schedule`, as projected by the
  * hydration queries (the `planned_transaction_id` key is stripped on the list
  * path and never selected on the detail path).
  */
-export type LoanScheduleRow = {
-  installment_number: number;
-  /** DATE */
-  due_date: Date;
-  /** NUMERIC */
-  payment_amount: string;
-  /** NUMERIC */
-  principal_amount: string;
-  /** NUMERIC */
-  interest_amount: string;
-  /** NUMERIC */
-  remaining_principal: string;
-};
+export type LoanScheduleRow = z.output<typeof loanScheduleRowSchema>;
 
 /**
  * `PlannedTransactionRow` with the shared `PLANNED_SELECT_FIELDS` join columns
@@ -232,41 +151,17 @@ export type HydratedPlannedTransactionRow = PlannedTransactionRow & {
  * `PlannedTransactionRow` with just the join columns — the un-hydrated shape
  * `getDueSoon` returns.
  */
-export type PlannedTransactionListRow = PlannedTransactionRow & {
-  recipient_name: string | null;
-  category_name: string | null;
-};
+export type PlannedTransactionListRow = z.output<
+  typeof plannedTransactionListRowSchema
+>;
 
 /** Narrow projection of `plannedTransactionRepository.listActiveUnexecuted`. */
-export type PlannedMatchCandidateRow = {
-  id: number;
-  recipient_id: number | null;
-  recipient_cluster_id: number | null;
-  /** NUMERIC */
-  amount: string;
-  /** DATE */
-  planned_date: Date;
-  currency: string | null;
-  is_recurring: boolean;
-  recurrence_pattern: string | null;
-  memo: string | null;
-  recipient_name: string | null;
-};
+export type PlannedMatchCandidateRow = z.output<
+  typeof plannedMatchCandidateRowSchema
+>;
 
 /** Narrow projection of `plannedTransactionRepository.getForForecast`. */
-export type PlannedForecastRow = {
-  id: number;
-  /** DATE */
-  planned_date: Date;
-  /** NUMERIC */
-  amount: string;
-  currency: string | null;
-  memo: string | null;
-  is_recurring: boolean;
-  recurrence_pattern: string | null;
-  recipient_name: string | null;
-  category_name: string | null;
-};
+export type PlannedForecastRow = z.output<typeof plannedForecastRowSchema>;
 
 // ---------------------------------------------------------------------------
 // Recipients
@@ -368,47 +263,15 @@ export type EnrichedCategoryRow = CategoryRow & { category_name: string };
  * list. Statement readings live in the currency-keyed collection and are not
  * scalar account columns.
  */
-export type AccountRow = {
-  id: number;
-  /** Canonical name; unique on `lower(btrim(name))` (migration 0066). */
-  name: string;
-  display_name: string | null;
-  institution: string | null;
-  currency: string;
-  /** `account_type` enum: checking|savings|brokerage|crypto_exchange|wallet|pension|liability. */
-  type: string;
-  /** `account_liquidity_class` enum. */
-  liquidity_class: string;
-  spendable: boolean;
-  in_net_worth: boolean;
-  /** `account_tax_wrapper` enum. */
-  tax_wrapper: string;
-  /** `account_owner` enum: me|partner|joint. */
-  owner: string;
-  multi_currency_cash: boolean;
-  has_cash_sleeve: boolean;
-  funding_account_id: number | null;
-  is_active: boolean;
-  closed_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
-};
+export type AccountRow = z.output<typeof accountRowSchema>;
 
 /**
  * Raw account-list row returned by `accountRepository.getAll` before service
  * conversion and API shaping.
  */
-export type AccountBalanceQueryRow = AccountRow & {
-  balance_parts: Array<{ currency: string; balance: string }> | null;
-  has_transactions: boolean;
-  anchor_date: string | null;
-  post_anchor_count: string | null;
-  statement_balances: Array<{
-    currency: string;
-    balance: string;
-    balance_date: string;
-  }> | null;
-};
+export type AccountBalanceQueryRow = z.output<
+  typeof accountBalanceQueryRowSchema
+>;
 
 /**
  * `AccountRow` plus the balance/provenance columns `accountService.list` adds.
@@ -448,21 +311,7 @@ export type AccountWithBalanceRow = AccountRow & {
  * A raw row of `transaction_splits` (`SELECT *` / `RETURNING *`). NOT what the
  * repository returns — every read path funnels through `formatSplit`.
  */
-export type TransactionSplitRow = {
-  id: number;
-  transaction_id: number;
-  recipient_id: number;
-  /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-  amount: string;
-  note: string | null;
-  is_settled: boolean;
-  created_at: Date;
-  updated_at: Date;
-  /** Joined on the read paths. */
-  recipient_name?: string;
-  /** NUMERIC sum of `split_payments` on the read paths. */
-  amount_paid?: string;
-};
+export type TransactionSplitRow = z.output<typeof transactionSplitRowSchema>;
 
 /**
  * What `formatSplit` emits: the canonical wire shape for a split. `amount` and
@@ -496,16 +345,7 @@ export type OwedSplitDetailRow = FormattedSplit & {
 };
 
 /** A raw row of `split_payments` (`SELECT *` / `RETURNING *`). */
-export type SplitPaymentRow = {
-  id: number;
-  split_id: number;
-  /** NUMERIC(18,4) since migration 0088 (ADR-060 D7) */
-  amount: string;
-  /** DATE */
-  paid_at: Date;
-  note: string | null;
-  created_at: Date;
-};
+export type SplitPaymentRow = z.output<typeof splitPaymentRowSchema>;
 
 /**
  * What `formatPayment` emits: `amount` coerced to a number and `paid_at`

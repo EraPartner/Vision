@@ -242,6 +242,20 @@ describe("multipart body parameters", () => {
     expect(runImportPipeline).not.toHaveBeenCalled();
   });
 
+  it("keeps each endpoint's exact bank_name message (parseInput, no path prefix)", async () => {
+    const csv = await api.post(`${BASE}/csv`).send({}).expect(400);
+    expect(csv.body.error.message).toBe(
+      "Missing required multipart field: bank_name",
+    );
+    const stream = await api
+      .post(`${BASE}/csv/stream`)
+      .send({ bank_name: "" })
+      .expect(400);
+    expect(stream.body.error.message).toBe(
+      "Missing required parameter: bank_name",
+    );
+  });
+
   it("rejects query-only bank names for one-shot and streaming imports", async () => {
     await api.post(`${BASE}/csv`).query({ bank_name: "vision" }).expect(400);
     await api
@@ -441,6 +455,31 @@ describe("override-body id shape (parseOverrideId)", () => {
         `expected ${JSON.stringify(recipient_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
+    expect(overrideRecipient).not.toHaveBeenCalled();
+  });
+
+  it("keeps parseOverrideId's exact message and rejects a non-object body", async () => {
+    const res = await api
+      .post(`${BASE}/batches/5/rows/6/override`)
+      .send({ recipient_id: "1e3" })
+      .expect(400);
+    expect(res.body.error.message).toBe(
+      "recipient_id must be a positive integer or null",
+    );
+    const category = await api
+      .post(`${BASE}/batches/5/rows/6/category-override`)
+      .send({ category_id: 0 })
+      .expect(400);
+    expect(category.body.error.message).toBe(
+      "category_id must be a positive integer or null",
+    );
+
+    // An array body used to read as "no recipient_id" and cleared the override.
+    const array = await api
+      .post(`${BASE}/batches/5/rows/6/override`)
+      .send([7])
+      .expect(400);
+    expect(array.body.error.code).toBe("VALIDATION_ERROR");
     expect(overrideRecipient).not.toHaveBeenCalled();
   });
 
@@ -750,8 +789,47 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
   it("rejects a non-object or array config", async () => {
     for (const config of [null, "str", [1]]) {
       const res = await create(config).expect(400);
-      expect(res.body.error.message).toContain('Missing or invalid "config"');
+      expect(res.body.error.message).toBe('Missing or invalid "config"');
     }
+  });
+
+  it("joins the issues of a config without path prefixes", async () => {
+    const res = await create({ dateColumn: "Date", encoding: "bogus" }).expect(
+      400,
+    );
+    expect(res.body.error.message).toBe(
+      'config.recipientColumn is required; config.amountColumn is required; Unsupported CSV encoding "bogus"',
+    );
+  });
+
+  it("validates the POST/PATCH body through one schema per verb", async () => {
+    const both = await api.post(`${BASE}/parsers`).send({}).expect(400);
+    expect(both.body.error.message).toBe(
+      'Missing or invalid "name"; Missing or invalid "config"',
+    );
+    const name = await api
+      .post(`${BASE}/parsers`)
+      .send({ name: "  ", config: base })
+      .expect(400);
+    expect(name.body.error.message).toBe('Missing or invalid "name"');
+
+    // PATCH leaves absent fields alone and normalizes the present ones.
+    customParserConfigRepository.update.mockResolvedValue(
+      partial({ id: 3, name: "Renamed" }),
+    );
+    await api
+      .patch(`${BASE}/parsers/3`)
+      .send({ name: " Renamed " })
+      .expect(200);
+    expect(customParserConfigRepository.update).toHaveBeenLastCalledWith(3, {
+      name: "Renamed",
+      config: undefined,
+    });
+    const patchConfig = await api
+      .patch(`${BASE}/parsers/3`)
+      .send({ config: [] })
+      .expect(400);
+    expect(patchConfig.body.error.message).toBe('Missing or invalid "config"');
   });
 });
 

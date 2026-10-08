@@ -627,7 +627,7 @@ Saved parsers are persisted in the `custom_parser_configs` table (migration `003
 | `created_at`  | TIMESTAMPTZ    |                                                                                                                                       |
 | `updated_at`  | TIMESTAMPTZ    | Maintained by the shared `update_updated_at_column()` trigger                                                                         |
 
-**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers.
+**Repository**: [[apps/node-backend/src/repositories/customParserConfigRepository.ts]] — `getAll`, `getById`, `getByName`, `create`, `update`, `delete`; maps `config_json` → `config` for callers. On every read it re-checks the stored config against the save-path schema of its `kind` (`storedParserConfigSchema` in `lib/parserConfigSchema.ts`, shared with the POST/PATCH request schemas). A stored config the save path would reject is a data-contract violation: it throws in tests and development and is logged elsewhere (issue paths only), and the row is still returned unchanged. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 **Backup**: `custom_parser_configs` is registered in `apps/node-backend/src/backup/coverage.ts` and travels with `.visionbak` exports.
 
@@ -661,7 +661,7 @@ The name the user assigns (e.g. `"My Savings Bank"`) is used as `adapterName` in
 
 ### `stageBatch` Generic-Adapter Fallback (Latent Bug Fix)
 
-`apps/node-backend/src/services/importPipeline/stage.ts` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.js`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to the `generic` adapter. Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
+`apps/node-backend/src/services/importPipeline/stage.ts` previously threw `Unknown adapter` when `adapterName` was not in the static adapter registry, even when a `customConfig` was present. The fix mirrors `createAdapter()` in `adapters/index.ts`: if `getAdapter(adapterName)` returns `null` and `customConfig` is present, fall back to `getAdapter("generic")`, the registry's generic adapter with its output contract ([[docs/integrations/bank-adapters#Output contract (ADR-193)|Output contract]]). Callers with an unrecognised name but no `customConfig` still receive the error (intentional — a missing mapping is a programming error).
 
 This fix applies to all callers, not only the saved-parser path, and closes a latent failure mode for any typed free-form bank name passed with a custom config.
 

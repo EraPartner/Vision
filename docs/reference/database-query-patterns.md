@@ -62,6 +62,30 @@ related_code:
 | `idleTimeoutMillis`       | 30000   | Close idle connections after 30s     |
 | `connectionTimeoutMillis` | 2000    | Fail fast if no connection available |
 
+### Row contracts (ADR-193)
+
+**Files:** [[apps/node-backend/src/database/rowContracts.ts]], [[apps/node-backend/src/database/rowSchemas.ts]]
+
+`query<R>()` does not check its generic. `queryRows(schema, sql, params, client?)` and
+`queryOne(...)` run the query and check each row with a zod schema. `checkRows(schema, rows)`
+checks rows a caller already has. The schemas describe what node-postgres returns with its default
+type parsers: NUMERIC, BIGINT and bare `COUNT(*)` as strings, DATE and TIMESTAMPTZ as `Date`,
+INTEGER and `::int` casts as numbers, JSON columns already parsed. No global type parser is
+installed.
+
+- Rows are never rewritten. The caller gets the exact objects pg returned.
+- Plain `z.object` ignores unlisted columns, so `SELECT *` keeps working after a migration adds one.
+- The row types in `src/types/rows.ts` are `z.output<typeof …Schema>`, so type and check share one
+  definition.
+- A mismatch is a bug, not bad input. Tests and development throw `RowContractError` (a 500).
+  Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, currently
+  `"log"`: warn and return the rows unchanged. The check stops at the first failing row.
+- Messages name the query, the row index, column paths and type names. They never contain values.
+
+The account, planned-transaction, split and transaction repositories read through these helpers.
+See [[docs/reference/code-patterns#Row contracts for new queries (ADR-193)|Row contracts for new queries]]
+and [[docs/adr/193-zod-runtime-contracts|ADR-193]].
+
 ---
 
 ## Query Patterns
@@ -406,6 +430,7 @@ FKs that protect financial history (e.g. `transactions.recipient_id`) are delibe
 | Dropping columns without migration    | Data loss                                     | Add → backfill → drop in separate migrations                              |
 | Returning raw pg NUMERIC as-is        | Leaks strings where `number` is declared      | Use `numericColumn()` / `coerceNumericFields()` at the repo read boundary |
 | Nullable currency without DEFAULT     | Forces implicit EUR assumptions in read layer | Add `DEFAULT 'EUR' NOT NULL` + ISO CHECK (migration 0046 pattern)         |
+| Hand-written row interface for a checked repository read | Type and runtime shape drift apart | Add a schema to `rowSchemas.ts`, read with `queryRows`/`queryOne`, derive the type with `z.output` |
 
 ---
 

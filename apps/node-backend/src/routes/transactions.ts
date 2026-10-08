@@ -1,11 +1,10 @@
 /**
  * Transaction routes.
  *
- * Create/patch/bulk bodies are validated with zod (schema → safeParse →
- * ValidationError), the idiom established in settings.js/reports.js. The body
- * schemas are LOOSE where the old code was loose (unvalidated fields such as
- * memo/comment/is_active pass through untouched; the repository allow-list
- * decides what is written). Bridges reuse the shared middleware guards so
+ * Params, query strings and bodies are parsed with zod through parseInput
+ * (ADR-193). The body schemas are LOOSE where the old code was loose
+ * (unvalidated fields such as memo/comment/is_active pass through untouched;
+ * the repository allow-list decides what is written). Bridges reuse the shared middleware guards so
  * accepted shapes and coercions stay identical to the pre-zod behavior.
  *
  * Handlers keep only request parsing/validation and response shaping
@@ -24,17 +23,26 @@ import {
 } from "../services/transactionBulkService.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
-  validateIdParam,
   validateId,
   assertYmd,
   assertOptionalId,
   assertCurrency,
   validateIntArray,
   MAX_MONEY_VALUE,
-  assertIdParam,
 } from "../middleware/validation.ts";
 import { rateLimiter } from "../middleware/rateLimiter.ts";
 import { ValidationError, NotFoundError } from "../middleware/errorHandler.ts";
+import {
+  bareMessages,
+  formatZodIssues,
+  guardField,
+  parseInput,
+} from "../lib/zodInput.ts";
+import {
+  booleanQueryFlag,
+  idParamsSchema,
+  singleQueryValue,
+} from "./_inputBridges.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import { parseAmountFilter } from "../lib/filterBuilder.ts";
 import {
@@ -45,12 +53,8 @@ import {
 } from "../services/transactionExport.ts";
 import { parsePagination } from "../lib/pagination.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
-import {
-  optionalQueryString,
-  parseBooleanQueryParam,
-} from "../lib/httpParams.ts";
-import type { ExpressRequest } from "../types/express.ts";
 import type { EnrichedTransactionRow } from "../types/rows.ts";
+import type { BulkFilterInput } from "../services/bulkSelection.ts";
 
 const router = Router();
 
@@ -63,10 +67,12 @@ type FormattableTransactionRow = EnrichedTransactionRow & {
   amount_eur?: number | string;
 };
 
-// Structural request type: assertIdParam requires it.
-function parseRouteId(req: ExpressRequest): number {
-  return assertIdParam(req);
+function parseRouteId(req: { params: unknown }): number {
+  return parseInput(idParamsSchema, req.params).id;
 }
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 function parseBulkExpectedCount(
   value: unknown,
@@ -98,24 +104,12 @@ const tagsField = z
 // clear-vs-default semantics: POST maps absent/'' to undefined (repo default),
 // PATCH rejects a cleared value (the column is NOT NULL).
 const currencyField = ({ rejectEmpty = false } = {}) =>
-  z
-    .unknown()
-    .transform((value, ctx) => {
-      if (rejectEmpty && (value == null || value === "")) {
-        ctx.addIssue({ code: "custom", message: "currency cannot be cleared" });
-        return z.NEVER;
-      }
-      try {
-        return assertCurrency(value);
-      } catch (err) {
-        ctx.addIssue({
-          code: "custom",
-          message: err instanceof Error ? err.message : String(err),
-        });
-        return z.NEVER;
-      }
-    })
-    .optional();
+  guardField((value) => {
+    if (rejectEmpty && (value == null || value === "")) {
+      throw new ValidationError("currency cannot be cleared");
+    }
+    return assertCurrency(value);
+  }).optional();
 
 // recipient_id/category_id on PATCH: null clears (both columns are nullable),
 // but a present non-null value must be a positive integer — a non-integer here
@@ -214,27 +208,10 @@ const createTransactionSchema = z
 // them but never clear them.
 const patchTransactionSchema = z.looseObject({
   tags: tagsField,
-  transaction_date: z
-    .unknown()
-    .transform((value, ctx) => {
-      if (!value) {
-        ctx.addIssue({
-          code: "custom",
-          message: "transaction_date cannot be cleared",
-        });
-        return z.NEVER;
-      }
-      try {
-        return assertYmd(value, "transaction_date");
-      } catch (err) {
-        ctx.addIssue({
-          code: "custom",
-          message: err instanceof Error ? err.message : String(err),
-        });
-        return z.NEVER;
-      }
-    })
-    .optional(),
+  transaction_date: guardField((value) => {
+    if (!value) throw new ValidationError("transaction_date cannot be cleared");
+    return assertYmd(value, "transaction_date");
+  }).optional(),
   amount: z
     .unknown()
     .transform((value, ctx) => {
@@ -319,21 +296,123 @@ const bulkUpdateFieldsSchema = z.object({
     .optional(),
 });
 
-// schema → safeParse → joined issues → ValidationError (settings.js idiom).
-function parseTransactionBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) =>
-        issue.path.length
-          ? `${issue.path.join(".")}: ${issue.message}`
-          : issue.message,
-      )
-      .join("; ");
-    throw new ValidationError(msg);
+// The PATCH body is normalized (read-only keys stripped, `date` remapped)
+// before the field rules run; a non-object body is left for the schema to
+// reject.
+const patchTransactionBodySchema = z.preprocess(
+  (body) => (isJsonObject(body) ? normalizeTransactionPatchFields(body) : body),
+  patchTransactionSchema,
+);
+
+// POST /transfers: the same strict id parse as everywhere else. This was a
+// bare parseInt guarded only by Number.isInteger, so `aId: "12abc"` marked
+// transaction 12 as a transfer — a wrong-record *write*, not a wrong-record
+// read — and an id past int4 (99999999999) passed the guard and 500'd at the
+// column. Any failure answers the one combined message.
+const transferPairBodySchema = z.unknown().transform((body, ctx) => {
+  const raw = isJsonObject(body) ? body : {};
+  const a = validateId(raw.aId, "aId");
+  const b = validateId(raw.bId, "bId");
+  if (!a.valid || !b.valid || a.value === b.value) {
+    ctx.addIssue({
+      code: "custom",
+      message: "aId and bId must be two distinct transaction ids",
+    });
+    return z.NEVER;
   }
-  return result.data;
-}
+  return { aId: a.value, bId: b.value };
+});
+
+// Bulk bodies select rows by `ids` or `filter`; transactionBulkService
+// validates that selection (its messages are the established ones). The
+// route checks `expected_count`, the filter-mode safety count. A missing body
+// reads as an empty one.
+//
+// The casts name the shapes the service accepts; resolveBulkSelection checks
+// them at runtime (validateBulkSelection: "ids contains invalid value: …",
+// unknown filter fields).
+const bulkSelectionShape = {
+  ids: z
+    .unknown()
+    .optional()
+    .transform((value) => value as number[] | undefined),
+  filter: z
+    .unknown()
+    .optional()
+    .transform((value) => value as BulkFilterInput | null | undefined),
+  expected_count: z.unknown().optional(),
+};
+
+const withExpectedCount = <
+  T extends { filter?: unknown; expected_count?: unknown },
+>(
+  body: T,
+  ctx: z.RefinementCtx,
+) => {
+  try {
+    return {
+      ...body,
+      expectedCount: parseBulkExpectedCount(body.expected_count, body.filter),
+    };
+  } catch (err) {
+    if (!(err instanceof ValidationError)) throw err;
+    ctx.addIssue({ code: "custom", message: err.message });
+    return z.NEVER;
+  }
+};
+
+const bulkBody = <S extends z.ZodType>(schema: S) =>
+  bareMessages(z.preprocess((body) => body ?? {}, schema));
+
+const bulkDeleteBodySchema = bulkBody(
+  z.object(bulkSelectionShape).transform(withExpectedCount),
+);
+
+// Strip-mode parse: unknown keys are dropped, present keys are validated,
+// absent keys stay absent — presence drives the SET clause build. Explicit-
+// undefined values (unreachable via JSON) are dropped too, so a
+// `category_id: undefined` can never become `SET category_id = NULL`.
+const bulkUpdateFieldsBodySchema = z
+  .custom<object>((value) => Boolean(value) && typeof value === "object", {
+    message: "`fields` must be an object with at least one updatable property",
+  })
+  .transform((value, ctx) => {
+    const result = bulkUpdateFieldsSchema.safeParse(value);
+    if (!result.success) {
+      ctx.addIssue({ code: "custom", message: formatZodIssues(result.error) });
+      return z.NEVER;
+    }
+    const sanitized = Object.fromEntries(
+      Object.entries(result.data).filter(([, field]) => field !== undefined),
+    );
+    if (Object.keys(sanitized).length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "`fields` must contain at least one of: category_id, recipient_id, is_active",
+      });
+      return z.NEVER;
+    }
+    return sanitized;
+  });
+
+const bulkUpdateBodySchema = bulkBody(
+  z
+    .object({ ...bulkSelectionShape, fields: bulkUpdateFieldsBodySchema })
+    .transform(withExpectedCount),
+);
+
+const bulkExportBodySchema = bulkBody(
+  z
+    .object({
+      ...bulkSelectionShape,
+      format: z
+        .enum(["csv", "json"], { error: "`format` must be 'csv' or 'json'" })
+        .default("csv"),
+      include_balance: z.unknown().optional(),
+    })
+    .transform(withExpectedCount),
+);
 
 /**
  * Comma-separated *id* list query param (`category_ids` on the list and export
@@ -376,106 +455,134 @@ function parseIdListQueryParam(
   return result.value;
 }
 
-// `query` is req.query — an Express querystring object whose values are
-// string|string[]|object|undefined at runtime. Values handed to helpers that
-// accept `unknown` are read raw; free-text values that reach SQL as strings
-// are read with optionalQueryString (a repeated/bracketed key is a 400).
-function parseTransactionListQuery(query: Record<string, unknown>) {
-  const {
-    transaction_id,
-    start_date,
-    end_date,
-    account_id,
-    category_id,
-    category_ids,
-    recipient_id,
-    recipient_group_id,
-    active = "true",
-    sort_dir,
-    include_balance,
-    transaction_type,
-    amount_min,
-    amount_max,
-    amount_exact,
-    amount_signed,
-    tags,
-  } = query;
-  const bank_account = optionalQueryString(query, "bank_account");
-  const recipient_name = optionalQueryString(query, "recipient_name");
-  const search = optionalQueryString(query, "search");
-  const sort_by = optionalQueryString(query, "sort_by");
-  const { limit, offset } = parsePagination(query, { maxLimit: 5000 });
-
-  const sortDir: "asc" | "desc" | undefined =
-    sort_dir === "asc" || sort_dir === "desc" ? sort_dir : undefined;
-  const transactionType: "income" | "expense" | undefined =
-    transaction_type === "income" || transaction_type === "expense"
-      ? transaction_type
-      : undefined;
-
-  const parsedCategoryIds = parseIdListQueryParam(category_ids, "category_ids");
-
-  const parsedTagSlugs = tags
-    ? String(tags)
+// Shared list/export filter fields. Values that reach SQL as free-text strings
+// are single-valued (a repeated/bracketed key is a 400); the rest keep their
+// helpers' lenient readings. bareMessages keeps the established 400 texts
+// ("account_id must be a positive integer").
+const transactionFilterQueryShape = {
+  // Every scalar id here goes through assertOptionalId — absent/empty means
+  // "no filter" (undefined, 200), anything malformed is a 400. These were bare
+  // `x ? parseInt(x) : null`, which took the leading digits of anything:
+  // ?category_id=12abc filtered by category 12, ?recipient_group_id=1e3 by
+  // group 1, ?transaction_id=0 and ?recipient_id=-4 reached the SQL builder
+  // as ids no row can have, and a NaN (which is what the Transactions page
+  // sends for a hand-edited URL) passed the `!= null` guard and reached
+  // Postgres as a 22P02 500.
+  transaction_id: optionalIdQuery("transaction_id"),
+  start_date: guardField((value) => assertYmd(value, "start_date")),
+  end_date: guardField((value) => assertYmd(value, "end_date")),
+  // account_id is the preferred account filter (ADR-088 — reads key on the
+  // FK); bank_account stays as a substring escape hatch.
+  account_id: optionalIdQuery("account_id"),
+  bank_account: singleQueryValue("bank_account"),
+  category_id: optionalIdQuery("category_id"),
+  category_ids: guardField((value) =>
+    parseIdListQueryParam(value, "category_ids"),
+  ),
+  recipient_id: optionalIdQuery("recipient_id"),
+  recipient_group_id: optionalIdQuery("recipient_group_id"),
+  recipient_name: singleQueryValue("recipient_name"),
+  search: singleQueryValue("search"),
+  active: booleanQueryFlag(true),
+  sort_by: singleQueryValue("sort_by"),
+  sort_dir: z
+    .unknown()
+    .optional()
+    .transform((value): "asc" | "desc" | undefined =>
+      value === "asc" || value === "desc" ? value : undefined,
+    ),
+  include_balance: booleanQueryFlag(),
+  transaction_type: z
+    .unknown()
+    .optional()
+    .transform((value): "income" | "expense" | undefined =>
+      value === "income" || value === "expense" ? value : undefined,
+    ),
+  amount_min: z.unknown().optional(),
+  amount_max: z.unknown().optional(),
+  amount_exact: z.unknown().optional(),
+  amount_signed: booleanQueryFlag(),
+  tags: z
+    .unknown()
+    .optional()
+    .transform((value) => {
+      if (!value) return undefined;
+      const slugs = String(value)
         .split(",")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean)
-    : undefined;
+        .map((slug) => slug.trim().toLowerCase())
+        .filter(Boolean);
+      return slugs.length ? slugs : undefined;
+    }),
+};
 
+function optionalIdQuery(field: string) {
+  return guardField((value) => assertOptionalId(value, field));
+}
+
+type TransactionFilterQuery = z.output<
+  z.ZodObject<typeof transactionFilterQueryShape>
+>;
+
+/** The list/export service filter model from the parsed filter fields. */
+function toTransactionFilters(query: TransactionFilterQuery) {
   // Amount coercion lives in filterBuilder.parseAmountFilter (shared with
   // bulkSelection). amount_exact is shorthand for min == max.
-  const amountSigned = parseBooleanQueryParam(amount_signed);
-  const amountExact = parseAmountFilter(amount_exact, amountSigned);
+  const amountSigned = query.amount_signed;
+  const amountExact = parseAmountFilter(query.amount_exact, amountSigned);
   const amountMin =
     amountExact != null
       ? amountExact
-      : parseAmountFilter(amount_min, amountSigned);
+      : parseAmountFilter(query.amount_min, amountSigned);
   const amountMax =
     amountExact != null
       ? amountExact
-      : parseAmountFilter(amount_max, amountSigned);
+      : parseAmountFilter(query.amount_max, amountSigned);
 
   return {
-    limit,
-    offset,
-    // Every scalar id here goes through assertOptionalId — absent/empty means
-    // "no filter" (undefined, 200), anything malformed is a 400. These were bare
-    // `x ? parseInt(x) : null`, which took the leading digits of anything:
-    // ?category_id=12abc filtered by category 12, ?recipient_group_id=1e3 by
-    // group 1, ?transaction_id=0 and ?recipient_id=-4 reached the SQL builder
-    // as ids no row can have, and a NaN (which is what the Transactions page
-    // sends for a hand-edited URL) passed the `!= null` guard and reached
-    // Postgres as a 22P02 500.
-    transactionId: assertOptionalId(transaction_id, "transaction_id"),
-    startDate: assertYmd(start_date, "start_date"),
-    endDate: assertYmd(end_date, "end_date"),
-    // account_id is the preferred account filter (ADR-088 — reads key on the
-    // FK); bank_account stays as a substring escape hatch.
-    accountId: assertOptionalId(account_id, "account_id"),
-    bankAccount: bank_account || undefined,
-    categoryId: assertOptionalId(category_id, "category_id"),
-    categoryIds: parsedCategoryIds,
-    recipientId: assertOptionalId(recipient_id, "recipient_id"),
-    recipientGroupId: assertOptionalId(
-      recipient_group_id,
-      "recipient_group_id",
-    ),
-    recipientName: recipient_name || undefined,
-    search: search ? search.slice(0, 200) : undefined,
-    active: parseBooleanQueryParam(active, true),
-    sortBy: sort_by || undefined,
-    sortDir,
-    includeBalance: parseBooleanQueryParam(include_balance),
-    transactionType,
+    transactionId: query.transaction_id,
+    startDate: query.start_date,
+    endDate: query.end_date,
+    accountId: query.account_id,
+    bankAccount: query.bank_account || undefined,
+    categoryId: query.category_id,
+    categoryIds: query.category_ids,
+    recipientId: query.recipient_id,
+    recipientGroupId: query.recipient_group_id,
+    recipientName: query.recipient_name || undefined,
+    search: query.search ? query.search.slice(0, 200) : undefined,
+    active: query.active,
+    sortBy: query.sort_by || undefined,
+    sortDir: query.sort_dir,
+    includeBalance: query.include_balance,
+    transactionType: query.transaction_type,
     amountMin,
     amountMax,
     amountSigned,
-    tagSlugs: parsedTagSlugs?.length ? parsedTagSlugs : undefined,
+    tagSlugs: query.tags,
   };
 }
 
+// GET / — the filters plus pagination, the uncategorised view and the
+// optional EUR normalization.
+const transactionListQuerySchema = bareMessages(
+  z.looseObject({
+    ...transactionFilterQueryShape,
+    uncategorised: booleanQueryFlag(),
+    normalize_to_eur: booleanQueryFlag(),
+    target_currency: singleQueryValue("target_currency"),
+  }),
+).transform((query) => ({
+  opts: {
+    ...parsePagination(query, { maxLimit: 5000 }),
+    ...toTransactionFilters(query),
+  },
+  uncategorised: query.uncategorised,
+  normalizeToEur: query.normalize_to_eur,
+  targetCurrency: query.target_currency,
+}));
+
 /**
- * Parse the transactions export filters into a service input model.
+ * The transactions export filters, as a service input model.
  *
  * Accepts the same raw query-string shape used by the list endpoint, including
  * `transaction_id`, `recipient_id`, `recipient_name`, `search`,
@@ -484,53 +591,62 @@ function parseTransactionListQuery(query: Record<string, unknown>) {
  *
  * Account multi-value support: `account_ids=1,2,3` → array of ids (preferred);
  * `bank_accounts=a,b,c` → array of trimmed strings (legacy escape hatch).
- *
- * Returns a plain filter model. `query` is req.query — see
- * parseTransactionListQuery.
  */
-function buildExportFilters(query: Record<string, unknown>) {
-  const opts = parseTransactionListQuery(query);
-
-  // Validated in full BEFORE the cap is applied, so a malformed id past
-  // EXPORT_MAX_LIST_SIZE still rejects rather than being sliced away unseen.
-  // The cap itself is unchanged (it silently truncates an over-long list — a
-  // separate, pre-existing narrowing, shared with bank_accounts below).
-  const accountIds = parseIdListQueryParam(
-    query.account_ids,
-    "account_ids",
-  )?.slice(0, EXPORT_MAX_LIST_SIZE);
-
-  const bankAccounts = query.bank_accounts
-    ? String(query.bank_accounts)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .slice(0, EXPORT_MAX_LIST_SIZE)
-    : undefined;
-
+const transactionExportQuerySchema = bareMessages(
+  z.object({
+    ...transactionFilterQueryShape,
+    // Validated in full BEFORE the cap is applied, so a malformed id past
+    // EXPORT_MAX_LIST_SIZE still rejects rather than being sliced away unseen.
+    // The cap itself is unchanged (it silently truncates an over-long list —
+    // a separate, pre-existing narrowing, shared with bank_accounts below).
+    account_ids: guardField((value) =>
+      parseIdListQueryParam(value, "account_ids")?.slice(
+        0,
+        EXPORT_MAX_LIST_SIZE,
+      ),
+    ),
+    bank_accounts: z
+      .unknown()
+      .optional()
+      .transform((value) =>
+        value
+          ? String(value)
+              .split(",")
+              .map((account) => account.trim())
+              .filter(Boolean)
+              .slice(0, EXPORT_MAX_LIST_SIZE)
+          : undefined,
+      ),
+  }),
+).transform((query) => {
+  const opts = toTransactionFilters(query);
   return {
-    transactionId: opts.transactionId,
-    startDate: opts.startDate,
-    endDate: opts.endDate,
-    accountId: opts.accountId,
-    accountIds: accountIds && accountIds.length > 0 ? accountIds : undefined,
-    bankAccount: opts.bankAccount,
-    bankAccounts:
-      bankAccounts && bankAccounts.length > 0 ? bankAccounts : undefined,
-    categoryId: opts.categoryId,
-    categoryIds: opts.categoryIds,
-    recipientId: opts.recipientId,
-    recipientGroupId: opts.recipientGroupId,
-    recipientName: opts.recipientName,
-    search: opts.search,
-    active: opts.active,
-    transactionType: opts.transactionType,
-    amountMin: opts.amountMin,
-    amountMax: opts.amountMax,
-    amountSigned: opts.amountSigned,
-    tagSlugs: opts.tagSlugs,
+    includeBalance: opts.includeBalance,
+    filters: {
+      transactionId: opts.transactionId,
+      startDate: opts.startDate,
+      endDate: opts.endDate,
+      accountId: opts.accountId,
+      accountIds: query.account_ids?.length ? query.account_ids : undefined,
+      bankAccount: opts.bankAccount,
+      bankAccounts: query.bank_accounts?.length
+        ? query.bank_accounts
+        : undefined,
+      categoryId: opts.categoryId,
+      categoryIds: opts.categoryIds,
+      recipientId: opts.recipientId,
+      recipientGroupId: opts.recipientGroupId,
+      recipientName: opts.recipientName,
+      search: opts.search,
+      active: opts.active,
+      transactionType: opts.transactionType,
+      amountMin: opts.amountMin,
+      amountMax: opts.amountMax,
+      amountSigned: opts.amountSigned,
+      tagSlugs: opts.tagSlugs,
+    },
   };
-}
+});
 
 function normalizeTransactionPatchFields(
   body: Record<string, unknown>,
@@ -566,26 +682,14 @@ router.get("/transfer-suggestions", async (req, res) => {
 
 // POST /api/transactions/transfers — manually confirm a transfer pair (sticky)
 router.post("/transfers", async (req, res) => {
-  // Same strict id parse as everywhere else. This was a bare parseInt guarded
-  // only by Number.isInteger, so `aId: "12abc"` marked transaction 12 as a
-  // transfer — a wrong-record *write*, not a wrong-record read — and an id past
-  // int4 (99999999999) passed the guard and 500'd at the column.
-  const a = validateId(req.body?.aId, "aId");
-  const b = validateId(req.body?.bId, "bId");
-  if (!a.valid || !b.valid || a.value === b.value) {
-    throw new ValidationError(
-      "aId and bId must be two distinct transaction ids",
-    );
-  }
-  const aId = a.value;
-  const bId = b.value;
+  const { aId, bId } = parseInput(transferPairBodySchema, req.body);
   await transactionService.markTransfer(aId, bId);
   res.ok({ ok: true });
 });
 
 // DELETE /api/transactions/transfers/:id — clear a transfer mark and its peer
-router.delete("/transfers/:id", validateIdParam, async (req, res) => {
-  await transactionService.unmarkTransfer(assertIdParam(req));
+router.delete("/transfers/:id", async (req, res) => {
+  await transactionService.unmarkTransfer(parseRouteId(req));
   // Deleting the transfer mark reports nothing the caller can't derive →
   // 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();
@@ -593,13 +697,14 @@ router.delete("/transfers/:id", validateIdParam, async (req, res) => {
 
 // GET /api/transactions
 router.get("/", async (req, res) => {
-  const { uncategorised, normalize_to_eur = "false" } = req.query;
-  const target_currency = optionalQueryString(req.query, "target_currency");
-  const opts = parseTransactionListQuery(req.query);
+  const { opts, uncategorised, normalizeToEur, targetCurrency } = parseInput(
+    transactionListQuerySchema,
+    req.query,
+  );
 
   let items: FormattableTransactionRow[];
   let total: number;
-  if (parseBooleanQueryParam(uncategorised)) {
+  if (uncategorised) {
     const result = await transactionService.getUncategorisedWithCount(opts);
     items = result.rows;
     total = result.total;
@@ -609,12 +714,12 @@ router.get("/", async (req, res) => {
     total = result.total;
   }
 
-  if (parseBooleanQueryParam(normalize_to_eur)) {
+  if (normalizeToEur) {
     // convertRowsToEur's JSDoc widens rows to Record<string, any>; it returns
     // the input rows with `amount_eur` added.
     items = (await convertRowsToEur(
       items,
-      target_currency || "EUR",
+      targetCurrency || "EUR",
     )) as FormattableTransactionRow[];
   }
 
@@ -637,8 +742,10 @@ router.get(
     keyPrefix: "transactions-export-csv",
   }),
   async (req, res) => {
-    const includeBalance = parseBooleanQueryParam(req.query.include_balance);
-    const filters = buildExportFilters(req.query);
+    const { filters, includeBalance } = parseInput(
+      transactionExportQuerySchema,
+      req.query,
+    );
     await streamCsvExport(res, {
       filters,
       includeBalance,
@@ -656,7 +763,7 @@ router.get(
     keyPrefix: "transactions-export-json",
   }),
   async (req, res) => {
-    const filters = buildExportFilters(req.query);
+    const { filters } = parseInput(transactionExportQuerySchema, req.query);
     await streamNdjsonExport(res, { filters });
   },
 );
@@ -670,7 +777,7 @@ router.post(
     keyPrefix: "transactions-bulk-tag",
   }),
   async (req, res) => {
-    const { transaction_ids, add_slugs, remove_slugs } = parseTransactionBody(
+    const { transaction_ids, add_slugs, remove_slugs } = parseInput(
       bulkTagSchema,
       req.body,
     );
@@ -701,8 +808,10 @@ router.post(
     keyPrefix: "transactions-bulk-delete",
   }),
   async (req, res) => {
-    const { ids, filter, expected_count } = req.body ?? {};
-    const expectedCount = parseBulkExpectedCount(expected_count, filter);
+    const { ids, filter, expectedCount } = parseInput(
+      bulkDeleteBodySchema,
+      req.body,
+    );
     const result = await bulkDeleteTransactions({ ids, filter, expectedCount });
     res.ok(result);
   },
@@ -720,30 +829,12 @@ router.post(
     keyPrefix: "transactions-bulk-update",
   }),
   async (req, res) => {
-    const { ids, filter, fields, expected_count } = req.body ?? {};
-    const expectedCount = parseBulkExpectedCount(expected_count, filter);
-
-    if (!fields || typeof fields !== "object") {
-      throw new ValidationError(
-        "`fields` must be an object with at least one updatable property",
-      );
-    }
-
-    // Strip-mode parse: unknown keys are dropped, present keys are validated,
-    // absent keys stay absent — presence drives the SET clause build below.
-    // Explicit-undefined values (unreachable via JSON) are dropped too, so a
-    // `category_id: undefined` can never become `SET category_id = NULL`.
-    const sanitized = Object.fromEntries(
-      Object.entries(
-        parseTransactionBody(bulkUpdateFieldsSchema, fields),
-      ).filter(([, value]) => value !== undefined),
-    );
-
-    if (Object.keys(sanitized).length === 0) {
-      throw new ValidationError(
-        "`fields` must contain at least one of: category_id, recipient_id, is_active",
-      );
-    }
+    const {
+      ids,
+      filter,
+      fields: sanitized,
+      expectedCount,
+    } = parseInput(bulkUpdateBodySchema, req.body);
 
     const result = await bulkUpdateTransactions({
       ids,
@@ -766,18 +857,10 @@ router.post(
     keyPrefix: "transactions-bulk-export",
   }),
   async (req, res) => {
-    const {
-      ids,
-      filter,
-      format = "csv",
-      include_balance = false,
-      expected_count,
-    } = req.body ?? {};
-    if (format !== "csv" && format !== "json") {
-      throw new ValidationError("`format` must be 'csv' or 'json'");
-    }
-
-    parseBulkExpectedCount(expected_count, filter);
+    const { ids, filter, format, include_balance } = parseInput(
+      bulkExportBodySchema,
+      req.body,
+    );
     await streamBulkTransactionExport(res, {
       ids,
       filter,
@@ -788,10 +871,11 @@ router.post(
 );
 
 // GET /api/transactions/:id
-router.get("/:id", validateIdParam, async (req, res) => {
-  const transaction = await transactionService.getById(assertIdParam(req));
+router.get("/:id", async (req, res) => {
+  const id = parseRouteId(req);
+  const transaction = await transactionService.getById(id);
   if (!transaction) {
-    throw new NotFoundError(`Transaction with ID ${req.params.id} not found`);
+    throw new NotFoundError(`Transaction with ID ${id} not found`);
   }
   res.ok(formatTransaction(transaction));
 });
@@ -802,7 +886,7 @@ router.post("/", async (req, res) => {
   // default); everything else is forwarded raw, exactly as before the schema.
   // The duplicate check, insert, claim, auto-link, and reconcile chain lives
   // in the service; a duplicate surfaces as ConflictError (409) from there.
-  const data = parseTransactionBody(createTransactionSchema, req.body);
+  const data = parseInput(createTransactionSchema, req.body);
 
   // createTransactionSchema is a loose passthrough object (see module doc) —
   // its zod-inferred type makes every field optional, but the schema's own
@@ -824,7 +908,6 @@ router.post("/", async (req, res) => {
 // PATCH /api/transactions/:id
 router.patch(
   "/:id",
-  validateIdParam,
   rateLimiter({
     windowMs: 60_000,
     maxRequests: 30,
@@ -835,10 +918,7 @@ router.patch(
     // Whitelist-strip read-only keys, then validate/coerce the typed fields.
     // Absent keys stay absent (partial PATCH), null keeps its clear semantics
     // for the nullable FK columns, and unvalidated fields pass through loose.
-    const fields = parseTransactionBody(
-      patchTransactionSchema,
-      normalizeTransactionPatchFields(req.body),
-    );
+    const fields = parseInput(patchTransactionBodySchema, req.body);
 
     // patchTransactionSchema's tagsField only validates "is an array" (item
     // type unchecked, matching pre-zod behavior); transactionRepository.update
@@ -858,7 +938,7 @@ router.patch(
 );
 
 // DELETE /api/transactions/:id
-router.delete("/:id", validateIdParam, async (req, res) => {
+router.delete("/:id", async (req, res) => {
   const id = parseRouteId(req);
   const deleted = await transactionService.hardDeleteWithCleanup(id);
   if (!deleted) {

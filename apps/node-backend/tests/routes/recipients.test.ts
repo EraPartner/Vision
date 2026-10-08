@@ -58,9 +58,12 @@ import type {
 } from "../../src/repositories/recipientRepository.ts";
 import { mergeRecipients as rawMergeRecipientsAtomic } from "../../src/services/recipientMergeService.ts";
 import {
+  createPattern,
   updatePattern,
   deletePattern,
+  previewPatternMatches,
 } from "../../src/services/recipientPatternService.ts";
+import { findRecipientClusters } from "../../src/services/recipientClusterService.ts";
 
 const recipientRepository = vi.mocked(rawRecipientRepository);
 const mergeRecipientsAtomic = vi.mocked(rawMergeRecipientsAtomic);
@@ -419,6 +422,198 @@ describe("Recipient Routes", () => {
 
       expect(deletePattern).toHaveBeenCalledWith(77);
       expect(res.text).toBe("");
+    });
+  });
+
+  // ADR-193: every query/body field is parsed by the route's zod schema, so a
+  // wrong JSON type is a 400 before any service or repository runs. Before,
+  // `name: 123` reached `name.toUpperCase()` (500), a non-string `pattern`
+  // reached `pattern.trim()` (500), and the other wrong types were forwarded
+  // to Postgres.
+  describe("request schemas (zod)", () => {
+    it.each([
+      ["?min_count=2&min_count=3", "/clusters"],
+      ["?name=a&name=b", ""],
+      ["?search=a&search=b", ""],
+      ["?sort_by=a&sort_by=b", ""],
+    ])(
+      "rejects a repeated or bracketed single-value query (%s)",
+      async (query, path) => {
+        const res = await api.get(`${BASE}${path}${query}`).expect(400);
+        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+        expect(findRecipientClusters).not.toHaveBeenCalled();
+        expect(recipientRepository.getAll).not.toHaveBeenCalled();
+      },
+    );
+
+    it("keeps an unrecognised sort_dir as the default order", async () => {
+      recipientRepository.getAll.mockResolvedValue([]);
+      recipientRepository.getCount.mockResolvedValue(0);
+      await api.get(`${BASE}?sort_dir=sideways&limit=abc`).expect(200);
+      expect(recipientRepository.getAll).toHaveBeenCalledWith(
+        expect.objectContaining({ sortDir: undefined, limit: 50, offset: 0 }),
+      );
+    });
+
+    it.each([
+      [{ name: 123 }, "name: must be a string"],
+      [{ name: "" }, "name: Missing required field"],
+      [{ name: "A", default_category_id: "1e3" }, "default_category_id"],
+      [{ name: "A", notes: 42 }, "notes"],
+    ])("POST / rejects %j", async (body, message) => {
+      const res = await api.post(BASE).send(body).expect(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(res.body.error.message).toContain(message);
+      expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
+      expect(recipientRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("POST / still coerces a digit-string default_category_id", async () => {
+      recipientRepository.createOrGet.mockResolvedValue({
+        recipient: recipient({ id: 4, name: "A" }),
+        created: true,
+      });
+      recipientRepository.update.mockResolvedValue(recipient({ id: 4 }));
+      await api
+        .post(BASE)
+        .send({ name: "A", default_category_id: "7" })
+        .expect(201);
+      expect(recipientRepository.update).toHaveBeenCalledWith(4, {
+        default_category_id: 7,
+        notes: undefined,
+      });
+    });
+
+    it.each([
+      { name: 5 },
+      { default_category_id: "abc" },
+      { default_category_id: 0 },
+      { notes: ["x"] },
+      { is_active: "yes" },
+    ])("PATCH /:id rejects %j", async (body) => {
+      const res = await api.patch(`${BASE}/1`).send(body).expect(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(recipientRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("PATCH /:id forwards only the known fields, keeping null clears", async () => {
+      recipientRepository.update.mockResolvedValue(recipient({ id: 1 }));
+      await api
+        .patch(`${BASE}/1`)
+        .send({
+          default_category_id: null,
+          notes: "n",
+          primary_recipient_id: 9,
+        })
+        .expect(200);
+      expect(recipientRepository.update).toHaveBeenCalledWith(1, {
+        default_category_id: null,
+        notes: "n",
+      });
+    });
+
+    it.each([{ alias_ids: "3" }, { alias_ids: [] }])(
+      "POST /:id/merge rejects %j",
+      async (body) => {
+        const res = await api.post(`${BASE}/1/merge`).send(body).expect(400);
+        expect(res.body.error.message).toContain(
+          "Missing required field: alias_ids",
+        );
+        expect(mergeRecipientsAtomic).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([
+      { pattern: 123 },
+      { pattern: "" },
+      { pattern: "ACME", pattern_kind: "fuzzy" },
+      { pattern: "ACME", case_sensitive: "yes" },
+      { pattern: "ACME", priority: "high" },
+      { pattern: "ACME", priority: 1.5 },
+      { pattern: "ACME", priority: 2147483648 },
+      { pattern: "ACME", notes: 7 },
+    ])("POST /:id/patterns rejects %j", async (body) => {
+      const res = await api.post(`${BASE}/1/patterns`).send(body).expect(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(createPattern).not.toHaveBeenCalled();
+    });
+
+    it("POST /:id/patterns forwards a well-typed body", async () => {
+      vi.mocked(createPattern).mockResolvedValue({ id: 3 });
+      await api
+        .post(`${BASE}/1/patterns`)
+        .send({ pattern: "ACME", pattern_kind: "glob", priority: 5 })
+        .expect(201);
+      expect(createPattern).toHaveBeenCalledWith({
+        recipientId: 1,
+        pattern: "ACME",
+        pattern_kind: "glob",
+        case_sensitive: undefined,
+        priority: 5,
+        notes: undefined,
+      });
+    });
+
+    it("POST /:id/patterns treats null options as their defaults", async () => {
+      vi.mocked(createPattern).mockResolvedValue({ id: 4 });
+      await api
+        .post(`${BASE}/1/patterns`)
+        .send({
+          pattern: "ACME",
+          pattern_kind: null,
+          case_sensitive: null,
+          priority: null,
+          notes: null,
+        })
+        .expect(201);
+      expect(createPattern).toHaveBeenCalledWith({
+        recipientId: 1,
+        pattern: "ACME",
+        pattern_kind: undefined,
+        case_sensitive: undefined,
+        priority: undefined,
+        notes: null,
+      });
+    });
+
+    it("POST /:id/patterns/preview treats null options as their defaults", async () => {
+      await api
+        .post(`${BASE}/1/patterns/preview`)
+        .send({ pattern: "ACME", pattern_kind: null, case_sensitive: null })
+        .expect(200);
+      expect(previewPatternMatches).toHaveBeenCalled();
+    });
+
+    it.each([{}, { pattern: ["A"] }, { pattern: "A", case_sensitive: 1 }])(
+      "POST /:id/patterns/preview rejects %j",
+      async (body) => {
+        await api.post(`${BASE}/1/patterns/preview`).send(body).expect(400);
+        expect(previewPatternMatches).not.toHaveBeenCalled();
+      },
+    );
+
+    it("POST /:id/patterns/preview rejects a malformed :id", async () => {
+      await api
+        .post(`${BASE}/abc/patterns/preview`)
+        .send({ pattern: "A" })
+        .expect(400);
+      expect(previewPatternMatches).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { pattern: null },
+      { priority: "1" },
+      { is_active: "false" },
+      { pattern_kind: "REGEX" },
+    ])("PATCH /:id/patterns/:patternId rejects %j", async (body) => {
+      await api.patch(`${BASE}/1/patterns/2`).send(body).expect(400);
+      expect(updatePattern).not.toHaveBeenCalled();
+    });
+
+    it("PATCH /:id/patterns/:patternId still clears a note with null", async () => {
+      vi.mocked(updatePattern).mockResolvedValue(undefined);
+      await api.patch(`${BASE}/1/patterns/2`).send({ notes: null }).expect(200);
+      expect(updatePattern).toHaveBeenCalledWith(2, { notes: null });
     });
   });
 });

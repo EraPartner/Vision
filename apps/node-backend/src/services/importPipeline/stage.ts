@@ -11,7 +11,6 @@ import { query, withTransaction } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { getAdapter } from "./adapters/index.ts";
-import generic from "./adapters/generic.ts";
 import type { CustomTransactionParserConfig } from "./adapters/generic.ts";
 import type { ParsedBankTransaction } from "./adapters/_shared.ts";
 import {
@@ -88,10 +87,10 @@ export async function stageBatch({
   // When a customConfig is supplied the import is column-mapping driven, not
   // tied to a built-in bank. The adapterName is then a free-form label (e.g. a
   // saved parser's name) that won't be in the static registry, so fall back to
-  // the generic adapter — mirroring createAdapter() in adapters/index.js.
+  // the generic adapter — mirroring createAdapter() in adapters/index.ts.
   const adapter =
     customConfig && !getAdapter(adapterName)
-      ? generic
+      ? getAdapter("generic")
       : getAdapter(adapterName);
   if (!adapter) throw new Error(`Unknown adapter: ${adapterName}`);
 

@@ -140,6 +140,31 @@ describe("validateBatch", () => {
     });
   });
 
+  it.each([
+    ["missing tx_date", { tx_date: null, amount: null }],
+    ["missing tx_date", { tx_date: "" }],
+    ["missing amount", { amount: null }],
+    ["invalid amount", { amount: "N/A" }],
+  ])("stores the rejection reason %s", async (reason, overrides) => {
+    setupPending({ ...baseRow, ...overrides });
+    await validateBatch({ batchId: 8 });
+    const call = poolQuery.mock.calls.find(([sql]) =>
+      sql.includes("FROM unnest"),
+    )!;
+    expect(call[1][1]).toEqual(["error"]);
+    expect(call[1][6]).toEqual([reason]);
+  });
+
+  it("stores no rejection reason for a usable row", async () => {
+    setupPending({ ...baseRow, amount: 12 });
+    await validateBatch({ batchId: 9 });
+    const call = poolQuery.mock.calls.find(([sql]) =>
+      sql.includes("FROM unnest"),
+    )!;
+    expect(call[1][1]).toEqual(["validated"]);
+    expect(call[1][6]).toEqual([null]);
+  });
+
   it("keeps identical occurrences and assigns distinct fingerprints", async () => {
     const dupRow = { ...baseRow, id: 2, row_index: 1, raw_data: null };
     poolQuery

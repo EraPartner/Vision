@@ -104,8 +104,8 @@ describe("markTransfer — releases a stranded prior peer", () => {
     // SELECT ... FOR UPDATE returns both legs, opposite signs, different accounts.
     mockClient.query.mockResolvedValueOnce({
       rows: [
-        { id: 10, amount: -100, account_id: 1, is_active: true },
-        { id: 20, amount: 100, account_id: 2, is_active: true },
+        { id: 10, amount: "-100.0000", account_id: 1, is_active: true },
+        { id: 20, amount: "100.0000", account_id: 2, is_active: true },
       ],
     });
     await markTransfer(10, 20);

@@ -7,10 +7,14 @@ import type {
     CategoryNodeCreate,
     CategoryNodeUpdate,
 } from "@/types/api";
-import { apiRequest } from "@/lib/api/client";
+import {
+    CategoryListSchema,
+    CategoryTreeSchema,
+} from "@vision/types/contracts";
+import { apiRequest, checkResponseContract } from "@/lib/api/client";
 import { requestWithQuery, createWithStatus } from "@/lib/api/helpers";
 
-export function getCategories(params?: {
+export async function getCategories(params?: {
     limit?: number;
     offset?: number;
     general?: string;
@@ -18,7 +22,14 @@ export function getCategories(params?: {
     active?: boolean;
     search?: string;
 }): Promise<CategoriesListResponse> {
-    return requestWithQuery<CategoriesListResponse>("/api/categories", params);
+    return checkResponseContract(
+        CategoryListSchema,
+        await requestWithQuery<CategoriesListResponse>(
+            "/api/categories",
+            params,
+        ),
+        "GET /api/categories",
+    );
 }
 
 export async function createCategory(
@@ -51,6 +62,7 @@ export function getCategoryTree(): Promise<{
 }> {
     return apiRequest<{ items: CategoryNode[]; total: number }>(
         "/api/categories/tree",
+        { schema: CategoryTreeSchema },
     );
 }
 

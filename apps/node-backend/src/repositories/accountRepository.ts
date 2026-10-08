@@ -11,6 +11,13 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  accountBalanceQueryRowSchema,
+  accountRowSchema,
+  countRowSchema,
+  statementBalanceRowSchema,
+} from "../database/rowSchemas.ts";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
@@ -23,6 +30,7 @@ import {
 import { todayAppDateString } from "../lib/timezone.ts";
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 
+import type { z } from "zod";
 import type {
   AccountBalanceQueryRow,
   AccountRow,
@@ -32,14 +40,7 @@ import type {
 export type { AccountRow, AccountBalanceQueryRow };
 
 /** A row of `account_statement_balances` as `upsertStatementBalance` returns it. */
-export interface StatementBalanceRow {
-  account_id: number;
-  currency: string;
-  /** NUMERIC — pg string. */
-  balance: string;
-  /** 'YYYY-MM-DD' */
-  balance_date: string;
-}
+export type StatementBalanceRow = z.output<typeof statementBalanceRowSchema>;
 
 const COLUMNS = `id, name, display_name, institution, currency, type, liquidity_class,
   spendable, in_net_worth, tax_wrapper, owner, multi_currency_cash, has_cash_sleeve,
@@ -187,8 +188,7 @@ export const accountRepository = {
     sql += ` ORDER BY a.name`;
     const params: unknown[] = [asOfDate];
     sql += buildLimitOffset(params, { limit, offset });
-    const result = await query<AccountBalanceQueryRow>(sql, params);
-    return result.rows;
+    return queryRows(accountBalanceQueryRowSchema, sql, params);
   },
 
   /**
@@ -201,27 +201,27 @@ export const accountRepository = {
     let sql = `SELECT COUNT(*) FROM accounts a WHERE 1=1`;
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
-    const result = await query<{ count: string }>(sql, []);
-    return parseInt(result.rows[0].count, 10);
+    const [row] = await queryRows(countRowSchema, sql, []);
+    return parseInt(row.count, 10);
   },
 
   async getById(id: number): Promise<AccountRow | undefined> {
-    const result = await query<AccountRow>(
+    return queryOne(
+      accountRowSchema,
       `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
       [id],
     );
-    return result.rows[0] ?? undefined;
   },
 
   /** @param name Matched case/whitespace-insensitively (D1). */
   async getByName(name: string): Promise<AccountRow | undefined> {
     // Identity is case/whitespace-insensitive (D1) — match how the sync
     // trigger and resolveOrCreateByName resolve labels.
-    const result = await query<AccountRow>(
+    return queryOne(
+      accountRowSchema,
       `SELECT ${COLUMNS} FROM accounts WHERE lower(btrim(name)) = lower(btrim($1))`,
       [name],
     );
-    return result.rows[0] ?? undefined;
   },
 
   /**
@@ -245,13 +245,14 @@ export const accountRepository = {
       placeholders,
       params,
     } = buildInsert(fields, { allowed: WRITABLE, quote: true });
-    const result = await query<AccountRow>(
+    const [row] = await queryRows(
+      accountRowSchema,
       `INSERT INTO accounts (${cols.join(", ")})
        VALUES (${placeholders.join(", ")})
        RETURNING ${COLUMNS}`,
       params,
     );
-    return result.rows[0];
+    return row;
   },
 
   /**
@@ -270,11 +271,11 @@ export const accountRepository = {
     setClauses.push(`updated_at = NOW()`);
     params.push(id);
 
-    const result = await query<AccountRow>(
+    return queryOne(
+      accountRowSchema,
       `UPDATE accounts SET ${setClauses.join(", ")} WHERE id = $${i} RETURNING ${COLUMNS}`,
       params,
     );
-    return result.rows[0] ?? undefined;
   },
 
   /**
@@ -352,7 +353,8 @@ export const accountRepository = {
     balance: number | string,
     balanceDate: string,
   ): Promise<StatementBalanceRow> {
-    const result = await query<StatementBalanceRow>(
+    const [row] = await queryRows(
+      statementBalanceRowSchema,
       `INSERT INTO account_statement_balances
          (account_id, currency, balance, balance_date)
        VALUES ($1, $2, $3, $4)
@@ -362,7 +364,7 @@ export const accountRepository = {
                  to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
       [accountId, currency, balance, balanceDate],
     );
-    return result.rows[0];
+    return row;
   },
 
   async deleteStatementBalance(

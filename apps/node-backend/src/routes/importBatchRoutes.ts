@@ -4,9 +4,28 @@
  */
 
 import type { Router } from "express";
-import { parseBatchIdParam } from "../lib/importBatchIds.ts";
+import { z } from "zod";
+import { coercedIdSchema } from "../lib/importBatchIds.ts";
 import { parsePagination } from "../lib/pagination.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { optionalValue, pageFields } from "./_requestSchemas.ts";
+
+const batchListQuery = z
+  .object(pageFields)
+  .transform((query) => parsePagination(query, { maxLimit: 200 }));
+
+// Batch ids are BIGSERIAL, so they use the import routers' MAX_SAFE_ID-bounded
+// id schema. Root issue: both pipelines answer every bad batch id with the
+// same "Invalid batch id" message (lib/importBatchIds.ts).
+const batchIdParams = z
+  .object({ id: optionalValue })
+  .transform((params, ctx) => {
+    const result = coercedIdSchema.safeParse(params.id);
+    if (result.success) return result.data;
+    ctx.addIssue({ code: "custom", message: "Invalid batch id" });
+    return z.NEVER;
+  });
 
 interface ImportBatchRouteOptions {
   listBatches: (page: {
@@ -27,20 +46,20 @@ export function registerImportBatchRoutes(
   const { listBatches, getBatch, inProgressStatuses, rollback } = options;
 
   router.get("/batches", async (req, res) => {
-    const { limit, offset } = parsePagination(req.query, { maxLimit: 200 });
+    const { limit, offset } = parseInput(batchListQuery, req.query);
     const { batches, total } = await listBatches({ limit, offset });
     res.ok({ items: batches, total, limit, offset });
   });
 
   router.get("/batches/:id", async (req, res) => {
-    const id = parseBatchIdParam(req);
+    const id = parseInput(batchIdParams, req.params);
     const batch = await getBatch(id);
     if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
     res.ok(batch);
   });
 
   router.delete("/batches/:id", async (req, res) => {
-    const id = parseBatchIdParam(req);
+    const id = parseInput(batchIdParams, req.params);
     const batch = await getBatch(id);
     if (!batch) throw new NotFoundError(`Import batch ${id} not found`);
     if (batch.status === "aborted")

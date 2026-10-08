@@ -7,6 +7,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { logger } from "../../config/logger.ts";
 import { rateLimiter, adminRateLimiter } from "../../middleware/rateLimiter.ts";
 import {
@@ -21,8 +22,9 @@ import {
 } from "../../services/belgianInflationService.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
 import { formatDateToYmd } from "../../lib/dateFormat.ts";
-import { getMonthParam, getCurrentDateString } from "./_queryParams.ts";
-import { parseBooleanQueryParam } from "../../lib/httpParams.ts";
+import { getCurrentDateString, monthQueryField } from "./_queryParams.ts";
+import { bareMessages, parseInput } from "../../lib/zodInput.ts";
+import { booleanQueryFlag } from "../_inputBridges.ts";
 
 // The pg row shape for `exchange_rates` as SELECTed above — NUMERIC columns
 // arrive as strings (see toDecimal/toNumber below), DATE as a Date at local
@@ -36,6 +38,20 @@ interface ExchangeRateRow {
 
 const router = Router();
 
+const exchangeRatesQuerySchema = z.object({ db_only: booleanQueryFlag() });
+
+// Default to DB-only so the request never blocks on a slow/unreachable
+// Statbel/Eurostat fetch when the host is offline. Background refresh is
+// scheduled so cached data is updated whenever connectivity returns. Clients
+// can opt in to a synchronous live fetch with ?db_only=false.
+const inflationRatesQuerySchema = bareMessages(
+  z.object({
+    start_month: monthQueryField("start_month"),
+    end_month: monthQueryField("end_month"),
+    db_only: booleanQueryFlag(true),
+  }),
+);
+
 router.get(
   "/exchange-rates",
   rateLimiter({
@@ -44,7 +60,7 @@ router.get(
     keyPrefix: "exchange-rates",
   }),
   async (req, res) => {
-    const dbOnly = parseBooleanQueryParam(req.query.db_only);
+    const { db_only: dbOnly } = parseInput(exchangeRatesQuerySchema, req.query);
 
     const result = await listLatestStoredRates();
 
@@ -103,13 +119,11 @@ router.get(
     keyPrefix: "inflation-rates",
   }),
   async (req, res) => {
-    const startMonth = getMonthParam(req.query.start_month);
-    const endMonth = getMonthParam(req.query.end_month);
-    // Default to DB-only so the request never blocks on a slow/unreachable
-    // Statbel/Eurostat fetch when the host is offline. Background refresh is
-    // scheduled so cached data is updated whenever connectivity returns.
-    // Clients can opt in to a synchronous live fetch with ?db_only=false.
-    const dbOnly = parseBooleanQueryParam(req.query.db_only, true);
+    const {
+      start_month: startMonth,
+      end_month: endMonth,
+      db_only: dbOnly,
+    } = parseInput(inflationRatesQuerySchema, req.query);
     const result = await getInflationRates({
       startMonth,
       endMonth,

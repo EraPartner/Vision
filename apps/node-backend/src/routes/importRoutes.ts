@@ -1,11 +1,12 @@
 /**
  * Import routes - Full CSV import with bank adapters.
  *
- * Request parsing is validated with zod (schema → safeParse → ValidationError),
- * the idiom established in settings.js/reports.js. Batch/row route ids share
- * one coerced schema with the portfolio import router (lib/importBatchIds.ts).
- * CSV option/config schemas normalize multipart fields and validate the
- * supported encoding and numeric convention before staging.
+ * Request parsing goes through zod schemas and `parseInput` (lib/zodInput.ts,
+ * ADR-193). Batch/row route ids share one coerced schema with the portfolio
+ * import router (lib/importBatchIds.ts). CSV option/config schemas normalize
+ * multipart fields and validate the supported encoding and numeric convention
+ * before staging; the saved-parser config schema is shared with the repository
+ * read-back check (lib/parserConfigSchema.ts).
  */
 
 import { Router } from "express";
@@ -17,9 +18,14 @@ import {
 import {
   parseBatchIdParam,
   parseBatchRowIdParams,
-  parseOverrideId,
 } from "../lib/importBatchIds.ts";
 import { logger } from "../config/logger.ts";
+import { bareMessages, parseInput } from "../lib/zodInput.ts";
+import { overrideIdField, parserConfigBody } from "./_importInput.ts";
+import {
+  csvEncodingField,
+  parserConfigSchema,
+} from "../lib/parserConfigSchema.ts";
 import {
   runImportPipeline,
   commitImport,
@@ -46,10 +52,7 @@ import {
 } from "../services/aggregationRefresh.ts";
 import { registerParserRoutes } from "./parserConfigRoutes.ts";
 import { registerImportBatchRoutes } from "./importBatchRoutes.ts";
-import {
-  normalizeCsvEncoding,
-  CSV_NUMBER_FORMATS,
-} from "../services/importPipeline/adapters/_shared.ts";
+import { CSV_NUMBER_FORMATS } from "../services/importPipeline/adapters/_shared.ts";
 
 /** The shape `runImportPipeline` resolves with (services/importPipeline/index.js). */
 type ImportPipelineResult = Awaited<ReturnType<typeof runImportPipeline>>;
@@ -57,7 +60,7 @@ type ImportPipelineResult = Awaited<ReturnType<typeof runImportPipeline>>;
 // Structural slices of Express's Request/Response: the legacy checkJs program
 // resolves `express` to an untyped shim that has no type exports.
 interface CsvOptionsRequest {
-  body?: { separator?: unknown; encoding?: unknown };
+  body?: unknown;
   file?: { path: string };
 }
 interface EnvelopeResponse {
@@ -118,32 +121,23 @@ function buildPipelineResult(pipelineResult: ImportPipelineResult) {
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
 
-// schema → safeParse → joined issues → ValidationError (settings.js idiom).
-// Messages here already name their field, so issues join without path prefixes.
-function parseImportInput<T>(schema: z.ZodType<T>, input: unknown): T {
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    throw new ValidationError(
-      result.error.issues.map((issue) => issue.message).join("; "),
-    );
-  }
-  return result.data;
-}
+// Every message here already names its field, so each schema is wrapped in
+// bareMessages: issues join without a `field: ` path prefix.
 
-const csvEncodingField = z
-  .unknown()
-  .optional()
-  .transform((value, ctx) => {
-    try {
-      return normalizeCsvEncoding(value);
-    } catch (error) {
-      ctx.addIssue({
-        code: "custom",
-        message: error instanceof Error ? error.message : String(error),
-      });
-      return z.NEVER;
-    }
-  });
+// A required multipart text field; a repeated field arrives as an array and
+// is rejected like an absent one.
+const bankNameBodySchema = (message: string) =>
+  bareMessages(
+    z.looseObject({
+      bank_name: z.string({ error: message }).min(1, { error: message }),
+    }),
+  );
+const csvBankNameSchema = bankNameBodySchema(
+  "Missing required multipart field: bank_name",
+);
+const streamBankNameSchema = bankNameBodySchema(
+  "Missing required parameter: bank_name",
+);
 
 // Multipart fields arrive as strings; empty values use the endpoint defaults.
 const csvImportOptionsSchema = z.object({
@@ -163,21 +157,17 @@ const csvImportOptionsSchema = z.object({
     }),
   encoding: csvEncodingField,
 });
+const csvImportOptionsInput = bareMessages(csvImportOptionsSchema);
 
 // Parse + validate the CSV separator/encoding options shared by the
 // recipients/categories import endpoints. Cleans up the upload on rejection.
 function parseCsvImportOptions(req: CsvOptionsRequest) {
-  const result = csvImportOptionsSchema.safeParse({
-    separator: req.body?.separator,
-    encoding: req.body?.encoding,
-  });
-  if (!result.success) {
+  try {
+    return parseInput(csvImportOptionsInput, req.body ?? {});
+  } catch (err) {
     if (req.file) cleanup(req.file.path);
-    throw new ValidationError(
-      result.error.issues.map((issue) => issue.message).join("; "),
-    );
+    throw err;
   }
-  return result.data;
 }
 
 // Listener-free contract seam for environments that cannot bind a test socket.
@@ -296,10 +286,11 @@ const customCsvImportSchema = z
       },
     };
   });
+const customCsvImportInput = bareMessages(customCsvImportSchema);
 
 // Listener-free seam for the same request schema used by the upload handler.
 function buildCustomCsvConfig(input: unknown) {
-  return parseImportInput(customCsvImportSchema, input);
+  return parseInput(customCsvImportInput, input);
 }
 
 export { buildCustomCsvConfig as __buildCustomCsvConfig };
@@ -312,11 +303,12 @@ router.post("/csv", csvUpload.single("file"), async (req, res) => {
     );
   }
 
-  // A repeated multipart field arrives as an array; only one name is valid.
-  const bankName: unknown = req.body?.bank_name;
-  if (typeof bankName !== "string" || !bankName) {
+  let bankName: string;
+  try {
+    ({ bank_name: bankName } = parseInput(csvBankNameSchema, req.body ?? {}));
+  } catch (err) {
     cleanup(req.file.path);
-    throw new ValidationError("Missing required multipart field: bank_name");
+    throw err;
   }
 
   try {
@@ -393,60 +385,13 @@ router.post("/csv/custom", csvUpload.single("file"), async (req, res) => {
 
 // --- Saved custom parser configs (CRUD) ---------------------------------
 
-// Saved parser configs (camelCase CustomConfig shape). Strip mode drops
-// unknown keys, exactly like the old hand-built return object. NOTE: unlike
-// the live import endpoints, separator deliberately has no single-char rule
-// here (pre-zod parity — any non-empty string sticks).
-const requiredConfigColumn = (key: string) =>
-  z
-    .unknown()
-    .optional()
-    .transform((value, ctx) => {
-      if (!value || typeof value !== "string" || value.trim().length === 0) {
-        ctx.addIssue({ code: "custom", message: `config.${key} is required` });
-        return z.NEVER;
-      }
-      return value.trim();
-    });
-
-const parserConfigSchema = z.object({
-  dateColumn: requiredConfigColumn("dateColumn"),
-  recipientColumn: requiredConfigColumn("recipientColumn"),
-  amountColumn: requiredConfigColumn("amountColumn"),
-  memoColumn: z
-    .unknown()
-    .optional()
-    .transform((value) => (typeof value === "string" ? value.trim() : "")),
-  dateFormat: z
-    .unknown()
-    .optional()
-    .transform((value) =>
-      typeof value === "string" && value.trim() ? value.trim() : "%Y-%m-%d",
-    ),
-  separator: z
-    .unknown()
-    .optional()
-    .transform((value) =>
-      typeof value === "string" && value.length ? value : ",",
-    ),
-  encoding: csvEncodingField,
-  number_format: z.enum(CSV_NUMBER_FORMATS).default("auto"),
-  skipRows: z
-    .unknown()
-    .optional()
-    .transform((value) => {
-      const skipRows = parseInt(String(value), 10);
-      return Number.isFinite(skipRows) && skipRows > 0 ? skipRows : 0;
-    }),
-});
-
 // Validates and normalizes the column-mapping config to the frontend's
-// CustomConfig shape. Required: dateColumn, recipientColumn, amountColumn.
+// CustomConfig shape (lib/parserConfigSchema.ts). Required: dateColumn,
+// recipientColumn, amountColumn.
+const parserConfigInput = parserConfigBody(parserConfigSchema);
+
 function normalizeParserConfig(config: unknown) {
-  if (!config || typeof config !== "object" || Array.isArray(config)) {
-    throw new ValidationError('Missing or invalid "config"');
-  }
-  return parseImportInput(parserConfigSchema, config);
+  return parseInput(parserConfigInput, config);
 }
 
 export { normalizeParserConfig as __normalizeParserConfig };
@@ -464,11 +409,15 @@ router.post("/csv/stream", csvUpload.single("file"), async (req, res) => {
     throw new ValidationError("No file uploaded.");
   }
 
-  // A repeated multipart field arrives as an array; only one name is valid.
-  const bankName: unknown = req.body?.bank_name;
-  if (typeof bankName !== "string" || !bankName) {
+  let bankName: string;
+  try {
+    ({ bank_name: bankName } = parseInput(
+      streamBankNameSchema,
+      req.body ?? {},
+    ));
+  } catch (err) {
     cleanup(file.path);
-    throw new ValidationError("Missing required parameter: bank_name");
+    throw err;
   }
 
   await streamImport(req, res, {
@@ -583,6 +532,13 @@ registerImportBatchRoutes(router, {
 
 // ─── Import review endpoints ──────────────────────────────────────────────────
 
+const recipientOverrideBodySchema = bareMessages(
+  z.looseObject({ recipient_id: overrideIdField("recipient_id") }),
+);
+const categoryOverrideBodySchema = bareMessages(
+  z.looseObject({ category_id: overrideIdField("category_id") }),
+);
+
 // GET /api/import/batches/:id/preview
 // Returns staging rows grouped by resolved recipient with match-source badges.
 router.get("/batches/:id/preview", async (req, res) => {
@@ -600,10 +556,10 @@ router.get("/batches/:id/preview", async (req, res) => {
 router.post("/batches/:id/rows/:rowId/override", async (req, res) => {
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
-  const { recipient_id } = req.body ?? {};
-  // null/absent clears the override; anything else must be a real recipient id
-  // (parseOverrideId, not Number() — see lib/importBatchIds.ts).
-  const effectiveRecipientId = parseOverrideId(recipient_id, "recipient_id");
+  const { recipient_id: effectiveRecipientId } = parseInput(
+    recipientOverrideBodySchema,
+    req.body ?? {},
+  );
 
   const rowCount = await overrideRecipient({
     batchId,
@@ -627,8 +583,10 @@ router.post("/batches/:id/rows/:rowId/override", async (req, res) => {
 router.post("/batches/:id/rows/:rowId/category-override", async (req, res) => {
   const { batchId, rowId } = parseBatchRowIdParams(req);
 
-  const { category_id } = req.body ?? {};
-  const effectiveCategoryId = parseOverrideId(category_id, "category_id");
+  const { category_id: effectiveCategoryId } = parseInput(
+    categoryOverrideBodySchema,
+    req.body ?? {},
+  );
 
   if (
     effectiveCategoryId !== null &&

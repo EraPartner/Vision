@@ -28,6 +28,14 @@ const PUBLIC_NAMED_EXPORTS = new Set([
   "apps/node-backend/src/services/aiEvaluation/localReliability.ts:scoreLocalAiRun",
   "apps/node-backend/src/services/aiEvaluation/localReliability.ts:summarizeLocalAiEvaluation",
   "apps/node-backend/src/lib/importBatchIds.ts:coercedIdSchema",
+  // ADR-193 runtime contracts: schemas, error and production switch callers rely on.
+  "apps/node-backend/src/database/rowContracts.ts:RowContractError",
+  "apps/node-backend/src/lib/dataContract.ts:PRODUCTION_DATA_CONTRACT_MODE",
+  "apps/node-backend/src/services/importPipeline/adapters/_shared.ts:parsedBankTransactionSchema",
+  "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts:parsedPortfolioRowSchema",
+  // Documented id-param middleware (docs/security/input-validation.md); routes
+  // moved to zod params schemas, but the middleware stays available.
+  "apps/node-backend/src/middleware/validation.ts:validateIntParam",
   // Imported by the root baseline maintenance scripts, which this scan does not read.
   "apps/node-backend/src/database/baselineManifest.ts:readBaselineManifest",
   // Named helpers mirrored by a stable runtime default object.

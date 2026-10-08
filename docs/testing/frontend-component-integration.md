@@ -2,8 +2,8 @@
 title: Frontend Component-Integration Tests (RTL + MSW)
 type: testing
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last-updated: 2026-09-24
 last_updated_timestamp: 2026-09-24T00:00:00Z
 added_dashboard_error_state_tests: 2026-05-02
@@ -36,7 +36,7 @@ description: Render full pages with the real provider stack and HTTP mocked at t
 | Provider stack helper                    | `apps/frontend/src/test/renderWithApp.tsx`       |
 | MSW server                               | `apps/frontend/src/test/msw/server.ts`           |
 | Default HTTP handlers + envelope helpers | `apps/frontend/src/test/msw/handlers.ts`         |
-| Shared MSW/live Zod resource schemas     | `apps/frontend/src/test/contracts/schemas.ts`    |
+| Shared MSW/live Zod resource schemas     | `packages/types/src/contracts/` (`@vision/types/contracts`), re-exported by `apps/frontend/src/test/contracts/schemas.ts` |
 | Lifecycle wiring (MSW + jsdom polyfills) | `apps/frontend/src/test-setup.ts`                |
 | Coverage gate                            | `apps/frontend/vite.config.ts` (`test.coverage`) |
 

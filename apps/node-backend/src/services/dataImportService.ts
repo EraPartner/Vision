@@ -25,6 +25,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { parse } from "csv-parse/sync";
+import { z } from "zod";
 import { parseCategoryName } from "@vision/shared-utils";
 import { logger } from "../config/logger.ts";
 import { query, withTransaction } from "../database/connection.ts";
@@ -38,19 +39,68 @@ import {
 } from "./importPipeline/adapters/_shared.ts";
 const SAFE_BASENAME_RE = /^[A-Za-z0-9._-]+$/;
 
-export interface RecipientCsvRow {
-  name: string;
-  bankAccount: string;
-  address: string;
-  categoryStr: string;
-}
+/** One `columns: true` csv-parse record; `relax_column_count` leaves short rows' cells absent. */
+const csvRecordSchema = z.record(z.string(), z.string().optional());
 
-export interface CategoryCsvRow {
-  /** the cell as written, for log messages */
-  raw: string;
-  general: string;
-  detail: string;
-}
+/**
+ * A recipient CSV record → the columns the importer reads. Header matching
+ * stays case- and whitespace-insensitive; a row without a name is rejected.
+ */
+const recipientCsvRowSchema = csvRecordSchema
+  .transform((record) => {
+    const rowKeys = Object.keys(record);
+    const col = (name: string) => {
+      const key = rowKeys.find((k) => k.toLowerCase().trim() === name);
+      return key ? (record[key] ?? "").trim() : "";
+    };
+    return {
+      name: col("name"),
+      bankAccount: col("bank_account") || col("account_number"),
+      address: col("address"),
+      categoryStr: col("category"),
+    };
+  })
+  .pipe(
+    z.object({
+      name: z.string().min(1, { error: "missing name" }),
+      bankAccount: z.string(),
+      address: z.string(),
+      categoryStr: z.string(),
+    }),
+  );
+
+export type RecipientCsvRow = z.output<typeof recipientCsvRowSchema>;
+
+/**
+ * A category cell → its GENERAL:DETAIL pair. An empty cell is rejected
+ * without a log line (`too_small`); the other issues are the logged reasons.
+ */
+const categoryCsvRowSchema = z
+  .string()
+  .optional()
+  .transform((cell) => (cell ?? "").trim())
+  .pipe(
+    z
+      .string()
+      .min(1, { abort: true })
+      // No ':' at all is a format error; empty parts are flagged below.
+      .refine((raw) => raw.includes(":"), {
+        error: (issue) =>
+          `invalid format "${String(issue.input)}" — expected GENERAL:DETAIL`,
+        abort: true,
+      })
+      .transform((raw) => ({ raw, ...parseCategoryPair(raw) }))
+      .superRefine((row, ctx) => {
+        if (!row.general || !row.detail) {
+          ctx.addIssue({
+            code: "custom",
+            message: `empty general or detail in "${row.raw}"`,
+          });
+        }
+      }),
+  );
+
+export type CategoryCsvRow = z.output<typeof categoryCsvRowSchema>;
 
 /**
  * A recipient the file names, resolved once. `notes`/`defaultCategoryId` are
@@ -299,24 +349,6 @@ async function resolveRecipients(
 }
 
 // ─── Recipients ───────────────────────────────────────────────────────────────
-
-/**
- * Extract the columns the recipient importer reads from one parsed CSV record.
- * Header matching stays case- and whitespace-insensitive.
- */
-function readRecipientRow(record: Record<string, string>): RecipientCsvRow {
-  const rowKeys = Object.keys(record);
-  const col = (name: string) => {
-    const key = rowKeys.find((k) => k.toLowerCase().trim() === name);
-    return key ? (record[key] ?? "").trim() : "";
-  };
-  return {
-    name: col("name"),
-    bankAccount: col("bank_account") || col("account_number"),
-    address: col("address"),
-    categoryStr: col("category"),
-  };
-}
 
 /**
  * Apply planned updates in one statement, replaying them as the single-row
@@ -666,13 +698,13 @@ export async function importRecipientsCSV(
 
   const rows: RecipientCsvRow[] = [];
   for (const record of records) {
-    const row = readRecipientRow(record);
-    if (!row.name) {
+    const row = recipientCsvRowSchema.safeParse(record);
+    if (!row.success) {
       logger.warn("Recipient import: skipping row with missing name");
       results.errors++;
       continue;
     }
-    rows.push(row);
+    rows.push(row.data);
   }
 
   if (rows.length > 0) {
@@ -801,29 +833,15 @@ export async function importCategoriesCSV(
 
   const rows: CategoryCsvRow[] = [];
   for (const record of records) {
-    const raw = (record[categoryKey] ?? "").trim();
-    if (!raw) {
+    const row = categoryCsvRowSchema.safeParse(record[categoryKey]);
+    if (!row.success) {
+      const [issue] = row.error.issues;
+      if (issue.code !== "too_small")
+        logger.warn(`Category import: ${issue.message}`);
       results.errors++;
       continue;
     }
-
-    // No ':' at all is a format error; empty parts are flagged below.
-    if (!raw.includes(":")) {
-      logger.warn(
-        `Category import: invalid format "${raw}" — expected GENERAL:DETAIL`,
-      );
-      results.errors++;
-      continue;
-    }
-
-    const { general, detail } = parseCategoryPair(raw);
-    if (!general || !detail) {
-      logger.warn(`Category import: empty general or detail in "${raw}"`);
-      results.errors++;
-      continue;
-    }
-
-    rows.push({ raw, general, detail });
+    rows.push(row.data);
   }
 
   if (rows.length > 0) {

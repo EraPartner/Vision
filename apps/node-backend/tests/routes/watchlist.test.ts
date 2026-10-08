@@ -502,4 +502,49 @@ describe("Watchlist Routes", () => {
       expect(res.text).toBe("");
     });
   });
+  describe("request validation (ADR-193)", () => {
+    const validationError = (message: string) =>
+      errEnvelope({ code: "VALIDATION_ERROR", message });
+
+    it("rejects a repeated asset_class filter", async () => {
+      const res = await api
+        .get(`${BASE}?asset_class=etf&asset_class=stock`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("asset_class must be a single value"),
+      );
+      expect(watchlistRepository.getAllWithCount).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["get", "/abc"],
+      ["patch", "/0"],
+      ["delete", "/12abc"],
+    ] as const)("rejects a malformed :id on %s %s", async (method, path) => {
+      const res = await api[method](`${BASE}${path}`).send({}).expect(400);
+      expect(res.body).toEqual(
+        validationError("id must be a positive integer"),
+      );
+    });
+
+    // The presence check read `req.body.name` before any parse, so a POST
+    // without a JSON body threw a TypeError and answered 500.
+    it("answers 400, not 500, for a create without a JSON body", async () => {
+      const res = await api.post(BASE).expect(400);
+      expect(res.body).toEqual(
+        validationError("name, asset_class, and target_price are required"),
+      );
+      expect(watchlistRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("checks presence before the field rules", async () => {
+      const res = await api
+        .post(BASE)
+        .send({ name: "x", target_price: -1 })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("name, asset_class, and target_price are required"),
+      );
+    });
+  });
 });

@@ -221,4 +221,66 @@ describe("Electron audit bridge requests", () => {
       message: "Audit checkpoint does not match stored history",
     });
   });
+
+  it("reports each rejected bridge field as a 400 under its stable prefix", () => {
+    const cases: Array<[() => unknown, RegExp]> = [
+      [() => parseVerifyBody([]), /^Invalid audit bridge request body: /],
+      [
+        () => parseVerifyBody({ extra: 1 }),
+        /^Invalid audit verification request: /,
+      ],
+      [
+        () =>
+          parseVerifyBody({ trustedCheckpoint: { sequence: 1.5, hash: HASH } }),
+        /^Invalid trusted audit checkpoint: sequence: /,
+      ],
+      [
+        () =>
+          parseVerifyBody({
+            trustedCheckpoint: {
+              sequence: 3,
+              hash: HASH,
+              retention: {
+                through: 2,
+                hash: HASH,
+                domainMax: { dbEditor: 1, split: 1, retag: 1 },
+                migrationHeads: ["b", "a"],
+              },
+            },
+          }),
+        /^Invalid trusted audit retention boundary: migrationHeads: /,
+      ],
+      [
+        () =>
+          parseReadBody({
+            trustedCheckpoint: { sequence: 3, hash: HASH },
+            afterSequence: "1",
+          }),
+        /^Invalid audit read cursor: /,
+      ],
+      [() => parseReadBody({ limit: 0 }), /^Invalid audit read limit: /],
+      [
+        () => parseCheckpointBody({ sequence: 3 }),
+        /^Invalid audit checkpoint metadata: /,
+      ],
+      [
+        () =>
+          parseUpdateDecisionBody({
+            decision: "installed",
+            mode: "native",
+            version: "1",
+          }),
+        /^Invalid audit update decision: decision: /,
+      ],
+    ];
+    for (const [parse, message] of cases) {
+      expect(parse).toThrow(
+        expect.objectContaining({
+          status: 400,
+          code: "VALIDATION_ERROR",
+          message: expect.stringMatching(message),
+        }),
+      );
+    }
+  });
 });

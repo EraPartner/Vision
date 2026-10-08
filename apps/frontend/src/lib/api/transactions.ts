@@ -10,7 +10,8 @@ import type {
     TransactionsListResponse,
     TransactionUpdate,
 } from "@/types/api";
-import { apiRequest } from "@/lib/api/client";
+import { TransactionListSchema } from "@vision/types/contracts";
+import { apiRequest, checkResponseContract } from "@/lib/api/client";
 import { requestBlobWithResponse } from "@/lib/api/helpers";
 import { requestWithQuery } from "@/lib/api/helpers";
 
@@ -61,6 +62,8 @@ export async function getTransactions(
             );
         }
     }
+    // After the transaction_date guard above, which blocks in every mode.
+    checkResponseContract(TransactionListSchema, res, "GET /api/transactions");
     return {
         ...res,
         items: res.items,

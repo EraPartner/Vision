@@ -645,6 +645,125 @@ components:
                 limit: { type: integer, minimum: 1, maximum: 200 }
                 offset: { type: integer, minimum: 0, maximum: 1000000 }
 
+    AnalysisVisualFilter:
+      type: object
+      required: [fieldId, operator]
+      properties:
+        fieldId: { type: string }
+        operator: { type: string }
+        value:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: number
+            - type: boolean
+
+    AnalysisVisualPlan:
+      type: object
+      description: Visual analysis plan. The route checks these field types; the catalog compiler owns semantic validation. Unknown keys are kept. A null option means the same as leaving it out.
+      required: [datasetId]
+      additionalProperties: true
+      properties:
+        datasetId: { type: string }
+        fields: { type: array, items: { type: string } }
+        groups: { type: array, items: { type: string } }
+        measures: { type: array, items: { type: string } }
+        joins: { type: array, items: { type: string } }
+        filters:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisVisualFilter" }
+        orderBy:
+          type: array
+          items:
+            type: object
+            required: [id, direction]
+            properties:
+              id: { type: string }
+              direction: { type: string, enum: [asc, desc] }
+        limit: { type: number, nullable: true }
+        reportingCurrency: { type: string, nullable: true }
+        from: { type: string, nullable: true }
+        to: { type: string, nullable: true }
+        symbol: { type: string, nullable: true }
+        range: { type: string, nullable: true }
+        costBasisMethod: { type: string, nullable: true }
+        generatedSql: { type: string }
+
+    AnalysisColumnRef:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id: { type: string }
+
+    AnalysisWorkbenchInput:
+      type: object
+      additionalProperties: true
+      properties:
+        steps:
+          { type: array, items: { type: object, additionalProperties: true } }
+        time: { type: object, additionalProperties: true }
+
+    AnalysisQuerySpec:
+      oneOf:
+        - type: object
+          required: [mode, plan]
+          properties:
+            mode: { type: string, enum: [visual] }
+            plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
+        - type: object
+          required: [mode, sql, datasetIds]
+          properties:
+            mode: { type: string, enum: [sql] }
+            sql: { type: string }
+            datasetIds: { type: array, items: { type: string } }
+            columns:
+              type: array
+              items: { $ref: "#/components/schemas/AnalysisColumnRef" }
+            visualOrigin: { $ref: "#/components/schemas/AnalysisVisualPlan" }
+
+    AnalysisSavedFields:
+      type: object
+      properties:
+        name: { type: string }
+        workspace:
+          type: string
+          enum: [budgeting, portfolio, research, cross-workspace]
+        querySpec: { $ref: "#/components/schemas/AnalysisQuerySpec" }
+        parameters: { type: object, additionalProperties: true }
+        charts: { type: array, items: {} }
+        sourceReferences: { type: array, items: {} }
+        refreshMode: { type: string, enum: [live, frozen] }
+        formulas:
+          { type: array, items: { type: object, additionalProperties: true } }
+        assumptions:
+          { type: array, items: { type: object, additionalProperties: true } }
+        assumptionValues: { type: object, additionalProperties: true }
+
+    AiAnalysisEditProposal:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, savedAnalysisId, baseVersion, rationale, operations]
+      properties:
+        schemaVersion: { type: integer, enum: [1] }
+        savedAnalysisId: { type: string, minLength: 1 }
+        baseVersion: { type: integer, minimum: 1 }
+        rationale: { type: string, minLength: 1, maxLength: 2000 }
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 30
+          items:
+            type: object
+            additionalProperties: false
+            required: [op, path]
+            properties:
+              op: { type: string, enum: [add, replace, remove] }
+              path:
+                type: string
+                pattern: "^/(name|parameters|charts|querySpec)(/.*)?$"
+              value: {}
+
     AiInvestigationRequest:
       type: object
       additionalProperties: false
@@ -1566,22 +1685,30 @@ components:
       properties:
         general:
           type: string
+          minLength: 1
         detail:
           type: string
+          minLength: 1
         description:
           type: string
+          nullable: true
 
     CategoryUpdate:
       type: object
+      description: "`null` for general, detail, or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
       properties:
         general:
           type: string
+          nullable: true
         detail:
           type: string
+          nullable: true
         description:
           type: string
+          nullable: true
         is_active:
           type: boolean
+          nullable: true
 
     CategoryList:
       allOf:
@@ -1723,23 +1850,34 @@ components:
       properties:
         name:
           type: string
+          minLength: 1
         default_category_id:
           type: integer
-        notes:
-          type: string
-
-    RecipientUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-        default_category_id:
-          type: integer
+          format: int32
+          minimum: 1
           nullable: true
         notes:
           type: string
+          nullable: true
+
+    RecipientUpdate:
+      type: object
+      description: "`null` name or is_active leaves that field unchanged. Each field must have the stated JSON type; a string such as \"false\" for is_active returns 400."
+      properties:
+        name:
+          type: string
+          nullable: true
+        default_category_id:
+          type: integer
+          format: int32
+          minimum: 1
+          nullable: true
+        notes:
+          type: string
+          nullable: true
         is_active:
           type: boolean
+          nullable: true
 
     RecipientList:
       allOf:
@@ -1794,18 +1932,21 @@ components:
       properties:
         slug:
           type: string
+          description: Slugified by the server; empty after normalization returns 400.
         color:
           type: string
           nullable: true
 
     TagUpdate:
       type: object
+      description: Each field must have the stated JSON type; a string such as "false" for is_active returns 400.
       properties:
         color:
           type: string
           nullable: true
         is_active:
           type: boolean
+          nullable: true
 
     Account:
       type: object
@@ -4571,10 +4712,11 @@ paths:
       tags: [Tags]
       parameters:
         - in: query
-          name: is_active
+          name: active
           schema:
-            type: boolean
-          description: Filter by active status (omit for all)
+            type: string
+            enum: ["true", "false", "all"]
+          description: Filter by active status (default true; `all` disables the filter). Accepts true/false/1/0; other values use the default.
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
@@ -4600,6 +4742,8 @@ paths:
             schema:
               $ref: "#/components/schemas/TagCreate"
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing or empty slug, or a field of the wrong type"
         "200":
           description: Existing active tag returned (`created` is false)
           content:
@@ -4667,6 +4811,8 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/Tag"
+        "400":
+          description: "VALIDATION_ERROR: malformed id or a field of the wrong type"
         "404":
           description: Tag not found
     delete:
@@ -4706,14 +4852,17 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema: { $ref: "#/components/schemas/AnalysisVisualPlan" }
       responses:
         "200":
           description: Generated SQL, result columns, datasets, and normalized plan
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid or duplication-unsafe visual plan }
+        "400":
+          {
+            description: "VALIDATION_ERROR for a mistyped plan; otherwise an invalid or duplication-unsafe visual plan",
+          }
 
   /api/analysis/execute:
     post:
@@ -4725,15 +4874,109 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              description: "`mode: visual` requires `plan`. An omitted `mode` or `mode: sql` requires `sql`. Any other `mode` returns 400."
+              oneOf:
+                - type: object
+                  required: [mode, plan]
+                  properties:
+                    mode: { type: string, enum: [visual] }
+                    plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
+                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    limit: { type: number }
+                    offset: { type: number }
+                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    scenarioModel:
+                      type: object
+                      nullable: true
+                      additionalProperties: true
+                      properties:
+                        attachments: { type: array, items: {} }
+                        joins: { type: array, items: {} }
+                    formulaModel:
+                      type: object
+                      nullable: true
+                      additionalProperties: true
+                      properties:
+                        formulas:
+                          {
+                            type: array,
+                            items: { type: object, additionalProperties: true },
+                          }
+                        assumptions:
+                          {
+                            type: array,
+                            items: { type: object, additionalProperties: true },
+                          }
+                        assumptionValues:
+                          { type: object, additionalProperties: true }
+                - type: object
+                  required: [sql]
+                  properties:
+                    mode: { type: string, enum: [sql] }
+                    sql: { type: string }
+                    values:
+                      type: array
+                      items:
+                        nullable: true
+                        oneOf:
+                          - type: string
+                          - type: number
+                          - type: boolean
+                    datasetIds: { type: array, items: { type: string } }
+                    columns:
+                      type: array
+                      items:
+                        type: object
+                        required: [id, type]
+                        additionalProperties: true
+                        properties:
+                          id: { type: string }
+                          label: { type: string }
+                          type: { type: string }
+                    requestId: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
+                    limit: { type: number }
+                    offset: { type: number }
+                    workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                    scenarioModel:
+                      type: object
+                      nullable: true
+                      additionalProperties: true
+                      properties:
+                        attachments: { type: array, items: {} }
+                        joins: { type: array, items: {} }
+                    formulaModel:
+                      type: object
+                      nullable: true
+                      additionalProperties: true
+                      properties:
+                        formulas:
+                          {
+                            type: array,
+                            items: { type: object, additionalProperties: true },
+                          }
+                        assumptions:
+                          {
+                            type: array,
+                            items: { type: object, additionalProperties: true },
+                          }
+                        assumptionValues:
+                          { type: object, additionalProperties: true }
       responses:
         "200":
           description: Typed, paged or explicitly truncated analysis result
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Query rejected by the analysis boundary }
+        "400":
+          {
+            description: "VALIDATION_ERROR for a malformed body; ANALYSIS_EXECUTION_REJECTED when the analysis boundary rejects the query",
+          }
         "408": { description: Query cancelled or timed out }
+        "500":
+          {
+            description: Database connection, resource, or network failure (server fault, not a rejected query),
+          }
 
   /api/analysis/pivot:
     post:
@@ -4748,7 +4991,7 @@ paths:
               type: object
               required: [plan, config, requestId]
               properties:
-                plan: { type: object, additionalProperties: true }
+                plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
                 config:
                   type: object
                   required: [rows, columns, values]
@@ -4764,10 +5007,8 @@ paths:
                         items: { type: string },
                       }
                     filters:
-                      {
-                        type: array,
-                        items: { type: object, additionalProperties: true },
-                      }
+                      type: array
+                      items: { $ref: "#/components/schemas/AnalysisVisualFilter" }
                 requestId: { type: string, minLength: 8, maxLength: 110 }
       responses:
         "200":
@@ -4776,6 +5017,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid pivot or complete output exceeds limits }
+        "500": { description: Database connection, resource, or network failure }
 
   /api/analysis/extensions/evaluate:
     post:
@@ -4803,11 +5045,27 @@ paths:
                     items: { type: object, additionalProperties: true },
                   }
                 columns:
+                  type: array
+                  items: { $ref: "#/components/schemas/AnalysisColumnRef" }
+                complete: { type: boolean }
+                inputComplete: { type: boolean }
+                window: { type: object, additionalProperties: true }
+                coverage: { type: object, additionalProperties: true }
+                workbench: { $ref: "#/components/schemas/AnalysisWorkbenchInput" }
+                formulas:
                   {
                     type: array,
                     items: { type: object, additionalProperties: true },
                   }
-                complete: { type: boolean }
+                assumptions: { type: object, additionalProperties: true }
+                assumptionUnits: { type: object, additionalProperties: true }
+                dateColumn: { type: string }
+                valueColumns: { type: array, items: { type: string } }
+                outcomeId: { type: string }
+                variableId: { type: string }
+                target: { oneOf: [{ type: string }, { type: number }] }
+                lower: { oneOf: [{ type: string }, { type: number }] }
+                upper: { oneOf: [{ type: string }, { type: number }] }
               additionalProperties: true
       responses:
         "200":
@@ -4826,7 +5084,7 @@ paths:
       - in: path
         name: requestId
         required: true
-        schema: { type: string, minLength: 8, maxLength: 128 }
+        schema: { type: string, pattern: "^[A-Za-z0-9_-]{8,128}$" }
     post:
       summary: Cancel a running analysis query
       operationId: cancelAnalysis
@@ -4837,6 +5095,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: "VALIDATION_ERROR: malformed requestId" }
 
   /api/analysis/drill:
     post:
@@ -4847,7 +5106,16 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [plan]
+              properties:
+                plan: { $ref: "#/components/schemas/AnalysisVisualPlan" }
+                row:
+                  type: object
+                  additionalProperties: true
+                  description: The grouped result row to resolve
+                requestId: { type: string }
       responses:
         "200":
           description: Bounded source-record result
@@ -4855,6 +5123,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Invalid drill-through request }
+        "500": { description: Database connection, resource, or network failure }
 
   /api/analysis/formulas/evaluate:
     post:
@@ -4866,7 +5135,27 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              type: object
+              required: [rows]
+              additionalProperties: true
+              properties:
+                rows:
+                  {
+                    type: array,
+                    items: { type: object, additionalProperties: true },
+                  }
+                formulas:
+                  {
+                    type: array,
+                    items: { type: object, additionalProperties: true },
+                  }
+                assumptions: { type: object, additionalProperties: true }
+                inputComplete: { type: boolean, default: true }
+                columns:
+                  type: array
+                  items: { $ref: "#/components/schemas/AnalysisColumnRef" }
+                assumptionUnits: { type: object, additionalProperties: true }
       responses:
         "200":
           description: Formula rows, summaries, and explicit errors
@@ -4884,7 +5173,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema: { $ref: "#/components/schemas/AiAnalysisEditProposal" }
       responses:
         "200":
           description: Inspectable before and after definitions
@@ -4903,7 +5192,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema: { $ref: "#/components/schemas/AiAnalysisEditProposal" }
       responses:
         "200":
           description: Newly versioned saved analysis
@@ -4921,6 +5210,7 @@ paths:
       parameters:
         - in: query
           name: workspace
+          description: An empty value lists every workspace. Any other value outside the enum, or a repeated key, returns 400.
           schema:
             type: string
             enum: [budgeting, portfolio, research, cross-workspace]
@@ -4930,6 +5220,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+        "400": { description: "VALIDATION_ERROR: unknown workspace" }
     post:
       summary: Save the first immutable definition version of an analysis
       operationId: createSavedAnalysis
@@ -4938,7 +5229,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AnalysisSavedFields"
+                - type: object
+                  required: [name, workspace, querySpec]
       responses:
         "201":
           description: Saved analysis
@@ -4972,7 +5267,17 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: true }
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AnalysisSavedFields"
+                - type: object
+                  required: [querySpec]
+                  properties:
+                    expectedVersion:
+                      nullable: true
+                      oneOf:
+                        - { type: integer, minimum: 1 }
+                        - { type: string }
       responses:
         "200":
           description: Updated saved analysis
@@ -5007,6 +5312,7 @@ paths:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400": { description: Refresh failed }
         "404": { description: Saved analysis not found }
+        "500": { description: Database connection, resource, or network failure }
 
   /api/analysis/saved/{id}/versions:
     parameters:
@@ -5043,8 +5349,12 @@ paths:
               type: object
               required: [instruction]
               properties:
-                instruction: { type: string, minLength: 1, maxLength: 2000 }
-                model: { type: string, maxLength: 200 }
+                instruction:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+                  description: Trimmed before the length check.
+                model: { type: string, nullable: true, maxLength: 200 }
       responses:
         "200":
           description: Schema-valid before and after preview; no edit has been applied
@@ -5080,6 +5390,10 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          {
+            description: "VALIDATION_ERROR: version or expectedVersion is not a positive integer",
+          }
         "404": { description: Saved analysis or version not found }
         "409": { description: Current version changed }
 
@@ -5669,7 +5983,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
         "400":
-          { description: Unsupported, empty, unreadable, or oversized file }
+          {
+            description: "Missing, unsupported, empty, unreadable, or oversized file, or a text field sent more than once",
+          }
 
   /api/ai-research/documents/{id}:
     parameters:
@@ -5705,14 +6021,33 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, additionalProperties: false }
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                  minLength: 1
+                  description: Trimmed before use; a blank query is rejected.
+                mode:
+                  type: string
+                  enum: [hybrid, keyword, semantic]
+                  default: hybrid
+                limit:
+                  type: integer
+                  minimum: 1
+                  default: 8
+                  description: The service caps results at 20.
       responses:
         "200":
           description: Bounded passages with document, version, page, and section locators
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid search }
+        "400":
+          {
+            description: "VALIDATION_ERROR: missing or blank query, unknown mode, or a limit that is not a positive integer",
+          }
 
   /api/ai-research/disclosures/preview:
     post:
@@ -5827,7 +6162,8 @@ paths:
               type: object
               properties:
                 currency: { type: string, pattern: "^[A-Za-z]{3}$" }
-                reserveFloor: { type: number, minimum: 0, default: 0 }
+                reserveFloor:
+                  { type: number, minimum: 0, default: 0, nullable: true }
       responses:
         "200":
           description: Candidate cap and projection assumptions
@@ -5882,7 +6218,7 @@ paths:
                               excludesUnplannedExpenses: { type: boolean }
                               currencyConversionAtRecentRates: { type: boolean }
         "400":
-          description: Invalid reserve floor or currency
+          description: VALIDATION_ERROR — body is not an object, or invalid reserve floor or currency
 
   /api/cross-workspace/rebalance:
     post:
@@ -5906,7 +6242,9 @@ paths:
                 targetWeights:
                   type: object
                   additionalProperties: { type: number }
-                availableCash: { type: number }
+                availableCash:
+                  type: number
+                  description: Optional cash cap. A non-numeric value is ignored.
       responses:
         "200":
           description: Rebalancing plan
@@ -5914,6 +6252,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: Body is not a JSON object, or the target weights are invalid
 
   /api/accounts:
     get:
@@ -6731,6 +7071,8 @@ paths:
                               created:
                                 type: boolean
                                 enum: [true]
+        "400":
+          description: "VALIDATION_ERROR: missing general/detail, or a field of the wrong type"
 
   /api/categories/tree:
     get:
@@ -6864,6 +7206,8 @@ paths:
             schema:
               $ref: "#/components/schemas/CategoryUpdate"
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing body or a field of the wrong type"
         "200":
           description: Updated category
           content:
@@ -6893,19 +7237,51 @@ paths:
           name: limit
           schema:
             type: integer
+            maximum: 1000
         - in: query
           name: offset
           schema:
             type: integer
         - in: query
-          name: search
+          name: name
           schema:
             type: string
         - in: query
-          name: is_active
+          name: search
+          description: Truncated to 200 characters.
+          schema:
+            type: string
+        - in: query
+          name: default_category_id
+          description: Empty means no filter; any other non-id value returns 400.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+        - in: query
+          name: active
+          description: Accepts true/false/1/0 (default true); other values use the default.
           schema:
             type: boolean
+            default: true
+        - in: query
+          name: uncategorized
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: sort_by
+          schema:
+            type: string
+        - in: query
+          name: sort_dir
+          description: Any other value uses the default order.
+          schema:
+            type: string
+            enum: [asc, desc]
       responses:
+        "400":
+          description: "VALIDATION_ERROR: malformed default_category_id, or name/search/sort_by sent more than once"
         "200":
           description: Recipient list
           content:
@@ -6928,6 +7304,8 @@ paths:
             schema:
               $ref: "#/components/schemas/RecipientCreate"
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing name, or a field of the wrong type"
         "200":
           description: Existing recipient
           content:
@@ -7001,6 +7379,8 @@ paths:
             schema:
               $ref: "#/components/schemas/RecipientUpdate"
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing body or a field of the wrong type"
         "200":
           description: Updated recipient
           content:
@@ -7031,7 +7411,7 @@ paths:
           schema:
             type: boolean
             default: false
-          description: Return data as {settings, expected} maps from the same database read.
+          description: Return data as {settings, expected} maps from the same database read. Only the literal values `true` and `false` are accepted; any other value or a repeated key returns 400.
       responses:
         "200":
           description: All settings as key-value map
@@ -7045,6 +7425,8 @@ paths:
                       data:
                         type: object
                         additionalProperties: true
+        "400":
+          description: "VALIDATION_ERROR: withBaselines must be true or false"
     put:
       summary: Atomically replace settings with persisted baselines
       operationId: saveSettings
@@ -7244,11 +7626,14 @@ paths:
       parameters:
         - in: query
           name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema:
             type: string
         - $ref: "#/components/parameters/OptionalLimit"
         - $ref: "#/components/parameters/OptionalOffset"
       responses:
+        "400":
+          description: "VALIDATION_ERROR: currency must be a single value"
         "200":
           description: >
             Net worth with history. `snapshots` holds every snapshot unless
@@ -7796,12 +8181,15 @@ paths:
               required: [recipient_ids]
               properties:
                 recipient_ids:
+                  description: One id or a list. Each id must be a positive int4 (integer or digit string); a scalar is treated as a one-element list.
                   oneOf:
                     - type: integer
                     - type: array
                       items:
                         type: integer
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing recipient_ids, or recipient_ids contains invalid value"
         "200":
           description: Assignment result
           content:
@@ -7827,6 +8215,14 @@ paths:
       summary: List recipient name clusters
       operationId: getRecipientClusters
       tags: [Recipients]
+      parameters:
+        - in: query
+          name: min_count
+          description: Minimum cluster size (at least 2, the default). A repeated key returns 400.
+          schema:
+            type: integer
+            minimum: 2
+            default: 2
       responses:
         "200":
           description: Cluster list
@@ -7859,6 +8255,7 @@ paths:
                 alias_ids:
                   type: array
                   minItems: 1
+                  description: Each id is an integer or a digit string.
                   items:
                     type: integer
                     format: int32
@@ -7961,9 +8358,25 @@ paths:
               properties:
                 pattern:
                   type: string
-                is_regex:
+                  minLength: 1
+                pattern_kind:
+                  type: string
+                  enum: [literal_prefix, glob, regex]
+                  default: literal_prefix
+                  nullable: true
+                case_sensitive:
                   type: boolean
+                  nullable: true
+                priority:
+                  type: integer
+                  format: int32
+                  nullable: true
+                notes:
+                  type: string
+                  nullable: true
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing pattern, or a field of the wrong type"
         "201":
           description: Created pattern
           content:
@@ -7999,9 +8412,18 @@ paths:
               properties:
                 pattern:
                   type: string
-                is_regex:
+                  minLength: 1
+                pattern_kind:
+                  type: string
+                  enum: [literal_prefix, glob, regex]
+                  default: literal_prefix
+                  nullable: true
+                case_sensitive:
                   type: boolean
+                  nullable: true
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing pattern, or a field of the wrong type"
         "200":
           description: Match count preview
           content:
@@ -8035,12 +8457,26 @@ paths:
           application/json:
             schema:
               type: object
+              description: "`notes: null` clears the note."
               properties:
                 pattern:
                   type: string
-                is_regex:
+                pattern_kind:
+                  type: string
+                  enum: [literal_prefix, glob, regex]
+                case_sensitive:
+                  type: boolean
+                priority:
+                  type: integer
+                  format: int32
+                notes:
+                  type: string
+                  nullable: true
+                is_active:
                   type: boolean
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing body or a field of the wrong type"
         "200":
           description: Updated pattern
           content:
@@ -8096,15 +8532,23 @@ paths:
               properties:
                 account_number:
                   type: string
+                  minLength: 1
+                  maxLength: 34
                 bank_name:
                   type: string
+                  nullable: true
                 address:
                   type: string
+                  nullable: true
                 account_label:
                   type: string
+                  nullable: true
                 set_as_primary:
                   type: boolean
+                  nullable: true
       responses:
+        "400":
+          description: "VALIDATION_ERROR: missing or over-long account_number, or a field of the wrong type"
         "200":
           description: Existing bank account returned
           content:
@@ -8169,12 +8613,15 @@ paths:
             schema:
               type: object
               properties:
-                iban:
-                  type: string
-                bic:
-                  type: string
                 bank_name:
                   type: string
+                  nullable: true
+                address:
+                  type: string
+                  nullable: true
+                account_label:
+                  type: string
+                  nullable: true
       responses:
         "200":
           description: Updated bank account
@@ -8182,6 +8629,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: "VALIDATION_ERROR: missing body or a field of the wrong type"
     delete:
       summary: Deactivate bank account (soft delete)
       operationId: deleteRecipientBankAccount
@@ -8601,7 +9050,15 @@ paths:
       summary: Get planned expenses due next month
       operationId: getPlannedExpensesNextMonth
       tags: [Info]
+      parameters:
+        - in: query
+          name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
+          schema:
+            type: string
       responses:
+        "400":
+          description: "VALIDATION_ERROR: currency must be a single value"
         "200":
           description: Planned expense total
           content:
@@ -8722,10 +9179,24 @@ paths:
       tags: [Info]
       parameters:
         - in: query
-          name: year
+          name: start_month
+          description: "`YYYY-MM` (a full date uses its month). A malformed value is ignored; a repeated key returns 400."
           schema:
-            type: integer
+            type: string
+        - in: query
+          name: end_month
+          description: "`YYYY-MM` (a full date uses its month). A malformed value is ignored; a repeated key returns 400."
+          schema:
+            type: string
+        - in: query
+          name: db_only
+          description: Serve persisted rates and refresh in the background (default true). Accepts true/false/1/0.
+          schema:
+            type: boolean
+            default: true
       responses:
+        "400":
+          description: "VALIDATION_ERROR: start_month or end_month sent more than once"
         "200":
           description: Inflation rate list
           content:
@@ -8754,23 +9225,17 @@ paths:
       parameters:
         - in: query
           name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema:
             type: string
         - in: query
-          name: start_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: end_date
-          schema:
-            type: string
-            format: date
-        - in: query
-          name: investment_id
+          name: period
+          description: Chart window (`5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all`, the default). An unknown value is served unfiltered. A repeated key returns 400.
           schema:
             type: string
       responses:
+        "400":
+          description: "VALIDATION_ERROR: currency or period sent more than once"
         "200":
           description: Performance snapshots
           content:
@@ -8786,12 +9251,15 @@ paths:
       parameters:
         - in: query
           name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema: { type: string, pattern: "^[A-Z]{3}$" }
         - in: query
           name: from
+          description: Calendar date; defaults to 2000-01-01 when absent or empty. Any other non-date value returns 400.
           schema: { type: string, format: date }
         - in: query
           name: to
+          description: Calendar date; defaults to today when absent or empty. Any other non-date value returns 400.
           schema: { type: string, format: date }
       responses:
         "200":
@@ -8799,6 +9267,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
+        "400":
+          description: "VALIDATION_ERROR: from/to is not a YYYY-MM-DD calendar date, or a parameter was sent more than once"
 
   /api/info/portfolio-summary:
     get:
@@ -8808,9 +9278,12 @@ paths:
       parameters:
         - in: query
           name: currency
+          description: Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400.
           schema:
             type: string
       responses:
+        "400":
+          description: "VALIDATION_ERROR: currency must be a single value"
         "200":
           description: Per-investment summary
           content:
@@ -9830,10 +10303,11 @@ paths:
       parameters:
         - in: query
           name: q
-          required: true
+          description: Search text. Missing or empty returns an empty `items` list. A repeated key returns 400.
           schema:
             type: string
       responses:
+        "400": { description: "VALIDATION_ERROR: `q` sent more than once" }
         "200":
           description: Symbol search results
           content:
@@ -9857,16 +10331,20 @@ paths:
         - in: query
           name: symbols
           required: true
-          description: Comma-separated list of symbols (e.g. `AAPL,MSFT`)
+          description: Comma-separated list of symbols (e.g. `AAPL,MSFT`). A repeated key is joined with commas.
           schema:
             type: string
         - in: query
           name: detail
-          description: "`basic` returns price fields only; the default (full) also fetches fundamentals/analyst data"
+          description: "`basic` returns price fields only; any other single value (default full) also fetches fundamentals/analyst data. A repeated key returns 400."
           schema:
             type: string
             enum: [basic, full]
       responses:
+        "400":
+          {
+            description: "VALIDATION_ERROR: missing `symbols`, or `detail` sent more than once",
+          }
         "200":
           description: Quote data (canonical `{items, total}` body)
           content:
@@ -9899,14 +10377,23 @@ paths:
           schema:
             type: string
         - in: query
-          name: period
+          name: range
+          description: Lookback window. An unknown value falls back to `1mo`.
           schema:
             type: string
+            enum: [1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max]
+            default: 1mo
         - in: query
           name: interval
           schema:
             type: string
+            enum: [1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo]
+            default: 1d
       responses:
+        "400":
+          {
+            description: "VALIDATION_ERROR: missing `symbol`, an `interval` outside the list, or a parameter sent more than once",
+          }
         "200":
           description: OHLC chart data (canonical `{items, total}` series with `symbol`/`currency` alongside)
           content:
@@ -9942,11 +10429,19 @@ paths:
       tags: [Market]
       parameters:
         - in: query
-          name: symbol
-          required: true
+          name: symbols
+          description: Comma-separated symbols; the first 10 are used. Defaults to `SPY,QQQ,DIA`. A repeated key is joined with commas.
           schema:
             type: string
+        - in: query
+          name: count
+          description: Articles per symbol (max 50). A non-numeric value falls back to 20. A repeated key returns 400.
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
       responses:
+        "400": { description: "VALIDATION_ERROR: `count` sent more than once" }
         "200":
           description: News items (canonical `{items, total}` body)
           content:
@@ -11510,7 +12005,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Malformed batch id, row id or recipient_id
+          description: Malformed batch id, row id or recipient_id, or a body that is not a JSON object
         "404":
           description: Row not found in this batch, or not in matched status
 
@@ -11562,7 +12057,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Malformed batch id, row id or category_id, or an unknown category
+          description: Malformed batch id, row id or category_id, an unknown category, or a body that is not a JSON object
         "404":
           description: Row not found in this batch, or not in matched status
 
@@ -11942,7 +12437,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Malformed batch id, row id or investment_id, or create_new validation failed
+          description: Malformed batch id, row id or investment_id, create_new validation failed, or a body that is not a JSON object
         "404":
           description: Batch or staging row not found, or the row is cash and cannot accept an investment override
 
@@ -12390,7 +12885,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Malformed batch id or account_id, or the batch is not in a reviewable state
+          description: Malformed batch id or account_id, a body that is not a JSON object, or the batch is not in a reviewable state
         "404":
           description: Batch not found, or account_id names no account
         "409":
@@ -12820,6 +13315,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: VALIDATION_ERROR — `force` is not a boolean, or is not `true`
 
   /api/admin/database/stats:
     get:
@@ -12839,13 +13336,29 @@ paths:
       summary: Run VACUUM ANALYZE on database
       operationId: adminDatabaseVacuum
       tags: [Admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                table:
+                  type: string
+                  nullable: true
+                  minLength: 1
+                  description: User table to vacuum; omit or null for every table
       responses:
         "200":
-          description: Vacuum result
+          description: Vacuum result (`data.vacuumed` is the table name or `all`)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Envelope"
+        "400":
+          description: VALIDATION_ERROR — `table` is not a non-empty string, or names an unknown table
+        "403":
+          description: Insufficient database privileges to VACUUM
 
   /api/admin/database/tables/{table}/schema:
     parameters:
@@ -12927,7 +13440,7 @@ paths:
         - in: query
           name: filters
           schema: { type: string }
-          description: JSON-encoded array of structured column filters
+          description: JSON-encoded array of `{ column, op?, value? }` objects; `column` and `op` are strings. Invalid JSON, a non-array, or a non-object entry returns 400.
       responses:
         "200":
           description: Keyset page of rows with column metadata and continuation state. No unbounded count query is run.
@@ -12981,7 +13494,7 @@ paths:
               properties:
                 dryRun:
                   type: boolean
-                  description: Preview the SQL statements without applying them
+                  description: Preview the SQL statements without applying them. Must be a JSON boolean; a string such as "true" returns 400.
                 changes:
                   type: array
                   items:
@@ -13001,7 +13514,9 @@ paths:
                         type: object
                         description: Column values to write for an update
                       xmin:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: number
                         description: Optimistic-concurrency token captured at read time
       responses:
         "200":
@@ -13011,7 +13526,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Envelope"
         "400":
-          description: Malformed change set
+          description: Malformed change set or non-boolean dryRun
         "403":
           description: Protected audit table cannot be edited in the generic data editor
         "404":
@@ -13477,6 +13992,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ResearchPortfolioForecastEnvelope"
+        "400":
+          description: VALIDATION_ERROR — body is not a JSON object, or an invalid contribution schedule or goal month
   # Research symbol mapping (ADR-079)
   /api/research/mappings:
     get:
@@ -13525,8 +14042,19 @@ paths:
                   default: isin
                 mappings:
                   type: array
+                  minItems: 1
                   items:
                     type: object
+                    required: [provider]
+                    properties:
+                      provider: { type: string, minLength: 1 }
+                      providerSymbol: { type: string, nullable: true }
+                      provider_symbol: { type: string, nullable: true }
+                      resolvedName: { type: string, nullable: true }
+                      resolved_name: { type: string, nullable: true }
+                      exchange: { type: string, nullable: true }
+                      currency: { type: string, nullable: true }
+                      status: { type: string, nullable: true }
       responses:
         "200":
           description: Updated mapping set (canonical `{items, total}` body)
@@ -13535,7 +14063,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ResearchMappingsEnvelope"
         "400":
-          description: instrument_key required or mappings must be a non-empty array
+          description: instrument_key required, mappings must be a non-empty array, or a mapping has no provider or a non-string field
   /api/research/mappings/resolve:
     post:
       summary: Auto-propose per-provider symbols for an instrument (does not persist)

@@ -2,8 +2,8 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-09-13
+date: 2026-10-08
+updated: 2026-10-08
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
 aliases: [api-client, frontend-http, fetch-client, apiClient, lib/api]
@@ -15,6 +15,7 @@ related_code:
   - apps/frontend/src/lib/api/categories.ts
   - apps/frontend/src/lib/api/portfolio.ts
   - apps/frontend/src/lib/env.ts
+  - packages/types/src/contracts/index.ts
   - apps/frontend/src/types/generated.ts
   - openapi.yaml
 ---
@@ -171,6 +172,31 @@ export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
   their message/details and map the code by status; retired `{ detail }`, `{ message }`,
   Pydantic-array, and top-level `retry_after` failures are not parsed. See
   [[docs/adr/136-same-release-http-import-and-navigation-contract|ADR-136]].
+- Optional response contract: `apiRequest(endpoint, { schema })` checks the unwrapped `data`
+  with `checkResponseContract`. See [[#Response contracts]].
+
+### Response contracts
+
+Per [[docs/adr/193-zod-runtime-contracts|ADR-193]], a domain module can declare a zod schema for
+a response. `ApiRequestOptions` extends `RequestInit` with an optional `schema`. After the
+envelope is unwrapped, `apiRequest` runs `checkResponseContract(schema, data, "METHOD /path")`.
+Modules that build their URL with `requestWithQuery` call `checkResponseContract` themselves.
+
+| Mode     | When                                         | On mismatch                                                                                  |
+| -------- | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `strict` | `import.meta.env.DEV` or Vite mode `test`    | Throws `ApiContractError` (`endpoint`, `issues`). `apiRequest` does not retry it.            |
+| `warn`   | Every other build (`PRODUCTION_RESPONSE_CONTRACT_MODE`) | Logs `api:contract <endpoint>` with issue paths and codes, then returns the data. |
+
+The schema never transforms the value: callers get the wire object in both modes. Issue strings
+carry paths, never values, and the endpoint label drops the query string because search terms can
+carry personal data. A strict-mode `ApiContractError` thrown inside `apiRequest` is emitted to the
+devtools bus as an `error` event with the contract message.
+
+Schemas live in `packages/types/src/contracts/` and are imported from `@vision/types/contracts`.
+They are loose on purpose: identity fields are required, other fields are optional but typed.
+The frontend contract tests re-export the same schemas from `src/test/contracts/schemas.ts`.
+Current reads with a schema: `getTransactions`, `getAccounts`, `getCategories`, `getCategoryTree`,
+`getRecipients`, `getRecipient` and `listRecipientPatterns`.
 
 ### Shared Types (`types.ts`)
 

@@ -2,8 +2,8 @@
 title: AI Research API
 type: api
 status: active
-date: 2026-09-14
-updated: 2026-09-25
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, ai, research, jobs, documents, disclosure, openai, agentcloak]
 description: Recoverable AI investigations, local research documents, consent-bound cloud disclosure, scoped reversible references, and optional AgentCloak Desktop protection or MCP preflight.
 aliases: [AI investigation API, research document API, disclosure API]
@@ -152,6 +152,19 @@ surrounding disclosure can still reveal amounts, dates, holdings, writing style,
 patterns. See [[docs/adr/151-scoped-reversible-ai-references|ADR-151]]. The API change is additive
 and backward-compatible; requests without markers or Desktop findings receive
 `referenceScope: null` and an equivalent `outboundRequest`.
+
+## Research documents
+
+`POST /api/ai-research/documents` takes a multipart `file` with optional `title` and `source_name`
+text fields. A missing file returns `400`. A field sent twice arrives as an array and returns
+`400`. An empty `title` or `source_name` falls back to the file name.
+
+`POST /api/ai-research/documents/search/passages` takes a JSON body `{ query, mode?, limit? }`.
+`query` must be a non-blank string. `mode` is `hybrid` (default), `keyword`, or `semantic`. `limit`
+must be a positive integer; the service caps it at 20 and defaults to 8. A body that breaks these
+rules returns `400 VALIDATION_ERROR`. A failure after validation is a server fault and returns
+`500`; it is no longer reported as a rejected search. See
+[[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 ## Analysis extensions
 

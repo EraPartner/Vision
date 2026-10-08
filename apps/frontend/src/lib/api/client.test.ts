@@ -2,7 +2,11 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { ApiErrorCode } from "@vision/types";
+import { z } from "zod";
 import {
+    ApiContractError,
+    checkResponseContract,
+    responseContractMode,
     backoffDelay,
     generateRequestId,
     ApiClientError,
@@ -453,5 +457,106 @@ describe("apiRequest", () => {
             ApiClientError,
         );
         expect(calls).toBe(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Response contracts (apiRequest `schema` option)
+// ---------------------------------------------------------------------------
+
+describe("response contracts", () => {
+    const ItemListSchema = z.looseObject({
+        items: z.array(z.looseObject({ id: z.number(), amount: z.number() })),
+    });
+    // A drifted body: `amount` arrives as a string carrying a money value.
+    const DRIFTED = { items: [{ id: 7, amount: "1234.56", memo: "rent" }] };
+
+    function serve(data: unknown) {
+        let calls = 0;
+        server.use(
+            http.get(TEST_URL, () => {
+                calls++;
+                return HttpResponse.json({ ok: true, data });
+            }),
+        );
+        return () => calls;
+    }
+
+    function useProductionMode() {
+        vi.stubEnv("DEV", false);
+        vi.stubEnv("MODE", "production");
+    }
+
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        vi.restoreAllMocks();
+    });
+
+    it("is strict under the test runner and warn-only in production", () => {
+        expect(responseContractMode()).toBe("strict");
+        useProductionMode();
+        expect(responseContractMode()).toBe("warn");
+    });
+
+    it("returns a matching body unchanged, extra keys included", async () => {
+        serve({ items: [{ id: 1, amount: 2.5, extra: true }] });
+        const result = await apiRequest("/api/client-test", {
+            schema: ItemListSchema,
+        });
+        expect(result).toEqual({
+            items: [{ id: 1, amount: 2.5, extra: true }],
+        });
+    });
+
+    it("strict mode throws ApiContractError with paths, not values, and does not retry", async () => {
+        const calls = serve(DRIFTED);
+        const error = await apiRequest("/api/client-test?search=rent", {
+            schema: ItemListSchema,
+        }).catch((err: unknown) => err);
+
+        expect(error).toBeInstanceOf(ApiContractError);
+        const contractError = error as ApiContractError;
+        expect(contractError.endpoint).toBe("GET /api/client-test");
+        expect(contractError.issues).toEqual([
+            "items[0].amount: Invalid input: expected number, received string",
+        ]);
+        expect(contractError.message).not.toContain("1234.56");
+        expect(contractError.message).not.toContain("rent");
+        expect(calls()).toBe(1);
+    });
+
+    it("production mode warns with issue paths only and passes the body through", async () => {
+        useProductionMode();
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        serve(DRIFTED);
+
+        const result = await apiRequest("/api/client-test?search=rent", {
+            schema: ItemListSchema,
+        });
+
+        expect(result).toEqual(DRIFTED);
+        expect(warn).toHaveBeenCalledTimes(1);
+        const logged = JSON.stringify(warn.mock.calls[0]);
+        expect(logged).toContain("GET /api/client-test");
+        expect(logged).toContain("items[0].amount (invalid_type)");
+        expect(logged).not.toContain("1234.56");
+        expect(logged).not.toContain("rent");
+    });
+
+    it("skips the check when no schema is given", async () => {
+        serve(DRIFTED);
+        await expect(apiRequest("/api/client-test")).resolves.toEqual(DRIFTED);
+    });
+
+    it("checkResponseContract labels root-level failures and returns the same reference", () => {
+        const data = { id: 1 };
+        expect(
+            checkResponseContract(z.object({ id: z.number() }), data, "GET /x"),
+        ).toBe(data);
+        expect(() =>
+            checkResponseContract(z.array(z.unknown()), data, "GET /x?q=1"),
+        ).toThrow(
+            "Response contract violation for GET /x: (root): Invalid input: expected array, received object",
+        );
     });
 });

@@ -24,6 +24,8 @@ The Settings API manages user preferences stored as key-value JSON. Settings can
 
 Get all settings. With `?withBaselines=true`, response data is `{ settings, expected }`,
 with both maps obtained from one database read. Absent keys have baseline `{ exists: false }`.
+`withBaselines` accepts only `true` or `false`. Any other value, such as `1` or `yes`, or a
+repeated key returns `400 VALIDATION_ERROR` with `withBaselines must be true or false`.
 
 **Response:**
 

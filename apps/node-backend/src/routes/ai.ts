@@ -56,11 +56,11 @@ import {
 import { ApiErrorCode } from "@vision/types/errors";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
 import { listBody, parsePagination } from "../lib/pagination.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import {
   AppError,
   NotFoundError,
   UpstreamError,
-  ValidationError,
 } from "../middleware/errorHandler.ts";
 
 const UUID_RE =
@@ -69,13 +69,14 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_TITLE_LENGTH = 200;
 
 /* ── Zod schemas ─────────────────────────────────────────────────────────────
- * schema → safeParse → ValidationError, the idiom from settings.js/reports.js.
- * UUIDs keep the existing case-insensitive UUID_RE (zod's .uuid() is stricter
- * about variant/version bits, and ids are passed through in their original
- * case), so the accepted id set is unchanged. */
+ * Parsed with parseInput (ADR-193). UUIDs keep the existing case-insensitive
+ * UUID_RE (zod's .uuid() is stricter about variant/version bits, and ids are
+ * passed through in their original case), so the accepted id set is unchanged. */
 
 // Case-insensitive UUID; any-case input is forwarded unchanged.
-const conversationIdSchema = z.string().regex(UUID_RE);
+const conversationIdSchema = z
+  .string({ error: "Invalid conversation id" })
+  .regex(UUID_RE, "Invalid conversation id");
 
 const uuidField = (message: string) =>
   z.string({ error: message }).regex(UUID_RE, message);
@@ -132,19 +133,8 @@ const renameConversationSchema = z.object({
   ),
 });
 
-function parseAiBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body || {});
-  if (!result.success) {
-    const msg = result.error.issues.map((issue) => issue.message).join("; ");
-    throw new ValidationError(msg);
-  }
-  return result.data;
-}
-
 function requireConversationId(req: ExpressRequest): string {
-  const result = conversationIdSchema.safeParse(req.params.id);
-  if (!result.success) throw new ValidationError("Invalid conversation id");
-  return result.data;
+  return parseInput(conversationIdSchema, req.params.id);
 }
 
 function enforceAiChatEnabled(
@@ -249,7 +239,11 @@ router.get("/conversations", async (req, res) => {
 
 // POST /api/ai/conversations
 router.post("/conversations", async (req, res) => {
-  const { title, model } = parseAiBody(createConversationSchema, req.body);
+  const { title, model } = parseInput(
+    createConversationSchema,
+    req.body ?? {},
+    { omitPaths: true },
+  );
 
   try {
     const conversation = await createEmptyConversation({ title, model });
@@ -271,7 +265,9 @@ router.get("/conversations/:id", async (req, res) => {
 // PATCH /api/ai/conversations/:id
 router.patch("/conversations/:id", async (req, res) => {
   const id = requireConversationId(req);
-  const { title } = parseAiBody(renameConversationSchema, req.body);
+  const { title } = parseInput(renameConversationSchema, req.body ?? {}, {
+    omitPaths: true,
+  });
 
   const updated = await renameConversation(id, title);
   if (!updated) throw new NotFoundError("Conversation not found");
@@ -288,7 +284,9 @@ router.delete("/conversations/:id", async (req, res) => {
 
 // POST /api/ai/chat
 router.post("/chat", async (req, res) => {
-  const parsed = parseAiBody(chatBodySchema, req.body);
+  const parsed = parseInput(chatBodySchema, req.body ?? {}, {
+    omitPaths: true,
+  });
 
   const abortController = new AbortController();
   res.on("close", () => {
@@ -324,7 +322,9 @@ router.post("/chat", async (req, res) => {
 // through the global error handler as envelope responses. After headers
 // commit, errors ride the SSE `error` frame.
 router.post("/chat/stream", async (req, res) => {
-  const parsed = parseAiBody(chatBodySchema, req.body);
+  const parsed = parseInput(chatBodySchema, req.body ?? {}, {
+    omitPaths: true,
+  });
   logger.info("[ai] chat/stream start", {
     requestId: req.id,
     conversationId: parsed.conversationId,
