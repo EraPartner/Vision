@@ -4,19 +4,16 @@ import {
     Archive,
     Eye,
     FileDown,
-    MoreHorizontal,
     Plus,
     Trash2,
     type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { cn } from "@/lib/utils";
@@ -114,36 +111,23 @@ export function AssetPageActions({
                     </Button>
                 }
             />
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={t("portfolio.menu")}
-                    >
-                        <MoreHorizontal />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {showExport && (
-                        <>
-                            <DropdownMenuItem
-                                onSelect={() => setExportOpen(true)}
-                            >
-                                <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
-                                {t("portfolio.menu.exportPdf")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                        </>
-                    )}
-                    <DropdownMenuItem
-                        onSelect={() => navigate("/portfolio/import")}
-                    >
-                        <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
-                        {t("nav.portfolioImport")}
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <RowMenu variant="outline" size="icon" label={t("portfolio.menu")}>
+                {showExport && (
+                    <>
+                        <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                            <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                            {t("portfolio.menu.exportPdf")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                    </>
+                )}
+                <DropdownMenuItem
+                    onSelect={() => navigate("/portfolio/import")}
+                >
+                    <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
+                    {t("nav.portfolioImport")}
+                </DropdownMenuItem>
+            </RowMenu>
             {showExport && (
                 <ExportDialog
                     defaultType="portfolio"
@@ -178,39 +162,30 @@ export function HoldingActionsMenu({
 }: HoldingActionsMenuProps) {
     const { t } = useLanguage();
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn("h-8 w-8 text-label-secondary", className)}
-                    aria-label={t("portfolio.row.menu", { name: holding.name })}
-                >
-                    <MoreHorizontal />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => onDetails(holding)}>
-                    <Eye className="mr-2 h-4 w-4 text-label-secondary" />
-                    {t("invDetail.trigger")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onAddTransaction(holding)}>
-                    <Plus className="mr-2 h-4 w-4 text-label-secondary" />
-                    {t("portfolio.addTransaction")}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => onArchive(holding)}>
-                    <Archive className="mr-2 h-4 w-4 text-label-secondary" />
-                    {t("portfolio.archiveInvestment")}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => onDelete(holding)}
-                >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    {deleteLabel}
-                </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+        <RowMenu
+            label={t("portfolio.row.menu", { name: holding.name })}
+            className={className}
+        >
+            <DropdownMenuItem onSelect={() => onDetails(holding)}>
+                <Eye className="mr-2 h-4 w-4 text-label-secondary" />
+                {t("invDetail.trigger")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onAddTransaction(holding)}>
+                <Plus className="mr-2 h-4 w-4 text-label-secondary" />
+                {t("portfolio.addTransaction")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => onArchive(holding)}>
+                <Archive className="mr-2 h-4 w-4 text-label-secondary" />
+                {t("portfolio.archiveInvestment")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+                variant="destructive"
+                onSelect={() => onDelete(holding)}
+            >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {deleteLabel}
+            </DropdownMenuItem>
+        </RowMenu>
     );
 }

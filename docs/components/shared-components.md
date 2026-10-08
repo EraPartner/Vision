@@ -2,8 +2,8 @@
 title: Shared Components Reference
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 last_modified: 2026-08-27
 tags: [component, shared, utility, frontend, reference, phase-13, phase-c, phase-d, multi-select, export-filters, bug-hunt-2026-05-05, bug-hunt-2026-05-06, dateutils, utc-safe-dates, date-formatting, debounce, accessibility, aria-label, useCallback, aria-grid, keyboard-operability, a11y, performance, memoization, selection-toggle, upcoming-payments-hook, june-2026, symbol-search, research, ui-consistency, glass-consistency, popover-glass-thick, trend-hue, gain-loss, design-system, card-sheen, corner-orb, adr-105]
 description: Reference documentation for shared utility components used across the application. May 2026 adds UTC-safe date parsing, ARIA grid semantics on VirtualDataTable, the onActivateKeyDown keyboard helper, and the columnKeySignature selection-toggle reprocessing fix. June 2026 V11: UpcomingPaymentsNotification refactored onto shared useUpcomingPlannedPayments hook; its visible reminder is dashboard-only while AppLayout keeps native badge synchronization mounted on all routes. 2026-06-24: SuggestionCard dashboard widget removed; UpcomingPaymentsNotification is now the sole upcoming-payments notification surface. June 2026 V12: SymbolSearchBox and SymbolSearchResultItem added — canonical chrome and result row for all research symbol pickers. June 2026 (glass consistency): SymbolSearchBox dropdown material changed from glass-elevated to glass-thick to match the rest of the floating-overlay system. 2026-06-24 (gain/loss consistency pass): TrendHue added — single shared overlay component for the faint diagonal card hue on all summary/stat cards. 2026-08-27: StateBlock unifies empty, page-error, and crash-fallback anatomy; CardSheen has a named feature tier for the Performance total-value card's 10rem sheen. 2026-08-25: VirtualDataTable visible rows gained a memo boundary so server-search input updates do not rebuild unchanged row subtrees; StatCard moved into shared ownership for its dashboard, portfolio, research, and statistics consumers. 2026-08-26: SymbolSearchBox gained ARIA listbox semantics and input-owned keyboard navigation; RecipientCombobox now resolves the selected label independently of its filtered search page; VirtualDataTable column resizing gained pointer and keyboard operation.
@@ -41,11 +41,22 @@ related_code:
 
 [[docs/adr/179-primitives-adopt-role-tokens|ADR-179]] adds three primitives in `components/ui/` for the screen passes:
 
-- `SegmentedControl` / `SegmentedControlItem` (`segmented-control.tsx`): a macOS-style picker on Radix ToggleGroup in single mode. The group is a `radiogroup`, each segment a `radio` with `aria-checked`; one pill glides between segments on the snappy spring, and clicking the chosen segment does not clear it. Sizes `default` (36px) and `sm` (32px). `SegmentedButtons` keeps its predicate API (`options`, `getKey`, `getLabel`, `isSelected`, `onSelect`, `buttonClassName`, `size`, `aria-label`/`aria-labelledby`) and renders this control; its `selectedVariant`/`unselectedVariant` props are gone.
-- `List` / `ListRow` (`list.tsx`): an inset grouped list on one `rounded-card` surface with hairline dividers. A row takes `leading`, `title`, `subtitle`, `trailing` and `chevron`; it renders a button when `onActivate` is set, wraps a link or custom control with `asChild`, and is static otherwise. Interactive rows keep the keyboard ring inside the clipped group.
+- `SegmentedControl` / `SegmentedControlItem` (`segmented-control.tsx`): a macOS-style picker on Radix ToggleGroup in single mode. The group is a `radiogroup`, each segment a `radio` with `aria-checked`; one pill glides between segments on the snappy spring, and clicking the chosen segment does not clear it. Sizes `default` (36px) and `sm` (32px). A `label` prop renders a `Label` above the group and wires `aria-labelledby`; `aria-label` remains for pickers without a visible caption. `SegmentedButtons` keeps its predicate API (`options`, `getKey`, `getLabel`, `isSelected`, `onSelect`, `buttonClassName`, `size`, `aria-label`/`aria-labelledby`) and renders this control; its `selectedVariant`/`unselectedVariant` props are gone.
+- `List` / `ListRow` (`list.tsx`): an inset grouped list on one `rounded-card` surface with hairline dividers. A row takes `leading`, `title`, `subtitle`, `trailing` and `chevron`; it renders a button when `onActivate` is set, wraps a link or custom control with `asChild`, and is static otherwise. Interactive rows keep the keyboard ring inside the clipped group. An `actions` slot renders beside the interactive element (a `RowMenu` or `Switch` on an activatable row never nests a button), and `selected` tints the row and sets `aria-current="true"` for the current item of a master list.
 - `Inspector` with `InspectorHeader`, `InspectorTitle`, `InspectorClose`, `InspectorBody`, `InspectorSection`, `InspectorField` and `InspectorFooter` (`inspector.tsx`): a non-modal details pane docked beside a list, exposed as a `complementary` landmark. Focus is not trapped, Escape inside the panel calls `onClose`, and the close button is labelled with `common.close`. Screens decide its width and may show the same content in a `Sheet` on phones.
 
 `PageShell` owns page-level vertical rhythm. It defaults to 24px (`space-y-6`); only Dashboard uses the explicit `rhythm="airy"` 32px variant. Route entrance motion remains owned by `PageTransition`, so PageShell adds no animation.
+
+## RowMenu
+
+`RowMenu` (`components/shared/RowMenu.tsx`) is the ••• menu every list row, card and page header
+uses ([[docs/adr/190-primitives-follow-up|ADR-190]]): an icon `Button` (`variant="ghost"` and
+`size="icon-sm"` by default; `variant="outline" size="icon"` for the page-header menu; `icon-xs`
+for dense tables) with the `MoreHorizontal` glyph, a required `label` (`aria-label`, usually the
+`*.rowMenu` "Actions for {name}" string), `align="end"` content and `stopPropagation` on click and
+keydown so the row behind it does not activate. It forwards its ref to the trigger for focus
+restore and takes `disabled` for busy rows. Children are ordinary `DropdownMenuItem`s; destructive
+ones use `variant="destructive"` and sit last after a `DropdownMenuSeparator` (ADR-187).
 
 ## VirtualDataTable
 

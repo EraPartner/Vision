@@ -7,6 +7,7 @@ import type {
 import { evaluateAnalysisExtension } from "@/lib/api/analysis";
 import type { ScenarioAttachment } from "./analysisInterchange";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import { isAnalysisResultComplete } from "./analysisChartModel";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import {
@@ -17,6 +18,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { List } from "@/components/ui/list";
@@ -40,13 +46,9 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-const NONE = "__none__";
 const fieldLabelClass =
     "block min-w-0 type-callout font-medium [&>input]:mt-1 [&>input]:font-normal";
 const hintClass = "max-w-prose type-callout text-label-secondary";
-const disclosureSummaryClass =
-    "flex cursor-pointer items-center gap-2 rounded-card px-4 py-3 type-headline focus-ring";
-const disclosureBodyClass = "space-y-3 px-4 pb-4";
 const nestedBoxClass =
     "space-y-3 rounded-card corner-continuous border border-border/60 bg-background/40 p-3";
 interface Formula {
@@ -506,16 +508,16 @@ export function AnalysisWorkbenchPanel(props: Props) {
                     {tr(label)}
                 </Label>
                 <Select
-                    value={value || (clearable ? NONE : value)}
-                    onValueChange={(next) =>
-                        onChange(next === NONE ? "" : next)
-                    }
+                    value={clearable ? toSelectValue(value) : value}
+                    onValueChange={(next) => onChange(fromSelectValue(next))}
                 >
                     <SelectTrigger id={id}>
                         <SelectValue placeholder="—" />
                     </SelectTrigger>
                     <SelectContent>
-                        {clearable && <SelectItem value={NONE}>—</SelectItem>}
+                        {clearable && (
+                            <SelectItem value={SELECT_NONE}>—</SelectItem>
+                        )}
                         {options.map((v) => (
                             <SelectItem key={v} value={v}>
                                 {optionLabel(v)}
@@ -532,25 +534,20 @@ export function AnalysisWorkbenchPanel(props: Props) {
         onChange: (value: string) => void,
         options: string[],
     ) => {
-        const id = `${baseId}-${label}-label`;
         return (
-            <div className="min-w-0 space-y-1">
-                <Label id={id} className="type-callout">
-                    {tr(label)}
-                </Label>
-                <SegmentedControl
-                    aria-labelledby={id}
-                    value={value}
-                    onValueChange={onChange}
-                    className="w-full"
-                >
-                    {options.map((v) => (
-                        <SegmentedControlItem key={v} value={v}>
-                            {optionLabel(v)}
-                        </SegmentedControlItem>
-                    ))}
-                </SegmentedControl>
-            </div>
+            <SegmentedControl
+                label={<span className="type-callout">{tr(label)}</span>}
+                wrapperClassName="min-w-0 space-y-1"
+                value={value}
+                onValueChange={onChange}
+                className="w-full"
+            >
+                {options.map((v) => (
+                    <SegmentedControlItem key={v} value={v}>
+                        {optionLabel(v)}
+                    </SegmentedControlItem>
+                ))}
+            </SegmentedControl>
         );
     };
     const checkFields = (
@@ -944,15 +941,15 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     </dd>
                                 </div>
                             </dl>
-                            <details className="type-footnote text-label-secondary">
-                                <summary className="cursor-pointer rounded-control focus-ring">
+                            <Disclosure className="type-footnote text-label-secondary">
+                                <DisclosureSummary tone="footnote">
                                     {tr("technicalDetails")}
-                                </summary>
+                                </DisclosureSummary>
                                 <p className="pt-1">
                                     {value.reason} · {tr("iterations")}:{" "}
                                     {value.iterations}
                                 </p>
-                            </details>
+                            </Disclosure>
                         </CardContent>
                     </Card>
                 )}
@@ -968,7 +965,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
     return (
         <div className="min-w-0 space-y-5">
             {props.sourceStale && (
-                <Alert variant="warning" role="status">
+                <Alert variant="warning">
                     <AlertDescription>{tr("sourceStale")}</AlertDescription>
                 </Alert>
             )}
@@ -977,11 +974,14 @@ export function AnalysisWorkbenchPanel(props: Props) {
                     {t("analysis.workflow.prepare")}
                 </h2>
                 <Card asChild>
-                    <details open>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure open>
+                        <DisclosureSummary
+                            padded
+                            className="flex items-center gap-2"
+                        >
                             {tr("preparation")}
-                        </summary>
-                        <div className={disclosureBodyClass}>
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-3 pt-0">
                             <Button
                                 variant="outline"
                                 aria-expanded={addingStep}
@@ -1194,15 +1194,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     {tr("applySteps")}
                                 </Button>
                             )}
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
                 <Card asChild>
-                    <details>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure>
+                        <DisclosureSummary
+                            padded
+                            className="flex items-center gap-2"
+                        >
                             {tr("time")}
-                        </summary>
-                        <div className={disclosureBodyClass}>
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-3 pt-0">
                             {select(
                                 "dateColumn",
                                 time.dateColumn,
@@ -1291,8 +1294,8 @@ export function AnalysisWorkbenchPanel(props: Props) {
                             >
                                 {tr("compareTime")}
                             </Button>
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
             </section>
             <section id="analysis-calculate" className="scroll-mt-4 space-y-3">
@@ -1312,11 +1315,14 @@ export function AnalysisWorkbenchPanel(props: Props) {
                     </Alert>
                 )}
                 <Card asChild>
-                    <details open>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure open>
+                        <DisclosureSummary
+                            padded
+                            className="flex items-center gap-2"
+                        >
                             {tr("formulas")}
-                        </summary>
-                        <div className={disclosureBodyClass}>
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-3 pt-0">
                             {formulas.map((f, i) => (
                                 <div key={i} className={nestedBoxClass}>
                                     <Button
@@ -1468,10 +1474,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                         )}
                                                     </Button>
                                                 )}
-                                            <details className="type-callout">
-                                                <summary className="cursor-pointer rounded-control text-label-secondary focus-ring">
+                                            <Disclosure className="type-callout">
+                                                <DisclosureSummary tone="subtle">
                                                     {tr("technicalDetails")}
-                                                </summary>
+                                                </DisclosureSummary>
                                                 <label
                                                     className={`${fieldLabelClass} mt-2`}
                                                 >
@@ -1501,7 +1507,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                                         }
                                                     />
                                                 </label>
-                                            </details>
+                                            </Disclosure>
                                             <Button
                                                 size="sm"
                                                 variant="outline"
@@ -1555,10 +1561,10 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                 ))}
                             </datalist>
                             {formulas[active] && (
-                                <details>
-                                    <summary className="cursor-pointer rounded-control type-callout text-label-secondary focus-ring">
+                                <Disclosure>
+                                    <DisclosureSummary tone="subtle">
                                         {tr("insertField")}
-                                    </summary>
+                                    </DisclosureSummary>
                                     <Input
                                         className="my-2"
                                         aria-label={tr("searchFields")}
@@ -1615,13 +1621,13 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             </Button>
                                         ))}
                                     </div>
-                                </details>
+                                </Disclosure>
                             )}
                             {formulas[active] && (
-                                <details>
-                                    <summary className="cursor-pointer rounded-control type-callout text-label-secondary focus-ring">
+                                <Disclosure>
+                                    <DisclosureSummary tone="subtle">
                                         {tr("functionsHelp")}
-                                    </summary>
+                                    </DisclosureSummary>
                                     <div className="space-y-2 pt-2">
                                         {select(
                                             "function",
@@ -1673,7 +1679,7 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                             </p>
                                         )}
                                     </div>
-                                </details>
+                                </Disclosure>
                             )}
                             <div aria-busy={previewBusy} className="min-w-0">
                                 {previewBusy && (
@@ -1719,15 +1725,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     {tr("applyFormulas")}
                                 </Button>
                             )}
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
                 <Card asChild>
-                    <details>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure>
+                        <DisclosureSummary
+                            padded
+                            className="flex items-center gap-2"
+                        >
                             {tr("assumptions")}
-                        </summary>
-                        <div className={disclosureBodyClass}>
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-3 pt-0">
                             <p className={hintClass}>{tr("assumptionsHelp")}</p>
                             {definitions.map((a, i) => (
                                 <div
@@ -1949,15 +1958,18 @@ export function AnalysisWorkbenchPanel(props: Props) {
                             >
                                 {tr("addAssumption")}
                             </Button>
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
                 <Card asChild>
-                    <details>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure>
+                        <DisclosureSummary
+                            padded
+                            className="flex items-center gap-2"
+                        >
                             {tr("scenarios")}
-                        </summary>
-                        <div className={disclosureBodyClass}>
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-3 pt-0">
                             {(!definitions.length ||
                                 !formulas.some(
                                     (f) => f.scope === "summary",
@@ -2261,8 +2273,8 @@ export function AnalysisWorkbenchPanel(props: Props) {
                                     )}
                                 </div>
                             )}
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
             </section>
             {busy && (

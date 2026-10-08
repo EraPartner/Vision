@@ -2,8 +2,8 @@
 title: UI Components
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     components,
@@ -149,6 +149,20 @@ primitives from the same change: `SegmentedControl`, `List`/`ListRow`, `Inspecto
 `undoToast` helper (see [[docs/components/shared-components|Shared Components]] and
 [[docs/features/transactions|Transactions]]).
 
+[[docs/adr/190-primitives-follow-up|ADR-190]] (October 2026) extends those primitives instead of
+adding screen-local copies: `ListRow` takes an `actions` slot rendered
+beside, not inside, the activatable element (so a row menu or switch can sit on a clickable row
+without nested buttons) and a `selected` flag (tint, `aria-current="true"`, `data-selected`);
+`DropdownMenuItem` has `variant="destructive"`; `Button` adds the `xs` (28px), `icon-sm` (32px)
+and `icon-xs` (28px) sizes; `SegmentedControl` takes a `label` and wires `aria-labelledby`
+itself; `Alert` derives its live-region role from the variant (`destructive` is an `alert`, every
+other variant a `status`) unless `role` is passed; `Disclosure`, `DisclosureSummary` and
+`DisclosureContent` (`disclosure.tsx`) wrap a native `<details>` with the summary and panel
+styles the sweep repeated; `lib/selectValue.ts` exports `SELECT_NONE`, `toSelectValue` and
+`fromSelectValue` for a "none" item in a Radix `Select`, which rejects empty-string values; and
+the shared `RowMenu` and `PageHeader back` prop are described in
+[[docs/components/shared-components|Shared Components]].
+
 **Motion and premium polish utilities**:
 
 - `.micro-lift` — a non-Card hover elevation (`translateY(-1px)`); it does not add a shadow.
@@ -293,7 +307,7 @@ Code links: [[apps/frontend/package.json]], [[apps/frontend/src/index.css]]
 
 Page-level consistency is provided by reusable shared components:
 
-- `PageHeader` for canonical page title/subtitle/icon/actions layout; the title renders `type-large-title` and the subtitle `type-body` (ADR-179)
+- `PageHeader` for canonical page title/subtitle/icon/actions layout; the title renders `type-large-title` and the subtitle `type-body` (ADR-179). Detail pages pass `back={{ label, to }}` (or `onClick`) and the header renders the ghost back control above the title, so no page hand-rolls an arrow button
 - Destination identity icons come from `lib/pageIcons.ts`. Sidebar, command palette, page headers, and identity empty states must not choose separate icons for the same route.
 - Ordinary section and chart headings are text-first. Keep an icon only when it communicates identity, state, action, or distinguishes sibling cards; do not add an icon that merely repeats the heading noun.
 - `EmptyState` for standardized empty-state messaging and CTA composition (see below)
@@ -350,7 +364,7 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 | Component   | Description               | File                                                                   |
 | ----------- | ------------------------- | ---------------------------------------------------------------------- |
-| Alert       | Alert message box         | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]]               |
+| Alert       | Notice; role follows variant | [[apps/frontend/src/components/ui/alert.tsx\|alert.tsx]]               |
 | AlertDialog | Confirmation dialog       | [[apps/frontend/src/components/ui/alert-dialog.tsx\|alert-dialog.tsx]] |
 | Sonner      | Toast notification system | [[apps/frontend/src/components/ui/sonner.tsx\|sonner.tsx]]             |
 | Progress    | Progress bar              | [[apps/frontend/src/components/ui/progress.tsx\|progress.tsx]]         |
@@ -365,6 +379,7 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 | Separator   | Visual divider          | [[apps/frontend/src/components/ui/separator.tsx\|separator.tsx]]       |
 | Accordion   | Collapsible sections    | [[apps/frontend/src/components/ui/accordion.tsx\|accordion.tsx]]       |
 | Collapsible | Collapsible content     | [[apps/frontend/src/components/ui/collapsible.tsx\|collapsible.tsx]]   |
+| Disclosure  | Styled native details   | [[apps/frontend/src/components/ui/disclosure.tsx\|disclosure.tsx]]     |
 | AspectRatio | Fixed aspect ratio      | [[apps/frontend/src/components/ui/aspect-ratio.tsx\|aspect-ratio.tsx]] |
 
 ### Navigation
@@ -411,7 +426,7 @@ Code links: [[apps/frontend/src/App.tsx]], [[apps/frontend/src/components/ui/son
 
 ## Button
 
-Primary action component with multiple variants. Every size and variant uses the `rounded-control` corner; `default` and `icon` are 36px tall, `sm` 32px and `lg` 40px (ADR-179). Color and border distinguish emphasis; hover changes the surface without lifting the control or adding a colored glow. Shared press feedback, keyboard focus, disabled states and reduced-motion handling remain intact.
+Primary action component with multiple variants. Every size and variant uses the `rounded-control` corner; `default` and `icon` are 36px tall, `sm` and `icon-sm` 32px, `xs` and `icon-xs` 28px (dense rows and table chrome, footnote type), and `lg` 40px (ADR-179, ADR-187 follow-ups). Color and border distinguish emphasis; hover changes the surface without lifting the control or adding a colored glow. Shared press feedback, keyboard focus, disabled states and reduced-motion handling remain intact.
 
 ### Variants
 
@@ -440,8 +455,11 @@ Primary action component with multiple variants. Every size and variant uses the
 ```tsx
 <Button size="default">Default</Button>
 <Button size="sm">Small</Button>
+<Button size="xs">Mini</Button>
 <Button size="lg">Large</Button>
 <Button size="icon"><Icon /></Button>
+<Button size="icon-sm"><Icon /></Button>
+<Button size="icon-xs"><Icon /></Button>
 ```
 
 ### Props
@@ -449,7 +467,7 @@ Primary action component with multiple variants. Every size and variant uses the
 | Prop       | Type                                                                          | Default     | Description             |
 | ---------- | ----------------------------------------------------------------------------- | ----------- | ----------------------- |
 | `variant`  | `'default' \| 'destructive' \| 'outline' \| 'secondary' \| 'ghost' \| 'link'` | `'default'` | Visual style            |
-| `size`     | `'default' \| 'sm' \| 'lg' \| 'icon'`                                         | `'default'` | Size                    |
+| `size`     | `'default' \| 'sm' \| 'xs' \| 'lg' \| 'icon' \| 'icon-sm' \| 'icon-xs'`        | `'default'` | Size                    |
 | `asChild`  | `boolean`                                                                     | `false`     | Render as child element |
 | `disabled` | `boolean`                                                                     | `false`     | Disabled state          |
 

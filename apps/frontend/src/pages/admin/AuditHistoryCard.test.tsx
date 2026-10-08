@@ -250,8 +250,9 @@ describe("AuditHistoryCard", () => {
             screen.getByRole("button", { name: /load more/i }),
         );
         await waitFor(() =>
-            expect(screen.getByRole("alert")).toHaveTextContent(
-                /history changed/i,
+            expect(screen.getByText(/history changed/i)).toHaveAttribute(
+                "role",
+                "status",
             ),
         );
         expect(

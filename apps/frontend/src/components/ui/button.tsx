@@ -24,13 +24,18 @@ const buttonVariants = cva(
                 accent: "bg-accent text-accent-foreground shadow-sm hover:bg-accent/92",
             },
             // macOS regular control height is 36px (ADR-179); `sm` is the
-            // 32px small size, `lg` the 40px large one. Icon-only actions that
+            // 32px small size, `xs` the 28px mini size for dense rows and
+            // table chrome, `lg` the 40px large one. Icon-only actions have
+            // matching `icon`, `icon-sm` and `icon-xs` squares; the ones that
             // need a 40px touch target add `.icon-touch-target`.
             size: {
                 default: "h-9 px-4",
                 sm: "h-8 px-3",
+                xs: "h-7 px-2.5 type-footnote",
                 lg: "h-10 px-6",
                 icon: "h-9 w-9",
+                "icon-sm": "h-8 w-8",
+                "icon-xs": "h-7 w-7",
             },
         },
         defaultVariants: {

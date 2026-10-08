@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { aiKeys } from "@/lib/queryKeys";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { OllamaStatus } from "@/types/aiChat";
 
@@ -30,7 +31,7 @@ export function OllamaStatusBanner({
     const shownUrl = status?.displayUrl || status?.baseUrl;
 
     return (
-        <Alert role="status" className="mx-5 my-3 w-auto">
+        <Alert className="mx-5 my-3 w-auto">
             <Info aria-hidden="true" className="h-4 w-4" />
             <AlertTitle>{t("aiChat.banner.unreachable")}</AlertTitle>
             <AlertDescription>
@@ -40,21 +41,28 @@ export function OllamaStatusBanner({
                             {t("aiChat.banner.hint")}
                         </p>
                         {(shownUrl || status?.hint) && (
-                            <details className="mt-2 type-footnote text-label-secondary">
-                                <summary className="w-fit cursor-pointer rounded-chip focus-ring">
+                            <Disclosure className="mt-2 type-footnote text-label-secondary">
+                                <DisclosureSummary
+                                    tone="footnote"
+                                    className="rounded-chip"
+                                >
                                     {t("aiChat.banner.connectionDetails")}
-                                </summary>
+                                </DisclosureSummary>
                                 {shownUrl && (
                                     <p className="mt-2 break-all">{shownUrl}</p>
                                 )}
                                 {status?.hint && (
                                     <p className="mt-1">{status.hint}</p>
                                 )}
-                            </details>
+                            </Disclosure>
                         )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <Button variant="outline" size="sm" onClick={handleRetry}>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleRetry}
+                        >
                             <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                             {t("aiChat.banner.retry")}
                         </Button>

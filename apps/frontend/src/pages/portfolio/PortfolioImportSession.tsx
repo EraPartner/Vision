@@ -13,6 +13,19 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import { PortfolioBrokerField } from "@/features/portfolio/PortfolioBrokerField";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -939,11 +952,11 @@ export function PortfolioImportSession({ accounts }: Props) {
                         }}
                     />
                 </div>
-                <details className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4">
-                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
+                <Disclosure variant="card">
+                    <DisclosureSummary padded>
                         {t("portfolioImport.session.existing.title")}
-                    </summary>
-                    <div className="mt-3 space-y-3">
+                    </DisclosureSummary>
+                    <DisclosureContent className="space-y-3">
                         <p className="type-footnote text-label-secondary">
                             {t("portfolioImport.session.existing.hint")}
                         </p>
@@ -961,64 +974,74 @@ export function PortfolioImportSession({ accounts }: Props) {
                                         "portfolioImport.session.existing.choose",
                                     )}
                                 </Label>
-                                <select
-                                    id="portfolio-existing-batch"
-                                    className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
-                                    value={existingBatchId}
-                                    disabled={locked || existingLoading}
-                                    onChange={(event) =>
-                                        setExistingBatchId(event.target.value)
+                                <Select
+                                    value={toSelectValue(existingBatchId)}
+                                    onValueChange={(value) =>
+                                        setExistingBatchId(
+                                            fromSelectValue(value),
+                                        )
                                     }
                                 >
-                                    <option value="">
-                                        {t(
-                                            "portfolioImport.session.existing.unselected",
-                                        )}
-                                    </option>
-                                    {existingBatches.items
-                                        .filter(
-                                            (batch) =>
-                                                isRetainedIbkrBatch(batch) &&
-                                                [
-                                                    "complete",
-                                                    "complete_with_errors",
-                                                ].includes(batch.status) &&
-                                                accounts.some(
-                                                    (account) =>
-                                                        account.id ===
-                                                        batch.account_id,
-                                                ) &&
-                                                !statements.some(
-                                                    (item) =>
-                                                        item.batchId ===
-                                                            batch.id ||
-                                                        item.originalBatchId ===
-                                                            batch.id,
-                                                ),
-                                        )
-                                        .map((batch) => (
-                                            <option
-                                                key={batch.id}
-                                                value={batch.id}
-                                            >
-                                                {t(
-                                                    "portfolioImport.session.existing.option",
-                                                    {
-                                                        name:
-                                                            batch.source_filename ||
-                                                            batch.adapter_name,
-                                                        id: batch.id,
-                                                        account: accountName(
-                                                            batch.account_id!,
-                                                        ),
-                                                        status: t(
-                                                            `portfolioImport.session.existing.status.${batch.status}`,
-                                                        ),
-                                                    },
-                                                )}
-                                            </option>
-                                        ))}
-                                </select>
+                                    <SelectTrigger
+                                        id="portfolio-existing-batch"
+                                        disabled={locked || existingLoading}
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={SELECT_NONE}>
+                                            {t(
+                                                "portfolioImport.session.existing.unselected",
+                                            )}
+                                        </SelectItem>
+                                        {existingBatches.items
+                                            .filter(
+                                                (batch) =>
+                                                    isRetainedIbkrBatch(
+                                                        batch,
+                                                    ) &&
+                                                    [
+                                                        "complete",
+                                                        "complete_with_errors",
+                                                    ].includes(batch.status) &&
+                                                    accounts.some(
+                                                        (account) =>
+                                                            account.id ===
+                                                            batch.account_id,
+                                                    ) &&
+                                                    !statements.some(
+                                                        (item) =>
+                                                            item.batchId ===
+                                                                batch.id ||
+                                                            item.originalBatchId ===
+                                                                batch.id,
+                                                    ),
+                                            )
+                                            .map((batch) => (
+                                                <SelectItem
+                                                    key={batch.id}
+                                                    value={String(batch.id)}
+                                                >
+                                                    {t(
+                                                        "portfolioImport.session.existing.option",
+                                                        {
+                                                            name:
+                                                                batch.source_filename ||
+                                                                batch.adapter_name,
+                                                            id: batch.id,
+                                                            account:
+                                                                accountName(
+                                                                    batch.account_id!,
+                                                                ),
+                                                            status: t(
+                                                                `portfolioImport.session.existing.status.${batch.status}`,
+                                                            ),
+                                                        },
+                                                    )}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
                                 <div className="flex flex-wrap gap-2">
                                     <Button
                                         variant="outline"
@@ -1072,8 +1095,8 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </div>
                             </>
                         )}
-                    </div>
-                </details>
+                    </DisclosureContent>
+                </Disclosure>
                 {statements.length > 0 && (
                     <ul className="divide-y divide-border/50 rounded-card corner-continuous border border-border/60">
                         {statements.map((item) => (
@@ -1201,51 +1224,56 @@ export function PortfolioImportSession({ accounts }: Props) {
                                             "portfolioImport.session.statementPolicy",
                                         )}
                                     </Label>
-                                    <select
-                                        id={`policy-${item.id}`}
-                                        aria-label={t(
-                                            "portfolioImport.session.policyForFile",
-                                            { name: item.name },
-                                        )}
-                                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
-                                        value={item.adoptPolicy ?? ""}
-                                        disabled={
-                                            locked ||
-                                            item.status === "completed"
-                                        }
-                                        onChange={(event) =>
+                                    <Select
+                                        value={toSelectValue(item.adoptPolicy)}
+                                        onValueChange={(value) =>
                                             changeStatementPolicy(
                                                 item.id,
-                                                event.target.value,
+                                                fromSelectValue(value),
                                             )
                                         }
                                     >
-                                        <option value="">
-                                            {t(
-                                                "portfolioImport.session.useSessionPolicy",
+                                        <SelectTrigger
+                                            id={`policy-${item.id}`}
+                                            aria-label={t(
+                                                "portfolioImport.session.policyForFile",
+                                                { name: item.name },
                                             )}
-                                        </option>
-                                        <option
-                                            value="preserve_existing"
-                                            disabled={correctionOnly}
-                                        >
-                                            {t(
-                                                "portfolioImport.session.preserve",
-                                            )}
-                                        </option>
-                                        <option
-                                            value="prefer_source"
                                             disabled={
-                                                attachmentOnly ||
-                                                incomeOnly ||
-                                                cashOnly
+                                                locked ||
+                                                item.status === "completed"
                                             }
                                         >
-                                            {t(
-                                                "portfolioImport.session.source",
-                                            )}
-                                        </option>
-                                    </select>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value={SELECT_NONE}>
+                                                {t(
+                                                    "portfolioImport.session.useSessionPolicy",
+                                                )}
+                                            </SelectItem>
+                                            <SelectItem
+                                                value="preserve_existing"
+                                                disabled={correctionOnly}
+                                            >
+                                                {t(
+                                                    "portfolioImport.session.preserve",
+                                                )}
+                                            </SelectItem>
+                                            <SelectItem
+                                                value="prefer_source"
+                                                disabled={
+                                                    attachmentOnly ||
+                                                    incomeOnly ||
+                                                    cashOnly
+                                                }
+                                            >
+                                                {t(
+                                                    "portfolioImport.session.source",
+                                                )}
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 {item.detected &&
                                     ["nexo", "kinesis"].includes(
@@ -1262,54 +1290,64 @@ export function PortfolioImportSession({ accounts }: Props) {
                                                         : "portfolioImport.session.transferDestination",
                                                 )}
                                             </Label>
-                                            <select
-                                                id={`transfer-${item.id}`}
-                                                className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
-                                                value={
+                                            <Select
+                                                value={toSelectValue(
                                                     item.detected.source !==
                                                         "nexo" ||
-                                                    item.transferOriginAccountId ===
-                                                        item.transferDestinationAccountId
-                                                        ? (item.transferDestinationAccountId ??
-                                                          "")
-                                                        : ""
-                                                }
-                                                disabled={
-                                                    locked ||
-                                                    !item.file ||
-                                                    item.status === "completed"
-                                                }
-                                                onChange={(event) =>
+                                                        item.transferOriginAccountId ===
+                                                            item.transferDestinationAccountId
+                                                        ? item.transferDestinationAccountId?.toString()
+                                                        : undefined,
+                                                )}
+                                                onValueChange={(value) =>
                                                     changeTransferAccount(
                                                         item.id,
-                                                        event.target.value,
+                                                        fromSelectValue(value),
                                                     )
                                                 }
                                             >
-                                                <option value="">
-                                                    {t(
-                                                        item.detected.source ===
-                                                            "nexo"
-                                                            ? "portfolioImport.session.custodyUnassigned"
-                                                            : "portfolioImport.session.transferUnassigned",
-                                                    )}
-                                                </option>
-                                                {accounts
-                                                    .filter(
-                                                        (account) =>
-                                                            account.id !==
-                                                            item.accountId,
-                                                    )
-                                                    .map((account) => (
-                                                        <option
-                                                            key={account.id}
-                                                            value={account.id}
-                                                        >
-                                                            {account.display_name ||
-                                                                account.name}
-                                                        </option>
-                                                    ))}
-                                            </select>
+                                                <SelectTrigger
+                                                    id={`transfer-${item.id}`}
+                                                    disabled={
+                                                        locked ||
+                                                        !item.file ||
+                                                        item.status ===
+                                                            "completed"
+                                                    }
+                                                >
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem
+                                                        value={SELECT_NONE}
+                                                    >
+                                                        {t(
+                                                            item.detected
+                                                                .source ===
+                                                                "nexo"
+                                                                ? "portfolioImport.session.custodyUnassigned"
+                                                                : "portfolioImport.session.transferUnassigned",
+                                                        )}
+                                                    </SelectItem>
+                                                    {accounts
+                                                        .filter(
+                                                            (account) =>
+                                                                account.id !==
+                                                                item.accountId,
+                                                        )
+                                                        .map((account) => (
+                                                            <SelectItem
+                                                                key={account.id}
+                                                                value={String(
+                                                                    account.id,
+                                                                )}
+                                                            >
+                                                                {account.display_name ||
+                                                                    account.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                </SelectContent>
+                                            </Select>
                                             <p className="type-caption text-label-secondary">
                                                 {t(
                                                     item.detected.source ===
@@ -1394,15 +1432,11 @@ export function PortfolioImportSession({ accounts }: Props) {
                     <Label htmlFor="portfolio-session-scope">
                         {t("portfolioImport.session.scope")}
                     </Label>
-                    <select
-                        id="portfolio-session-scope"
-                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
+                    <Select
                         value={reconciliationMode}
-                        disabled={locked}
-                        onChange={(event) => {
+                        onValueChange={(value) => {
                             invalidate();
-                            const next = event.target
-                                .value as PortfolioReconciliationMode;
+                            const next = value as PortfolioReconciliationMode;
                             setReconciliationMode(next);
                             if (
                                 next === "adopt_existing_only" ||
@@ -1414,36 +1448,48 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 setPolicy("prefer_source");
                         }}
                     >
-                        <option value="full">
-                            {t("portfolioImport.session.fullHistory")}
-                        </option>
-                        <option
-                            value="record_cash_only"
-                            disabled={!attachmentEligible}
+                        <SelectTrigger
+                            id="portfolio-session-scope"
+                            disabled={locked}
                         >
-                            {t("portfolioImport.session.recordCash")}
-                        </option>
-                        <option
-                            value="record_in_kind_income_only"
-                            disabled={!attachmentEligible}
-                        >
-                            {t("portfolioImport.session.recordInKindIncome")}
-                        </option>
-                        <option
-                            value="correct_existing_only"
-                            disabled={!correctionEligible}
-                        >
-                            {t(
-                                "portfolioImport.session.correctExistingRecords",
-                            )}
-                        </option>
-                        <option
-                            value="adopt_existing_only"
-                            disabled={!attachmentEligible}
-                        >
-                            {t("portfolioImport.session.attachSourceRecords")}
-                        </option>
-                    </select>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="full">
+                                {t("portfolioImport.session.fullHistory")}
+                            </SelectItem>
+                            <SelectItem
+                                value="record_cash_only"
+                                disabled={!attachmentEligible}
+                            >
+                                {t("portfolioImport.session.recordCash")}
+                            </SelectItem>
+                            <SelectItem
+                                value="record_in_kind_income_only"
+                                disabled={!attachmentEligible}
+                            >
+                                {t(
+                                    "portfolioImport.session.recordInKindIncome",
+                                )}
+                            </SelectItem>
+                            <SelectItem
+                                value="correct_existing_only"
+                                disabled={!correctionEligible}
+                            >
+                                {t(
+                                    "portfolioImport.session.correctExistingRecords",
+                                )}
+                            </SelectItem>
+                            <SelectItem
+                                value="adopt_existing_only"
+                                disabled={!attachmentEligible}
+                            >
+                                {t(
+                                    "portfolioImport.session.attachSourceRecords",
+                                )}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                     <p className="type-footnote text-label-secondary">
                         {t(
                             cashOnly
@@ -1489,7 +1535,10 @@ export function PortfolioImportSession({ accounts }: Props) {
                         </div>
                     )}
                     {existingOnly && !scopeValid && (
-                        <p role="alert" className="type-footnote text-destructive">
+                        <p
+                            role="alert"
+                            className="type-footnote text-destructive"
+                        >
                             {t(
                                 cashOnly
                                     ? "portfolioImport.session.cashUnavailable"
@@ -1506,26 +1555,31 @@ export function PortfolioImportSession({ accounts }: Props) {
                     <Label htmlFor="portfolio-session-policy">
                         {t("portfolioImport.session.policy")}
                     </Label>
-                    <select
-                        id="portfolio-session-policy"
-                        className="h-9 w-full rounded-control border border-input bg-background px-3 type-body focus-ring"
+                    <Select
                         value={policy}
-                        disabled={locked || existingOnly}
-                        onChange={(event) => {
+                        onValueChange={(value) => {
                             invalidate();
-                            setPolicy(event.target.value as typeof policy);
+                            setPolicy(value as typeof policy);
                         }}
                     >
-                        <option value="auto">
-                            {t("portfolioImport.session.auto")}
-                        </option>
-                        <option value="preserve_existing">
-                            {t("portfolioImport.session.preserve")}
-                        </option>
-                        <option value="prefer_source">
-                            {t("portfolioImport.session.source")}
-                        </option>
-                    </select>
+                        <SelectTrigger
+                            id="portfolio-session-policy"
+                            disabled={locked || existingOnly}
+                        >
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="auto">
+                                {t("portfolioImport.session.auto")}
+                            </SelectItem>
+                            <SelectItem value="preserve_existing">
+                                {t("portfolioImport.session.preserve")}
+                            </SelectItem>
+                            <SelectItem value="prefer_source">
+                                {t("portfolioImport.session.source")}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
                     <p className="type-footnote text-label-secondary">
                         {t(
                             cashOnly
@@ -1578,12 +1632,18 @@ export function PortfolioImportSession({ accounts }: Props) {
                     )}
                 </div>
                 {stopped && (
-                    <p role="status" className="type-footnote text-label-secondary">
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
                         {t("portfolioImport.session.stopped")}
                     </p>
                 )}
                 {operation === "preview" && (
-                    <p role="status" className="type-footnote text-label-secondary">
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
                         {t("portfolioImport.session.previewing")}
                     </p>
                 )}
@@ -1718,10 +1778,10 @@ export function PortfolioImportSession({ accounts }: Props) {
                                 </ul>
                             </div>
                         )}
-                        <details>
-                            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
+                        <Disclosure>
+                            <DisclosureSummary>
                                 {t("portfolioImport.session.evidence")}
-                            </summary>
+                            </DisclosureSummary>
                             <div className="mt-3 space-y-3">
                                 {review.plan.actions
                                     .slice(0, shownActions)
@@ -2111,7 +2171,7 @@ export function PortfolioImportSession({ accounts }: Props) {
                                     {t("portfolioImport.session.more")}
                                 </Button>
                             )}
-                        </details>
+                        </Disclosure>
                         <p className="type-footnote text-label-secondary">
                             {t(
                                 cashOnly
@@ -2144,7 +2204,10 @@ export function PortfolioImportSession({ accounts }: Props) {
                     </section>
                 )}
                 {operation === "commit" && (
-                    <p role="status" className="type-footnote text-label-secondary">
+                    <p
+                        role="status"
+                        className="type-footnote text-label-secondary"
+                    >
                         {t("portfolioImport.session.committing")}
                     </p>
                 )}

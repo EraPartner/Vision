@@ -18,7 +18,13 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { MappedColumnField, NONE } from "./ColumnSelect";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
+import { MappedColumnField } from "./ColumnSelect";
+import { SELECT_NONE } from "@/lib/selectValue";
 import { PORTFOLIO_COLUMN_FIELDS } from "./portfolioColumnFields";
 import { ASSET_CLASSES } from "@/utils/assetClass";
 import type { PortfolioCustomConfig } from "@/lib/api/portfolioImports";
@@ -94,7 +100,7 @@ export function PortfolioCsvColumnMapper({
 
     const setMapping = (raw: string, canonical: string) => {
         const next = { ...config.typeMapping };
-        if (canonical === NONE) delete next[raw];
+        if (canonical === SELECT_NONE) delete next[raw];
         else next[raw] = canonical;
         onChange({ ...config, typeMapping: next });
     };
@@ -187,16 +193,16 @@ export function PortfolioCsvColumnMapper({
                     ([key]) => !ADDITIONAL_COLUMNS.has(key),
                 ).map(renderField)}
             </div>
-            <details className="rounded-card corner-continuous border border-border/60 p-3">
-                <summary className="cursor-pointer rounded-chip type-body font-medium text-foreground focus-ring">
+            <Disclosure variant="card">
+                <DisclosureSummary padded>
                     {t("portfolioImport.optionalColumns")}
-                </summary>
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                </DisclosureSummary>
+                <DisclosureContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {PORTFOLIO_COLUMN_FIELDS.filter(([key]) =>
                         ADDITIONAL_COLUMNS.has(key),
                     ).map(renderField)}
-                </div>
-            </details>
+                </DisclosureContent>
+            </Disclosure>
 
             {duplicateColumns.length > 0 && (
                 <p className="type-footnote text-warning" role="alert">
@@ -219,7 +225,9 @@ export function PortfolioCsvColumnMapper({
                                     {raw}
                                 </span>
                                 <Select
-                                    value={config.typeMapping?.[raw] ?? NONE}
+                                    value={
+                                        config.typeMapping?.[raw] ?? SELECT_NONE
+                                    }
                                     onValueChange={(v) => setMapping(raw, v)}
                                 >
                                     <SelectTrigger
@@ -229,7 +237,7 @@ export function PortfolioCsvColumnMapper({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value={NONE}>
+                                        <SelectItem value={SELECT_NONE}>
                                             <span className="text-label-secondary">
                                                 {t(
                                                     "portfolioImport.typeMappingAuto",

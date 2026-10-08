@@ -331,8 +331,8 @@ function TickerManager({ holdings }: { holdings: InvestmentSummary[] }) {
             <PopoverTrigger asChild>
                 <Button
                     variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-label-secondary hover:text-foreground"
+                    size="icon-sm"
+                    className="text-label-secondary hover:text-foreground"
                     aria-label={t("portfolio.ticker.manage")}
                     title={t("portfolio.ticker.manage")}
                 >

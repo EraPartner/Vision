@@ -28,6 +28,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import { PortfolioCsvColumnMapper } from "@/features/imports/PortfolioCsvColumnMapper";
 import { portfolioMappedColumns } from "@/features/imports/portfolioColumnFields";
 import { CsvDropzone } from "@/features/imports/CsvDropzone";
@@ -379,10 +384,10 @@ export function PortfolioImportPage() {
     return (
         <PageShell className="mx-auto max-w-3xl space-y-6 p-4">
             <PortfolioImportSession accounts={brokerAccounts} />
-            <details className="rounded-card corner-continuous border border-border/60 bg-card/70">
-                <summary className="cursor-pointer rounded-card p-4 type-body font-medium focus-ring">
+            <Disclosure variant="card">
+                <DisclosureSummary padded>
                     {t("portfolioImport.session.advanced")}
-                </summary>
+                </DisclosureSummary>
                 <Card className="rounded-t-none border-x-0 border-b-0 shadow-none">
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
@@ -508,11 +513,11 @@ export function PortfolioImportPage() {
                             </Alert>
                         ) : (
                             <>
-                                <details className="rounded-card corner-continuous bg-foreground/[0.04] p-3">
-                                    <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
+                                <Disclosure variant="inset">
+                                    <DisclosureSummary padded>
                                         {t("portfolioImport.formatOptions")}
-                                    </summary>
-                                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    </DisclosureSummary>
+                                    <DisclosureContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                         <SeparatorSelect
                                             id="pf-separator"
                                             value={config.separator}
@@ -577,8 +582,8 @@ export function PortfolioImportPage() {
                                                 }
                                             />
                                         </div>
-                                    </div>
-                                </details>
+                                    </DisclosureContent>
+                                </Disclosure>
 
                                 {/* Column mapping */}
                                 {file ? (
@@ -617,11 +622,11 @@ export function PortfolioImportPage() {
                         />
 
                         {/* Save parser */}
-                        <details className="rounded-card corner-continuous bg-foreground/[0.04] p-3">
-                            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
+                        <Disclosure variant="inset">
+                            <DisclosureSummary padded>
                                 {t("portfolioImport.saveParserOptions")}
-                            </summary>
-                            <div className="mt-4 flex flex-wrap items-end gap-2">
+                            </DisclosureSummary>
+                            <DisclosureContent className="flex flex-wrap items-end gap-2">
                                 <div className="flex-1 space-y-2 min-w-[160px]">
                                     <Label htmlFor="pf-parser-name">
                                         {t("importPage.customParser.name")}
@@ -666,8 +671,8 @@ export function PortfolioImportPage() {
                                         {t("importPage.customParser.delete")}
                                     </Button>
                                 )}
-                            </div>
-                        </details>
+                            </DisclosureContent>
+                        </Disclosure>
 
                         {/* Progress */}
                         {progress && loading && (
@@ -743,7 +748,7 @@ export function PortfolioImportPage() {
                         <ConfirmDialog />
                     </CardContent>
                 </Card>
-            </details>
+            </Disclosure>
         </PageShell>
     );
 }

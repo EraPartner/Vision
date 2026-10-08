@@ -1,19 +1,11 @@
 import { useId, useMemo, useState } from "react";
-import {
-    MoreHorizontal,
-    Plus,
-    Pencil,
-    Trash2,
-    MessageSquare,
-} from "lucide-react";
+import { Plus, Pencil, Trash2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     Dialog,
     DialogContent,
@@ -100,12 +92,11 @@ export function ChatConversationList({
                     </h2>
                     <Button
                         type="button"
-                        size="icon"
+                        size="icon-sm"
                         variant="ghost"
                         onClick={handleNew}
                         disabled={createMut.isPending}
                         aria-label={t("aiChat.newConversation")}
-                        className="h-8 w-8"
                     >
                         <Plus className="h-4 w-4" />
                     </Button>
@@ -176,47 +167,35 @@ export function ChatConversationList({
                                             />
                                         )}
                                     </Button>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                size="icon"
-                                                variant="ghost"
-                                                aria-label={t(
-                                                    "aiChat.conversationActions",
-                                                )}
-                                                className="icon-touch-target h-8 w-8 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(pointer:coarse)]:opacity-100"
-                                            >
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem
-                                                onSelect={() =>
-                                                    setRenameTarget(conv)
-                                                }
-                                            >
-                                                <Pencil
-                                                    className="mr-2 h-4 w-4 text-label-secondary"
-                                                    aria-hidden="true"
-                                                />
-                                                {t("aiChat.rename")}
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                onSelect={() =>
-                                                    void handleDelete(conv)
-                                                }
-                                                className="text-destructive focus:text-destructive"
-                                            >
-                                                <Trash2
-                                                    className="mr-2 h-4 w-4"
-                                                    aria-hidden="true"
-                                                />
-                                                {t("aiChat.delete")}
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <RowMenu
+                                        label={t("aiChat.conversationActions")}
+                                        className="icon-touch-target shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(pointer:coarse)]:opacity-100"
+                                    >
+                                        <DropdownMenuItem
+                                            onSelect={() =>
+                                                setRenameTarget(conv)
+                                            }
+                                        >
+                                            <Pencil
+                                                className="mr-2 h-4 w-4 text-label-secondary"
+                                                aria-hidden="true"
+                                            />
+                                            {t("aiChat.rename")}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onSelect={() =>
+                                                void handleDelete(conv)
+                                            }
+                                            variant="destructive"
+                                        >
+                                            <Trash2
+                                                className="mr-2 h-4 w-4"
+                                                aria-hidden="true"
+                                            />
+                                            {t("aiChat.delete")}
+                                        </DropdownMenuItem>
+                                    </RowMenu>
                                 </li>
                             );
                         })}

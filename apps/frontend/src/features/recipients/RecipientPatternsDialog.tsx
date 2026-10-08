@@ -28,24 +28,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { List, ListRow } from "@/components/ui/list";
 import { toast } from "sonner";
-import {
-    Eye,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Plus,
-    Regex,
-    Trash2,
-} from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Regex, Trash2 } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { SectionLoader } from "@/components/shared/SectionLoader";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { cn } from "@/lib/utils";
@@ -326,64 +316,42 @@ export function RecipientPatternsDialog({
                                                         { pattern: p.pattern },
                                                     )}
                                                 />
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger
-                                                        asChild
+                                                <RowMenu
+                                                    label={t(
+                                                        "recipientPatterns.rowMenu",
+                                                        { pattern: p.pattern },
+                                                    )}
+                                                >
+                                                    <DropdownMenuItem
+                                                        onSelect={() =>
+                                                            editingId === p.id
+                                                                ? resetForm()
+                                                                : startEdit(p)
+                                                        }
                                                     >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-label-secondary"
-                                                            aria-label={t(
-                                                                "recipientPatterns.rowMenu",
-                                                                {
-                                                                    pattern:
-                                                                        p.pattern,
-                                                                },
-                                                            )}
-                                                        >
-                                                            <MoreHorizontal
-                                                                aria-hidden
-                                                            />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            onSelect={() =>
-                                                                editingId ===
-                                                                p.id
-                                                                    ? resetForm()
-                                                                    : startEdit(
-                                                                          p,
-                                                                      )
-                                                            }
-                                                        >
-                                                            <Pencil
-                                                                className="mr-2 h-4 w-4 text-label-secondary"
-                                                                aria-hidden
-                                                            />
-                                                            {t("common.edit")}
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem
-                                                            className="text-destructive focus:text-destructive"
-                                                            disabled={
-                                                                deleteMutation.isPending
-                                                            }
-                                                            onSelect={() =>
-                                                                void handleDelete(
-                                                                    p,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2
-                                                                className="mr-2 h-4 w-4"
-                                                                aria-hidden
-                                                            />
-                                                            {t("common.delete")}
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                        <Pencil
+                                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                                            aria-hidden
+                                                        />
+                                                        {t("common.edit")}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        variant="destructive"
+                                                        disabled={
+                                                            deleteMutation.isPending
+                                                        }
+                                                        onSelect={() =>
+                                                            void handleDelete(p)
+                                                        }
+                                                    >
+                                                        <Trash2
+                                                            className="mr-2 h-4 w-4"
+                                                            aria-hidden
+                                                        />
+                                                        {t("common.delete")}
+                                                    </DropdownMenuItem>
+                                                </RowMenu>
                                             </span>
                                         }
                                     />

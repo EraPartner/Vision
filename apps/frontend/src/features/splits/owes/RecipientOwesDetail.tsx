@@ -1,12 +1,10 @@
 import { PageError } from "@/components/shared/PageError";
 import { useId, useState, type FormEvent } from "react";
 import {
-    ArrowLeft,
     BanknoteCheck,
     Check,
     Download,
     HandCoins,
-    MoreHorizontal,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +12,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { TextLink } from "@/components/shared/TextLink";
 import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
@@ -25,11 +24,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -164,48 +160,31 @@ export function RecipientOwesDetail({
 
     return (
         <div className="space-y-6">
-            <div>
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="-ml-2 text-label-secondary"
-                    onClick={onBack}
-                >
-                    <ArrowLeft aria-hidden />
-                    {t("common.back")}
-                </Button>
-            </div>
             <PageHeader
+                back={{ label: t("common.back"), onClick: onBack }}
                 title={recipient.name}
                 subtitle={t("owesPage.outstandingSplits")}
                 icon={HandCoins}
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("owesPage.menu")}
-                                >
-                                    <MoreHorizontal aria-hidden />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    disabled={!items.length || isExportingCsv}
-                                    onSelect={() => void handleExportCsv()}
-                                >
-                                    <Download
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                    {isExportingCsv
-                                        ? t("owesPage.export.loading")
-                                        : t("owesPage.export.button")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("owesPage.menu")}
+                        >
+                            <DropdownMenuItem
+                                disabled={!items.length || isExportingCsv}
+                                onSelect={() => void handleExportCsv()}
+                            >
+                                <Download
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                                {isExportingCsv
+                                    ? t("owesPage.export.loading")
+                                    : t("owesPage.export.button")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <Button
                             onClick={() => void handleSettleAll()}
                             disabled={
@@ -351,65 +330,46 @@ export function RecipientOwesDetail({
                                                 <BanknoteCheck aria-hidden="true" />
                                                 {t("owesPage.recordPayment")}
                                             </Button>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-label-secondary"
-                                                        aria-label={t(
-                                                            "owesPage.rowMenu",
-                                                            {
-                                                                name: splitContext,
-                                                            },
-                                                        )}
-                                                    >
-                                                        <MoreHorizontal
-                                                            aria-hidden
-                                                        />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem
-                                                        disabled={
-                                                            settleSplit.isPending
-                                                        }
-                                                        onSelect={() =>
-                                                            settleSplit.mutate(
-                                                                split.id,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Check
-                                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                                            aria-hidden
-                                                        />
-                                                        {t(
-                                                            "owesPage.markSettled",
-                                                        )}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                        className="text-destructive focus:text-destructive"
-                                                        disabled={
-                                                            deleteSplit.isPending
-                                                        }
-                                                        onSelect={() =>
-                                                            void handleDeleteSplit(
-                                                                split.id,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Trash2
-                                                            className="mr-2 h-4 w-4"
-                                                            aria-hidden
-                                                        />
-                                                        {t(
-                                                            "owesPage.deleteSplit",
-                                                        )}
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <RowMenu
+                                                label={t("owesPage.rowMenu", {
+                                                    name: splitContext,
+                                                })}
+                                            >
+                                                <DropdownMenuItem
+                                                    disabled={
+                                                        settleSplit.isPending
+                                                    }
+                                                    onSelect={() =>
+                                                        settleSplit.mutate(
+                                                            split.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <Check
+                                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                                        aria-hidden
+                                                    />
+                                                    {t("owesPage.markSettled")}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    disabled={
+                                                        deleteSplit.isPending
+                                                    }
+                                                    onSelect={() =>
+                                                        void handleDeleteSplit(
+                                                            split.id,
+                                                        )
+                                                    }
+                                                >
+                                                    <Trash2
+                                                        className="mr-2 h-4 w-4"
+                                                        aria-hidden
+                                                    />
+                                                    {t("owesPage.deleteSplit")}
+                                                </DropdownMenuItem>
+                                            </RowMenu>
                                         </>
                                     }
                                 />

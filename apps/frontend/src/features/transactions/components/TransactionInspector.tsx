@@ -1,6 +1,16 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { Check, Copy, Filter, Pencil, Split, ToggleLeft, ToggleRight, Trash2, X } from "lucide-react";
+import {
+    Check,
+    Copy,
+    Filter,
+    Pencil,
+    Split,
+    ToggleLeft,
+    ToggleRight,
+    Trash2,
+    X,
+} from "lucide-react";
 import {
     Inspector,
     InspectorBody,
@@ -110,7 +120,11 @@ export function TransactionInspector(props: TransactionInspectorProps) {
                         <SheetDescription>{title}</SheetDescription>
                     </SheetHeader>
                     {transaction && (
-                        <InspectorContent key={transaction.id} {...props} transaction={transaction} />
+                        <InspectorContent
+                            key={transaction.id}
+                            {...props}
+                            transaction={transaction}
+                        />
                     )}
                 </SheetContent>
             </Sheet>
@@ -124,7 +138,11 @@ export function TransactionInspector(props: TransactionInspectorProps) {
             onClose={onClose}
             className="sticky top-4 max-h-[calc(100vh-6rem)] w-[332px]"
         >
-            <InspectorContent key={transaction.id} {...props} transaction={transaction} />
+            <InspectorContent
+                key={transaction.id}
+                {...props}
+                transaction={transaction}
+            />
         </Inspector>
     );
 }
@@ -163,9 +181,13 @@ function InspectorContent({
     const { data: accountsData } = useAccounts({ active: "true" });
     const tagsLabelId = useId();
 
-    const [editingField, setEditingField] = useState<InfoEditableField | null>(null);
+    const [editingField, setEditingField] = useState<InfoEditableField | null>(
+        null,
+    );
     const [editingValue, setEditingValue] = useState("");
-    const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
+    const [editingAccountId, setEditingAccountId] = useState<number | null>(
+        null,
+    );
 
     // Tag chips track local state (the row snapshot never carries tag edits
     // back), re-seeded whenever a different row's tags arrive.
@@ -213,7 +235,10 @@ function InspectorContent({
 
         if (editingField === "amount") {
             const parsed = moneyAmount(
-                { required: "addTxn.invalidAmount", invalid: "addTxn.invalidAmount" },
+                {
+                    required: "addTxn.invalidAmount",
+                    invalid: "addTxn.invalidAmount",
+                },
                 appSettings.numberFormat,
             ).safeParse(trimmed);
             if (!parsed.success) return;
@@ -237,7 +262,9 @@ function InspectorContent({
             } else {
                 const normalized = trimmed.toLowerCase();
                 const account =
-                    (accountsData?.items ?? []).find((a) => a.id === editingAccountId) ??
+                    (accountsData?.items ?? []).find(
+                        (a) => a.id === editingAccountId,
+                    ) ??
                     (accountsData?.items ?? []).find(
                         (a) => a.name.trim().toLowerCase() === normalized,
                     );
@@ -265,7 +292,10 @@ function InspectorContent({
             key: "date",
             label: t("txPage.field.date"),
             value: txn.date
-                ? formatDateStringWithAppSettings(txn.date, appSettings.dateFormat)
+                ? formatDateStringWithAppSettings(
+                      txn.date,
+                      appSettings.dateFormat,
+                  )
                 : "—",
             editable: true,
             editField: "date",
@@ -287,7 +317,10 @@ function InspectorContent({
             value: <Money amount={txn.amount} currency={txn.currency} signed />,
             editable: true,
             editField: "amount",
-            editValue: formatEditableNumber(txn.amount, appSettings.numberFormat),
+            editValue: formatEditableNumber(
+                txn.amount,
+                appSettings.numberFormat,
+            ),
             editType: "text",
         },
         {
@@ -336,10 +369,15 @@ function InspectorContent({
         <dl className="divide-y divide-border/50">
             {fields.map((field) =>
                 field.value || field.editable ? (
-                    <div key={field.key} className="flex items-center justify-between gap-3 py-2 type-body">
+                    <div
+                        key={field.key}
+                        className="flex items-center justify-between gap-3 py-2 type-body"
+                    >
                         <dt className="shrink-0 text-label-secondary">
                             {field.editable && field.editField ? (
-                                <label htmlFor={`transaction-info-${field.editField}`}>
+                                <label
+                                    htmlFor={`transaction-info-${field.editField}`}
+                                >
                                     {field.label}
                                 </label>
                             ) : (
@@ -362,11 +400,15 @@ function InspectorContent({
                                             id={`transaction-info-${field.editField}`}
                                             value={
                                                 editingValue
-                                                    ? parseLocalDateFromYmd(editingValue)
+                                                    ? parseLocalDateFromYmd(
+                                                          editingValue,
+                                                      )
                                                     : undefined
                                             }
                                             onChange={(d) =>
-                                                setEditingValue(d ? toYmd(d) : "")
+                                                setEditingValue(
+                                                    d ? toYmd(d) : "",
+                                                )
                                             }
                                             buttonClassName="h-8 w-36"
                                         />
@@ -375,7 +417,9 @@ function InspectorContent({
                                             id={`transaction-info-${field.editField}`}
                                             value={editingValue}
                                             onChange={setEditingValue}
-                                            onAccountIdChange={setEditingAccountId}
+                                            onAccountIdChange={
+                                                setEditingAccountId
+                                            }
                                             className="w-40"
                                         />
                                     ) : field.multiline ? (
@@ -383,9 +427,14 @@ function InspectorContent({
                                             id={`transaction-info-${field.editField}`}
                                             value={editingValue}
                                             rows={2}
-                                            onChange={(e) => setEditingValue(e.target.value)}
+                                            onChange={(e) =>
+                                                setEditingValue(e.target.value)
+                                            }
                                             onKeyDown={(e) => {
-                                                if (e.key === "Enter" && !e.shiftKey) {
+                                                if (
+                                                    e.key === "Enter" &&
+                                                    !e.shiftKey
+                                                ) {
                                                     e.preventDefault();
                                                     void saveEdit();
                                                 }
@@ -402,15 +451,16 @@ function InspectorContent({
                                                     : undefined
                                             }
                                             value={editingValue}
-                                            onChange={(e) => setEditingValue(e.target.value)}
+                                            onChange={(e) =>
+                                                setEditingValue(e.target.value)
+                                            }
                                             className="h-8 w-36"
                                         />
                                     )}
                                     <Button
                                         type="submit"
                                         variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
+                                        size="icon-sm"
                                         aria-label={t("common.save")}
                                         title={t("common.save")}
                                         disabled={updateMutation.isPending}
@@ -420,8 +470,7 @@ function InspectorContent({
                                     <Button
                                         type="button"
                                         variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
+                                        size="icon-sm"
                                         onClick={cancelEdit}
                                         disabled={updateMutation.isPending}
                                         title={t("common.cancel")}
@@ -435,7 +484,8 @@ function InspectorContent({
                                     <span
                                         className={cn(
                                             "min-w-0 break-words text-foreground tabular-nums",
-                                            !field.value && "text-label-tertiary",
+                                            !field.value &&
+                                                "text-label-tertiary",
                                         )}
                                     >
                                         {field.value ?? "—"}
@@ -443,13 +493,20 @@ function InspectorContent({
                                     {field.editable && field.editField && (
                                         <Button
                                             variant="ghost"
-                                            size="icon"
-                                            className="h-7 w-7 text-label-secondary hover:text-foreground"
+                                            size="icon-xs"
+                                            className="text-label-secondary hover:text-foreground"
                                             onClick={() =>
-                                                startEdit(field.editField!, field.editValue ?? "")
+                                                startEdit(
+                                                    field.editField!,
+                                                    field.editValue ?? "",
+                                                )
                                             }
-                                            aria-label={t("common.editField", { field: field.label })}
-                                            title={t("common.editField", { field: field.label })}
+                                            aria-label={t("common.editField", {
+                                                field: field.label,
+                                            })}
+                                            title={t("common.editField", {
+                                                field: field.label,
+                                            })}
                                         >
                                             <Pencil className="h-3.5 w-3.5" />
                                         </Button>
@@ -467,16 +524,25 @@ function InspectorContent({
         <>
             <InspectorHeader className={cn(presentation === "sheet" && "pt-6")}>
                 <div className="min-w-0 flex-1">
-                    <InspectorTitle title={txn.recipient}>{txn.recipient}</InspectorTitle>
+                    <InspectorTitle title={txn.recipient}>
+                        {txn.recipient}
+                    </InspectorTitle>
                     <p className="type-footnote text-label-secondary">
                         {txn.date
-                            ? formatDateStringWithAppSettings(txn.date, appSettings.dateFormat)
+                            ? formatDateStringWithAppSettings(
+                                  txn.date,
+                                  appSettings.dateFormat,
+                              )
                             : "—"}
                         {txn.bank ? ` · ${txn.bank}` : ""}
-                        {!txn.is_active ? ` · ${t("txPage.statusInactive")}` : ""}
+                        {!txn.is_active
+                            ? ` · ${t("txPage.statusInactive")}`
+                            : ""}
                     </p>
                 </div>
-                {presentation === "docked" && <InspectorClose onClick={onClose} />}
+                {presentation === "docked" && (
+                    <InspectorClose onClick={onClose} />
+                )}
             </InspectorHeader>
             <InspectorBody>
                 <p
@@ -492,7 +558,10 @@ function InspectorContent({
                 <InspectorSection label={t("txPage.inspector.classify")}>
                     <div className="space-y-2">
                         <div className="space-y-1">
-                            <label htmlFor="transaction-info-category" className="type-footnote text-label-secondary">
+                            <label
+                                htmlFor="transaction-info-category"
+                                className="type-footnote text-label-secondary"
+                            >
                                 {t("txPage.field.category")}
                             </label>
                             <div className="flex items-center gap-2">
@@ -500,31 +569,44 @@ function InspectorContent({
                                     aria-hidden="true"
                                     className={cn(
                                         "h-2.5 w-2.5 shrink-0 rounded-full",
-                                        uncategorised && "border border-dashed border-label-tertiary",
+                                        uncategorised &&
+                                            "border border-dashed border-label-tertiary",
                                     )}
                                     style={
                                         uncategorised
                                             ? undefined
-                                            : { backgroundColor: getCategoryChartColor(txn.category) }
+                                            : {
+                                                  backgroundColor:
+                                                      getCategoryChartColor(
+                                                          txn.category,
+                                                      ),
+                                              }
                                     }
                                 />
                                 <CategoryCombobox
                                     id="transaction-info-category"
                                     value={txn.categoryId ?? null}
-                                    onSelect={(id, name) => onSelectCategory(txn.id, id, name)}
+                                    onSelect={(id, name) =>
+                                        onSelectCategory(txn.id, id, name)
+                                    }
                                     className="h-9 flex-1"
                                     disabled={updatePending}
                                 />
                             </div>
                         </div>
                         <div className="space-y-1">
-                            <label htmlFor="transaction-info-recipient" className="type-footnote text-label-secondary">
+                            <label
+                                htmlFor="transaction-info-recipient"
+                                className="type-footnote text-label-secondary"
+                            >
                                 {t("txPage.field.recipient")}
                             </label>
                             <RecipientCombobox
                                 id="transaction-info-recipient"
                                 value={txn.recipientId || null}
-                                onSelect={(id, name) => onSelectRecipient(txn.id, id, name)}
+                                onSelect={(id, name) =>
+                                    onSelectRecipient(txn.id, id, name)
+                                }
                                 className="h-9 w-full"
                                 disabled={updatePending}
                             />
@@ -535,10 +617,13 @@ function InspectorContent({
                             {otherUncategorised > 0 && txn.categoryId && (
                                 <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                                     <span>
-                                        {t("txPage.inspector.othersNeedCategory", {
-                                            count: otherUncategorised,
-                                            name: recipient.name,
-                                        })}
+                                        {t(
+                                            "txPage.inspector.othersNeedCategory",
+                                            {
+                                                count: otherUncategorised,
+                                                name: recipient.name,
+                                            },
+                                        )}
                                     </span>
                                     <Button
                                         variant="link"
@@ -552,22 +637,31 @@ function InspectorContent({
                                                     uncategorised: true,
                                                     active: true,
                                                 },
-                                                expected_count: uncategorisedCount ?? 0,
-                                                fields: { category_id: txn.categoryId ?? null },
+                                                expected_count:
+                                                    uncategorisedCount ?? 0,
+                                                fields: {
+                                                    category_id:
+                                                        txn.categoryId ?? null,
+                                                },
                                             })
                                         }
                                     >
-                                        {t("txPage.inspector.useForAll", { count: otherUncategorised })}
+                                        {t("txPage.inspector.useForAll", {
+                                            count: otherUncategorised,
+                                        })}
                                     </Button>
                                 </p>
                             )}
                             {canSetUsual && (
                                 <p className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                                     <span>
-                                        {t("txPage.inspector.alwaysUseQuestion", {
-                                            category: txn.category,
-                                            name: recipient.name,
-                                        })}
+                                        {t(
+                                            "txPage.inspector.alwaysUseQuestion",
+                                            {
+                                                category: txn.category,
+                                                name: recipient.name,
+                                            },
+                                        )}
                                     </span>
                                     <Button
                                         variant="link"
@@ -577,7 +671,10 @@ function InspectorContent({
                                         onClick={() =>
                                             updateRecipient.mutate({
                                                 id: recipient.id,
-                                                data: { default_category_id: txn.categoryId ?? null },
+                                                data: {
+                                                    default_category_id:
+                                                        txn.categoryId ?? null,
+                                                },
                                             })
                                         }
                                     >
@@ -596,8 +693,15 @@ function InspectorContent({
                                         category: txn.category,
                                     })}
                                 </span>
-                                <Button asChild variant="link" size="sm" className="h-auto p-0">
-                                    <Link to="/recipients">{t("txPage.inspector.editRule")}</Link>
+                                <Button
+                                    asChild
+                                    variant="link"
+                                    size="sm"
+                                    className="h-auto p-0"
+                                >
+                                    <Link to="/recipients">
+                                        {t("txPage.inspector.editRule")}
+                                    </Link>
                                 </Button>
                             </p>
                         )}
@@ -647,13 +751,23 @@ function InspectorContent({
                     }
                 />
                 {canDuplicate && (
-                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => onDuplicate(txn)}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => onDuplicate(txn)}
+                    >
                         <Copy className="h-4 w-4" />
                         {t("contextMenu.duplicate")}
                     </Button>
                 )}
                 {hasRecipient && (
-                    <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => onFilterByRecipient(txn)}>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => onFilterByRecipient(txn)}
+                    >
                         <Filter className="h-4 w-4" />
                         {t("txPage.inspector.showAllFromPayee")}
                     </Button>
@@ -665,8 +779,14 @@ function InspectorContent({
                     disabled={updatePending}
                     onClick={() => onToggleActive(txn.id, txn.is_active)}
                 >
-                    {txn.is_active ? <ToggleLeft className="h-4 w-4" /> : <ToggleRight className="h-4 w-4" />}
-                    {txn.is_active ? t("contextMenu.markInactive") : t("contextMenu.markActive")}
+                    {txn.is_active ? (
+                        <ToggleLeft className="h-4 w-4" />
+                    ) : (
+                        <ToggleRight className="h-4 w-4" />
+                    )}
+                    {txn.is_active
+                        ? t("contextMenu.markInactive")
+                        : t("contextMenu.markActive")}
                 </Button>
                 <Button
                     variant="ghost"

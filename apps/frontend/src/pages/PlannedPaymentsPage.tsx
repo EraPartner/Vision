@@ -1,13 +1,7 @@
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-    CalendarClock,
-    History,
-    MoreHorizontal,
-    Plus,
-    SlidersHorizontal,
-} from "lucide-react";
+import { CalendarClock, History, Plus, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -22,6 +16,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
@@ -164,7 +159,10 @@ export default function PlannedPaymentsPage() {
                         try {
                             await toggleActive(payment.id);
                         } catch (error) {
-                            logger.error("Failed to undo status change:", error);
+                            logger.error(
+                                "Failed to undo status change:",
+                                error,
+                            );
                             toast.error(t("plannedPage.toggleFailed"));
                         }
                     },
@@ -328,7 +326,10 @@ export default function PlannedPaymentsPage() {
                                         {t("txPage.view.menu")}
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuContent
+                                    align="end"
+                                    className="w-56"
+                                >
                                     <DropdownMenuCheckboxItem
                                         checked={showAll}
                                         onCheckedChange={(checked) =>
@@ -339,31 +340,21 @@ export default function PlannedPaymentsPage() {
                                     </DropdownMenuCheckboxItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label={t("plannedPage.menu")}
-                                    >
-                                        <MoreHorizontal
-                                            className="h-4 w-4"
-                                            aria-hidden
-                                        />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        onSelect={() => setHistoryOpen(true)}
-                                    >
-                                        <History
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("plannedPage.history.title")}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <RowMenu
+                                variant="outline"
+                                size="icon"
+                                label={t("plannedPage.menu")}
+                            >
+                                <DropdownMenuItem
+                                    onSelect={() => setHistoryOpen(true)}
+                                >
+                                    <History
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("plannedPage.history.title")}
+                                </DropdownMenuItem>
+                            </RowMenu>
                             {addButton}
                         </>
                     }

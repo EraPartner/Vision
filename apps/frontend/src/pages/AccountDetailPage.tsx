@@ -30,12 +30,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     Table,
     TableBody,
@@ -57,7 +55,6 @@ import {
     Coins,
     DoorClosed,
     GitMerge,
-    MoreHorizontal,
     Pencil,
     Receipt,
     Scale,
@@ -391,21 +388,11 @@ export default function AccountDetailPage() {
 
     return (
         <PageShell className="">
-            {/* Back to the hub */}
-            <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2 px-2 text-label-secondary hover:text-foreground"
-                onClick={() => navigate("/accounts")}
-            >
-                <ArrowLeft aria-hidden />
-                {t("accounts.detail.back")}
-            </Button>
-
             <PageHeader
                 title={a.display_name || a.name}
                 subtitle={subtitleParts.join(" · ")}
                 icon={PAGE_ICONS["/accounts"]}
+                back={{ label: t("accounts.detail.back"), to: "/accounts" }}
                 actions={
                     <>
                         {!a.is_active && (
@@ -414,127 +401,114 @@ export default function AccountDetailPage() {
                             </Badge>
                         )}
                         {/* Edit / Merge / Close live HERE now (moved off the hub cards, WP-B4). */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("accounts.actionsMenu")}
-                                >
-                                    <MoreHorizontal aria-hidden />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("accounts.actionsMenu")}
+                        >
+                            <DropdownMenuItem onClick={() => setEditing(true)}>
+                                <Pencil
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                                {t("common.edit")}
+                            </DropdownMenuItem>
+                            {!holdingsOnly && (
                                 <DropdownMenuItem
-                                    onClick={() => setEditing(true)}
+                                    onClick={() => setAnchoring(true)}
                                 >
-                                    <Pencil
+                                    <Coins
                                         className="mr-2 h-4 w-4 text-label-secondary"
                                         aria-hidden
                                     />
-                                    {t("common.edit")}
+                                    {t("accounts.openingBalance.action")}
                                 </DropdownMenuItem>
-                                {!holdingsOnly && (
-                                    <DropdownMenuItem
-                                        onClick={() => setAnchoring(true)}
-                                    >
-                                        <Coins
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("accounts.openingBalance.action")}
-                                    </DropdownMenuItem>
-                                )}
-                                {canViewTransactions && (
-                                    <DropdownMenuItem
-                                        onClick={() =>
-                                            openAccountTransactions(a)
-                                        }
-                                    >
-                                        <Receipt
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("accounts.openTransactions")}
-                                    </DropdownMenuItem>
-                                )}
-                                <DropdownMenuSeparator />
-                                {accounts.length > 1 && (
-                                    <DropdownMenuItem
-                                        onClick={() => setMerging(true)}
-                                    >
-                                        <GitMerge
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("accounts.merge")}
-                                    </DropdownMenuItem>
-                                )}
-                                {a.is_active && portfolio && (
-                                    <DropdownMenuItem
-                                        onClick={() =>
-                                            setTransferringLots(true)
-                                        }
-                                    >
-                                        <ArrowRightLeft
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("portfolio.brokerTransfer.action")}
-                                    </DropdownMenuItem>
-                                )}
-                                {/* ONE lifecycle verb (§3 F5): Close (= archive + drop from
+                            )}
+                            {canViewTransactions && (
+                                <DropdownMenuItem
+                                    onClick={() => openAccountTransactions(a)}
+                                >
+                                    <Receipt
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("accounts.openTransactions")}
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            {accounts.length > 1 && (
+                                <DropdownMenuItem
+                                    onClick={() => setMerging(true)}
+                                >
+                                    <GitMerge
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("accounts.merge")}
+                                </DropdownMenuItem>
+                            )}
+                            {a.is_active && portfolio && (
+                                <DropdownMenuItem
+                                    onClick={() => setTransferringLots(true)}
+                                >
+                                    <ArrowRightLeft
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("portfolio.brokerTransfer.action")}
+                                </DropdownMenuItem>
+                            )}
+                            {/* ONE lifecycle verb (§3 F5): Close (= archive + drop from
                                     aggregates, WP-A3) while active, Reopen while closed. */}
-                                {a.is_active ? (
-                                    <DropdownMenuItem
-                                        onClick={() => setClosing(true)}
-                                    >
-                                        <DoorClosed
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("accounts.close.action")}
-                                    </DropdownMenuItem>
-                                ) : (
-                                    <DropdownMenuItem onClick={() => reopen(a)}>
-                                        <ArchiveRestore
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("accounts.restore")}
-                                    </DropdownMenuItem>
-                                )}
-                                {/* Delete only exists for an account with no transactions;
+                            {a.is_active ? (
+                                <DropdownMenuItem
+                                    onClick={() => setClosing(true)}
+                                >
+                                    <DoorClosed
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("accounts.close.action")}
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem onClick={() => reopen(a)}>
+                                    <ArchiveRestore
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("accounts.restore")}
+                                </DropdownMenuItem>
+                            )}
+                            {/* Delete only exists for an account with no transactions;
                                     otherwise a disabled row explains the close route (§3 F5). */}
-                                {a.has_transactions === false ? (
-                                    <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => requestDelete(a)}
-                                    >
-                                        <Trash2
-                                            className="mr-2 h-4 w-4"
-                                            aria-hidden
-                                        />
-                                        {t("common.delete")}
-                                    </DropdownMenuItem>
-                                ) : (
-                                    <DropdownMenuItem disabled>
-                                        <Trash2
-                                            className="mr-2 h-4 w-4"
-                                            aria-hidden
-                                        />
-                                        <span className="flex flex-col">
-                                            <span>{t("common.delete")}</span>
-                                            <span className="type-footnote text-label-secondary">
-                                                {t(
-                                                    "accounts.delete.hasTransactions",
-                                                )}
-                                            </span>
+                            {a.has_transactions === false ? (
+                                <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={() => requestDelete(a)}
+                                >
+                                    <Trash2
+                                        className="mr-2 h-4 w-4"
+                                        aria-hidden
+                                    />
+                                    {t("common.delete")}
+                                </DropdownMenuItem>
+                            ) : (
+                                <DropdownMenuItem disabled>
+                                    <Trash2
+                                        className="mr-2 h-4 w-4"
+                                        aria-hidden
+                                    />
+                                    <span className="flex flex-col">
+                                        <span>{t("common.delete")}</span>
+                                        <span className="type-footnote text-label-secondary">
+                                            {t(
+                                                "accounts.delete.hasTransactions",
+                                            )}
                                         </span>
-                                    </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                    </span>
+                                </DropdownMenuItem>
+                            )}
+                        </RowMenu>
                     </>
                 }
             />
@@ -832,8 +806,8 @@ export default function AccountDetailPage() {
                                 </span>
                                 <Button
                                     variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 shrink-0"
+                                    size="icon-xs"
+                                    className="shrink-0"
                                     onClick={clearSince}
                                     aria-label={t("aria.clearFilter")}
                                 >

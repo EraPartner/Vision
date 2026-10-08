@@ -3,17 +3,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminKeys } from "@/lib/queryKeys";
-import {
-    Database,
-    HardDrive,
-    MoreHorizontal,
-    RefreshCw,
-    Table2,
-    Zap,
-} from "lucide-react";
+import { Database, HardDrive, RefreshCw, Table2, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -21,12 +15,7 @@ import { numberFormatToLocale } from "@/utils/currency";
 import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
@@ -159,39 +148,29 @@ function TableStatRow({
                 {row.size}
             </TableCell>
             <TableCell className="text-right">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label={t("dbMaintenance.rowMenu", {
-                                table: row.table_name,
-                            })}
-                        >
-                            <MoreHorizontal aria-hidden="true" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => navigate(editorHref)}>
-                            <Table2
-                                aria-hidden="true"
-                                className="mr-2 h-4 w-4 text-label-secondary"
-                            />
-                            {t("dbMaintenance.openTable")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={isVacuuming}
-                            onSelect={() => onVacuum(row.table_name)}
-                        >
-                            <Zap
-                                aria-hidden="true"
-                                className="mr-2 h-4 w-4 text-label-secondary"
-                            />
-                            {t("dbMaintenance.vacuumTable")}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <RowMenu
+                    label={t("dbMaintenance.rowMenu", {
+                        table: row.table_name,
+                    })}
+                >
+                    <DropdownMenuItem onSelect={() => navigate(editorHref)}>
+                        <Table2
+                            aria-hidden="true"
+                            className="mr-2 h-4 w-4 text-label-secondary"
+                        />
+                        {t("dbMaintenance.openTable")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        disabled={isVacuuming}
+                        onSelect={() => onVacuum(row.table_name)}
+                    >
+                        <Zap
+                            aria-hidden="true"
+                            className="mr-2 h-4 w-4 text-label-secondary"
+                        />
+                        {t("dbMaintenance.vacuumTable")}
+                    </DropdownMenuItem>
+                </RowMenu>
             </TableCell>
         </TableRow>
     );
@@ -250,33 +229,29 @@ export default function DbMaintenancePage() {
                 iconColor="from-warning/20 to-warning/5 text-warning"
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("admin.moreActions")}
-                                >
-                                    <MoreHorizontal aria-hidden="true" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    disabled={isLoading}
-                                    onSelect={handleRefresh}
-                                >
-                                    <RefreshCw
-                                        aria-hidden="true"
-                                        className={cn(
-                                            "mr-2 h-4 w-4 text-label-secondary",
-                                            isLoading && "animate-spin",
-                                        )}
-                                    />
-                                    {t("dbMaintenance.refresh")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                        <Button onClick={handleVacuumAll} disabled={isVacuuming}>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("admin.moreActions")}
+                        >
+                            <DropdownMenuItem
+                                disabled={isLoading}
+                                onSelect={handleRefresh}
+                            >
+                                <RefreshCw
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "mr-2 h-4 w-4 text-label-secondary",
+                                        isLoading && "animate-spin",
+                                    )}
+                                />
+                                {t("dbMaintenance.refresh")}
+                            </DropdownMenuItem>
+                        </RowMenu>
+                        <Button
+                            onClick={handleVacuumAll}
+                            disabled={isVacuuming}
+                        >
                             <Zap aria-hidden="true" />
                             {isVacuuming && vacuumingTable === "__all__"
                                 ? t("dbMaintenance.vacuuming")

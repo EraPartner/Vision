@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { List } from "@/components/ui/list";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -315,7 +316,7 @@ export function AuditHistoryCard() {
                         </div>
                     )}
                 {changed && (
-                    <p role="alert" className="type-body text-warning">
+                    <p role="status" className="type-body text-warning">
                         {t("admin.audit.changed")}
                     </p>
                 )}
@@ -412,10 +413,13 @@ export function AuditHistoryCard() {
                                             <p className="type-footnote text-label-secondary">
                                                 {entry.createdAt}
                                             </p>
-                                            <details className="mt-2">
-                                                <summary className="cursor-pointer rounded-chip type-footnote text-label-secondary hover:text-foreground focus-ring">
+                                            <Disclosure className="mt-2">
+                                                <DisclosureSummary
+                                                    tone="footnote"
+                                                    className="hover:text-foreground"
+                                                >
                                                     {t("admin.audit.details")}
-                                                </summary>
+                                                </DisclosureSummary>
                                                 <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-card corner-continuous bg-foreground/[0.04] p-3 font-mono type-footnote">
                                                     {JSON.stringify(
                                                         {
@@ -429,7 +433,7 @@ export function AuditHistoryCard() {
                                                         2,
                                                     )}
                                                 </pre>
-                                            </details>
+                                            </Disclosure>
                                         </li>
                                     );
                                 })}

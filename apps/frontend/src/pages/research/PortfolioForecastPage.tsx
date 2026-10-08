@@ -22,6 +22,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import { SegmentedButtons } from "@/components/shared/SegmentedButtons";
 import {
     SegmentedControl,
@@ -262,8 +267,11 @@ export default function PortfolioForecastPage() {
                         />
                     </div>
 
-                    <details className="group rounded-card corner-continuous border border-border/60 md:col-span-2 lg:col-span-3">
-                        <summary className="cursor-pointer rounded-card px-4 py-3 type-body text-foreground marker:text-label-tertiary focus-ring">
+                    <Disclosure
+                        variant="card"
+                        className="md:col-span-2 lg:col-span-3"
+                    >
+                        <DisclosureSummary padded className="font-normal">
                             <span className="font-medium">
                                 {t("research.forecast.assumptions")}
                             </span>
@@ -285,25 +293,21 @@ export default function PortfolioForecastPage() {
                                 {t("research.forecast.paths")}:{" "}
                                 {paths.toLocaleString(locale)}
                             </span>
-                        </summary>
-                        <div className="grid gap-6 border-t border-border/60 p-4 md:grid-cols-2 lg:grid-cols-3">
+                        </DisclosureSummary>
+                        <DisclosureContent className="grid gap-6 border-t border-border/60 p-4 md:grid-cols-2 lg:grid-cols-3">
                             <div className="space-y-2">
-                                <p
-                                    id="forecast-return-source-label"
-                                    className="type-body font-medium text-foreground"
-                                >
-                                    {t("research.forecast.returnSource")}
-                                </p>
                                 <SegmentedControl
+                                    label={t("research.forecast.returnSource")}
                                     size="sm"
                                     value={returnSource}
                                     onValueChange={(v) =>
                                         setReturnSource(v as ReturnSource)
                                     }
-                                    aria-labelledby="forecast-return-source-label"
                                 >
                                     <SegmentedControlItem value="historical">
-                                        {t("research.forecast.sourceHistorical")}
+                                        {t(
+                                            "research.forecast.sourceHistorical",
+                                        )}
                                     </SegmentedControlItem>
                                     <SegmentedControlItem value="blended">
                                         {t("research.forecast.sourceBlended")}
@@ -349,29 +353,21 @@ export default function PortfolioForecastPage() {
                                 )}
                             </div>
 
-                            <div className="space-y-2">
-                                <p
-                                    id="forecast-method-label"
-                                    className="type-body font-medium text-foreground"
-                                >
-                                    {t("research.forecast.method")}
-                                </p>
-                                <SegmentedControl
-                                    size="sm"
-                                    value={method}
-                                    onValueChange={(v) =>
-                                        setMethod(v as ForecastMethod)
-                                    }
-                                    aria-labelledby="forecast-method-label"
-                                >
-                                    <SegmentedControlItem value="parametric">
-                                        {t("research.forecast.methodParametric")}
-                                    </SegmentedControlItem>
-                                    <SegmentedControlItem value="block_bootstrap">
-                                        {t("research.forecast.methodBootstrap")}
-                                    </SegmentedControlItem>
-                                </SegmentedControl>
-                            </div>
+                            <SegmentedControl
+                                label={t("research.forecast.method")}
+                                size="sm"
+                                value={method}
+                                onValueChange={(v) =>
+                                    setMethod(v as ForecastMethod)
+                                }
+                            >
+                                <SegmentedControlItem value="parametric">
+                                    {t("research.forecast.methodParametric")}
+                                </SegmentedControlItem>
+                                <SegmentedControlItem value="block_bootstrap">
+                                    {t("research.forecast.methodBootstrap")}
+                                </SegmentedControlItem>
+                            </SegmentedControl>
 
                             <div className="space-y-2">
                                 <p
@@ -390,8 +386,8 @@ export default function PortfolioForecastPage() {
                                     buttonClassName="tabular-nums"
                                 />
                             </div>
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </CardContent>
             </Card>
 

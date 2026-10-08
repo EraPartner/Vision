@@ -612,7 +612,7 @@ export default function LifeScenarioPanel({
                     </Alert>
                 )}
                 {visibleComparison && !available && (
-                    <Alert role="status">
+                    <Alert>
                         <AlertTriangle className="h-4 w-4" aria-hidden="true" />
                         <AlertDescription>
                             {t("research.lifeScenario.unavailable")}
@@ -631,7 +631,9 @@ export default function LifeScenarioPanel({
                         </div>
                         <List>
                             <ListRow
-                                title={t("research.lifeScenario.baselineMedian")}
+                                title={t(
+                                    "research.lifeScenario.baselineMedian",
+                                )}
                                 trailing={
                                     <span className="text-foreground">
                                         {money(

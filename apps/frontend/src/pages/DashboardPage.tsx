@@ -19,13 +19,8 @@ import { AddTransactionButton } from "@/features/transactions/components/AddTran
 import { ExclusionToggle } from "@/components/shared/ExclusionToggle";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
-import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     Card,
     CardContent,
@@ -40,7 +35,6 @@ import {
     Receipt,
     TrendingDown,
     AlertTriangle,
-    MoreHorizontal,
     LayoutGrid,
 } from "lucide-react";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -570,25 +564,18 @@ export default function DashboardPage() {
                     icon={PAGE_ICONS["/"]}
                     actions={
                         <>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label={t("home.menu")}
-                                    >
-                                        <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        onSelect={() => setCustomizeOpen(true)}
-                                    >
-                                        <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
-                                        {t("home.customize")}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <RowMenu
+                                variant="outline"
+                                size="icon"
+                                label={t("home.menu")}
+                            >
+                                <DropdownMenuItem
+                                    onSelect={() => setCustomizeOpen(true)}
+                                >
+                                    <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("home.customize")}
+                                </DropdownMenuItem>
+                            </RowMenu>
                             <WidgetVisibilityDialog
                                 open={customizeOpen}
                                 onOpenChange={setCustomizeOpen}
@@ -601,7 +588,9 @@ export default function DashboardPage() {
                             <AddTransactionButton
                                 onCreated={(created) =>
                                     navigate("/transactions", {
-                                        state: { selectTransactionId: created.id },
+                                        state: {
+                                            selectTransactionId: created.id,
+                                        },
                                     })
                                 }
                             />
@@ -636,7 +625,10 @@ export default function DashboardPage() {
 
                 <div
                     key={arrivalRun}
-                    className={cn("space-y-6", playArrival && "animate-stagger")}
+                    className={cn(
+                        "space-y-6",
+                        playArrival && "animate-stagger",
+                    )}
                 >
                     {isVisible("hero") && (
                         <MonthToDateHero currency={targetCurrency} />
@@ -649,111 +641,136 @@ export default function DashboardPage() {
                             )}
 
                             {/* Summary cards (off by default since the hero): featured net tile + metrics */}
-                            {isVisible("statCards") && statsLoading && statSkeleton}
-                {isVisible("statCards") && !statsLoading && (
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2">
-                        <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
-                            <NetSummaryCard
-                                netBalance={netBalance}
-                                income={totalIncome}
-                                spending={totalSpending}
-                                history={netHistory}
-                                animateNumber={playArrival}
-                            />
-                        </div>
-                        <div className="lg:col-span-3 lg:row-span-1">
-                            <StatCard
-                                title={t("dashboard.stat.lastMonthIncome")}
-                                to={
-                                    latestPeriod
-                                        ? buildTransactionDrillUrl({
-                                              period: latestPeriod,
-                                              valueMode: "income",
-                                              label: t(
-                                                  "dashboard.stat.lastMonthIncome",
-                                              ),
-                                          })
-                                        : undefined
-                                }
-                                value={
-                                    <RollingNumber
-                                        parts={incomeCompact.parts}
-                                        animate={playArrival}
-                                    />
-                                }
-                                icon={ArrowUpRight}
-                                trend="income"
-                                subtitle={t("dashboard.stat.mostRecentMonth")}
-                                titleValue={
-                                    incomeCompact.isCompact
-                                        ? incomeCompact.full
-                                        : undefined
-                                }
-                            />
-                        </div>
-                        <div className="lg:col-span-3 lg:row-span-1 grid gap-4 sm:grid-cols-2">
-                            <StatCard
-                                title={t("dashboard.stat.lastMonthSpending")}
-                                to={
-                                    latestPeriod
-                                        ? buildTransactionDrillUrl({
-                                              period: latestPeriod,
-                                              valueMode: "expense",
-                                              label: t(
-                                                  "dashboard.stat.lastMonthSpending",
-                                              ),
-                                          })
-                                        : undefined
-                                }
-                                value={
-                                    <RollingNumber
-                                        parts={spendingCompact.parts}
-                                        animate={playArrival}
-                                    />
-                                }
-                                icon={TrendingDown}
-                                trend="expense"
-                                subtitle={t("dashboard.stat.mostRecentMonth")}
-                                titleValue={
-                                    spendingCompact.isCompact
-                                        ? spendingCompact.full
-                                        : undefined
-                                }
-                            />
-                            <StatCard
-                                title={t("dashboard.stat.totalTransactions")}
-                                to="/transactions"
-                                value={integerLocaleFormatter.format(
-                                    totalTransactions,
-                                )}
-                                numericValue={totalTransactions}
-                                formatValue={(n) =>
-                                    integerLocaleFormatter.format(Math.round(n))
-                                }
-                                icon={Receipt}
-                                odometer={playArrival}
-                            />
-                        </div>
-                    </div>
-                )}
-
+                            {isVisible("statCards") &&
+                                statsLoading &&
+                                statSkeleton}
+                            {isVisible("statCards") && !statsLoading && (
+                                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 lg:grid-rows-2">
+                                    <div className="sm:col-span-2 lg:col-span-3 lg:row-span-2">
+                                        <NetSummaryCard
+                                            netBalance={netBalance}
+                                            income={totalIncome}
+                                            spending={totalSpending}
+                                            history={netHistory}
+                                            animateNumber={playArrival}
+                                        />
+                                    </div>
+                                    <div className="lg:col-span-3 lg:row-span-1">
+                                        <StatCard
+                                            title={t(
+                                                "dashboard.stat.lastMonthIncome",
+                                            )}
+                                            to={
+                                                latestPeriod
+                                                    ? buildTransactionDrillUrl({
+                                                          period: latestPeriod,
+                                                          valueMode: "income",
+                                                          label: t(
+                                                              "dashboard.stat.lastMonthIncome",
+                                                          ),
+                                                      })
+                                                    : undefined
+                                            }
+                                            value={
+                                                <RollingNumber
+                                                    parts={incomeCompact.parts}
+                                                    animate={playArrival}
+                                                />
+                                            }
+                                            icon={ArrowUpRight}
+                                            trend="income"
+                                            subtitle={t(
+                                                "dashboard.stat.mostRecentMonth",
+                                            )}
+                                            titleValue={
+                                                incomeCompact.isCompact
+                                                    ? incomeCompact.full
+                                                    : undefined
+                                            }
+                                        />
+                                    </div>
+                                    <div className="lg:col-span-3 lg:row-span-1 grid gap-4 sm:grid-cols-2">
+                                        <StatCard
+                                            title={t(
+                                                "dashboard.stat.lastMonthSpending",
+                                            )}
+                                            to={
+                                                latestPeriod
+                                                    ? buildTransactionDrillUrl({
+                                                          period: latestPeriod,
+                                                          valueMode: "expense",
+                                                          label: t(
+                                                              "dashboard.stat.lastMonthSpending",
+                                                          ),
+                                                      })
+                                                    : undefined
+                                            }
+                                            value={
+                                                <RollingNumber
+                                                    parts={
+                                                        spendingCompact.parts
+                                                    }
+                                                    animate={playArrival}
+                                                />
+                                            }
+                                            icon={TrendingDown}
+                                            trend="expense"
+                                            subtitle={t(
+                                                "dashboard.stat.mostRecentMonth",
+                                            )}
+                                            titleValue={
+                                                spendingCompact.isCompact
+                                                    ? spendingCompact.full
+                                                    : undefined
+                                            }
+                                        />
+                                        <StatCard
+                                            title={t(
+                                                "dashboard.stat.totalTransactions",
+                                            )}
+                                            to="/transactions"
+                                            value={integerLocaleFormatter.format(
+                                                totalTransactions,
+                                            )}
+                                            numericValue={totalTransactions}
+                                            formatValue={(n) =>
+                                                integerLocaleFormatter.format(
+                                                    Math.round(n),
+                                                )
+                                            }
+                                            icon={Receipt}
+                                            odometer={playArrival}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Bank Account Balances */}
-                            {isVisible("bankBalances") && <BankBalancesWidget />}
+                            {isVisible("bankBalances") && (
+                                <BankBalancesWidget />
+                            )}
 
                             {/* Recent transactions */}
                             {isVisible("recentTransactions") &&
-                                (transactionsLoading || recentTransactionsLoading) &&
+                                (transactionsLoading ||
+                                    recentTransactionsLoading) &&
                                 recentSkeleton}
                             {isVisible("recentTransactions") &&
-                                !(transactionsLoading || recentTransactionsLoading) && (
+                                !(
+                                    transactionsLoading ||
+                                    recentTransactionsLoading
+                                ) && (
                                     <RecentTransactionsList
                                         rows={recentTransactions}
                                         exclusionsApply={exclusionsApply}
                                         isFiltered={
-                                            graphExclusions["recentTransactions"] ?? true
+                                            graphExclusions[
+                                                "recentTransactions"
+                                            ] ?? true
                                         }
-                                        onToggleExclusions={toggleGraphExclusion}
+                                        onToggleExclusions={
+                                            toggleGraphExclusion
+                                        }
                                     />
                                 )}
                         </div>
@@ -856,7 +873,6 @@ export default function DashboardPage() {
                         />
                     </div>
                 )}
-
             </PageShell>
         </ChartSyncProvider>
     );

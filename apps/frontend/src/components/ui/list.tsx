@@ -29,8 +29,10 @@ const List = React.forwardRef<
 ));
 List.displayName = "List";
 
-export interface ListRowProps
-    extends Omit<React.HTMLAttributes<HTMLLIElement>, "title"> {
+export interface ListRowProps extends Omit<
+    React.HTMLAttributes<HTMLLIElement>,
+    "title"
+> {
     /** Glyph or avatar in front of the title. */
     leading?: React.ReactNode;
     title: React.ReactNode;
@@ -44,6 +46,13 @@ export interface ListRowProps
     /** Pass a link or custom control as the row's interactive element. */
     asChild?: boolean;
     disabled?: boolean;
+    /**
+     * Controls rendered beside the row, outside its interactive element, so a
+     * row can carry a ••• menu or a switch without nesting buttons.
+     */
+    actions?: React.ReactNode;
+    /** Marks the row as the current selection (tinted, `aria-current`). */
+    selected?: boolean;
 }
 
 const rowSurfaceClass =
@@ -63,6 +72,8 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
             onActivate,
             asChild = false,
             disabled,
+            actions,
+            selected = false,
             children,
             ...props
         },
@@ -77,7 +88,9 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                     </span>
                 )}
                 <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate">{title}</span>
+                    <span className={cn("truncate", selected && "font-medium")}>
+                        {title}
+                    </span>
                     {subtitle && (
                         <span className="truncate type-footnote text-label-secondary">
                             {subtitle}
@@ -101,11 +114,24 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
             </>
         );
 
+        const surface = cn(rowSurfaceClass, actions && "pr-1");
+
         return (
-            <li ref={ref} className={cn("min-h-11", className)} {...props}>
+            <li
+                ref={ref}
+                className={cn(
+                    "min-h-11",
+                    actions && "flex items-center",
+                    selected && "bg-primary/[0.08]",
+                    className,
+                )}
+                aria-current={selected ? "true" : undefined}
+                data-selected={selected ? "" : undefined}
+                {...props}
+            >
                 {interactive ? (
                     asChild ? (
-                        <Slot className={cn(rowSurfaceClass, rowInteractiveClass)}>
+                        <Slot className={cn(surface, rowInteractiveClass)}>
                             {/* the child supplies the element; the row supplies the content */}
                             {React.isValidElement(children)
                                 ? React.cloneElement(
@@ -122,13 +148,18 @@ const ListRow = React.forwardRef<HTMLLIElement, ListRowProps>(
                             type="button"
                             onClick={onActivate}
                             disabled={disabled}
-                            className={cn(rowSurfaceClass, rowInteractiveClass)}
+                            className={cn(surface, rowInteractiveClass)}
                         >
                             {content}
                         </button>
                     )
                 ) : (
-                    <div className={rowSurfaceClass}>{content}</div>
+                    <div className={surface}>{content}</div>
+                )}
+                {actions && (
+                    <span className="flex shrink-0 items-center gap-1 pr-2">
+                        {actions}
+                    </span>
                 )}
             </li>
         );

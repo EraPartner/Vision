@@ -252,7 +252,7 @@ export function BulkActionsBar({
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             onClick={handleDelete}
-                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            variant="destructive"
                         >
                             <Trash2 className="h-4 w-4 mr-2" />
                             {t("txPage.bulk.delete")}

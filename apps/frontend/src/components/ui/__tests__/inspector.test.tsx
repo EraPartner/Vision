@@ -12,7 +12,9 @@ import {
 } from "@/components/ui/inspector";
 
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
-    useLanguage: () => ({ t: (key: string) => (key === "common.close" ? "Close" : key) }),
+    useLanguage: () => ({
+        t: (key: string) => (key === "common.close" ? "Close" : key),
+    }),
 }));
 
 function renderInspector(onClose = vi.fn()) {
@@ -37,10 +39,14 @@ function renderInspector(onClose = vi.fn()) {
 describe("Inspector", () => {
     it("is a complementary landmark, not a dialog", () => {
         renderInspector();
-        const panel = screen.getByRole("complementary", { name: "Transaction details" });
+        const panel = screen.getByRole("complementary", {
+            name: "Transaction details",
+        });
         expect(panel).toHaveClass("rounded-card", "corner-continuous");
         expect(screen.queryByRole("dialog")).toBeNull();
-        expect(screen.getByRole("heading", { name: "Delhaize Gent" })).toBeInTheDocument();
+        expect(
+            screen.getByRole("heading", { name: "Delhaize Gent" }),
+        ).toBeInTheDocument();
         expect(screen.getByText("Amount")).toBeInTheDocument();
     });
 
@@ -48,9 +54,12 @@ describe("Inspector", () => {
         const onClose = renderInspector();
         fireEvent.click(screen.getByRole("button", { name: "Close" }));
         expect(onClose).toHaveBeenCalledTimes(1);
-        fireEvent.keyDown(screen.getByRole("heading", { name: "Delhaize Gent" }), {
-            key: "Escape",
-        });
+        fireEvent.keyDown(
+            screen.getByRole("heading", { name: "Delhaize Gent" }),
+            {
+                key: "Escape",
+            },
+        );
         expect(onClose).toHaveBeenCalledTimes(2);
     });
 });

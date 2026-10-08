@@ -17,7 +17,9 @@ describe("AIChatPage (integration)", () => {
             initialEntries: ["/ai-chat?mode=investigation"],
         });
         await user.click(
-            await screen.findByRole("button", { name: "Understand my spending" }),
+            await screen.findByRole("button", {
+                name: "Understand my spending",
+            }),
         );
         const question = screen.getByRole("textbox", {
             name: /ask a financial or research question/i,
@@ -239,9 +241,11 @@ describe("AIChatPage (integration)", () => {
 
         renderWithApp(<AIChatPage />);
 
-        // Banner alert only shown when unreachable; wait for status to resolve
+        // Banner (a polite status) only shows when unreachable; wait for status to resolve
         await screen.findByPlaceholderText(/ask about your spending/i);
-        expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+        expect(
+            screen.queryByText("Local AI model unreachable"),
+        ).not.toBeInTheDocument();
     });
 
     it("shows unreachable banner when AI status API returns 500", async () => {

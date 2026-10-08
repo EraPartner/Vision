@@ -54,27 +54,20 @@ export function BulkExportDialog({
                     grid gap-5 mirrors DialogContent's layout, so the wrapper is
                     layout-neutral. */}
                 <form onSubmit={handleApply} className="grid gap-5">
-                    <div className="grid gap-2 py-2">
-                        <span
-                            id="bulk-export-format-label"
-                            className="type-headline text-foreground"
-                        >
-                            {t("txPage.bulk.exportFormat")}
-                        </span>
-                        <SegmentedControl
-                            aria-labelledby="bulk-export-format-label"
-                            value={format}
-                            onValueChange={(v) => setFormat(v as ExportFormat)}
-                            className="w-full"
-                        >
-                            <SegmentedControlItem value="csv">
-                                {t("txPage.bulk.exportFormatCsv")}
-                            </SegmentedControlItem>
-                            <SegmentedControlItem value="json">
-                                {t("txPage.bulk.exportFormatJson")}
-                            </SegmentedControlItem>
-                        </SegmentedControl>
-                    </div>
+                    <SegmentedControl
+                        label={t("txPage.bulk.exportFormat")}
+                        wrapperClassName="py-2"
+                        value={format}
+                        onValueChange={(v) => setFormat(v as ExportFormat)}
+                        className="w-full"
+                    >
+                        <SegmentedControlItem value="csv">
+                            {t("txPage.bulk.exportFormatCsv")}
+                        </SegmentedControlItem>
+                        <SegmentedControlItem value="json">
+                            {t("txPage.bulk.exportFormatJson")}
+                        </SegmentedControlItem>
+                    </SegmentedControl>
                     <DialogFooter>
                         <Button
                             type="button"

@@ -398,9 +398,11 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             await screen.findByRole("button", { name: "Monthly cashflow" }),
         );
-        expect(screen.getByRole("alert")).toHaveTextContent(
-            "ratio (row 2): Division by zero",
-        );
+        expect(
+            screen
+                .getByText("ratio (row 2): Division by zero")
+                .closest('[role="status"]'),
+        ).toBeInTheDocument();
     });
 
     it("keeps SQL aliases that resemble catalog identifiers in result labels", async () => {

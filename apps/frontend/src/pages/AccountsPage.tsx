@@ -9,12 +9,8 @@ import { Badge, badgeVariants } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { List, ListRow } from "@/components/ui/list";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     Tooltip,
     TooltipContent,
@@ -30,7 +26,6 @@ import {
     ChevronRight,
     CreditCard,
     Landmark,
-    MoreHorizontal,
     PanelRight,
     PiggyBank,
     Receipt,
@@ -348,51 +343,39 @@ export default function AccountsPage() {
                             </Tooltip>
                         )}
                         {value}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-label-secondary"
-                                    aria-label={t("accounts.rowMenu", {
-                                        name: label,
-                                    })}
-                                    onClick={stopRowActivation}
-                                >
-                                    <MoreHorizontal aria-hidden />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                onClick={(event) => event.stopPropagation()}
-                            >
-                                <DropdownMenuItem asChild>
-                                    <Link to={`/accounts/${a.id}`}>
-                                        <PanelRight className="mr-2 h-4 w-4 text-label-secondary" />
-                                        {t("accounts.viewDetails")}
-                                    </Link>
-                                </DropdownMenuItem>
-                                {canViewTransactions && (
-                                    <DropdownMenuItem asChild>
-                                        <Link to={accountTransactionsHref(a)}>
-                                            <Receipt className="mr-2 h-4 w-4 text-label-secondary" />
-                                            {t("accounts.openTransactions")}
-                                        </Link>
-                                    </DropdownMenuItem>
-                                )}
-                                {canReconcile && (
-                                    <DropdownMenuItem
-                                        onSelect={() => setReconciling(a)}
-                                    >
-                                        <Scale className="mr-2 h-4 w-4 text-label-secondary" />
-                                        {t("accounts.reconcile.open")}
-                                    </DropdownMenuItem>
-                                )}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
                     </>
                 }
                 chevron
+                actions={
+                    <RowMenu
+                        label={t("accounts.rowMenu", {
+                            name: label,
+                        })}
+                    >
+                        <DropdownMenuItem asChild>
+                            <Link to={`/accounts/${a.id}`}>
+                                <PanelRight className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("accounts.viewDetails")}
+                            </Link>
+                        </DropdownMenuItem>
+                        {canViewTransactions && (
+                            <DropdownMenuItem asChild>
+                                <Link to={accountTransactionsHref(a)}>
+                                    <Receipt className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("accounts.openTransactions")}
+                                </Link>
+                            </DropdownMenuItem>
+                        )}
+                        {canReconcile && (
+                            <DropdownMenuItem
+                                onSelect={() => setReconciling(a)}
+                            >
+                                <Scale className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("accounts.reconcile.open")}
+                            </DropdownMenuItem>
+                        )}
+                    </RowMenu>
+                }
             >
                 <Link to={`/accounts/${a.id}`} aria-label={label} />
             </ListRow>

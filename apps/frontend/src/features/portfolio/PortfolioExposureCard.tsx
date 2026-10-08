@@ -13,6 +13,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -235,11 +236,11 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                         )}
                         <div className="divide-y divide-border/60 rounded-card corner-continuous border border-border/60">
                             {selected.rows.map((row) => (
-                                <details
+                                <Disclosure
                                     key={row.id}
                                     className="first:rounded-t-card last:rounded-b-card"
                                 >
-                                    <summary className="cursor-pointer rounded-card p-3 type-body font-medium hover:bg-foreground/[0.04] focus-ring">
+                                    <DisclosureSummary className="rounded-card p-3 hover:bg-foreground/[0.04]">
                                         <span className="ml-1 inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-x-4 gap-y-1 align-middle">
                                             <span>{row.label}</span>
                                             <span className="flex items-baseline gap-3 tabular-nums">
@@ -260,7 +261,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                                 </span>
                                             </span>
                                         </span>
-                                    </summary>
+                                    </DisclosureSummary>
                                     <ul className="space-y-2 border-t border-border/60 px-4 py-3 type-footnote text-label-secondary">
                                         {row.contributions.map(
                                             (item, index) => (
@@ -295,7 +296,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                                             ),
                                         )}
                                     </ul>
-                                </details>
+                                </Disclosure>
                             ))}
                             {selected.rows.length === 0 && (
                                 <p className="p-3 type-footnote text-label-secondary">
@@ -308,10 +309,10 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                         </p>
                     </>
                 )}
-                <details className="rounded-card corner-continuous border border-border/60">
-                    <summary className="cursor-pointer rounded-card p-3 type-body font-medium focus-ring">
+                <Disclosure variant="card">
+                    <DisclosureSummary className="rounded-card p-3">
                         {t("portfolio.exposure.sourcesAndImport")}
-                    </summary>
+                    </DisclosureSummary>
                     <div className="space-y-3 border-t border-border/60 p-3">
                         <p className="type-footnote text-label-secondary">
                             {t("portfolio.exposure.sourceBoundary")}
@@ -391,7 +392,7 @@ export function PortfolioExposureCard({ currency }: { currency: string }) {
                             {t("portfolio.exposure.importHint")}
                         </p>
                     </div>
-                </details>
+                </Disclosure>
             </CardContent>
         </Card>
     );

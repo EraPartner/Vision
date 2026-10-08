@@ -3,6 +3,7 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { getChartColor } from "@/components/charts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Label } from "@/components/ui/label";
 import {
     SegmentedControl,
@@ -28,12 +29,12 @@ import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { numberFormatToLocale } from "@/utils/currency";
 import type { AnalysisResult } from "@/lib/api/analysis";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 import {
     analysisChartData,
     type AnalysisChartSpec,
 } from "./analysisChartModel";
 
-const NO_AXIS = "__none__";
 const statusClass = "type-callout text-label-secondary";
 
 export function AnalysisChartPanel({
@@ -47,7 +48,6 @@ export function AnalysisChartPanel({
 }) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const typeLabelId = useId();
     const xAxisId = useId();
     const tickFormat = new Intl.NumberFormat(
         numberFormatToLocale(appSettings.numberFormat),
@@ -160,44 +160,40 @@ export function AnalysisChartPanel({
     return (
         <div className="min-w-0 space-y-3">
             <div className="grid items-start gap-4 sm:grid-cols-2">
-                <div className="min-w-0 space-y-1.5 sm:col-span-2">
-                    <Label id={typeLabelId}>
-                        {t("analysis.ext.chart.type")}
-                    </Label>
-                    <SegmentedControl
-                        aria-labelledby={typeLabelId}
-                        value={spec.kind}
-                        onValueChange={(kind) =>
-                            onChange({
-                                ...spec,
-                                kind: kind as AnalysisChartSpec["kind"],
-                            })
-                        }
-                        className="w-full"
-                    >
-                        {(
-                            [
-                                "bar",
-                                "line",
-                                "stacked-bar",
-                                "scatter",
-                                "waterfall",
-                            ] as const
-                        ).map((k) => (
-                            <SegmentedControlItem key={k} value={k}>
-                                {t(`analysis.ext.chart.${k}`)}
-                            </SegmentedControlItem>
-                        ))}
-                    </SegmentedControl>
-                </div>
+                <SegmentedControl
+                    label={t("analysis.ext.chart.type")}
+                    wrapperClassName="min-w-0 space-y-1.5 sm:col-span-2"
+                    value={spec.kind}
+                    onValueChange={(kind) =>
+                        onChange({
+                            ...spec,
+                            kind: kind as AnalysisChartSpec["kind"],
+                        })
+                    }
+                    className="w-full"
+                >
+                    {(
+                        [
+                            "bar",
+                            "line",
+                            "stacked-bar",
+                            "scatter",
+                            "waterfall",
+                        ] as const
+                    ).map((k) => (
+                        <SegmentedControlItem key={k} value={k}>
+                            {t(`analysis.ext.chart.${k}`)}
+                        </SegmentedControlItem>
+                    ))}
+                </SegmentedControl>
                 <div className="min-w-0 space-y-1.5">
                     <Label htmlFor={xAxisId}>{t("analysis.ext.chart.x")}</Label>
                     <Select
-                        value={spec.x || NO_AXIS}
+                        value={toSelectValue(spec.x)}
                         onValueChange={(value) =>
                             onChange({
                                 ...spec,
-                                x: value === NO_AXIS ? "" : value,
+                                x: fromSelectValue(value),
                             })
                         }
                     >
@@ -205,7 +201,7 @@ export function AnalysisChartPanel({
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value={NO_AXIS}>—</SelectItem>
+                            <SelectItem value={SELECT_NONE}>—</SelectItem>
                             {columns.map((c) => (
                                 <SelectItem key={c.id} value={c.id}>
                                     {String("label" in c ? c.label : c.id)}
@@ -263,7 +259,7 @@ export function AnalysisChartPanel({
                     {t("analysis.ext.chart.oneSeries")}
                 </p>
             ) : !data.rows.length ? (
-                <Alert role="status">
+                <Alert>
                     <AlertDescription>
                         {t("analysis.ext.chart.empty")}
                     </AlertDescription>
@@ -480,10 +476,10 @@ export function AnalysisChartPanel({
                             </li>
                         ))}
                     </ul>
-                    <details className="rounded-card corner-continuous border border-border/60">
-                        <summary className="cursor-pointer rounded-card px-4 py-2.5 type-headline focus-ring">
+                    <Disclosure variant="card">
+                        <DisclosureSummary className="rounded-card px-4 py-2.5">
                             {t("analysis.ext.chart.table")}
-                        </summary>
+                        </DisclosureSummary>
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -519,7 +515,7 @@ export function AnalysisChartPanel({
                                 ))}
                             </TableBody>
                         </Table>
-                    </details>
+                    </Disclosure>
                 </>
             )}
         </div>

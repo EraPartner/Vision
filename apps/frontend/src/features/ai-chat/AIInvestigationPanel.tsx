@@ -15,6 +15,11 @@ import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { List, ListRow } from "@/components/ui/list";
@@ -39,9 +44,6 @@ const EMPTY_OPENAI_MODELS: OpenAiResearchModel[] = [];
 
 const codeBlockClass =
     "max-h-40 overflow-auto rounded-card corner-continuous border border-border/50 bg-background/60 p-3 type-footnote leading-snug text-foreground/80";
-const disclosureSummaryClass =
-    "flex cursor-pointer flex-wrap items-baseline gap-x-2 gap-y-1 rounded-card px-4 py-3 type-headline focus-ring";
-
 function EvidenceAnswer({ answer }: { answer: AiAnswer }) {
     const { t } = useLanguage();
     const [selectedEvidenceId, setSelectedEvidenceId] = useState<string | null>(
@@ -452,92 +454,83 @@ export function AIInvestigationPanel() {
                     </div>
                 )}
                 <Card asChild>
-                    <details>
-                        <summary className={disclosureSummaryClass}>
+                    <Disclosure>
+                        <DisclosureSummary
+                            padded
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                        >
                             <span>{t("aiResearch.configure")}</span>
                             <span className="type-footnote font-normal text-label-secondary">
                                 {settingsSummary}
                             </span>
-                        </summary>
-                        <div className="grid gap-4 px-4 pb-4 sm:grid-cols-2">
-                            <div className="space-y-1.5">
-                                <Label id="ai-route-label">
-                                    {t("aiResearch.route")}
-                                </Label>
-                                <SegmentedControl
-                                    aria-labelledby="ai-route-label"
-                                    className="w-full"
-                                    value={route}
-                                    onValueChange={(value) => {
-                                        setRoute(value as typeof route);
-                                        setPreview(null);
-                                    }}
+                        </DisclosureSummary>
+                        <DisclosureContent className="grid gap-4 pt-0 sm:grid-cols-2">
+                            <SegmentedControl
+                                label={t("aiResearch.route")}
+                                wrapperClassName="space-y-1.5"
+                                className="w-full"
+                                value={route}
+                                onValueChange={(value) => {
+                                    setRoute(value as typeof route);
+                                    setPreview(null);
+                                }}
+                            >
+                                <SegmentedControlItem value="local">
+                                    {t("aiResearch.localModel")}
+                                </SegmentedControlItem>
+                                <SegmentedControlItem
+                                    value="openai-api"
+                                    disabled={!openAiEnabled}
                                 >
-                                    <SegmentedControlItem value="local">
-                                        {t("aiResearch.localModel")}
-                                    </SegmentedControlItem>
-                                    <SegmentedControlItem
-                                        value="openai-api"
-                                        disabled={!openAiEnabled}
-                                    >
-                                        {t("aiResearch.openAi")}
-                                    </SegmentedControlItem>
-                                </SegmentedControl>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label id="ai-depth-label">
-                                    {t("aiResearch.depth")}
-                                </Label>
-                                <SegmentedControl
-                                    aria-labelledby="ai-depth-label"
-                                    className="w-full"
-                                    value={depth}
-                                    onValueChange={(value) =>
-                                        setDepthOverride(
-                                            value as "quick" | "detailed",
-                                        )
-                                    }
-                                >
-                                    <SegmentedControlItem value="quick">
-                                        {t("aiResearch.quick")}
-                                    </SegmentedControlItem>
-                                    <SegmentedControlItem value="detailed">
-                                        {t("aiResearch.detailed")}
-                                    </SegmentedControlItem>
-                                </SegmentedControl>
-                            </div>
-                            <div className="space-y-1.5 sm:col-span-2">
-                                <Label id="ai-research-mode-label">
-                                    {t("aiResearch.researchMode")}
-                                </Label>
-                                <SegmentedControl
-                                    aria-labelledby="ai-research-mode-label"
-                                    className="w-full"
-                                    value={researchMode}
-                                    disabled={
-                                        route === "openai-api" &&
-                                        disclosureMode ===
-                                            "cloud-synthesis-selected"
-                                    }
-                                    onValueChange={(value) =>
-                                        setResearchMode(
-                                            value as typeof researchMode,
-                                        )
-                                    }
-                                >
-                                    <SegmentedControlItem value="local-only">
-                                        {t("aiResearch.localOnly")}
-                                    </SegmentedControlItem>
-                                    <SegmentedControlItem value="public-providers">
-                                        {t("aiResearch.publicProviders")}
-                                    </SegmentedControlItem>
-                                    <SegmentedControlItem value="public-web">
-                                        {t("aiResearch.publicWeb")}
-                                    </SegmentedControlItem>
-                                </SegmentedControl>
-                            </div>
-                        </div>
-                    </details>
+                                    {t("aiResearch.openAi")}
+                                </SegmentedControlItem>
+                            </SegmentedControl>
+                            <SegmentedControl
+                                label={t("aiResearch.depth")}
+                                wrapperClassName="space-y-1.5"
+                                className="w-full"
+                                value={depth}
+                                onValueChange={(value) =>
+                                    setDepthOverride(
+                                        value as "quick" | "detailed",
+                                    )
+                                }
+                            >
+                                <SegmentedControlItem value="quick">
+                                    {t("aiResearch.quick")}
+                                </SegmentedControlItem>
+                                <SegmentedControlItem value="detailed">
+                                    {t("aiResearch.detailed")}
+                                </SegmentedControlItem>
+                            </SegmentedControl>
+                            <SegmentedControl
+                                label={t("aiResearch.researchMode")}
+                                wrapperClassName="space-y-1.5 sm:col-span-2"
+                                className="w-full"
+                                value={researchMode}
+                                disabled={
+                                    route === "openai-api" &&
+                                    disclosureMode ===
+                                        "cloud-synthesis-selected"
+                                }
+                                onValueChange={(value) =>
+                                    setResearchMode(
+                                        value as typeof researchMode,
+                                    )
+                                }
+                            >
+                                <SegmentedControlItem value="local-only">
+                                    {t("aiResearch.localOnly")}
+                                </SegmentedControlItem>
+                                <SegmentedControlItem value="public-providers">
+                                    {t("aiResearch.publicProviders")}
+                                </SegmentedControlItem>
+                                <SegmentedControlItem value="public-web">
+                                    {t("aiResearch.publicWeb")}
+                                </SegmentedControlItem>
+                            </SegmentedControl>
+                        </DisclosureContent>
+                    </Disclosure>
                 </Card>
             </div>
             {researchMode === "public-web" && (
@@ -577,8 +570,11 @@ export function AIInvestigationPanel() {
                 </div>
             )}
             <Card asChild>
-                <details>
-                    <summary className={disclosureSummaryClass}>
+                <Disclosure>
+                    <DisclosureSummary
+                        padded
+                        className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                    >
                         <span>{t("aiResearch.evidenceOptions")}</span>
                         <span className="type-footnote font-normal text-label-secondary">
                             {t("aiResearch.documentCount", {
@@ -587,8 +583,8 @@ export function AIInvestigationPanel() {
                             {(dateFrom || dateTo) &&
                                 ` · ${dateFrom || "…"} – ${dateTo || "…"}`}
                         </span>
-                    </summary>
-                    <div className="space-y-4 px-4 pb-4">
+                    </DisclosureSummary>
+                    <DisclosureContent className="space-y-4 pt-0">
                         <div className="flex flex-wrap items-center gap-3">
                             <Button
                                 type="button"
@@ -630,9 +626,9 @@ export function AIInvestigationPanel() {
                                         trailing={
                                             <Button
                                                 type="button"
-                                                size="icon"
+                                                size="icon-sm"
                                                 variant="ghost"
-                                                className="icon-touch-target h-8 w-8 text-destructive hover:text-destructive"
+                                                className="icon-touch-target text-destructive hover:text-destructive"
                                                 aria-label={`${t("aiResearch.deleteDocument")}: ${document.title}`}
                                                 onClick={() =>
                                                     void deleteDocument(
@@ -686,8 +682,8 @@ export function AIInvestigationPanel() {
                                 />
                             </div>
                         </div>
-                    </div>
-                </details>
+                    </DisclosureContent>
+                </Disclosure>
             </Card>
             {route === "openai-api" && (
                 <div className="space-y-3">
@@ -944,11 +940,14 @@ export function AIInvestigationPanel() {
                 </span>
             </div>
             <Card asChild>
-                <details>
-                    <summary className={disclosureSummaryClass}>
+                <Disclosure>
+                    <DisclosureSummary
+                        padded
+                        className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                    >
                         {t("aiResearch.disclosureHistory")}
-                    </summary>
-                    <div className="space-y-3 px-4 pb-4">
+                    </DisclosureSummary>
+                    <DisclosureContent className="space-y-3 pt-0">
                         <div className="flex flex-wrap gap-2">
                             <Button
                                 size="sm"
@@ -1049,8 +1048,8 @@ export function AIInvestigationPanel() {
                                 {JSON.stringify(record, null, 2)}
                             </pre>
                         ))}
-                    </div>
-                </details>
+                    </DisclosureContent>
+                </Disclosure>
             </Card>
             {error && (
                 <Alert variant="destructive">
@@ -1058,7 +1057,7 @@ export function AIInvestigationPanel() {
                 </Alert>
             )}
             {job?.state === "waiting" && (
-                <Alert variant="warning" role="status">
+                <Alert variant="warning">
                     <AlertDescription className="space-y-3">
                         <p>
                             {job.plan?.ambiguity?.question ??

@@ -3,6 +3,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
@@ -79,15 +84,15 @@ export function PortfolioImportHistory({
         }
     };
     return (
-        <details
-            className="rounded-card corner-continuous border border-border/60 bg-card/70 p-4"
+        <Disclosure
+            variant="card"
             onToggle={(event) => setOpen(event.currentTarget.open)}
         >
-            <summary className="cursor-pointer rounded-control type-body font-medium focus-ring">
+            <DisclosureSummary padded>
                 {t("portfolioImport.session.history.title")}
-            </summary>
+            </DisclosureSummary>
             {open && (
-                <div className="mt-3 space-y-3">
+                <DisclosureContent className="space-y-3">
                     {error && (
                         <Alert variant="destructive">
                             <AlertDescription>
@@ -165,9 +170,9 @@ export function PortfolioImportHistory({
                             </Button>
                         </div>
                     )}
-                </div>
+                </DisclosureContent>
             )}
             <ConfirmDialog />
-        </details>
+        </Disclosure>
     );
 }
