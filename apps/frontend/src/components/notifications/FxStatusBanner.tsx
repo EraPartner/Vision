@@ -106,9 +106,9 @@ export function FxStatusBanner() {
             <Button
                 type="button"
                 variant="ghost"
-                size="icon"
+                size="icon-sm"
                 onClick={handleDismiss}
-                className="absolute right-2 top-2 h-8 w-8 text-label-secondary hover:text-foreground"
+                className="absolute right-2 top-2 text-label-secondary hover:text-foreground"
                 aria-label={t("layout.dismiss")}
             >
                 <X aria-hidden="true" />

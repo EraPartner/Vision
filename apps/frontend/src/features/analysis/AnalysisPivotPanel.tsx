@@ -2,6 +2,7 @@ import { Input } from "@/components/ui/input";
 import { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Minus, Plus, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Label } from "@/components/ui/label";
 import { List } from "@/components/ui/list";
 import {
@@ -255,8 +256,8 @@ export function AnalysisPivotPanel({
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target h-8 w-8 shrink-0"
+                                            size="icon-sm"
+                                            className="icon-touch-target shrink-0"
                                             disabled={index === 0}
                                             aria-label={t(
                                                 "analysis.ext.pivot.moveUp",
@@ -271,8 +272,8 @@ export function AnalysisPivotPanel({
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target h-8 w-8 shrink-0"
+                                            size="icon-sm"
+                                            className="icon-touch-target shrink-0"
                                             disabled={
                                                 index ===
                                                 config[axis].length - 1
@@ -288,8 +289,8 @@ export function AnalysisPivotPanel({
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            size="icon"
-                                            className="icon-touch-target h-8 w-8 shrink-0"
+                                            size="icon-sm"
+                                            className="icon-touch-target shrink-0"
                                             aria-label={t(
                                                 "analysis.ext.pivot.removeField",
                                                 { field },
@@ -549,12 +550,12 @@ export function AnalysisPivotPanel({
                 <Alert variant="destructive">
                     <AlertDescription>
                         <p>{t("analysis.ext.pivot.failed")}</p>
-                        <details className="mt-2">
-                            <summary className="cursor-pointer rounded-control focus-ring">
+                        <Disclosure className="mt-2">
+                            <DisclosureSummary className="text-inherit">
                                 {t("analysis.ext.pivot.errorDetails")}
-                            </summary>
+                            </DisclosureSummary>
                             <p className="mt-2 break-words">{error}</p>
-                        </details>
+                        </Disclosure>
                     </AlertDescription>
                 </Alert>
             )}
@@ -570,7 +571,7 @@ export function AnalysisPivotPanel({
                 </p>
             )}
             {currentResult && !visibleRows.length && (
-                <Alert role="status">
+                <Alert>
                     <AlertDescription>
                         {t("analysis.ext.pivot.empty")}
                     </AlertDescription>
@@ -871,8 +872,8 @@ export function AnalysisPivotPanel({
                                                             <Button
                                                                 type="button"
                                                                 variant="ghost"
-                                                                size="sm"
-                                                                className="h-7 px-1.5 font-normal tabular-nums"
+                                                                size="xs"
+                                                                className="px-1.5 font-normal tabular-nums"
                                                                 title={t(
                                                                     "analysis.ext.pivot.drill",
                                                                 )}

@@ -391,8 +391,8 @@ function FormHeader({
         <div className="flex items-center gap-2 px-2 py-1.5 border-b border-border/60">
             <Button
                 variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-label-secondary"
+                size="icon-sm"
+                className="text-label-secondary"
                 onClick={onBack}
                 aria-label={backLabel}
             >

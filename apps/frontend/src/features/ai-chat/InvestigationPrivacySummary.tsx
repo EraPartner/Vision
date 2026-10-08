@@ -1,5 +1,6 @@
 import { Cloud, HardDrive, Search, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface InvestigationPrivacySummaryProps {
@@ -90,7 +91,10 @@ export function InvestigationPrivacySummary({
                                     : "aiResearch.summary.savedCloud",
                             },
                         ].map(({ Icon, title, body }) => (
-                            <div key={title} className="flex items-start gap-2.5">
+                            <div
+                                key={title}
+                                className="flex items-start gap-2.5"
+                            >
                                 <Icon
                                     aria-hidden="true"
                                     className="mt-0.5 h-4 w-4 shrink-0 text-primary"
@@ -104,10 +108,13 @@ export function InvestigationPrivacySummary({
                             </div>
                         ))}
                     </div>
-                    <details className="mt-3 border-t border-border/50 pt-3 type-footnote">
-                        <summary className="w-fit cursor-pointer rounded-chip text-label-secondary focus-ring">
+                    <Disclosure className="mt-3 border-t border-border/50 pt-3 type-footnote">
+                        <DisclosureSummary
+                            tone="footnote"
+                            className="rounded-chip"
+                        >
                             {t("aiResearch.modeGuideTitle")}
-                        </summary>
+                        </DisclosureSummary>
                         <dl className="mt-3 space-y-3 text-label-secondary">
                             <div>
                                 <dt className="type-footnote font-medium text-foreground">
@@ -153,7 +160,7 @@ export function InvestigationPrivacySummary({
                                 </div>
                             )}
                         </dl>
-                    </details>
+                    </Disclosure>
                 </CardContent>
             </section>
         </Card>

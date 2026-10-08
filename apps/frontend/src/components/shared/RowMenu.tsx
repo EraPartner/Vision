@@ -1,4 +1,9 @@
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import {
+    forwardRef,
+    type KeyboardEvent,
+    type MouseEvent,
+    type ReactNode,
+} from "react";
 import { MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +21,8 @@ export interface RowMenuProps {
     size?: "icon" | "icon-sm" | "icon-xs";
     className?: string;
     contentClassName?: string;
+    /** Disables the trigger, for example while a row action is in flight. */
+    disabled?: boolean;
     children: ReactNode;
 }
 
@@ -27,37 +34,45 @@ const stop = (event: MouseEvent | KeyboardEvent) => event.stopPropagation();
  * row it sits in. Items go in as children; destructive ones last, after a
  * separator, with `variant="destructive"`.
  */
-export function RowMenu({
-    label,
-    align = "end",
-    size = "icon-sm",
-    className,
-    contentClassName,
-    children,
-}: RowMenuProps) {
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size={size}
-                    aria-label={label}
-                    className={cn("text-label-secondary", className)}
+export const RowMenu = forwardRef<HTMLButtonElement, RowMenuProps>(
+    function RowMenu(
+        {
+            label,
+            align = "end",
+            size = "icon-sm",
+            className,
+            contentClassName,
+            disabled,
+            children,
+        },
+        ref,
+    ) {
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        ref={ref}
+                        type="button"
+                        variant="ghost"
+                        size={size}
+                        aria-label={label}
+                        disabled={disabled}
+                        className={cn("text-label-secondary", className)}
+                        onClick={stop}
+                        onKeyDown={stop}
+                    >
+                        <MoreHorizontal aria-hidden="true" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align={align}
+                    className={contentClassName}
                     onClick={stop}
                     onKeyDown={stop}
                 >
-                    <MoreHorizontal aria-hidden="true" />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-                align={align}
-                className={contentClassName}
-                onClick={stop}
-                onKeyDown={stop}
-            >
-                {children}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
+                    {children}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    },
+);

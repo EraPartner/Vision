@@ -159,8 +159,8 @@ export function FilterBanner({
                     {onClearTags && (
                         <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
+                            size="icon-xs"
+
                             onClick={onClearTags}
                             aria-label={t("filter.tags.clearAll")}
                         >

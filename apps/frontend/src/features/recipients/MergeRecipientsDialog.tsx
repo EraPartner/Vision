@@ -149,8 +149,8 @@ export function MergeRecipientsDialog({
                                     trailing={
                                         <Button
                                             variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 text-label-secondary"
+                                            size="icon-sm"
+                                            className="text-label-secondary"
                                             aria-label={t(
                                                 "aria.clearSelection",
                                             )}

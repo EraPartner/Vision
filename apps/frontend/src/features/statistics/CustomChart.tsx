@@ -7,17 +7,14 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { MoreHorizontal, Pencil, Trash2, TrendingUp } from "lucide-react";
+import { Pencil, Trash2, TrendingUp } from "lucide-react";
 import {
     LineChart,
     type LineSeries,
@@ -365,59 +362,49 @@ export function CustomChart({
                     </CardDescription>
                 </div>
                 {(onEdit || onDelete) && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                ref={menuTriggerRef}
-                                variant="ghost"
-                                size="icon"
-                                className="shrink-0 text-label-secondary"
-                                aria-label={t("customChart.menu", {
+                    <RowMenu
+                        ref={menuTriggerRef}
+                        size="icon"
+                        className="shrink-0"
+                        label={t("customChart.menu", { name: savedChart.name })}
+                    >
+                        {onEdit && (
+                            <DropdownMenuItem
+                                aria-label={t("customChart.editAction", {
                                     name: savedChart.name,
                                 })}
+                                onSelect={() => {
+                                    if (menuTriggerRef.current)
+                                        onEdit(
+                                            savedChart,
+                                            menuTriggerRef.current,
+                                        );
+                                }}
                             >
-                                <MoreHorizontal />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            {onEdit && (
-                                <DropdownMenuItem
-                                    aria-label={t("customChart.editAction", {
-                                        name: savedChart.name,
-                                    })}
-                                    onSelect={() => {
-                                        if (menuTriggerRef.current)
-                                            onEdit(
-                                                savedChart,
-                                                menuTriggerRef.current,
-                                            );
-                                    }}
-                                >
-                                    <Pencil />
-                                    {t("common.edit")}
-                                </DropdownMenuItem>
-                            )}
-                            {onEdit && onDelete && <DropdownMenuSeparator />}
-                            {onDelete && (
-                                <DropdownMenuItem
-                                    aria-label={t("customChart.deleteAction", {
-                                        name: savedChart.name,
-                                    })}
-                                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                                    onSelect={() => {
-                                        if (menuTriggerRef.current)
-                                            onDelete(
-                                                savedChart,
-                                                menuTriggerRef.current,
-                                            );
-                                    }}
-                                >
-                                    <Trash2 />
-                                    {t("common.delete")}
-                                </DropdownMenuItem>
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                <Pencil />
+                                {t("common.edit")}
+                            </DropdownMenuItem>
+                        )}
+                        {onEdit && onDelete && <DropdownMenuSeparator />}
+                        {onDelete && (
+                            <DropdownMenuItem
+                                aria-label={t("customChart.deleteAction", {
+                                    name: savedChart.name,
+                                })}
+                                variant="destructive"
+                                onSelect={() => {
+                                    if (menuTriggerRef.current)
+                                        onDelete(
+                                            savedChart,
+                                            menuTriggerRef.current,
+                                        );
+                                }}
+                            >
+                                <Trash2 />
+                                {t("common.delete")}
+                            </DropdownMenuItem>
+                        )}
+                    </RowMenu>
                 )}
             </CardHeader>
 

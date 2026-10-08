@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { List } from "@/components/ui/list";
@@ -298,7 +299,10 @@ export function PortfolioTaxAdjustmentsDialog({
                                                     {inv.symbol}
                                                 </span>
                                             )}
-                                            <Badge variant="secondary" size="sm">
+                                            <Badge
+                                                variant="secondary"
+                                                size="sm"
+                                            >
                                                 {getAssetClassLabel(
                                                     t,
                                                     inv.assetClass,
@@ -307,7 +311,9 @@ export function PortfolioTaxAdjustmentsDialog({
                                         </div>
                                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                                             <div className="space-y-2">
-                                                <Label htmlFor={`taxes-${inv.id}`}>
+                                                <Label
+                                                    htmlFor={`taxes-${inv.id}`}
+                                                >
                                                     {t("tax.taxes")}
                                                 </Label>
                                                 <Input
@@ -326,11 +332,15 @@ export function PortfolioTaxAdjustmentsDialog({
                                                             e.target.value,
                                                         )
                                                     }
-                                                    placeholder={zeroPlaceholder}
+                                                    placeholder={
+                                                        zeroPlaceholder
+                                                    }
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label htmlFor={`fees-${inv.id}`}>
+                                                <Label
+                                                    htmlFor={`fees-${inv.id}`}
+                                                >
                                                     {t("tax.fees")}
                                                 </Label>
                                                 <Input
@@ -349,29 +359,30 @@ export function PortfolioTaxAdjustmentsDialog({
                                                             e.target.value,
                                                         )
                                                     }
-                                                    placeholder={zeroPlaceholder}
+                                                    placeholder={
+                                                        zeroPlaceholder
+                                                    }
                                                 />
                                             </div>
                                         </div>
                                         {(showEtfStructure || showReynders) && (
-                                            <details
+                                            <Disclosure
                                                 className="border-t border-border/50 pt-3"
                                                 onInvalidCapture={(event) => {
                                                     // Keep optional fields mounted so drafts and native
                                                     // validation survive collapsing this section.
-                                                    event.currentTarget.open =
-                                                        true;
+                                                    event.currentTarget.open = true;
                                                     (
                                                         event.target as HTMLElement
                                                     ).focus();
                                                 }}
                                             >
-                                                <summary
-                                                    className="cursor-default rounded-chip type-headline text-foreground focus-ring"
+                                                <DisclosureSummary
+                                                    className="cursor-default rounded-chip"
                                                     aria-label={`${t("tax.treatmentOptions")}: ${inv.name}`}
                                                 >
                                                     {t("tax.treatmentOptions")}
-                                                </summary>
+                                                </DisclosureSummary>
                                                 <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                                                     {showEtfStructure && (
                                                         <div className="space-y-2">
@@ -525,7 +536,7 @@ export function PortfolioTaxAdjustmentsDialog({
                                                             </div>
                                                         )}
                                                 </div>
-                                            </details>
+                                            </Disclosure>
                                         )}
                                     </li>
                                 );

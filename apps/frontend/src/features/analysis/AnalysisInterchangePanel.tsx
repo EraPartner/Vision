@@ -13,6 +13,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -335,9 +336,9 @@ export function AnalysisInterchangePanel({
                                 </span>
                                 <Button
                                     type="button"
-                                    size="icon"
+                                    size="icon-sm"
                                     variant="ghost"
-                                    className="icon-touch-target h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                                    className="icon-touch-target shrink-0 text-destructive hover:text-destructive"
                                     aria-label={t("analysis.removeScenario")}
                                     onClick={() =>
                                         onScenarioModelChange({
@@ -356,10 +357,10 @@ export function AnalysisInterchangePanel({
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <details>
-                                <summary className="cursor-pointer rounded-control type-callout text-label-secondary focus-ring">
+                            <Disclosure>
+                                <DisclosureSummary tone="subtle">
                                     {t("analysis.ext.workbook.preview")}
-                                </summary>
+                                </DisclosureSummary>
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
@@ -397,7 +398,7 @@ export function AnalysisInterchangePanel({
                                             ))}
                                     </TableBody>
                                 </Table>
-                            </details>
+                            </Disclosure>
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="min-w-0 space-y-1.5">
                                     <Label htmlFor={resultFieldId}>

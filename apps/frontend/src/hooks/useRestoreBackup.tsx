@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogCancel,
@@ -8,17 +8,17 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import { apiClient } from '@/lib/api';
-import { useLanguage } from '@/stores/hydration/LanguageHydration';
-import { electronErrorToMessage } from '@/lib/api/electronErrorMessage';
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { apiClient } from "@/lib/api";
+import { useLanguage } from "@/stores/hydration/LanguageHydration";
+import { electronErrorToMessage } from "@/lib/api/electronErrorMessage";
 
-const ERR_PASSPHRASE_REQUIRED = 'PASSPHRASE_REQUIRED';
-const ERR_INVALID_PASSPHRASE = 'INVALID_PASSPHRASE';
+const ERR_PASSPHRASE_REQUIRED = "PASSPHRASE_REQUIRED";
+const ERR_INVALID_PASSPHRASE = "INVALID_PASSPHRASE";
 
 type RestoreOptions = {
     /** Called once a successful restore is confirmed, before the page reloads. */
@@ -46,52 +46,71 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
 
     useEffect(() => {
         return () => {
-            if (reloadTimerRef.current !== null) clearTimeout(reloadTimerRef.current);
+            if (reloadTimerRef.current !== null)
+                clearTimeout(reloadTimerRef.current);
         };
     }, []);
     const [passphraseOpen, setPassphraseOpen] = useState(false);
     const [pendingFile, setPendingFile] = useState<string | null>(null);
-    const [passphraseInput, setPassphraseInput] = useState('');
+    const [passphraseInput, setPassphraseInput] = useState("");
     const [showPassphrase, setShowPassphrase] = useState(false);
     const [submitting, setSubmitting] = useState(false);
 
     const performRestore = useCallback(
-        async (filePath: string, passphrase?: string): Promise<'ok' | 'needPassphrase' | 'invalidPassphrase'> => {
-            const result = await apiClient.restoreBackup(filePath, passphrase ? { passphrase } : undefined);
-            if (!result) return 'ok';
+        async (
+            filePath: string,
+            passphrase?: string,
+        ): Promise<"ok" | "needPassphrase" | "invalidPassphrase"> => {
+            const result = await apiClient.restoreBackup(
+                filePath,
+                passphrase ? { passphrase } : undefined,
+            );
+            if (!result) return "ok";
 
             if (result.success) {
                 if (result.frontendState?.keys) {
                     try {
-                        for (const [key, value] of Object.entries(result.frontendState.keys)) {
+                        for (const [key, value] of Object.entries(
+                            result.frontendState.keys,
+                        )) {
                             window.localStorage.setItem(key, String(value));
                         }
                     } catch {
                         // Non-fatal: continue even if localStorage is restricted.
                     }
                 }
-                toast.success(t('settings.restore.success'), {
-                    description: t('settings.restore.successDesc').replaceAll('{file}', result.file ?? filePath),
+                toast.success(t("settings.restore.success"), {
+                    description: t("settings.restore.successDesc").replaceAll(
+                        "{file}",
+                        result.file ?? filePath,
+                    ),
                     duration: 8000,
                 });
                 onSuccess?.();
-                reloadTimerRef.current = setTimeout(() => window.location.reload(), 3000);
-                return 'ok';
+                reloadTimerRef.current = setTimeout(
+                    () => window.location.reload(),
+                    3000,
+                );
+                return "ok";
             }
 
-            const errMsg = result.error ?? '';
-            if (errMsg.includes(ERR_INVALID_PASSPHRASE)) return 'invalidPassphrase';
-            if (errMsg.includes(ERR_PASSPHRASE_REQUIRED)) return 'needPassphrase';
+            const errMsg = result.error ?? "";
+            if (errMsg.includes(ERR_INVALID_PASSPHRASE))
+                return "invalidPassphrase";
+            if (errMsg.includes(ERR_PASSPHRASE_REQUIRED))
+                return "needPassphrase";
 
-            if (errMsg.startsWith('BUNDLE_SCHEMA_NEWER:')) {
-                toast.error(t('settings.restore.schemaMismatch'), {
-                    description: errMsg.replace('BUNDLE_SCHEMA_NEWER: ', ''),
+            if (errMsg.startsWith("BUNDLE_SCHEMA_NEWER:")) {
+                toast.error(t("settings.restore.schemaMismatch"), {
+                    description: errMsg.replace("BUNDLE_SCHEMA_NEWER: ", ""),
                     duration: 12000,
                 });
             } else {
-                toast.error(t('settings.restore.failed'), { description: errMsg });
+                toast.error(t("settings.restore.failed"), {
+                    description: errMsg,
+                });
             }
-            return 'ok';
+            return "ok";
         },
         [onSuccess, t],
     );
@@ -104,24 +123,26 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                 const encrypted = await apiClient.isBackupEncrypted(filePath);
                 if (encrypted) {
                     setPendingFile(filePath);
-                    setPassphraseInput('');
+                    setPassphraseInput("");
                     setShowPassphrase(false);
                     setPassphraseOpen(true);
                     return;
                 }
 
                 const outcome = await performRestore(filePath);
-                if (outcome === 'needPassphrase') {
+                if (outcome === "needPassphrase") {
                     // Defensive: file looked unencrypted but main says otherwise.
                     setPendingFile(filePath);
-                    setPassphraseInput('');
+                    setPassphraseInput("");
                     setShowPassphrase(false);
                     setPassphraseOpen(true);
                     return;
                 }
                 setRunning(false);
             } catch (err: unknown) {
-                toast.error(t('settings.restore.failed'), { description: electronErrorToMessage(err, t) });
+                toast.error(t("settings.restore.failed"), {
+                    description: electronErrorToMessage(err, t),
+                });
                 setRunning(false);
             }
         },
@@ -133,24 +154,26 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
         setSubmitting(true);
         try {
             const outcome = await performRestore(pendingFile, passphraseInput);
-            if (outcome === 'invalidPassphrase') {
-                toast.error(t('settings.restore.passphraseInvalid'));
-                setPassphraseInput('');
+            if (outcome === "invalidPassphrase") {
+                toast.error(t("settings.restore.passphraseInvalid"));
+                setPassphraseInput("");
                 // Keep dialog open for retry.
                 return;
             }
-            if (outcome === 'needPassphrase') {
-                toast.error(t('settings.restore.passphraseRequired'));
-                setPassphraseInput('');
+            if (outcome === "needPassphrase") {
+                toast.error(t("settings.restore.passphraseRequired"));
+                setPassphraseInput("");
                 return;
             }
             // Success or non-passphrase failure — close dialog and reset.
             setPassphraseOpen(false);
             setPendingFile(null);
-            setPassphraseInput('');
-            if (outcome !== 'ok') setRunning(false);
+            setPassphraseInput("");
+            if (outcome !== "ok") setRunning(false);
         } catch (err: unknown) {
-            toast.error(t('settings.restore.failed'), { description: electronErrorToMessage(err, t) });
+            toast.error(t("settings.restore.failed"), {
+                description: electronErrorToMessage(err, t),
+            });
             setPassphraseOpen(false);
             setPendingFile(null);
             setRunning(false);
@@ -162,7 +185,7 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
     const handlePassphraseCancel = useCallback(() => {
         setPassphraseOpen(false);
         setPendingFile(null);
-        setPassphraseInput('');
+        setPassphraseInput("");
         setRunning(false);
     }, []);
 
@@ -177,24 +200,30 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2">
                         <Lock className="h-4 w-4" aria-hidden="true" />
-                        {t('settings.restore.passphraseTitle')}
+                        {t("settings.restore.passphraseTitle")}
                     </AlertDialogTitle>
-                    <AlertDialogDescription>{t('settings.restore.passphraseDesc')}</AlertDialogDescription>
+                    <AlertDialogDescription>
+                        {t("settings.restore.passphraseDesc")}
+                    </AlertDialogDescription>
                 </AlertDialogHeader>
 
                 <div className="space-y-2 py-2">
                     <Label htmlFor="restore-passphrase">
-                        {t('settings.restore.passphraseLabel')}
+                        {t("settings.restore.passphraseLabel")}
                     </Label>
                     <div className="relative">
                         <Input
                             id="restore-passphrase"
-                            type={showPassphrase ? 'text' : 'password'}
+                            type={showPassphrase ? "text" : "password"}
                             autoFocus
                             value={passphraseInput}
                             onChange={(e) => setPassphraseInput(e.target.value)}
                             onKeyDown={(e) => {
-                                if (e.key === 'Enter' && passphraseInput && !submitting) {
+                                if (
+                                    e.key === "Enter" &&
+                                    passphraseInput &&
+                                    !submitting
+                                ) {
                                     e.preventDefault();
                                     void handlePassphraseSubmit();
                                 }
@@ -205,36 +234,50 @@ export function useRestoreBackup({ onSuccess }: RestoreOptions = {}) {
                         <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
+                            size="icon-xs"
                             onClick={() => setShowPassphrase((v) => !v)}
-                            className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-label-secondary hover:text-foreground"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 text-label-secondary hover:text-foreground"
                             tabIndex={-1}
                             aria-label={
                                 showPassphrase
-                                    ? t('settings.restore.hidePassphrase')
-                                    : t('settings.restore.showPassphrase')
+                                    ? t("settings.restore.hidePassphrase")
+                                    : t("settings.restore.showPassphrase")
                             }
                         >
-                            {showPassphrase ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+                            {showPassphrase ? (
+                                <EyeOff aria-hidden="true" />
+                            ) : (
+                                <Eye aria-hidden="true" />
+                            )}
                         </Button>
                     </div>
                     {pendingFile && (
                         <p className="break-all font-mono type-footnote text-label-secondary">
-                            {pendingFile.split('/').pop()}
+                            {pendingFile.split("/").pop()}
                         </p>
                     )}
                 </div>
 
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={submitting} onClick={handlePassphraseCancel}>
-                        {t('settings.restore.cancelButton')}
+                    <AlertDialogCancel
+                        disabled={submitting}
+                        onClick={handlePassphraseCancel}
+                    >
+                        {t("settings.restore.cancelButton")}
                     </AlertDialogCancel>
                     <Button
-                        onClick={() => { void handlePassphraseSubmit(); }}
+                        onClick={() => {
+                            void handlePassphraseSubmit();
+                        }}
                         disabled={!passphraseInput || submitting}
                     >
-                        {submitting && <Loader2 className="animate-spin" aria-hidden="true" />}
-                        {t('settings.restore.passphraseSubmit')}
+                        {submitting && (
+                            <Loader2
+                                className="animate-spin"
+                                aria-hidden="true"
+                            />
+                        )}
+                        {t("settings.restore.passphraseSubmit")}
                     </Button>
                 </AlertDialogFooter>
             </AlertDialogContent>

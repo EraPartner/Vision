@@ -23,7 +23,7 @@ describe("HistoricalFxFallbackWarning", () => {
             />,
         );
 
-        expect(screen.getByRole("alert")).toHaveTextContent(
+        expect(screen.getByRole("status")).toHaveTextContent(
             "Historical rates unavailable: GBP, USD",
         );
     });

@@ -18,6 +18,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -317,15 +318,18 @@ export function CashFlowForecastChart({
             )}
             {data && !isLoading && (
                 <>
-                    <details className="mb-3">
-                        <summary className="w-fit cursor-pointer rounded-chip py-2 type-footnote text-label-secondary focus-ring">
+                    <Disclosure className="mb-3">
+                        <DisclosureSummary
+                            tone="footnote"
+                            className="rounded-chip py-2"
+                        >
                             {t("cashflow.compareMethods")}
-                        </summary>
+                        </DisclosureSummary>
                         <p className="mb-3 type-footnote text-label-secondary">
                             {t("cashflow.compareMethodsHelp")}
                         </p>
                         {methodToggles}
-                    </details>
+                    </Disclosure>
                     {mode === "month" && monthQuery.data ? (
                         <ForecastInner
                             data={monthQuery.data}

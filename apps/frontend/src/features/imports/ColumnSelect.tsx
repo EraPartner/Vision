@@ -1,7 +1,8 @@
 /**
  * ColumnSelect — a single "map this field to a CSV column" dropdown, shared by
- * the transaction and portfolio column mappers. Renders a NONE sentinel option
- * ("leave empty") because Radix Select cannot hold an empty-string value.
+ * the transaction and portfolio column mappers. Renders the shared "none"
+ * sentinel option ("leave empty") because Radix Select cannot hold an
+ * empty-string value.
  */
 
 import {
@@ -14,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export const NONE = "__none__";
+import { SELECT_NONE, fromSelectValue, toSelectValue } from "@/lib/selectValue";
 
 interface ColumnSelectProps {
     id: string;
@@ -77,14 +78,14 @@ export function ColumnSelect({
                 {required && <span aria-hidden="true"> *</span>}
             </Label>
             <Select
-                value={value || NONE}
-                onValueChange={(v) => onChange(v === NONE ? "" : v)}
+                value={toSelectValue(value)}
+                onValueChange={(v) => onChange(fromSelectValue(v))}
             >
                 <SelectTrigger id={id} aria-required={required || undefined}>
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value={NONE}>
+                    <SelectItem value={SELECT_NONE}>
                         <span className="text-muted-foreground">
                             {noMappingLabel}
                         </span>

@@ -349,32 +349,22 @@ export function CustomChartBuilderModal({
 
                             {/* Time bucket — irrelevant for ranked (totals over the whole range) */}
                             {state.chartVariant !== "ranked" && (
-                                <div className="space-y-1">
-                                    <span
-                                        id={`${fieldId}-bucket-label`}
-                                        className="type-body font-medium text-foreground"
-                                    >
-                                        {t("customChart.timeBucket")}
-                                    </span>
-                                    <SegmentedControl
-                                        aria-labelledby={`${fieldId}-bucket-label`}
-                                        value={state.timeBucket}
-                                        onValueChange={(v) =>
-                                            update(
-                                                "timeBucket",
-                                                v as TimeBucket,
-                                            )
-                                        }
-                                        className="w-full"
-                                    >
-                                        <SegmentedControlItem value="monthly">
-                                            {t("customChart.monthly")}
-                                        </SegmentedControlItem>
-                                        <SegmentedControlItem value="yearly">
-                                            {t("customChart.yearly")}
-                                        </SegmentedControlItem>
-                                    </SegmentedControl>
-                                </div>
+                                <SegmentedControl
+                                    label={t("customChart.timeBucket")}
+                                    wrapperClassName="space-y-1"
+                                    value={state.timeBucket}
+                                    onValueChange={(v) =>
+                                        update("timeBucket", v as TimeBucket)
+                                    }
+                                    className="w-full"
+                                >
+                                    <SegmentedControlItem value="monthly">
+                                        {t("customChart.monthly")}
+                                    </SegmentedControlItem>
+                                    <SegmentedControlItem value="yearly">
+                                        {t("customChart.yearly")}
+                                    </SegmentedControlItem>
+                                </SegmentedControl>
                             )}
 
                             {/* Date range */}

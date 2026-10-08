@@ -388,7 +388,8 @@ export default function PlannedPaymentForm({
     const title = initial
         ? t("plannedForm.editTitle")
         : t("plannedForm.newTitle");
-    const groupClass = "rounded-card corner-continuous bg-foreground/[0.04] p-3";
+    const groupClass =
+        "rounded-card corner-continuous bg-foreground/[0.04] p-3";
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -489,14 +490,12 @@ export default function PlannedPaymentForm({
 
                         {/* Direction — owns the sign of the amount above (see `Direction`). */}
                         <div className="grid gap-1.5">
-                            {/* Labelled via aria-labelledby, not htmlFor: the segments are
+                            {/* `label` wires aria-labelledby, not htmlFor: the segments are
                                 role="radio" buttons, and a `for` association would
                                 overwrite their own accessible names with "Direction". */}
-                            <Label id="pp-direction-label">
-                                {t("plannedForm.direction")}
-                            </Label>
                             <SegmentedControl
-                                aria-labelledby="pp-direction-label"
+                                label={t("plannedForm.direction")}
+                                wrapperClassName="space-y-1.5"
                                 value={effectiveDirection}
                                 onValueChange={(v) =>
                                     setDirection(v as Direction)

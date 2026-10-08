@@ -14,17 +14,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { List, ListRow } from "@/components/ui/list";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import {
     AlertTriangle,
     Check,
-    MoreHorizontal,
     RefreshCw,
     ShieldCheck,
     Trash2,
@@ -266,7 +261,10 @@ export function ResearchMappingDialog({
                         </div>
                     ) : resolveMutation.isError ? (
                         <Alert variant="destructive">
-                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                            <AlertTriangle
+                                className="h-4 w-4"
+                                aria-hidden="true"
+                            />
                             <AlertDescription>
                                 {t("research.mapping.resolveError")}
                             </AlertDescription>
@@ -291,7 +289,9 @@ export function ResearchMappingDialog({
                                         leading={
                                             confirmable ? (
                                                 <Checkbox
-                                                    checked={!!selected[p.provider]}
+                                                    checked={
+                                                        !!selected[p.provider]
+                                                    }
                                                     onCheckedChange={(v) =>
                                                         setSelected((s) => ({
                                                             ...s,
@@ -423,41 +423,28 @@ export function ResearchMappingDialog({
                                                     )}
                                                 />
                                             )}
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-8 w-8 text-label-secondary"
-                                                        aria-label={t(
-                                                            "research.mapping.rowMenu",
-                                                            {
-                                                                provider:
-                                                                    m.provider,
-                                                            },
-                                                        )}
-                                                    >
-                                                        <MoreHorizontal />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem
-                                                        className="text-destructive focus:text-destructive"
-                                                        onSelect={() =>
-                                                            void handleRemove(
-                                                                m.id,
-                                                                m.provider,
-                                                                m.provider_symbol,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        {t(
-                                                            "research.mapping.remove",
-                                                        )}
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <RowMenu
+                                                label={t(
+                                                    "research.mapping.rowMenu",
+                                                    { provider: m.provider },
+                                                )}
+                                            >
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onSelect={() =>
+                                                        void handleRemove(
+                                                            m.id,
+                                                            m.provider,
+                                                            m.provider_symbol,
+                                                        )
+                                                    }
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    {t(
+                                                        "research.mapping.remove",
+                                                    )}
+                                                </DropdownMenuItem>
+                                            </RowMenu>
                                         </>
                                     }
                                 />
@@ -494,7 +481,7 @@ export function ResearchMappingDialog({
                                 </AlertDescription>
                             </Alert>
                         ) : (
-                            <Alert variant="success" role="status">
+                            <Alert variant="success">
                                 <Check className="h-4 w-4" aria-hidden="true" />
                                 <AlertDescription>
                                     {t("research.mapping.auditClean")}

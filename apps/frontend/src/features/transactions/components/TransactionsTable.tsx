@@ -553,7 +553,7 @@ export function TransactionsTable({
                             onDelete(row.id, row.memo || row.recipient)
                         }
                         disabled={deletePending}
-                        className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                        variant="destructive"
                     >
                         <Trash2 className="mr-2 h-4 w-4" />
                         {t("contextMenu.delete")}

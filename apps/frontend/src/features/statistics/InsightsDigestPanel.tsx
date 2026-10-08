@@ -452,8 +452,8 @@ function DismissButton({
     return (
         <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 text-label-secondary hover:text-foreground"
+            size="icon-sm"
+            className="shrink-0 text-label-secondary hover:text-foreground"
             aria-label={label}
             onClick={onClick}
         >

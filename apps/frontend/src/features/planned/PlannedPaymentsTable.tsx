@@ -2,7 +2,6 @@ import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router";
 import {
     ExternalLink,
-    MoreHorizontal,
     Pause,
     Pencil,
     Play,
@@ -11,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Money } from "@/components/shared/Money";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     VirtualDataTable,
     type Column,
@@ -18,11 +18,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PlannedDueBadge } from "@/features/planned/PlannedDueBadge";
@@ -263,9 +260,7 @@ export function PlannedPaymentsTable({
                             {row.executed_transaction_id != null ? (
                                 <Link
                                     to={`/transactions?transaction_id=${row.executed_transaction_id}`}
-                                    onClick={(event) =>
-                                        event.stopPropagation()
-                                    }
+                                    onClick={(event) => event.stopPropagation()}
                                     className="rounded-chip focus-ring"
                                 >
                                     {t("plannedPage.execute.linked", {
@@ -299,57 +294,46 @@ export function PlannedPaymentsTable({
                 editable: false,
                 defaultWidth: 56,
                 render: (row) => (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="icon-touch-target text-label-secondary hover:text-foreground"
-                                disabled={actionLoading}
-                                aria-label={t("plannedPage.rowMenu", {
-                                    name: row.name,
-                                })}
-                                onClick={(event) => event.stopPropagation()}
-                            >
-                                <MoreHorizontal className="h-4 w-4" aria-hidden />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => onEdit(row)}>
-                                <Pencil
+                    <RowMenu
+                        size="icon"
+                        className="icon-touch-target hover:text-foreground"
+                        disabled={actionLoading}
+                        label={t("plannedPage.rowMenu", { name: row.name })}
+                    >
+                        <DropdownMenuItem onSelect={() => onEdit(row)}>
+                            <Pencil
+                                className="mr-2 h-4 w-4 text-label-secondary"
+                                aria-hidden
+                            />
+                            {t("common.edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            onSelect={() => void onToggleActive(row)}
+                        >
+                            {row.is_active ? (
+                                <Pause
                                     className="mr-2 h-4 w-4 text-label-secondary"
                                     aria-hidden
                                 />
-                                {t("common.edit")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                onSelect={() => void onToggleActive(row)}
-                            >
-                                {row.is_active ? (
-                                    <Pause
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                ) : (
-                                    <Play
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                )}
-                                {row.is_active
-                                    ? t("plannedPage.pause")
-                                    : t("plannedPage.resume")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onSelect={() => void onDelete(row)}
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" aria-hidden />
-                                {t("common.delete")}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            ) : (
+                                <Play
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                            )}
+                            {row.is_active
+                                ? t("plannedPage.pause")
+                                : t("plannedPage.resume")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            variant="destructive"
+                            onSelect={() => void onDelete(row)}
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                            {t("common.delete")}
+                        </DropdownMenuItem>
+                    </RowMenu>
                 ),
             },
         ],
