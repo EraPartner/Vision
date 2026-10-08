@@ -7,7 +7,8 @@ import { SidebarProvider, SidebarRail, SidebarTrigger } from "../sidebar";
 vi.mock("@/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 vi.mock("@/stores/hydration/LanguageHydration", () => ({
     useLanguage: () => ({
-        t: (key: string) => key === "menu.toggleSidebar" ? "Zijbalk tonen/verbergen" : key,
+        t: (key: string) =>
+            key === "menu.toggleSidebar" ? "Zijbalk tonen/verbergen" : key,
     }),
 }));
 
@@ -20,7 +21,9 @@ describe("sidebar controls", () => {
             </SidebarProvider>,
         );
 
-        const controls = screen.getAllByRole("button", { name: "Zijbalk tonen/verbergen" });
+        const controls = screen.getAllByRole("button", {
+            name: "Zijbalk tonen/verbergen",
+        });
         expect(controls).toHaveLength(2);
         expect(controls[1]).toHaveAttribute("title", "Zijbalk tonen/verbergen");
     });

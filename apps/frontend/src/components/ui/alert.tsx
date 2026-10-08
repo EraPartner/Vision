@@ -1,7 +1,7 @@
 import * as React from "react";
-import {cva, type VariantProps} from "class-variance-authority";
+import { cva, type VariantProps } from "class-variance-authority";
 
-import {cn} from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const alertVariants = cva(
     "relative w-full rounded-card corner-continuous p-4 shadow-[inset_0_1px_0_0_hsl(var(--foreground)/0.04)] [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
@@ -24,34 +24,45 @@ const alertVariants = cva(
     },
 );
 
+/**
+ * Only a destructive alert interrupts (`role="alert"`); default, warning and
+ * success notices are polite status messages. Pass `role` to override.
+ */
 const Alert = React.forwardRef<
     HTMLDivElement,
     React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
->(({className, variant, ...props}, ref) => (
-    <div ref={ref} role="alert" className={cn(alertVariants({variant}), className)} {...props} />
+>(({ className, variant, role, ...props }, ref) => (
+    <div
+        ref={ref}
+        role={role ?? (variant === "destructive" ? "alert" : "status")}
+        className={cn(alertVariants({ variant }), className)}
+        {...props}
+    />
 ));
 Alert.displayName = "Alert";
 
-const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
-    ({className, ...props}, ref) => (
-        <h5
-            ref={ref}
-            className={cn("mb-1 type-headline leading-tight", className)}
-            {...props}
-        />
-    ),
-);
+const AlertTitle = React.forwardRef<
+    HTMLParagraphElement,
+    React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+    <h5
+        ref={ref}
+        className={cn("mb-1 type-headline leading-tight", className)}
+        {...props}
+    />
+));
 AlertTitle.displayName = "AlertTitle";
 
-const AlertDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
-    ({className, ...props}, ref) => (
-        <div
-            ref={ref}
-            className={cn("type-body opacity-90 [&_p]:leading-relaxed", className)}
-            {...props}
-        />
-    ),
-);
+const AlertDescription = React.forwardRef<
+    HTMLParagraphElement,
+    React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => (
+    <div
+        ref={ref}
+        className={cn("type-body opacity-90 [&_p]:leading-relaxed", className)}
+        {...props}
+    />
+));
 AlertDescription.displayName = "AlertDescription";
 
-export {Alert, AlertTitle, AlertDescription};
+export { Alert, AlertTitle, AlertDescription };

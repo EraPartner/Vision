@@ -20,14 +20,24 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import { render, cleanup } from "@testing-library/react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
 import {
     AlertDialog,
     AlertDialogContent,
     AlertDialogTitle,
     AlertDialogDescription,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import {
+    Sheet,
+    SheetContent,
+    SheetTitle,
+    SheetDescription,
+} from "@/components/ui/sheet";
 
 // vitest runs with apps/frontend as the project root.
 const indexCss = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
@@ -85,16 +95,21 @@ describe("modal overlay — rendered classes (default tier = dim)", () => {
             ),
             false,
         ],
-    ])("%s overlay uses the tiered dim class, not an unconditional blur", (_name, ui, strong) => {
-        render(ui());
-        const overlay = overlayEl();
-        expect(overlay.className).toContain("modal-overlay");
-        expect(overlay.className.includes("modal-overlay-strong")).toBe(strong);
-        // The unconditional full-viewport blur must be gone at the default tier.
-        expect(overlay.className).not.toContain("backdrop-blur");
-        expect(overlay.className).not.toContain("bg-background/");
-        cleanup();
-    });
+    ])(
+        "%s overlay uses the tiered dim class, not an unconditional blur",
+        (_name, ui, strong) => {
+            render(ui());
+            const overlay = overlayEl();
+            expect(overlay.className).toContain("modal-overlay");
+            expect(overlay.className.includes("modal-overlay-strong")).toBe(
+                strong,
+            );
+            // The unconditional full-viewport blur must be gone at the default tier.
+            expect(overlay.className).not.toContain("backdrop-blur");
+            expect(overlay.className).not.toContain("bg-background/");
+            cleanup();
+        },
+    );
 });
 
 describe("modal overlay — index.css tier rules", () => {
@@ -120,7 +135,8 @@ describe("modal overlay — index.css tier rules", () => {
         // Every `.modal-overlay` rule that sets a backdrop-filter must sit
         // under :root.fx-enhanced — the class VisualEffectsController stamps
         // on <html> when the user's visual-effects setting is 'enhanced'.
-        const ruleRe = /^[^\S\n]*([^\n{}]*\.modal-overlay[^\n{}]*)\{([^}]*)\}/gm;
+        const ruleRe =
+            /^[^\S\n]*([^\n{}]*\.modal-overlay[^\n{}]*)\{([^}]*)\}/gm;
         let match: RegExpExecArray | null;
         let count = 0;
         while ((match = ruleRe.exec(indexCss)) !== null) {

@@ -14,7 +14,9 @@ describe("SegmentedControl", () => {
                 <SegmentedControlItem value="1y">1Y</SegmentedControlItem>
             </SegmentedControl>,
         );
-        expect(screen.getByRole("radiogroup", { name: "Period" })).toBeInTheDocument();
+        expect(
+            screen.getByRole("radiogroup", { name: "Period" }),
+        ).toBeInTheDocument();
         expect(screen.getByRole("radio", { name: "1Y" })).toHaveAttribute(
             "aria-checked",
             "true",
@@ -28,7 +30,11 @@ describe("SegmentedControl", () => {
     it("reports a new choice and never clears the current one", () => {
         const onValueChange = vi.fn();
         render(
-            <SegmentedControl aria-label="Period" value="1y" onValueChange={onValueChange}>
+            <SegmentedControl
+                aria-label="Period"
+                value="1y"
+                onValueChange={onValueChange}
+            >
                 <SegmentedControlItem value="1m">1M</SegmentedControlItem>
                 <SegmentedControlItem value="1y">1Y</SegmentedControlItem>
             </SegmentedControl>,
@@ -45,6 +51,29 @@ describe("SegmentedControl", () => {
                 <SegmentedControlItem value="a">A</SegmentedControlItem>
             </SegmentedControl>,
         );
-        expect(screen.getByRole("radiogroup")).toHaveClass("h-8", "rounded-control");
+        expect(screen.getByRole("radiogroup")).toHaveClass(
+            "h-8",
+            "rounded-control",
+        );
+    });
+});
+
+describe("SegmentedControl label", () => {
+    it("names the radiogroup by its rendered label", () => {
+        render(
+            <SegmentedControl label="Answer depth" defaultValue="quick">
+                <SegmentedControlItem value="quick">Quick</SegmentedControlItem>
+                <SegmentedControlItem value="deep">
+                    Detailed
+                </SegmentedControlItem>
+            </SegmentedControl>,
+        );
+        expect(
+            screen.getByRole("radiogroup", { name: "Answer depth" }),
+        ).toBeInTheDocument();
+        expect(screen.getByLabelText("Answer depth")).toHaveAttribute(
+            "role",
+            "radiogroup",
+        );
     });
 });

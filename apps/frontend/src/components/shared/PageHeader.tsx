@@ -1,7 +1,18 @@
 import { useEffect } from "react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowLeft, type LucideIcon } from "lucide-react";
+import { Link } from "react-router";
+import { Button } from "@/components/ui/button";
 import { usePageTitle } from "@/contexts/PageTitleContext";
 import { cn } from "@/lib/utils";
+
+export interface PageHeaderBack {
+    /** Accessible and visible label, for example "Back to accounts". */
+    label: string;
+    /** Route to go back to; rendered as a link. */
+    to?: string;
+    /** Handler used instead of `to`, for in-page back navigation. */
+    onClick?: () => void;
+}
 
 interface PageHeaderProps {
     title: string;
@@ -9,6 +20,8 @@ interface PageHeaderProps {
     icon?: LucideIcon;
     iconColor?: string;
     actions?: React.ReactNode;
+    /** Back control rendered above the title, for detail pages. */
+    back?: PageHeaderBack;
 }
 
 export function PageHeader({
@@ -17,6 +30,7 @@ export function PageHeader({
     icon: Icon,
     iconColor = "text-muted-foreground",
     actions,
+    back,
 }: PageHeaderProps) {
     // Register the title so the topbar can show it when this header scrolls out.
     const { setTitle } = usePageTitle();
@@ -25,8 +39,38 @@ export function PageHeader({
         return () => setTitle(null);
     }, [title, setTitle]);
 
+    const backControl = back ? (
+        back.to ? (
+            <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="-ml-2 w-fit text-label-secondary"
+            >
+                <Link to={back.to}>
+                    <ArrowLeft aria-hidden="true" />
+                    {back.label}
+                </Link>
+            </Button>
+        ) : (
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="-ml-2 w-fit text-label-secondary"
+                onClick={back.onClick}
+            >
+                <ArrowLeft aria-hidden="true" />
+                {back.label}
+            </Button>
+        )
+    ) : null;
+
     return (
         <div className="canvas-text flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-4">
+            {backControl && (
+                <div className="w-full sm:basis-full">{backControl}</div>
+            )}
             <div className="flex min-w-0 items-center gap-3 sm:flex-1 sm:basis-80">
                 {Icon && (
                     <div

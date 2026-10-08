@@ -5,6 +5,7 @@ import { m, useReducedMotion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
 import { springs } from "@/lib/motion";
+import { Label } from "@/components/ui/label";
 
 /**
  * macOS-style segmented control (ADR-179): one filled pill marks the chosen
@@ -19,9 +20,8 @@ import { springs } from "@/lib/motion";
 const SegmentedControlValueContext = React.createContext<string | undefined>(
     undefined,
 );
-const SegmentedControlLayoutIdContext = React.createContext<string>(
-    "segmented",
-);
+const SegmentedControlLayoutIdContext =
+    React.createContext<string>("segmented");
 
 const segmentedControlVariants = cva(
     "inline-flex max-w-full items-center rounded-control bg-foreground/[0.06] p-0.5 text-label-secondary",
@@ -46,6 +46,13 @@ export interface SegmentedControlProps
     value?: string;
     defaultValue?: string;
     onValueChange?: (value: string) => void;
+    /**
+     * Renders a Label above the control and wires `aria-labelledby`, so the
+     * radiogroup is reachable by its visible name without a hand-rolled id.
+     */
+    label?: React.ReactNode;
+    /** Classes for the wrapper rendered when `label` is set. */
+    wrapperClassName?: string;
 }
 
 const SegmentedControl = React.forwardRef<
@@ -53,19 +60,29 @@ const SegmentedControl = React.forwardRef<
     SegmentedControlProps
 >(
     (
-        { className, size, value, defaultValue, onValueChange, ...props },
+        {
+            className,
+            size,
+            value,
+            defaultValue,
+            onValueChange,
+            label,
+            wrapperClassName,
+            ...props
+        },
         ref,
     ) => {
         const [active, setActive] = React.useState<string | undefined>(
             value ?? defaultValue,
         );
         const layoutId = React.useId();
+        const labelId = React.useId();
 
         React.useEffect(() => {
             if (value !== undefined) setActive(value);
         }, [value]);
 
-        return (
+        const control = (
             <SegmentedControlLayoutIdContext.Provider value={layoutId}>
                 <SegmentedControlValueContext.Provider value={active}>
                     <ToggleGroupPrimitive.Root
@@ -84,10 +101,19 @@ const SegmentedControl = React.forwardRef<
                             segmentedControlVariants({ size }),
                             className,
                         )}
+                        aria-labelledby={label ? labelId : undefined}
                         {...props}
                     />
                 </SegmentedControlValueContext.Provider>
             </SegmentedControlLayoutIdContext.Provider>
+        );
+
+        if (!label) return control;
+        return (
+            <div className={cn("space-y-2", wrapperClassName)}>
+                <Label id={labelId}>{label}</Label>
+                {control}
+            </div>
         );
     },
 );
@@ -116,7 +142,9 @@ const SegmentedControlItem = React.forwardRef<
                 <m.span
                     layoutId={`${layoutId}-pill`}
                     aria-hidden="true"
-                    transition={reducedMotion ? { duration: 0 } : springs.snappy}
+                    transition={
+                        reducedMotion ? { duration: 0 } : springs.snappy
+                    }
                     className="absolute inset-0 rounded-[inherit] bg-background shadow-elevation-1 ring-1 ring-foreground/[0.06]"
                 />
             )}
