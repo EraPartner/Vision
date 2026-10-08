@@ -13,12 +13,9 @@ import { logger } from '../config/logger.ts';
 import { ValidationError } from '../middleware/errorHandler.ts';
 
 /**
- * The slice of a multer `File` this module reads. The ambient
- * `declare module 'multer'` shim still types `multer` as `any`, so this is
- * a local structural stand-in rather than `import('multer').File` (same
- * reasoning as the ambient `declare module 'multer'` in
- * thirdPartyModules.d.ts, which only silences the VALUE import above — it
- * does not give the resulting `multer` binding's members any real shape).
+ * The slice of a multer `File` this module reads: a local structural
+ * stand-in rather than `import('multer').File`, written when a legacy checkJs
+ * program still saw `multer` as `any` (ADR-191).
  */
 export interface MulterFile {
   originalname?: string;

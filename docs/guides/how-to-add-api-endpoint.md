@@ -216,23 +216,25 @@ def downgrade():
 Create `apps/node-backend/tests/<resource>.test.js`:
 
 ```javascript
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import request from "supertest";
-import app from "../src/main.ts";
+import { describe, it, expect, vi } from "vitest";
+import { mockConnection } from "./helpers/repoMocks.js";
+import { routeAgent } from "./helpers/routeApp.js";
+
+vi.mock("../src/database/connection.ts", () => mockConnection());
+
+import { query } from "../src/database/connection.ts";
+const { default: router } = await import("../src/routes/<resource>.ts");
+
+// Mounts the router behind the same middleware and error handler as main.ts,
+// without booting the server (importing main.ts starts it).
+const api = routeAgent(router, { mountPath: "/api/<resource>" });
 
 describe("<resource> API", () => {
-  it("GET /api/<resource> returns empty list", async () => {
-    const res = await request(app).get("/api/<resource>");
+  it("GET /api/<resource> returns an empty list", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    const res = await api.get("/api/<resource>");
     expect(res.status).toBe(200);
-    expect(res.body.items).toEqual([]);
-  });
-
-  it("POST /api/<resource> creates item", async () => {
-    const res = await request(app)
-      .post("/api/<resource>")
-      .send({ name: "Test" });
-    expect(res.status).toBe(201);
-    expect(res.body.name).toBe("Test");
+    expect(res.body.ok).toBe(true);
   });
 });
 ```

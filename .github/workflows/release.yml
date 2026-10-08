@@ -198,13 +198,8 @@ jobs:
         run: cd apps/frontend && bun run typecheck
 
       # ci.yml's typecheck-backend job — a required gate there, absent here.
-      # Both halves: the loose base program over all of src/, then the
-      # noImplicitAny ratchet over src/ with an explicit existing-debt baseline.
-      - name: Type-check backend (JSDoc)
-        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.check.json
-
-      - name: Type-check backend (noImplicitAny ratchet)
-        run: cd apps/node-backend && bun scripts/checkjs-ratchet.js
+      - name: Type-check backend (strict TypeScript)
+        run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.json
 
       - name: Build frontend
         run: CI=1 bun run build

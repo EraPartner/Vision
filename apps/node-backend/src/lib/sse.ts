@@ -37,9 +37,8 @@ const SSE_FLUSH_PADDING = `:${' '.repeat(2048)}\n\n`;
  * - end() is a no-op if the response has already ended.
  *
  * `req`/`res` are typed via `node:http`'s base classes rather than
- * `import('express').Request/Response` — the legacy checkJs program resolves
- * `express` to the ambient `any` shim in thirdPartyModules.d.ts. At
- * runtime these ARE `http.IncomingMessage`/`http.ServerResponse` (express
+ * `import('express').Request/Response` (chosen while a legacy checkJs program
+ * still saw `express` as `any`; see ADR-191). At runtime these ARE `http.IncomingMessage`/`http.ServerResponse` (express
  * augments the prototypes, it doesn't replace them), and this function only
  * ever touches members both share with plain Node http, so the base classes
  * type it exactly, not just structurally.

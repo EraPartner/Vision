@@ -73,13 +73,12 @@ export function progressToPercent(ev: ImportProgressEvent) {
  * internals. Always cleans up the uploaded file.
  *
  * `req`/`res` are typed via `node:http`'s base classes rather than
- * `import('express').Request/Response` — the legacy checkJs program resolves
- * `express` to the ambient `any` shim in thirdPartyModules.d.ts. This
+ * `import('express').Request/Response`, matching lib/sse.ts. This
  * function only forwards both straight into `createSseWriter`, which is
  * typed the same way (see lib/sse.ts).
  *
  * The skeleton is generic over the pipeline result `R`: the two current
- * callers (routes/importRoutes.js, routes/portfolioImportRoutes.js) resolve
+ * callers (routes/importRoutes.ts, routes/portfolioImportRoutes.ts) resolve
  * with genuinely different pipeline result shapes (each has fields —
  * `total`/`autoLinkedCount` vs. `total`/`skipped` — the other doesn't), so
  * `buildComplete` sees the caller's own type while this function's reads stay

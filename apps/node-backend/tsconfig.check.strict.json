@@ -1,7 +1,0 @@
-{
-  "//": "noImplicitAny variant of tsconfig.check.json, consumed ONLY by scripts/checkjs-ratchet.js. It extends the base config so both checks compile the same program. The ratchet checks all src/ diagnostics against an explicit baseline and fails on new diagnostics.",
-  "extends": "./tsconfig.check.json",
-  "compilerOptions": {
-    "noImplicitAny": true
-  }
-}

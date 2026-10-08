@@ -1,14 +1,11 @@
 /**
  * Shared structural Express types.
  *
- * The legacy checkJs program (tsconfig.check.json) still resolves `express`
- * to the ambient `any` shim in thirdPartyModules.d.ts, so its JavaScript
- * callers cannot use `@types/express` — same reasoning as `ExpressResponse` in
- * services/transactionExport.ts and services/reports/index.js, and
- * `ExpressApp`/`ExpressLayer` in services/routeManifest.js. Those files each
- * defined a narrow local structural type; this module centralizes the
- * equivalent for the middleware/lib/controllers layer, where many files share
- * the same req/res/router surface, rather than repeating it per file.
+ * Written while a legacy checkJs program still saw `express` as `any`, so
+ * JavaScript callers could not use `@types/express` (retired by ADR-191).
+ * This module centralizes narrow structural types for the
+ * middleware/lib/controllers layer, where many files share the same
+ * req/res/router surface, rather than repeating them per file.
  *
  * Each type below describes only the members some annotated backend file
  * actually reads or writes — not the full Express API. Extend deliberately:
