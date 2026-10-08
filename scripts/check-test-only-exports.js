@@ -132,13 +132,16 @@ function exportedSurface(sourceFile) {
         }
       }
     }
+    // Type-only re-exports (`export type { Row }`) have no runtime surface, so
+    // a test importing them for annotations is not a test-only seam.
     if (
       ts.isExportDeclaration(statement) &&
+      !statement.isTypeOnly &&
       statement.exportClause &&
       ts.isNamedExports(statement.exportClause)
     ) {
       for (const element of statement.exportClause.elements)
-        names.add(element.name.text);
+        if (!element.isTypeOnly) names.add(element.name.text);
     }
   }
   return names;
