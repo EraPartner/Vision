@@ -1310,11 +1310,11 @@ describe("AnalysisWorkspacePage", () => {
         ) {
             await user.click(screen.getByRole("button", { name: /^Total/ }));
         }
+        // Paste instead of typing: per-keystroke re-renders of this page exceed
+        // the 5s test timeout under CI coverage instrumentation.
         await user.clear(screen.getByLabelText("Expression"));
-        await user.type(
-            screen.getByLabelText("Expression"),
-            "SUM(row.sum_spending) * assumption.rate",
-        );
+        await user.click(screen.getByLabelText("Expression"));
+        await user.paste("SUM(row.sum_spending) * assumption.rate");
         await user.click(screen.getByRole("button", { name: "Run" }));
         await waitFor(() =>
             expect(apiClient.executeAnalysis).toHaveBeenLastCalledWith(
