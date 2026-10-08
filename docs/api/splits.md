@@ -2,8 +2,8 @@
 title: Splits API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-08-19
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - api
   - splits
@@ -364,6 +364,56 @@ Implementation notes:
 - Batch allocation validation via `validateBatchSplitAllocation({ splits, transactionTotal, currentSplitTotal })` ([[apps/node-backend/src/lib/calculations/splits.ts]]).
 - Normalized inputs via `normalizeBatchSplitInputs(splits)` to filter and type-cast before validation ([[apps/node-backend/src/routes/splits.ts]]).
 - `splitService.createSplitsBatchAtomic()` validates the complete allocation, persists all rows through one bulk repository primitive, and writes one action='create' audit per split in the same transaction.
+
+---
+
+### POST /api/splits/bulk
+
+Bulk split: give **one** payee a preset share of **many** transactions in one atomic write. This backs the transactions page's bulk **Split…** action ([[docs/features/bulk-actions]]).
+
+The share per transaction is computed server-side by `computeBulkSplitAmount` ([[apps/node-backend/src/lib/calculations/splits.ts]]) from the transaction's absolute amount, rounded to cents (banker's rounding):
+
+| `mode`  | Share the payee owes             | Reads as |
+| ------- | -------------------------------- | -------- |
+| `equal` | half of the transaction          | 50/50    |
+| `full`  | the whole transaction            | 0/100    |
+
+Rows the preset cannot apply to are **skipped and counted**, not failed, so one stale row never aborts the batch: an id that no longer exists, a transaction that already carries a split (a preset on top of an existing allocation has no single right answer; the user edits those one by one in the split dialog), and a zero-amount transaction. Ids are deduplicated and locked in ascending order (`SELECT … FOR UPDATE`) so two overlapping bulk calls cannot deadlock. An unknown recipient is a `404` before any write. Rate-limited to 30 requests per minute, like the transactions bulk routes.
+
+**Request Body:**
+
+| Field             | Type     | Required | Description                                             |
+| ----------------- | -------- | -------- | ------------------------------------------------------- |
+| `transaction_ids` | number[] | Yes      | 1–500 transaction ids; a malformed id rejects the whole request |
+| `recipient_id`    | number   | Yes      | The payee who owes the share                            |
+| `mode`            | string   | Yes      | `equal` or `full`                                       |
+| `note`            | string   | No       | Optional note copied onto every created split (≤ 500 chars) |
+
+**Response:** `201 Created`
+
+```json
+{
+  "requested": 4,
+  "split": 2,
+  "skipped_already_split": 1,
+  "skipped_zero_amount": 0,
+  "skipped_missing": 1,
+  "items": [
+    { "id": 11, "transaction_id": 100, "recipient_id": 2, "amount": 20.0 },
+    { "id": 12, "transaction_id": 101, "recipient_id": 2, "amount": 7.5 }
+  ]
+}
+```
+
+`requested` counts the ids as sent (duplicates included); `split` the rows written; the `skipped_*` counts explain the difference.
+
+**Error Response:** `400 Bad Request` — empty or malformed `transaction_ids`, malformed `recipient_id`, or a `mode` outside `equal`/`full`.
+
+**Error Response:** `404 Not Found` — `Recipient not found`.
+
+Implementation notes:
+
+- `splitService.createBulkSplitsAtomic()` locks each transaction with `lockAndGetTotals`, computes the share, re-checks it with `validateSplitAllocation`, inserts through `insertSplitInTransaction`, and writes one action='create' audit row per split with `bulk: true` and the `mode` in the payload, all inside one `withTransaction`.
 
 ---
 

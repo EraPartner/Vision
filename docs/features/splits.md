@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -33,6 +33,8 @@ related_code:
     "apps/node-backend/src/lib/money.ts",
     "apps/frontend/src/pages/OwesPage.tsx",
     "apps/frontend/src/features/splits/SplitTransactionDialog.tsx",
+    "apps/frontend/src/features/splits/splitShares.ts",
+    "apps/frontend/src/features/transactions/components/bulk/BulkSplitDialog.tsx",
     "apps/frontend/src/features/splits/owes/RecipientOwesDetail.tsx",
     "apps/frontend/src/features/splits/owes/RecentRecipientTransactionsTable.tsx",
     "apps/frontend/src/features/splits/owes/useRecentRecipientTransactions.ts",
@@ -55,7 +57,17 @@ The Splits & Owes system allows users to track shared expenses and debts between
 
 ### Transaction Split
 
-A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI the **Split** action sits in the footer of the transaction inspector ([[docs/features/transactions#Inspector]]); `SplitTransactionDialog` takes a `trigger` element for it. The dialog's _Equal split_ / _Custom amounts_ choice is a `SegmentedControl`.
+A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI the **Split** action sits in the footer of the transaction inspector ([[docs/features/transactions#Inspector]]); `SplitTransactionDialog` takes a `trigger` element for it. The dialog's preset choice is a `SegmentedControl` with three options:
+
+| Preset             | Each other person owes                                                                              | Reads as |
+| ------------------ | --------------------------------------------------------------------------------------------------- | -------- |
+| _Equal split_      | the amount divided by everyone including you                                                        | 50/50    |
+| _Others pay all_   | the whole amount divided among the others only, cent-exact (`allocateEvenly` in `features/splits/splitShares.ts`): one person owes exactly the transaction, three owe shares that add up to it | 0/100    |
+| _Custom amounts_   | what you type per person                                                                            | —        |
+
+_Others pay all_ on a transaction that already has a split trips the existing over-allocation gate (the shares plus the existing splits exceed the total), so the dialog explains and disables **Split**.
+
+Many transactions at once: the transactions page's multi-select toolbar has a bulk **Split…** action (`BulkSplitDialog`) that gives one payee the _Equal split_ or _Others pay all_ share of every selected row through `POST /api/splits/bulk` ([[docs/api/splits#POST /api/splits/bulk]], [[docs/features/bulk-actions]]). Already-split rows are left unchanged and reported in the toast.
 
 ### Split Payment
 
@@ -177,6 +189,7 @@ Overpayment protection operates at three layers:
 | GET    | `/api/splits/transaction/:id` | Get splits for a transaction                                                                                          |
 | POST   | `/api/splits`                 | Create a single split; validates allocation against transaction total; writes audit row with action='create'          |
 | POST   | `/api/splits/batch`           | Create multiple splits; batch validation via `validateBatchSplitAllocation`; audit row per split with action='create' |
+| POST   | `/api/splits/bulk`            | Bulk split: one payee, `equal` (50/50) or `full` (0/100) share of many transactions; already-split, zero-amount and missing rows skipped and counted; audit row per split with `bulk: true` |
 | DELETE | `/api/splits/:id`             | Hard-delete split; writes audit row with action='delete' + pre-delete snapshot                                        |
 
 ### Payment & Settlement

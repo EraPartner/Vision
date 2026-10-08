@@ -2,10 +2,10 @@
 title: Bulk Transaction Actions
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-08-28
+date: 2026-10-08
+updated: 2026-10-08
 tags: [feature, transactions, bulk, productivity]
-description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, and tag operations across many transactions in one atomic call.
+description: Multi-row checkbox selection drives delete, recategorize, recipient reassignment, activate/deactivate, export, tag, and split operations across many transactions in one atomic call.
 aliases: [bulk-actions, bulk-delete, bulk-update, bulk-export]
 related_code:
   - "apps/node-backend/src/services/bulkSelection.js"
@@ -16,6 +16,9 @@ related_code:
   - "apps/frontend/src/features/transactions/components/bulk/BulkRecipientDialog.tsx"
   - "apps/frontend/src/features/transactions/components/bulk/BulkExportDialog.tsx"
   - "apps/frontend/src/features/transactions/components/bulk/BulkTagDialog.tsx"
+  - "apps/frontend/src/features/transactions/components/bulk/BulkSplitDialog.tsx"
+  - "apps/node-backend/src/routes/splits.ts"
+  - "apps/frontend/src/hooks/useSplits.ts"
   - "apps/frontend/src/hooks/useTransactions.ts"
   - "apps/frontend/src/lib/api/transactions.ts"
 ---
@@ -23,7 +26,7 @@ related_code:
 # Bulk Transaction Actions
 
 > [!abstract] Overview
-> The transactions list lets users select multiple rows (or every row matching the current filter) and apply a single action to the whole set in one atomic backend call: delete, recategorize, reassign recipient, activate/deactivate, export, or apply tags.
+> The transactions list lets users select multiple rows (or every row matching the current filter) and apply a single action to the whole set in one atomic backend call: delete, recategorize, reassign recipient, activate/deactivate, export, apply tags, or split with one payee.
 
 ## Feature Overview
 
@@ -66,7 +69,7 @@ Every write route runs inside `withTransaction(client => …)` and ends with `sc
 | File                                                                                                 | Role                                                                                                                                                           |
 | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `apps/frontend/src/features/transactions/components/bulk/BulkActionsBar.tsx`                         | Self-contained toolbar: count label, `Actions ▾` dropdown, "Select all N matching" affordance, mounts every action dialog                                      |
-| `BulkRecategorizeDialog.tsx`, `BulkRecipientDialog.tsx`, `BulkExportDialog.tsx`, `BulkTagDialog.tsx` | Per-action input dialogs, each reusing the existing combobox primitives                                                                                        |
+| `BulkRecategorizeDialog.tsx`, `BulkRecipientDialog.tsx`, `BulkExportDialog.tsx`, `BulkTagDialog.tsx`, `BulkSplitDialog.tsx` | Per-action input dialogs, each reusing the existing combobox primitives; the split dialog adds an _Equal split_ / _Others pay all_ `SegmentedControl` |
 | `apps/frontend/src/hooks/useTransactions.ts`                                                         | New mutation hooks: `useBulkDeleteTransactions`, `useBulkUpdateTransactions`, `useBulkExportTransactions`                                                      |
 | `apps/frontend/src/lib/api/transactions.ts`                                                          | Three API client functions; `bulkExportTransactions` returns the response `Blob` plus its exported-row count, and the hook triggers a synthetic `<a download>` |
 | `apps/frontend/src/pages/TransactionsPage.tsx`                                                       | Owns selection state and selection mode; clears selection whenever the current filter changes                                                                  |
@@ -85,8 +88,9 @@ screen-reader name while reusing the shared combobox controls.
 | `POST` | `/api/transactions/bulk-update` | Applies an update (`category_id` / `recipient_id` / `is_active`) to a set of transactions. FK targets are validated up front so the batch fails atomically on the first invalid reference. |
 | `POST` | `/api/transactions/bulk-export` | Streams CSV (`format: 'csv'`) or NDJSON (`format: 'json'`) for the resolved selection. Reuses the same chunk SQL as the GET export endpoints.                                              |
 | `POST` | `/api/transactions/bulk-tag`    | Existing — atomically adds/removes tags on `transaction_ids`.                                                                                                                              |
+| `POST` | `/api/splits/bulk`              | Gives one payee a preset share (`equal` = 50/50, `full` = 0/100) of every transaction in `transaction_ids`; already-split, zero-amount and missing rows are skipped and counted. See [[docs/api/splits#POST /api/splits/bulk]]. |
 
-All four are rate-limited to 30 req/min per client, mirroring the existing bulk-tag route.
+All five are rate-limited to 30 req/min per client, mirroring the existing bulk-tag route. Bulk tag and bulk split take an explicit id list only (the toolbar disables them in filter mode and says why); the other three accept `ids` or `filter`.
 
 ### Request body shape
 
@@ -164,6 +168,9 @@ No orphan rows remain after a successful bulk delete.
 | Route          | `apps/node-backend/tests/routes/transactionsBulkDelete.test.js`  | Validation, id-mode + filter-mode, atomicity rollback                |
 | Route          | `apps/node-backend/tests/routes/transactionsBulkUpdate.test.js`  | Field validation, FK pre-checks, multi-field SET clause, atomicity   |
 | Route          | `apps/node-backend/tests/routes/transactionsBulkExport.test.js`  | Format gating, CSV header + row, NDJSON line shape, filter cap       |
+| Service unit   | `apps/node-backend/tests/splitService.test.js`                   | Bulk split: preset amounts, lock order, skip counts, unknown payee   |
+| Route          | `apps/node-backend/tests/routes/splits.test.js`                  | Bulk split: id/mode validation, actor forwarding, 404 payee          |
+| Frontend       | `apps/frontend/src/features/transactions/components/bulk/__tests__/BulkSplitDialog.test.tsx` | Bulk split dialog: payee gating, presets, pending state |
 | Frontend hooks | `apps/frontend/src/hooks/__tests__/useBulkTransactions.test.tsx` | Mutation success + error paths for delete / update / export          |
 
 ## Related
