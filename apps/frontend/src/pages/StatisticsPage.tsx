@@ -7,17 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     SegmentedControl,
     SegmentedControlItem,
 } from "@/components/ui/segmented-control";
-import { FileDown, Import, LayoutGrid, MoreHorizontal } from "lucide-react";
+import { FileDown, Import, LayoutGrid } from "lucide-react";
 import { ExportDialog } from "@/features/reports/ExportDialog";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -121,8 +117,12 @@ function InsightsWindowControl({
             aria-label={label}
             className="w-fit"
         >
-            <SegmentedControlItem value="24m">{rollingLabel}</SegmentedControlItem>
-            <SegmentedControlItem value="all">{allTimeLabel}</SegmentedControlItem>
+            <SegmentedControlItem value="24m">
+                {rollingLabel}
+            </SegmentedControlItem>
+            <SegmentedControlItem value="all">
+                {allTimeLabel}
+            </SegmentedControlItem>
         </SegmentedControl>
     );
 }
@@ -197,29 +197,18 @@ export default function StatisticsPage() {
                 rollingLabel={t("statsPage.window.rolling24")}
                 allTimeLabel={t("statsPage.window.allTime")}
             />
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("statsPage.menu.label")}
-                    >
-                        <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {hasData && (
-                        <DropdownMenuItem onSelect={() => setExportOpen(true)}>
-                            <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
-                            {t("statsPage.menu.exportPdf")}
-                        </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onSelect={() => setCustomizeOpen(true)}>
-                        <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
-                        {t("statsPage.menu.customize")}
+            <RowMenu label={t("statsPage.menu.label")} size="icon">
+                {hasData && (
+                    <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                        <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                        {t("statsPage.menu.exportPdf")}
                     </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                )}
+                <DropdownMenuItem onSelect={() => setCustomizeOpen(true)}>
+                    <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                    {t("statsPage.menu.customize")}
+                </DropdownMenuItem>
+            </RowMenu>
             <WidgetVisibilityDialog
                 open={customizeOpen}
                 onOpenChange={setCustomizeOpen}

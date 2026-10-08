@@ -25,6 +25,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { List, ListRow } from "@/components/ui/list";
 import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
+import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
@@ -72,6 +77,7 @@ import {
     type LineSeries,
 } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { SymbolSearchResultItem } from "@/components/shared/SymbolSearchResultItem";
 import { SymbolSearchBox } from "@/components/shared/SymbolSearchBox";
@@ -149,9 +155,9 @@ export default function ChartBuilderPage() {
     );
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [layoutName, setLayoutName] = useState("");
-    const [confirmAction, setConfirmAction] = useState<
-        "new" | "share" | null
-    >(null);
+    const [confirmAction, setConfirmAction] = useState<"new" | "share" | null>(
+        null,
+    );
     const [pendingSharedState, setPendingSharedState] =
         useState<BuilderState | null>(null);
     const storageFailureShown = useRef(false);
@@ -817,7 +823,7 @@ export default function ChartBuilderPage() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     disabled={!activeLayout}
-                                    className="text-destructive focus:text-destructive"
+                                    variant="destructive"
                                     onSelect={deleteLayout}
                                 >
                                     <Trash2 className="mr-2 h-4 w-4" />
@@ -927,7 +933,9 @@ export default function ChartBuilderPage() {
                                                 {t("research.builder.axisLeft")}
                                             </SelectItem>
                                             <SelectItem value="right">
-                                                {t("research.builder.axisRight")}
+                                                {t(
+                                                    "research.builder.axisRight",
+                                                )}
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -974,34 +982,21 @@ export default function ChartBuilderPage() {
                                             </SelectContent>
                                         </Select>
                                     )}
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="ml-auto h-8 w-8 text-label-secondary"
-                                                aria-label={t(
-                                                    "research.builder.seriesMenu",
-                                                    { name: seriesName(s) },
-                                                )}
-                                            >
-                                                <MoreHorizontal />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem
-                                                className="text-destructive focus:text-destructive"
-                                                onSelect={() =>
-                                                    removeSeries(s.id)
-                                                }
-                                            >
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                {t(
-                                                    "research.builder.removeSeries",
-                                                )}
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <RowMenu
+                                        className="ml-auto"
+                                        label={t(
+                                            "research.builder.seriesMenu",
+                                            { name: seriesName(s) },
+                                        )}
+                                    >
+                                        <DropdownMenuItem
+                                            variant="destructive"
+                                            onSelect={() => removeSeries(s.id)}
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            {t("research.builder.removeSeries")}
+                                        </DropdownMenuItem>
+                                    </RowMenu>
                                 </li>
                             ))}
                         </List>
@@ -1073,14 +1068,14 @@ export default function ChartBuilderPage() {
                                     />
                                 ))}
                             </SymbolSearchBox>
-                            <details className="type-footnote text-label-secondary">
-                                <summary className="cursor-pointer rounded-chip focus-ring">
+                            <Disclosure className="type-footnote text-label-secondary">
+                                <DisclosureSummary tone="footnote">
                                     {t("research.builder.sourceHelp")}
-                                </summary>
+                                </DisclosureSummary>
                                 <p className="mt-2 max-w-2xl">
                                     {t("research.builder.economicHint")}
                                 </p>
-                            </details>
+                            </Disclosure>
                         </>
                     )}
 
@@ -1157,40 +1152,28 @@ export default function ChartBuilderPage() {
                                                                 )
                                                             }
                                                         />
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger
-                                                                asChild
+                                                        <RowMenu
+                                                            label={t(
+                                                                "research.builder.indicatorMenu",
+                                                                {
+                                                                    indicator: `${name} (${ind.period})`,
+                                                                },
+                                                            )}
+                                                        >
+                                                            <DropdownMenuItem
+                                                                variant="destructive"
+                                                                onSelect={() =>
+                                                                    removeIndicator(
+                                                                        ind.id,
+                                                                    )
+                                                                }
                                                             >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-label-secondary"
-                                                                    aria-label={t(
-                                                                        "research.builder.indicatorMenu",
-                                                                        {
-                                                                            indicator: `${name} (${ind.period})`,
-                                                                        },
-                                                                    )}
-                                                                >
-                                                                    <MoreHorizontal />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem
-                                                                    className="text-destructive focus:text-destructive"
-                                                                    onSelect={() =>
-                                                                        removeIndicator(
-                                                                            ind.id,
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                                    {t(
-                                                                        "research.builder.removeIndicator",
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
+                                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                                {t(
+                                                                    "research.builder.removeIndicator",
+                                                                )}
+                                                            </DropdownMenuItem>
+                                                        </RowMenu>
                                                     </>
                                                 }
                                             />
@@ -1270,16 +1253,16 @@ export default function ChartBuilderPage() {
                             )}
                         </p>
                     </div>
-                    <details className="rounded-card corner-continuous border border-border/60">
-                        <summary className="cursor-pointer rounded-card px-4 py-3 type-body font-medium text-foreground marker:text-label-tertiary focus-ring">
+                    <Disclosure variant="card">
+                        <DisclosureSummary padded>
                             {t("research.builder.options")}
                             {activeOptions.length > 0 && (
                                 <span className="ml-2 type-footnote font-normal text-label-secondary">
                                     {activeOptions.join(" · ")}
                                 </span>
                             )}
-                        </summary>
-                        <div className="space-y-4 border-t border-border/50 p-4">
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-4 border-t border-border/50 p-4">
                             <List>
                                 <ListRow
                                     title={
@@ -1339,8 +1322,8 @@ export default function ChartBuilderPage() {
                                     ))}
                                 </div>
                             </div>
-                        </div>
-                    </details>
+                        </DisclosureContent>
+                    </Disclosure>
                 </CardContent>
             </Card>
 

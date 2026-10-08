@@ -137,9 +137,11 @@ describe("AnalysisMonitorsPage", () => {
         await user.click(
             screen.getByRole("button", { name: /create monitor/i }),
         );
-        expect(await screen.findByRole("status")).toHaveTextContent(
-            "Monitor created",
-        );
+        expect(
+            (await screen.findByText("Monitor created")).closest(
+                '[role="status"]',
+            ),
+        ).toBeInTheDocument();
         expect(posted).toMatchObject({
             kind: "analysis-threshold",
             savedAnalysisId: "a-1",
@@ -232,9 +234,11 @@ describe("AnalysisMonitorsPage", () => {
         await user.click(
             screen.getByRole("button", { name: /create monitor/i }),
         );
-        expect(await screen.findByRole("status")).toHaveTextContent(
-            "Monitor created",
-        );
+        expect(
+            (await screen.findByText("Monitor created")).closest(
+                '[role="status"]',
+            ),
+        ).toBeInTheDocument();
         expect(posted).toEqual({
             kind: "dossier-evidence",
             title: "Evidence changes",
@@ -346,9 +350,11 @@ describe("AnalysisMonitorsPage", () => {
             screen.getByText("The value crossed the threshold."),
         ).toBeInTheDocument();
         await user.click(screen.getByRole("button", { name: /mark as read/i }));
-        expect(await screen.findByRole("status")).toHaveTextContent(
-            "Notification marked as read",
-        );
+        expect(
+            (await screen.findByText("Notification marked as read")).closest(
+                '[role="status"]',
+            ),
+        ).toBeInTheDocument();
         expect(reads).toBe(1);
     });
 
@@ -413,9 +419,11 @@ describe("AnalysisMonitorsPage", () => {
                 name: "Delete",
             }),
         );
-        expect(await screen.findByRole("status")).toHaveTextContent(
-            "Monitor deleted",
-        );
+        expect(
+            (await screen.findByText("Monitor deleted")).closest(
+                '[role="status"]',
+            ),
+        ).toBeInTheDocument();
         expect(deletes).toBe(1);
     });
 });

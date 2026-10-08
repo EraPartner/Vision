@@ -11,7 +11,6 @@ import {
     Activity,
     Bell,
     ListChecks,
-    MoreHorizontal,
     Pause,
     Play,
     Plus,
@@ -41,6 +40,7 @@ import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { PageShell } from "@/components/shared/PageShell";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
@@ -53,15 +53,13 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { List } from "@/components/ui/list";
+import { List, ListRow } from "@/components/ui/list";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import {
     SegmentedControl,
     SegmentedControlItem,
@@ -295,10 +293,13 @@ function ScheduleFields({
     const { t } = useLanguage();
     return (
         <Card asChild>
-            <details onInvalidCapture={revealInvalidSchedule}>
-                <summary className="flex cursor-pointer items-center rounded-card px-4 py-3 type-headline focus-ring">
+            <Disclosure onInvalidCapture={revealInvalidSchedule}>
+                <DisclosureSummary
+                    padded
+                    className="flex items-center rounded-card"
+                >
                     {t("monitors.schedule")}
-                </summary>
+                </DisclosureSummary>
                 <div className="grid grid-cols-2 gap-3 px-4 pb-4">
                     <Field
                         id={`${idPrefix}-interval`}
@@ -331,38 +332,33 @@ function ScheduleFields({
                         />
                     </Field>
                 </div>
-            </details>
+            </Disclosure>
         </Card>
     );
 }
 
 function OperatorControl({
-    labelId,
     value,
     onChange,
 }: {
-    labelId: string;
     value: MonitorOperator;
     onChange: (value: MonitorOperator) => void;
 }) {
     const { t } = useLanguage();
     return (
-        <div className="space-y-1.5">
-            <Label id={labelId}>{t("monitors.operator")}</Label>
-            <SegmentedControl
-                aria-labelledby={labelId}
-                value={value}
-                onValueChange={(next) => onChange(next as MonitorOperator)}
-                className="w-full"
-            >
-                <SegmentedControlItem value="above">
-                    {t("monitors.above")}
-                </SegmentedControlItem>
-                <SegmentedControlItem value="below">
-                    {t("monitors.below")}
-                </SegmentedControlItem>
-            </SegmentedControl>
-        </div>
+        <SegmentedControl
+            label={t("monitors.operator")}
+            value={value}
+            onValueChange={(next) => onChange(next as MonitorOperator)}
+            className="w-full"
+        >
+            <SegmentedControlItem value="above">
+                {t("monitors.above")}
+            </SegmentedControlItem>
+            <SegmentedControlItem value="below">
+                {t("monitors.below")}
+            </SegmentedControlItem>
+        </SegmentedControl>
     );
 }
 
@@ -636,7 +632,7 @@ export default function AnalysisMonitorsPage() {
                 </Alert>
             )}
             {notice && (
-                <Alert role="status">
+                <Alert>
                     <AlertDescription>{notice}</AlertDescription>
                 </Alert>
             )}
@@ -656,29 +652,24 @@ export default function AnalysisMonitorsPage() {
                                     void create();
                                 }}
                             >
-                                <div className="space-y-1.5">
-                                    <Label id="monitor-kind-label">
-                                        {t("monitors.kind")}
-                                    </Label>
-                                    <SegmentedControl
-                                        aria-labelledby="monitor-kind-label"
-                                        value={form.kind}
-                                        onValueChange={(next) =>
-                                            setForm({
-                                                ...blank,
-                                                kind: next as MonitorKind,
-                                            })
-                                        }
-                                        className="w-full"
-                                    >
-                                        <SegmentedControlItem value="analysis-threshold">
-                                            {t("monitors.kind.threshold")}
-                                        </SegmentedControlItem>
-                                        <SegmentedControlItem value="dossier-evidence">
-                                            {t("monitors.kind.evidence")}
-                                        </SegmentedControlItem>
-                                    </SegmentedControl>
-                                </div>
+                                <SegmentedControl
+                                    label={t("monitors.kind")}
+                                    value={form.kind}
+                                    onValueChange={(next) =>
+                                        setForm({
+                                            ...blank,
+                                            kind: next as MonitorKind,
+                                        })
+                                    }
+                                    className="w-full"
+                                >
+                                    <SegmentedControlItem value="analysis-threshold">
+                                        {t("monitors.kind.threshold")}
+                                    </SegmentedControlItem>
+                                    <SegmentedControlItem value="dossier-evidence">
+                                        {t("monitors.kind.evidence")}
+                                    </SegmentedControlItem>
+                                </SegmentedControl>
                                 {form.kind === "analysis-threshold" ? (
                                     <>
                                         <div className="space-y-2">
@@ -778,16 +769,16 @@ export default function AnalysisMonitorsPage() {
                                                         </AlertDescription>
                                                     </Alert>
                                                 )}
-                                            <details className="type-footnote text-label-secondary">
-                                                <summary className="cursor-pointer rounded-control focus-ring">
+                                            <Disclosure className="type-footnote text-label-secondary">
+                                                <DisclosureSummary tone="footnote">
                                                     {t(
                                                         "monitors.howAlertsWork",
                                                     )}
-                                                </summary>
+                                                </DisclosureSummary>
                                                 <p className="pt-2">
                                                     {t("monitors.analysisHint")}
                                                 </p>
-                                            </details>
+                                            </Disclosure>
                                         </div>
                                         {chosenAnalysis && (
                                             <>
@@ -838,7 +829,6 @@ export default function AnalysisMonitorsPage() {
                                                 </Field>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <OperatorControl
-                                                        labelId="monitor-operator-label"
                                                         value={form.operator}
                                                         onChange={(operator) =>
                                                             setForm(
@@ -1081,38 +1071,12 @@ export default function AnalysisMonitorsPage() {
                                             const active =
                                                 monitor.id === selectedId;
                                             return (
-                                                <li
+                                                <ListRow
                                                     key={monitor.id}
-                                                    className={cn(
-                                                        "group flex min-h-11 items-center gap-1 pr-2",
-                                                        active &&
-                                                            "bg-primary/[0.08]",
-                                                    )}
-                                                    aria-current={
-                                                        active
-                                                            ? "page"
-                                                            : undefined
-                                                    }
-                                                >
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            selectMonitor(
-                                                                monitor.id,
-                                                            )
-                                                        }
-                                                        className="flex min-w-0 flex-1 flex-col items-start gap-0.5 px-4 py-2.5 text-left type-body text-foreground transition-[background-color] duration-fast ease-glide hover:bg-foreground/[0.04] focus-ring focus-visible:outline-offset-[-3px]"
-                                                    >
-                                                        <span
-                                                            className={cn(
-                                                                "w-full truncate",
-                                                                active &&
-                                                                    "font-medium",
-                                                            )}
-                                                        >
-                                                            {monitor.title}
-                                                        </span>
-                                                        <span className="w-full truncate type-footnote text-label-secondary">
+                                                    selected={active}
+                                                    title={monitor.title}
+                                                    subtitle={
+                                                        <>
                                                             {
                                                                 monitor.targetLabel
                                                             }{" "}
@@ -1128,30 +1092,24 @@ export default function AnalysisMonitorsPage() {
                                                                 : t(
                                                                       "monitors.disabled",
                                                                   )}
-                                                        </span>
-                                                    </button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger
-                                                            asChild
+                                                        </>
+                                                    }
+                                                    onActivate={() =>
+                                                        selectMonitor(
+                                                            monitor.id,
+                                                        )
+                                                    }
+                                                    actions={
+                                                        <RowMenu
+                                                            label={t(
+                                                                "monitors.rowMenu",
+                                                                {
+                                                                    name: monitor.title,
+                                                                },
+                                                            )}
                                                         >
-                                                            <Button
-                                                                type="button"
-                                                                size="icon"
-                                                                variant="ghost"
-                                                                disabled={busy}
-                                                                aria-label={t(
-                                                                    "monitors.rowMenu",
-                                                                    {
-                                                                        name: monitor.title,
-                                                                    },
-                                                                )}
-                                                                className="icon-touch-target h-8 w-8 shrink-0"
-                                                            >
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
                                                             <DropdownMenuItem
+                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void check(
                                                                         monitor,
@@ -1167,6 +1125,7 @@ export default function AnalysisMonitorsPage() {
                                                                 )}
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
+                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void toggleEnabled(
                                                                         monitor,
@@ -1194,12 +1153,13 @@ export default function AnalysisMonitorsPage() {
                                                             </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem
+                                                                variant="destructive"
+                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void remove(
                                                                         monitor,
                                                                     )
                                                                 }
-                                                                className="text-destructive focus:text-destructive"
                                                             >
                                                                 <Trash2
                                                                     className="mr-2 h-4 w-4"
@@ -1209,9 +1169,9 @@ export default function AnalysisMonitorsPage() {
                                                                     "monitors.delete",
                                                                 )}
                                                             </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </li>
+                                                        </RowMenu>
+                                                    }
+                                                />
                                             );
                                         })}
                                     </List>
@@ -1363,7 +1323,6 @@ export default function AnalysisMonitorsPage() {
                                             </Field>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <OperatorControl
-                                                    labelId="edit-operator-label"
                                                     value={
                                                         edit.operator ?? "above"
                                                     }
@@ -1574,15 +1533,13 @@ export default function AnalysisMonitorsPage() {
                                             (item) => {
                                                 const unread = !item.readAt;
                                                 return (
-                                                    <li
+                                                    <ListRow
                                                         key={item.id}
                                                         className={cn(
-                                                            "flex flex-wrap items-start justify-between gap-3 px-4 py-3 type-body",
                                                             unread &&
                                                                 "bg-primary/[0.04]",
                                                         )}
-                                                    >
-                                                        <div className="flex min-w-0 flex-1 gap-3">
+                                                        leading={
                                                             <span
                                                                 aria-hidden={
                                                                     unread
@@ -1602,46 +1559,46 @@ export default function AnalysisMonitorsPage() {
                                                                         : undefined
                                                                 }
                                                                 className={cn(
-                                                                    "mt-2 inline-flex h-2 w-2 shrink-0 rounded-full",
+                                                                    "inline-flex h-2 w-2 shrink-0 rounded-full",
                                                                     unread
                                                                         ? "bg-primary"
                                                                         : "bg-transparent",
                                                                 )}
                                                             />
-                                                            <div className="min-w-0 space-y-0.5">
-                                                                <p
-                                                                    className={cn(
-                                                                        "flex flex-wrap items-baseline gap-x-2",
-                                                                        unread &&
-                                                                            "font-medium",
+                                                        }
+                                                        title={
+                                                            <span
+                                                                className={cn(
+                                                                    "flex flex-wrap items-baseline gap-x-2",
+                                                                    unread &&
+                                                                        "font-medium",
+                                                                )}
+                                                            >
+                                                                <span className="truncate">
+                                                                    {item.title}
+                                                                </span>
+                                                                <span className="type-footnote font-normal text-label-secondary tabular-nums">
+                                                                    {dateTime(
+                                                                        item.createdAt,
                                                                     )}
-                                                                >
-                                                                    <span className="truncate">
-                                                                        {
-                                                                            item.title
-                                                                        }
-                                                                    </span>
-                                                                    <span className="type-footnote font-normal text-label-secondary tabular-nums">
-                                                                        {dateTime(
-                                                                            item.createdAt,
-                                                                        )}
-                                                                    </span>
-                                                                </p>
-                                                                <p>
-                                                                    {reasonLabel(
-                                                                        item.reasonCode,
-                                                                        item.reason,
-                                                                        t,
-                                                                    ) ??
-                                                                        t(
-                                                                            "monitors.notificationReasonUnknown",
-                                                                        )}
-                                                                </p>
+                                                                </span>
+                                                            </span>
+                                                        }
+                                                        subtitle={
+                                                            <span className="block whitespace-normal type-body text-foreground">
+                                                                {reasonLabel(
+                                                                    item.reasonCode,
+                                                                    item.reason,
+                                                                    t,
+                                                                ) ??
+                                                                    t(
+                                                                        "monitors.notificationReasonUnknown",
+                                                                    )}
                                                                 {(item.previousValue !==
                                                                     null ||
                                                                     item.currentValue !==
                                                                         null) && (
-                                                                    <p className="type-footnote text-label-secondary tabular-nums">
+                                                                    <span className="block type-footnote text-label-secondary tabular-nums">
                                                                         {t(
                                                                             "monitors.valueChange",
                                                                             {
@@ -1653,28 +1610,32 @@ export default function AnalysisMonitorsPage() {
                                                                                     "—",
                                                                             },
                                                                         )}
-                                                                    </p>
+                                                                    </span>
                                                                 )}
-                                                            </div>
-                                                        </div>
-                                                        {unread && (
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
-                                                                size="sm"
-                                                                disabled={busy}
-                                                                onClick={() =>
-                                                                    void markRead(
-                                                                        item.id,
-                                                                    )
-                                                                }
-                                                            >
-                                                                {t(
-                                                                    "monitors.markRead",
-                                                                )}
-                                                            </Button>
-                                                        )}
-                                                    </li>
+                                                            </span>
+                                                        }
+                                                        actions={
+                                                            unread && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    disabled={
+                                                                        busy
+                                                                    }
+                                                                    onClick={() =>
+                                                                        void markRead(
+                                                                            item.id,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    {t(
+                                                                        "monitors.markRead",
+                                                                    )}
+                                                                </Button>
+                                                            )
+                                                        }
+                                                    />
                                                 );
                                             },
                                         )}

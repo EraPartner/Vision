@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/shared/Money";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Disclosure, DisclosureSummary } from "@/components/ui/disclosure";
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -633,10 +634,10 @@ export default function RebalancePage() {
                                 })}
                             </p>
                         </div>
-                        <details className="rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2">
-                            <summary className="cursor-pointer rounded-control py-1 type-body font-medium focus-ring">
+                        <Disclosure variant="inset" className="px-3 py-2">
+                            <DisclosureSummary className="py-1">
                                 {t("rebalance.commitment.methodology")}
-                            </summary>
+                            </DisclosureSummary>
                             <ul className="mt-2 list-disc space-y-2 pl-5 type-footnote text-label-secondary">
                                 <li>
                                     {t("rebalance.commitment.includes", {
@@ -648,7 +649,7 @@ export default function RebalancePage() {
                                 </li>
                                 <li>{t("rebalance.commitment.exclusions")}</li>
                             </ul>
-                        </details>
+                        </Disclosure>
                     </CardContent>
                 </Card>
             )}

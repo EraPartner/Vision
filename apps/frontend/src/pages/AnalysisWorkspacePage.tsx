@@ -4,7 +4,6 @@ import {
     ArrowUpDown,
     Database,
     Loader2,
-    MoreHorizontal,
     Play,
     Save,
     Square,
@@ -23,6 +22,7 @@ import type {
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { PageShell } from "@/components/shared/PageShell";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import {
     Card,
@@ -39,13 +39,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List } from "@/components/ui/list";
+import { List, ListRow } from "@/components/ui/list";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import {
     SegmentedControl,
     SegmentedControlItem,
@@ -69,7 +71,6 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
-import { cn } from "@/lib/utils";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { LOCAL_STORAGE_KEYS } from "@/lib/localStorage-keys";
 import { useAnalysisWorkspaceQueries } from "@/hooks/useAnalysisQueries";
@@ -155,11 +156,6 @@ const chipLabelClass =
 const checkLabelClass = "flex items-center gap-2 type-callout";
 const legendClass = "type-callout font-medium";
 const helpClass = "type-footnote text-label-secondary";
-const insetSummaryClass =
-    "cursor-pointer rounded-card px-3 py-2.5 type-headline focus-ring";
-const insetDetailsClass =
-    "rounded-card corner-continuous border border-border/60 bg-background/40";
-const insetBodyClass = "space-y-2 px-3 pb-3";
 
 interface AnalysisExportContext {
     name: string;
@@ -338,8 +334,8 @@ function ResultTable({
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    size="sm"
-                                    className="h-7 gap-1 px-2 type-footnote font-medium text-label-secondary hover:text-foreground"
+                                    size="xs"
+                                    className="gap-1 px-2 text-label-secondary hover:text-foreground"
                                     onClick={() => onSort(column)}
                                 >
                                     {analysisColumnLabel(
@@ -1111,22 +1107,22 @@ export default function AnalysisWorkspacePage() {
                         </Card>
                     )}
                     <Card>
-                        <details
+                        <Disclosure
                             open={templatesOpen}
                             onToggle={(event) =>
                                 setTemplatesOpen(event.currentTarget.open)
                             }
                         >
-                            <summary
+                            <DisclosureSummary
                                 ref={templateSummaryRef}
-                                className="cursor-pointer rounded-card px-6 py-4 type-headline focus-ring"
+                                className="rounded-card px-6 py-4"
                             >
                                 {t(
                                     templatesOpen
                                         ? "analysis.startTitle"
                                         : "analysis.chooseTemplate",
                                 )}
-                            </summary>
+                            </DisclosureSummary>
                             <CardContent className="space-y-3">
                                 <p className="max-w-prose type-callout text-label-secondary">
                                     {t("analysis.taskStartHelp")}
@@ -1207,7 +1203,7 @@ export default function AnalysisWorkspacePage() {
                                     {t("analysis.blank")}
                                 </Button>
                             </CardContent>
-                        </details>
+                        </Disclosure>
                     </Card>
                     <Card>
                         <CardHeader>
@@ -1282,18 +1278,15 @@ export default function AnalysisWorkspacePage() {
                                     </div>
                                 </dl>
                             )}
-                            <details
+                            <Disclosure
                                 open={builderOpen}
                                 onToggle={(event) =>
                                     setBuilderOpen(event.currentTarget.open)
                                 }
                             >
-                                <summary
-                                    ref={builderSummaryRef}
-                                    className="cursor-pointer rounded-control type-headline focus-ring"
-                                >
+                                <DisclosureSummary ref={builderSummaryRef}>
                                     {t("analysis.editConfiguration")}
-                                </summary>
+                                </DisclosureSummary>
                                 <div className="mt-4 space-y-4">
                                     <div className="flex flex-wrap items-center gap-3">
                                         <SegmentedControl
@@ -2085,12 +2078,12 @@ export default function AnalysisWorkspacePage() {
                                                 {t("analysis.sqlHint")}
                                             </p>
                                             {sqlHistory.length > 0 && (
-                                                <details>
-                                                    <summary className="cursor-pointer rounded-control type-callout text-label-secondary focus-ring">
+                                                <Disclosure>
+                                                    <DisclosureSummary tone="subtle">
                                                         {t(
                                                             "analysis.queryHistory",
                                                         )}
-                                                    </summary>
+                                                    </DisclosureSummary>
                                                     <div className="mt-1 flex flex-col">
                                                         {sqlHistory.map(
                                                             (entry, index) => (
@@ -2113,12 +2106,12 @@ export default function AnalysisWorkspacePage() {
                                                             ),
                                                         )}
                                                     </div>
-                                                </details>
+                                                </Disclosure>
                                             )}
                                         </div>
                                     )}
                                 </div>
-                            </details>
+                            </Disclosure>
                             <div className="flex gap-2">
                                 <Button
                                     onClick={() => execute(0, plan, true)}
@@ -2188,7 +2181,7 @@ export default function AnalysisWorkspacePage() {
                             </CardHeader>
                             {(queryOutdated || transformationsOutdated) && (
                                 <div className="px-6 pb-3">
-                                    <Alert variant="warning" role="status">
+                                    <Alert variant="warning">
                                         <AlertDescription>
                                             {t("analysis.resultsOutdated")}
                                         </AlertDescription>
@@ -2343,16 +2336,16 @@ export default function AnalysisWorkspacePage() {
                                                 </Button>
                                             </div>
                                         </div>
-                                        <details>
-                                            <summary className="cursor-pointer rounded-control type-headline focus-ring">
+                                        <Disclosure>
+                                            <DisclosureSummary>
                                                 {t("analysis.generatedSql")}
-                                            </summary>
+                                            </DisclosureSummary>
                                             <pre
                                                 className={`mt-2 ${codeBlockClass}`}
                                             >
                                                 {displayedResult.generatedSql}
                                             </pre>
-                                        </details>
+                                        </Disclosure>
                                     </CardContent>
                                 </TabsContent>
                                 {displayedResult.coverage && (
@@ -2371,14 +2364,14 @@ export default function AnalysisWorkspacePage() {
                                     </div>
                                 )}
                                 {displayedResult.provenance && (
-                                    <details
+                                    <Disclosure
                                         className={`px-6 pb-3 ${helpClass}`}
                                     >
-                                        <summary className="cursor-pointer rounded-control focus-ring">
+                                        <DisclosureSummary tone="footnote">
                                             {t(
                                                 "analysis.ext.financial.provenance",
                                             )}
-                                        </summary>
+                                        </DisclosureSummary>
                                         {Object.entries(
                                             displayedResult.provenance,
                                         ).map(([key, value]) => (
@@ -2390,7 +2383,7 @@ export default function AnalysisWorkspacePage() {
                                                 <span>{String(value)}</span>
                                             </div>
                                         ))}
-                                    </details>
+                                    </Disclosure>
                                 )}
                                 <TabsContent value="chart" className="mt-0">
                                     <CardContent>
@@ -2483,18 +2476,18 @@ export default function AnalysisWorkspacePage() {
                         </Card>
                     )}
                     <Card>
-                        <details
+                        <Disclosure
                             open={toolsOpen}
                             onToggle={(event) =>
                                 setToolsOpen(event.currentTarget.open)
                             }
                         >
-                            <summary className="cursor-pointer rounded-card px-6 py-4 type-headline focus-ring">
+                            <DisclosureSummary className="rounded-card px-6 py-4">
                                 {t("analysis.refineTitle")}
                                 <span className="mt-1 block max-w-2xl type-callout font-normal text-label-secondary">
                                     {t("analysis.refineHelp")}
                                 </span>
-                            </summary>
+                            </DisclosureSummary>
                             <CardContent className="min-w-0 pt-2">
                                 <AnalysisWorkbenchPanel
                                     result={
@@ -2539,7 +2532,7 @@ export default function AnalysisWorkspacePage() {
                                     }}
                                 />
                             </CardContent>
-                        </details>
+                        </Disclosure>
                     </Card>
                 </div>
 
@@ -2585,11 +2578,11 @@ export default function AnalysisWorkspacePage() {
                                 }
                                 placeholder={t("analysis.namePlaceholder")}
                             />
-                            <details className={insetDetailsClass}>
-                                <summary className={insetSummaryClass}>
+                            <Disclosure variant="card">
+                                <DisclosureSummary padded>
                                     {t("analysis.sourcesLabel")}
-                                </summary>
-                                <div className={insetBodyClass}>
+                                </DisclosureSummary>
+                                <DisclosureContent className="space-y-2">
                                     <Label htmlFor="analysis-sources">
                                         {t("analysis.sourcesLabel")}
                                     </Label>
@@ -2605,13 +2598,13 @@ export default function AnalysisWorkspacePage() {
                                             "analysis.sourcesPlaceholder",
                                         )}
                                     />
-                                </div>
-                            </details>
-                            <details className={insetDetailsClass}>
-                                <summary className={insetSummaryClass}>
+                                </DisclosureContent>
+                            </Disclosure>
+                            <Disclosure variant="card">
+                                <DisclosureSummary padded>
                                     {t("analysis.runPreferences")}
-                                </summary>
-                                <div className={insetBodyClass}>
+                                </DisclosureSummary>
+                                <DisclosureContent className="space-y-2">
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="analysis-run-currency">
@@ -2673,89 +2666,73 @@ export default function AnalysisWorkspacePage() {
                                                 </Label>
                                             </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <Label id="analysis-run-depth-label">
-                                                {t("analysis.answerDepth")}
-                                            </Label>
-                                            <SegmentedControl
-                                                aria-labelledby="analysis-run-depth-label"
-                                                size="sm"
-                                                className="w-full"
-                                                value={
-                                                    runAnswerDepth ||
-                                                    DEFAULT_PREFERENCE
-                                                }
-                                                onValueChange={(value) =>
-                                                    setRunAnswerDepth(
-                                                        value ===
-                                                            DEFAULT_PREFERENCE
-                                                            ? ""
-                                                            : value,
-                                                    )
-                                                }
+                                        <SegmentedControl
+                                            label={t("analysis.answerDepth")}
+                                            size="sm"
+                                            className="w-full"
+                                            value={
+                                                runAnswerDepth ||
+                                                DEFAULT_PREFERENCE
+                                            }
+                                            onValueChange={(value) =>
+                                                setRunAnswerDepth(
+                                                    value === DEFAULT_PREFERENCE
+                                                        ? ""
+                                                        : value,
+                                                )
+                                            }
+                                        >
+                                            <SegmentedControlItem
+                                                value={DEFAULT_PREFERENCE}
                                             >
-                                                <SegmentedControlItem
-                                                    value={DEFAULT_PREFERENCE}
-                                                >
-                                                    {t("analysis.useDefault")}
-                                                </SegmentedControlItem>
-                                                <SegmentedControlItem value="quick">
-                                                    {t("aiResearch.quick")}
-                                                </SegmentedControlItem>
-                                                <SegmentedControlItem value="detailed">
-                                                    {t("aiResearch.detailed")}
-                                                </SegmentedControlItem>
-                                            </SegmentedControl>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label id="analysis-run-language-label">
-                                                {t("analysis.language")}
-                                            </Label>
-                                            <SegmentedControl
-                                                aria-labelledby="analysis-run-language-label"
-                                                size="sm"
-                                                className="w-full"
-                                                value={
-                                                    runLanguage ||
-                                                    DEFAULT_PREFERENCE
-                                                }
-                                                onValueChange={(value) =>
-                                                    setRunLanguage(
-                                                        value ===
-                                                            DEFAULT_PREFERENCE
-                                                            ? ""
-                                                            : value,
-                                                    )
-                                                }
+                                                {t("analysis.useDefault")}
+                                            </SegmentedControlItem>
+                                            <SegmentedControlItem value="quick">
+                                                {t("aiResearch.quick")}
+                                            </SegmentedControlItem>
+                                            <SegmentedControlItem value="detailed">
+                                                {t("aiResearch.detailed")}
+                                            </SegmentedControlItem>
+                                        </SegmentedControl>
+                                        <SegmentedControl
+                                            label={t("analysis.language")}
+                                            size="sm"
+                                            className="w-full"
+                                            value={
+                                                runLanguage ||
+                                                DEFAULT_PREFERENCE
+                                            }
+                                            onValueChange={(value) =>
+                                                setRunLanguage(
+                                                    value === DEFAULT_PREFERENCE
+                                                        ? ""
+                                                        : value,
+                                                )
+                                            }
+                                        >
+                                            <SegmentedControlItem
+                                                value={DEFAULT_PREFERENCE}
                                             >
-                                                <SegmentedControlItem
-                                                    value={DEFAULT_PREFERENCE}
-                                                >
-                                                    {t("analysis.useDefault")}
-                                                </SegmentedControlItem>
-                                                <SegmentedControlItem value="en">
-                                                    {t(
-                                                        "settings.general.lang.en",
-                                                    )}
-                                                </SegmentedControlItem>
-                                                <SegmentedControlItem value="nl">
-                                                    {t(
-                                                        "settings.general.lang.nl",
-                                                    )}
-                                                </SegmentedControlItem>
-                                            </SegmentedControl>
-                                        </div>
+                                                {t("analysis.useDefault")}
+                                            </SegmentedControlItem>
+                                            <SegmentedControlItem value="en">
+                                                {t("settings.general.lang.en")}
+                                            </SegmentedControlItem>
+                                            <SegmentedControlItem value="nl">
+                                                {t("settings.general.lang.nl")}
+                                            </SegmentedControlItem>
+                                        </SegmentedControl>
                                     </div>
                                     <p className={helpClass}>
                                         {t("analysis.preferencePrecedence")}
                                     </p>
-                                </div>
-                            </details>
-                            <details className={insetDetailsClass}>
-                                <summary className={insetSummaryClass}>
+                                </DisclosureContent>
+                            </Disclosure>
+                            <Disclosure variant="card">
+                                <DisclosureSummary padded>
                                     {t("analysis.filesAndScenarios")}
-                                </summary>
-                                <div className={insetBodyClass}>
+                                </DisclosureSummary>
+                                <DisclosureContent className="space-y-2">
                                     {displayedResult &&
                                         (!exportInputsKnown ||
                                             queryOutdated ||
@@ -2811,8 +2788,8 @@ export default function AnalysisWorkspacePage() {
                                         scenarioModel={scenarioModel}
                                         onScenarioModelChange={setScenarioModel}
                                     />
-                                </div>
-                            </details>
+                                </DisclosureContent>
+                            </Disclosure>
                             <Button
                                 className="w-full"
                                 onClick={() => saveMutation.mutate()}
@@ -2947,11 +2924,11 @@ export default function AnalysisWorkspacePage() {
                                 </div>
                             )}
                             {selectedSaved && (
-                                <details className={insetDetailsClass}>
-                                    <summary className={insetSummaryClass}>
+                                <Disclosure variant="card">
+                                    <DisclosureSummary padded>
                                         {t("analysis.aiEditProposal")}
-                                    </summary>
-                                    <div className={insetBodyClass}>
+                                    </DisclosureSummary>
+                                    <DisclosureContent className="space-y-2">
                                         <Textarea
                                             className="font-mono type-footnote"
                                             value={proposalJson}
@@ -3091,8 +3068,8 @@ export default function AnalysisWorkspacePage() {
                                                 )}
                                             </pre>
                                         )}
-                                    </div>
-                                </details>
+                                    </DisclosureContent>
+                                </Disclosure>
                             )}
                         </CardContent>
                     </Card>
@@ -3107,68 +3084,35 @@ export default function AnalysisWorkspacePage() {
                                         const active =
                                             selectedSaved?.id === saved.id;
                                         return (
-                                            <li
+                                            <ListRow
                                                 key={saved.id}
-                                                className={cn(
-                                                    "flex min-h-11 items-center gap-1 pr-2",
-                                                    active &&
-                                                        "bg-primary/[0.08]",
-                                                )}
-                                                aria-current={
-                                                    active ? "true" : undefined
-                                                }
-                                            >
-                                                <div className="flex min-w-0 flex-1 flex-col py-1.5 pl-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        className={cn(
-                                                            "h-auto min-h-8 w-full justify-start whitespace-normal break-words px-2 py-1 text-left",
-                                                            active
-                                                                ? "font-medium text-foreground"
-                                                                : "font-normal",
-                                                        )}
-                                                        onClick={() =>
-                                                            loadSaved(saved)
-                                                        }
-                                                    >
-                                                        {saved.name}
-                                                    </Button>
-                                                    <span
-                                                        className={`px-2 ${helpClass}`}
-                                                    >
+                                                asChild
+                                                selected={active}
+                                                title={saved.name}
+                                                subtitle={
+                                                    <>
                                                         v{saved.version} ·{" "}
                                                         {saved.refreshStatus}
-                                                    </span>
-                                                    {saved.lastError && (
-                                                        <p className="px-2 type-footnote text-destructive">
-                                                            {
-                                                                saved.lastError
-                                                                    .message
-                                                            }
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger
-                                                        asChild
-                                                    >
-                                                        <Button
-                                                            type="button"
-                                                            size="icon"
-                                                            variant="ghost"
-                                                            aria-label={t(
-                                                                "analysis.rowMenu",
+                                                        {saved.lastError && (
+                                                            <span className="block whitespace-normal text-destructive">
                                                                 {
-                                                                    name: saved.name,
-                                                                },
-                                                            )}
-                                                            className="icon-touch-target h-8 w-8 shrink-0"
-                                                        >
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
+                                                                    saved
+                                                                        .lastError
+                                                                        .message
+                                                                }
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                }
+                                                actions={
+                                                    <RowMenu
+                                                        label={t(
+                                                            "analysis.rowMenu",
+                                                            {
+                                                                name: saved.name,
+                                                            },
+                                                        )}
+                                                    >
                                                         <DropdownMenuItem
                                                             disabled={
                                                                 savedAction ||
@@ -3213,7 +3157,7 @@ export default function AnalysisWorkspacePage() {
                                                         </DropdownMenuItem>
                                                         <DropdownMenuSeparator />
                                                         <DropdownMenuItem
-                                                            className="text-destructive focus:text-destructive"
+                                                            variant="destructive"
                                                             disabled={
                                                                 savedAction ||
                                                                 saveMutation.isPending
@@ -3285,9 +3229,17 @@ export default function AnalysisWorkspacePage() {
                                                                 "analysis.delete",
                                                             )}
                                                         </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </li>
+                                                    </RowMenu>
+                                                }
+                                            >
+                                                <button
+                                                    type="button"
+                                                    aria-label={saved.name}
+                                                    onClick={() =>
+                                                        loadSaved(saved)
+                                                    }
+                                                />
+                                            </ListRow>
                                         );
                                     })}
                                 </List>

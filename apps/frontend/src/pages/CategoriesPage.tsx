@@ -240,8 +240,8 @@ export default function CategoriesPage() {
                 {descendants.length > 0 ? (
                     <Button
                         variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0 text-label-secondary"
+                        size="icon-xs"
+                        className="shrink-0 text-label-secondary"
                         aria-label={`${isExpanded ? t("categoriesPage.collapseAll") : t("categoriesPage.expandAll")}: ${label}`}
                         aria-expanded={isExpanded}
                         onClick={() => toggleExpanded(node.id)}
@@ -299,8 +299,8 @@ export default function CategoriesPage() {
                                         rowMenuTriggers.current.delete(node.id);
                                 }}
                                 variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-label-secondary"
+                                size="icon-sm"
+                                className="text-label-secondary"
                                 aria-label={t("categoriesPage.rowMenu", {
                                     name: label,
                                 })}
@@ -355,7 +355,7 @@ export default function CategoriesPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
+                                variant="destructive"
                                 disabled={
                                     remove.isPending || descendants.length > 0
                                 }

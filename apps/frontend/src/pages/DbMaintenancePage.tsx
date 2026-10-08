@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -159,39 +160,29 @@ function TableStatRow({
                 {row.size}
             </TableCell>
             <TableCell className="text-right">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            aria-label={t("dbMaintenance.rowMenu", {
-                                table: row.table_name,
-                            })}
-                        >
-                            <MoreHorizontal aria-hidden="true" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => navigate(editorHref)}>
-                            <Table2
-                                aria-hidden="true"
-                                className="mr-2 h-4 w-4 text-label-secondary"
-                            />
-                            {t("dbMaintenance.openTable")}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                            disabled={isVacuuming}
-                            onSelect={() => onVacuum(row.table_name)}
-                        >
-                            <Zap
-                                aria-hidden="true"
-                                className="mr-2 h-4 w-4 text-label-secondary"
-                            />
-                            {t("dbMaintenance.vacuumTable")}
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                <RowMenu
+                    label={t("dbMaintenance.rowMenu", {
+                        table: row.table_name,
+                    })}
+                >
+                    <DropdownMenuItem onSelect={() => navigate(editorHref)}>
+                        <Table2
+                            aria-hidden="true"
+                            className="mr-2 h-4 w-4 text-label-secondary"
+                        />
+                        {t("dbMaintenance.openTable")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        disabled={isVacuuming}
+                        onSelect={() => onVacuum(row.table_name)}
+                    >
+                        <Zap
+                            aria-hidden="true"
+                            className="mr-2 h-4 w-4 text-label-secondary"
+                        />
+                        {t("dbMaintenance.vacuumTable")}
+                    </DropdownMenuItem>
+                </RowMenu>
             </TableCell>
         </TableRow>
     );
@@ -276,7 +267,10 @@ export default function DbMaintenancePage() {
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
-                        <Button onClick={handleVacuumAll} disabled={isVacuuming}>
+                        <Button
+                            onClick={handleVacuumAll}
+                            disabled={isVacuuming}
+                        >
                             <Zap aria-hidden="true" />
                             {isVacuuming && vacuumingTable === "__all__"
                                 ? t("dbMaintenance.vacuuming")

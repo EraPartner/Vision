@@ -10,22 +10,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { List, ListRow } from "@/components/ui/list";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import {
-    Check,
-    LineChart,
-    MoreHorizontal,
-    Plus,
-    Search,
-    Trash2,
-    WifiOff,
-} from "lucide-react";
+import { Check, LineChart, Plus, Search, Trash2, WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
@@ -127,7 +117,7 @@ export default function WatchlistPage() {
     const watchlistEmptyTitle = watchlistEmptyLines[0] ?? t("watchlist.empty");
     const watchlistEmptyDescriptionLines = watchlistEmptyLines.slice(1);
 
-    /* The row surface opens the chart; the row menu sits inside it, so its
+    /* The row surface opens the chart; the symbol link sits inside it, so its
        events must not fall through to the row. */
     const stopRowActivation = (event: MouseEvent | KeyboardEvent) =>
         event.stopPropagation();
@@ -352,62 +342,41 @@ export default function WatchlistPage() {
                                                 ) : null}
                                             </span>
                                         </span>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-label-secondary"
-                                                    aria-label={t(
-                                                        "watchlist.rowMenu",
-                                                        { name },
-                                                    )}
-                                                    onClick={stopRowActivation}
-                                                    onKeyDown={
-                                                        stopRowActivation
-                                                    }
-                                                >
-                                                    <MoreHorizontal />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent
-                                                align="end"
-                                                onClick={stopRowActivation}
-                                                onKeyDown={stopRowActivation}
-                                            >
-                                                <DropdownMenuItem
-                                                    onSelect={openChart}
-                                                >
-                                                    <LineChart className="mr-2 h-4 w-4 text-label-secondary" />
-                                                    {t("watchlist.openChart")}
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    disabled={!item.symbol}
-                                                    onSelect={() =>
-                                                        item.symbol &&
-                                                        navigate(
-                                                            `/research/market?symbol=${encodeURIComponent(item.symbol)}`,
-                                                        )
-                                                    }
-                                                >
-                                                    <Search className="mr-2 h-4 w-4 text-label-secondary" />
-                                                    {t("watchlist.openLookup")}
-                                                </DropdownMenuItem>
-                                                <DropdownMenuSeparator />
-                                                <DropdownMenuItem
-                                                    className="text-destructive focus:text-destructive"
-                                                    onSelect={() =>
-                                                        void handleRemove(item)
-                                                    }
-                                                >
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    {t(
-                                                        "aria.removeFromWatchlist",
-                                                    )}
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
                                     </>
+                                }
+                                actions={
+                                    <RowMenu
+                                        label={t("watchlist.rowMenu", {
+                                            name,
+                                        })}
+                                    >
+                                        <DropdownMenuItem onSelect={openChart}>
+                                            <LineChart className="mr-2 h-4 w-4 text-label-secondary" />
+                                            {t("watchlist.openChart")}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                            disabled={!item.symbol}
+                                            onSelect={() =>
+                                                item.symbol &&
+                                                navigate(
+                                                    `/research/market?symbol=${encodeURIComponent(item.symbol)}`,
+                                                )
+                                            }
+                                        >
+                                            <Search className="mr-2 h-4 w-4 text-label-secondary" />
+                                            {t("watchlist.openLookup")}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            variant="destructive"
+                                            onSelect={() =>
+                                                void handleRemove(item)
+                                            }
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            {t("aria.removeFromWatchlist")}
+                                        </DropdownMenuItem>
+                                    </RowMenu>
                                 }
                             >
                                 <div

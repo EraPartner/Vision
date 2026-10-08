@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams } from "react-router";
 import {
-    ArrowLeft,
     Plus,
     Trash2,
     RotateCcw,
@@ -21,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { PageShell } from "@/components/shared/PageShell";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -128,8 +128,7 @@ function display(value: unknown): { text: string; isNull: boolean } {
 
 // ── editable cell ───────────────────────────────────────────────────────────
 
-const CELL_ACTION_CLASS =
-    "h-5 w-5 shrink-0 rounded-chip [&_svg]:size-3";
+const CELL_ACTION_CLASS = "h-5 w-5 shrink-0 rounded-chip [&_svg]:size-3";
 
 function RevertCellButton({
     onRevert,
@@ -144,7 +143,10 @@ function RevertCellButton({
             type="button"
             variant="ghost"
             size="icon"
-            className={cn(CELL_ACTION_CLASS, "text-warning hover:text-foreground")}
+            className={cn(
+                CELL_ACTION_CLASS,
+                "text-warning hover:text-foreground",
+            )}
             aria-label={label}
             title={label}
             onClick={(e) => {
@@ -273,7 +275,8 @@ function EditableCell({
             className={cn(
                 "py-2 font-mono type-footnote",
                 dirtyCls,
-                canEdit && "cursor-text focus-ring focus-visible:outline-offset-[-3px]",
+                canEdit &&
+                    "cursor-text focus-ring focus-visible:outline-offset-[-3px]",
             )}
             onClick={() => canEdit && setEditing(true)}
             title={
@@ -320,28 +323,10 @@ function EditableCell({
     );
 }
 
-// ── row menu ────────────────────────────────────────────────────────────────
-
-function RowMenuTrigger({ label }: { label: string }) {
-    return (
-        <DropdownMenuTrigger asChild>
-            <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                aria-label={label}
-            >
-                <MoreHorizontal aria-hidden="true" />
-            </Button>
-        </DropdownMenuTrigger>
-    );
-}
-
 // ── page ──────────────────────────────────────────────────────────────────────
 
 export default function TableDataEditorPage() {
     const { table = "" } = useParams();
-    const navigate = useNavigate();
     const { t, tc } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
 
@@ -525,15 +510,9 @@ export default function TableDataEditorPage() {
             <PageHeader
                 title={table}
                 subtitle={t("dbEditor.subtitle")}
+                back={{ label: t("dbEditor.back"), to: "/admin/db" }}
                 actions={
                     <>
-                        <Button
-                            variant="outline"
-                            onClick={() => navigate("/admin/db")}
-                        >
-                            <ArrowLeft aria-hidden="true" />
-                            {t("dbEditor.back")}
-                        </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
@@ -754,33 +733,30 @@ export default function TableDataEditorPage() {
                                     className="bg-success/5"
                                 >
                                     <TableCell className="w-10 py-1.5">
-                                        <DropdownMenu>
-                                            <RowMenuTrigger
-                                                label={rowMenuLabel}
-                                            />
-                                            <DropdownMenuContent align="start">
-                                                <DropdownMenuItem
-                                                    className="text-destructive focus:text-destructive"
-                                                    onSelect={() =>
-                                                        setNewRows((prev) =>
-                                                            prev.filter(
-                                                                (r) =>
-                                                                    r.tempId !==
-                                                                    nr.tempId,
-                                                            ),
-                                                        )
-                                                    }
-                                                >
-                                                    <Trash2
-                                                        aria-hidden="true"
-                                                        className="mr-2 h-4 w-4"
-                                                    />
-                                                    {t(
-                                                        "dbEditor.discardNewRow",
-                                                    )}
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        <RowMenu
+                                            label={rowMenuLabel}
+                                            size="icon-xs"
+                                            align="start"
+                                        >
+                                            <DropdownMenuItem
+                                                variant="destructive"
+                                                onSelect={() =>
+                                                    setNewRows((prev) =>
+                                                        prev.filter(
+                                                            (r) =>
+                                                                r.tempId !==
+                                                                nr.tempId,
+                                                        ),
+                                                    )
+                                                }
+                                            >
+                                                <Trash2
+                                                    aria-hidden="true"
+                                                    className="mr-2 h-4 w-4"
+                                                />
+                                                {t("dbEditor.discardNewRow")}
+                                            </DropdownMenuItem>
+                                        </RowMenu>
                                     </TableCell>
                                     {columns.map((col) => (
                                         <EditableCell
@@ -834,19 +810,37 @@ export default function TableDataEditorPage() {
                                             }
                                         >
                                             <TableCell className="w-10 py-1.5">
-                                                <DropdownMenu>
-                                                    <RowMenuTrigger
-                                                        label={rowMenuLabel}
-                                                    />
-                                                    <DropdownMenuContent align="start">
+                                                <RowMenu
+                                                    label={rowMenuLabel}
+                                                    size="icon-xs"
+                                                    align="start"
+                                                >
+                                                    <DropdownMenuItem
+                                                        disabled={
+                                                            readOnly ||
+                                                            !hasRowEdits ||
+                                                            isDeleted
+                                                        }
+                                                        onSelect={() =>
+                                                            revertRow(key)
+                                                        }
+                                                    >
+                                                        <RotateCcw
+                                                            aria-hidden="true"
+                                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                                        />
+                                                        {t(
+                                                            "dbEditor.revertRow",
+                                                        )}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    {isDeleted ? (
                                                         <DropdownMenuItem
-                                                            disabled={
-                                                                readOnly ||
-                                                                !hasRowEdits ||
-                                                                isDeleted
-                                                            }
+                                                            disabled={readOnly}
                                                             onSelect={() =>
-                                                                revertRow(key)
+                                                                toggleDelete(
+                                                                    key,
+                                                                )
                                                             }
                                                         >
                                                             <RotateCcw
@@ -854,52 +848,29 @@ export default function TableDataEditorPage() {
                                                                 className="mr-2 h-4 w-4 text-label-secondary"
                                                             />
                                                             {t(
-                                                                "dbEditor.revertRow",
+                                                                "dbEditor.undoDelete",
                                                             )}
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        {isDeleted ? (
-                                                            <DropdownMenuItem
-                                                                disabled={
-                                                                    readOnly
-                                                                }
-                                                                onSelect={() =>
-                                                                    toggleDelete(
-                                                                        key,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <RotateCcw
-                                                                    aria-hidden="true"
-                                                                    className="mr-2 h-4 w-4 text-label-secondary"
-                                                                />
-                                                                {t(
-                                                                    "dbEditor.undoDelete",
-                                                                )}
-                                                            </DropdownMenuItem>
-                                                        ) : (
-                                                            <DropdownMenuItem
-                                                                disabled={
-                                                                    readOnly
-                                                                }
-                                                                className="text-destructive focus:text-destructive"
-                                                                onSelect={() =>
-                                                                    toggleDelete(
-                                                                        key,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Trash2
-                                                                    aria-hidden="true"
-                                                                    className="mr-2 h-4 w-4"
-                                                                />
-                                                                {t(
-                                                                    "dbEditor.deleteRow",
-                                                                )}
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                    ) : (
+                                                        <DropdownMenuItem
+                                                            disabled={readOnly}
+                                                            variant="destructive"
+                                                            onSelect={() =>
+                                                                toggleDelete(
+                                                                    key,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2
+                                                                aria-hidden="true"
+                                                                className="mr-2 h-4 w-4"
+                                                            />
+                                                            {t(
+                                                                "dbEditor.deleteRow",
+                                                            )}
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                </RowMenu>
                                             </TableCell>
                                             {columns.map((col) => {
                                                 const hasEdit =
@@ -994,8 +965,7 @@ export default function TableDataEditorPage() {
                     <div className="flex items-center gap-2">
                         <Button
                             variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="icon-sm"
                             disabled={
                                 page <= 0 || hasPending || query.isFetching
                             }
@@ -1011,8 +981,7 @@ export default function TableDataEditorPage() {
                         </span>
                         <Button
                             variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
+                            size="icon-sm"
                             disabled={
                                 !data?.hasMore || hasPending || query.isFetching
                             }

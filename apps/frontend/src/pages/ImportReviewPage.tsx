@@ -372,11 +372,13 @@ export default function ImportReviewPage() {
 
     return (
         <PageShell className="max-w-3xl mx-auto">
-            <div>{backButton}</div>
-
             <PageHeader
                 title={t("importReview.title")}
                 subtitle={t("importReview.subtitle", { n: totalRows })}
+                back={{
+                    label: t("importReview.back"),
+                    onClick: () => navigate("/import"),
+                }}
             />
 
             {/* Legend: what each badge means, with this file's counts. */}
@@ -449,7 +451,9 @@ export default function ImportReviewPage() {
                                     </span>
                                     {entry.isNew && (
                                         <Badge variant="success">
-                                            {t("importReview.accounts.newBadge")}
+                                            {t(
+                                                "importReview.accounts.newBadge",
+                                            )}
                                         </Badge>
                                     )}
                                 </li>
@@ -703,10 +707,7 @@ export default function ImportReviewPage() {
                             ? t("importReview.discarding")
                             : t("importReview.discard")}
                     </Button>
-                    <Button
-                        onClick={() => commit(dateRange)}
-                        disabled={busy}
-                    >
+                    <Button onClick={() => commit(dateRange)} disabled={busy}>
                         {isCommitting ? (
                             <>
                                 <Loader2

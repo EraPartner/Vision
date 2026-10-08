@@ -1,10 +1,4 @@
-import {
-    useMemo,
-    useState,
-    type KeyboardEvent,
-    type MouseEvent,
-    type ReactNode,
-} from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -104,6 +98,7 @@ import {
 } from "@/components/ui/tooltip";
 import { PageShell } from "@/components/shared/PageShell";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Money } from "@/components/shared/Money";
@@ -129,7 +124,14 @@ const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
     "all",
 );
-const PERIODS: ReadonlyArray<ChartPeriod> = ["1m", "3m", "6m", "1y", "3y", "all"];
+const PERIODS: ReadonlyArray<ChartPeriod> = [
+    "1m",
+    "3m",
+    "6m",
+    "1y",
+    "3y",
+    "all",
+];
 
 type HoldingsSort = "value" | "return";
 
@@ -361,7 +363,10 @@ export default function PortfolioPage() {
     // uses the live totals so the hero and the figures agree to the cent.
     const periodGain = useMemo(() => {
         if (period === "all") {
-            return { amount: totalGainLoss, pct: totalReturnPct as number | undefined };
+            return {
+                amount: totalGainLoss,
+                pct: totalReturnPct as number | undefined,
+            };
         }
         if (snapshots.length < 2) return undefined;
         const first = snapshots[0];
@@ -383,14 +388,20 @@ export default function PortfolioPage() {
             stocksEtfs: cumulative(s.stocks_etfs_value, s.stocks_etfs_invested),
             crypto: cumulative(s.crypto_value, s.crypto_invested),
             metals: cumulative(s.metals_value, s.metals_invested),
-            inflationAdjusted: cumulative(s.inflation_adjusted_value, s.invested),
+            inflationAdjusted: cumulative(
+                s.inflation_adjusted_value,
+                s.invested,
+            ),
         }));
     }, [snapshots]);
 
     const brokerChart = useMemo(() => {
         const rows = brokerPerformance.data?.rows ?? [];
         const series = brokerPerformance.data?.series ?? [];
-        const byDate = new Map<string, Record<string, number | string | Date>>();
+        const byDate = new Map<
+            string,
+            Record<string, number | string | Date>
+        >();
         for (const row of rows) {
             const point = byDate.get(row.date) ?? {
                 day: row.date,
@@ -434,10 +445,14 @@ export default function PortfolioPage() {
         const byGroup = new Map<string, number>();
         const symbols: string[] = [];
         for (const summary of summaries) {
-            const value = convertToTarget(summary.currentValue, summary.currency);
+            const value = convertToTarget(
+                summary.currentValue,
+                summary.currency,
+            );
             const group = classToGroup.get(summary.assetClass);
             if (group) byGroup.set(group, (byGroup.get(group) ?? 0) + value);
-            if (summary.symbol && symbols.length < 10) symbols.push(summary.symbol);
+            if (summary.symbol && symbols.length < 10)
+                symbols.push(summary.symbol);
         }
         const groups = Object.keys(assetClassGroups);
         const slices = groups
@@ -507,7 +522,9 @@ export default function PortfolioPage() {
             );
             if (rows.length === 0) continue;
             byInvestment.set(summary.id, {
-                currentValue: toNumber(addAll(rows.map((row) => row.currentValue))),
+                currentValue: toNumber(
+                    addAll(rows.map((row) => row.currentValue)),
+                ),
                 totalInvested: toNumber(
                     addAll(rows.map((row) => row.totalInvested)),
                 ),
@@ -531,7 +548,10 @@ export default function PortfolioPage() {
 
     const holdings = useMemo(() => {
         const rows = summaries
-            .filter((inv) => !filteredBrokerMetrics || filteredBrokerMetrics.has(inv.id))
+            .filter(
+                (inv) =>
+                    !filteredBrokerMetrics || filteredBrokerMetrics.has(inv.id),
+            )
             .map((inv) => {
                 const selected = filteredBrokerMetrics?.get(inv.id);
                 const server = serverSummariesById.get(inv.id);
@@ -545,7 +565,9 @@ export default function PortfolioPage() {
                     convertToTarget(inv.gainLoss, inv.currency);
                 const gainPct = selected
                     ? selected.totalInvested !== 0
-                        ? (selected.gainLoss / Math.abs(selected.totalInvested)) * 100
+                        ? (selected.gainLoss /
+                              Math.abs(selected.totalInvested)) *
+                          100
                         : 0
                     : (server?.gainLossPercent ?? inv.gainLossPercent);
                 const oversold =
@@ -556,7 +578,13 @@ export default function PortfolioPage() {
             sortBy === "value" ? b.value - a.value : b.gainPct - a.gainPct,
         );
         return rows;
-    }, [summaries, filteredBrokerMetrics, serverSummariesById, convertToTarget, sortBy]);
+    }, [
+        summaries,
+        filteredBrokerMetrics,
+        serverSummariesById,
+        convertToTarget,
+        sortBy,
+    ]);
 
     const brokerSubtotal = useMemo(() => {
         if (!filteredBrokerMetrics) {
@@ -583,7 +611,9 @@ export default function PortfolioPage() {
     const archiveInvestment = async (inv: InvestmentSummary) => {
         const ok = await confirm({
             title: t("portfolio.archiveInvestment"),
-            description: t("portfolio.archiveInvestmentDesc", { name: inv.name }),
+            description: t("portfolio.archiveInvestmentDesc", {
+                name: inv.name,
+            }),
             confirmLabel: t("portfolio.archiveInvestment"),
         });
         if (ok) await updateInvestment(inv.id, { is_active: false });
@@ -591,17 +621,14 @@ export default function PortfolioPage() {
     const removeInvestment = async (inv: InvestmentSummary) => {
         const ok = await confirm({
             title: t("portfolio.deleteInvestment"),
-            description: t("portfolio.deleteInvestmentDesc", { name: inv.name }),
+            description: t("portfolio.deleteInvestmentDesc", {
+                name: inv.name,
+            }),
             confirmLabel: t("common.delete"),
             variant: "destructive",
         });
         if (ok) deleteInvestment(inv.id);
     };
-    /* The row surface is the details control; the row menu sits inside it, so
-       its events must not fall through to the row. */
-    const stopRowActivation = (event: MouseEvent | KeyboardEvent) =>
-        event.stopPropagation();
-
     // ── Page states ─────────────────────────────────────────────────────────
     const title = t("nav.portfolio");
     const subtitle = [tc("portfolio.investments", summaries.length), priceLabel]
@@ -764,7 +791,9 @@ export default function PortfolioPage() {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                                <DropdownMenuItem
+                                    onSelect={() => setExportOpen(true)}
+                                >
                                     <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
                                     {t("portfolio.menu.exportPdf")}
                                 </DropdownMenuItem>
@@ -776,7 +805,9 @@ export default function PortfolioPage() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
-                                    onSelect={() => navigate("/portfolio/import")}
+                                    onSelect={() =>
+                                        navigate("/portfolio/import")
+                                    }
                                 >
                                     <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
                                     {t("nav.portfolioImport")}
@@ -829,7 +860,9 @@ export default function PortfolioPage() {
                         isRefreshing={isRefreshingPrices}
                     />
 
-                    {isVisible("ticker") && <PortfolioTicker items={summaries} />}
+                    {isVisible("ticker") && (
+                        <PortfolioTicker items={summaries} />
+                    )}
 
                     {/* Hero: value, period gain, period picker, value chart */}
                     <Card className="overflow-hidden">
@@ -838,9 +871,14 @@ export default function PortfolioPage() {
                             className="grid gap-6 lg:grid-cols-5"
                         >
                             <div className="space-y-3 lg:col-span-2">
-                                <p className="eyebrow">{t("portfolio.hero.value")}</p>
+                                <p className="eyebrow">
+                                    {t("portfolio.hero.value")}
+                                </p>
                                 <p className="type-large-title tabular-nums text-foreground">
-                                    <Money amount={totalValue} currency={targetCurrency} />
+                                    <Money
+                                        amount={totalValue}
+                                        currency={targetCurrency}
+                                    />
                                 </p>
                                 {periodGain ? (
                                     <p
@@ -869,7 +907,9 @@ export default function PortfolioPage() {
                                             {period === "all"
                                                 ? t("networth.allTime")
                                                 : t("portfolio.hero.inPeriod", {
-                                                      period: periodLabels[period],
+                                                      period: periodLabels[
+                                                          period
+                                                      ],
                                                   })}
                                         </span>
                                     </p>
@@ -907,7 +947,10 @@ export default function PortfolioPage() {
                                 ) : performance.isError ? (
                                     <p className="type-footnote text-destructive">
                                         {t("common.loadError", {
-                                            msg: apiErrorToMessage(performance.error, t),
+                                            msg: apiErrorToMessage(
+                                                performance.error,
+                                                t,
+                                            ),
                                         })}
                                     </p>
                                 ) : !hasHistory ? (
@@ -929,7 +972,9 @@ export default function PortfolioPage() {
                                             series={[
                                                 {
                                                     key: "invested",
-                                                    label: t("portfolio.hero.invested"),
+                                                    label: t(
+                                                        "portfolio.hero.invested",
+                                                    ),
                                                     accessor: (d) => d.invested,
                                                     color: SERIES_COLOR.invested,
                                                     dashed: true,
@@ -938,7 +983,9 @@ export default function PortfolioPage() {
                                                 },
                                                 {
                                                     key: "value",
-                                                    label: t("portfolio.hero.value"),
+                                                    label: t(
+                                                        "portfolio.hero.value",
+                                                    ),
                                                     accessor: (d) => d.value,
                                                     color: SERIES_COLOR.value,
                                                     strokeWidth: 2.5,
@@ -946,12 +993,23 @@ export default function PortfolioPage() {
                                             ]}
                                             xIsDate
                                             xTickFormat={formatTickDate}
-                                            yTickFormat={(v) => fmt(v, { decimals: 0 })}
-                                            tooltipTitle={(d) => formatPointDate(d.day)}
+                                            yTickFormat={(v) =>
+                                                fmt(v, { decimals: 0 })
+                                            }
+                                            tooltipTitle={(d) =>
+                                                formatPointDate(d.day)
+                                            }
                                             tooltipValueFormat={(v) => fmt(v)}
                                             height={200}
-                                            margin={{ top: 8, right: 8, bottom: 24, left: 72 }}
-                                            ariaLabel={t("portfolio.hero.chartAria")}
+                                            margin={{
+                                                top: 8,
+                                                right: 8,
+                                                bottom: 24,
+                                                left: 72,
+                                            }}
+                                            ariaLabel={t(
+                                                "portfolio.hero.chartAria",
+                                            )}
                                         />
                                         <div className="flex flex-wrap items-center gap-4 type-caption text-label-secondary">
                                             <span className="flex items-center gap-1.5">
@@ -980,7 +1038,9 @@ export default function PortfolioPage() {
                                                 />
                                                 <span>
                                                     <span className="text-foreground">
-                                                        {t("performance.latestSnapshotProvisional")}
+                                                        {t(
+                                                            "performance.latestSnapshotProvisional",
+                                                        )}
                                                     </span>{" "}
                                                     {t(
                                                         "performance.latestSnapshotProvisionalDescription",
@@ -1020,10 +1080,13 @@ export default function PortfolioPage() {
                                 label={t("portfolio.figure.perYear")}
                                 value={
                                     metrics
-                                        ? formatPercent(metrics.annualizedReturn, {
-                                              digits: 1,
-                                              signed: true,
-                                          })
+                                        ? formatPercent(
+                                              metrics.annualizedReturn,
+                                              {
+                                                  digits: 1,
+                                                  signed: true,
+                                              },
+                                          )
                                         : undefined
                                 }
                                 tone={toneClass(metrics?.annualizedReturn ?? 0)}
@@ -1071,7 +1134,9 @@ export default function PortfolioPage() {
                                 }
                                 hint={
                                     metrics && metrics.cumulativeInflation
-                                        ? t("portfolio.figure.afterInflationHint")
+                                        ? t(
+                                              "portfolio.figure.afterInflationHint",
+                                          )
                                         : t("portfolio.figure.inflationMissing")
                                 }
                             />
@@ -1079,7 +1144,9 @@ export default function PortfolioPage() {
                                 label={t("portfolio.figure.realized")}
                                 value={
                                     totalRealizedGain !== 0
-                                        ? fmt(totalRealizedGain, { signed: true })
+                                        ? fmt(totalRealizedGain, {
+                                              signed: true,
+                                          })
                                         : undefined
                                 }
                                 tone={toneClass(totalRealizedGain)}
@@ -1112,7 +1179,9 @@ export default function PortfolioPage() {
                                             onValueChange={(next) =>
                                                 setSortBy(next as HoldingsSort)
                                             }
-                                            aria-label={t("portfolio.sort.label")}
+                                            aria-label={t(
+                                                "portfolio.sort.label",
+                                            )}
                                         >
                                             <SegmentedControlItem
                                                 value="value"
@@ -1137,25 +1206,35 @@ export default function PortfolioPage() {
                                         >
                                             <SelectTrigger
                                                 className="h-8 w-44"
-                                                aria-label={t("portfolio.brokerFilter.label")}
+                                                aria-label={t(
+                                                    "portfolio.brokerFilter.label",
+                                                )}
                                             >
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">
-                                                    {t("portfolio.brokerFilter.all")}
+                                                    {t(
+                                                        "portfolio.brokerFilter.all",
+                                                    )}
                                                 </SelectItem>
-                                                {brokerFilterOptions.accounts.map((account) => (
-                                                    <SelectItem
-                                                        key={account.id}
-                                                        value={String(account.id)}
-                                                    >
-                                                        {account.label}
-                                                    </SelectItem>
-                                                ))}
+                                                {brokerFilterOptions.accounts.map(
+                                                    (account) => (
+                                                        <SelectItem
+                                                            key={account.id}
+                                                            value={String(
+                                                                account.id,
+                                                            )}
+                                                        >
+                                                            {account.label}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
                                                 {brokerFilterOptions.hasUnassigned && (
                                                     <SelectItem value="unassigned">
-                                                        {t("portfolio.brokerFilter.unassigned")}
+                                                        {t(
+                                                            "portfolio.brokerFilter.unassigned",
+                                                        )}
                                                     </SelectItem>
                                                 )}
                                             </SelectContent>
@@ -1169,137 +1248,203 @@ export default function PortfolioPage() {
                                         </p>
                                     ) : (
                                         <List>
-                                            {holdings.map(({ inv, value, gain, gainPct, oversold }) => {
-                                                const Icon = ASSET_CLASS_ICON[inv.assetClass];
-                                                const classLabel = getAssetClassLabel(
-                                                    t,
-                                                    inv.assetClass,
-                                                );
-                                                return [
-                                                    <ListRow
-                                                        key={inv.id}
-                                                        asChild
-                                                        leading={Icon ? <Icon /> : undefined}
-                                                        title={
-                                                            <span className="inline-flex max-w-full items-center gap-2">
-                                                                <span className="truncate">{inv.name}</span>
-                                                                <PortfolioOversoldBadge oversold={oversold} />
-                                                            </span>
-                                                        }
-                                                        subtitle={
-                                                            inv.symbol
-                                                                ? `${classLabel} · ${inv.symbol}`
-                                                                : classLabel
-                                                        }
-                                                        trailing={
-                                                            <>
-                                                                <span className="flex flex-col items-end">
-                                                                    <span className="text-foreground">
-                                                                        <Money
-                                                                            amount={value}
-                                                                            currency={targetCurrency}
-                                                                        />
+                                            {holdings.map(
+                                                ({
+                                                    inv,
+                                                    value,
+                                                    gain,
+                                                    gainPct,
+                                                    oversold,
+                                                }) => {
+                                                    const Icon =
+                                                        ASSET_CLASS_ICON[
+                                                            inv.assetClass
+                                                        ];
+                                                    const classLabel =
+                                                        getAssetClassLabel(
+                                                            t,
+                                                            inv.assetClass,
+                                                        );
+                                                    return [
+                                                        <ListRow
+                                                            key={inv.id}
+                                                            asChild
+                                                            leading={
+                                                                Icon ? (
+                                                                    <Icon />
+                                                                ) : undefined
+                                                            }
+                                                            title={
+                                                                <span className="inline-flex max-w-full items-center gap-2">
+                                                                    <span className="truncate">
+                                                                        {
+                                                                            inv.name
+                                                                        }
                                                                     </span>
-                                                                    <span
-                                                                        className={cn(
-                                                                            "type-footnote",
-                                                                            toneClass(gain),
-                                                                        )}
-                                                                    >
-                                                                        <Money
-                                                                            amount={gain}
-                                                                            currency={targetCurrency}
-                                                                            signed
-                                                                        />{" "}
-                                                                        (
-                                                                        {formatPercent(gainPct, {
-                                                                            digits: 1,
-                                                                            signed: true,
-                                                                        })}
-                                                                        )
-                                                                    </span>
+                                                                    <PortfolioOversoldBadge
+                                                                        oversold={
+                                                                            oversold
+                                                                        }
+                                                                    />
                                                                 </span>
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger asChild>
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-label-secondary"
-                                                                            aria-label={t("portfolio.row.menu", {
-                                                                                name: inv.name,
-                                                                            })}
-                                                                            onClick={stopRowActivation}
-                                                                            onKeyDown={stopRowActivation}
+                                                            }
+                                                            subtitle={
+                                                                inv.symbol
+                                                                    ? `${classLabel} · ${inv.symbol}`
+                                                                    : classLabel
+                                                            }
+                                                            trailing={
+                                                                <>
+                                                                    <span className="flex flex-col items-end">
+                                                                        <span className="text-foreground">
+                                                                            <Money
+                                                                                amount={
+                                                                                    value
+                                                                                }
+                                                                                currency={
+                                                                                    targetCurrency
+                                                                                }
+                                                                            />
+                                                                        </span>
+                                                                        <span
+                                                                            className={cn(
+                                                                                "type-footnote",
+                                                                                toneClass(
+                                                                                    gain,
+                                                                                ),
+                                                                            )}
                                                                         >
-                                                                            <MoreHorizontal />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent
-                                                                        align="end"
-                                                                        onClick={stopRowActivation}
-                                                                        onKeyDown={stopRowActivation}
+                                                                            <Money
+                                                                                amount={
+                                                                                    gain
+                                                                                }
+                                                                                currency={
+                                                                                    targetCurrency
+                                                                                }
+                                                                                signed
+                                                                            />{" "}
+                                                                            (
+                                                                            {formatPercent(
+                                                                                gainPct,
+                                                                                {
+                                                                                    digits: 1,
+                                                                                    signed: true,
+                                                                                },
+                                                                            )}
+                                                                            )
+                                                                        </span>
+                                                                    </span>
+                                                                </>
+                                                            }
+                                                            actions={
+                                                                <RowMenu
+                                                                    label={t(
+                                                                        "portfolio.row.menu",
+                                                                        {
+                                                                            name: inv.name,
+                                                                        },
+                                                                    )}
+                                                                >
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() =>
+                                                                            openDetail(
+                                                                                inv,
+                                                                            )
+                                                                        }
                                                                     >
-                                                                        <DropdownMenuItem
-                                                                            onSelect={() => openDetail(inv)}
-                                                                        >
-                                                                            <Eye className="mr-2 h-4 w-4 text-label-secondary" />
-                                                                            {t("invDetail.trigger")}
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            onSelect={() =>
-                                                                                openAddTransaction(inv)
-                                                                            }
-                                                                        >
-                                                                            <Plus className="mr-2 h-4 w-4 text-label-secondary" />
-                                                                            {t("portfolio.addTransaction")}
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuSeparator />
-                                                                        <DropdownMenuItem
-                                                                            onSelect={() =>
-                                                                                void archiveInvestment(inv)
-                                                                            }
-                                                                        >
-                                                                            <Archive className="mr-2 h-4 w-4 text-label-secondary" />
-                                                                            {t("portfolio.archiveInvestment")}
-                                                                        </DropdownMenuItem>
-                                                                        <DropdownMenuItem
-                                                                            className="text-destructive focus:text-destructive"
-                                                                            onSelect={() =>
-                                                                                void removeInvestment(inv)
-                                                                            }
-                                                                        >
-                                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                                            {t("portfolio.deleteInvestment")}
-                                                                        </DropdownMenuItem>
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            </>
-                                                        }
-                                                    >
-                                                        <div
-                                                            role="button"
-                                                            tabIndex={0}
-                                                            aria-label={`${t("invDetail.trigger")}: ${inv.name}`}
-                                                            onClick={() => openDetail(inv)}
-                                                            onKeyDown={(event) => {
-                                                                if (event.key === "Enter" || event.key === " ") {
-                                                                    event.preventDefault();
-                                                                    openDetail(inv);
+                                                                        <Eye className="mr-2 h-4 w-4 text-label-secondary" />
+                                                                        {t(
+                                                                            "invDetail.trigger",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() =>
+                                                                            openAddTransaction(
+                                                                                inv,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Plus className="mr-2 h-4 w-4 text-label-secondary" />
+                                                                        {t(
+                                                                            "portfolio.addTransaction",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() =>
+                                                                            void archiveInvestment(
+                                                                                inv,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Archive className="mr-2 h-4 w-4 text-label-secondary" />
+                                                                        {t(
+                                                                            "portfolio.archiveInvestment",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        variant="destructive"
+                                                                        onSelect={() =>
+                                                                            void removeInvestment(
+                                                                                inv,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        {t(
+                                                                            "portfolio.deleteInvestment",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                </RowMenu>
+                                                            }
+                                                        >
+                                                            <div
+                                                                role="button"
+                                                                tabIndex={0}
+                                                                aria-label={`${t("invDetail.trigger")}: ${inv.name}`}
+                                                                onClick={() =>
+                                                                    openDetail(
+                                                                        inv,
+                                                                    )
                                                                 }
-                                                            }}
-                                                        />
-                                                    </ListRow>,
-                                                    !inv.fullyAssigned ? (
-                                                        <li key={`${inv.id}-lots`} className="px-4 pb-3">
-                                                            <UnassignedLotsNudge
-                                                                investmentId={inv.id}
-                                                                investmentName={inv.name}
-                                                                transactions={transactions}
+                                                                onKeyDown={(
+                                                                    event,
+                                                                ) => {
+                                                                    if (
+                                                                        event.key ===
+                                                                            "Enter" ||
+                                                                        event.key ===
+                                                                            " "
+                                                                    ) {
+                                                                        event.preventDefault();
+                                                                        openDetail(
+                                                                            inv,
+                                                                        );
+                                                                    }
+                                                                }}
                                                             />
-                                                        </li>
-                                                    ) : null,
-                                                ];
-                                            })}
+                                                        </ListRow>,
+                                                        !inv.fullyAssigned ? (
+                                                            <li
+                                                                key={`${inv.id}-lots`}
+                                                                className="px-4 pb-3"
+                                                            >
+                                                                <UnassignedLotsNudge
+                                                                    investmentId={
+                                                                        inv.id
+                                                                    }
+                                                                    investmentName={
+                                                                        inv.name
+                                                                    }
+                                                                    transactions={
+                                                                        transactions
+                                                                    }
+                                                                />
+                                                            </li>
+                                                        ) : null,
+                                                    ];
+                                                },
+                                            )}
                                         </List>
                                     )}
                                     <p className="mt-3 flex flex-wrap justify-end gap-x-4 gap-y-1 type-footnote tabular-nums text-label-secondary">
@@ -1307,25 +1452,43 @@ export default function PortfolioPage() {
                                             t("portfolio.brokerFilter.loading")
                                         ) : portfolioSummaryQuery.isError ? (
                                             <span className="text-warning">
-                                                {t("portfolio.brokerFilter.unavailable")}
+                                                {t(
+                                                    "portfolio.brokerFilter.unavailable",
+                                                )}
                                             </span>
                                         ) : (
                                             <>
                                                 <span>
-                                                    {t("portfolio.brokerFilter.holdingsSubtotal")}{" "}
+                                                    {t(
+                                                        "portfolio.brokerFilter.holdingsSubtotal",
+                                                    )}{" "}
                                                     <span className="text-foreground">
                                                         <Money
-                                                            amount={brokerSubtotal.currentValue}
-                                                            currency={targetCurrency}
+                                                            amount={
+                                                                brokerSubtotal.currentValue
+                                                            }
+                                                            currency={
+                                                                targetCurrency
+                                                            }
                                                         />
                                                     </span>
                                                 </span>
                                                 <span>
-                                                    {t("portfolio.brokerFilter.pnlSubtotal")}{" "}
-                                                    <span className={toneClass(brokerSubtotal.gainLoss)}>
+                                                    {t(
+                                                        "portfolio.brokerFilter.pnlSubtotal",
+                                                    )}{" "}
+                                                    <span
+                                                        className={toneClass(
+                                                            brokerSubtotal.gainLoss,
+                                                        )}
+                                                    >
                                                         <Money
-                                                            amount={brokerSubtotal.gainLoss}
-                                                            currency={targetCurrency}
+                                                            amount={
+                                                                brokerSubtotal.gainLoss
+                                                            }
+                                                            currency={
+                                                                targetCurrency
+                                                            }
                                                             signed
                                                         />
                                                     </span>
@@ -1362,7 +1525,9 @@ export default function PortfolioPage() {
                                 <CardContent className="space-y-4">
                                     <div
                                         role="img"
-                                        aria-label={t("portfolio.allocation.legendAria")}
+                                        aria-label={t(
+                                            "portfolio.allocation.legendAria",
+                                        )}
                                         className="flex h-2.5 w-full gap-px overflow-hidden rounded-chip bg-foreground/[0.06]"
                                     >
                                         {allocation.map((slice) => (
@@ -1371,7 +1536,8 @@ export default function PortfolioPage() {
                                                 className="h-full"
                                                 style={{
                                                     width: `${slice.pct}%`,
-                                                    backgroundColor: slice.color,
+                                                    backgroundColor:
+                                                        slice.color,
                                                 }}
                                             />
                                         ))}
@@ -1385,7 +1551,10 @@ export default function PortfolioPage() {
                                                 <span
                                                     aria-hidden="true"
                                                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                                    style={{ backgroundColor: slice.color }}
+                                                    style={{
+                                                        backgroundColor:
+                                                            slice.color,
+                                                    }}
                                                 />
                                                 <span className="min-w-0 flex-1 truncate text-label-secondary">
                                                     {slice.name}
@@ -1393,11 +1562,15 @@ export default function PortfolioPage() {
                                                 <span className="tabular-nums text-foreground">
                                                     <Money
                                                         amount={slice.value}
-                                                        currency={targetCurrency}
+                                                        currency={
+                                                            targetCurrency
+                                                        }
                                                     />
                                                 </span>
                                                 <span className="w-12 text-right tabular-nums text-label-secondary">
-                                                    {formatPercent(slice.pct, { digits: 0 })}
+                                                    {formatPercent(slice.pct, {
+                                                        digits: 0,
+                                                    })}
                                                 </span>
                                             </li>
                                         ))}
@@ -1428,7 +1601,9 @@ export default function PortfolioPage() {
                                                     {row.warning && (
                                                         <TouchDisclosure
                                                             label={row.warning}
-                                                            content={row.warning}
+                                                            content={
+                                                                row.warning
+                                                            }
                                                             className="ml-1 align-middle text-warning"
                                                         >
                                                             <Info
@@ -1446,7 +1621,9 @@ export default function PortfolioPage() {
                                                 >
                                                     <Money
                                                         amount={row.value}
-                                                        currency={targetCurrency}
+                                                        currency={
+                                                            targetCurrency
+                                                        }
                                                         signed={row.signed}
                                                     />
                                                 </dd>
@@ -1486,10 +1663,15 @@ export default function PortfolioPage() {
                                         </Label>
                                         <TouchDisclosure
                                             label={t("performance.fxNeutral")}
-                                            content={t("performance.fxNeutralDesc")}
+                                            content={t(
+                                                "performance.fxNeutralDesc",
+                                            )}
                                             className="text-label-tertiary"
                                         >
-                                            <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                                            <Info
+                                                className="h-3.5 w-3.5"
+                                                aria-hidden="true"
+                                            />
                                         </TouchDisclosure>
                                     </div>
                                 ) : undefined
@@ -1499,8 +1681,14 @@ export default function PortfolioPage() {
                                     label: t("performance.relativeStocksEtfs"),
                                     color: SERIES_COLOR.stocksEtfs,
                                 },
-                                { label: t("performance.crypto"), color: SERIES_COLOR.crypto },
-                                { label: t("performance.metals"), color: SERIES_COLOR.metals },
+                                {
+                                    label: t("performance.crypto"),
+                                    color: SERIES_COLOR.crypto,
+                                },
+                                {
+                                    label: t("performance.metals"),
+                                    color: SERIES_COLOR.metals,
+                                },
                                 {
                                     label: t("performance.inflationAdjusted"),
                                     color: SERIES_COLOR.inflationAdjusted,
@@ -1527,7 +1715,9 @@ export default function PortfolioPage() {
                                 series={[
                                     {
                                         key: "stocksEtfs",
-                                        label: t("performance.relativeStocksEtfs"),
+                                        label: t(
+                                            "performance.relativeStocksEtfs",
+                                        ),
                                         accessor: (d) => d.stocksEtfs,
                                         color: SERIES_COLOR.stocksEtfs,
                                         fillOpacity: 0,
@@ -1551,7 +1741,9 @@ export default function PortfolioPage() {
                                     },
                                     {
                                         key: "inflationAdjusted",
-                                        label: t("performance.inflationAdjusted"),
+                                        label: t(
+                                            "performance.inflationAdjusted",
+                                        ),
                                         accessor: (d) => d.inflationAdjusted,
                                         color: SERIES_COLOR.inflationAdjusted,
                                         fillOpacity: 0,
@@ -1561,9 +1753,12 @@ export default function PortfolioPage() {
                                         ? [
                                               {
                                                   key: "fxNeutral",
-                                                  label: t("performance.fxNeutral"),
-                                                  accessor: (d: (typeof chartData)[number]) =>
-                                                      d.fxNeutral,
+                                                  label: t(
+                                                      "performance.fxNeutral",
+                                                  ),
+                                                  accessor: (
+                                                      d: (typeof chartData)[number],
+                                                  ) => d.fxNeutral,
                                                   color: SERIES_COLOR.fxNeutral,
                                                   fillOpacity: 0,
                                                   dashed: true,
@@ -1585,7 +1780,12 @@ export default function PortfolioPage() {
                                 tooltipTitle={(d) => formatPointDate(d.day)}
                                 tooltipValueFormat={(v) => fmt(v)}
                                 height={320}
-                                margin={{ top: 16, right: 24, bottom: 28, left: 90 }}
+                                margin={{
+                                    top: 16,
+                                    right: 24,
+                                    bottom: 28,
+                                    left: 90,
+                                }}
                             />
                         </ChartCard>
                     )}
@@ -1595,7 +1795,9 @@ export default function PortfolioPage() {
                         brokerChart.series.length > 0 && (
                             <ChartCard
                                 title={t("performance.byBrokerTitle")}
-                                description={t("performance.byBrokerDescription")}
+                                description={t(
+                                    "performance.byBrokerDescription",
+                                )}
                                 legend={brokerChart.series.map((entry) => ({
                                     label: entry.label,
                                     color: entry.color,
@@ -1608,8 +1810,12 @@ export default function PortfolioPage() {
                                     series={brokerChart.series.map((entry) => ({
                                         key: entry.accountKey,
                                         label: entry.label,
-                                        accessor: (d: Record<string, number | string | Date>) =>
-                                            Number(d[entry.accountKey] ?? 0),
+                                        accessor: (
+                                            d: Record<
+                                                string,
+                                                number | string | Date
+                                            >,
+                                        ) => Number(d[entry.accountKey] ?? 0),
                                         color: entry.color,
                                         fillOpacity: 0.08,
                                         strokeWidth: 2,
@@ -1617,10 +1823,17 @@ export default function PortfolioPage() {
                                     xIsDate
                                     xTickFormat={formatTickDate}
                                     yTickFormat={(v) => fmt(v, { decimals: 0 })}
-                                    tooltipTitle={(point) => formatPointDate(String(point.day))}
+                                    tooltipTitle={(point) =>
+                                        formatPointDate(String(point.day))
+                                    }
                                     tooltipValueFormat={(v) => fmt(v)}
                                     height={280}
-                                    margin={{ top: 16, right: 24, bottom: 28, left: 90 }}
+                                    margin={{
+                                        top: 16,
+                                        right: 24,
+                                        bottom: 28,
+                                        left: 90,
+                                    }}
                                 />
                             </ChartCard>
                         )}
@@ -1640,8 +1853,14 @@ export default function PortfolioPage() {
                                     label: t("performance.relativeStocksEtfs"),
                                     color: SERIES_COLOR.stocksEtfs,
                                 },
-                                { label: t("performance.crypto"), color: SERIES_COLOR.crypto },
-                                { label: t("performance.metals"), color: SERIES_COLOR.metals },
+                                {
+                                    label: t("performance.crypto"),
+                                    color: SERIES_COLOR.crypto,
+                                },
+                                {
+                                    label: t("performance.metals"),
+                                    color: SERIES_COLOR.metals,
+                                },
                                 {
                                     label: t("performance.inflationAdjusted"),
                                     color: SERIES_COLOR.inflationAdjusted,
@@ -1656,14 +1875,18 @@ export default function PortfolioPage() {
                                 series={[
                                     {
                                         key: "portfolio",
-                                        label: t("performance.relativePortfolio"),
+                                        label: t(
+                                            "performance.relativePortfolio",
+                                        ),
                                         accessor: (d) => d.portfolio,
                                         color: SERIES_COLOR.value,
                                         strokeWidth: 2.5,
                                     },
                                     {
                                         key: "stocksEtfs",
-                                        label: t("performance.relativeStocksEtfs"),
+                                        label: t(
+                                            "performance.relativeStocksEtfs",
+                                        ),
                                         accessor: (d) => d.stocksEtfs,
                                         color: SERIES_COLOR.stocksEtfs,
                                         fillOpacity: 0,
@@ -1687,7 +1910,9 @@ export default function PortfolioPage() {
                                     },
                                     {
                                         key: "inflationAdjusted",
-                                        label: t("performance.inflationAdjusted"),
+                                        label: t(
+                                            "performance.inflationAdjusted",
+                                        ),
                                         accessor: (d) => d.inflationAdjusted,
                                         color: SERIES_COLOR.inflationAdjusted,
                                         fillOpacity: 0,
@@ -1698,14 +1923,25 @@ export default function PortfolioPage() {
                                 xIsDate
                                 xTickFormat={formatTickDate}
                                 yTickFormat={(v) =>
-                                    formatPercent(v, { digits: 0, signed: true })
+                                    formatPercent(v, {
+                                        digits: 0,
+                                        signed: true,
+                                    })
                                 }
                                 tooltipTitle={(d) => formatPointDate(d.day)}
                                 tooltipValueFormat={(v) =>
-                                    formatPercent(v, { digits: 2, signed: true })
+                                    formatPercent(v, {
+                                        digits: 2,
+                                        signed: true,
+                                    })
                                 }
                                 height={300}
-                                margin={{ top: 16, right: 24, bottom: 28, left: 72 }}
+                                margin={{
+                                    top: 16,
+                                    right: 24,
+                                    bottom: 28,
+                                    left: 72,
+                                }}
                             />
                         </ChartCard>
                     )}
@@ -1726,7 +1962,9 @@ export default function PortfolioPage() {
             {isVisible("archived") && (
                 <ArchivedInvestmentsCard
                     investments={inactiveSummaries}
-                    onRestore={(id) => updateInvestment(id, { is_active: true })}
+                    onRestore={(id) =>
+                        updateInvestment(id, { is_active: true })
+                    }
                     t={t}
                 />
             )}

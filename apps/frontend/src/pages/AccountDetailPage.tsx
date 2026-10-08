@@ -391,21 +391,11 @@ export default function AccountDetailPage() {
 
     return (
         <PageShell className="">
-            {/* Back to the hub */}
-            <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-2 px-2 text-label-secondary hover:text-foreground"
-                onClick={() => navigate("/accounts")}
-            >
-                <ArrowLeft aria-hidden />
-                {t("accounts.detail.back")}
-            </Button>
-
             <PageHeader
                 title={a.display_name || a.name}
                 subtitle={subtitleParts.join(" · ")}
                 icon={PAGE_ICONS["/accounts"]}
+                back={{ label: t("accounts.detail.back"), to: "/accounts" }}
                 actions={
                     <>
                         {!a.is_active && (
@@ -508,7 +498,7 @@ export default function AccountDetailPage() {
                                     otherwise a disabled row explains the close route (§3 F5). */}
                                 {a.has_transactions === false ? (
                                     <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
+                                        variant="destructive"
                                         onClick={() => requestDelete(a)}
                                     >
                                         <Trash2
@@ -832,8 +822,8 @@ export default function AccountDetailPage() {
                                 </span>
                                 <Button
                                     variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 shrink-0"
+                                    size="icon-xs"
+                                    className="shrink-0"
                                     onClick={clearSince}
                                     aria-label={t("aria.clearFilter")}
                                 >

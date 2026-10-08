@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { RowMenu } from "@/components/shared/RowMenu";
 import {
     useUpdateRecipient,
     useDeleteRecipient,
@@ -473,100 +474,81 @@ export default function RecipientsPage() {
                 editable: false,
                 render: (row: TableRecipient) => (
                     <div className="flex justify-end">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-label-secondary"
-                                    aria-label={t("recipientsPage.rowMenu", {
+                        <RowMenu
+                            label={t("recipientsPage.rowMenu", {
+                                name: row.name,
+                            })}
+                        >
+                            <DropdownMenuItem
+                                onSelect={() =>
+                                    setPatternsDialogRecipient({
+                                        id: row.id,
                                         name: row.name,
-                                    })}
-                                    onClick={(event) => event.stopPropagation()}
-                                >
-                                    <MoreHorizontal aria-hidden />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                                align="end"
-                                onClick={(event) => event.stopPropagation()}
+                                    })
+                                }
                             >
+                                <Regex
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                                {t("recipientPatterns.title")}
+                            </DropdownMenuItem>
+                            {row.primary_recipient_id && (
                                 <DropdownMenuItem
+                                    disabled={unmergeMutation.isPending}
                                     onSelect={() =>
-                                        setPatternsDialogRecipient({
-                                            id: row.id,
-                                            name: row.name,
-                                        })
+                                        unmergeMutation.mutate(row.id)
                                     }
                                 >
-                                    <Regex
+                                    <Unlink
                                         className="mr-2 h-4 w-4 text-label-secondary"
                                         aria-hidden
                                     />
-                                    {t("recipientPatterns.title")}
+                                    {t("recipientsPage.unmerge")}
                                 </DropdownMenuItem>
-                                {row.primary_recipient_id && (
-                                    <DropdownMenuItem
-                                        disabled={unmergeMutation.isPending}
-                                        onSelect={() =>
-                                            unmergeMutation.mutate(row.id)
-                                        }
-                                    >
-                                        <Unlink
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                        {t("recipientsPage.unmerge")}
-                                    </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem
-                                    disabled={statusMutation.isPending}
-                                    onSelect={() => void toggleActive(row)}
-                                >
-                                    {row.is_active ? (
-                                        <EyeOff
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                    ) : (
-                                        <Eye
-                                            className="mr-2 h-4 w-4 text-label-secondary"
-                                            aria-hidden
-                                        />
-                                    )}
-                                    {row.is_active
-                                        ? t("recipientsPage.markInactive")
-                                        : t("recipientsPage.markActive")}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    disabled={deleteMutation.isPending}
-                                    onSelect={async () => {
-                                        const ok = await confirm({
-                                            title: t(
-                                                "recipientsPage.delete.title",
-                                            ),
-                                            description: t(
-                                                "recipientsPage.delete.desc",
-                                                { name: row.name },
-                                            ),
-                                            confirmLabel: t(
-                                                "recipientsPage.delete.confirm",
-                                            ),
-                                            variant: "destructive",
-                                        });
-                                        if (ok) deleteMutation.mutate(row.id);
-                                    }}
-                                >
-                                    <Trash2
-                                        className="mr-2 h-4 w-4"
+                            )}
+                            <DropdownMenuItem
+                                disabled={statusMutation.isPending}
+                                onSelect={() => void toggleActive(row)}
+                            >
+                                {row.is_active ? (
+                                    <EyeOff
+                                        className="mr-2 h-4 w-4 text-label-secondary"
                                         aria-hidden
                                     />
-                                    {t("common.delete")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                ) : (
+                                    <Eye
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                )}
+                                {row.is_active
+                                    ? t("recipientsPage.markInactive")
+                                    : t("recipientsPage.markActive")}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                variant="destructive"
+                                disabled={deleteMutation.isPending}
+                                onSelect={async () => {
+                                    const ok = await confirm({
+                                        title: t("recipientsPage.delete.title"),
+                                        description: t(
+                                            "recipientsPage.delete.desc",
+                                            { name: row.name },
+                                        ),
+                                        confirmLabel: t(
+                                            "recipientsPage.delete.confirm",
+                                        ),
+                                        variant: "destructive",
+                                    });
+                                    if (ok) deleteMutation.mutate(row.id);
+                                }}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                                {t("common.delete")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                     </div>
                 ),
             },

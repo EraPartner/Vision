@@ -30,6 +30,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { cn } from "@/lib/utils";
+import { SELECT_NONE, toSelectValue } from "@/lib/selectValue";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { PageError } from "@/components/shared/PageError";
@@ -42,6 +43,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { List, ListRow } from "@/components/ui/list";
+import {
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import {
     Card,
     CardContent,
@@ -74,14 +80,15 @@ const WORKSPACES = [
     "research",
     "cross-workspace",
 ] as const satisfies ReadonlyArray<AnalysisWorkspace>;
-const ORIGINS = ["user", "ai-draft"] as const satisfies ReadonlyArray<EvidenceOrigin>;
+const ORIGINS = [
+    "user",
+    "ai-draft",
+] as const satisfies ReadonlyArray<EvidenceOrigin>;
 const STANCES = [
     "support",
     "oppose",
     "context",
 ] as const satisfies ReadonlyArray<EvidenceStance>;
-/** Radix Select items need a non-empty value; this one stands for "no document". */
-const NO_DOCUMENT = "__none__";
 
 const emptyContent = (): DossierContent => ({
     title: "",
@@ -418,7 +425,7 @@ export default function ResearchDossiersPage() {
                 </Alert>
             )}
             {notice && (
-                <Alert variant="success" role="status">
+                <Alert variant="success">
                     <Check className="h-4 w-4" aria-hidden="true" />
                     <AlertDescription>{notice}</AlertDescription>
                 </Alert>
@@ -608,12 +615,14 @@ export default function ResearchDossiersPage() {
                                                         }
                                                     >
                                                         <Download className="mr-2 h-4 w-4 text-label-secondary" />
-                                                        {t("dossiers.exportOne")}
+                                                        {t(
+                                                            "dossiers.exportOne",
+                                                        )}
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         disabled={busy}
-                                                        className="text-destructive focus:text-destructive"
+                                                        variant="destructive"
                                                         onSelect={() =>
                                                             void remove()
                                                         }
@@ -648,37 +657,31 @@ export default function ResearchDossiersPage() {
                                                 }
                                             />
                                         </div>
-                                        <div className="space-y-2">
-                                            <p
-                                                id="dossier-workspace-label"
-                                                className="type-body font-medium text-foreground"
-                                            >
-                                                {t("dossiers.field.workspace")}
-                                            </p>
-                                            <SegmentedControl
-                                                size="sm"
-                                                className="w-full"
-                                                aria-labelledby="dossier-workspace-label"
-                                                value={draft.workspace}
-                                                onValueChange={(value) =>
-                                                    edit({
-                                                        workspace:
-                                                            value as AnalysisWorkspace,
-                                                    })
-                                                }
-                                            >
-                                                {WORKSPACES.map((value) => (
-                                                    <SegmentedControlItem
-                                                        key={value}
-                                                        value={value}
-                                                    >
-                                                        {t(
-                                                            `dossiers.workspace.${value}`,
-                                                        )}
-                                                    </SegmentedControlItem>
-                                                ))}
-                                            </SegmentedControl>
-                                        </div>
+                                        <SegmentedControl
+                                            label={t(
+                                                "dossiers.field.workspace",
+                                            )}
+                                            size="sm"
+                                            className="w-full"
+                                            value={draft.workspace}
+                                            onValueChange={(value) =>
+                                                edit({
+                                                    workspace:
+                                                        value as AnalysisWorkspace,
+                                                })
+                                            }
+                                        >
+                                            {WORKSPACES.map((value) => (
+                                                <SegmentedControlItem
+                                                    key={value}
+                                                    value={value}
+                                                >
+                                                    {t(
+                                                        `dossiers.workspace.${value}`,
+                                                    )}
+                                                </SegmentedControlItem>
+                                            ))}
+                                        </SegmentedControl>
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="dossier-question">
@@ -894,9 +897,7 @@ export default function ResearchDossiersPage() {
                                                 id: item.id,
                                                 label: item.name,
                                             }))}
-                                            selected={
-                                                draft.links.investmentIds
-                                            }
+                                            selected={draft.links.investmentIds}
                                             error={investments.isError}
                                             onToggle={(id) =>
                                                 toggleLink("investmentIds", id)
@@ -1023,8 +1024,6 @@ function EvidenceEditor({
 }: EvidenceEditorProps) {
     const { t } = useLanguage();
     const headingId = `evidence-heading-${item.id}`;
-    const originLabelId = `origin-label-${item.id}`;
-    const stanceLabelId = `stance-label-${item.id}`;
     const updateSource = (patch: Partial<DossierEvidence["source"]>) =>
         onChange({ source: { ...item.source, ...patch } });
 
@@ -1050,52 +1049,36 @@ function EvidenceEditor({
                 </Button>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                    <p
-                        id={originLabelId}
-                        className="type-body font-medium text-foreground"
-                    >
-                        {t("dossiers.field.origin")}
-                    </p>
-                    <SegmentedControl
-                        size="sm"
-                        className="w-full"
-                        aria-labelledby={originLabelId}
-                        value={item.origin}
-                        onValueChange={(value) =>
-                            onChange({ origin: value as EvidenceOrigin })
-                        }
-                    >
-                        {ORIGINS.map((origin) => (
-                            <SegmentedControlItem key={origin} value={origin}>
-                                {t(`dossiers.origin.${origin}`)}
-                            </SegmentedControlItem>
-                        ))}
-                    </SegmentedControl>
-                </div>
-                <div className="space-y-2">
-                    <p
-                        id={stanceLabelId}
-                        className="type-body font-medium text-foreground"
-                    >
-                        {t("dossiers.field.stance")}
-                    </p>
-                    <SegmentedControl
-                        size="sm"
-                        className="w-full"
-                        aria-labelledby={stanceLabelId}
-                        value={item.stance}
-                        onValueChange={(value) =>
-                            onChange({ stance: value as EvidenceStance })
-                        }
-                    >
-                        {STANCES.map((stance) => (
-                            <SegmentedControlItem key={stance} value={stance}>
-                                {t(`dossiers.stance.${stance}`)}
-                            </SegmentedControlItem>
-                        ))}
-                    </SegmentedControl>
-                </div>
+                <SegmentedControl
+                    label={t("dossiers.field.origin")}
+                    size="sm"
+                    className="w-full"
+                    value={item.origin}
+                    onValueChange={(value) =>
+                        onChange({ origin: value as EvidenceOrigin })
+                    }
+                >
+                    {ORIGINS.map((origin) => (
+                        <SegmentedControlItem key={origin} value={origin}>
+                            {t(`dossiers.origin.${origin}`)}
+                        </SegmentedControlItem>
+                    ))}
+                </SegmentedControl>
+                <SegmentedControl
+                    label={t("dossiers.field.stance")}
+                    size="sm"
+                    className="w-full"
+                    value={item.stance}
+                    onValueChange={(value) =>
+                        onChange({ stance: value as EvidenceStance })
+                    }
+                >
+                    {STANCES.map((stance) => (
+                        <SegmentedControlItem key={stance} value={stance}>
+                            {t(`dossiers.stance.${stance}`)}
+                        </SegmentedControlItem>
+                    ))}
+                </SegmentedControl>
             </div>
             <div className="space-y-2">
                 <Label htmlFor={`claim-${item.id}`}>
@@ -1115,7 +1098,7 @@ function EvidenceEditor({
                     {t("dossiers.field.document")}
                 </Label>
                 <Select
-                    value={item.source.documentId ?? NO_DOCUMENT}
+                    value={toSelectValue(item.source.documentId)}
                     onValueChange={(value) => {
                         const document = documents.find(
                             (candidate) => candidate.id === value,
@@ -1143,7 +1126,7 @@ function EvidenceEditor({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value={NO_DOCUMENT}>
+                        <SelectItem value={SELECT_NONE}>
                             {t("dossiers.noDocument")}
                         </SelectItem>
                         {documents.map((document) => (
@@ -1217,9 +1200,7 @@ function EvidenceEditor({
                         onChange={(event) =>
                             updateSource({
                                 accessedAt: event.target.value
-                                    ? new Date(
-                                          event.target.value,
-                                      ).toISOString()
+                                    ? new Date(event.target.value).toISOString()
                                     : null,
                             })
                         }
@@ -1280,16 +1261,16 @@ function DossierLinkPicker<T extends string | number>({
                     {t("dossiers.linksError")}
                 </p>
             )}
-            <details className="rounded-card corner-continuous border border-border/60">
-                <summary className="cursor-pointer rounded-card px-4 py-3 type-body font-medium text-foreground marker:text-label-tertiary focus-ring">
+            <Disclosure variant="card">
+                <DisclosureSummary padded>
                     {label}
                     <span className="ml-2 type-footnote font-normal text-label-secondary">
                         {t("dossiers.linksSelected", {
                             count: selected.length,
                         })}
                     </span>
-                </summary>
-                <div className="space-y-3 border-t border-border/50 p-3">
+                </DisclosureSummary>
+                <DisclosureContent className="space-y-3 border-t border-border/50 p-3">
                     {items.length > 8 && (
                         <Input
                             type="search"
@@ -1335,8 +1316,8 @@ function DossierLinkPicker<T extends string | number>({
                             </p>
                         )}
                     </div>
-                </div>
-            </details>
+                </DisclosureContent>
+            </Disclosure>
         </div>
     );
 }
