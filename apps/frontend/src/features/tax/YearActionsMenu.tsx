@@ -9,25 +9,15 @@
  * Wired against the currently-viewed year.
  */
 import type { ReactNode } from "react";
-import {
-    MoreHorizontal,
-    Snowflake,
-    Lock,
-    History,
-    FileDown,
-    Unlock,
-} from "lucide-react";
+import { Snowflake, Lock, History, FileDown, Unlock } from "lucide-react";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { MarkAsFiledDialog } from "./MarkAsFiledDialog";
 import { SnapshotHistoryDialog } from "./SnapshotHistoryDialog";
 import { exportTaxYearCsv } from "@/lib/belgianTax/exportTaxYearCsv";
@@ -84,82 +74,72 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
     }
 
     return (
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={t("tax.menu.label")}
-                >
-                    <MoreHorizontal />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[240px]">
-                {pageItems && (
-                    <>
-                        {pageItems}
-                        <DropdownMenuSeparator />
-                    </>
-                )}
-                <DropdownMenuLabel>
-                    {t("tax.yearActions.menuLabel", { year: String(year) })}
-                </DropdownMenuLabel>
+        <RowMenu
+            variant="outline"
+            size="icon"
+            label={t("tax.menu.label")}
+            contentClassName="min-w-[240px]"
+        >
+            {pageItems && (
+                <>
+                    {pageItems}
+                    <DropdownMenuSeparator />
+                </>
+            )}
+            <DropdownMenuLabel>
+                {t("tax.yearActions.menuLabel", { year: String(year) })}
+            </DropdownMenuLabel>
 
-                {!filed && !hasFrozen && (
-                    <DropdownMenuItem onSelect={() => freezeCalculation(year)}>
-                        <Snowflake className={itemIconClass} />
-                        {t("tax.yearActions.freeze")}
-                    </DropdownMenuItem>
-                )}
-                {!filed && hasFrozen && (
-                    <DropdownMenuItem
-                        onSelect={() => unfreezeCalculation(year)}
-                    >
-                        <Snowflake className={itemIconClass} />
-                        {t("tax.yearActions.unfreeze")}
-                    </DropdownMenuItem>
-                )}
+            {!filed && !hasFrozen && (
+                <DropdownMenuItem onSelect={() => freezeCalculation(year)}>
+                    <Snowflake className={itemIconClass} />
+                    {t("tax.yearActions.freeze")}
+                </DropdownMenuItem>
+            )}
+            {!filed && hasFrozen && (
+                <DropdownMenuItem onSelect={() => unfreezeCalculation(year)}>
+                    <Snowflake className={itemIconClass} />
+                    {t("tax.yearActions.unfreeze")}
+                </DropdownMenuItem>
+            )}
 
-                {!filed && year !== liveYear && (
-                    <MarkAsFiledDialog
-                        year={year}
-                        trigger={
-                            <DropdownMenuItem
-                                onSelect={(e) => e.preventDefault()}
-                            >
-                                <Lock className={itemIconClass} />
-                                {t("tax.yearActions.markFiled")}
-                            </DropdownMenuItem>
-                        }
-                    />
-                )}
-                {filed && (
-                    <DropdownMenuItem onSelect={() => unmarkYearAsFiled(year)}>
-                        <Unlock className={itemIconClass} />
-                        {t("tax.yearActions.unmarkFiled")}
-                    </DropdownMenuItem>
-                )}
-
-                <DropdownMenuSeparator />
-
-                <SnapshotHistoryDialog
+            {!filed && year !== liveYear && (
+                <MarkAsFiledDialog
                     year={year}
                     trigger={
-                        <DropdownMenuItem
-                            onSelect={(e) => e.preventDefault()}
-                            disabled={!snapshotExists && !hasFrozen && !filed}
-                        >
-                            <History className={itemIconClass} />
-                            {t("tax.yearActions.viewHistory")}
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Lock className={itemIconClass} />
+                            {t("tax.yearActions.markFiled")}
                         </DropdownMenuItem>
                     }
                 />
-
-                <DropdownMenuItem onSelect={handleExport}>
-                    <FileDown className={itemIconClass} />
-                    {t("tax.yearActions.exportCsv")}
+            )}
+            {filed && (
+                <DropdownMenuItem onSelect={() => unmarkYearAsFiled(year)}>
+                    <Unlock className={itemIconClass} />
+                    {t("tax.yearActions.unmarkFiled")}
                 </DropdownMenuItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
+            )}
+
+            <DropdownMenuSeparator />
+
+            <SnapshotHistoryDialog
+                year={year}
+                trigger={
+                    <DropdownMenuItem
+                        onSelect={(e) => e.preventDefault()}
+                        disabled={!snapshotExists && !hasFrozen && !filed}
+                    >
+                        <History className={itemIconClass} />
+                        {t("tax.yearActions.viewHistory")}
+                    </DropdownMenuItem>
+                }
+            />
+
+            <DropdownMenuItem onSelect={handleExport}>
+                <FileDown className={itemIconClass} />
+                {t("tax.yearActions.exportCsv")}
+            </DropdownMenuItem>
+        </RowMenu>
     );
 }

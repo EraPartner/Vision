@@ -3,7 +3,6 @@ import {
     AlertTriangle,
     Check,
     Download,
-    MoreHorizontal,
     Plus,
     RotateCcw,
     Save,
@@ -67,12 +66,10 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 
 const WORKSPACES = [
     "budgeting",
@@ -378,25 +375,18 @@ export default function ResearchDossiersPage() {
                 icon={PAGE_ICONS["/research/dossiers"]}
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("dossiers.menu")}
-                                >
-                                    <MoreHorizontal />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    onSelect={() => void exportJson()}
-                                >
-                                    <Download className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("dossiers.exportAll")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("dossiers.menu")}
+                        >
+                            <DropdownMenuItem
+                                onSelect={() => void exportJson()}
+                            >
+                                <Download className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("dossiers.exportAll")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <Button onClick={() => void create()}>
                             <Plus />
                             {t("dossiers.new")}
@@ -593,45 +583,33 @@ export default function ResearchDossiersPage() {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {selectedId && (
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        aria-label={t(
-                                                            "dossiers.editorMenu",
-                                                        )}
-                                                    >
-                                                        <MoreHorizontal />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem
-                                                        onSelect={() =>
-                                                            void exportJson(
-                                                                selectedId,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Download className="mr-2 h-4 w-4 text-label-secondary" />
-                                                        {t(
-                                                            "dossiers.exportOne",
-                                                        )}
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem
-                                                        disabled={busy}
-                                                        variant="destructive"
-                                                        onSelect={() =>
-                                                            void remove()
-                                                        }
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        {t("dossiers.delete")}
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <RowMenu
+                                                variant="outline"
+                                                size="icon"
+                                                label={t("dossiers.editorMenu")}
+                                            >
+                                                <DropdownMenuItem
+                                                    onSelect={() =>
+                                                        void exportJson(
+                                                            selectedId,
+                                                        )
+                                                    }
+                                                >
+                                                    <Download className="mr-2 h-4 w-4 text-label-secondary" />
+                                                    {t("dossiers.exportOne")}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    disabled={busy}
+                                                    variant="destructive"
+                                                    onSelect={() =>
+                                                        void remove()
+                                                    }
+                                                >
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    {t("dossiers.delete")}
+                                                </DropdownMenuItem>
+                                            </RowMenu>
                                         )}
                                         <Button type="submit" disabled={busy}>
                                             <Save />

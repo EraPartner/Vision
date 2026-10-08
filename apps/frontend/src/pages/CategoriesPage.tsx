@@ -10,7 +10,6 @@ import {
     Folder,
     FolderOpen,
     GitMerge,
-    MoreHorizontal,
     Pencil,
     SlidersHorizontal,
     Trash2,
@@ -31,6 +30,7 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { TextLink } from "@/components/shared/TextLink";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CategoryNodeDialog } from "@/features/categories/CategoryNodeDialog";
@@ -286,100 +286,82 @@ export default function CategoriesPage() {
                     </span>
                 )}
                 <div className="ml-auto flex shrink-0 items-center">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                ref={(element) => {
-                                    if (element)
-                                        rowMenuTriggers.current.set(
-                                            node.id,
-                                            element,
-                                        );
-                                    else
-                                        rowMenuTriggers.current.delete(node.id);
-                                }}
-                                variant="ghost"
-                                size="icon-sm"
-                                className="text-label-secondary"
-                                aria-label={t("categoriesPage.rowMenu", {
-                                    name: label,
-                                })}
-                            >
-                                <MoreHorizontal aria-hidden />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                                onSelect={() =>
-                                    openFromRow(node, () => setEditTarget(node))
-                                }
-                            >
-                                <Pencil
+                    <RowMenu
+                        ref={(element) => {
+                            if (element)
+                                rowMenuTriggers.current.set(node.id, element);
+                            else rowMenuTriggers.current.delete(node.id);
+                        }}
+                        label={t("categoriesPage.rowMenu", { name: label })}
+                    >
+                        <DropdownMenuItem
+                            onSelect={() =>
+                                openFromRow(node, () => setEditTarget(node))
+                            }
+                        >
+                            <Pencil
+                                className="mr-2 h-4 w-4 text-label-secondary"
+                                aria-hidden
+                            />
+                            {t("common.edit")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            disabled={!canMerge}
+                            onSelect={() =>
+                                openFromRow(node, () => setMergeSource(node))
+                            }
+                        >
+                            <GitMerge
+                                className="mr-2 h-4 w-4 text-label-secondary"
+                                aria-hidden
+                            />
+                            {t("categoriesPage.mergeTitle")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                            disabled={toggleStatus.isPending}
+                            onSelect={() => void handleToggleStatus(node)}
+                        >
+                            {node.is_active ? (
+                                <EyeOff
                                     className="mr-2 h-4 w-4 text-label-secondary"
                                     aria-hidden
                                 />
-                                {t("common.edit")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                disabled={!canMerge}
-                                onSelect={() =>
-                                    openFromRow(node, () =>
-                                        setMergeSource(node),
-                                    )
-                                }
-                            >
-                                <GitMerge
+                            ) : (
+                                <Eye
                                     className="mr-2 h-4 w-4 text-label-secondary"
                                     aria-hidden
                                 />
-                                {t("categoriesPage.mergeTitle")}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                disabled={toggleStatus.isPending}
-                                onSelect={() => void handleToggleStatus(node)}
-                            >
-                                {node.is_active ? (
-                                    <EyeOff
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                ) : (
-                                    <Eye
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
+                            )}
+                            {node.is_active
+                                ? t("categoriesPage.markInactive")
+                                : t("categoriesPage.markActive")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                            variant="destructive"
+                            disabled={
+                                remove.isPending || descendants.length > 0
+                            }
+                            onSelect={() =>
+                                openFromRow(
+                                    node,
+                                    () => void requestDelete(node),
+                                )
+                            }
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+                            <span className="flex flex-col">
+                                <span>{t("common.delete")}</span>
+                                {descendants.length > 0 && (
+                                    <span className="type-footnote text-label-secondary">
+                                        {t(
+                                            "categoriesPage.deleteChildrenFirst",
+                                        )}
+                                    </span>
                                 )}
-                                {node.is_active
-                                    ? t("categoriesPage.markInactive")
-                                    : t("categoriesPage.markActive")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                variant="destructive"
-                                disabled={
-                                    remove.isPending || descendants.length > 0
-                                }
-                                onSelect={() =>
-                                    openFromRow(
-                                        node,
-                                        () => void requestDelete(node),
-                                    )
-                                }
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" aria-hidden />
-                                <span className="flex flex-col">
-                                    <span>{t("common.delete")}</span>
-                                    {descendants.length > 0 && (
-                                        <span className="type-footnote text-label-secondary">
-                                            {t(
-                                                "categoriesPage.deleteChildrenFirst",
-                                            )}
-                                        </span>
-                                    )}
-                                </span>
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            </span>
+                        </DropdownMenuItem>
+                    </RowMenu>
                 </div>
             </li>
         );

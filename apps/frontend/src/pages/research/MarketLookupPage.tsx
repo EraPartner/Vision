@@ -10,21 +10,16 @@ import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { List, ListRow } from "@/components/ui/list";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { RowMenu } from "@/components/shared/RowMenu";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { StateBlock } from "@/components/shared/StateBlock";
-import { Clock, Link2, MoreHorizontal, Star } from "lucide-react";
+import { Clock, Link2, Star } from "lucide-react";
 import {
     AreaChart,
     BarChart,
@@ -328,31 +323,24 @@ export default function MarketLookupPage() {
                 actions={
                     quoteActions ? (
                         <>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label={t("marketLookup.menu")}
-                                    >
-                                        <MoreHorizontal />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem
-                                        onSelect={() => setWatchlistOpen(true)}
-                                    >
-                                        <Star className="mr-2 h-4 w-4 text-label-secondary" />
-                                        {t("addWatchlist.title")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                        onSelect={() => setMappingOpen(true)}
-                                    >
-                                        <Link2 className="mr-2 h-4 w-4 text-label-secondary" />
-                                        {t("research.mapping.button")}
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
+                            <RowMenu
+                                variant="outline"
+                                size="icon"
+                                label={t("marketLookup.menu")}
+                            >
+                                <DropdownMenuItem
+                                    onSelect={() => setWatchlistOpen(true)}
+                                >
+                                    <Star className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("addWatchlist.title")}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onSelect={() => setMappingOpen(true)}
+                                >
+                                    <Link2 className="mr-2 h-4 w-4 text-label-secondary" />
+                                    {t("research.mapping.button")}
+                                </DropdownMenuItem>
+                            </RowMenu>
                             <AddInvestmentFromMarketDialog
                                 quote={quote}
                                 existingInvestment={

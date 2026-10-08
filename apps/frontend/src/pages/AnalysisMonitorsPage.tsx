@@ -1107,9 +1107,9 @@ export default function AnalysisMonitorsPage() {
                                                                     name: monitor.title,
                                                                 },
                                                             )}
+                                                            disabled={busy}
                                                         >
                                                             <DropdownMenuItem
-                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void check(
                                                                         monitor,
@@ -1125,7 +1125,6 @@ export default function AnalysisMonitorsPage() {
                                                                 )}
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem
-                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void toggleEnabled(
                                                                         monitor,
@@ -1154,7 +1153,6 @@ export default function AnalysisMonitorsPage() {
                                                             <DropdownMenuSeparator />
                                                             <DropdownMenuItem
                                                                 variant="destructive"
-                                                                disabled={busy}
                                                                 onSelect={() =>
                                                                     void remove(
                                                                         monitor,

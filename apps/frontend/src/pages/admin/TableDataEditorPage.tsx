@@ -15,7 +15,6 @@ import {
     RefreshCw,
     Search,
     KeyRound,
-    MoreHorizontal,
     Table2,
 } from "lucide-react";
 
@@ -29,11 +28,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AdminErrorState } from "@/components/shared/AdminErrorState";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -513,32 +509,25 @@ export default function TableDataEditorPage() {
                 back={{ label: t("dbEditor.back"), to: "/admin/db" }}
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("admin.moreActions")}
-                                >
-                                    <MoreHorizontal aria-hidden="true" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    disabled={query.isFetching}
-                                    onSelect={refresh}
-                                >
-                                    <RefreshCw
-                                        aria-hidden="true"
-                                        className={cn(
-                                            "mr-2 h-4 w-4 text-label-secondary",
-                                            query.isFetching && "animate-spin",
-                                        )}
-                                    />
-                                    {t("dbEditor.refresh")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("admin.moreActions")}
+                        >
+                            <DropdownMenuItem
+                                disabled={query.isFetching}
+                                onSelect={refresh}
+                            >
+                                <RefreshCw
+                                    aria-hidden="true"
+                                    className={cn(
+                                        "mr-2 h-4 w-4 text-label-secondary",
+                                        query.isFetching && "animate-spin",
+                                    )}
+                                />
+                                {t("dbEditor.refresh")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <Button onClick={addRow} disabled={readOnly}>
                             <Plus aria-hidden="true" />
                             {t("dbEditor.addRow")}

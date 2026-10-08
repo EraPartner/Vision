@@ -4,18 +4,14 @@ import {
     Archive,
     Eye,
     FileDown,
-    MoreHorizontal,
     Plus,
     Trash2,
     type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { RowMenu } from "@/components/shared/RowMenu";
 import { ExportDialog } from "@/features/reports/ExportDialog";
@@ -115,36 +111,23 @@ export function AssetPageActions({
                     </Button>
                 }
             />
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={t("portfolio.menu")}
-                    >
-                        <MoreHorizontal />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    {showExport && (
-                        <>
-                            <DropdownMenuItem
-                                onSelect={() => setExportOpen(true)}
-                            >
-                                <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
-                                {t("portfolio.menu.exportPdf")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                        </>
-                    )}
-                    <DropdownMenuItem
-                        onSelect={() => navigate("/portfolio/import")}
-                    >
-                        <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
-                        {t("nav.portfolioImport")}
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <RowMenu variant="outline" size="icon" label={t("portfolio.menu")}>
+                {showExport && (
+                    <>
+                        <DropdownMenuItem onSelect={() => setExportOpen(true)}>
+                            <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                            {t("portfolio.menu.exportPdf")}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                    </>
+                )}
+                <DropdownMenuItem
+                    onSelect={() => navigate("/portfolio/import")}
+                >
+                    <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
+                    {t("nav.portfolioImport")}
+                </DropdownMenuItem>
+            </RowMenu>
             {showExport && (
                 <ExportDialog
                     defaultType="portfolio"

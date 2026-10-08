@@ -5,7 +5,6 @@ import {
     Check,
     Download,
     HandCoins,
-    MoreHorizontal,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,11 +24,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -171,31 +167,24 @@ export function RecipientOwesDetail({
                 icon={HandCoins}
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("owesPage.menu")}
-                                >
-                                    <MoreHorizontal aria-hidden />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    disabled={!items.length || isExportingCsv}
-                                    onSelect={() => void handleExportCsv()}
-                                >
-                                    <Download
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                    {isExportingCsv
-                                        ? t("owesPage.export.loading")
-                                        : t("owesPage.export.button")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("owesPage.menu")}
+                        >
+                            <DropdownMenuItem
+                                disabled={!items.length || isExportingCsv}
+                                onSelect={() => void handleExportCsv()}
+                            >
+                                <Download
+                                    className="mr-2 h-4 w-4 text-label-secondary"
+                                    aria-hidden
+                                />
+                                {isExportingCsv
+                                    ? t("owesPage.export.loading")
+                                    : t("owesPage.export.button")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <Button
                             onClick={() => void handleSettleAll()}
                             disabled={

@@ -21,7 +21,6 @@ import {
     Eye,
     EyeOff,
     Link2,
-    MoreHorizontal,
     Regex,
     SlidersHorizontal,
     Trash2,
@@ -635,26 +634,19 @@ export default function RecipientsPage() {
                     </DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
             </DropdownMenu>
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label={t("recipientsPage.menu")}
-                    >
-                        <MoreHorizontal className="h-4 w-4" aria-hidden />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setMergeDialogOpen(true)}>
-                        <Link2
-                            className="mr-2 h-4 w-4 text-label-secondary"
-                            aria-hidden
-                        />
-                        {t("merge.title")}
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <RowMenu
+                variant="outline"
+                size="icon"
+                label={t("recipientsPage.menu")}
+            >
+                <DropdownMenuItem onSelect={() => setMergeDialogOpen(true)}>
+                    <Link2
+                        className="mr-2 h-4 w-4 text-label-secondary"
+                        aria-hidden
+                    />
+                    {t("merge.title")}
+                </DropdownMenuItem>
+            </RowMenu>
             <AddRecipientDialog />
         </>
     );

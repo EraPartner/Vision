@@ -4,7 +4,6 @@ import {
     Copy,
     FilePlus2,
     LineChart as LineChartIcon,
-    MoreHorizontal,
     Plus,
     Save,
     Trash2,
@@ -30,11 +29,8 @@ import {
     DisclosureSummary,
 } from "@/components/ui/disclosure";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { undoToast } from "@/lib/undoToast";
 import { Button } from "@/components/ui/button";
@@ -799,38 +795,31 @@ export default function ChartBuilderPage() {
                 icon={PAGE_ICONS["/research/charts"]}
                 actions={
                     <>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("research.builder.menu")}
-                                >
-                                    <MoreHorizontal />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={requestNewLayout}>
-                                    <FilePlus2 className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("research.builder.newChart")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onSelect={() => void copyShareLink()}
-                                >
-                                    <Copy className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("research.builder.copyLink")}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    disabled={!activeLayout}
-                                    variant="destructive"
-                                    onSelect={deleteLayout}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    {t("research.builder.deleteSavedLayout")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("research.builder.menu")}
+                        >
+                            <DropdownMenuItem onSelect={requestNewLayout}>
+                                <FilePlus2 className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("research.builder.newChart")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => void copyShareLink()}
+                            >
+                                <Copy className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("research.builder.copyLink")}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                disabled={!activeLayout}
+                                variant="destructive"
+                                onSelect={deleteLayout}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {t("research.builder.deleteSavedLayout")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <Button onClick={() => setSaveDialogOpen(true)}>
                             <Save />
                             {t("research.builder.saveAs")}

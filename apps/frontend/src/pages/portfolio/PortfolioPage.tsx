@@ -8,7 +8,6 @@ import {
     Info,
     LayoutGrid,
     Loader2,
-    MoreHorizontal,
     Plus,
     RefreshCw,
     Trash2,
@@ -78,11 +77,8 @@ import {
     SegmentedControlItem,
 } from "@/components/ui/segmented-control";
 import {
-    DropdownMenu,
-    DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
-    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
     Select,
@@ -780,40 +776,31 @@ export default function PortfolioPage() {
                                     : t("portfolio.refreshPricesOffline")}
                             </TooltipContent>
                         </Tooltip>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    aria-label={t("portfolio.menu")}
-                                >
-                                    <MoreHorizontal />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    onSelect={() => setExportOpen(true)}
-                                >
-                                    <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("portfolio.menu.exportPdf")}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                    onSelect={() => setCustomizeOpen(true)}
-                                >
-                                    <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("portfolio.menu.customize")}
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    onSelect={() =>
-                                        navigate("/portfolio/import")
-                                    }
-                                >
-                                    <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
-                                    {t("nav.portfolioImport")}
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <RowMenu
+                            variant="outline"
+                            size="icon"
+                            label={t("portfolio.menu")}
+                        >
+                            <DropdownMenuItem
+                                onSelect={() => setExportOpen(true)}
+                            >
+                                <FileDown className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("portfolio.menu.exportPdf")}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                onSelect={() => setCustomizeOpen(true)}
+                            >
+                                <LayoutGrid className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("portfolio.menu.customize")}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                onSelect={() => navigate("/portfolio/import")}
+                            >
+                                <ImportIcon className="mr-2 h-4 w-4 text-label-secondary" />
+                                {t("nav.portfolioImport")}
+                            </DropdownMenuItem>
+                        </RowMenu>
                         <ExportDialog
                             defaultType="portfolio"
                             trigger={null}
