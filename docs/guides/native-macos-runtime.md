@@ -2,7 +2,7 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-07
+date: 2026-10-08
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
@@ -81,8 +81,8 @@ partially switched database cannot become the writer by accident.
 
 An empty PostgreSQL 18 cluster installs the reviewed 0119 SQL baseline atomically, then follows the
 current migration chain. Older 0118 clusters stay there until the separately approved,
-restore-tested bridge. Existing profiles at the exact registered 0120–0125 revisions instead
-advance to the pinned additive 0125 target, preserving existing financial values, legacy objects
+restore-tested bridge. Existing profiles at the exact registered 0120–0126 revisions instead
+advance to the pinned additive 0126 target, preserving existing financial values, legacy objects
 and old receipt JSON. This does not run the deferred bridge or conversion; unknown successor
 revisions refuse automatic upgrade. The package includes the baseline SQL and historical
 migrations. See [[docs/guides/migrations|Database Migration Guide]] and

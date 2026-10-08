@@ -227,6 +227,7 @@ improving repair edits.
 | `fees`             | number  | Cumulative fees paid (converted at transaction-date rates)                                                                             |
 | `taxes`            | number  | Cumulative taxes paid (converted at transaction-date rates)                                                                            |
 | `income`           | number  | Cumulative dividends/interest/yield received (converted at transaction-date rates)                                                     |
+| `totalDividends`   | number  | Dividend share of ordinary income, summed across holdings (converted at transaction-date rates); excludes in-kind income               |
 | `totalReturnPct`   | number  | Total return percentage: `(totalGainLoss / totalInvested) × 100`                                                                       |
 | `usedFallbackRate` | boolean | **New (ADR-074).** `true` if any investment lacked a transaction-date rate and fell back to today's rate; a disclosure flag for the UI |
 

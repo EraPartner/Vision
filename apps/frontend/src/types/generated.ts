@@ -4887,6 +4887,8 @@ export interface components {
             /** Format: date-time */
             computed_at: string;
             totals: {
+                /** @description Dividend share of ordinary income summed across active holdings, at transaction-date FX. Excludes in-kind income. */
+                totalDividends?: number;
                 /** @description Sum of active holdings' in-kind income, excluded from ordinary income and gains. Absence in an older response means zero. */
                 totalInKindIncome?: number;
             } & {

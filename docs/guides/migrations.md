@@ -98,7 +98,7 @@ maintained schema. The bridge revision contains no DDL or data rewrite and
 rejects an unknown schema fingerprint. A failed bridge leaves the previous
 revision and audit head unchanged.
 
-### Automatic reviewed successors (0120–0125)
+### Automatic reviewed successors (0120–0126)
 
 The normal guarded startup/`db:upgrade` path separately recognizes these exact current revisions:
 
@@ -108,16 +108,19 @@ The normal guarded startup/`db:upgrade` path separately recognizes these exact c
 - `0123_portfolio_asset_adjustments`
 - `0124_portfolio_income_recognition`
 - `0125_brokerage_cash_origin`
+- `0126_income_recognition_check_name`
 
 Without enabling the maintenance bridge, these existing profiles advance only to the pinned
-`0125_brokerage_cash_origin` target. A retained legacy object does not require replay of
+`0126_income_recognition_check_name` target. A retained legacy object does not require replay of
 0119 for this reviewed additive extension. Existing financial values, legacy objects and old
 receipt JSON remain unchanged; the new role defaults to `standard`, and its journal starts empty.
-A stale successful-head cache cannot skip the pending extension. A subsequent boot at 0125 stays
+A stale successful-head cache cannot skip the pending extension. A subsequent boot at 0126 stays
 there rather than requesting 0118. Migration 0125 extends brokerage cash origin and protects
 only typed source-owned cash envelopes. It creates no ledger entries or bank counterparts during
 upgrade; downgrade refuses remaining brokerage-origin rows until guarded import rollback. See
-[[docs/adr/189-proved-brokerage-cash-history|ADR-189]].
+[[docs/adr/189-proved-brokerage-cash-history|ADR-189]]. Migration 0126 only renames the 0124
+income-recognition CHECK from `ck_` to `chk_portfolio_income_recognition_role`; downgrade restores
+the old name.
 
 The registration is exact, not a numerical revision range. An unknown or unregistered successor
 refuses automatic upgrade without changing its revision marker or domain history. Adding a future
