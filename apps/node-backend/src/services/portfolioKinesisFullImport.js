@@ -3,13 +3,27 @@ import { toDecimal } from "../lib/money.ts";
 import { UNIT_BASED_ASSET_CLASSES } from "@vision/types/assetClasses";
 import { proveKinesisCorrectionSources } from "./portfolioKinesisAdoptionScope.js";
 
+/**
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisSourceRow} KinesisSourceRow
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisBatchRow} KinesisBatchRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationHistoryEvent} ReconciliationHistoryEvent
+ * @typedef {import('../lib/money.ts').DecimalInput} DecimalInput
+ */
+
+/** @param {{ amount?: DecimalInput, price_per_unit?: DecimalInput, fees?: DecimalInput, taxes?: DecimalInput }} row */
 const zeroBasis = (row) =>
-  ["amount", "price_per_unit", "fees", "taxes"].every((field) =>
-    toDecimal(row[field] ?? 0).eq(0),
+  /** @type {const} */ (["amount", "price_per_unit", "fees", "taxes"]).every(
+    (field) => toDecimal(row[field] ?? 0).eq(0),
   );
 
+/**
+ * @param {KinesisSourceRow[]} rows
+ * @param {KinesisBatchRow[]} batches
+ * @param {ReconciliationHistoryEvent[]} history
+ */
 export function proveKinesisFullYieldCandidates(rows, batches, history) {
   const evidence = proveKinesisCorrectionSources(rows, batches);
+  /** @type {Map<number, ReconciliationHistoryEvent[]>} */
   const candidates = new Map();
   for (const row of rows) {
     const proof = evidence.proofs.get(Number(row.id));
@@ -20,7 +34,11 @@ export function proveKinesisFullYieldCandidates(rows, batches, history) {
       proof.parsed.assetAdjustment?.basisPolicy !== "zero" ||
       row.type !== "gift" ||
       row.route !== "portfolio" ||
-      !UNIT_BASED_ASSET_CLASSES.includes(row.asset_class)
+      !(
+        /** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES).includes(
+          row.asset_class,
+        )
+      )
     )
       continue;
     const sameDaySources = rows.filter(

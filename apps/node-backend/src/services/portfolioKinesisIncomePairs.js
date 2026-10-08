@@ -9,25 +9,81 @@ import { portfolioPrimaryRawData } from "./portfolioPerformanceReferenceEvidence
 import { proveKinesisCorrectionSources } from "./portfolioKinesisAdoptionScope.js";
 import { kinesisYieldReferenceDigest } from "./portfolioKinesisYieldGroups.js";
 
+/**
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisSourceRow} KinesisSourceRow
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisBatchRow} KinesisBatchRow
+ * @typedef {import('./portfolioKinesisAdoptionScope.js').KinesisSourceProof} KinesisSourceProof
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationReceiptContext} ReconciliationReceiptContext
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').PortfolioTransactionSnapshot} PortfolioTransactionSnapshot
+ * @typedef {import('../lib/money.ts').DecimalInput} DecimalInput
+ */
+/**
+ * Canonical history; income snapshots keep a non-standard recognition role.
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationHistoryEvent & { income_recognition_role?: "standard" | "included_in_units" }} KinesisHistoryEvent
+ */
+/**
+ * A row of `portfolio_import_income_recognition_journal` (migration 0124).
+ * @typedef {object} IncomeRecognitionReceipt
+ * @property {string} id
+ * @property {string} batch_id
+ * @property {string} staging_row_id
+ * @property {string} unit_staging_row_id
+ * @property {number} income_transaction_id
+ * @property {number} unit_transaction_id
+ * @property {"record"|"restore"} action
+ * @property {string|null} previous_entry_id
+ * @property {Record<string, unknown>} income_data
+ * @property {Record<string, unknown>} unit_data
+ * @property {Record<string, unknown>} proof_data
+ * @property {Date} created_at
+ */
+/**
+ * @typedef {object} IncomeRecognitionContext
+ * @property {IncomeRecognitionReceipt[]} receipts
+ * @property {KinesisSourceRow[]} sources
+ * @property {KinesisBatchRow[]} batches
+ */
+/**
+ * A gift acquisition the same plan inserts or adopts.
+ * @typedef {object} PlannedIncomeUnit
+ * @property {string} action
+ * @property {KinesisSourceRow} row
+ * @property {KinesisHistoryEvent} after
+ */
+
+/**
+ * @param {DecimalInput} a
+ * @param {DecimalInput} b
+ */
 const equal = (a, b, places = 8) =>
   a == null || b == null
     ? a == null && b == null
     : toDecimal(a)
         .toDecimalPlaces(places, 4)
         .eq(toDecimal(b).toDecimalPlaces(places, 4));
+/** @param {{ amount?: DecimalInput, price_per_unit?: DecimalInput, fees?: DecimalInput, taxes?: DecimalInput }} row */
 const zero = (row) =>
-  ["amount", "price_per_unit", "fees", "taxes"].every((key) =>
-    toDecimal(row[key] ?? 0).eq(0),
+  /** @type {const} */ (["amount", "price_per_unit", "fees", "taxes"]).every(
+    (key) => toDecimal(row[key] ?? 0).eq(0),
   );
+/**
+ * @param {Record<string, unknown>} row
+ * @returns {Record<string, unknown>}
+ */
 export const normalizeIncomeSnapshot = (row) => {
   const { income_recognition_role: role, ...rest } = row;
   return role == null || role === "standard"
     ? rest
     : { ...rest, income_recognition_role: role };
 };
+/**
+ * @param {Record<string, unknown>} a
+ * @param {Record<string, unknown>} b
+ */
 const sameImage = (a, b) =>
   kinesisYieldReferenceDigest(normalizeIncomeSnapshot(a)) ===
   kinesisYieldReferenceDigest(normalizeIncomeSnapshot(b));
+/** @param {KinesisSourceRow} row */
 const identityMatches = (row) => {
   const identity = assignImportIdentities([row], (source) =>
     portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
@@ -38,6 +94,12 @@ const identityMatches = (row) => {
     Number(row.dedup_occurrence) === identity.occurrence
   );
 };
+/**
+ * @param {KinesisSourceRow} a
+ * @param {KinesisSourceRow} b
+ * @param {KinesisSourceProof|undefined} proofA
+ * @param {KinesisSourceProof|undefined} proofB
+ */
 const samePrimary = (a, b, proofA, proofB) =>
   a.source_record_hash === b.source_record_hash &&
   a.source_transaction_id === b.source_transaction_id &&
@@ -49,7 +111,16 @@ const samePrimary = (a, b, proofA, proofB) =>
   portfolioPrimaryRawData(a.raw_data) === portfolioPrimaryRawData(b.raw_data) &&
   proofA?.sourceFileHash === proofB?.sourceFileHash;
 
-/** Classify only after the entire original source and full canonical history have been loaded. */
+/** Classify only after the entire original source and full canonical history have been loaded.
+ * @param {{
+ *   rows: KinesisSourceRow[],
+ *   batches: KinesisBatchRow[],
+ *   history: KinesisHistoryEvent[],
+ *   context: ReconciliationReceiptContext,
+ *   incomeContext?: IncomeRecognitionContext,
+ *   plannedUnits?: PlannedIncomeUnit[],
+ * }} input
+ */
 export function proveKinesisIncomePairs({
   rows,
   batches,
@@ -79,6 +150,10 @@ export function proveKinesisIncomePairs({
       !row.source_transaction_id?.endsWith(":income")
     )
       continue;
+    /**
+     * @param {string} reason
+     * @param {(number|string)[]} [ids]
+     */
     const issue = (reason, ids = []) =>
       blockers.push({
         reason,
@@ -104,7 +179,11 @@ export function proveKinesisIncomePairs({
     )
       continue;
     if (
-      !UNIT_BASED_ASSET_CLASSES.includes(row.asset_class) ||
+      !(
+        /** @type {readonly string[]} */ (UNIT_BASED_ASSET_CLASSES).includes(
+          row.asset_class,
+        )
+      ) ||
       row.route !== "portfolio" ||
       row.type !== "dividend" ||
       row.type_raw !== "Dividend" ||
@@ -177,6 +256,7 @@ export function proveKinesisIncomePairs({
     const receipts = context.receipts.filter(
       (receipt) => Number(receipt.transaction_id) === Number(current.id),
     );
+    /** @type {KinesisSourceRow|undefined} */
     let prior;
     if (plannedUnit) {
       if (

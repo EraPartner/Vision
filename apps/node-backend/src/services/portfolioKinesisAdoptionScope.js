@@ -14,9 +14,64 @@ import {
   portfolioIdentityBase,
 } from "./importIdentity.js";
 
+/**
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} KinesisSourceRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow} KinesisBatchRow
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ */
+/**
+ * One captured statement event (see captureKinesisSourceContext).
+ * @typedef {object} KinesisSourceEvent
+ * @property {string} rawHash
+ * @property {string|null} sourceId
+ * @property {string|null} sourceAccountIdentity
+ * @property {number} occurrence
+ * @property {string} eventKey
+ */
+/**
+ * `custom_config.kinesis_source_context` as captured at stage time.
+ * @typedef {object} KinesisSourceContext
+ * @property {number} version
+ * @property {number} skipped
+ * @property {string} source_file_hash
+ * @property {string[]|undefined} source_columns
+ * @property {KinesisSourceEvent[]} events
+ */
+/**
+ * @typedef {object} KinesisSourceProof
+ * @property {string} eventKey
+ * @property {string} sourceFileHash
+ * @property {ParsedPortfolioRow} parsed
+ */
+/**
+ * @typedef {object} KinesisSourceIssue
+ * @property {number} batchId
+ * @property {number} rowId
+ * @property {number} rowOrdinal
+ * @property {string} reason
+ * @property {number[]} candidateTransactionIds
+ */
+/**
+ * @typedef {object} KinesisSourceEvidence
+ * @property {Map<number, KinesisSourceProof>} proofs
+ * @property {Map<number, KinesisSourceProof>} literalProofs
+ * @property {KinesisSourceIssue[]} issues
+ */
+
+/** @param {string|Buffer} value */
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+/**
+ * Batch config is JSONB whose adapter-specific shape is read dynamically.
+ * @param {unknown} value
+ * @returns {any}
+ */
 const configOf = (value) =>
   typeof value === "string" ? JSON.parse(value) : value || {};
+/**
+ * @param {string} rawHash
+ * @param {string|null|undefined} sourceId
+ * @param {string|null|undefined} account
+ */
 const tuple = (rawHash, sourceId, account) => [
   rawHash,
   sourceId ?? null,
@@ -55,16 +110,21 @@ export async function captureKinesisSourceContext(path, rows) {
 }
 
 /** Validate the entire staged source before selecting existing adoptions.
- * @param {any[]} rows
- * @param {any[]} batches
+ * @param {KinesisSourceRow[]} rows
+ * @param {KinesisBatchRow[]} batches
+ * @param {{ recordedBasis?: boolean }} [options]
+ * @returns {KinesisSourceEvidence}
  */
 export function proveKinesisAdoptionSources(
   rows,
   batches,
   { recordedBasis = false } = {},
 ) {
+  /** @type {Map<number, KinesisSourceProof>} */
   const proofs = new Map();
+  /** @type {Map<number, KinesisSourceProof>} */
   const literalProofs = new Map();
+  /** @type {KinesisSourceIssue[]} */
   const issues = [];
   for (const batch of batches) {
     const scoped = rows
@@ -72,6 +132,7 @@ export function proveKinesisAdoptionSources(
       .sort((a, b) => a.row_index - b.row_index);
     try {
       const config = configOf(batch.custom_config);
+      /** @type {KinesisSourceContext|undefined} */
       const context = config.kinesis_source_context;
       const reference = config.portfolio_performance_reference;
       if (
@@ -215,7 +276,10 @@ export function proveKinesisAdoptionSources(
   return { proofs, literalProofs, issues };
 }
 
-/** Original primary identity remains separate from verified native-basis enrichment. */
+/** Original primary identity remains separate from verified native-basis enrichment.
+ * @param {KinesisSourceRow[]} rows
+ * @param {KinesisBatchRow[]} batches
+ */
 export function proveKinesisCorrectionSources(rows, batches) {
   return proveKinesisAdoptionSources(rows, batches, { recordedBasis: true });
 }

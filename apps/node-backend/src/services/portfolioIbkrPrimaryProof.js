@@ -13,23 +13,40 @@ import { Decimal, toDecimal } from "../lib/money.ts";
  * @property {string} summary_base_currency_record
  * @property {string[]} record_hashes
  */
+/** @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput */
 
-const hash = (raw) => createHash("sha256").update(raw, "utf8").digest("hex");
-const clean = (value) =>
+const hash = (/** @type {string} */ raw) =>
+  createHash("sha256").update(raw, "utf8").digest("hex");
+const clean = (/** @type {unknown} */ value) =>
   String(value ?? "").trim() === "-" ? "" : String(value ?? "").trim();
+/**
+ * @param {DecimalInput} left
+ * @param {DecimalInput} right
+ * @param {number} places
+ */
 const same = (left, right, places) =>
   left != null &&
   right != null &&
   toDecimal(left)
     .toDecimalPlaces(places)
     .eq(toDecimal(right).toDecimalPlaces(places));
+/**
+ * @param {DecimalInput} literal
+ * @param {DecimalInput} value
+ * @param {number} places
+ */
 const stored = (literal, value, places) =>
   value != null &&
   [Decimal.ROUND_HALF_EVEN, Decimal.ROUND_HALF_UP].some((rounding) =>
     toDecimal(literal).toDecimalPlaces(places, rounding).eq(toDecimal(value)),
   );
-const zero = (value) => value == null || toDecimal(value).eq(0);
+const zero = (/** @type {DecimalInput} */ value) =>
+  value == null || toDecimal(value).eq(0);
 
+/**
+ * @param {unknown} value
+ * @param {boolean} [optional]
+ */
 function literalNumber(value, optional = false) {
   const text = clean(value);
   if (!text) return optional ? toDecimal(0) : undefined;
@@ -38,6 +55,10 @@ function literalNumber(value, optional = false) {
   return toDecimal(text.replace(",", "."));
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {string[] | undefined}
+ */
 function csvRecord(raw) {
   if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > 100000)
     return undefined;
@@ -93,14 +114,20 @@ export function getIbkrPrimaryReconciliationEvidence(row) {
     )
       return undefined;
     const record = Object.fromEntries(
-      context.source_columns.map((key, i) => [key, clean(values[i + 2])]),
+      context.source_columns.map(
+        (/** @type {string} */ key, /** @type {number} */ i) => [
+          key,
+          clean(values[i + 2]),
+        ],
+      ),
     );
-    const type = {
-      Buy: "buy",
-      Sell: "sell",
-      Dividend: "dividend",
-      "Foreign Tax Withholding": "tax",
-    }[record["Transaction Type"]];
+    const type =
+      /** @type {Record<string, "buy" | "sell" | "dividend" | "tax">} */ ({
+        Buy: "buy",
+        Sell: "sell",
+        Dividend: "dividend",
+        "Foreign Tax Withholding": "tax",
+      })[record["Transaction Type"]];
     if (
       !type ||
       row.type !== type ||

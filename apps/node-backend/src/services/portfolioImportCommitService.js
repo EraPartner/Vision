@@ -56,7 +56,7 @@ async function commitLockedScope(
   batchPolicies = [],
   lockedBatchIds = batches.map((batch) => Number(batch.id)),
   reconciliationScope = "full",
-  cashFundingPolicy = undefined,
+  /** @type {"own_account_transfer" | undefined} */ cashFundingPolicy = undefined,
 ) {
   const ids = batches.map((batch) => Number(batch.id));
   const sourceRows = await readReconciliationSources(ids);
@@ -72,11 +72,15 @@ async function commitLockedScope(
     ...new Set(
       [
         ...sourceRows.map((row) => row.asset_adjustment_details?.accountId),
-        ...(preliminary?.actions ?? []).flatMap((action) => [
-          action.transfer?.sourceAccountId,
-          action.transfer?.destinationAccountId,
-          action.adjustment?.accountId,
-        ]),
+        ...(preliminary?.actions ?? []).flatMap(
+          (
+            /** @type {{ transfer?: { sourceAccountId?: number, destinationAccountId?: number }, adjustment?: { accountId?: number } }} */ action,
+          ) => [
+            action.transfer?.sourceAccountId,
+            action.transfer?.destinationAccountId,
+            action.adjustment?.accountId,
+          ],
+        ),
         ...batches.flatMap((batch) => [
           batch.account_id,
           batch.custom_config?.transfer_destination_account_id,
@@ -93,8 +97,9 @@ async function commitLockedScope(
     reconciliationScope === "record_cash_only" ||
     (reconciliationScope === "full" &&
       batches.some(
-        (batch) =>
-          batch.custom_config?.format === "kinesis_transaction_history",
+        (
+          /** @type {import('../repositories/portfolioImportBatchRepository.ts').PortfolioImportBatchLockRow} */ batch,
+        ) => batch.custom_config?.format === "kinesis_transaction_history",
       ))
   )
     await lockKinesisCashLedger(accountIds);
@@ -150,7 +155,9 @@ async function commitLockedScope(
     const results = [];
     for (const batch of batches) {
       const progress = plan.batchProgress.find(
-        (entry) => entry.batchId === Number(batch.id),
+        (
+          /** @type {{ batchId: number, pending: number, complete: boolean, deferredCounts: Record<string, number> }} */ entry,
+        ) => entry.batchId === Number(batch.id),
       );
       if (
         !(await finalizeAdoptionOnlyBatch(
@@ -299,8 +306,9 @@ async function commitLockedScope(
       // Income reproof must never treat an unfinished prior owner as active.
       for (const batchId of [
         ...new Set(
-          nativeGiftGroups.flatMap((group) =>
-            group.members.map((row) => Number(row.batch_id)),
+          nativeGiftGroups.flatMap(
+            (/** @type {{ members: { batch_id: string }[] }} */ group) =>
+              group.members.map((row) => Number(row.batch_id)),
           ),
         ),
       ]) {
@@ -354,7 +362,10 @@ async function commitLockedScope(
         repaired: results.reduce((count, result) => count + result.repaired, 0),
         errors: 0,
         recordedIncome: results.reduce(
-          (count, result) => count + result.recordedIncome,
+          (
+            /** @type {number} */ count,
+            /** @type {{ recordedIncome: number }} */ result,
+          ) => count + result.recordedIncome,
           0,
         ),
         recordedCash: 0,
@@ -370,7 +381,9 @@ export async function commitReviewedPortfolioImports({
   expectedPlanFingerprint,
   batchPolicies = [],
   reconciliationScope = "full",
-  cashFundingPolicy = undefined,
+  cashFundingPolicy = /** @type {"own_account_transfer" | undefined} */ (
+    undefined
+  ),
 }) {
   if (
     !Array.isArray(batchIds) ||

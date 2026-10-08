@@ -48,8 +48,8 @@ import { parsedDateToYmd } from "../../lib/importDates.ts";
  * @property {string} rawData source record, kept for dedup + provenance.
  * @property {string|null} [sourceAccountIdentity]
  * @property {string|null} [sourceId]
- * @property {{ direction: 'in'|'out'|'internal', basisStatus: 'carried'|'unresolved'|'not_applicable', feeUnits?: string, receivedUnits?: string }} [assetTransfer]
- * @property {{ kind: 'yield_acquisition'|'yield_reversal'|'asset_fee', basisPolicy: 'zero'|'zero_yield_only'|'carried', accountId?: number, eligibleSourceRecordHashes?: string[] }} [assetAdjustment]
+ * @property {{ direction: 'in'|'out'|'internal', basisStatus: 'carried'|'unresolved'|'not_applicable', feeUnits?: string, receivedUnits?: string, networkReceipt?: unknown }} [assetTransfer]
+ * @property {{ kind: 'yield_acquisition'|'yield_reversal'|'asset_fee', basisPolicy: 'zero'|'zero_yield_only'|'carried', accountId?: number, eligibleSourceRecordHashes?: string[], networkReceipt?: unknown }} [assetAdjustment]
  */
 
 /**
@@ -132,6 +132,7 @@ function rowToParsed(row, config, rowNumber) {
   const currency = colMap.currency ? cell(row, colMap.currency) || null : null;
   const fxRaw = magnitude(colMap.fx_rate);
 
+  /** @type {ParsedPortfolioRow} */
   const parsed = {
     date,
     typeRaw: cell(row, colMap.type),

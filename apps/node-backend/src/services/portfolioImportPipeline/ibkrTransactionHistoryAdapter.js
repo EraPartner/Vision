@@ -168,8 +168,10 @@ export async function parseIbkrTransactionHistory(filePath, config = {}) {
   const header = headers[0];
   const headerIndex = sourceRecords.indexOf(header);
 
-  const columns = header.values.slice(2).map((column) => String(column).trim());
-  if (columns.some((column) => !column)) {
+  const columns = header.values
+    .slice(2)
+    .map((/** @type {unknown} */ column) => String(column).trim());
+  if (columns.some((/** @type {string} */ column) => !column)) {
     throw new Error("IBKR Transaction History has blank column names");
   }
   if (new Set(columns).size !== columns.length) {

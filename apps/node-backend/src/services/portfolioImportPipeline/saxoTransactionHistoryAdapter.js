@@ -532,7 +532,10 @@ function parseWorkbookRecord(record, bookings, trades) {
   return base;
 }
 
-/** Reparse one retained, typed XLSX transaction without trusting staged economics. */
+/**
+ * Reparse one retained, typed XLSX transaction without trusting staged economics.
+ * @param {unknown} rawData the retained `saxo_xlsx_v1` envelope
+ */
 export function getSaxoWorkbookReconciliationEvidence(rawData) {
   try {
     if (typeof rawData !== "string" || rawData.length > 2 * 1024 * 1024)
@@ -546,7 +549,9 @@ export function getSaxoWorkbookReconciliationEvidence(rawData) {
       envelope.records.length > 1000
     )
       return undefined;
+    /** @type {Record<string, Record<string, import('../../lib/portfolioUpload.ts').WorkbookCell>[]>} */
     const groups = { Transacties: [], _Transacties: [], Bookings: [] };
+    /** @type {Record<string, string[]>} */
     const columns = {
       Transacties: REQUIRED_COLUMNS,
       _Transacties: TRADE_COLUMNS,
@@ -560,7 +565,9 @@ export function getSaxoWorkbookReconciliationEvidence(rawData) {
         retained.row < 2 ||
         !Array.isArray(retained.headers) ||
         retained.headers.length > 512 ||
-        !retained.headers.every((header) => typeof header === "string") ||
+        !retained.headers.every(
+          (/** @type {unknown} */ header) => typeof header === "string",
+        ) ||
         !Array.isArray(retained.cells) ||
         retained.cells.length > retained.headers.length
       )
@@ -568,7 +575,8 @@ export function getSaxoWorkbookReconciliationEvidence(rawData) {
       const location = JSON.stringify([retained.sheet, retained.row]);
       if (locations.has(location)) return undefined;
       locations.add(location);
-      const cells = retained.cells.map((cell) => {
+      // Untrusted retained JSON: each cell is validated structurally below.
+      const cells = retained.cells.map((/** @type {any} */ cell) => {
         if (
           cell == null ||
           typeof cell === "string" ||
@@ -631,7 +639,12 @@ export function getSaxoWorkbookReconciliationEvidence(rawData) {
   }
 }
 
-/** Bind one literal CSV event to the detailed workbook's primary event. */
+/**
+ * Bind one literal CSV event to the detailed workbook's primary event.
+ * @param {unknown} rawData the literal CSV record
+ * @param {unknown} sourceColumns the batch's retained source column names
+ * @param {string} workbookRawData the primary workbook row's retained envelope
+ */
 export function getSaxoCsvCompanionEvidence(
   rawData,
   sourceColumns,
@@ -676,14 +689,17 @@ export function getSaxoCsvCompanionEvidence(
     const workbook = getSaxoWorkbookReconciliationEvidence(workbookRawData);
     if (!workbook) return undefined;
     const main = JSON.parse(workbookRawData).records.find(
-      (record) => record.sheet === "Transacties",
+      (/** @type {{ sheet: string }} */ record) =>
+        record.sheet === "Transacties",
     );
     const workbookHeaders = main.headers.map(normalizeHeader);
     const record = Object.fromEntries(
-      workbookHeaders.map((header, index) => {
-        const cell = main.cells[index];
-        return [header, cell?.type === "date" ? new Date(cell.value) : cell];
-      }),
+      workbookHeaders.map(
+        (/** @type {string} */ header, /** @type {number} */ index) => {
+          const cell = main.cells[index];
+          return [header, cell?.type === "date" ? new Date(cell.value) : cell];
+        },
+      ),
     );
     const monetary = new Set([
       "Boekingsbedrag",
@@ -696,7 +712,8 @@ export function getSaxoCsvCompanionEvidence(
     const ownerColumns = new Set(["Gebruikersnaam", "IBAN owner name"]);
     if (
       workbookHeaders.some(
-        (header) => !ownerColumns.has(header) && !headers.includes(header),
+        (/** @type {string} */ header) =>
+          !ownerColumns.has(header) && !headers.includes(header),
       )
     )
       return undefined;
@@ -707,7 +724,7 @@ export function getSaxoCsvCompanionEvidence(
       const right = record[header];
       if (dates.has(header)) {
         if (!cleanCell(left) && !cleanCell(right)) continue;
-        const parsed = (value) =>
+        const parsed = (/** @type {unknown} */ value) =>
           value instanceof Date
             ? value
             : parseDateWithFormat(
@@ -810,7 +827,7 @@ export async function parseSaxoTransactionHistory(filePath, config = {}) {
   const records = await parseCsvFile(
     filePath,
     {
-      columns: (headers) => {
+      columns: (/** @type {string[]} */ headers) => {
         sourceColumns = [...headers];
         return headers.map(normalizeHeader);
       },

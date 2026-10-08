@@ -9,19 +9,89 @@ import {
   portfolioIdentityBase,
 } from "./importIdentity.js";
 
+/**
+ * @typedef {import('@vision/shared-utils/money').DecimalInput} DecimalInput
+ * @typedef {import('decimal.js').default} Decimal
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationSourceRow} ReconciliationSourceRow
+ * @typedef {import('../repositories/portfolioImportReconciliationRepository.ts').ReconciliationBatchScopeRow} ReconciliationBatchScopeRow
+ * @typedef {import('./portfolioImportPipeline/portfolioGenericAdapter.js').ParsedPortfolioRow} ParsedPortfolioRow
+ */
+/**
+ * Proven ledger values of one native cash movement (or its funding fee).
+ * @typedef {object} KinesisCashValues
+ * @property {string | null} date 'YYYY-MM-DD'
+ * @property {string} amount exact decimal text, signed
+ * @property {string} currency
+ * @property {number} accountId
+ * @property {boolean} isTransfer
+ * @property {string} transferSource
+ * @property {null} transferPeerId
+ */
+/**
+ * @typedef {object} KinesisCashProof
+ * @property {"closed_kinesis_cash"} kind
+ * @property {string} groupKey
+ * @property {string} eventKey
+ * @property {string} eventKind
+ * @property {string} fileHash
+ * @property {number} memberCount
+ * @property {number} componentCount
+ */
+/**
+ * One reparsed fiat event of a closed per-currency chain.
+ * @typedef {object} KinesisCashMember
+ * @property {ReconciliationSourceRow} row
+ * @property {{ eventKey: string, sourceFileHash: string, parsed: ParsedPortfolioRow }} literal
+ * @property {Record<string, string>} record the single original CSV record, keyed by header
+ * @property {Decimal} start
+ * @property {Decimal} close
+ * @property {Decimal} delta
+ * @property {"trade_quote" | "card_expense" | "own_account_funding"} eventKind
+ * @property {KinesisCashValues} values
+ * @property {KinesisCashValues | undefined} feeValues
+ * @property {KinesisCashProof} [proof]
+ */
+/**
+ * The `transactions` after-image fields (CASH_SNAPSHOT_SQL jsonb) this scope reads.
+ * @typedef {object} KinesisCashLedgerImage
+ * @property {number} id
+ * @property {string} date 'YYYY-MM-DD'
+ * @property {string} amount exact decimal text
+ * @property {string | null} currency
+ * @property {number | null} account_id
+ * @property {boolean} is_active
+ * @property {string | null} dedup_fingerprint
+ * @property {number | null} dedup_fingerprint_version
+ */
+/**
+ * @typedef {object} KinesisCashContext
+ * @property {KinesisCashLedgerImage[]} ledger
+ * @property {ReconciliationSourceRow[]} sources
+ * @property {ReconciliationBatchScopeRow[]} batches
+ * @property {{ account_id: number }[]} [statementBalances]
+ */
+
 const fiat = new Set(["AUD", "CAD", "CHF", "EUR", "GBP", "SGD", "USD"]);
+/** @param {unknown} value */
 const hash = (value) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+/** @param {unknown} value */
 const currency = (value) =>
   String(value ?? "")
     .trim()
     .toUpperCase()
     .replace(/^C1USD$/, "USD");
+/** @param {DecimalInput} value */
 const rounded = (value) => toDecimal(value).toDecimalPlaces(4, 4).toFixed(4);
+/**
+ * @param {DecimalInput} left
+ * @param {DecimalInput} right
+ */
 const equal = (left, right) =>
   left == null || right == null
     ? left == null && right == null
     : rounded(left) === rounded(right);
+/** @param {{ raw_data?: string | null }} row */
 export function cashReceipt(row) {
   try {
     return JSON.parse(row.raw_data)?.portfolioCashReceipt;
@@ -29,6 +99,10 @@ export function cashReceipt(row) {
     return undefined;
   }
 }
+/**
+ * @param {unknown} value
+ * @returns {unknown}
+ */
 const canonical = (value) =>
   Array.isArray(value)
     ? value.map(canonical)
@@ -36,22 +110,34 @@ const canonical = (value) =>
       ? Object.fromEntries(
           Object.keys(value)
             .sort()
-            .map((key) => [key, canonical(value[key])]),
+            .map((key) => [
+              key,
+              canonical(/** @type {Record<string, unknown>} */ (value)[key]),
+            ]),
         )
       : value;
+/** @param {Pick<ReconciliationSourceRow, "dedup_fingerprint" | "dedup_fingerprint_version">} row */
 export const cashFeeFingerprint = (row) =>
   hash({
     kind: "kinesis_funding_fee",
     version: row.dedup_fingerprint_version,
     primary: row.dedup_fingerprint,
   });
+/**
+ * @param {unknown} left
+ * @param {unknown} right
+ */
 export function cashImageEqual(left, right) {
   return left == null || right == null
     ? left == null && right == null
     : hash(canonical(left)) === hash(canonical(right));
 }
 
-/** Reparse all primary events before selecting any fiat movement. */
+/** Reparse all primary events before selecting any fiat movement.
+ * @param {ReconciliationSourceRow[]} rows
+ * @param {ReconciliationBatchScopeRow[]} batches
+ * @param {string} fundingPolicy
+ */
 export function proveKinesisCashSources(rows, batches, fundingPolicy) {
   const evidence = proveKinesisAdoptionSources(rows, batches);
   const blockers = [...evidence.issues];
@@ -59,11 +145,15 @@ export function proveKinesisCashSources(rows, batches, fundingPolicy) {
   const proofs = new Map();
   const seen = new Set();
   for (const batch of batches) {
-    /** @type {any[]} */
+    /** @type {KinesisCashMember[]} */
     const members = [];
     const scoped = rows.filter(
       (row) => Number(row.batch_id) === Number(batch.id),
     );
+    /**
+     * @param {ReconciliationSourceRow | undefined} row
+     * @param {string} reason
+     */
     const issue = (row, reason) =>
       blockers.push({
         reason,
@@ -161,6 +251,7 @@ export function proveKinesisCashSources(rows, batches, fundingPolicy) {
         const key = `${row.account_id}:${row.dedup_fingerprint_version}:${row.dedup_fingerprint}`;
         if (seen.has(key)) throw new Error("cash_source_ambiguous");
         seen.add(key);
+        /** @type {KinesisCashValues} */
         const values = {
           date: row.tx_date,
           amount: rounded(delta),
@@ -214,6 +305,7 @@ export function proveKinesisCashSources(rows, batches, fundingPolicy) {
           feeValues,
         });
       }
+      /** @type {Map<string, KinesisCashMember[]>} */
       const chains = new Map();
       for (const member of members) {
         const chain = chains.get(member.values.currency) ?? [];
@@ -279,7 +371,14 @@ export function proveKinesisCashSources(rows, batches, fundingPolicy) {
   return { groups, proofs, blockers };
 }
 
-/** Every existing fingerprint needs an owned, unchanged receipt from the same original file. */
+/** Every existing fingerprint needs an owned, unchanged receipt from the same original file.
+ * @param {object} input
+ * @param {ReconciliationSourceRow[]} input.rows
+ * @param {ReconciliationBatchScopeRow[]} input.batches
+ * @param {KinesisCashContext} input.context
+ * @param {string} input.fundingPolicy
+ * @param {{ currency: string, date: string, rate: string | number | null }[]} [input.historicalFxContext]
+ */
 export function classifyKinesisCash({
   rows,
   batches,
@@ -308,6 +407,7 @@ export function classifyKinesisCash({
           current.dedup_fingerprint === row.dedup_fingerprint &&
           current.dedup_fingerprint_version === row.dedup_fingerprint_version,
       );
+      /** @param {string} reason */
       const issue = (reason) => {
         valid = false;
         blockers.push({

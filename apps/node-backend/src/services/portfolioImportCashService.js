@@ -19,6 +19,12 @@ const stale = () =>
   new ConflictError("Owned cash source or ledger image changed", {
     details: { reason: "cash_receipt_changed" },
   });
+/** @typedef {import('../repositories/portfolioImportCashRepository.js').KinesisCashValues} KinesisCashValues */
+
+/**
+ * @param {{ row: any, values: KinesisCashValues, proof: any, feeValues?: KinesisCashValues }} member
+ *   a proven cash group member (see proveKinesisCashSources)
+ */
 export function recordKinesisCash(member) {
   return insertKinesisCash({
     ...member,
@@ -29,6 +35,10 @@ export function recordKinesisCash(member) {
   });
 }
 /** Validate the entire owned removal set before the first ledger delete. */
+/**
+ * @param {number} batchId
+ * @returns {Promise<number[]>} the owned transaction ids to remove
+ */
 export async function validateKinesisCashRollback(batchId) {
   const sources = await readReconciliationSources([batchId]);
   const owned = sources.filter((row) => cashReceipt(row));
