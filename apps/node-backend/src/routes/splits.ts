@@ -11,6 +11,11 @@ import { Router } from "express";
 import type { ExpressRequest } from "../types/express.ts";
 import { z } from "zod";
 import splitService from "../services/splitService.js";
+import { rateLimiter } from "../middleware/rateLimiter.ts";
+import {
+  BULK_SPLIT_MODES,
+  type BulkSplitMode,
+} from "../lib/calculations/splits.ts";
 import {
   validateIdParam,
   validateId,
@@ -135,6 +140,54 @@ const batchSplitsSchema = z.looseObject({}).superRefine((data, ctx) => {
   const txIdCheck = validateId(data.transaction_id, "transaction_id");
   if (!txIdCheck.valid)
     ctx.addIssue({ code: "custom", message: txIdCheck.error });
+});
+
+// POST /bulk: one recipient, one preset, many transactions. Ids reuse
+// validateId (same accepted shapes as every other id surface); the array cap
+// mirrors transactions/bulk-tag. Like /batch, a malformed id rejects the
+// whole request before any write.
+const BULK_SPLIT_MAX_IDS = 500;
+
+const bulkSplitSchema = z.object({
+  transaction_ids: z
+    .array(z.unknown(), {
+      error: `transaction_ids must be a non-empty array of up to ${BULK_SPLIT_MAX_IDS} IDs`,
+    })
+    .min(1, {
+      error: `transaction_ids must be a non-empty array of up to ${BULK_SPLIT_MAX_IDS} IDs`,
+    })
+    .max(BULK_SPLIT_MAX_IDS, {
+      error: `transaction_ids must be a non-empty array of up to ${BULK_SPLIT_MAX_IDS} IDs`,
+    })
+    .transform((ids, ctx) => {
+      const prepared: number[] = [];
+      const rejected: string[] = [];
+      ids.forEach((id, index) => {
+        const check = validateId(id, `transaction_ids[${index}]`);
+        if (check.valid) prepared.push(check.value);
+        else rejected.push(check.error);
+      });
+      if (rejected.length > 0) {
+        ctx.addIssue({ code: "custom", message: rejected.join(", ") });
+        return z.NEVER;
+      }
+      return prepared;
+    }),
+  recipient_id: validatedIdField("recipient_id"),
+  mode: z.unknown().transform((value, ctx) => {
+    if (
+      typeof value !== "string" ||
+      !(BULK_SPLIT_MODES as readonly string[]).includes(value)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: `mode must be one of: ${BULK_SPLIT_MODES.join(", ")}`,
+      });
+      return z.NEVER;
+    }
+    return value as BulkSplitMode;
+  }),
+  note: z.string().max(500).optional(),
 });
 
 const payBodySchema = z.looseObject({}).superRefine((data, ctx) => {
@@ -326,6 +379,32 @@ router.post("/batch", async (req, res) => {
   res.status(201);
   res.ok({ items: created, total: created.length });
 });
+
+// POST /api/splits/bulk — the transactions page's bulk "Split" action.
+// Rate-limited like the transactions bulk routes (30/min).
+router.post(
+  "/bulk",
+  rateLimiter({
+    windowMs: 60_000,
+    maxRequests: 30,
+    keyPrefix: "splits-bulk",
+  }),
+  async (req, res) => {
+    const { transaction_ids, recipient_id, mode, note } = parseSplitsBody(
+      bulkSplitSchema,
+      req.body,
+    );
+    const result = await splitService.createBulkSplitsAtomic({
+      transaction_ids,
+      recipient_id,
+      mode,
+      note,
+      actor: resolveActor(req),
+    });
+    res.status(201);
+    res.ok(result);
+  },
+);
 
 router.post("/:id/pay", validateIdParam, async (req, res) => {
   const splitId = parseRouteId(req);

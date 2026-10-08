@@ -3541,6 +3541,36 @@ components:
               items:
                 $ref: "#/components/schemas/Split"
 
+    # POST /api/splits/bulk result (splitService.createBulkSplitsAtomic).
+    # `requested` counts the ids as sent (duplicates included); `split` the
+    # rows written; the skipped_* counts explain the difference.
+    BulkSplitResult:
+      type: object
+      required:
+        [
+          requested,
+          split,
+          skipped_already_split,
+          skipped_zero_amount,
+          skipped_missing,
+          items,
+        ]
+      properties:
+        requested:
+          type: integer
+        split:
+          type: integer
+        skipped_already_split:
+          type: integer
+        skipped_zero_amount:
+          type: integer
+        skipped_missing:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Split"
+
     # Aggregated "who owes what" row from computeOwedSummary. No currency is
     # carried here — the summary sums across a recipient's splits.
     SplitOwed:
@@ -10234,6 +10264,64 @@ paths:
                     properties:
                       data:
                         $ref: "#/components/schemas/SplitList"
+
+  /api/splits/bulk:
+    post:
+      summary: Give one payee a preset share of many transactions (bulk split)
+      operationId: createBulkSplits
+      tags: [Splits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            # routes/splits.ts bulkSplitSchema: ids reuse validateId (a
+            # malformed id rejects the whole request), the array cap mirrors
+            # transactions/bulk-tag. The share per transaction is computed
+            # server-side (lib/calculations/splits.ts computeBulkSplitAmount):
+            # equal = half of the absolute amount, full = the whole amount.
+            schema:
+              type: object
+              required: [transaction_ids, recipient_id, mode]
+              properties:
+                transaction_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    type: integer
+                recipient_id:
+                  type: integer
+                mode:
+                  type: string
+                  enum: [equal, full]
+                  description: >-
+                    `equal` — the payee owes half of each transaction (50/50).
+                    `full` — the payee owes the whole amount (0/100).
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        "201":
+          description: >-
+            Created splits plus skip counts. The write is atomic; rows the
+            preset cannot apply to are skipped and counted, not failed: ids
+            that no longer exist, transactions that already carry a split, and
+            zero-amount transactions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/BulkSplitResult"
+        "400":
+          description: Validation error (empty or malformed ids, unknown mode)
+        "404":
+          description: Recipient not found
+        "429":
+          description: Rate limited (30 requests per minute)
 
   /api/splits/{id}:
     parameters:

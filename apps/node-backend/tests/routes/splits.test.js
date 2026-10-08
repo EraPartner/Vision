@@ -25,6 +25,7 @@ vi.mock("../../src/services/splitService.js", () => ({
     createSplitAtomic: vi.fn(),
     createSplitsBatch: vi.fn(),
     createSplitsBatchAtomic: vi.fn(),
+    createBulkSplitsAtomic: vi.fn(),
     addPayment: vi.fn(),
     getPayments: vi.fn(),
     settleSplit: vi.fn(),
@@ -421,6 +422,96 @@ describe("Splits Routes", () => {
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       expect(splitService.createSplitsBatchAtomic).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("POST /bulk", () => {
+    const BULK_RESULT = {
+      requested: 3,
+      split: 2,
+      skipped_already_split: 1,
+      skipped_zero_amount: 0,
+      skipped_missing: 0,
+      items: [{ id: 1 }, { id: 2 }],
+    };
+
+    it("forwards validated ids, recipient, mode and actor to the service", async () => {
+      splitService.createBulkSplitsAtomic.mockResolvedValue(BULK_RESULT);
+
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .set("x-actor", "tor")
+        .send({
+          transaction_ids: [3, "1", 2],
+          recipient_id: "7",
+          mode: "full",
+          note: "dinner",
+        })
+        .expect(201);
+
+      expect(res.body).toEqual(okEnvelope(BULK_RESULT));
+      expect(splitService.createBulkSplitsAtomic).toHaveBeenCalledWith({
+        transaction_ids: [3, 1, 2],
+        recipient_id: 7,
+        mode: "full",
+        note: "dinner",
+        actor: "tor",
+      });
+    });
+
+    it("rejects an unknown mode before any write", async () => {
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .send({ transaction_ids: [1], recipient_id: 2, mode: "custom" })
+        .expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(res.body.error.message).toMatch(/mode must be one of: equal, full/);
+      expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
+    });
+
+    it("rejects an empty transaction_ids array", async () => {
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .send({ transaction_ids: [], recipient_id: 2, mode: "equal" })
+        .expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
+    });
+
+    it("rejects the whole request when one id is malformed", async () => {
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .send({ transaction_ids: [1, "abc"], recipient_id: 2, mode: "equal" })
+        .expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(res.body.error.message).toMatch(/transaction_ids\[1\]/);
+      expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed recipient_id", async () => {
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .send({ transaction_ids: [1], recipient_id: "x", mode: "equal" })
+        .expect(400);
+
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
+    });
+
+    it("maps a missing recipient to 404", async () => {
+      splitService.createBulkSplitsAtomic.mockRejectedValue(
+        new NotFoundError("Recipient not found"),
+      );
+
+      const res = await api
+        .post(`${BASE}/bulk`)
+        .send({ transaction_ids: [1], recipient_id: 999, mode: "equal" })
+        .expect(404);
+
+      expect(res.body).toEqual(errEnvelope({ code: "NOT_FOUND" }));
     });
   });
 

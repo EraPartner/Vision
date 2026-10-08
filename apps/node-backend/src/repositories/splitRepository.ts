@@ -132,6 +132,23 @@ export async function lockAndGetTotals(
   return mapSplitTotals(totalsResult.rows[0]);
 }
 
+/**
+ * Existence check for the recipient a bulk split writes to, inside the
+ * caller's transaction. The FK would reject an unknown id on INSERT, but as a
+ * raw 23503 after some rows were already written; checking up front turns it
+ * into a 404 before any write.
+ */
+export async function recipientExistsInTransaction(
+  client: QueryRunner,
+  recipientId: number,
+): Promise<boolean> {
+  const result = await client.query(
+    "SELECT 1 FROM recipients WHERE id = $1",
+    [recipientId],
+  );
+  return result.rows.length > 0;
+}
+
 export async function insertSplitInTransaction(
   client: QueryRunner,
   {
