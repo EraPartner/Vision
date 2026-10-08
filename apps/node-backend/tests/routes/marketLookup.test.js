@@ -9,7 +9,7 @@
  * assertions against the real error handler.
  *
  * Per the routeApp.js fidelity map, the app-level `marketRateLimiter`
- * (main.js:329, mounted before this router for both `/api/market` and
+ * (main.ts:293, mounted before this router for both `/api/market` and
  * `/api/research`) is a module-scoped per-IP counter and is deliberately NOT
  * reproduced here — it would 429 this suite's own many requests.
  */

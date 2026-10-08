@@ -12,7 +12,7 @@
  * dropped. Those limiters are real now; this suite's request counts per
  * keyPrefix stay far under every limit (30-500/60s) so nothing 429s.
  *
- * Mount path is /api/info — no app-level per-mount middleware (main.js:322).
+ * Mount path is /api/info — no app-level per-mount middleware (main.ts:260).
  *
  * Database-backed handlers are mocked at their service or repository boundary.
  * In particular, portfolio-summary does not cascade through its valuation and

@@ -47,8 +47,8 @@ package "Middleware" {
     +hostGuard: exact destination authority before CORS, body parsing, health and routes; SERVER_ALLOWED_HOSTS adds explicit hosts
     +cors: middleware/cors.ts (strict allowlist, replaces cors package)
     +compression: middleware/compression.ts (node:zlib, replaces compression package)
-    +securityHeaders: middleware (inline in main.js)
-    +requestLogger: middleware (inline in main.js)
+    +securityHeaders: middleware (inline in main.ts)
+    +requestLogger: middleware (inline in main.ts)
     +adminAuth middleware (token-or-open: timing-safe Bearer when ADMIN_AUTH_TOKEN set, open otherwise — ADR-063)
     +csrfGuard middleware (Sec-Fetch-Site / Origin allowlist; blocks cross-site state-changing requests to /api)
   }

@@ -79,7 +79,7 @@ const { default: transactionsRouter } =
   await import("../../src/routes/transactions.ts");
 
 const api = routeAgent(transactionsRouter, { mountPath: "/api/transactions" });
-// Same router behind an error handler in production mode (main.js:401 passes
+// Same router behind an error handler in production mode (main.ts:395 passes
 // `settings.isProduction`), so the 5xx message-sanitization branch
 // (errorHandler.js:234-235) is actually exercised rather than assumed.
 const apiProd = routeAgent(transactionsRouter, {

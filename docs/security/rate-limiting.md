@@ -2,8 +2,8 @@
 title: Rate Limiting
 type: security
 status: active
-date: 2026-10-07
-updated: 2026-09-11
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - security
   - rate-limiting
@@ -52,7 +52,7 @@ export const globalRateLimiter = rateLimiter({
   keyPrefix: "global-api",
 });
 
-// Mounted in main.js before all domain routers:
+// Mounted in main.ts before all domain routers:
 app.use("/api", globalRateLimiter, ...routers);
 ```
 
@@ -344,7 +344,7 @@ isDev: process.env.VISION_DEV === 'true',
 // rateLimiter.js — skip check
 if (config.isDev) return next();
 
-// main.js — CORS reflection (dev only)
+// main.ts — CORS reflection (dev only)
 if (config.isDev) {
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin ?? '*');
 }

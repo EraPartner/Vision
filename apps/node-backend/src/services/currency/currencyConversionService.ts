@@ -255,7 +255,7 @@ export async function listLatestStoredRates() {
 /**
  * Fetch fresh rates from both sources, update DB, memory cache, and fallback map.
  * ECB is fetched first and takes priority; open.er-api fills in currencies ECB doesn't publish.
- * Called on startup and every 12 hours by the scheduler in main.js.
+ * Called on startup and every 12 hours by the scheduler in main.ts.
  */
 export async function warmCache() {
   try {

@@ -546,7 +546,7 @@ Create-path compatibility:
 - `POST /api/investments/refresh-prices` now performs update writes in bounded batches (instead of one unbounded `Promise.all`) to reduce DB/pool contention spikes while preserving response payload semantics (`updated`, `total`, `prices`, `priceSources`) and per-investment update behavior ([[apps/node-backend/src/routes/investments.ts]]).
 - Migration safety note: in inherited-schema deployments where `portfolio_transactions` is a compatibility view, migration `0016_add_fx_rate_to_portfolio_transactions` now checks relation kind before running `ALTER TABLE` (`r`/`p` only) and keeps the view recreation path for `relkind='v'`, so migration does not fail on view-backed schemas ([[alembic/versions/0016_add_fx_rate_to_portfolio_transactions.py]], [[docs/features/portfolio|Feature: Portfolio & Investments]]).
 - Add/Edit portfolio transaction dialogs expose an optional `fx_rate_to_eur` field and pass it through to create payloads when set ([[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]]).
-- If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.js]]).
+- If `fx_rate_to_eur` is omitted, FX conversion uses historical rates from `exchange_rates` for transaction dates; missing rows are auto-backfilled from ECB historical data at startup, with nearest DB historical-rate fallback when exact dates are unavailable ([[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.ts]]).
 
 ### ~~POST /api/investments/:id/move~~ _(removed 2026-07-22 — WP-C1 / ADR-108)_
 
@@ -731,4 +731,4 @@ For real estate investments:
 
 Metals implementation code links: [[apps/node-backend/src/repositories/investmentRepository.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/services/priceProviderService.ts]]
 
-Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]]
+Historical quote cache code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/config/kinesisConfig.ts]], [[apps/node-backend/src/routes/investments.ts]], [[apps/node-backend/src/main.ts]], [[alembic/versions/0019_asset_price_history_cache.py]]

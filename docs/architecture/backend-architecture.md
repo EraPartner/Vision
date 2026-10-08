@@ -69,7 +69,7 @@ No acquisition or cash/custody drain runs in this scope. See
 
 ### Database Connection (2026-04-27)
 
-Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node-backend/src/main.js`:
+Backend now owns DB readiness polling via `checkConnection()` loop in `apps/node-backend/src/main.ts`:
 
 - **40 attempts** with exponential backoff (50ms → 1s)
 - Non-blocking: Bun process starts immediately instead of blocking behind entrypoint
@@ -104,7 +104,7 @@ Once DB is ready, initialization respects dependency ordering to prevent cache a
 
 New module: [[apps/node-backend/src/lib/network.ts]] — detects internet connectivity at startup and during scheduled tasks.
 
-**Usage in main.js:**
+**Usage in main.ts:**
 
 - **Startup probe** (line ~522): Single async call `const online = await isInternetReachable()` gates all external fetches
 - **Scheduled 12h FX refresh** (line ~598): `if (!(await isInternetReachable({ force: true })))` — force-refreshes cache every 12h to detect connectivity changes; skips fetch if still offline
@@ -139,7 +139,7 @@ Users see no errors; data is simply older.
 
 ## Process Crash Handlers (2026-05-29)
 
-`apps/node-backend/src/main.js` registers process-level handlers for unhandled async and synchronous
+`apps/node-backend/src/main.ts` registers process-level handlers for unhandled async and synchronous
 errors. Previously only `SIGINT` and `SIGTERM` were caught, so failures could exit without a useful
 structured trace.
 
@@ -163,7 +163,7 @@ process.on("uncaughtException", (err) => {
 
 ## Graceful Shutdown (2026-04-29)
 
-SIGTERM handler in `apps/node-backend/src/main.js` clears all background timers to enable clean process exit:
+SIGTERM handler in `apps/node-backend/src/main.ts` clears all background timers to enable clean process exit:
 
 1. **Three background intervals** — cleared via `clearInterval()`:
    - `exchangeRateRefreshInterval` (existing; clears hourly FX refresh)
@@ -746,7 +746,7 @@ authorities; wildcard binds do not weaken it. The admin token and `/api` CSRF gu
 separate checks. See [[docs/security/data-protection#Admin Auth: Token-or-Open + CSRF Guard (2026-05-29)|Data Protection]]
 and [[docs/guides/deployment#Network and admin security|Deployment]].
 
-- Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.js]], [[apps/node-backend/src/config/config.ts]]).
+- Optional admin bearer-auth middleware was added in main app wiring: when `ADMIN_AUTH_TOKEN` is configured, `/api/admin/*` routes require `Authorization: Bearer <token>`; when unset, behavior remains backward-compatible ([[apps/node-backend/src/main.ts]], [[apps/node-backend/src/config/config.ts]]).
 - `POST /api/info/refresh-views` now uses `adminRateLimiter` for additional protection of expensive refresh operations ([[apps/node-backend/src/routes/info.ts]]).
 - Error responses for selected admin/import/transaction paths are now sanitized to avoid leaking internal exception details ([[apps/node-backend/src/routes/admin.ts]], [[apps/node-backend/src/routes/importRoutes.ts]], [[apps/node-backend/src/routes/transactions.ts]]).
 - Settings route validation paths are now regression-covered for single-key and bulk upsert constraints (max key length, required `value`, `dashboard_settings` exclusion validation, DELETE not-found semantics) in [[apps/node-backend/tests/routes/settings.test.js]] against [[apps/node-backend/src/routes/settings.ts]].

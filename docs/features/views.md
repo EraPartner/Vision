@@ -560,7 +560,7 @@ Real-time market data search and quotes.
 - **Date/time formatting consistency**: Chart tooltips and analyst/news date labels follow app date format + locale settings
 - **News image rendering fix**: backend CSP now permits remote HTTPS thumbnails, and market/portfolio news cards hide image fallback placeholders on thumbnail fetch failures
 
-Code links: [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/node-backend/src/main.js]], [[apps/node-backend/src/routes/marketLookup.ts]]
+Code links: [[apps/frontend/src/pages/research/MarketLookupPage.tsx]], [[apps/frontend/src/lib/dateUtils.ts]], [[apps/frontend/src/components/shared/RemoteNewsImage.tsx]], [[apps/frontend/src/features/portfolio/PortfolioNewsFeed.tsx]], [[apps/node-backend/src/main.ts]], [[apps/node-backend/src/routes/marketLookup.ts]]
 
 ### Data Source
 

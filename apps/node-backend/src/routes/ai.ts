@@ -1,7 +1,7 @@
 /**
  * AI chat routes.
  *
- * Mounted at /api/ai by main.js.
+ * Mounted at /api/ai by main.ts.
  *
  *   GET    /api/ai/status                   — Ollama reachability + baseUrl
  *   GET    /api/ai/models                   — installed models (pass-through)

@@ -2,8 +2,8 @@
 title: How to Add a New API Endpoint
 type: guide
 status: active
-date: 2026-10-07
-updated: 2026-08-26
+date: 2026-10-08
+updated: 2026-10-08
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
 aliases: [add api, new endpoint, create endpoint, api tutorial]
@@ -11,7 +11,7 @@ related_code:
   [
     "apps/node-backend/src/routes/",
     "apps/node-backend/src/repositories/",
-    "apps/node-backend/src/main.js",
+    "apps/node-backend/src/main.ts",
   ]
 ---
 
@@ -92,16 +92,16 @@ export default router;
 ```
 
 > [!tip] Rate limiting
-> Don't add a per-router `rateLimit(...)` unless the resource needs a tighter budget than the global `/api` limiter already applied in `main.js`. When it does, pass the limiter as middleware to `mountRouter` (see the `aggregations`/`admin` mounts) rather than `router.use(...)`.
+> Don't add a per-router `rateLimit(...)` unless the resource needs a tighter budget than the global `/api` limiter already applied in `main.ts`. When it does, pass the limiter as middleware to `mountRouter` (see the `aggregations`/`admin` mounts) rather than `router.use(...)`.
 
 ### 3. Register the Route
 
-Add to `apps/node-backend/src/main.js`, using `mountRouter` (which also registers the route in the manifest) — not a bare `app.use`:
+Add to `apps/node-backend/src/main.ts`, using `mountRouter` (which also registers the route in the manifest) — not a bare `app.use`:
 
 ```javascript
 import <resource>Router from './routes/<resource>.js';
 
-// ...alongside the other mounts near main.js:310+
+// ...alongside the other mounts near main.ts:254+
 mountRouter(app, '/api/<resource>', <resource>Router);
 ```
 
@@ -218,7 +218,7 @@ Create `apps/node-backend/tests/<resource>.test.js`:
 ```javascript
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
-import app from "../src/main.js";
+import app from "../src/main.ts";
 
 describe("<resource> API", () => {
   it("GET /api/<resource> returns empty list", async () => {
@@ -252,7 +252,7 @@ The endpoint is not "done" until the API contract and the generated frontend typ
 - [ ] Route file created (thin — delegates to the service, uses `res.ok()` + `validateIdParam`, throws typed errors)
 - [ ] Service module created (ADR-067 seam; validation + orchestration)
 - [ ] Repository created (parameterized SQL via `query` from `database/connection.ts`)
-- [ ] Route registered in `main.js` via `mountRouter`
+- [ ] Route registered in `main.ts` via `mountRouter`
 - [ ] Database migration created and tested
 - [ ] Tests written for all endpoints
 - [ ] `openapi.yaml` updated **and** `bun run generate:types` run

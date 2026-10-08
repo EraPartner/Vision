@@ -4,10 +4,10 @@
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.js). The production admin mount
- * (main.js:324 — `mountRouter(app, '/api/admin', adminRateLimiter,
+ * (main.ts:276 — `mountRouter(app, '/api/admin', adminRateLimiter,
  * adminCsrfGuard, adminAuthMiddleware, adminRouter)`) is reproduced via the
  * harness's `before` slot with the REAL `createAdminAuthMiddleware`, driven by
- * the same `settings.admin.authToken` value main.js uses — so a
+ * the same `settings.admin.authToken` value main.ts uses — so a
  * configured token is now actually enforced in tests, previously impossible
  * under the mock-router harness. `adminRateLimiter` (app-level, module-scoped
  * counters) and `adminCsrfGuard` (redundant with the harness's own global CSRF
@@ -71,7 +71,7 @@ import https from "https";
 
 const { default: adminRouter } = await import("../../src/routes/admin.ts");
 
-// Mirrors main.js:31 exactly — a per-request getter so a test can flip
+// Mirrors main.ts:43 exactly — a per-request getter so a test can flip
 // settings.admin.authToken between calls and see the guard react.
 const adminAuthMiddleware = createAdminAuthMiddleware(
   () => settings.admin.authToken,
@@ -104,7 +104,7 @@ describe("Admin Routes", () => {
   // Newly on-path: the mock-router harness never ran any middleware, so the
   // auth guard was never actually exercised even though it protects every
   // admin request in production.
-  describe("admin auth guard (main.js:324)", () => {
+  describe("admin auth guard (main.ts:276)", () => {
     it("passes through with no configured token (loopback-only trust model)", async () => {
       checkConnection.mockResolvedValue(true);
       getTableCount.mockResolvedValue(5);

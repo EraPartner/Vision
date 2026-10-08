@@ -32,7 +32,7 @@ const router = Router();
  */
 // codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
 // applied to this whole router via mountRouter('/api/attachments',
-// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// attachmentRateLimiter, ...) in main.ts. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
 router.post(
   "/transaction/:id",
@@ -142,7 +142,7 @@ router.get("/transaction/:id", validateIdParam, async (req, res) => {
  */
 // codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
 // applied to this whole router via mountRouter('/api/attachments',
-// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// attachmentRateLimiter, ...) in main.ts. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
 router.get("/:id/download", validateIdParam, async (req, res, next) => {
   const attachment = await attachmentRepository.findById(assertIdParam(req));
@@ -184,7 +184,7 @@ router.get("/:id/download", validateIdParam, async (req, res, next) => {
  */
 // codeql[js/missing-rate-limiting]: attachmentRateLimiter (60 req/min) is
 // applied to this whole router via mountRouter('/api/attachments',
-// attachmentRateLimiter, ...) in main.js. The scanner does not trace rate
+// attachmentRateLimiter, ...) in main.ts. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
 router.delete("/:id", validateIdParam, async (req, res) => {
   const attachment = await attachmentRepository.findById(assertIdParam(req));

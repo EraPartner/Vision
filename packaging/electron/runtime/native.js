@@ -1835,7 +1835,7 @@ function createNativeRuntime(options) {
       throw new Error("Native backend source runtime is unavailable");
     return {
       bin: tools.bun,
-      args: ["run", "apps/node-backend/src/main.js"],
+      args: ["run", "apps/node-backend/src/main.ts"],
       cwd: repoRoot,
     };
   }
@@ -1889,7 +1889,7 @@ function createNativeRuntime(options) {
     if (expected.bin && actual.includes(expected.bin)) return true;
     return expected.args.some(
       (argument) =>
-        argument.includes("apps/node-backend/src/main.js") &&
+        argument.includes("apps/node-backend/src/main.ts") &&
         actual.includes(argument),
     );
   }

@@ -64,19 +64,19 @@ export interface ExpressResponse {
   statusCode: number;
   headersSent: boolean;
   writableEnded: boolean;
-  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts) and, reassigned wholesale, by main.js's gzip wrapper. */
+  /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts) and, reassigned wholesale, by middleware/compression.ts's gzip wrapper. */
   write: (chunk?: any, encoding?: any, cb?: any) => boolean;
-  /** Same overload shape as `write` above; main.js's gzip wrapper reassigns this too. */
+  /** Same overload shape as `write` above; middleware/compression.ts's gzip wrapper reassigns this too. */
   end: (chunk?: any, encoding?: any, cb?: any) => ExpressResponse | void;
   /** Express's `res.sendFile`, used by routes/attachments.js's download endpoint. */
   sendFile?: (path: string, callback?: (err: any) => void) => void;
-  /** Node's `http.ServerResponse#writeHead`, used by main.js's CORS preflight short-circuit. */
+  /** Node's `http.ServerResponse#writeHead`, used by middleware/cors.ts's CORS preflight short-circuit. */
   writeHead?: (statusCode: number) => ExpressResponse;
   getHeader?: (name: string) => any;
   removeHeader?: (name: string) => void;
-  /** Express's `res.type`, used by main.js's SPA fallback. */
+  /** Express's `res.type`, used by main.ts's SPA fallback. */
   type?: (contentType: string) => ExpressResponse;
-  /** Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by main.js's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`. */
+  /** Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by middleware/compression.ts's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`. */
   emit?: (event: string, ...args: any[]) => boolean;
   destroy?: (err?: Error) => void;
   /** Attached by middleware/envelope.ts's `wrapResponse`. */

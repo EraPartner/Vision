@@ -5,6 +5,7 @@
  */
 
 import express from "express";
+import type { Server } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
 import fs from "node:fs";
 import { dirname, resolve, sep } from "path";
@@ -36,14 +37,8 @@ import { wrapResponse } from "./middleware/envelope.ts";
 import { requestId } from "./middleware/requestId.ts";
 import { requestMetrics } from "./middleware/requestMetrics.ts";
 import { cancelPendingAggregationRefresh } from "./services/aggregationRefresh.ts";
-import { runWarmupTasks } from "./startup/warmup.ts";
+import { runWarmupTasks, type WarmupStatus } from "./startup/warmup.ts";
 import { resumeRecoverableInvestigations } from "./services/aiInvestigationService.ts";
-
-/**
- * @typedef {import('./types/express.ts').ExpressRequest} ExpressRequest
- * @typedef {import('./types/express.ts').ExpressResponse} ExpressResponse
- * @typedef {import('./types/express.ts').ExpressNextFunction} ExpressNextFunction
- */
 
 const adminAuthMiddleware = createAdminAuthMiddleware(
   () => settings.admin.authToken,
@@ -128,49 +123,37 @@ app.use("/api/internal/audit", express.json({ limit: "4kb" }));
 app.use(express.json({ limit: "1mb" }));
 
 // Security headers (production-ready)
-app.use(
-  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
-    req,
-    res,
-    next,
-  ) => {
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-XSS-Protection", "0"); // Deprecated; rely on CSP instead
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "0"); // Deprecated; rely on CSP instead
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+  );
+  if (settings.isProduction()) {
     res.setHeader(
-      "Permissions-Policy",
-      "camera=(), microphone=(), geolocation=()",
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload",
     );
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
-    );
-    if (settings.isProduction()) {
-      res.setHeader(
-        "Strict-Transport-Security",
-        "max-age=63072000; includeSubDomains; preload",
-      );
-    }
-    next();
-  },
-);
+  }
+  next();
+});
 
 app.use(compression);
 
 // Request logging
-app.use(
-  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
-    req,
-    res,
-    next,
-  ) => {
-    logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, {
-      requestId: req.id,
-    });
-    next();
-  },
-);
+app.use((req, res, next) => {
+  logger.debug(`[REQ] ${req.method} ${req.originalUrl}`, {
+    requestId: req.id,
+  });
+  next();
+});
 
 // Unified response envelope — attaches res.ok(data, meta?) before routers run.
 app.use(wrapResponse);
@@ -189,22 +172,18 @@ const WARMUP_KEYS = [
   "infoCaches",
   "materializedViews",
 ];
-const warmupStatus = Object.fromEntries(WARMUP_KEYS.map((k) => [k, "pending"]));
-
-app.get(
-  "/health",
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ (
-    req,
-    res,
-  ) => {
-    res.json({
-      status: "healthy",
-      service: "financial-transaction-manager-node",
-      version: settings.api.version,
-      timestamp: new Date().toISOString(),
-    });
-  },
+const warmupStatus: WarmupStatus = Object.fromEntries(
+  WARMUP_KEYS.map((k) => [k, "pending"]),
 );
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    service: "financial-transaction-manager-node",
+    version: settings.api.version,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // /health/* sits outside /api, so the global rate limiter doesn't apply — and
 // the detailed probe costs a DB round-trip. Cache the probe result briefly so
@@ -220,54 +199,42 @@ async function checkConnectionCached() {
   return value;
 }
 
-app.get(
-  "/health/detailed",
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ async (
-    req,
-    res,
-  ) => {
-    const states = Object.values(warmupStatus);
-    const warming = states.includes("pending");
-    const degraded = states.includes("failed");
+app.get("/health/detailed", async (req, res) => {
+  const states = Object.values(warmupStatus);
+  const warming = states.includes("pending");
+  const degraded = states.includes("failed");
 
-    // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
-    // process-level "I'm listening" check would miss. checkConnection never throws.
-    const dbConnected = await checkConnectionCached();
+  // Real liveness probe — a SELECT 1 round-trip catches a wedged pool that a
+  // process-level "I'm listening" check would miss. checkConnection never throws.
+  const dbConnected = await checkConnectionCached();
 
-    res.json({
-      status: warming ? "warming" : "ready", // unchanged contract: 'ready' once warmup settles (pass or fail)
-      degraded, // a best-effort warmup task failed; app is serving but missing some warm data
-      service: "financial-transaction-manager-node",
-      version: settings.api.version,
-      timestamp: new Date().toISOString(),
-      database: { connected: dbConnected, pool: getPoolStats() },
-      warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
-      // Backward-compatible boolean map (true once a task settles, pass or fail) —
-      // consumed by the Electron readiness gate. Prefer `warmup` for new code.
-      caches: Object.fromEntries(
-        WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== "pending"]),
-      ),
-    });
-  },
-);
+  res.json({
+    status: warming ? "warming" : "ready", // unchanged contract: 'ready' once warmup settles (pass or fail)
+    degraded, // a best-effort warmup task failed; app is serving but missing some warm data
+    service: "financial-transaction-manager-node",
+    version: settings.api.version,
+    timestamp: new Date().toISOString(),
+    database: { connected: dbConnected, pool: getPoolStats() },
+    warmup: { ...warmupStatus }, // tri-state: pending | ready | failed
+    // Backward-compatible boolean map (true once a task settles, pass or fail) —
+    // consumed by the Electron readiness gate. Prefer `warmup` for new code.
+    caches: Object.fromEntries(
+      WARMUP_KEYS.map((k) => [k, warmupStatus[k] !== "pending"]),
+    ),
+  });
+});
 
 // ==================== API Root ====================
 
-app.get(
-  "/api/",
-  /** @param {ExpressRequest} req @param {ExpressResponse} res */ (
-    req,
-    res,
-  ) => {
-    res.json({
-      version: settings.api.version,
-      title: settings.api.title,
-      description: settings.api.description,
-      runtime: "Node.js/Express",
-      links: [],
-    });
-  },
-);
+app.get("/api/", (req, res) => {
+  res.json({
+    version: settings.api.version,
+    title: settings.api.title,
+    description: settings.api.description,
+    runtime: "Node.js/Express",
+    links: [],
+  });
+});
 
 // ==================== Route Registration ====================
 
@@ -400,10 +367,7 @@ if (settings.isProduction()) {
       index: false,
       maxAge: "1y",
       immutable: true,
-      setHeaders: (
-        /** @type {ExpressResponse} */ res,
-        /** @type {string} */ filePath,
-      ) => {
+      setHeaders: (res, filePath) => {
         if (!filePath.startsWith(hashedAssetsPrefix)) {
           res.setHeader("Cache-Control", "no-cache");
         }
@@ -413,31 +377,18 @@ if (settings.isProduction()) {
   // Preload the SPA shell once at startup; the fallback route then serves it
   // from memory with no per-request file I/O.
   const indexHtml = fs.readFileSync(resolve(distPath, "index.html"), "utf-8");
-  app.get(
-    /^(?!\/api)/,
-    spaRateLimiter,
-    /** @param {ExpressRequest} _req @param {ExpressResponse} res */ (
-      _req,
-      res,
-    ) => {
-      res.setHeader("Cache-Control", "no-cache");
-      res.type("html").send(indexHtml);
-    },
-  );
+  app.get(/^(?!\/api)/, spaRateLimiter, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.type("html").send(indexHtml);
+  });
 }
 
 // ==================== Error Handling ====================
 
 // 404 handler — funnel through the error handler so the envelope stays uniform.
-app.use(
-  /** @param {ExpressRequest} req @param {ExpressResponse} res @param {ExpressNextFunction} next */ (
-    req,
-    res,
-    next,
-  ) => {
-    next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
-  },
-);
+app.use((req, res, next) => {
+  next(new NotFoundError(`Not Found: ${req.method} ${req.path}`));
+});
 
 // Global error handler — typed errors (AppError, ValidationError, NotFoundError, …)
 // map to their declared status; untyped errors fall through to 500.
@@ -449,33 +400,22 @@ const PORT = settings.server.port;
 const HOST = settings.server.host;
 
 // Background interval handles — captured here so graceful shutdown can clear them.
-/** @type {NodeJS.Timeout|null} */
-let exchangeRateRefreshInterval = null;
-/** @type {NodeJS.Timeout|null} */
-let quotesRefreshInterval = null;
-/** @type {NodeJS.Timeout|null} */
-let cashflowForecastRefreshInterval = null;
-/** @type {NodeJS.Timeout|null} */
-let holdingGapBackfillInterval = null;
-/** @type {NodeJS.Timeout|null} */
-let analysisMonitorInterval = null;
+let exchangeRateRefreshInterval: NodeJS.Timeout | null = null;
+let quotesRefreshInterval: NodeJS.Timeout | null = null;
+let cashflowForecastRefreshInterval: NodeJS.Timeout | null = null;
+let holdingGapBackfillInterval: NodeJS.Timeout | null = null;
+let analysisMonitorInterval: NodeJS.Timeout | null = null;
 
 // HTTP server handle — module-scoped so shutdown() can drain in-flight requests.
-// `app.listen(...)` returns whatever express's ambient `any` import resolves
-// to (see thirdPartyModules.d.ts) — kept `any` here to match, rather than
-// asserting the real `http.Server` shape express doesn't publish types for.
-/** @type {any} */
-let httpServer = null;
+let httpServer: Server | null = null;
 // Guards shutdown() against a second SIGINT/SIGTERM re-entering mid-drain.
 let isShuttingDown = false;
 
 // ── Boot instrumentation ───────────────────────────────────────────────────
 const BOOT_TRACE_ENABLED = process.env.VISION_BOOT_TRACE !== "0";
 const _bootT0 = Date.now();
-/** @type {{ phase: string, ms: number }[]} */
-const _bootMarks = [];
-/** @param {string} phase */
-function bootMark(phase) {
+const _bootMarks: { phase: string; ms: number }[] = [];
+function bootMark(phase: string) {
   const t0 = Date.now();
   return () => {
     const ms = Date.now() - t0;
@@ -590,7 +530,7 @@ async function start() {
         // stats (idempotent, non-destructive), so it must never delay `listen`
         // or block boot — hence not awaited, errors swallowed. This is complementary
         // to, not in conflict with, the post-migration targeted ANALYZE in
-        // migrate.js: that one guarantees the two big, migration-rewritten tables
+        // migrate.ts: that one guarantees the two big, migration-rewritten tables
         // are fresh immediately after an upgrade; this one covers every remaining
         // table on every boot. On a boot that just migrated, the two big tables
         // are simply re-sampled here — harmless (ANALYZE is idempotent), and the
@@ -654,18 +594,20 @@ async function start() {
           intervals.cashflowForecastRefreshInterval;
         holdingGapBackfillInterval = intervals.holdingGapBackfillInterval;
       } catch (err) {
-        logger.error("Warmup tasks failed", { error: err.message });
+        logger.error("Warmup tasks failed", { error: (err as Error).message });
       }
     });
 
     httpServer = server;
 
-    server.on("error", (/** @type {any} */ err) => {
+    server.on("error", (err: Error) => {
       logger.error("HTTP server error", { error: err.message });
       process.exit(1);
     });
   } catch (err) {
-    logger.error("Failed to start application", { error: err.message });
+    logger.error("Failed to start application", {
+      error: (err as Error).message,
+    });
     process.exit(1);
   }
 }
@@ -673,8 +615,7 @@ async function start() {
 // Graceful shutdown
 const SHUTDOWN_FORCE_EXIT_MS = 10_000;
 
-/** @param {string} [signal] */
-async function shutdown(signal) {
+async function shutdown(signal?: string) {
   // A second SIGINT/SIGTERM while a drain is already in progress should not
   // restart the sequence — just note it and let the first run finish.
   if (isShuttingDown) {
@@ -705,13 +646,14 @@ async function shutdown(signal) {
   // Stop accepting new connections and let in-flight requests finish before
   // tearing down the pool — closePool() mid-request would error live handlers.
   if (httpServer) {
-    await new Promise((resolve) => {
-      httpServer.close(() => resolve());
+    const server = httpServer;
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
       // close() alone leaves idle keep-alive sockets (browser tabs, the
       // Electron health watchdog's keepAlive agent) holding the server open
       // until the 10s force-exit. Drop them explicitly; in-flight requests
       // are untouched. Optional-chained: not every runtime implements it.
-      httpServer.closeIdleConnections?.();
+      server.closeIdleConnections?.();
     });
   }
 
@@ -735,16 +677,12 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 // to hand control back to the supervisor for a clean restart. Many of the
 // fire-and-forget chains here (warmup, deferred refresh, SSE) are exactly where
 // a stray rejection would otherwise escape unseen.
-/**
- * @param {string} kind
- * @param {unknown} err
- */
-function logFatal(kind, err) {
+function logFatal(kind: string, err: unknown) {
   const error = err instanceof Error ? err : new Error(String(err));
   logger.error(`${kind} — exiting`, {
     error: error.message,
     stack: error.stack,
-    requestId: /** @type {any} */ (error).requestId,
+    requestId: "requestId" in error ? error.requestId : undefined,
   });
 }
 
@@ -758,7 +696,9 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-start().catch((err) => {
-  logger.error("Failed to start application", { error: err.message });
+start().catch((err: unknown) => {
+  logger.error("Failed to start application", {
+    error: (err as Error).message,
+  });
   process.exit(1);
 });

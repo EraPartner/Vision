@@ -424,4 +424,4 @@ See [[docs/features/portfolio#historical-fx-in-snapshots-2026-05-29|Portfolio â€
 - [[docs/integrations/index]] - Integrations Index
 - [[docs/reference/code-patterns#Filter Builder Pattern]] - Related Phase 0 patterns
 
-Code links: [[apps/node-backend/src/services/currency/rateFetcher.ts|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.ts|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/services/currency/rateFetcher.ts|Rate fetcher (ECB tiers)]], [[apps/node-backend/src/services/currency/currencyConversionService.ts|Canonical implementation]], [[apps/node-backend/src/repositories/infoRepositoryHelpers.ts|Batch grouped conversion (Phase 3.1)]], [[apps/node-backend/src/main.ts]]

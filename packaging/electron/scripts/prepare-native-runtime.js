@@ -145,7 +145,7 @@ function run() {
       [
         "build",
         "--compile",
-        path.join(repoRoot, "apps", "node-backend", "src", "main.js"),
+        path.join(repoRoot, "apps", "node-backend", "src", "main.ts"),
         "--outfile",
         path.join(stagingRoot, "vision-backend"),
       ],

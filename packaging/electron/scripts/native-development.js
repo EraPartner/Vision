@@ -111,7 +111,7 @@ async function main() {
     });
     backend = spawn(
       tools.bun,
-      validateArgs(["--watch", "apps/node-backend/src/main.js"]),
+      validateArgs(["--watch", "apps/node-backend/src/main.ts"]),
       {
         cwd: repoRoot,
         env: backendEnv,

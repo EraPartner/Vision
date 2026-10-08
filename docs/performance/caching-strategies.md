@@ -99,7 +99,7 @@ const mvCache = new Map();
 - This ensures exchange rates are written to the database before info caches query them, preventing spurious "Historical FX missing" warnings
 - The `computeAndStoreSnapshots()` service depends on today's FX rates being available in `exchange_rates` table before computing portfolio snapshots
 
-Code links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/repositories/infoRepository.ts]], [[apps/node-backend/src/main.ts]]
 
 ---
 

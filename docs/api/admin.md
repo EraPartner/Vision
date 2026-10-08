@@ -25,7 +25,7 @@ related_code:
   - apps/node-backend/src/routes/admin.ts
   - apps/node-backend/src/routes/codexExperimental.ts
   - apps/node-backend/src/services/dbEditor.ts
-  - apps/node-backend/src/main.js
+  - apps/node-backend/src/main.ts
   - apps/node-backend/src/config/config.ts
   - apps/node-backend/src/services/providerHealth/providerHealthService.js
   - apps/node-backend/src/middleware/requestMetrics.ts

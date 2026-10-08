@@ -33,9 +33,9 @@ describe("response envelope writer convention", () => {
         .filter(({ method, argument }) => method === "json" && argument)
         .map(({ file }) => file),
     ).toEqual([
-      "main.js",
-      "main.js",
-      "main.js",
+      "main.ts",
+      "main.ts",
+      "main.ts",
       "middleware/envelope.ts",
       "middleware/errorHandler.ts",
     ]);

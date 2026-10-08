@@ -258,7 +258,7 @@ source-record hash or duplicate fingerprint prevents canonical stamping. Source 
 literal FX rate empty while conversion resolves dated cached rates. The update repeats those guards
 after acquiring the row lock, so concurrent adoption cannot change an immutable receipt after-image.
 
-Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.js]]
+Code links: [[apps/frontend/src/features/portfolio/AddPortfolioTxnDialog.tsx]], [[apps/frontend/src/features/portfolio/EditPortfolioTxnDialog.tsx]], [[apps/frontend/src/hooks/usePortfolio.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionService.ts]], [[apps/node-backend/src/services/portfolio/portfolioTransactionRules.ts]], [[apps/node-backend/src/repositories/portfolioTransactionRepository.ts]], [[apps/node-backend/src/services/currency/currencyConversionService.ts]], [[apps/node-backend/src/main.ts]]
 
 ## Holdings Calculation
 
@@ -710,7 +710,7 @@ All invalidations cascade through `clearInvestmentsCaches()` → `invalidatePort
 - Startup/scheduled behavior: backend warms inflation cache at startup and refreshes together with exchange-rate refresh cadence.
 - New persistence table `belgian_inflation_rates` stores monthly values (`month_date`, `monthly_rate`, `source`, `fetched_at`, `updated_at`) for deterministic portfolio calculations and offline resilience.
 
-Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/main.js]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
+Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[apps/node-backend/src/routes/info.ts]], [[apps/node-backend/src/main.ts]], [[apps/frontend/src/lib/api.ts]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ### Performance Improvements (2026-05-08 Bug Hunt)
 
@@ -724,7 +724,7 @@ Code links: [[apps/node-backend/src/services/belgianInflationService.ts]], [[app
 - Price history endpoint and portfolio calculations use read-through behavior: DB history first, provider fetch when needed, then DB upsert.
 - Startup backfill populates historical quotes for currently held unit-based assets (`stock`, `etf`, `crypto`, `metals`) from first transaction date.
 
-Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/main.js]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
+Code links: [[apps/node-backend/src/services/priceProviderService.ts]], [[apps/node-backend/src/main.ts]], [[alembic/versions/0019_asset_price_history_cache.py]], [[apps/frontend/src/pages/portfolio/PortfolioPage.tsx]]
 
 ## Cost Basis Methods (Phase 6)
 

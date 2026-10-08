@@ -10,7 +10,7 @@
  * Driven over HTTP against the real router (tests/helpers/routeApp.js),
  * mirroring importValidationPins.test.js: multer is stubbed to a pass-through
  * (no real multipart parsing) and the uploaded file is injected by a `before`
- * middleware, the same per-mount slot main.js uses (main.js:326 mounts
+ * middleware, the same per-mount slot main.ts uses (main.ts:285 mounts
  * importRateLimiter there for this router).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -113,7 +113,7 @@ const { default: portfolioImportRouter } =
 const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
 const BASE = "/api/portfolio/import";
 // multer is stubbed, so nothing populates req.file — inject it in the same
-// per-mount slot main.js uses.
+// per-mount slot main.ts uses.
 const api = routeAgent(portfolioImportRouter, {
   mountPath: BASE,
   before: [

@@ -7,7 +7,7 @@
  * provider/series_id guards.
  *
  * Runs against the REAL router mounted on a throwaway Express app (see
- * tests/helpers/routeApp.js). main.js:330 also mounts `marketRateLimiter`
+ * tests/helpers/routeApp.js). main.ts:294 also mounts `marketRateLimiter`
  * before this router — deliberately not reproduced here (module-level counter
  * shared across the whole worker; see routeApp.js's fidelity map).
  */

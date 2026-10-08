@@ -10,7 +10,7 @@
  * validateIdParam is simply exercised for real now instead of bypassed.
  *
  * Mount path is /api/investments, behind investmentRateLimiter at the app
- * level (main.js:327) — a module-scoped per-IP counter deliberately NOT
+ * level (main.ts:291) — a module-scoped per-IP counter deliberately NOT
  * reproduced here per the routeApp.js fidelity map.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";

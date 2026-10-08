@@ -292,7 +292,7 @@ Self-test the checker with `python3 scripts/check-destructive-migrations.py --se
 There is no checker for this one — the cost of a statement is not visible to static analysis, and a full-table rewrite that is instant on the demo corpus is minutes on a real install. It is on the author.
 
 > [!warning] The upgrade is on the critical path to a usable app
-> `main.js` awaits `runMigrations()` **before** `app.listen()`, so nothing answers `/health` until the whole pending chain has applied. The packaged Electron shell polls that endpoint with a 60 s budget and shows an error page when it runs out ([[packaging/electron/main.js|main.js]] `pollReady`). A cold or big-jump upgrade stacks every pending migration into that one window.
+> `main.ts` awaits `runMigrations()` **before** `app.listen()`, so nothing answers `/health` until the whole pending chain has applied. The packaged Electron shell polls that endpoint with a 60 s budget and shows an error page when it runs out ([[packaging/electron/main.js|main.js]] `pollReady`). A cold or big-jump upgrade stacks every pending migration into that one window.
 
 The costs are paid **once**, on the first boot after an update (`migrate.ts` caches "already at head" keyed on revision + a fingerprint of `alembic/versions/`, and skips the alembic invocation entirely on every later boot). That is not a reason to ignore them: the one boot that pays is the one the user is watching.
 

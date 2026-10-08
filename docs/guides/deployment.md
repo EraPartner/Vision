@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-04
+date: 2026-10-08
 tags:
   [
     guide,
@@ -17,7 +17,7 @@ tags:
   ]
 description: Deploy Vision as the native macOS desktop application or as a source backend with operator-managed PostgreSQL 18.
 aliases: [deployment-guide, production-deploy, electron-packaging]
-related_code: ["packaging/electron/", "apps/node-backend/src/main.js"]
+related_code: ["packaging/electron/", "apps/node-backend/src/main.ts"]
 ---
 
 # Deployment Guide

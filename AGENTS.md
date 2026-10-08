@@ -133,7 +133,7 @@ Finish with changed files, checks run, skipped checks, residual risk, and follow
 | Path                            | Purpose                         |
 | ------------------------------- | ------------------------------- |
 | `apps/frontend/src/`            | React frontend                  |
-| `apps/node-backend/src/main.js` | Backend entry point             |
+| `apps/node-backend/src/main.ts` | Backend entry point             |
 | `alembic/versions/`             | Database migrations             |
 | `config/`                       | Shared tool configuration       |
 | `i18n/source/`                  | Locale source files             |

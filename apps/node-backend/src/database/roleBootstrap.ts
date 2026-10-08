@@ -224,7 +224,7 @@ function isRetryableConnectError(err: unknown): boolean {
 
 /**
  * Connect a one-shot client as the privileged migration role, waiting out a
- * cold Postgres start with the same backoff envelope as main.js's pool poll.
+ * cold Postgres start with the same backoff envelope as main.ts's pool poll.
  */
 async function connectPrivileged(
   migrationsUrl: string,

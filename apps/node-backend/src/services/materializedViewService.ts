@@ -127,7 +127,7 @@ export async function createMaterializedViews() {
     `);
   await runMaintenanceStatement(`DROP INDEX IF EXISTS mv_category_totals_idx`);
 
-  // The boot-wide `ANALYZE` in main.js runs pre-listen and so no longer covers
+  // The boot-wide `ANALYZE` in main.ts runs pre-listen and so no longer covers
   // views created after it; without this a freshly created view carries no
   // planner statistics (matviews are never auto-analyzed, and REFRESH does not
   // sample them either). Same best-effort shape as the post-migration ANALYZE

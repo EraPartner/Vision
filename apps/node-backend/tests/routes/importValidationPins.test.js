@@ -13,7 +13,7 @@
  *
  * multer is still stubbed to a pass-through (no real multipart parsing); the
  * uploaded file is injected by a `before` middleware, which is the same slot
- * `main.js` uses for per-mount middleware.
+ * `main.ts` uses for per-mount middleware.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.js";
@@ -122,7 +122,7 @@ const UPLOAD = { path: "/tmp/pin.csv", originalname: "pin.csv", size: 10 };
 
 const BASE = "/api/import";
 // multer is stubbed, so nothing populates req.file — inject it in the same
-// per-mount slot main.js uses (main.js:325 mounts importRateLimiter there).
+// per-mount slot main.ts uses (main.ts:284 mounts importRateLimiter there).
 const api = routeAgent(importRouter, {
   mountPath: BASE,
   before: [

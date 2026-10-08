@@ -13,7 +13,8 @@ interface ParsedDbUrl {
 
 export interface EnsureAnalysisRoleOptions {
   databaseUrl: string;
-  analysisUrl: string;
+  /** Undefined when config could not derive one; reported as degraded. */
+  analysisUrl: string | undefined;
   /** Privileged owner URL; falls back to `databaseUrl`. */
   migrationsUrl?: string;
   log?: Pick<typeof logger, "warn">;
@@ -24,8 +25,9 @@ export interface AnalysisRoleResult {
   reason?: string;
 }
 
-function parseUrl(value: string): ParsedDbUrl | null {
+function parseUrl(value: string | undefined): ParsedDbUrl | null {
   try {
+    if (value === undefined) return null;
     const parsed = new URL(value);
     return {
       user: decodeURIComponent(parsed.username),

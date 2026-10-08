@@ -15,8 +15,10 @@
 export interface ExpressLayer {
   regexp?: { source?: string };
   _mountPath?: string;
-  route?: { path: string, methods: Record<string, boolean> };
-  handle?: { stack?: ExpressLayer[], _mountPath?: string };
+  /** `methods` exists at runtime on Express's `Route` but is not declared by `@types/express`. */
+  route?: { path: string, methods?: Record<string, boolean> };
+  /** A middleware function; mounted routers also carry `stack` (and `_mountPath` from mountRouter). */
+  handle?: ((...args: never[]) => unknown) & { stack?: ExpressLayer[], _mountPath?: string };
 }
 
 /** The slice of an Express `Application` this module actually reads/calls. */
@@ -69,8 +71,9 @@ function scanStack(stack: ExpressLayer[], prefix: string): RouteManifestEntry[] 
     if (route) {
       const routePath = route.path === '/' && prefix ? '' : route.path;
       const fullPath = prefix + routePath || '/';
-      const methods = Object.keys(route.methods)
-        .filter((m) => route.methods[m] && m !== '_all')
+      const routeMethods = route.methods ?? {};
+      const methods = Object.keys(routeMethods)
+        .filter((m) => routeMethods[m] && m !== '_all')
         .map((m) => m.toUpperCase());
       for (const method of methods) {
         routes.push({ method, path: fullPath });
@@ -86,7 +89,7 @@ function scanStack(stack: ExpressLayer[], prefix: string): RouteManifestEntry[] 
 
 /**
  * Scan the Express app's router stack and store the manifest.
- * Call once after all routes are registered in main.js.
+ * Call once after all routes are registered in main.ts.
  */
 export function buildRouteManifest(app: ExpressApp) {
   const router = app.router ?? app._router;
