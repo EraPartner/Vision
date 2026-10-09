@@ -421,100 +421,132 @@ export default function ResearchDossiersPage() {
                 </Alert>
             )}
 
-            <div className="grid gap-6 lg:grid-cols-[minmax(14rem,19rem)_1fr]">
-                <aside aria-label={t("dossiers.list")} className="space-y-3">
-                    <h2 className="type-headline text-label-secondary">
-                        {t("dossiers.list")}
-                    </h2>
-                    {list.isLoading && (
-                        <div {...loadingSurfaceProps} className="space-y-2">
-                            {[1, 2, 3].map((i) => (
-                                <Skeleton key={i} className="h-14 w-full" />
-                            ))}
-                        </div>
-                    )}
-                    {list.isError && (
-                        <PageError
-                            message={apiErrorToMessage(list.error, t)}
-                            onRetry={() => void list.refetch()}
-                        />
-                    )}
-                    {!list.isLoading && !list.isError && items.length === 0 && (
-                        <Card>
-                            <CardContent variant="state">
-                                <EmptyState
-                                    size="compact"
-                                    headingLevel={3}
-                                    icon={PAGE_ICONS["/research/dossiers"]}
-                                    title={t("dossiers.empty")}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
-                    {items.length > 0 && (
-                        <List>
-                            {items.map((item) => {
-                                const selected = selectedId === item.id;
-                                return (
-                                    <ListRow
-                                        key={item.id}
-                                        aria-current={
-                                            selected ? "page" : undefined
-                                        }
-                                        className={cn(
-                                            selected && "bg-primary/10",
-                                        )}
-                                        onActivate={() => void choose(item.id)}
-                                        title={
-                                            <span
-                                                className={cn(
-                                                    selected && "font-medium",
-                                                )}
-                                            >
-                                                {item.title}
-                                            </span>
-                                        }
-                                        subtitle={`${t(`dossiers.workspace.${item.workspace}`)} · ${t("dossiers.version", { version: item.version })}`}
-                                    />
-                                );
-                            })}
-                        </List>
-                    )}
-                    {list.data && list.data.total > 500 && (
-                        <div className="flex flex-wrap items-center gap-2 type-footnote text-label-secondary">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={listOffset === 0}
-                                onClick={() =>
-                                    setListOffset(Math.max(0, listOffset - 500))
-                                }
-                            >
-                                {t("dossiers.previous")}
-                            </Button>
-                            <span className="tabular-nums">
-                                {t("dossiers.pageRange", {
-                                    first: listOffset + 1,
-                                    last: Math.min(
-                                        listOffset + 500,
-                                        list.data.total,
-                                    ),
-                                    total: list.data.total,
+            <div
+                className={cn(
+                    "grid items-start gap-6",
+                    (items.length > 0 ||
+                        draft ||
+                        selectedId ||
+                        list.isLoading ||
+                        list.isError) &&
+                        "lg:grid-cols-[minmax(14rem,19rem)_1fr]",
+                )}
+            >
+                {(items.length > 0 ||
+                    draft ||
+                    selectedId ||
+                    list.isLoading ||
+                    list.isError) && (
+                    <aside
+                        aria-label={t("dossiers.list")}
+                        className="space-y-3"
+                    >
+                        <h2 className="type-headline text-label-secondary">
+                            {t("dossiers.list")}
+                        </h2>
+                        {list.isLoading && (
+                            <div {...loadingSurfaceProps} className="space-y-2">
+                                {[1, 2, 3].map((i) => (
+                                    <Skeleton key={i} className="h-14 w-full" />
+                                ))}
+                            </div>
+                        )}
+                        {list.isError && (
+                            <PageError
+                                message={apiErrorToMessage(list.error, t)}
+                                onRetry={() => void list.refetch()}
+                            />
+                        )}
+                        {!list.isLoading &&
+                            !list.isError &&
+                            items.length === 0 && (
+                                <Card>
+                                    <CardContent variant="state">
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={
+                                                PAGE_ICONS["/research/dossiers"]
+                                            }
+                                            title={t("dossiers.empty")}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            )}
+                        {items.length > 0 && (
+                            <List>
+                                {items.map((item) => {
+                                    const selected = selectedId === item.id;
+                                    return (
+                                        <ListRow
+                                            key={item.id}
+                                            aria-current={
+                                                selected ? "page" : undefined
+                                            }
+                                            className={cn(
+                                                selected && "bg-primary/10",
+                                            )}
+                                            onActivate={() =>
+                                                void choose(item.id)
+                                            }
+                                            title={
+                                                <span
+                                                    className={cn(
+                                                        selected &&
+                                                            "font-medium",
+                                                    )}
+                                                >
+                                                    {item.title}
+                                                </span>
+                                            }
+                                            subtitle={`${t(`dossiers.workspace.${item.workspace}`)} · ${t("dossiers.version", { version: item.version })}`}
+                                        />
+                                    );
                                 })}
-                            </span>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                disabled={listOffset + 500 >= list.data.total}
-                                onClick={() => setListOffset(listOffset + 500)}
-                            >
-                                {t("dossiers.next")}
-                            </Button>
-                        </div>
-                    )}
-                </aside>
+                            </List>
+                        )}
+                        {list.data && list.data.total > 500 && (
+                            <div className="flex flex-wrap items-center gap-2 type-footnote text-label-secondary">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={listOffset === 0}
+                                    onClick={() =>
+                                        setListOffset(
+                                            Math.max(0, listOffset - 500),
+                                        )
+                                    }
+                                >
+                                    {t("dossiers.previous")}
+                                </Button>
+                                <span className="tabular-nums">
+                                    {t("dossiers.pageRange", {
+                                        first: listOffset + 1,
+                                        last: Math.min(
+                                            listOffset + 500,
+                                            list.data.total,
+                                        ),
+                                        total: list.data.total,
+                                    })}
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={
+                                        listOffset + 500 >= list.data.total
+                                    }
+                                    onClick={() =>
+                                        setListOffset(listOffset + 500)
+                                    }
+                                >
+                                    {t("dossiers.next")}
+                                </Button>
+                            </div>
+                        )}
+                    </aside>
+                )}
 
                 <div className="min-w-0 space-y-6">
                     {selectedId && detail.isLoading && (
@@ -540,16 +572,28 @@ export default function ResearchDossiersPage() {
                             </CardContent>
                         </Card>
                     )}
-                    {!draft && !selectedId && (
-                        <Card>
-                            <CardContent variant="state">
-                                <EmptyState
-                                    icon={PAGE_ICONS["/research/dossiers"]}
-                                    title={t("dossiers.select")}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
+                    {!draft &&
+                        !selectedId &&
+                        !list.isLoading &&
+                        !list.isError && (
+                            <Card>
+                                <CardContent variant="state">
+                                    <EmptyState
+                                        icon={PAGE_ICONS["/research/dossiers"]}
+                                        title={t(
+                                            items.length > 0
+                                                ? "dossiers.select"
+                                                : "dossiers.empty",
+                                        )}
+                                        description={
+                                            items.length === 0
+                                                ? t("dossiers.emptyHint")
+                                                : undefined
+                                        }
+                                    />
+                                </CardContent>
+                            </Card>
+                        )}
                     {draft && (
                         <form
                             className="space-y-6"
@@ -635,31 +679,39 @@ export default function ResearchDossiersPage() {
                                                 }
                                             />
                                         </div>
-                                        <SegmentedControl
-                                            label={t(
-                                                "dossiers.field.workspace",
-                                            )}
-                                            size="sm"
-                                            className="w-full"
-                                            value={draft.workspace}
-                                            onValueChange={(value) =>
-                                                edit({
-                                                    workspace:
-                                                        value as AnalysisWorkspace,
-                                                })
-                                            }
-                                        >
-                                            {WORKSPACES.map((value) => (
-                                                <SegmentedControlItem
-                                                    key={value}
-                                                    value={value}
+                                        <div className="min-w-0 space-y-2">
+                                            <Label htmlFor="dossier-workspace">
+                                                {t("dossiers.field.workspace")}
+                                            </Label>
+                                            <Select
+                                                value={draft.workspace}
+                                                onValueChange={(value) =>
+                                                    edit({
+                                                        workspace:
+                                                            value as AnalysisWorkspace,
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger
+                                                    id="dossier-workspace"
+                                                    className="w-full"
                                                 >
-                                                    {t(
-                                                        `dossiers.workspace.${value}`,
-                                                    )}
-                                                </SegmentedControlItem>
-                                            ))}
-                                        </SegmentedControl>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {WORKSPACES.map((value) => (
+                                                        <SelectItem
+                                                            key={value}
+                                                            value={value}
+                                                        >
+                                                            {t(
+                                                                `dossiers.workspace.${value}`,
+                                                            )}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="dossier-question">

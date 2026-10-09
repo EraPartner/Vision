@@ -9,6 +9,7 @@ export type TableTransaction = {
     recipient: string;
     recipientId?: number;
     bank: string;
+    bankLabel?: string;
     accountId?: number;
     amount: number;
     currency: string;

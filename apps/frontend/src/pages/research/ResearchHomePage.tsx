@@ -210,9 +210,9 @@ export default function ResearchHomePage() {
             </section>
 
             {/* Watchlist + News */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-stretch">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
                 <div className="h-full min-h-0 lg:col-span-2">
-                    <Card className="flex h-full flex-col">
+                    <Card className="flex flex-col">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                             <CardTitle variant="sm">
                                 {t("research.watchlistPreview")}
@@ -277,7 +277,9 @@ export default function ResearchHomePage() {
                                                 subtitle={item.name}
                                                 trailing={trailing}
                                             >
-                                                <Link to={marketHref(item.symbol)} />
+                                                <Link
+                                                    to={marketHref(item.symbol)}
+                                                />
                                             </ListRow>
                                         ) : (
                                             <ListRow

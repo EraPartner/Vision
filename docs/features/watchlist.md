@@ -2,9 +2,9 @@
 title: Watchlist Feature
 type: feature
 status: active
-date: 2026-10-07
-last_modified: 2026-09-27
-updated: 2026-10-07
+date: 2026-10-09
+last_modified: 2026-10-09
+updated: 2026-10-09
 tags: [feature, watchlist, investments, tracking, alerts, phase-3.6, offline-resilience, online-status-detection, api-client-migration, validation, june-2026, backtest, added-price, adr-097, destructive-confirm]
 description: Investment watchlist for tracking securities not yet in the portfolio with target price alerts. June 2026: POST/PATCH return 400 ValidationError for invalid fields; what-if backtest shows return since add date using added_price (migration 0058, ADR-097).
 aliases: [watch list, price alerts, investment tracking]
@@ -96,17 +96,20 @@ Removes a security from the watchlist.
 
 The watchlist page uses a smart display strategy:
 
-- **At or below target**: Shows the current price (encourages buying)
-- **Above target**: Shows the percentage above target (shows how much it's exceeded)
+- **Current price and target**: Aligned amounts remain visible on each row; an unavailable quote is named explicitly.
+- **At or below target**: A status badge indicates that the current price meets the target.
+- **Above target**: A percentage shows the distance above the target.
 - **Since added**: Shows a signed percentage from the stored added price
 
-This provides actionable information: either "it's cheap enough" (price shown) or "it's gone up X%" (percentage shown).
+Security names and descriptive text wrap instead of truncating. Below 36rem of list-container width, prices and target details stack beneath the security information; wider lists align them at the right.
+
+Target amounts and status occupy separate lines so a status badge does not shift the amount alignment.
 Target distance and since-added change use the shared `DeltaPill`: direction, semantic gain/loss
 tone, neutral zero, and locale-aware precision therefore match the other market-change surfaces.
 
 ## Keyboard controls
 
-Each row opens the chart on activation (the row is a labelled button) and has a ••• menu with Open chart, Open in Market lookup and Remove (destructive, last, confirmed). The row menu identifies the item's name and symbol ([[docs/adr/187-completeness-sweep|ADR-187]]). In the chart dialog, the target-price button identifies the edit action,
+Each row has a labelled Open chart button. The security name links to Market lookup; the row itself is not an additional click target. A ••• menu also offers Open chart, Open in Market lookup and Remove (destructive, last, confirmed). The row menu identifies the item's name and symbol ([[docs/adr/187-completeness-sweep|ADR-187]]). In the chart dialog, the target-price button identifies the edit action,
 item, and current value, with a visible focus ring and tooltip. Opening its editor focuses the
 labelled price input immediately.
 

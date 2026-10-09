@@ -2,8 +2,8 @@
 title: Market Lookup Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-09
+updated: 2026-10-09
 tags: [feature, market, lookup, stocks, search, frontend, research, security-detail, url-state]
 description: Market Lookup (/research/market) is the consolidated security-detail surface for the Research workspace. It provides symbol search, a live price chart, a tabbed Details card (Fundamentals / Analyst / News via the multi-provider research aggregator), a Trading info card, and a Map-provider dialog. It is the canonical deep-link target from the Markets Overview heat-map and ResearchHomePage search/watchlist tiles. Aug 2026: the Details card's active tab is mirrored to `?tab=` via useTabParam.
 aliases: [stock lookup, market search, security search, ticker search, market lookup]
@@ -56,7 +56,7 @@ The page has two rendering paths:
    - **Analyst** — `ResearchAnalystTab`: consensus ratings + target price + recent analyst actions, sourced from `GET /api/research/analyst`.
    - **News** — `ResearchNewsTab`: recent news articles, sourced from `GET /api/research/news`.
    - **URL-synced (Aug 2026)**: the active tab (`fundamentals` | `analyst` | `news`) is mirrored to `?tab=` via [[docs/components/hooks#usetabparam-aug-2026|useTabParam]], so a shared `/research/market?symbol=…&tab=analyst` link reopens the same tab the sender was reading. Writes use `{ replace: true }`.
-5. **Trading info card** — open / high / low / prev-close / volume / avg-volume + 52-week range; responsive 2–3 column grid.
+5. **Trading info card** — open / high / low / prev-close / volume / avg-volume + 52-week range; responsive grid that fits groups at a minimum width of 20rem, or the available width when narrower. Labels wrap so names such as Average volume remain readable.
 
 **Provider-asset path** (`isProviderAsset` is true — non-Yahoo holdings: Kinesis, Binance, custom JSON):
 
@@ -163,3 +163,10 @@ Symbol search shows an explicit empty-result message or an unavailable-search me
 ### Shareable chart range
 
 The chart range is mirrored to `?range=` alongside symbol and Details tab state. Supported values restore on load; an unsupported value falls back to the one-month default. Changing range preserves other query parameters and uses history replacement. Selecting the default removes the range parameter.
+
+## Metric and news presentation
+
+Fundamentals concerns show each measured value beside its benchmark. Percentage metrics use
+percentage units, and free cash flow uses the known instrument currency. Analyst price targets
+include the quote currency when available. News rows reserve thumbnail space even when an image
+is absent or fails, keeping titles aligned. Ratios and compact values use the selected number format.

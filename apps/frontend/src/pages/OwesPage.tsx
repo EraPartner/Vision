@@ -150,8 +150,8 @@ export default function OwesPage() {
                                 chevron
                                 title={item.recipient_name}
                                 subtitle={
-                                    <span className="flex items-center gap-3">
-                                        <span className="shrink-0">
+                                    <span className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem] sm:items-center sm:gap-4">
+                                        <span className="min-w-0">
                                             {countLabel}
                                             {" · "}
                                             {t("owesPage.paid", {
@@ -186,7 +186,7 @@ export default function OwesPage() {
                                     </span>
                                 }
                                 trailing={
-                                    <span className="type-headline tabular-nums text-foreground">
+                                    <span className="w-36 text-right type-headline tabular-nums text-foreground">
                                         <Money
                                             amount={item.remaining}
                                             currency={defaultCurrency}

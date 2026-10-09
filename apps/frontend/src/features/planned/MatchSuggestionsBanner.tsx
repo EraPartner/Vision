@@ -17,14 +17,14 @@ interface MatchSuggestionsBannerProps {
 export function MatchSuggestionsBanner({
     onReview,
 }: MatchSuggestionsBannerProps) {
-    const { t } = useLanguage();
+    const { t, tc } = useLanguage();
     const { suggestions } = usePlannedMatchSuggestions();
 
     if (suggestions.length === 0) return null;
 
     return (
         <Card>
-            <CardContent variant="row" className="gap-4">
+            <CardContent variant="row" className="flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 type-body font-medium text-foreground">
                         <Sparkles
@@ -32,12 +32,10 @@ export function MatchSuggestionsBanner({
                             aria-hidden
                         />
                         <span>
-                            {t("plannedPage.suggestions.title", {
-                                n: suggestions.length,
-                            })}
+                            {tc("plannedPage.suggestions.title", suggestions.length)}
                         </span>
                     </div>
-                    <p className="mt-0.5 truncate type-footnote text-label-secondary">
+                    <p className="mt-0.5 type-footnote text-label-secondary">
                         {t("plannedPage.suggestions.subtitle")}
                     </p>
                 </div>

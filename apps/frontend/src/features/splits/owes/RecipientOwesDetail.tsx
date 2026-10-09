@@ -223,7 +223,7 @@ export function RecipientOwesDetail({
             ) : items.length === 0 ? (
                 <EmptyState icon={Check} title={t("owesPage.allSettled")} />
             ) : (
-                <>
+                <div className="space-y-6">
                     <List>
                         {items.map((split) => {
                             const progress =
@@ -272,8 +272,8 @@ export function RecipientOwesDetail({
                                         </span>
                                     }
                                     subtitle={
-                                        <span className="flex items-center gap-3">
-                                            <span className="shrink-0">
+                                        <span className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-center sm:gap-4">
+                                            <span className="min-w-0">
                                                 {t("owesPage.original", {
                                                     amount: formatCurrency(
                                                         Math.abs(
@@ -315,7 +315,7 @@ export function RecipientOwesDetail({
                                     }
                                     trailing={
                                         <>
-                                            <span className="type-headline tabular-nums text-foreground">
+                                            <span className="w-36 text-right type-headline tabular-nums text-foreground">
                                                 <Money
                                                     amount={split.remaining}
                                                     currency={defaultCurrency}
@@ -380,7 +380,7 @@ export function RecipientOwesDetail({
                         recipientId={recipient.id}
                         recipientName={recipient.name}
                     />
-                </>
+                </div>
             )}
 
             <Dialog open={!!payDialog} onOpenChange={() => setPayDialog(null)}>

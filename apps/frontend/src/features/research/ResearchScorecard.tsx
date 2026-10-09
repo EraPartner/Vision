@@ -1,3 +1,8 @@
+import {
+    useCurrencyFormatter,
+    useCurrencyFormatSettings,
+    usePercentFormatter,
+} from "@/hooks/useCurrencyFormatter";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import { List, ListRow } from "@/components/ui/list";
@@ -70,8 +75,17 @@ export function ScorecardGradeBadge({
 }
 
 /** Full panel: grade + severity counts + worst-first flag list. */
-export function ScorecardPanel({ scorecard }: { scorecard: ResearchScorecard }) {
+export function ScorecardPanel({
+    scorecard,
+    currency,
+}: {
+    scorecard: ResearchScorecard;
+    currency?: string;
+}) {
     const { t } = useLanguage();
+    const { locale, decimals } = useCurrencyFormatSettings();
+    const formatPercent = usePercentFormatter();
+    const formatCurrency = useCurrencyFormatter();
 
     if (!scorecard || scorecard.evaluated === 0) {
         return (
@@ -142,9 +156,35 @@ export function ScorecardPanel({ scorecard }: { scorecard: ResearchScorecard }) 
                                 title={t(`research.metric.${flag.metric}`)}
                                 subtitle={reasonText}
                                 trailing={
-                                    <span className="type-footnote">
+                                    <span className="flex flex-col items-end gap-1 type-footnote">
+                                        <span className="tabular-nums text-foreground">
+                                            {flag.benchmark.includes("%")
+                                                ? formatPercent(
+                                                      flag.value * 100,
+                                                      { digits: decimals },
+                                                  )
+                                                : flag.metric ===
+                                                        "freeCashFlow" &&
+                                                    currency
+                                                  ? formatCurrency(flag.value, {
+                                                        currency,
+                                                    })
+                                                  : flag.value.toLocaleString(
+                                                        locale,
+                                                        {
+                                                            maximumFractionDigits:
+                                                                decimals,
+                                                        },
+                                                    )}
+                                        </span>
                                         {t("research.scorecard.benchmark", {
-                                            value: flag.benchmark,
+                                            value: flag.benchmark.replace(
+                                                /\d+(?:\.\d+)?/g,
+                                                (value) =>
+                                                    Number(
+                                                        value,
+                                                    ).toLocaleString(locale),
+                                            ),
                                         })}
                                     </span>
                                 }

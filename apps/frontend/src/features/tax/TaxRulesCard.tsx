@@ -1,11 +1,6 @@
+import { Disclosure, DisclosureSummary, DisclosureContent } from "@/components/ui/disclosure";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+
 
 /** Static Belgian tax-rules reference of the overview page ("taxRules" widget). */
 export function TaxRulesCard() {
@@ -49,12 +44,10 @@ export function TaxRulesCard() {
     ];
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>{t("tax.rules.title")}</CardTitle>
-                <CardDescription>{t("tax.rules.description")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+        <Disclosure variant="card">
+            <DisclosureSummary padded>{t("tax.rules.title")}</DisclosureSummary>
+            <DisclosureContent className="space-y-3">
+                <p className="type-footnote text-label-secondary">{t("tax.rules.description")}</p>
                 {taxRuleCards.map((rule) => (
                     <section
                         key={rule.title}
@@ -75,7 +68,7 @@ export function TaxRulesCard() {
                         </ul>
                     </section>
                 ))}
-            </CardContent>
-        </Card>
+            </DisclosureContent>
+        </Disclosure>
     );
 }

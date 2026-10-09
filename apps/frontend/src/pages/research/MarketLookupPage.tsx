@@ -6,7 +6,6 @@ import {
     useCurrencyFormatter,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { formatDateTimeWithAppSettings } from "@/lib/dateUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -98,7 +97,7 @@ interface Quote {
 
 export default function MarketLookupPage() {
     const formatPercent = usePercentFormatter();
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
@@ -136,10 +135,13 @@ export default function MarketLookupPage() {
     );
     const fmtLargeNum = useCallback(
         (val: number | null | undefined) =>
-            formatCompactNumber(val, (v) =>
-                fmtNum(v, { maximumFractionDigits: 0 }),
-            ),
-        [fmtNum],
+            val == null || isNaN(val)
+                ? "—"
+                : fmtNum(val, {
+                      notation: "compact",
+                      maximumFractionDigits: appSettings.showDecimalPlaces,
+                  }),
+        [fmtNum, appSettings.showDecimalPlaces],
     );
     const [watchlistOpen, setWatchlistOpen] = useState(false);
     const [mappingOpen, setMappingOpen] = useState(false);
@@ -557,7 +559,7 @@ export default function MarketLookupPage() {
                                             formatMarketChartTick(
                                                 (v as Date).getTime(),
                                                 selectedRange.range,
-                                                locale,
+                                                language,
                                             )
                                         }
                                         yTickFormat={(v) =>
@@ -659,7 +661,7 @@ export default function MarketLookupPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid gap-3 md:grid-cols-2">
+                                <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] gap-3">
                                     {tradingInfoColumns.map((column, i) => (
                                         <List key={i}>
                                             {column.map(({ label, value }) => (
@@ -667,7 +669,7 @@ export default function MarketLookupPage() {
                                                     key={label}
                                                     className="min-h-10"
                                                     title={
-                                                        <span className="text-label-secondary">
+                                                        <span className="block whitespace-normal break-words text-label-secondary">
                                                             {label}
                                                         </span>
                                                     }
@@ -727,6 +729,7 @@ export default function MarketLookupPage() {
                                         className="pt-4"
                                     >
                                         <ResearchAnalystTab
+                                            currency={quote?.currency}
                                             symbol={effectiveSelectedSymbol}
                                             enabled={activeTab === "analyst"}
                                         />

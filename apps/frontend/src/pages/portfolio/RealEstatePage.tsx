@@ -195,7 +195,7 @@ export default function RealEstatePage() {
                                 />
                             </p>
                         </div>
-                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-2 lg:col-span-3">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:col-span-3">
                             <Figure
                                 label={t("portfolio.appreciation")}
                                 tone={toneClass(totalAppreciation)}

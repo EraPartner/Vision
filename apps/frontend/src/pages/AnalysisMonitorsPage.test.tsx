@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, delay } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
@@ -50,9 +50,14 @@ describe("AnalysisMonitorsPage", () => {
         expect(
             screen.queryByText("No notifications yet."),
         ).not.toBeInTheDocument();
+        await waitFor(() =>
+            expect(
+                screen.queryByRole("status", { name: "Notification inbox" }),
+            ).not.toBeInTheDocument(),
+        );
         expect(
-            await screen.findByText("No notifications yet."),
-        ).toBeInTheDocument();
+            screen.queryByText("No notifications yet."),
+        ).not.toBeInTheDocument();
         expect(
             screen.queryByRole("status", { name: "Notification inbox" }),
         ).not.toBeInTheDocument();
@@ -74,7 +79,12 @@ describe("AnalysisMonitorsPage", () => {
         await user.click(
             within(error.parentElement!).getByRole("button", { name: "Retry" }),
         );
-        expect(await screen.findByText("No monitors yet.")).toBeInTheDocument();
+        await waitFor(() =>
+            expect(
+                screen.queryByText("Could not load monitors"),
+            ).not.toBeInTheDocument(),
+        );
+        expect(screen.queryByText("No monitors yet.")).not.toBeInTheDocument();
         expect(
             screen.queryByText("Could not load monitors"),
         ).not.toBeInTheDocument();

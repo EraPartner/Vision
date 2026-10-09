@@ -78,9 +78,14 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
                             src={article.thumbnail}
                             alt=""
                             className="h-7 w-7 rounded-chip object-cover"
-                            fallbackClassName="hidden"
+                            fallbackClassName="h-7 w-7 rounded-chip bg-muted"
                         />
-                    ) : undefined;
+                    ) : (
+                        <span
+                            aria-hidden="true"
+                            className="h-7 w-7 rounded-chip bg-muted"
+                        />
+                    );
                     const title = (
                         <span className="whitespace-normal line-clamp-2 type-body text-foreground">
                             {article.title}
@@ -100,7 +105,11 @@ export function ResearchNewsTab({ symbol, enabled }: ResearchNewsTabProps) {
                                 />
                             }
                         >
-                            <a href={href} target="_blank" rel="noopener noreferrer" />
+                            <a
+                                href={href}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            />
                         </ListRow>
                     ) : (
                         <ListRow

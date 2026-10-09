@@ -5,9 +5,9 @@ import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     useCurrencyFormatter,
+    useCurrencyFormatSettings,
     usePercentFormatter,
 } from "@/hooks/useCurrencyFormatter";
-import { formatCompactNumber } from "@/utils/formatCompactNumber";
 import { ProvenanceBadge } from "@/features/research/ProvenanceBadge";
 import { ResearchUnavailableNote } from "@/features/research/ResearchUnavailableNote";
 import { ScorecardPanel } from "@/features/research/ResearchScorecard";
@@ -158,6 +158,7 @@ export function ResearchFundamentalsTab({
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const fmtCurrency = useCurrencyFormatter();
+    const { locale, decimals } = useCurrencyFormatSettings();
 
     const { data: result, isFetching } = useResearchScorecardQuery(
         symbol,
@@ -176,8 +177,12 @@ export function ResearchFundamentalsTab({
     );
     const fmtRatio = useCallback(
         (val: number | null | undefined) =>
-            val == null || isNaN(val) ? "—" : val.toFixed(2),
-        [],
+            val == null || isNaN(val)
+                ? "—"
+                : val.toLocaleString(locale, {
+                      maximumFractionDigits: decimals,
+                  }),
+        [locale, decimals],
     );
     const fmtPrice = useCallback(
         (val: number | null | undefined) =>
@@ -190,7 +195,13 @@ export function ResearchFundamentalsTab({
 
     const fmt = (format: MetricFormat, val: number | null | undefined) => {
         if (format === "pct") return fmtPct(val);
-        if (format === "largeNum") return formatCompactNumber(val);
+        if (format === "largeNum")
+            return val == null || isNaN(val)
+                ? "—"
+                : new Intl.NumberFormat(locale, {
+                      notation: "compact",
+                      maximumFractionDigits: decimals,
+                  }).format(val);
         if (format === "price") return fmtPrice(val);
         return fmtRatio(val);
     };
@@ -239,7 +250,7 @@ export function ResearchFundamentalsTab({
                 <h3 className="type-headline text-foreground">
                     {t("research.scorecard.title")}
                 </h3>
-                <ScorecardPanel scorecard={scorecard} />
+                <ScorecardPanel scorecard={scorecard} currency={currency} />
             </section>
 
             {/* Grouped metrics */}

@@ -53,7 +53,7 @@ related_code:
 
 ## Shareable view state
 
-The selected chart range is stored in `?period=1m|3m|6m|1y|3y|all`. The default range is omitted. Invalid values fall back to the default without rewriting the URL, and changes replace the current history entry.
+The selected chart range is stored in `?period=1m|3m|6m|1y|3y|all`. The default is one year (`1y`), and that default range is omitted. Invalid values fall back to the default without rewriting the URL, and changes replace the current history entry.
 
 ## Overview
 

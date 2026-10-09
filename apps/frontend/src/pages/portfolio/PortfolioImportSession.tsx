@@ -1,3 +1,4 @@
+import { CloudUpload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { Link } from "react-router";
@@ -942,14 +943,15 @@ export function PortfolioImportSession({ accounts }: Props) {
                     }}
                 />
                 <div
-                    className="rounded-card corner-continuous border border-dashed border-border/60 p-4"
+                    className="relative rounded-card corner-continuous border border-dashed border-border/60 bg-muted/20 p-10 text-center transition-colors hover:border-primary/50 focus-within:ring-2 focus-within:ring-ring"
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => {
                         event.preventDefault();
                         addFiles(Array.from(event.dataTransfer.files));
                     }}
                 >
-                    <Label htmlFor="portfolio-session-files">
+                    <CloudUpload className="mx-auto mb-3 h-10 w-10 text-label-secondary" aria-hidden="true" />
+                    <Label htmlFor="portfolio-session-files" className="block type-body font-medium">
                         {t("portfolioImport.session.files")}
                     </Label>
                     <Input
@@ -958,7 +960,8 @@ export function PortfolioImportSession({ accounts }: Props) {
                         accept=".csv,.xlsx,.xls"
                         multiple
                         disabled={locked}
-                        className="mt-2"
+                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                        aria-label={t("portfolioImport.session.files")}
                         onChange={(event) => {
                             addFiles(Array.from(event.target.files ?? []));
                             event.target.value = "";

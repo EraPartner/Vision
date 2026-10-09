@@ -2,8 +2,8 @@
 title: Planned Transactions
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-09
+updated: 2026-10-09
 tags: [feature, planned, recurring, bills, loans, phase-3, phase-12, calculations, immutability, error-handling, toast, atomic-patch, virtual-data-table, i18n-toasts, upcoming-payments-hook, occurrence-key-dismissal, june-2026, auto-link, planned-match, exchange-rates, fx]
 aliases: [planned-payments, scheduled-payments, recurring-payments, bills, subscriptions, loan-amortization]
 description: "Scheduled and recurring payment tracking - manage bills, subscriptions, and future expenses. June 2026: auto-link & auto-clear planned payments on match — ingested transactions are automatically linked to matching planned payments (same recipient cluster, same sign, ±5% amount, ±5 days); ambiguous matches surface as confirmable suggestions. PlannedPaymentsPage migrated from DataTable to VirtualDataTable; native alert() replaced with toast.error (new i18n keys plannedPage.toggleFailed/deleteFailed). V11: useUpcomingPlannedPayments shared hook (single fetch + shared dismissed-ID store); UpcomingPaymentsNotification renders its dashboard reminder without duplicating the planned-payments page, while native badge synchronization remains active throughout AppLayout. June 2026 (B1 fix): dismissals now keyed per occurrence (id:YYYY-MM-DD) so recurring reminders re-surface each cycle; past-dated keys pruned on load; legacy id-only entries silently dropped on next load. August 2026: Planned aggregates omit payments whose exchange rate is unavailable and visibly report the omission instead of blending currencies."
@@ -740,7 +740,7 @@ payment is active through its pressed state.
 The page opens with `features/planned/NextSevenDaysStrip.tsx`: eight day columns —
 today through today+7 — with every active payment due in that window sitting on
 the day it falls (name + signed amount). Clicking an item opens it for editing,
-the same target as the row's pencil action.
+the same target as the row's pencil action. Payment names wrap inside each day tile, with the signed amount on a separate line.
 
 It replaced a four-tile stat row (`Pending` / `Executed` / `Est. Monthly` /
 `Due this week`). Three of those were row counts a bills page has no use for;

@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -257,9 +257,10 @@ export default function CategoriesPage() {
                 )}
                 <TextLink
                     to={`/transactions?${categoryFilter}&filter_label=${encodeURIComponent(label)}`}
-                    tone={node.is_active ? "primary" : "muted"}
+                    tone={node.is_active ? "inherit" : "muted"}
                     className={cn(
                         "min-w-0 truncate type-body",
+                        level === 0 ? "font-semibold text-foreground" : "font-normal text-label-secondary",
                         !node.is_active && "line-through",
                     )}
                     title={label}
@@ -475,11 +476,6 @@ export default function CategoriesPage() {
                     }
                 />
                 <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle variant="sm">
-                            {t("categoriesPage.treeTitle")}
-                        </CardTitle>
-                    </CardHeader>
                     <CardContent variant="flush">
                         {roots.length === 0 ? (
                             <EmptyState
@@ -488,7 +484,7 @@ export default function CategoriesPage() {
                                 title={t("categoriesPage.empty")}
                             />
                         ) : (
-                            <ul className="m-0 list-none divide-y divide-border/50 border-t border-border/50 p-0">
+                            <ul className="m-0 list-none divide-y divide-border/50 p-0">
                                 {rows.map(renderRow)}
                             </ul>
                         )}

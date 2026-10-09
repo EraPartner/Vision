@@ -252,75 +252,79 @@ export default function AIChatPage() {
                     className="flex min-w-0 flex-1 flex-col overflow-hidden"
                 >
                     <main>
-                        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-5 py-3">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <Sheet
-                                    open={railOpen}
-                                    onOpenChange={setRailOpen}
-                                >
-                                    <SheetTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className={cn(
-                                                "md:hidden",
-                                                mode !== "chat" && "hidden",
-                                            )}
-                                            aria-label={t(
-                                                "aiChat.conversations",
-                                            )}
-                                        >
-                                            <Menu className="h-5 w-5" />
-                                        </Button>
-                                    </SheetTrigger>
-                                    <SheetContent
-                                        side="left"
-                                        className="w-72 p-0"
+                        {mode === "chat" && (
+                            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/50 px-5 py-3">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <Sheet
+                                        open={railOpen}
+                                        onOpenChange={setRailOpen}
                                     >
-                                        <SheetHeader className="sr-only">
-                                            <SheetTitle>
-                                                {t("aiChat.conversations")}
-                                            </SheetTitle>
-                                        </SheetHeader>
-                                        <ChatConversationList
-                                            selectedId={selectedId}
-                                            onSelect={(id) => {
-                                                setSelectedId(id);
-                                                setRailOpen(false);
-                                            }}
-                                        />
-                                    </SheetContent>
-                                </Sheet>
-                                <div className="min-w-0">
-                                    <h2 className="truncate type-title-3">
-                                        {(mode === "chat" &&
-                                            detail?.conversation.title) ||
-                                            t(
-                                                mode === "chat"
-                                                    ? "aiChat.mode.chat"
-                                                    : "aiChat.mode.investigation",
-                                            )}
-                                    </h2>
-                                    {(statusLoading || status?.ok) && (
-                                        <p className="mt-0.5 flex items-center gap-1.5 type-footnote text-label-secondary">
-                                            <span
-                                                aria-hidden="true"
+                                        <SheetTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
                                                 className={cn(
-                                                    "inline-block h-1.5 w-1.5 rounded-full",
-                                                    statusDotClass,
+                                                    "md:hidden",
+                                                    mode !== "chat" && "hidden",
                                                 )}
+                                                aria-label={t(
+                                                    "aiChat.conversations",
+                                                )}
+                                            >
+                                                <Menu className="h-5 w-5" />
+                                            </Button>
+                                        </SheetTrigger>
+                                        <SheetContent
+                                            side="left"
+                                            className="w-72 p-0"
+                                        >
+                                            <SheetHeader className="sr-only">
+                                                <SheetTitle>
+                                                    {t("aiChat.conversations")}
+                                                </SheetTitle>
+                                            </SheetHeader>
+                                            <ChatConversationList
+                                                selectedId={selectedId}
+                                                onSelect={(id) => {
+                                                    setSelectedId(id);
+                                                    setRailOpen(false);
+                                                }}
                                             />
-                                            {statusLabel}
-                                        </p>
-                                    )}
+                                        </SheetContent>
+                                    </Sheet>
+                                    <div className="min-w-0">
+                                        <h2 className="truncate type-title-3">
+                                            {(mode === "chat" &&
+                                                detail?.conversation.title) ||
+                                                t(
+                                                    mode === "chat"
+                                                        ? "aiChat.mode.chat"
+                                                        : "aiChat.mode.investigation",
+                                                )}
+                                        </h2>
+                                        {(statusLoading || status?.ok) && (
+                                            <p className="mt-0.5 flex items-center gap-1.5 type-footnote text-label-secondary">
+                                                <span
+                                                    aria-hidden="true"
+                                                    className={cn(
+                                                        "inline-block h-1.5 w-1.5 rounded-full",
+                                                        statusDotClass,
+                                                    )}
+                                                />
+                                                {statusLabel}
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </header>
+                            </header>
+                        )}
 
-                        <OllamaStatusBanner
-                            status={status}
-                            isLoading={statusLoading}
-                        />
+                        {mode === "chat" && (
+                            <OllamaStatusBanner
+                                status={status}
+                                isLoading={statusLoading}
+                            />
+                        )}
 
                         <div
                             role="region"
@@ -334,7 +338,10 @@ export default function AIChatPage() {
                             role="region"
                             aria-label={t("aiChat.mode.chat")}
                             hidden={mode !== "chat"}
-                            className="flex min-h-0 flex-1 flex-col"
+                            className={cn(
+                                "min-h-0 flex-1 flex-col",
+                                mode === "chat" ? "flex" : "hidden",
+                            )}
                         >
                             <ChatMessageList
                                 isVisible={mode === "chat"}
@@ -345,20 +352,28 @@ export default function AIChatPage() {
                                 assistantDraft={assistantDraft}
                                 isStreaming={isStreaming}
                                 streamStatus={streamStatus}
-                                onRetry={lastRequest ? handleRetry : undefined}
-                                emptyState={emptyState}
+                                onRetry={
+                                    lastRequest && !composerDisabled
+                                        ? handleRetry
+                                        : undefined
+                                }
+                                emptyState={
+                                    composerDisabled ? undefined : emptyState
+                                }
                             />
 
-                            <ChatComposer
-                                onSend={handleSend}
-                                onCancel={cancel}
-                                isStreaming={isStreaming}
-                                disabled={composerDisabled}
-                                model={activeModel}
-                                onModelChange={setModelOverride}
-                                useTools={useTools}
-                                onUseToolsChange={setUseTools}
-                            />
+                            {(!composerDisabled || isStreaming) && (
+                                <ChatComposer
+                                    onSend={handleSend}
+                                    onCancel={cancel}
+                                    isStreaming={isStreaming}
+                                    disabled={composerDisabled}
+                                    model={activeModel}
+                                    onModelChange={setModelOverride}
+                                    useTools={useTools}
+                                    onUseToolsChange={setUseTools}
+                                />
+                            )}
                         </div>
                     </main>
                 </Card>

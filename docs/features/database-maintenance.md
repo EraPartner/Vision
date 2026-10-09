@@ -2,8 +2,8 @@
 title: Database Maintenance UI
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-09
+updated: 2026-10-09
 tags:
   [
     feature,
@@ -170,6 +170,8 @@ The page consists of:
    - Last vacuum timestamp
    - Last analyze timestamp
 
+Timestamp and size columns keep their values on one line with reserved minimum widths. The table scrolls horizontally within its container when the window cannot fit all columns.
+
 2. **Row Count Behavior**:
    - **Important:** Row counts (`live_rows`, `dead_rows`) are estimates from PostgreSQL statistics (via `pg_stat_user_tables`), not authoritative counts. They are only updated when VACUUM ANALYZE is run.
    - All tables display actual row counts from PostgreSQL statistics regardless of their vacuum/analyze history. Tables with no vacuum/analyze events show the last known statistics (which may be zero for newly created tables).
@@ -207,8 +209,9 @@ The page consists of:
 
 The editor page (`TableDataEditorPage.tsx`) renders a controlled grid using the existing `ui/table` primitives (no new dependency). Features:
 
+- **Column sizing**: data columns use a fixed 11rem width and the row-action column uses 3rem. Column names and text values wrap, including long identifiers, instead of widening the grid or truncating values. Tables with many columns still scroll horizontally inside the card.
 - **Column headers** are sortable (click once for ASC, again for DESC). Sorting is paused while uncommitted changes exist to prevent silent loss of dirty state.
-- **Per-column filter inputs** appear below each header. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`.
+- **Per-column filter inputs** appear below each header with a short “Filter…” hint and a column-specific accessible label. Supported ops: `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, `contains` (ILIKE), `startsWith` (ILIKE), `isnull`, `notnull`.
 - **Pagination** via `limit` (default 100, max 500) and `offset` controls.
 
 The backend endpoint is `GET /api/admin/database/tables/:table/rows` — see [[docs/api/admin|Admin API]].

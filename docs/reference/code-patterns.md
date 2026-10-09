@@ -4686,3 +4686,11 @@ Known residue (pre-existing, not worth a rename until touched): the auto-named `
 - [[docs/guides/how-to-add-new-page|How to Add a New Page]]
 - [[docs/reference/react-query-keys|React Query Keys Reference]]
 - [[docs/reference/error-codes|Error Codes Reference]]
+
+## Inline table action menus
+
+`VirtualDataTable.renderRowActions(row, { startEditing })` replaces the idle Edit button when a
+consumer supplies a single row actions menu. Save and Cancel remain the table's responsibility while
+editing. After the Cancel button is used, focus returns to the row's menu trigger when no direct Edit button is
+present. Payees uses this hook to avoid duplicate visible edit and overflow controls; context-menu
+behavior remains available. See [[docs/features/recipients|Payees]].

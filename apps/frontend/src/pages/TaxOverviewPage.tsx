@@ -229,7 +229,7 @@ export default function TaxOverviewPage() {
                             />
                         )}
 
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
+                        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                             {isVisible("pitBreakdown") && (
                                 <PitBreakdownCard
                                     calculation={calculation}
@@ -249,7 +249,7 @@ export default function TaxOverviewPage() {
                             {isVisible("taxRules") && <TaxRulesCard />}
                         </div>
 
-                        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                             {isVisible("incomeBreakdown") && (
                                 <MonthlyIncomeTaxCard
                                     data={monthlyIncomeTax}

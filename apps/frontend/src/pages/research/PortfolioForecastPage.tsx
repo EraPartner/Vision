@@ -36,7 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
-import { LineChart, type LineSeries } from "@/components/charts";
+import { ChartLegend, LineChart, type LineSeries } from "@/components/charts";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StateBlock } from "@/components/shared/StateBlock";
 import { StatCard } from "@/components/shared/StatCard";
@@ -237,7 +237,8 @@ export default function PortfolioForecastPage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="contribution">
-                            {t("research.forecast.monthlyContribution")}
+                            {t("research.forecast.monthlyContribution")} (
+                            {currency})
                         </Label>
                         <Input
                             id="contribution"
@@ -253,7 +254,7 @@ export default function PortfolioForecastPage() {
 
                     <div className="space-y-2">
                         <Label htmlFor="target">
-                            {t("research.forecast.targetValue")}
+                            {t("research.forecast.targetValue")} ({currency})
                         </Label>
                         <Input
                             id="target"
@@ -498,6 +499,17 @@ export default function PortfolioForecastPage() {
                             </div>
                         </CardHeader>
                         <CardContent>
+                            <ChartLegend
+                                className="mb-3"
+                                items={series.map((item) => ({
+                                    label: item.label ?? item.key,
+                                    color: item.color ?? "currentColor",
+                                    dashed: item.dashed,
+                                }))}
+                            />
+                            <p className="mb-4 type-footnote text-label-secondary">
+                                {t("research.forecast.intervalHint")}
+                            </p>
                             {isFetching && !forecast ? (
                                 <Skeleton
                                     {...loadingSurfaceProps}

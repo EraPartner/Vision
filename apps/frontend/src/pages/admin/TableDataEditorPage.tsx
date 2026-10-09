@@ -283,10 +283,10 @@ function EditableCell({
                       : t("dbEditor.readOnlyCol")
             }
         >
-            <div className="flex max-w-[28rem] items-center justify-between gap-2 truncate">
+            <div className="flex min-w-0 items-center justify-between gap-2">
                 <span
                     className={cn(
-                        "truncate",
+                        "min-w-0 whitespace-normal [overflow-wrap:anywhere]",
                         isNull && "italic text-label-tertiary",
                     )}
                 >
@@ -610,7 +610,19 @@ export default function TableDataEditorPage() {
                     {...(query.isLoading ? loadingSurfaceProps : {})}
                     className="overflow-x-auto"
                 >
-                    <Table>
+                    <Table
+                        className="table-fixed"
+                        style={{ minWidth: `${3 + columns.length * 11}rem` }}
+                    >
+                        <colgroup>
+                            <col style={{ width: "3rem" }} />
+                            {columns.map((col) => (
+                                <col
+                                    key={col.name}
+                                    style={{ width: "11rem" }}
+                                />
+                            ))}
+                        </colgroup>
                         <TableHeader className="bg-foreground/[0.015]">
                             {/* Column titles + sort */}
                             <TableRow className="!border-b-0 hover:bg-transparent">
@@ -621,13 +633,13 @@ export default function TableDataEditorPage() {
                                     return (
                                         <TableHead
                                             key={col.name}
-                                            className="h-9 whitespace-nowrap pb-0 pt-2"
+                                            className="h-auto whitespace-normal pb-0 pt-2"
                                         >
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="sm"
-                                                className="group/sort -mx-2 h-7 gap-1.5 px-2 font-mono type-footnote font-normal text-label-secondary hover:text-foreground disabled:opacity-100 [&_svg]:size-3"
+                                                className="group/sort -mx-2 h-auto min-h-7 max-w-full gap-1.5 whitespace-normal px-2 text-left font-mono type-footnote font-normal text-label-secondary hover:text-foreground disabled:opacity-100 [&_svg]:size-3"
                                                 onClick={() =>
                                                     toggleSort(col.name)
                                                 }
@@ -639,7 +651,9 @@ export default function TableDataEditorPage() {
                                                         aria-label="PK"
                                                     />
                                                 )}
-                                                <span>{col.name}</span>
+                                                <span className="min-w-0 [overflow-wrap:anywhere]">
+                                                    {col.name}
+                                                </span>
                                                 {active ? (
                                                     sort!.dir === "asc" ? (
                                                         <ChevronUp

@@ -625,6 +625,17 @@ export default function TransactionsPage() {
         );
     };
 
+    const accountLabels = useMemo(
+        () =>
+            new Map(
+                accountsData?.items.map((account) => [
+                    account.id,
+                    account.display_name || account.name,
+                ]) ?? [],
+            ),
+        [accountsData],
+    );
+
     const transactions: TableTransaction[] = useMemo(
         () =>
             allItems.map((tx) => ({
@@ -643,6 +654,9 @@ export default function TransactionsPage() {
                     t("txPage.field.unknown"),
                 recipientId: tx.recipient_id ?? 0,
                 bank: (tx.bank_account as string | undefined) || tx.bank || "",
+                bankLabel: tx.account_id
+                    ? accountLabels.get(tx.account_id)
+                    : undefined,
                 accountId: tx.account_id ?? undefined,
                 amount: tx.amount ?? 0,
                 // Matches the backend window's COALESCE(currency, 'EUR').
@@ -653,7 +667,7 @@ export default function TransactionsPage() {
                 is_active: tx.is_active ?? true,
                 tags: tx.tags ?? [],
             })),
-        [allItems, t],
+        [allItems, t, accountLabels],
     );
     const selectedTransaction = useMemo(
         () =>

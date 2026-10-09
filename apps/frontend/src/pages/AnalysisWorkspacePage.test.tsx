@@ -306,6 +306,43 @@ describe("AnalysisWorkspacePage", () => {
         expect(await screen.findByText(/Results need updating/)).toBeVisible();
     });
 
+    it("pages loaded rows locally and keeps exact values available when formatting", async () => {
+        vi.mocked(apiClient.executeAnalysis).mockResolvedValue({
+            ...result,
+            rows: Array.from({ length: 75 }, (_, i) => ({
+                month: `row-${i + 1}`,
+                category_general: "Food",
+                sum_spending: "12.3456",
+            })),
+            window: { ...result.window, returnedRows: 75 },
+        } as never);
+        const user = userEvent.setup();
+        renderPage();
+        await screen.findByText("Cash flows");
+        await user.click(screen.getByRole("button", { name: "Run" }));
+        await screen.findByText("row-1");
+        expect(screen.queryByText("row-51")).not.toBeInTheDocument();
+        expect(screen.getAllByText("12,3456")).toHaveLength(50);
+        const calls = vi.mocked(apiClient.executeAnalysis).mock.calls.length;
+        const paging = screen.getByRole("navigation", { name: "Loaded rows" });
+        await user.click(within(paging).getByRole("button", { name: "Next" }));
+        expect(screen.getByText("row-51")).toBeInTheDocument();
+        expect(screen.queryByText("row-1")).not.toBeInTheDocument();
+        expect(apiClient.executeAnalysis).toHaveBeenCalledTimes(calls);
+        await pickOption(
+            user,
+            screen.getByLabelText("Display values"),
+            "Formatted values",
+        );
+        expect(screen.getAllByText("12,35")).toHaveLength(25);
+        await pickOption(
+            user,
+            screen.getByLabelText("Display values"),
+            "Raw values",
+        );
+        expect(screen.getAllByText("12.3456")).toHaveLength(25);
+    });
+
     it("charts every numeric returned row with signed axes and reports missing values", async () => {
         vi.mocked(apiClient.executeAnalysis).mockResolvedValue({
             ...result,
@@ -870,7 +907,7 @@ describe("AnalysisWorkspacePage", () => {
         });
         expect(operator).toHaveTextContent("Equals");
         expect(
-            screen.getByRole("textbox", {
+            screen.getByRole("combobox", {
                 name: "Filter 1: value for Transfer",
             }),
         ).toHaveValue("false");
@@ -895,7 +932,7 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByRole("button", { name: "Remove filter 1: Transfer" }),
         );
         expect(
-            screen.queryByRole("textbox", {
+            screen.queryByRole("combobox", {
                 name: "Filter 1: value for Transfer",
             }),
         ).not.toBeInTheDocument();

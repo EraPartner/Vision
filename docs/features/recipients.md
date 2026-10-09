@@ -93,8 +93,8 @@ See [[docs/adr/046-import-review-category-assignment|ADR-046]] for implementatio
 ### Editing recipients
 
 Inline edit fields identify both the column and recipient, including the default-category
-picker. Starting an edit focuses the recipient name. Cancelling returns focus to that row's
-Edit button, so keyboard navigation can continue from the same recipient.
+picker. Starting an edit focuses the recipient name. The Cancel button returns focus to that row's
+actions menu, so keyboard navigation can continue from the same recipient. The single visible row menu includes Edit and the existing recipient actions; Save and Cancel replace it during inline editing. Repeated Active badges and empty Notes values are not shown in read-only rows.
 
 ### Frontend Reorganization (Phase 6)
 

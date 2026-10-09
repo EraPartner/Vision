@@ -221,7 +221,7 @@ describe("RecipientsPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("links recipient rows and exposes truncated names through a touch disclosure", async () => {
+    it("links recipient rows and edits through a single actions menu", async () => {
         const heightDescriptor = Object.getOwnPropertyDescriptor(
             HTMLElement.prototype,
             "offsetHeight",
@@ -268,9 +268,7 @@ describe("RecipientsPage (integration)", () => {
             "href",
             "/transactions?recipient_id=2&filter_label=A%20very%20long%20recipient%20name",
         );
-        expect(
-            screen.getByRole("button", { name: "A very long recipient name" }),
-        ).toBeInTheDocument();
+        expect(recipientLink).toHaveAttribute("title", "A very long recipient name");
         const target = await screen.findByTitle(
             "A very long primary recipient name",
         );
@@ -298,7 +296,8 @@ describe("RecipientsPage (integration)", () => {
         await waitFor(() =>
             expect(screen.queryByRole("menu")).not.toBeInTheDocument(),
         );
-        await user.click(screen.getByRole("button", { name: `Edit: ${name}` }));
+        const editMenu = await openRowMenu(user, name);
+        await user.click(within(editMenu).getByRole("menuitem", { name: /^edit$/i }));
         const recipientInput = screen.getByRole("textbox", {
             name: `Payee: ${name}`,
         });
@@ -319,7 +318,7 @@ describe("RecipientsPage (integration)", () => {
             screen.getByRole("button", { name: `Cancel: ${name}` }),
         );
         expect(
-            screen.getByRole("button", { name: `Edit: ${name}` }),
+            screen.getByRole("button", { name: `Actions for ${name}` }),
         ).toHaveFocus();
 
         if (heightDescriptor)

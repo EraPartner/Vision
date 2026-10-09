@@ -322,8 +322,10 @@ export const BackupSection = memo(function BackupSection() {
                             <Input
                                 readOnly
                                 value={backupDir}
+                                title={backupDir}
+                                dir="rtl"
                                 placeholder={t("settings.backup.notConfigured")}
-                                className="flex-1 font-mono"
+                                className="min-w-0 flex-1 text-left font-mono"
                             />
                             <Button
                                 variant="outline"
@@ -490,7 +492,7 @@ export const BackupSection = memo(function BackupSection() {
                                         : ""
                                 }
                                 placeholder={t("settings.restore.noFile")}
-                                className="flex-1 font-mono"
+                                className="min-w-0 flex-1 text-left font-mono"
                                 title={restoreFile}
                             />
                             <Button

@@ -2,8 +2,8 @@
 title: Frontend Routes Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-08
+updated: 2026-10-08
 tags: [reference, frontend, routing, pages, react-router, admin, sidebar-sections]
 description: Complete reference of all frontend routes and their page components, including admin routes and the sidebar sections that offer them
 aliases: [routes, pages, navigation, url paths, frontend routes, admin routes]
@@ -166,3 +166,9 @@ The three sidebar workspaces and their switcher were replaced by one labelled si
 - [[docs/adr/187-completeness-sweep\|ADR-187: Every remaining screen and dialog adopts the design system]]
 - [[docs/architecture/frontend-architecture\|Frontend Architecture]] - Routes diagram
 - [[docs/adr/136-same-release-http-import-and-navigation-contract\|ADR-136: Same-Release HTTP, Import, and Navigation Contract]]
+
+## Scroll preservation
+
+`ScrollToTop` resets the window only when the pathname changes on a non-POP navigation.
+Same-page query changes from chart periods, filters or tabs preserve the current scroll position,
+including the first PUSH-to-REPLACE transition. Back and Forward keep native scroll restoration.

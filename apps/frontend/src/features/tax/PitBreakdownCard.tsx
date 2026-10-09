@@ -1,16 +1,13 @@
-import { Info } from "lucide-react";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useCurrencyFormatter } from "@/hooks/useCurrencyFormatter";
 import type { BelgianTaxCalculation } from "@/lib/belgianTax";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+    Disclosure,
+    DisclosureContent,
+    DisclosureSummary,
+} from "@/components/ui/disclosure";
 import {
     Table,
     TableBody,
@@ -19,7 +16,6 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 
 interface PitBreakdownCardProps {
     calculation: BelgianTaxCalculation;
@@ -138,25 +134,21 @@ export function PitBreakdownCard({
     ];
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    {t("tax.pit.title")}
-                    <TouchDisclosure
-                        label={t("tax.pit.tooltip")}
-                        content={t("tax.pit.tooltip")}
-                        className="text-label-tertiary hover:text-foreground"
-                    >
-                        <Info className="h-4 w-4" aria-hidden="true" />
-                    </TouchDisclosure>
-                </CardTitle>
-                <CardDescription>{t("tax.pit.description")}</CardDescription>
-            </CardHeader>
-            <CardContent>
+        <Disclosure variant="card">
+            <DisclosureSummary padded>{t("tax.pit.title")}</DisclosureSummary>
+            <DisclosureContent className="space-y-3">
+                <p className="type-footnote text-label-secondary">
+                    {t("tax.pit.description")}
+                </p>
+                <p className="type-footnote text-label-secondary">
+                    {t("tax.pit.tooltip")}
+                </p>
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>{t("tax.pit.table.component")}</TableHead>
+                            <TableHead>
+                                {t("tax.pit.table.component")}
+                            </TableHead>
                             <TableHead className="text-right">
                                 {t("tax.pit.table.amount")}
                             </TableHead>
@@ -199,7 +191,7 @@ export function PitBreakdownCard({
                         ))}
                     </TableBody>
                 </Table>
-            </CardContent>
-        </Card>
+            </DisclosureContent>
+        </Disclosure>
     );
 }

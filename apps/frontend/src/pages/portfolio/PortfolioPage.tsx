@@ -1592,7 +1592,7 @@ export default function PortfolioPage() {
                     </div>
 
                     {/* Gains breakdown and exposure */}
-                    <div className="grid gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
+                    <div className="grid items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         {isVisible("performance") && (
                             <Card>
                                 <CardHeader className="pb-4">

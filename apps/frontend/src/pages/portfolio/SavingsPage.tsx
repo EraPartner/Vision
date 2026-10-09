@@ -266,7 +266,7 @@ export default function SavingsPage() {
                                                 </Badge>
                                                 {a.interestRate ? (
                                                     <span className="tabular-nums text-accent">
-                                                        {a.interestRate}%{" "}
+                                                        {formatPercent(a.interestRate, { digits: 2 })}{" "}
                                                         {t("savings.pa")}
                                                     </span>
                                                 ) : null}

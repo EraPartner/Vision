@@ -72,7 +72,7 @@ interface DashboardSettingsDialogProps {
  * The Settings window (ADR-183): a macOS-style preferences window drawn as a
  * Dialog, because the desktop shell has exactly one BrowserWindow. A sidebar of
  * sections on the left, the current section's name in the title bar, and the
- * section's groups in a scrolling pane. Every control saves on change; the
+ * section's groups in a scrolling pane. Most preferences save on change; explicit actions retain their own buttons. The
  * window closes with its close button, Escape or the browser's Back.
  */
 export function DashboardSettingsDialog({
@@ -157,10 +157,10 @@ export function DashboardSettingsDialog({
                     {t("settings.title")}
                 </DialogTitle>
 
-                {/* Sidebar: a 224px rail from md up, a horizontally scrolling
+                {/* Sidebar: a 256px rail from md up, a horizontally scrolling
                     row of sections below it (a fixed rail would leave ~120px
                     for every control at phone widths). */}
-                <aside className="flex shrink-0 flex-col border-b border-border/60 bg-foreground/[0.025] md:w-56 md:border-b-0 md:border-r">
+                <aside className="flex shrink-0 flex-col border-b border-border/60 bg-foreground/[0.025] md:w-64 md:border-b-0 md:border-r">
                     <List
                         ref={tablistRef}
                         role="tablist"
@@ -176,7 +176,7 @@ export function DashboardSettingsDialog({
                                     asChild
                                     leading={<Icon aria-hidden="true" />}
                                     title={t(labelKey)}
-                                    className="min-h-0 shrink-0"
+                                    className="min-h-0 shrink-0 md:[&_.truncate]:whitespace-normal md:[&_.truncate]:overflow-visible"
                                 >
                                     <button
                                         type="button"
@@ -189,7 +189,7 @@ export function DashboardSettingsDialog({
                                         onKeyDown={(event) =>
                                             handleSectionKeyDown(event, index)
                                         }
-                                        className="rounded-control corner-continuous whitespace-nowrap aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:hover:bg-primary aria-selected:focus-visible:bg-primary aria-selected:[&_span]:text-primary-foreground"
+                                        className="rounded-control corner-continuous whitespace-nowrap aria-selected:bg-primary/10 aria-selected:text-foreground aria-selected:hover:bg-primary/15 aria-selected:focus-visible:bg-primary/15 aria-selected:[&_span]:text-foreground"
                                     />
                                 </ListRow>
                             );

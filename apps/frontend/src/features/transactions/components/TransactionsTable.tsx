@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,17 @@ export function TransactionsTable({
     onSelectionChange,
     isColumnVisible,
 }: TransactionsTableProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [compact, setCompact] = useState(false);
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container || typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(([entry]) => {
+            if (entry) setCompact(entry.contentRect.width < 960);
+        });
+        observer.observe(container);
+        return () => observer.disconnect();
+    }, []);
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const fmt = useCurrencyFormatter();
@@ -207,6 +218,8 @@ export function TransactionsTable({
                 key: "recipient",
                 header: t("txPage.col.recipient"),
                 editable: false,
+                defaultWidth: 280,
+                minWidth: 180,
                 render: (row, isEditing) => {
                     if (isEditing) {
                         const original = allItems.find((t) => t.id === row.id);
@@ -255,8 +268,8 @@ export function TransactionsTable({
                 key: "category",
                 header: t("txPage.col.category"),
                 editable: false,
-                defaultWidth: 180,
-                minWidth: 120,
+                defaultWidth: 220,
+                minWidth: 160,
                 render: (row, isEditing) => {
                     if (isEditing) {
                         const original = allItems.find((t) => t.id === row.id);
@@ -284,6 +297,7 @@ export function TransactionsTable({
                         !row.categoryId || row.category === uncategorisedLabel;
                     return (
                         <span
+                            title={uncategorised ? undefined : row.category}
                             className={cn(
                                 "flex min-w-0 items-center gap-2",
                                 inactive(row) && "opacity-50",
@@ -309,7 +323,7 @@ export function TransactionsTable({
                             />
                             <span
                                 className={cn(
-                                    "truncate",
+                                    "line-clamp-2 min-w-0 whitespace-normal break-words type-footnote leading-4 [overflow-wrap:anywhere]",
                                     uncategorised
                                         ? "text-label-tertiary"
                                         : "text-foreground",
@@ -327,8 +341,8 @@ export function TransactionsTable({
                 key: "bank",
                 header: t("txPage.col.account"),
                 editable: false,
-                defaultWidth: 150,
-                minWidth: 100,
+                defaultWidth: 220,
+                minWidth: 160,
                 render: (row) => (
                     <span
                         className={cn(
@@ -338,7 +352,7 @@ export function TransactionsTable({
                                 : "text-label-secondary",
                         )}
                     >
-                        {row.bank}
+                        {row.bankLabel || row.bank}
                     </span>
                 ),
             },
@@ -467,8 +481,58 @@ export function TransactionsTable({
                     </Button>
                 ),
             });
+        if (compact) {
+            const recipient = core.find(
+                (column) => column.key === "recipient",
+            )!;
+            const category = core.find((column) => column.key === "category")!;
+            const summary: Column<TableTransaction> = {
+                key: "compactSummary",
+                header: t("txPage.col.recipient"),
+                sortable: false,
+                filterable: false,
+                wrap: "anywhere",
+                className: "min-w-48 px-2",
+                render: (row, isEditing) => (
+                    <div className="flex min-w-0 flex-col gap-1">
+                        <span className="type-footnote tabular-nums text-label-secondary">
+                            {formatDateStringWithAppSettings(
+                                row.date,
+                                appSettings.dateFormat,
+                            )}
+                        </span>
+                        {isEditing ? (
+                            recipient.render?.(row, true)
+                        ) : (
+                            <span
+                                className={cn(
+                                    "font-medium",
+                                    inactive(row) &&
+                                        "text-label-tertiary line-through",
+                                )}
+                            >
+                                {row.recipient}
+                            </span>
+                        )}
+                        <span className="type-footnote text-label-secondary">
+                            {row.bankLabel || row.bank}
+                        </span>
+                        <div className="[&_.line-clamp-2]:line-clamp-none">
+                            {category.render?.(row, isEditing)}
+                        </div>
+                        {row.memo && (
+                            <span className="type-footnote text-label-secondary">
+                                {row.memo}
+                            </span>
+                        )}
+                    </div>
+                ),
+            };
+            return [core[0], summary, amount, ...optional, ...trailing];
+        }
         return [...core, ...optional, amount, ...trailing];
     }, [
+        compact,
         t,
         appSettings.dateFormat,
         getRowLabel,
@@ -580,44 +644,46 @@ export function TransactionsTable({
     );
 
     return (
-        <VirtualDataTable
-            columns={columns}
-            data={transactions}
-            getRowLabel={getRowLabel}
-            onRowUpdate={onRowUpdate}
-            onRowOpen={selectRow}
-            onRowSelect={selectRow}
-            selectedRowKey={selectedRowId}
-            onRowQuickLook={onQuickLook}
-            rowContextMenu={rowContextMenu}
-            rowHeight={52}
-            emptyMessage={
-                <EmptyState
-                    headingLevel={3}
-                    icon={Import}
-                    title={t("txPage.empty")}
-                    description={
-                        search
-                            ? t("txPage.emptySearch")
-                            : t("transactions.noTransactions")
-                    }
-                    action={
-                        !search ? (
-                            <Button asChild size="sm" variant="outline">
-                                <Link to="/import">
-                                    {t("txPage.importLink")}
-                                </Link>
-                            </Button>
-                        ) : undefined
-                    }
-                />
-            }
-            serverMode={serverMode}
-            actions={actions}
-            maxHeight={720}
-            cancelEditingRef={cancelEditingRef}
-            onEditingChange={onEditingChange}
-            scrollRestorationKey="transactions"
-        />
+        <div ref={containerRef} className="min-w-0">
+            <VirtualDataTable
+                columns={columns}
+                data={transactions}
+                getRowLabel={getRowLabel}
+                onRowUpdate={onRowUpdate}
+                onRowOpen={selectRow}
+                onRowSelect={selectRow}
+                selectedRowKey={selectedRowId}
+                onRowQuickLook={onQuickLook}
+                rowContextMenu={rowContextMenu}
+                rowHeight={compact ? 128 : 52}
+                emptyMessage={
+                    <EmptyState
+                        headingLevel={3}
+                        icon={Import}
+                        title={t("txPage.empty")}
+                        description={
+                            search
+                                ? t("txPage.emptySearch")
+                                : t("transactions.noTransactions")
+                        }
+                        action={
+                            !search ? (
+                                <Button asChild size="sm" variant="outline">
+                                    <Link to="/import">
+                                        {t("txPage.importLink")}
+                                    </Link>
+                                </Button>
+                            ) : undefined
+                        }
+                    />
+                }
+                serverMode={serverMode}
+                actions={actions}
+                maxHeight={720}
+                cancelEditingRef={cancelEditingRef}
+                onEditingChange={onEditingChange}
+                scrollRestorationKey="transactions"
+            />
+        </div>
     );
 }

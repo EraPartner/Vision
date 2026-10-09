@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     feature,
@@ -319,7 +319,7 @@ This automatic recovery prevents startup failure while preserving the corrupted 
 > [!info] Reworked June 2026 (ADR-084)
 > The settings dialog was a 5-tab Save/Cancel form (`General`, `Appearance`, `Dashboard`, `App`, `Backup`). It is now a **sidebar-navigated, instant-apply** surface. See [[docs/adr/084-settings-instant-apply-sidebar|ADR-084]] for full rationale.
 
-The primary UI is `[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, the **Settings window**: a macOS-style preferences window drawn as a `Dialog` (the desktop shell has one BrowserWindow), `max-w-4xl` by `82vh`. A sidebar on the left lists the seven sections as `List`/`ListRow` tabs with an icon and the section name, the selected one filled with the primary color; the title bar shows the current section's name; the content pane scrolls the section's groups. The dialog's accessible name stays "Settings" (a visually hidden `DialogTitle`). There is no description paragraph, no "save automatically" hint paragraph and no footer: the sidebar ends with a one-line caption (`settings.autosaveHint`) and the window closes with its close button, Escape or browser Back. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator threads no staged props.
+The primary UI is `[[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx|DashboardSettingsDialog]]`, the **Settings window**: a macOS-style preferences window drawn as a `Dialog` (the desktop shell has one BrowserWindow), `max-w-4xl` by `82vh`. A sidebar on the left lists the seven sections as `List`/`ListRow` tabs with an icon and the section name, the selected one marked with a quiet tinted background; the title bar shows the current section's name; the content pane scrolls the section's groups. The dialog's accessible name stays "Settings" (a visually hidden `DialogTitle`). There is no description paragraph, no "save automatically" hint paragraph and no footer: the sidebar ends with a one-line caption (`settings.autosaveHint`) and the window closes with its close button, Escape or browser Back. Each section component is self-contained — it reads from hooks and writes directly to the store or API, so the orchestrator threads no staged props.
 
 The section rail implements the tabs accessibility pattern: one selected tab is in the tab order,
 each tab controls the active tab panel, and Arrow keys plus Home/End move focus and selection.
@@ -339,7 +339,7 @@ Copy follows [[docs/adr/182-ui-copy-plain-words|ADR-182]]: sentence case (the se
 | ------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | General       | `sections/GeneralSection.tsx`    | Currency, number/decimal/date format, language, start of week, page size                                                                                             |
 | Appearance    | `sections/AppearanceSection.tsx` | Theme variant, color mode + schedule, macOS system accent, visual-effects tier, auto-adapt, **Sidebar** (Labels / Icons only, [[docs/adr/180-sidebar-sections-replace-workspaces\|ADR-180]]); **Accessibility** group: gain & loss colors (colorblind-safe vs classic) |
-| Statistics    | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
+| Insights      | `sections/StatisticsSection.tsx` | Exclusion scope, exclude-hidden, internal transfers toggle, excluded categories/recipients (was "Dashboard" tab)                                                     |
 | Behavior      | `sections/BehaviorSection.tsx`   | Startup section, cost-basis method, auto-clear planned, brokerage cash category mappings, reset recurring dismissals                                                 |
 | AI & research | `sections/AiSection.tsx`         | Analysis defaults, Ollama and OpenAI default models, AgentCloak Desktop status and protection control, and research provider keys                                    |
 
@@ -361,7 +361,7 @@ leaves the key in place for existing token-bearing investigations. See
 Every control writes through on change — there is no Save/Cancel or Done footer; the window closes with its close button, Escape or browser Back. Specific mechanisms:
 
 - **Most settings**: write through `updateAppSettings` or `updateDashboardSettings` (Zustand store actions); context providers debounce-persist to the API (500 ms).
-- **`includeTransfers`**: a server-only aggregation setting with no client reader. Its toggle persists via `apiClient.saveSetting` then `queryClient.invalidateQueries()` for an optimistic cache refresh. Lives in the Statistics section.
+- **`includeTransfers`**: a server-only aggregation setting with no client reader. Its toggle persists via `apiClient.saveSetting` then `queryClient.invalidateQueries()` for an optimistic cache refresh. Lives in the Insights section (the internal `statistics` key is unchanged).
 - **Visual-effects tier**: applied inline on change (ADR-075 addendum). On an auto-adapt-capped display, a pick writes to `sessionTierOverride`; on an uncapped display it writes the synced `visualEffects` preference and clears the override. Toggling auto-adapt clears the override.
 - **Reset all settings**: moved out of a Save-time action into the **About & Maintenance** danger zone. Since 2026-10-05 its **Reset** button asks first through the destructive `useConfirmDialog` confirmation (`settings.app.resetAllConfirm.*`); before that it reset immediately. The dialog says that all preferences return to their defaults, naming the language, the number and date formats and the excluded categories and recipients, and that the theme, accounts, transactions and other data are kept. Confirming resets every app preference (currency, date and number format, decimal places, page size, start of week, language, startup page, visual effects, gain and loss colors, cost basis method, admin mode, auto-clearing planned payments, and the AI model, answer depth and benchmark choices), the session visual-effects override, and the dashboard statistics settings (excluded categories and recipients, exclude-hidden and exclusion scope). Confirming also saves the server-side `includeTransfers` setting as `false` and shows the `settings.resetToDefaults` toast. Theme variant and color mode, accounts, transactions, categories and other data are kept. Cancelling changes nothing.
 - **Product identity**: `lib/appIdentity.ts` exposes the build-time root-package version, product name, license, repository, and documentation URLs. The same version appears in the sidebar footer and the About identity card; package manifests are kept aligned so neither surface can make a stale hardcoded claim.
@@ -441,4 +441,4 @@ General settings generates each decimal-precision example with the selected numb
 
 ## Clarity and recovery feedback
 
-The settings header explains that preferences apply automatically. Restore and reset remain explicit actions with their existing confirmation flows.
+The settings caption distinguishes preferences that save automatically from actions with their own Save or confirmation buttons. Restore and reset retain their explicit confirmation flows. Section names can wrap in the wider desktop rail. Backup paths retain the destination end when space is limited, with the full path available in the field tooltip.

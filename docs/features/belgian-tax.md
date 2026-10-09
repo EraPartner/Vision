@@ -479,3 +479,10 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion
 - [[docs/adr/002-database-schema#belgian-inflation-rates]] — Database schema
 - [[docs/integrations/index#government-data]] — Government data integrations
+
+## Summary and supporting detail
+
+The personal income tax breakdown starts collapsed beneath the summary, with its explanation and
+full calculation table available on expansion. Reference rules also use a disclosure. Summary cards
+size independently so explanatory text does not stretch neighbouring totals. These presentation
+changes do not change tax calculations or profile inputs.

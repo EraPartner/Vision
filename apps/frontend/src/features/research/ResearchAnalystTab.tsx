@@ -1,3 +1,7 @@
+import {
+    useCurrencyFormatter,
+    useCurrencyFormatSettings,
+} from "@/hooks/useCurrencyFormatter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { List, ListRow } from "@/components/ui/list";
 import { useLoadingSurfaceProps } from "@/lib/loadingSurface";
@@ -12,6 +16,7 @@ import { useResearchAnalystQuery } from "./useResearchQueries";
 
 interface ResearchAnalystTabProps {
     symbol: string;
+    currency?: string;
     enabled: boolean;
 }
 
@@ -25,6 +30,7 @@ function gradeColor(grade: string): string {
 
 export function ResearchAnalystTab({
     symbol,
+    currency,
     enabled,
 }: ResearchAnalystTabProps) {
     const { t } = useLanguage();
@@ -165,14 +171,17 @@ export function ResearchAnalystTab({
                     <TargetCell
                         label={t("research.analyst.targetLow")}
                         value={a.targetLow}
+                        currency={currency}
                     />
                     <TargetCell
                         label={t("research.analyst.targetMean")}
                         value={a.targetMean}
+                        currency={currency}
                     />
                     <TargetCell
                         label={t("research.analyst.targetHigh")}
                         value={a.targetHigh}
+                        currency={currency}
                     />
                 </div>
             )}
@@ -229,12 +238,28 @@ export function ResearchAnalystTab({
     );
 }
 
-function TargetCell({ label, value }: { label: string; value: number | null }) {
+function TargetCell({
+    label,
+    value,
+    currency,
+}: {
+    label: string;
+    value: number | null;
+    currency?: string;
+}) {
+    const formatCurrency = useCurrencyFormatter();
+    const { locale, decimals } = useCurrencyFormatSettings();
     return (
         <div>
             <p className="type-caption text-label-tertiary">{label}</p>
             <p className="type-title-3 tabular-nums text-foreground">
-                {value != null ? value.toFixed(2) : "—"}
+                {value != null
+                    ? currency
+                        ? formatCurrency(value, { currency })
+                        : value.toLocaleString(locale, {
+                              maximumFractionDigits: decimals,
+                          })
+                    : "—"}
             </p>
         </div>
     );

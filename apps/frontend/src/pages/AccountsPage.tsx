@@ -181,6 +181,29 @@ export default function AccountsPage() {
 
         const subtitle = (
             <>
+                {drift && (
+                    // Clicking the drift chip opens the reconcile dialog
+                    // (statement vs computed + delta → accept / adjust).
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                type="button"
+                                className={badgeVariants({
+                                    variant: drift.variant,
+                                })}
+                                aria-label={t("accounts.reconcile.open")}
+                                onClick={(event) => {
+                                    stopRowActivation(event);
+                                    setReconciling(a);
+                                }}
+                            >
+                                {drift.label}
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent>{drift.tooltip}</TooltipContent>
+                    </Tooltip>
+                )}
+
                 <span className="block truncate">
                     {metaParts.map((part, index) => (
                         <span key={index}>
@@ -317,33 +340,9 @@ export default function AccountsPage() {
                 }
                 subtitle={subtitle}
                 trailing={
-                    <>
-                        {drift && (
-                            // Clicking the drift chip opens the reconcile dialog
-                            // (statement vs computed + delta → accept / adjust).
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className={badgeVariants({
-                                            variant: drift.variant,
-                                        })}
-                                        aria-label={t(
-                                            "accounts.reconcile.open",
-                                        )}
-                                        onClick={(event) => {
-                                            stopRowActivation(event);
-                                            setReconciling(a);
-                                        }}
-                                    >
-                                        {drift.label}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent>{drift.tooltip}</TooltipContent>
-                            </Tooltip>
-                        )}
+                    <span className="min-w-32 text-right tabular-nums">
                         {value}
-                    </>
+                    </span>
                 }
                 chevron
                 actions={

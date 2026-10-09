@@ -54,7 +54,6 @@ import { PageError } from "@/components/shared/PageError";
 import { apiErrorToMessage } from "@/lib/api/errorMessage";
 import { PageShell } from "@/components/shared/PageShell";
 import { TextLink } from "@/components/shared/TextLink";
-import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 import { useSearchParams } from "react-router";
 import {
     booleanSearchParamCodec,
@@ -313,6 +312,7 @@ export default function RecipientsPage() {
                     <div className="flex min-w-0 items-center gap-2">
                         <TextLink
                             to={`/transactions?recipient_id=${row.id}&filter_label=${encodeURIComponent(row.name)}`}
+                            title={row.name}
                             className={cn(
                                 "min-w-0 truncate font-medium",
                                 row.is_active
@@ -322,13 +322,6 @@ export default function RecipientsPage() {
                         >
                             {row.name}
                         </TextLink>
-                        <TouchDisclosure
-                            label={row.name}
-                            content={row.name}
-                            className="shrink-0 px-1 type-footnote text-label-secondary"
-                        >
-                            …
-                        </TouchDisclosure>
                         {(row.alias_count ?? 0) > 0 && (
                             <Badge
                                 variant="secondary"
@@ -447,7 +440,7 @@ export default function RecipientsPage() {
                             !row.is_active && "line-through",
                         )}
                     >
-                        {row.notes || "-"}
+                        {row.notes || "—"}
                     </span>
                 ),
             },
@@ -456,112 +449,19 @@ export default function RecipientsPage() {
                 header: t("recipientsPage.col.status"),
                 editable: false,
                 render: (row: TableRecipient) => (
-                    <Badge
-                        variant={row.is_active ? "success" : "muted"}
-                        size="sm"
-                    >
+                    <Badge variant="muted" size="sm">
                         {row.is_active
                             ? t("recipientsPage.statusActive")
                             : t("recipientsPage.statusInactive")}
                     </Badge>
                 ),
             },
-            {
-                key: "actions",
-                header: "",
-                className: "w-12",
-                editable: false,
-                render: (row: TableRecipient) => (
-                    <div className="flex justify-end">
-                        <RowMenu
-                            label={t("recipientsPage.rowMenu", {
-                                name: row.name,
-                            })}
-                        >
-                            <DropdownMenuItem
-                                onSelect={() =>
-                                    setPatternsDialogRecipient({
-                                        id: row.id,
-                                        name: row.name,
-                                    })
-                                }
-                            >
-                                <Regex
-                                    className="mr-2 h-4 w-4 text-label-secondary"
-                                    aria-hidden
-                                />
-                                {t("recipientPatterns.title")}
-                            </DropdownMenuItem>
-                            {row.primary_recipient_id && (
-                                <DropdownMenuItem
-                                    disabled={unmergeMutation.isPending}
-                                    onSelect={() =>
-                                        unmergeMutation.mutate(row.id)
-                                    }
-                                >
-                                    <Unlink
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                    {t("recipientsPage.unmerge")}
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem
-                                disabled={statusMutation.isPending}
-                                onSelect={() => void toggleActive(row)}
-                            >
-                                {row.is_active ? (
-                                    <EyeOff
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                ) : (
-                                    <Eye
-                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                        aria-hidden
-                                    />
-                                )}
-                                {row.is_active
-                                    ? t("recipientsPage.markInactive")
-                                    : t("recipientsPage.markActive")}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                variant="destructive"
-                                disabled={deleteMutation.isPending}
-                                onSelect={async () => {
-                                    const ok = await confirm({
-                                        title: t("recipientsPage.delete.title"),
-                                        description: t(
-                                            "recipientsPage.delete.desc",
-                                            { name: row.name },
-                                        ),
-                                        confirmLabel: t(
-                                            "recipientsPage.delete.confirm",
-                                        ),
-                                        variant: "destructive",
-                                    });
-                                    if (ok) deleteMutation.mutate(row.id);
-                                }}
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" aria-hidden />
-                                {t("common.delete")}
-                            </DropdownMenuItem>
-                        </RowMenu>
-                    </div>
-                ),
-            },
         ],
         [
             t,
-            toggleActive,
-            statusMutation.isPending,
             queryClient,
             cancelEditingRef,
             updateMutation,
-            unmergeMutation,
-            deleteMutation,
-            confirm,
         ],
     );
 
@@ -665,6 +565,94 @@ export default function RecipientsPage() {
 
                 <VirtualDataTable
                     columns={columns}
+                    renderRowActions={(row, { startEditing }) => (
+                        <div className="flex justify-end">
+                            <RowMenu
+                                label={t("recipientsPage.rowMenu", {
+                                    name: row.name,
+                                })}
+                            >
+                                <DropdownMenuItem onSelect={startEditing}>
+                                    {t("common.edit")}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    onSelect={() =>
+                                        setPatternsDialogRecipient({
+                                            id: row.id,
+                                            name: row.name,
+                                        })
+                                    }
+                                >
+                                    <Regex
+                                        className="mr-2 h-4 w-4 text-label-secondary"
+                                        aria-hidden
+                                    />
+                                    {t("recipientPatterns.title")}
+                                </DropdownMenuItem>
+                                {row.primary_recipient_id && (
+                                    <DropdownMenuItem
+                                        disabled={unmergeMutation.isPending}
+                                        onSelect={() =>
+                                            unmergeMutation.mutate(row.id)
+                                        }
+                                    >
+                                        <Unlink
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                        {t("recipientsPage.unmerge")}
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                    disabled={statusMutation.isPending}
+                                    onSelect={() => void toggleActive(row)}
+                                >
+                                    {row.is_active ? (
+                                        <EyeOff
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                    ) : (
+                                        <Eye
+                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                            aria-hidden
+                                        />
+                                    )}
+                                    {row.is_active
+                                        ? t("recipientsPage.markInactive")
+                                        : t("recipientsPage.markActive")}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    variant="destructive"
+                                    disabled={deleteMutation.isPending}
+                                    onSelect={async () => {
+                                        const ok = await confirm({
+                                            title: t(
+                                                "recipientsPage.delete.title",
+                                            ),
+                                            description: t(
+                                                "recipientsPage.delete.desc",
+                                                { name: row.name },
+                                            ),
+                                            confirmLabel: t(
+                                                "recipientsPage.delete.confirm",
+                                            ),
+                                            variant: "destructive",
+                                        });
+                                        if (ok) deleteMutation.mutate(row.id);
+                                    }}
+                                >
+                                    <Trash2
+                                        className="mr-2 h-4 w-4"
+                                        aria-hidden
+                                    />
+                                    {t("common.delete")}
+                                </DropdownMenuItem>
+                            </RowMenu>
+                        </div>
+                    )}
                     data={recipients}
                     getRowLabel={(row) => row.name}
                     onRowUpdate={handleUpdate}

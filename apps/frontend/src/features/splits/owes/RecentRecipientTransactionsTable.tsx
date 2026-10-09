@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 
+import { EmptyState } from "@/components/shared/EmptyState";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/shared/Money";
 import { TextLink } from "@/components/shared/TextLink";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
@@ -119,6 +121,24 @@ export function RecentRecipientTransactionsTable({
 
     if (isLoading) {
         return <Skeleton {...loadingSurfaceProps} className="h-[320px]" />;
+    }
+
+    if (transactions.length === 0) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle variant="sm">
+                        {t("owesPage.recentTransactionsTitle")}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <EmptyState
+                        icon={HandCoins}
+                        title={t("owesPage.noRecentTransactions")}
+                    />
+                </CardContent>
+            </Card>
+        );
     }
 
     return (

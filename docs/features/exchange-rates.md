@@ -2,8 +2,8 @@
 title: Exchange Rates Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-09
+updated: 2026-10-09
 tags:
   [feature, exchange-rates, currency, frontend, backend, ECB, admin, url-state]
 description: Exchange rate viewing and management with live ECB rates, fallback rates, and manual refresh capability at the canonical /admin/exchange-rates route.
@@ -38,6 +38,8 @@ Located at `[[apps/frontend/src/pages/admin/ExchangeRatesPage.tsx]]` (gated by `
 2. **Fallback Currencies**: Number of hardcoded fallback currencies
 3. **Latest Fetch**: Date of the most recent rate fetch and timestamp
 
+Summary cards stack below the extra-large breakpoint. Counts and rate values follow the selected number format; dates follow the selected date format. The **100 Units in EUR** column always uses EUR, independent of the preferred display currency.
+
 #### Tabs
 
 - **Live Rates**: Table of current ECB rates with columns:
@@ -55,7 +57,7 @@ Triggers `POST /api/info/exchange-rates/refresh` to fetch fresh rates from ECB.
 
 #### Global stale-rate warning
 
-`FxStatusBanner` appears in the application layout when stored rates are stale or fallback rates are in use. It shows the last successful fetch time when available. Its inline **Refresh** button calls the same `POST /api/info/exchange-rates/refresh` endpoint as the admin page, invalidates both exchange-rate cache families, and reloads the banner status. Success and failure are reported with localized toasts. Dismissing the warning still suppresses it locally for one hour.
+`FxStatusBanner` appears in the application layout when stored rates are stale or fallback rates are in use. The admin page relies on this single warning instead of repeating it inside the page. It shows the last successful fetch time when available. Its inline **Refresh** button calls the same `POST /api/info/exchange-rates/refresh` endpoint as the admin page, invalidates both exchange-rate cache families, and reloads the banner status. Success and failure are reported with localized toasts. Dismissing the warning still suppresses it locally for one hour.
 
 ### Backend Endpoints
 

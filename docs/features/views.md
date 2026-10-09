@@ -806,3 +806,8 @@ Observability hub shown as the sidebar's Admin section (gated by Settings → Ap
 ## Sidebar navigation
 
 One labelled sidebar replaces the workspace switcher ([[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]]). It lists the top pages (Home, Transactions, Accounts, Planned Payments) and the Money, Wealth and Research sections; Research is hidden until shown, every headed section has a *Hide* / *Show* control, and the choice is remembered per browser. The sidebar can be collapsed to an icon rail (⌘B or Settings › Appearance › Sidebar). Transactions, Planned Payments, Statistics and Analysis monitors show live counts. See [[docs/components/layout|Layout components]].
+
+## Upcoming payment ordering
+
+Home sorts its upcoming payments by planned date before taking the visible row limit. Equal-date
+items use their record ID for stable ordering, so the nearest due payments stay at the top.

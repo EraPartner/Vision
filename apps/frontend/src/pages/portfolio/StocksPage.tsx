@@ -1,3 +1,10 @@
+import { numberFormatToLocale } from "@/utils/currency";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +45,7 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import type { AssetClass } from "@/types/portfolio";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PAGE_ICONS } from "@/lib/pageIcons";
 import { PageError } from "@/components/shared/PageError";
@@ -122,12 +129,18 @@ export default function StocksPage({
     showEmptyStateExport = true,
     showDividends = true,
     dynamicUnrealizedIcon = false,
-    assetCellVariant = "split",
+    assetCellVariant = "combined",
     unitsDecimals = 4,
     unitsMonospace = false,
     priceColumnsInTargetCurrency = false,
     simplePnlPercentSource = "costBasis",
 }: StocksPageProps = {}) {
+    const [visibleColumns, setVisibleColumns] = useState({
+        avgCost: false,
+        realized: false,
+        fx: false,
+        dividends: false,
+    });
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
@@ -397,14 +410,7 @@ export default function StocksPage({
                             </p>
                             <PriceFreshnessCaption investments={holdings} />
                         </div>
-                        <div
-                            className={cn(
-                                "grid grid-cols-2 gap-x-6 gap-y-4 lg:col-span-3",
-                                showDividends
-                                    ? "sm:grid-cols-3"
-                                    : "sm:grid-cols-2",
-                            )}
-                        >
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:col-span-3">
                             <Figure
                                 label={t("portfolio.realizedPnl")}
                                 tone={toneClass(totalRealizedGain)}
@@ -468,10 +474,55 @@ export default function StocksPage({
                 </Card>
 
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex-row items-center justify-between gap-3">
                         <CardTitle variant="sm" level={2}>
                             {t("portfolio.holdings")}
                         </CardTitle>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    {t("portfolio.columns")}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {(
+                                    [
+                                        "avgCost",
+                                        "realized",
+                                        "fx",
+                                        "dividends",
+                                    ] as const
+                                )
+                                    .filter(
+                                        (key) =>
+                                            (key !== "fx" ||
+                                                pageHasFxExposure) &&
+                                            (key !== "dividends" ||
+                                                showDividends),
+                                    )
+                                    .map((key) => (
+                                        <DropdownMenuCheckboxItem
+                                            key={key}
+                                            checked={visibleColumns[key]}
+                                            onCheckedChange={(checked) =>
+                                                setVisibleColumns(
+                                                    (previous) => ({
+                                                        ...previous,
+                                                        [key]: checked,
+                                                    }),
+                                                )
+                                            }
+                                            onSelect={(event) =>
+                                                event.preventDefault()
+                                            }
+                                        >
+                                            {t(
+                                                `portfolio.${key === "fx" ? "fxPnl" : key}`,
+                                            )}
+                                        </DropdownMenuCheckboxItem>
+                                    ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </CardHeader>
                     <CardContent variant="flush">
                         <Table>
@@ -494,9 +545,11 @@ export default function StocksPage({
                                     <TableHead className={headCellClass}>
                                         {t("portfolio.units")}
                                     </TableHead>
-                                    <TableHead className={headCellClass}>
-                                        {t("portfolio.avgCost")}
-                                    </TableHead>
+                                    {visibleColumns.avgCost && (
+                                        <TableHead className={headCellClass}>
+                                            {t("portfolio.avgCost")}
+                                        </TableHead>
+                                    )}
                                     <TableHead className={headCellClass}>
                                         {priceFreshnessLabel ? (
                                             <TooltipProvider>
@@ -542,10 +595,12 @@ export default function StocksPage({
                                     <TableHead className={headCellClass}>
                                         {t("portfolio.unrealized")}
                                     </TableHead>
-                                    <TableHead className={headCellClass}>
-                                        {t("portfolio.realized")}
-                                    </TableHead>
-                                    {pageHasFxExposure && (
+                                    {visibleColumns.realized && (
+                                        <TableHead className={headCellClass}>
+                                            {t("portfolio.realized")}
+                                        </TableHead>
+                                    )}
+                                    {pageHasFxExposure && visibleColumns.fx && (
                                         <TableHead className={headCellClass}>
                                             <TouchDisclosure
                                                 label={t("portfolio.fxEffect")}
@@ -557,11 +612,14 @@ export default function StocksPage({
                                             </TouchDisclosure>
                                         </TableHead>
                                     )}
-                                    {showDividends && (
-                                        <TableHead className={headCellClass}>
-                                            {t("portfolio.dividends")}
-                                        </TableHead>
-                                    )}
+                                    {showDividends &&
+                                        visibleColumns.dividends && (
+                                            <TableHead
+                                                className={headCellClass}
+                                            >
+                                                {t("portfolio.dividends")}
+                                            </TableHead>
+                                        )}
                                     <TableHead className="w-12">
                                         <span className="sr-only">
                                             {t("portfolio.menu")}
@@ -636,7 +694,7 @@ export default function StocksPage({
                                                                 aria-hidden
                                                             />
                                                         </span>
-                                                        <span className="flex min-w-0 flex-col">
+                                                        <span className="flex min-w-48 max-w-80 flex-col">
                                                             <span className="font-mono">
                                                                 {h.symbol ||
                                                                     "?"}
@@ -672,16 +730,25 @@ export default function StocksPage({
                                                         "font-mono",
                                                 )}
                                             >
-                                                {h.totalUnits.toFixed(
-                                                    unitsDecimals,
+                                                {h.totalUnits.toLocaleString(
+                                                    numberFormatToLocale(
+                                                        appSettings.numberFormat,
+                                                    ),
+                                                    {
+                                                        minimumFractionDigits: 0,
+                                                        maximumFractionDigits:
+                                                            unitsDecimals,
+                                                    },
                                                 )}
                                             </TableCell>
-                                            <TableCell className="text-right tabular-nums text-label-secondary">
-                                                {moneyPriceCol(
-                                                    h.avgCostBasis,
-                                                    h.currency,
-                                                )}
-                                            </TableCell>
+                                            {visibleColumns.avgCost && (
+                                                <TableCell className="text-right tabular-nums text-label-secondary">
+                                                    {moneyPriceCol(
+                                                        h.avgCostBasis,
+                                                        h.currency,
+                                                    )}
+                                                </TableCell>
+                                            )}
                                             <TableCell className="text-right tabular-nums">
                                                 <span className="inline-flex items-center justify-end gap-1">
                                                     {moneyPriceCol(
@@ -731,53 +798,20 @@ export default function StocksPage({
                                                     className="ml-1.5"
                                                 />
                                             </TableCell>
-                                            <TableCell
-                                                className={cn(
-                                                    "text-right tabular-nums",
-                                                    realized !== 0
-                                                        ? toneClass(realized)
-                                                        : "text-label-secondary",
-                                                )}
-                                            >
-                                                {realized !== 0 ? (
-                                                    <Money
-                                                        amount={realized}
-                                                        currency={
-                                                            targetCurrency
-                                                        }
-                                                        signed
-                                                    />
-                                                ) : (
-                                                    "—"
-                                                )}
-                                            </TableCell>
-                                            {pageHasFxExposure && (
-                                                <FxPnlCell
-                                                    holding={h}
-                                                    fxInfo={fxInfoById.get(
-                                                        h.id,
-                                                    )}
-                                                    targetCurrency={
-                                                        targetCurrency
-                                                    }
-                                                    t={t}
-                                                />
-                                            )}
-                                            {showDividends && (
+                                            {visibleColumns.realized && (
                                                 <TableCell
                                                     className={cn(
                                                         "text-right tabular-nums",
-                                                        h.totalDividends > 0
-                                                            ? "text-gain"
+                                                        realized !== 0
+                                                            ? toneClass(
+                                                                  realized,
+                                                              )
                                                             : "text-label-secondary",
                                                     )}
                                                 >
-                                                    {h.totalDividends > 0 ? (
+                                                    {realized !== 0 ? (
                                                         <Money
-                                                            amount={convertToTarget(
-                                                                h.totalDividends,
-                                                                h.currency,
-                                                            )}
+                                                            amount={realized}
                                                             currency={
                                                                 targetCurrency
                                                             }
@@ -788,6 +822,46 @@ export default function StocksPage({
                                                     )}
                                                 </TableCell>
                                             )}
+                                            {pageHasFxExposure &&
+                                                visibleColumns.fx && (
+                                                    <FxPnlCell
+                                                        holding={h}
+                                                        fxInfo={fxInfoById.get(
+                                                            h.id,
+                                                        )}
+                                                        targetCurrency={
+                                                            targetCurrency
+                                                        }
+                                                        t={t}
+                                                    />
+                                                )}
+                                            {showDividends &&
+                                                visibleColumns.dividends && (
+                                                    <TableCell
+                                                        className={cn(
+                                                            "text-right tabular-nums",
+                                                            h.totalDividends > 0
+                                                                ? "text-gain"
+                                                                : "text-label-secondary",
+                                                        )}
+                                                    >
+                                                        {h.totalDividends >
+                                                        0 ? (
+                                                            <Money
+                                                                amount={convertToTarget(
+                                                                    h.totalDividends,
+                                                                    h.currency,
+                                                                )}
+                                                                currency={
+                                                                    targetCurrency
+                                                                }
+                                                                signed
+                                                            />
+                                                        ) : (
+                                                            "—"
+                                                        )}
+                                                    </TableCell>
+                                                )}
                                             <TableCell className="py-1 text-right">
                                                 {renderMenu(h)}
                                             </TableCell>

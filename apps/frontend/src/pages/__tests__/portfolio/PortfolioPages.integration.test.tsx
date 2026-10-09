@@ -118,6 +118,20 @@ describe("Portfolio pages (integration)", () => {
         expect(
             screen.getByRole("button", { name: /price: prices as of/i }),
         ).toBeInTheDocument();
+        expect(
+            screen.queryByRole("columnheader", { name: /average cost/i }),
+        ).not.toBeInTheDocument();
+        const user = userEvent.setup();
+        await user.click(
+            screen.getByRole("button", { name: /columns|portfolio.columns/i }),
+        );
+        await user.click(
+            screen.getByRole("menuitemcheckbox", { name: /average cost/i }),
+        );
+        await user.keyboard("{Escape}");
+        expect(
+            screen.getByRole("columnheader", { name: /average cost/i }),
+        ).toBeInTheDocument();
     });
 
     // ─── CryptoPage ───────────────────────────────────────────────────────────

@@ -1339,3 +1339,12 @@ Transfer portfolio lots distinguishes account loading and failures from a succes
 Exposure coverage and holding percentages use the app number-format locale, matching the amounts beside them. Display retains up to two decimal places without padding whole percentages; coverage calculations and visual bar widths remain unchanged.
 
 Asset pages emphasize one primary total and keep supporting metrics neutral. Exposure explains incomplete coverage and offers retry on failure. Coverage-bar CSS widths use locale-independent numeric percentages while visible percentages retain the selected number format.
+
+## Asset table controls
+
+Stocks, crypto and metals share a combined security name/symbol column. The Columns menu can
+reveal average cost, realized gain, currency exposure and dividends where those metrics apply.
+Those supporting columns start hidden and their visibility lasts for the mounted page. This changes
+presentation only; calculations and available investment records are unchanged. Savings rates use
+the selected number format. Supporting summary cards align at their top edge instead of stretching
+to match neighbouring explanatory content.
