@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import { txRow } from "./helpers/pgRows.ts";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
@@ -65,7 +66,7 @@ describe("tag attachment", () => {
   it("getAll attaches tags grouped by transaction and empty arrays otherwise", async () => {
     // First call: main SELECT returns two rows. Second call: the tag lookup.
     query
-      .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }] })
+      .mockResolvedValueOnce({ rows: [txRow({ id: 1 }), txRow({ id: 2 })] })
       .mockResolvedValueOnce({
         rows: [
           {
@@ -234,7 +235,7 @@ describe("getUncategorised", () => {
 
 describe("getUncategorisedWithCount", () => {
   it("joins the primary recipient and filters on the full effective category", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({});
     const [sql] = query.mock.calls[0];
     // The uncategorised_rows CTE must join pr and use the 3-level predicate.
@@ -247,7 +248,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("counts the total over a REDUCED join set, not the full TRANSACTION_JOINS", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({
       recipientName: "delh",
     });
@@ -283,7 +284,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("total params and filter semantics are unchanged by the reduced join set", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({
       startDate: "2024-01-01",
       recipientName: "delh",
@@ -304,7 +305,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("forwards the full row-compatible filter set to both halves using shared params", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({
       recipientGroupId: 7,
       transactionType: "expense",
@@ -332,7 +333,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("ignores category filters and pins active rows for both the queue and its total", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({
       categoryIds: [3],
       search: "coffee",
@@ -357,7 +358,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("counts the identical predicate before pagination and preserves a total for an empty page", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "3" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 3 }] });
     const result = await transactionRepository.getUncategorisedWithCount({
       startDate: "2024-01-01",
       recipientName: "coffee",
@@ -389,7 +390,7 @@ describe("getUncategorisedWithCount", () => {
   });
 
   it("returns total 0 and empty rows when CTE yields only the null-joined total row", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: "0" }] });
+    query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     const res = await transactionRepository.getUncategorisedWithCount({});
     expect(res.total).toBe(0); // first row total_count parsed
     expect(res.rows).toEqual([]); // id null filtered out
@@ -398,7 +399,7 @@ describe("getUncategorisedWithCount", () => {
   it("parses total and strips total_count from rows", async () => {
     query
       .mockResolvedValueOnce({
-        rows: [{ id: 1, total_count: "7", _row_order: "1" }],
+        rows: [{ ...txRow({ id: 1 }), total_count: 7, _row_order: "1" }],
       }) // main CTE
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const res = await transactionRepository.getUncategorisedWithCount({
@@ -413,7 +414,7 @@ describe("getUncategorisedWithCount", () => {
 describe("getById", () => {
   it("returns the enriched row", async () => {
     queryPrepared.mockResolvedValueOnce({
-      rows: [{ id: 9, recipient_name: "X" }],
+      rows: [txRow({ id: 9, recipient_name: "X" })],
     });
     query.mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.getById(9);
@@ -432,7 +433,7 @@ describe("create", () => {
     const client = { query: vi.fn() };
     client.query
       .mockResolvedValueOnce({ rows: [{ id: 7 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 3 }] });
+      .mockResolvedValueOnce({ rows: [txRow({ id: 3 })] });
     withTransaction.mockImplementation(async (fn) => fn(client));
     query.mockResolvedValueOnce({ rows: [] });
 
@@ -463,7 +464,7 @@ describe("create", () => {
     const client = { query: vi.fn() };
     client.query
       .mockResolvedValueOnce({ rows: [{ id: 7 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 3 }] });
+      .mockResolvedValueOnce({ rows: [txRow({ id: 3 })] });
     withTransaction.mockImplementation(async (fn) => fn(client));
     query.mockResolvedValueOnce({ rows: [] }); // tag lookup
     // `balance` is not a create() input (manual rows carry no bank stamp);
@@ -494,7 +495,7 @@ describe("create", () => {
 
   it("defaults currency to EUR and nulls account/memo when absent", async () => {
     const client = {
-      query: vi.fn().mockResolvedValueOnce({ rows: [{ id: 4 }] }),
+      query: vi.fn().mockResolvedValueOnce({ rows: [txRow({ id: 4 })] }),
     };
     withTransaction.mockImplementation(async (fn) => fn(client));
     query.mockResolvedValueOnce({ rows: [] });
@@ -520,7 +521,7 @@ describe("create", () => {
         return { rows: [{ id: 7 }] };
       }
       if (typeof sql === "string" && sql.includes("INSERT INTO transactions")) {
-        return { rows: [{ id: 50 }] };
+        return { rows: [txRow({ id: 50 })] };
       }
       if (
         typeof sql === "string" &&
@@ -575,7 +576,7 @@ describe("update", () => {
   it("falls back to getById when there are no writable fields and no tags", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] }) // existence
-      .mockResolvedValueOnce({ rows: [{ id: 1 }] }) // hydrated fetch
+      .mockResolvedValueOnce({ rows: [txRow({ id: 1 })] }) // hydrated fetch
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.update(1, {});
     expect(row!.id).toBe(1);
@@ -584,7 +585,7 @@ describe("update", () => {
   it("maps transaction_date to date and returns enriched row", async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 2 }] }) // update
-      .mockResolvedValueOnce({ rows: [{ id: 2, recipient_name: "r" }] }) // fetch
+      .mockResolvedValueOnce({ rows: [txRow({ id: 2, recipient_name: "r" })] }) // fetch
       .mockResolvedValueOnce({ rows: [] }); // tag lookup
     const row = await transactionRepository.update(2, {
       transaction_date: "2024-06-01",
@@ -617,7 +618,7 @@ describe("update", () => {
       if (typeof sql === "string" && sql.includes("SELECT id FROM tags"))
         return { rows: [] }; // no matching tags -> early return
       if (typeof sql === "string" && sql.includes("SELECT t.*"))
-        return { rows: [{ id: 7 }] }; // fetchSql
+        return { rows: [txRow({ id: 7 })] }; // fetchSql
       return { rows: [] };
     });
     withTransaction.mockImplementation(async (fn) => fn(client));
@@ -642,7 +643,7 @@ describe("update", () => {
       if (typeof sql === "string" && sql.includes("UPDATE transactions SET"))
         return { rows: [{ id: 8 }] };
       if (typeof sql === "string" && sql.includes("SELECT t.*"))
-        return { rows: [{ id: 8 }] };
+        return { rows: [txRow({ id: 8 })] };
       return { rows: [] };
     });
     withTransaction.mockImplementation(async (fn) => fn(client));
@@ -663,11 +664,21 @@ describe("hardDelete", () => {
 
 describe("listRecentUnlinked", () => {
   it("queries from the since date and returns rows", async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 1, recipient_cluster_id: 3 }] });
+    const unlinked = {
+      id: 1,
+      recipient_id: 2,
+      recipient_cluster_id: 3,
+      amount: "-10.0000",
+      transaction_date: new Date(2024, 0, 2),
+      currency: "EUR",
+      memo: null,
+      recipient_name: null,
+    };
+    query.mockResolvedValueOnce({ rows: [unlinked] });
     const rows = await transactionRepository.listRecentUnlinked({
       sinceDate: "2024-01-01",
     });
-    expect(rows).toEqual([{ id: 1, recipient_cluster_id: 3 }]);
+    expect(rows).toEqual([unlinked]);
     expect(query.mock.calls[0][1]).toEqual(["2024-01-01"]);
     expect(query.mock.calls[0][0]).toContain("NOT EXISTS");
   });

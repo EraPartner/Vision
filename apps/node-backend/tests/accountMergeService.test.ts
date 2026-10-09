@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { accountRow } from "./helpers/pgRows.ts";
 const { mockClient } = vi.hoisted(() => ({ mockClient: { query: vi.fn() } }));
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mockClient));
@@ -61,7 +62,10 @@ function happyPath({
 }: {
   stampRanges?: StampRange[];
   openingAnchors?: OpeningAnchor[];
-  fundingAccounts?: Record<number, { id: number; funding_account_id: number }>;
+  fundingAccounts?: Record<
+    number,
+    { id: number; funding_account_id: number | null }
+  >;
 } = {}) {
   mockClient.query.mockImplementation(async (sql, params = []) => {
     if (sql.includes("transfer_source = 'opening'"))
@@ -195,7 +199,7 @@ describe("mergeAccounts (ADR-088)", () => {
   it("rejects a merge that would turn the survivor's source reference into a self-cycle", async () => {
     happyPath({
       fundingAccounts: {
-        2: { id: 2, funding_account_id: 1 },
+        2: accountRow({ id: 2, funding_account_id: 1 }),
       },
     });
 
@@ -212,8 +216,8 @@ describe("mergeAccounts (ADR-088)", () => {
   it("rejects a longer cycle introduced by the projected funding repoint", async () => {
     happyPath({
       fundingAccounts: {
-        2: { id: 2, funding_account_id: 3 },
-        3: { id: 3, funding_account_id: 1 },
+        2: accountRow({ id: 2, funding_account_id: 3 }),
+        3: accountRow({ id: 3, funding_account_id: 1 }),
       },
     });
 
@@ -235,9 +239,9 @@ describe("mergeAccounts (ADR-088)", () => {
   it("does not make an unrelated pre-existing funding cycle a merge blocker", async () => {
     happyPath({
       fundingAccounts: {
-        2: { id: 2, funding_account_id: 3 },
-        3: { id: 3, funding_account_id: 4 },
-        4: { id: 4, funding_account_id: 3 },
+        2: accountRow({ id: 2, funding_account_id: 3 }),
+        3: accountRow({ id: 3, funding_account_id: 4 }),
+        4: accountRow({ id: 4, funding_account_id: 3 }),
       },
     });
 

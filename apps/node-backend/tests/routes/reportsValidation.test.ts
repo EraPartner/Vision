@@ -19,4 +19,16 @@ describe('Report exclusion id validation', () => {
       excludedRecipientIds: [2147483647],
     }));
   });
+
+  it('reports a root-level issue without an empty path prefix', () => {
+    expect(() => __parseReportBody(undefined)).toThrow(
+      /^Invalid report request: Invalid input: expected object, received undefined$/
+    );
+  });
+
+  it('prefixes field issues with their path', () => {
+    expect(() => __parseReportBody({ currency: 'eur' })).toThrow(
+      /^Invalid report request: currency: currency must be a 3-letter ISO code$/
+    );
+  });
 });

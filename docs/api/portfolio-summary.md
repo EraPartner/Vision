@@ -79,6 +79,9 @@ principal. See [[docs/features/portfolio]] and [[docs/adr/095-brokerage-account-
 | ---------- | ------ | -------- | ------- | --------------------------------------------------------------------------- |
 | `currency` | string | No       | EUR     | Target 3-letter currency code for FX conversion (e.g., `USD`, `GBP`, `CHF`) |
 
+`target_currency` is an alias. A malformed code falls back to EUR. A repeated `currency` or
+`target_currency` key returns `400 VALIDATION_ERROR` with `currency must be a single value`.
+
 **Examples:**
 
 - `/api/info/portfolio-summary` — Totals in EUR (default)

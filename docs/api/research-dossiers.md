@@ -2,7 +2,7 @@
 title: Research Dossiers API
 type: endpoint
 status: active
-date: 2026-09-19
+date: 2026-10-08
 tags: [api, research, dossiers, evidence, versioning]
 description: Nine additive operations under /api/research-dossiers for local versioned research and JSON export.
 path: /api/research-dossiers
@@ -15,7 +15,9 @@ aliases: [dossier API, research dossier endpoints]
 This is an additive API; it does not change existing analysis or investigation requests. All
 success responses use `{ ok: true, data: ... }`, except `DELETE` which returns empty `204`. The
 route group uses the aggregation rate limiter. IDs are UUIDs; malformed IDs, invalid pagination,
-unknown links, or mismatched document provenance are rejected.
+unknown links, or mismatched document provenance are rejected. The route rejects a malformed UUID or
+invalid `limit`/`offset` with `400 VALIDATION_ERROR` before the service runs; these used to carry
+`INVALID_DOSSIER`. Dossier bodies are still validated by the service and keep `INVALID_DOSSIER`.
 
 | Method   | Path                                    | Purpose                                                                                  |
 | -------- | --------------------------------------- | ---------------------------------------------------------------------------------------- |

@@ -200,6 +200,11 @@ Mark a planned transaction as executed. **Atomic and idempotent as of Phase 3.**
 }
 ```
 
+`executed_transaction_id` is required and must be a positive int4 id. `execution_date` is optional
+and must be a `YYYY-MM-DD` date. A missing body returns `400` with
+`Missing required field: executed_transaction_id` instead of a `500`; a missing `PATCH` body is
+also a `400`.
+
 **Behavior:**
 
 - For recurring: Advances one occurrence, or completes the series at its maximum count or end date. A new execution of a completed bounded series returns `409 CONFLICT`.

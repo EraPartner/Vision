@@ -13,6 +13,7 @@
 
 import { Router } from "express";
 import https from "https";
+import { z } from "zod";
 // eslint-disable-next-line vision-local/no-repo-direct-from-route -- admin table stats/VACUUM are legitimately DB-level (ADR-067 documented exemption)
 import {
   checkConnection,
@@ -43,8 +44,7 @@ import {
   readRows,
   applyMutations,
 } from "../services/dbEditor.ts";
-import type { Filter } from "../services/dbEditor.ts";
-import { optionalQueryString } from "../lib/httpParams.ts";
+import { parseInput } from "../lib/zodInput.ts";
 
 const GITHUB_OWNER = "EraPartner";
 const GITHUB_REPO = "Vision";
@@ -169,6 +169,68 @@ function formatAdminStatusPayload(isConnected: boolean, tableCount: number) {
   };
 }
 
+const resetBodySchema = z.object({ force: z.boolean().optional() });
+
+const vacuumBodySchema = z.object({ table: z.string().min(1).nullish() });
+
+const tableParamsSchema = z.object({ table: z.string().min(1) });
+
+const providerParamsSchema = z.object({ provider: z.string().min(1) });
+
+/** Structured browse filters; dbEditor resolves columns and operators. */
+const dbFiltersSchema = z
+  .string()
+  .transform((raw, ctx): unknown => {
+    try {
+      return JSON.parse(raw);
+    } catch (err) {
+      ctx.addIssue({
+        code: "custom",
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return z.NEVER;
+    }
+  })
+  .pipe(
+    z.array(
+      z.object({
+        column: z.string(),
+        op: z.string().optional(),
+        value: z.unknown().optional(),
+      }),
+      { error: "filters must be an array" },
+    ),
+  );
+
+// The raw `where` param was removed (SQLi timing oracle, see ADR-101
+// addendum); it is still read so readRows can reject it with a 400 that
+// points at filters[].
+const rowsQuerySchema = z.object({
+  filters: z.string().optional(),
+  limit: z.string().optional(),
+  cursor: z.string().optional(),
+  orderBy: z.string().optional(),
+  dir: z.string().optional(),
+  where: z.string().optional(),
+});
+
+const rowValuesSchema = z.record(z.string(), z.unknown());
+
+const mutateBodySchema = z.object({
+  changes: z.array(
+    z.object({
+      op: z.enum(["insert", "update", "delete"]),
+      values: rowValuesSchema.optional(),
+      set: rowValuesSchema.optional(),
+      pk: rowValuesSchema.optional(),
+      xmin: z.union([z.string(), z.number()]).optional(),
+    }),
+  ),
+  // Anything but a real boolean is rejected: a truthy string must never
+  // commit a batch the caller meant to preview.
+  dryRun: z.boolean().optional(),
+});
+
 const router = Router();
 
 router.get("/", async (req, res) => {
@@ -195,8 +257,8 @@ router.post("/database/reset", adminMutateLimiter, async (req, res) => {
     throw new NotFoundError("Database reset endpoint disabled");
   }
 
-  const force = req.body?.force === true;
-  if (!force) {
+  const { force } = parseInput(resetBodySchema, req.body ?? {});
+  if (force !== true) {
     throw new ValidationError(
       "Database reset requires force=true in the request body",
       {
@@ -306,7 +368,7 @@ router.get("/database/stats", async (_req, res) => {
 // on this exact route (30 req/min). Scanner does not see middleware bound at
 // the route level.
 router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
-  const { table } = req.body ?? {};
+  const { table } = parseInput(vacuumBodySchema, req.body ?? {});
 
   // Validate table name against actual user tables to prevent injection
   const allowed = await query(
@@ -317,7 +379,7 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
     allowed.rows.map((r: { relname: string }) => r.relname),
   );
 
-  if (table !== undefined && table !== null && !allowedNames.has(table)) {
+  if (table != null && !allowedNames.has(table)) {
     throw new ValidationError(`Unknown table: ${table}`);
   }
 
@@ -350,35 +412,29 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
 // ── Data Editor (JetBrains-style table browser/editor) ─────────────────────────
 
 router.get("/database/tables/:table/schema", async (req, res) => {
-  const meta = await getTableMeta(req.params.table);
-  res.ok(meta);
+  const { table } = parseInput(tableParamsSchema, req.params);
+  res.ok(await getTableMeta(table));
 });
 
 router.get("/database/tables/:table/rows", async (req, res) => {
-  let filters: Filter[] = [];
-  const rawFilters = optionalQueryString(req.query, "filters");
-  if (rawFilters !== undefined) {
-    try {
-      const parsed: unknown = JSON.parse(rawFilters);
-      if (!Array.isArray(parsed)) throw new Error("filters must be an array");
-      filters = parsed;
-    } catch (err) {
-      throw new ValidationError(
-        `Invalid filters parameter: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
-  const limit = optionalQueryString(req.query, "limit");
-  // The raw `where` query param was removed (SQLi timing oracle, see ADR-101
-  // addendum); readRows rejects it with a 400 pointing at filters[].
-  const result = await readRows(req.params.table, {
+  const { table } = parseInput(tableParamsSchema, req.params);
+  const { filters, limit, cursor, orderBy, dir, where } = parseInput(
+    rowsQuerySchema,
+    req.query,
+  );
+  const result = await readRows(table, {
     // parseInt matches the service's own clampInt parse (NaN -> default).
     limit: limit === undefined ? undefined : Number.parseInt(limit, 10),
-    cursor: optionalQueryString(req.query, "cursor"),
-    orderBy: optionalQueryString(req.query, "orderBy"),
-    dir: optionalQueryString(req.query, "dir"),
-    where: optionalQueryString(req.query, "where"),
-    filters,
+    cursor,
+    orderBy,
+    dir,
+    where,
+    filters:
+      filters === undefined
+        ? []
+        : parseInput(dbFiltersSchema, filters, {
+            prefix: "Invalid filters parameter",
+          }),
   });
   res.ok(result);
 });
@@ -390,8 +446,9 @@ router.post(
   "/database/tables/:table/mutate",
   adminMutateLimiter,
   async (req, res) => {
-    const { changes, dryRun } = req.body ?? {};
-    const result = await applyMutations(req.params.table, changes, {
+    const { table } = parseInput(tableParamsSchema, req.params);
+    const { changes, dryRun } = parseInput(mutateBodySchema, req.body ?? {});
+    const result = await applyMutations(table, changes, {
       dryRun: dryRun === true,
     });
     res.ok(result);
@@ -411,7 +468,7 @@ router.post(
   "/providers/:provider/probe",
   adminMutateLimiter,
   async (req, res) => {
-    const { provider } = req.params;
+    const { provider } = parseInput(providerParamsSchema, req.params);
     const result = await probeProvider(provider);
     res.ok(result);
   },

@@ -42,49 +42,63 @@ Decide on:
 
 ### 2. Create the Route File
 
-Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Use `validateIdParam` for `/:id` routes and throw the typed errors from `middleware/errorHandler.ts` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.ts` for a live reference.
+Create `apps/node-backend/src/routes/<resource>.js`. Routes are thin: they parse/validate the request, delegate to the **service** (never the repository — the `vision-local/no-repo-direct-from-route` ESLint gate enforces this, [[docs/adr/067-enforce-route-service-boundary|ADR-067]]), and reply with the `res.ok()` envelope ([[docs/adr/026-unified-api-response-envelope|ADR-026]]). Parse `req.params`, `req.query` and `req.body` with zod schemas through `parseInput` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]) and throw the typed errors from `middleware/errorHandler.ts` instead of hand-rolling `res.status(...).json(...)` — the central error handler turns them into the `{ ok:false, error:{ code, message } }` envelope. See `routes/tags.ts` for a live reference.
 
-`validateIdParam` is validation-only and leaves Express path strings unchanged. Read the numeric id
-through `assertIdParam(req)` inside the handler; for a named sub-resource parameter, pair
-`validateIntParam(name)` with `assertIdParam(req, name)`.
+`parseInput(schema, value)` (`lib/zodInput.ts`) throws `ValidationError` when the schema fails,
+so a bad request is a 400 `VALIDATION_ERROR` with the issues joined as `path: message`. Reuse the
+shared fields in `routes/_requestSchemas.ts`: `idParams` for `/:id`, `idSchema()` for a named
+sub-resource id, `pageFields`, `booleanQuery()`, `clampedIntQuery()`, `singleQueryString` and
+`requiredString`. Declare every field that may be absent as `.optional()`. See
+[[docs/reference/code-patterns#Request validation with parseInput (ADR-193)|Request validation]].
 
 ```javascript
 import { Router } from 'express';
+import { z } from 'zod';
 import <resource>Service from '../services/<resource>Service.js';
-import { validateIdParam, assertIdParam } from '../middleware/validation.ts';
 import { parsePagination } from '../lib/pagination.ts';
+import { parseInput } from '../lib/zodInput.ts';
+import { idParams, pageFields, requiredString } from './_requestSchemas.ts';
 
 const router = Router();
 
+const listQuery = z
+  .object({ ...pageFields })
+  .transform((page) => parsePagination(page, { maxLimit: 1000 }));
+const createBody = z.object({ name: requiredString });
+const updateBody = z.object({ name: z.string().optional() });
+
 // GET /api/<resource>
 router.get('/', async (req, res) => {
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
+  const { limit, offset } = parseInput(listQuery, req.query);
   const { items, total } = await <resource>Service.list({ limit, offset });
   res.ok({ items, total, limit, offset, links: [] });
 });
 
 // POST /api/<resource>
 router.post('/', async (req, res) => {
-  const item = await <resource>Service.create(req.body); // throws ValidationError on bad input
+  const item = await <resource>Service.create(parseInput(createBody, req.body));
   res.status(201);
   res.ok({ ...item, links: [] });
 });
 
 // GET /api/<resource>/:id
-router.get('/:id', validateIdParam, async (req, res) => {
-  const item = await <resource>Service.get(assertIdParam(req)); // throws NotFoundError if absent
+router.get('/:id', async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const item = await <resource>Service.get(id); // throws NotFoundError if absent
   res.ok({ ...item, links: [] });
 });
 
 // PATCH /api/<resource>/:id
-router.patch('/:id', validateIdParam, async (req, res) => {
-  const item = await <resource>Service.update(assertIdParam(req), req.body);
+router.patch('/:id', async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const item = await <resource>Service.update(id, parseInput(updateBody, req.body));
   res.ok({ ...item, links: [] });
 });
 
 // DELETE /api/<resource>/:id
-router.delete('/:id', validateIdParam, async (req, res) => {
-  await <resource>Service.remove(assertIdParam(req)); // throws NotFoundError if absent
+router.delete('/:id', async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  await <resource>Service.remove(id); // throws NotFoundError if absent
   res.status(204).end();
 });
 
@@ -189,6 +203,12 @@ const <resource>Repository = {
 export default <resource>Repository;
 ```
 
+> [!tip] Row contracts
+> To check what PostgreSQL returns, add a schema to `database/rowSchemas.ts` and read through
+> `queryRows(schema, sql, params)` or `queryOne(...)` from `database/rowContracts.ts`. Derive the
+> row type from the schema in `types/rows.ts`. See
+> [[docs/reference/code-patterns#Row contracts for new queries (ADR-193)|Row contracts]].
+
 ### 5. Create the Database Migration
 
 ```bash
@@ -251,7 +271,7 @@ The endpoint is not "done" until the API contract and the generated frontend typ
 
 ## Checklist
 
-- [ ] Route file created (thin — delegates to the service, uses `res.ok()` + `validateIdParam`, throws typed errors)
+- [ ] Route file created (thin — parses input with `parseInput`, delegates to the service, uses `res.ok()`, throws typed errors)
 - [ ] Service module created (ADR-067 seam; validation + orchestration)
 - [ ] Repository created (parameterized SQL via `query` from `database/connection.ts`)
 - [ ] Route registered in `main.ts` via `mountRouter`

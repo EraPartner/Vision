@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
@@ -569,6 +569,38 @@ export default entityRepository;
 | SQL injection   | Use parameterized queries only, never string concatenation                  |
 | Export shape    | Entity CRUD object or specialized named functions, chosen by responsibility |
 
+### Row contracts for new queries (ADR-193)
+
+**Source:** [[apps/node-backend/src/database/rowContracts.ts|database/rowContracts.ts]], [[apps/node-backend/src/database/rowSchemas.ts|database/rowSchemas.ts]], [[apps/node-backend/src/types/rows.ts|types/rows.ts]]
+
+`query<R>()` trusts its generic. A new read in a checked repository runs through `queryRows` or
+`queryOne` with a row schema instead, so the rows are checked against what node-postgres really
+returns ([[docs/adr/193-zod-runtime-contracts|ADR-193]]):
+
+```ts
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { accountRowSchema, countRowSchema } from "../database/rowSchemas.ts";
+
+const rows = await queryRows(accountRowSchema, sql, params);
+const account = await queryOne(accountRowSchema, sqlById, [id], client); // first row or undefined
+const [row] = await queryRows(countRowSchema, countSql, []);
+return parseInt(row.count, 10);
+```
+
+| Rule             | Detail                                                                                                                                                                              |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema location  | Add the schema to `database/rowSchemas.ts`. Derive the TypeScript row type with `z.output<typeof schema>` in `types/rows.ts` so the type and the check cannot drift.                 |
+| pg default types | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. No global type parsers are installed.                        |
+| Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects pg returned, extra columns included.                   |
+| Columns          | Plain `z.object` ignores unlisted columns, so `SELECT t.*` keeps working after a migration adds one. `.optional()` marks a column only some projections select; `.nullable()` marks SQL NULL. |
+| Transactions     | Pass the `client` as the fourth argument inside `withTransaction`.                                                                                                                  |
+| Mismatch         | Never a 400. Tests and development throw `RowContractError` (a 500). Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"`: the owner chose to block (2026-10-09), so production fails the request too. Messages carry column paths and type names, never values. |
+| Cost             | `checkRows` stops at the first failing row, so a systematic mismatch is one error.                                                                                                  |
+
+The account, planned-transaction, split and transaction repositories use these helpers. Other
+repositories still call `query<R>()` directly; move a read over when you touch it. Tests that mock
+`query` build rows with the pg-shaped helpers in `tests/helpers/pgRows.ts`.
+
 ### Layering: repositories must not import services — with a closed list of sanctioned exceptions
 
 The intended layering is `routes → services → repositories`, with pure, framework-free helpers in
@@ -671,65 +703,66 @@ Two new test cases in `timezone.test.ts`:
 
 **Source:** [[apps/node-backend/src/routes/transactions.ts|transactions.js]], [[apps/node-backend/src/routes/splits.ts|splits.js]], [[apps/node-backend/src/routes/categories.ts|categories.js]], [[apps/node-backend/src/routes/plannedTransactions.ts|plannedTransactions.js]]
 
-Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. PATCH handlers must sanitize read-only fields immutably:
+Per [[docs/adr/026-unified-api-response-envelope|ADR-026]], all routes return `{ ok: true, data, meta? }` via `res.ok()` middleware. Per [[docs/adr/193-zod-runtime-contracts|ADR-193]], handlers parse `req.params`, `req.query` and `req.body` with `parseInput` before using them. PATCH handlers must sanitize read-only fields immutably:
 
 ```js
 import { Router } from "express";
-import entityRepository from "../repositories/entityRepository.js";
-import { logger } from "../config/logger.ts";
-import { validateIdParam } from "../middleware/validation.ts";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { z } from "zod";
+import entityService from "../services/entityService.ts";
+import { NotFoundError } from "../middleware/errorHandler.ts";
+import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
+import { parseInput } from "../lib/zodInput.ts";
+import { idParams, pageFields, requiredString } from "./_requestSchemas.ts";
 
 const router = Router();
 
-// GET /api/entities — paginated list
+const listQuery = z
+  .object({ ...pageFields })
+  .transform((page) => parseOptionalPagination(page, { maxLimit: 1000 }));
+
+const createBody = z.object({
+  name: requiredString,
+  color: z.string().nullable().optional(),
+});
+
+// GET /api/entities — list
 router.get("/", async (req, res) => {
-  const { limit = 50, offset = 0, ...filters } = req.query;
-  const opts = {
-    limit: Math.min(parseInt(limit, 10) || 50, 1000),
-    offset: parseInt(offset, 10) || 0,
-  };
-
-  const [items, total] = await Promise.all([
-    entityRepository.getAll(opts),
-    entityRepository.getCount(opts),
-  ]);
-
+  const page = parseInput(listQuery, req.query);
+  const { items, total } = await entityService.list({ ...(page ?? {}) });
   // List response: wrap payload as {items, total, ...} inside data
-  res.ok({ items, total, limit: opts.limit, offset: opts.offset });
+  res.ok(listBody(items, total, page));
 });
 
 // GET /api/entities/:id
-router.get("/:id", validateIdParam, async (req, res) => {
-  const entity = await entityRepository.getById(assertIdParam(req));
+router.get("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const entity = await entityService.getById(id);
   if (!entity) throw new NotFoundError("Entity not found");
   res.ok(entity);
 });
 
 // POST /api/entities
 router.post("/", async (req, res) => {
-  const { requiredField, ...data } = req.body;
-  if (!requiredField) {
-    throw new ValidationError("Missing required fields: requiredField");
-  }
-  const entity = await entityRepository.create(data);
+  const entity = await entityService.create(parseInput(createBody, req.body));
   res.status(201);
   res.ok(entity);
 });
 
 // PATCH /api/entities/:id
-router.patch("/:id", validateIdParam, async (req, res) => {
+router.patch("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   // Remove read-only fields immutably (via destructuring rest, not in-place delete)
-  const { id: _id, createdAt: _createdAt, ...sanitized } = req.body;
-  const updated = await entityRepository.update(assertIdParam(req), sanitized);
+  const { id: _id, createdAt: _createdAt, ...sanitized } = req.body ?? {};
+  const updated = await entityService.update(id, sanitized);
   if (!updated) throw new NotFoundError("Entity not found");
   res.ok(updated);
 });
 
 // DELETE /api/entities/:id — hard delete answers 204 with no body (see
 // "DELETE Response Pattern" below for the soft-delete / side-effect exceptions)
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const deleted = await entityRepository.hardDelete(assertIdParam(req));
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const deleted = await entityService.hardDelete(id);
   if (!deleted) throw new NotFoundError("Entity not found");
   res.status(204).send();
 });
@@ -737,13 +770,46 @@ router.delete("/:id", validateIdParam, async (req, res) => {
 export default router;
 ```
 
+### Request validation with parseInput (ADR-193)
+
+**Source:** [[apps/node-backend/src/lib/zodInput.ts|lib/zodInput.ts]], [[apps/node-backend/src/routes/_requestSchemas.ts|routes/_requestSchemas.ts]], [[apps/node-backend/src/routes/_inputBridges.ts|routes/_inputBridges.ts]], [[apps/node-backend/src/routes/_importInput.ts|routes/_importInput.ts]]
+
+Routes declare a zod schema per input and call `parseInput(schema, value, options?)` inside the
+handler. On failure it throws a `ValidationError`, so the client gets `400 VALIDATION_ERROR`. The
+message joins the issues as `path: message` with `"; "`. There is no zod validation middleware: the
+parse runs in the handler, next to the code that uses the result.
+
+| Helper                                  | Use                                                                                                                                                         |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parseInput(schema, value, options)`    | Parse one request input. `prefix` puts text before the issues, `separator` changes `"; "`, and `omitPaths` drops paths when the schema's messages name the field. |
+| `formatZodIssues(error, sep, omitPaths)` | The issue formatter `parseInput` uses. Use it when a route must build its own 400 message from a `safeParse` result.                                     |
+| `guardField(guard)`                     | Wrap a throwing guard such as `assertYmd`. Its `ValidationError` message becomes the issue. Any other error is a server fault and propagates.              |
+| `bareMessages(schema)`                  | Report a nested schema's issues by message only, so an established text such as `account_id must be a positive integer` keeps its exact wording.          |
+| `_requestSchemas.ts`                    | Shared fields: `idSchema`, `idParams`, `optionalIdFilter`, `nullableId`, `booleanQuery`, `clampedIntQuery`, `singleQueryString`, `pageFields`, `activeOrAllQuery`, `requiredString`. |
+| `_inputBridges.ts`                      | Bridges that keep the older 400 texts for settings, splits, transactions, watchlist and info: `idField`, `idParamsSchema`, `singleQueryValue`, `booleanQueryFlag`, `paginationQuery`. |
+| `_importInput.ts`                       | Import routers: `overrideIdField` and `parserConfigBody`.                                                                                                   |
+
+Rules:
+
+- Every field that may be absent is `.optional()` or built from `optionalValue`. zod 4 rejects a
+  missing key even for `z.unknown()`.
+- The shared fields wrap the existing guards (`validateId`, `parseBooleanQueryParam`,
+  `parseIntClamped`, the pagination parsers). Reuse them instead of writing a new accept set.
+- Use `parseInput` only for untrusted request input. Data Vision produced itself (adapter output,
+  stored configs, database rows) uses the data-contract helpers instead, because a mismatch there
+  is a bug, not a bad request ([[docs/reference/code-patterns#Row contracts for new queries (ADR-193)|Row contracts]]).
+- `validateIdParam`, `validateIntParam` and `assertIdParam` in `middleware/validation.ts` still
+  exist. `categories.ts` (`/tree/:id`), `parserConfigRoutes.ts`, `plannedTransactions.ts`,
+  `research.ts` and `savedCharts.ts` still call `validateIdParam`; no route calls
+  `validateIntParam` any more. New routes use `idParams` or `idSchema()`.
+
 ### Key Conventions
 
 | Pattern                | Rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **List envelope**      | `res.ok({ items, total, limit?, offset? })` wraps items in a `data` object per [[docs/adr/026-unified-api-response-envelope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | ADR-026]]                  |
 | **Parallel fetch**     | `Promise.all([getAll, getCount])` for list endpoints to avoid N+1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **ID validation**      | `validateIdParam` middleware on all `/:id` routes; `validateIntParam('<param>')` (e.g. `validateIntParam('patternId')`, `validateIntParam('accountId')`) for sub-resource id params. Handlers then read the number through `assertIdParam(req, '<param>')`, so safety does not depend on middleware ordering. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `validatedIdField` (`splits.js`) and `coercedIdSchema` (`lib/importBatchIds.ts`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
+| **ID validation**      | Parse `/:id` and sub-resource id params in the handler with `parseInput(idParams, req.params)` or an object of `idSchema()` fields (`routes/_requestSchemas.ts`); the routers that still use `validateIdParam` read the number through `assertIdParam(req, '<param>')`. These helpers accept **only** a plain base-10 digit string (or an integer number) in 1..2³¹−1 — `"12abc"`, `"12.5"`, `"1e3"`, `"0x10"`, `" 5 "` and `0` all 400. Never hand-roll an id check with `parseInt` (takes the leading digits of anything) **or `Number()`** (takes `"0x10"` as 16, `"1e3"` as 1000) — both silently address the wrong record. Every id parser delegates to `validateId`: `validateIntArray` for body id arrays, `parseIdArrayQueryParam` (`aggregations.js`) for repeatable id query params, `assertOptionalId` for optional single query ids, `idSchema`/`optionalIdFilter`/`nullableId` (`routes/_requestSchemas.ts`), `idField` (`routes/_inputBridges.ts`) and `coercedIdSchema` (`lib/importBatchIds.ts`) for zod bodies/params, `parsePositiveInt` (`aiChat/tools/_validate.js`) for LLM-emitted tool args. Add a call, not another parser. Request boundaries never filter a bad id out of a list; lower merge services may use the documented non-coercing `filterValidatedIdNumbers` defense only after strict boundary validation ([[docs/security/input-validation#ID Validation\|Input Validation]]) |
 | **PATCH sanitization** | Remove read-only fields immutably via destructured rest: `const { id: _id, ...sanitized } = req.body` (never in-place `delete`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Error handling**     | Throw `NotFoundError`, `ValidationError`, etc.; `errorHandler` middleware converts to `{ ok: false, error: {...} }`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Success response**   | All success paths use `res.ok(data)` or `res.ok({items, total})` — except hard deletes, which answer `204` (see [[docs/reference/code-patterns#DELETE Response Pattern                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | DELETE Response Pattern]]) |
@@ -870,16 +936,18 @@ DELETE success responses previously used six different shapes (`204` empty, `{me
 
 ```js
 // Hard delete — the row is gone; nothing to report.
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const deleted = await entityRepository.hardDelete(assertIdParam(req));
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const deleted = await entityService.hardDelete(id);
   if (!deleted) throw new NotFoundError("Entity not found");
   res.status(204).send();
 });
 
 // Soft delete / deactivate — the row survives with is_active = false, so the
 // caller gets the updated entity back (same shape as PATCH).
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const deactivated = await tagService.softDelete(assertIdParam(req));
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const deactivated = await tagService.softDelete(id);
   res.ok({ ...deactivated, links: [] });
 });
 
@@ -1237,6 +1305,33 @@ export const apiClient = new ApiClient();
 | 204 handling | Returns `undefined`                                                                                               |
 | Cancel       | `cancelAll()` aborts all in-flight requests                                                                       |
 
+### Response contracts (ADR-193)
+
+**Source:** [[apps/frontend/src/lib/api/client.ts|lib/api/client.ts]], [[packages/types/src/contracts/index.ts|packages/types/src/contracts]]
+
+A domain client can declare a zod schema for the unwrapped `data`. Pass it as the `schema` option
+of `apiRequest`, or call `checkResponseContract(schema, data, "METHOD /path")` on a value that went
+through `requestWithQuery`:
+
+```ts
+import { RecipientSchema } from "@vision/types/contracts";
+import { apiRequest } from "@/lib/api/client";
+
+export function getRecipient(id: number): Promise<Recipient> {
+  return apiRequest<Recipient>(`/api/recipients/${id}`, { schema: RecipientSchema });
+}
+```
+
+- The schema only checks. A passing check returns the wire value.
+- A mismatch throws `ApiContractError` in every build, production included (the owner chose to
+  block, 2026-10-09). It is not retried, and `apiErrorToMessage` shows the generic server copy.
+- Messages and logs carry issue paths, never values. The label drops the query string.
+- Schemas live in `@vision/types/contracts` so the client and the frontend contract tests share
+  one definition. Keep them loose: identity fields required, other fields optional but typed.
+- Seven reads declare a schema today: `getTransactions`, `getAccounts`, `getCategories`,
+  `getCategoryTree`, `getRecipients`, `getRecipient` and `listRecipientPatterns`
+  ([[docs/adr/193-zod-runtime-contracts|ADR-193]]).
+
 ---
 
 ## HTTP Request Parameter Parsing Pattern (Phase 10)
@@ -1368,8 +1463,8 @@ where fractional values are legitimate and a bad one costs a chart band, not a r
 
 ### When NOT to Use
 
-- **Path parameters** (e.g., `/resource/:id`) — Use Express route constraints or numeric middleware
-- **Request body** — Use schema validation (Zod) at middleware layer
+- **Path parameters** (e.g., `/resource/:id`) — Parse `req.params` in the handler with `parseInput(idParams, req.params)` ([[docs/reference/code-patterns#Request validation with parseInput (ADR-193)|Request validation]])
+- **Request body** — Parse `req.body` in the handler with a zod schema and `parseInput`. Vision has no validation middleware layer. Inside a schema, `booleanQuery()` and `clampedIntQuery()` (`routes/_requestSchemas.ts`) wrap the two helpers above, so the accept set stays the same
 - **Header values** — Parse at middleware layer, attach to `req.locals`
 
 ---

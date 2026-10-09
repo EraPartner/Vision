@@ -894,4 +894,105 @@ describe("Transaction Routes", () => {
       expect(res.body.error.code).toBe("NOT_FOUND");
     });
   });
+  describe("request validation (ADR-193)", () => {
+    const validationError = (message: string) =>
+      errEnvelope({ code: "VALIDATION_ERROR", message });
+
+    it.each([
+      ["get", "/12abc"],
+      ["patch", "/0"],
+      ["delete", "/1e3"],
+      ["delete", "/transfers/abc"],
+    ] as const)("rejects a malformed :id on %s %s", async (method, path) => {
+      const res = await api[method](`/api/transactions${path}`)
+        .send({ amount: -1 })
+        .expect(400);
+      expect(res.body).toEqual(validationError("id must be a positive integer"));
+      expect(transactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    // normalizeTransactionPatchFields destructured req.body before any parse,
+    // so a PATCH without a JSON body threw a TypeError and answered 500.
+    it("answers 400, not 500, for a PATCH without a JSON body", async () => {
+      const res = await api.patch("/api/transactions/1").expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(transactionRepository.update).not.toHaveBeenCalled();
+    });
+
+    it.each(["target_currency", "search", "sort_by", "bank_account"])(
+      "rejects a repeated %s on the list",
+      async (name) => {
+        const res = await api
+          .get(`/api/transactions?${name}=a&${name}=b`)
+          .expect(400);
+        expect(res.body).toEqual(
+          validationError(`${name} must be a single value`),
+        );
+        expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
+      },
+    );
+
+    it("rejects a malformed start_date on the export", async () => {
+      const res = await api
+        .get("/api/transactions/export/json?start_date=2026-1-1")
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("start_date must be in YYYY-MM-DD format"),
+      );
+    });
+
+    it("names the bulk-export format rule", async () => {
+      const res = await api
+        .post("/api/transactions/bulk-export")
+        .send({ ids: [1], format: "xml" })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("`format` must be 'csv' or 'json'"),
+      );
+    });
+
+    it("rejects expected_count without a filter on bulk-delete", async () => {
+      const res = await api
+        .post("/api/transactions/bulk-delete")
+        .send({ ids: [1], expected_count: 1 })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("`expected_count` is only valid with `filter`"),
+      );
+    });
+
+    it("keeps bulk-update field issues prefixed with their key", async () => {
+      const res = await api
+        .post("/api/transactions/bulk-update")
+        .send({ ids: [1], fields: { recipient_id: "7" } })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError(
+          "recipient_id: `fields.recipient_id` must be a positive integer",
+        ),
+      );
+    });
+
+    it("rejects a bulk-update without fields", async () => {
+      const res = await api
+        .post("/api/transactions/bulk-update")
+        .send({ ids: [1] })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError(
+          "`fields` must be an object with at least one updatable property",
+        ),
+      );
+    });
+
+    it("rejects a transfer pair that names one transaction twice", async () => {
+      const res = await api
+        .post("/api/transactions/transfers")
+        .send({ aId: 4, bId: "4" })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("aId and bId must be two distinct transaction ids"),
+      );
+    });
+  });
 });

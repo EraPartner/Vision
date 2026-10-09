@@ -1,8 +1,8 @@
 /**
  * Watchlist routes — CRUD for prospective investments.
  *
- * Bodies are validated with zod (schema → safeParse → ValidationError), the
- * idiom established in settings.js/reports.js. The schemas are LOOSE: fields
+ * Params, query strings and bodies are parsed with zod through parseInput
+ * (ADR-193). The body schemas are LOOSE: fields
  * without a typed column (notes, ...) pass through untouched and the
  * repository allow-list decides what is written, exactly as before.
  */
@@ -12,14 +12,16 @@ import { z } from "zod";
 import { watchlistRepository } from "../services/watchlistService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import {
-  validateIdParam,
   validateNumber,
   assertMaxLength,
   assertCurrency,
-  assertIdParam,
 } from "../middleware/validation.ts";
-import { parsePagination } from "../lib/pagination.ts";
-import { optionalQueryString } from "../lib/httpParams.ts";
+import { bareMessages, guardField, parseInput } from "../lib/zodInput.ts";
+import {
+  idParamsSchema,
+  paginationQuery,
+  singleQueryValue,
+} from "./_inputBridges.ts";
 
 const router = Router();
 
@@ -38,52 +40,28 @@ const MAX_PRICE = 999_999_999_999;
 
 // An empty / whitespace-only name is not a valid item label; VARCHAR(200)
 // (migration 0001) caps the width before the column raises a raw 22001 500.
-const nameField = z
-  .unknown()
-  .transform((value, ctx) => {
-    if (value === null || String(value).trim() === "") {
-      ctx.addIssue({ code: "custom", message: "name cannot be empty" });
-      return z.NEVER;
-    }
-    try {
-      // assertMaxLength's declared return is `unknown` (it's a generic
-      // length guard shared by many field shapes) but this branch already
-      // rejected null/empty above, so the surviving value is the caller-
-      // supplied name as-is — narrowed here for watchlistRepository.create's
-      // `name: string` param, matching the repository's contract, not a
-      // runtime coercion.
-      return assertMaxLength(value, 200, "name") as string;
-    } catch (err) {
-      ctx.addIssue({
-        code: "custom",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      return z.NEVER;
-    }
-  })
-  .optional();
+const nameField = guardField((value) => {
+  if (value === null || String(value).trim() === "") {
+    throw new ValidationError("name cannot be empty");
+  }
+  // assertMaxLength's declared return is `unknown` (it's a generic length
+  // guard shared by many field shapes) but null/empty was rejected above, so
+  // the surviving value is the caller-supplied name as-is — narrowed here for
+  // watchlistRepository.create's `name: string` param, matching the
+  // repository's contract, not a runtime coercion.
+  return assertMaxLength(value, 200, "name") as string;
+}).optional();
 
 // VARCHAR column widths: a provider-/market-prefilled value can exceed the
 // HTML maxLength cap (which only clamps typed input).
+// Same narrowing rationale as nameField above; assertMaxLength passes
+// null/undefined through unchanged, matching watchlistRepository's
+// `string|null` field shapes for symbol/price_provider_id.
 const maxLenField = (maxLength: number, field: string) =>
-  z
-    .unknown()
-    .transform((value, ctx) => {
-      try {
-        // Same narrowing rationale as nameField above; assertMaxLength passes
-        // null/undefined through unchanged, matching watchlistRepository's
-        // `string|null` field shapes for symbol/price_provider_id.
-        return assertMaxLength(value, maxLength, field) as
-          string | null | undefined;
-      } catch (err) {
-        ctx.addIssue({
-          code: "custom",
-          message: err instanceof Error ? err.message : String(err),
-        });
-        return z.NEVER;
-      }
-    })
-    .optional();
+  guardField(
+    (value) =>
+      assertMaxLength(value, maxLength, field) as string | null | undefined,
+  ).optional();
 
 // Numeric prices: Number() coercion + [0, MAX_PRICE] bounds via the shared
 // validateNumber guard; the coerced number replaces the raw input. null passes
@@ -121,29 +99,13 @@ const priceField = (
 // can't be stored and then mismatch the uppercase codes every FX/conversion
 // path expects. An explicit key must carry a real code; null/empty would bypass
 // the database default and hit the NOT NULL column as malformed data or a 500.
-const currencyField = z
-  .unknown()
-  .transform((value, ctx) => {
-    let code;
-    try {
-      code = assertCurrency(value);
-    } catch (err) {
-      ctx.addIssue({
-        code: "custom",
-        message: err instanceof Error ? err.message : String(err),
-      });
-      return z.NEVER;
-    }
-    if (code === undefined) {
-      ctx.addIssue({
-        code: "custom",
-        message: "currency must be a 3-letter ISO code",
-      });
-      return z.NEVER;
-    }
-    return code;
-  })
-  .optional();
+const currencyField = guardField((value) => {
+  const code = assertCurrency(value);
+  if (code === undefined) {
+    throw new ValidationError("currency must be a 3-letter ISO code");
+  }
+  return code;
+}).optional();
 
 const watchlistCreateSchema = z.looseObject({
   name: nameField,
@@ -185,20 +147,28 @@ const watchlistUpdateSchema = watchlistCreateSchema.extend({
     .optional(),
 });
 
-function parseWatchlistBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) =>
-        issue.path.length
-          ? `${issue.path.join(".")}: ${issue.message}`
-          : issue.message,
-      )
-      .join("; ");
-    throw new ValidationError(msg);
-  }
-  return result.data;
-}
+// The create presence rule runs on the raw body BEFORE the field rules, so a
+// body missing a required field gets this message rather than a field error.
+// A missing body (no JSON content type) reads as an empty one.
+const watchlistCreateBodySchema = z.preprocess(
+  (body) => body ?? {},
+  z
+    .looseObject({})
+    .superRefine((body, ctx) => {
+      if (!body.name || !body.asset_class || body.target_price == null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "name, asset_class, and target_price are required",
+        });
+      }
+    })
+    .pipe(watchlistCreateSchema),
+);
+
+const listQuerySchema = bareMessages(
+  z.object({ asset_class: singleQueryValue("asset_class") }),
+);
+const listPageQuerySchema = paginationQuery({ maxLimit: 5000 });
 
 /**
  * Listener-free validation seams used by focused contract tests. The HTTP
@@ -206,16 +176,20 @@ function parseWatchlistBody<T>(schema: z.ZodType<T>, body: unknown): T {
  * where binding a Supertest listener is prohibited.
  */
 function parseWatchlistCreateBody(body: unknown) {
-  return parseWatchlistBody(watchlistCreateSchema, body);
+  return parseInput(watchlistCreateBodySchema, body);
 }
 
 function parseWatchlistUpdateBody(body: unknown) {
-  return parseWatchlistBody(watchlistUpdateSchema, body);
+  return parseInput(watchlistUpdateSchema, body);
+}
+
+function parseItemId(req: { params: unknown }): number {
+  return parseInput(idParamsSchema, req.params).id;
 }
 
 router.get("/", async (req, res) => {
-  const assetClass = optionalQueryString(req.query, "asset_class");
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 5000 });
+  const { asset_class: assetClass } = parseInput(listQuerySchema, req.query);
+  const { limit, offset } = parseInput(listPageQuerySchema, req.query);
   const opts = {
     limit,
     offset,
@@ -230,22 +204,13 @@ router.get("/", async (req, res) => {
   });
 });
 
-router.get("/:id", validateIdParam, async (req, res) => {
-  const item = await watchlistRepository.getById(assertIdParam(req));
+router.get("/:id", async (req, res) => {
+  const item = await watchlistRepository.getById(parseItemId(req));
   if (!item) throw new NotFoundError("Watchlist item not found");
   res.ok(item);
 });
 
 router.post("/", async (req, res) => {
-  if (
-    !req.body.name ||
-    !req.body.asset_class ||
-    req.body.target_price == null
-  ) {
-    throw new ValidationError(
-      "name, asset_class, and target_price are required",
-    );
-  }
   const data = parseWatchlistCreateBody(req.body);
   const {
     name,
@@ -257,8 +222,8 @@ router.post("/", async (req, res) => {
     price_provider_id,
     added_price,
   } = data;
-  // Already enforced on the raw body above; repeated on the parsed output so
-  // the narrowed types reach watchlistRepository.create.
+  // Already enforced on the raw body by the schema; repeated on the parsed
+  // output so the narrowed types reach watchlistRepository.create.
   if (name === undefined || asset_class === undefined || target_price == null) {
     throw new ValidationError(
       "name, asset_class, and target_price are required",
@@ -278,16 +243,16 @@ router.post("/", async (req, res) => {
   res.ok(item);
 });
 
-router.patch("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.patch("/:id", async (req, res) => {
+  const id = parseItemId(req);
   const data = parseWatchlistUpdateBody(req.body);
   const item = await watchlistRepository.update(id, data);
   if (!item) throw new NotFoundError("Watchlist item not found");
   res.ok(item);
 });
 
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const deleted = await watchlistRepository.delete(assertIdParam(req));
+router.delete("/:id", async (req, res) => {
+  const deleted = await watchlistRepository.delete(parseItemId(req));
   if (!deleted) throw new NotFoundError("Watchlist item not found");
   res.status(204).send();
 });

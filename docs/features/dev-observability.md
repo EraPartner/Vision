@@ -2,7 +2,7 @@
 title: Observability Layer (API Inspector)
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-08
 tags:
   [
     feature,
@@ -176,8 +176,8 @@ The single `apiRequest()` chokepoint now:
 
 1. **Mints requestId** (UUID) before the retry loop and sets it as `X-Request-Id` header for backend log correlation
 2. **Emits phase:start** on each retry attempt
-3. **Emits phase:success** after successful response unwrap with durationMs and status
-4. **Emits phase:error** for both `ApiClientError` and network failures with durationMs, status, and errorCode
+3. **Emits phase:success** after successful response unwrap (and, when the caller passed a `schema`, a passing response-contract check) with durationMs and status
+4. **Emits phase:error** for both `ApiClientError` and network failures with durationMs, status, and errorCode. In development and tests a response that fails its declared schema throws `ApiContractError`; it is emitted as phase:error with its message (issue paths only, no values) and no status. See [[docs/reference/frontend-api-client#Response contracts|Response contracts]]
 5. **Calls logger.debug()** for each outcome
 
 This ensures all 38 domain hooks (`useTransactions`, `usePortfolio`, etc.) automatically participate in observability without any changes to their implementations.

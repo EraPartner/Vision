@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
+import { TRANSACTION_STUB } from "@/test/msw/handlers";
+import { ApiContractError } from "@/lib/api/client";
 
 import {
     getTransactions,
@@ -22,8 +24,13 @@ describe("transactions API client", () => {
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 url = request.url;
                 return ok({
-                    items: [{ id: 1, transaction_date: "2026-01-01" }],
+                    items: [
+                        { ...TRANSACTION_STUB, transaction_date: "2026-01-01" },
+                    ],
                     total: 1,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
                 });
             }),
         );
@@ -47,6 +54,45 @@ describe("transactions API client", () => {
         await expect(getTransactions()).rejects.toThrow(
             "items[0].transaction_date must be a non-empty string",
         );
+    });
+
+    it("getTransactions accepts the formatTransaction shape, null bank_account included", async () => {
+        const row = {
+            ...TRANSACTION_STUB,
+            bank_account: null,
+            account_id: 3,
+            is_transfer: false,
+            transfer_peer_id: null,
+            transfer_source: null,
+            amount_eur: -25.5,
+            tags: [{ id: 1, slug: "rent", color: null, is_active: true }],
+            links: [],
+        };
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({ items: [row], total: 1, limit: 50, offset: 0, links: [] }),
+            ),
+        );
+        expect((await getTransactions()).items).toEqual([row]);
+    });
+
+    it("getTransactions rejects a NUMERIC amount string in strict mode", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({
+                    items: [{ ...TRANSACTION_STUB, amount: "-25.50" }],
+                    total: 1,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+        const error = await getTransactions().catch((err: unknown) => err);
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues).toEqual([
+            "items[0].amount: Invalid input: expected number, received string",
+        ]);
     });
 
     it("createTransaction POSTs", async () => {

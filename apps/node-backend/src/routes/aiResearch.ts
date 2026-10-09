@@ -14,6 +14,7 @@ import {
   NotFoundError,
   UpstreamError,
 } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { disclosurePayload } from "../services/aiProviderAdapters.ts";
 import {
   checkAgentCloakPreflight,
@@ -48,16 +49,12 @@ import {
 const router = Router();
 const uuid = z.string().uuid();
 const desktopPreferenceSchema = z.strictObject({ enabled: z.boolean() });
-function parse<T>(schema: z.ZodType<T>, value: unknown): T {
-  const result = schema.safeParse(value);
-  if (!result.success)
-    throw new ValidationError(
-      result.error.issues.map((issue) => issue.message).join("; "),
-    );
-  return result.data;
-}
+const resumeInvestigationSchema = z.strictObject({
+  clarification: z.string().min(1).max(1000).optional(),
+  scope: aiInvestigationScopeSchema.optional(),
+});
 function id(req: ExpressRequest): string {
-  return parse(uuid, req.params.id);
+  return parseInput(uuid, req.params.id);
 }
 /** AgentCloak service errors carry a string `code`; anything else has none. */
 function errorCode(error: unknown): string | undefined {
@@ -71,7 +68,7 @@ router.get("/agentcloak-desktop", async (_req, res) => {
 });
 
 router.put("/agentcloak-desktop", async (req, res) => {
-  const { enabled } = parse(desktopPreferenceSchema, req.body);
+  const { enabled } = parseInput(desktopPreferenceSchema, req.body);
   res.ok(await configureAgentCloakDesktop(enabled));
 });
 
@@ -190,7 +187,7 @@ router.get("/status", async (_req, res) => {
 });
 
 router.post("/disclosures/preview", async (req, res) => {
-  const request = parse(aiInvestigationRequestSchema, req.body);
+  const request = parseInput(aiInvestigationRequestSchema, req.body);
   if (request.route !== "openai-api")
     throw new ValidationError(
       "Preview is only needed for the OpenAI API route",
@@ -243,7 +240,7 @@ router.post("/disclosures/preview", async (req, res) => {
   });
 });
 router.post("/disclosures/grants", async (req, res) => {
-  const grant = parse(aiDisclosureGrantSchema, req.body);
+  const grant = parseInput(aiDisclosureGrantSchema, req.body);
   res.status(201);
   res.ok(await createDisclosureGrant(grant));
 });
@@ -269,7 +266,7 @@ router.get("/investigations", async (_req, res) => {
   res.ok({ items, total: items.length });
 });
 router.post("/investigations", async (req, res) => {
-  const request = parse(aiInvestigationRequestSchema, req.body);
+  const request = parseInput(aiInvestigationRequestSchema, req.body);
   const job = await createInvestigation(request);
   res.status(202);
   res.ok(job);
@@ -280,13 +277,7 @@ router.get("/investigations/:id", async (req, res) => {
   res.ok(job);
 });
 router.post("/investigations/:id/resume", async (req, res) => {
-  const body = parse(
-    z.strictObject({
-      clarification: z.string().min(1).max(1000).optional(),
-      scope: aiInvestigationScopeSchema.optional(),
-    }),
-    req.body || {},
-  );
+  const body = parseInput(resumeInvestigationSchema, req.body ?? {});
   const job = await resumeInvestigation(
     id(req),
     body.clarification,

@@ -538,9 +538,9 @@ The new surface sits alongside the existing `window.electronUpdater` and `window
 | `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
 | `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with a boolean fullscreen state         |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 23 main handlers, 23 preload invokes, and 6 renderer events against it.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 29 main handlers, 29 preload invokes, and 6 renderer events against it, and checks that every invoke channel has an argument contract in `runtime/ipc-schemas.js`.
 
-**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
+**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. Handlers are registered only through `registerHandler` in `main.js`, which throws at startup when a channel has no argument contract in `packaging/electron/runtime/ipc-schemas.js`. After the sender check, the channel's `validate` function checks the raw renderer arguments (arity, types, ranges, backup paths) and the handler receives only the normalized result. Invalid arguments get the failure shape that channel's renderer caller already handles, or a rejected invoke for the channels marked `REJECT_INVALID`. The log line names the channel and a fixed reason, never the renderer values. The validators are plain functions because the Electron package ships without zod ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
 
 #### Renderer-Ready Queue Protocol
 
@@ -941,7 +941,8 @@ contextBridge.exposeInMainWorld("electronRecovery", {
 ```
 
 - Preload is the **only** way renderer can access Node.js or IPC
-- All functions are validated and scoped
+- All functions are validated and scoped: each invoke channel's arguments are checked in the main
+  process by its contract in `runtime/ipc-schemas.js` before the handler runs
 - Sandbox prevents renderer from directly calling Node APIs
 - Every privileged invoke must come from the current main frame at the selected
   backend origin or the exact packaged recovery page. A localhost page at a
@@ -978,7 +979,7 @@ and the before/after disposable Demo measurements. The current matrix is:
 
 | Capability                                                                               | Decision                                  | Current journey or boundary                                              |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------ |
-| Sandboxed single window, preload, 23 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
+| Sandboxed single window, preload, 29 invokes and 6 events                                | Keep, narrow sender to trusted main frame | Local application, backup, updates, recovery, and native integrations    |
 | Native dialogs and `safeStorage`                                                         | Keep in main process                      | Backup and restore selection and optional encrypted passphrase           |
 | Main-process updater and verified downloads                                              | Keep                                      | Explicit native or source update, checksum and rollback                  |
 | Notifications, menu and dock, Finder CSV, window bounds                                  | Keep                                      | Local reminders, native commands, import handoff, and relaunch state     |

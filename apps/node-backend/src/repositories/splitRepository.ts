@@ -7,10 +7,21 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  countRowSchema,
+  owedExportRawRowSchema,
+  owedSplitRawRowSchema,
+  splitOutstandingRowSchema,
+  splitPaymentRowSchema,
+  splitTotalsRowSchema,
+  transactionSplitRowSchema,
+} from "../database/rowSchemas.ts";
 import { buildLimitOffset } from "../lib/sqlClauses.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
 import type { SplitOutstandingRow } from "../lib/calculations/splits.ts";
+import type { z } from "zod";
 import type {
   FormattedSplit,
   FormattedSplitPayment,
@@ -33,17 +44,7 @@ export type {
  * A raw `getOwedByRecipientRows` row: the split columns plus its parent
  * transaction's, before the service formats it into an `OwedSplitDetailRow`.
  */
-export type OwedSplitRawRow = TransactionSplitRow & {
-  transaction_date: Date;
-  transaction_memo: string | null;
-  /** NUMERIC — pg string. */
-  transaction_amount: string;
-  transaction_currency: string | null;
-  bank_account: string | null;
-  transaction_recipient_name: string | null;
-  /** NUMERIC — pg string. */
-  amount_paid: string;
-};
+export type OwedSplitRawRow = z.output<typeof owedSplitRawRowSchema>;
 
 /** One `getOwedExportRowsByRecipient` row (transaction CSV shape). */
 export interface OwedExportRow {
@@ -59,10 +60,7 @@ export interface OwedExportRow {
 }
 
 /** Raw SPLIT_TOTALS_SQL row: both aggregates are pg NUMERIC strings. */
-interface SplitTotalsRow {
-  transaction_total: string;
-  current_split_total: string;
-}
+type SplitTotalsRow = z.output<typeof splitTotalsRowSchema>;
 
 /**
  * CTE that resolves $1 to every recipient id in the same merge/alias group:
@@ -275,11 +273,11 @@ export const splitRepository = {
   async getTransactionSplitTotals(
     transactionId: number,
   ): Promise<SplitTotals | null> {
-    const result = await query<SplitTotalsRow>(SPLIT_TOTALS_SQL, [
+    const rows = await queryRows(splitTotalsRowSchema, SPLIT_TOTALS_SQL, [
       transactionId,
     ]);
-    if (result.rows.length === 0) return null;
-    return mapSplitTotals(result.rows[0]);
+    if (rows.length === 0) return null;
+    return mapSplitTotals(rows[0]);
   },
 
   /**
@@ -303,19 +301,20 @@ export const splitRepository = {
       GROUP BY ts.id, r.name
       ORDER BY ts.created_at
     ` + buildLimitOffset(params, { limit, offset });
-    const result = await query<TransactionSplitRow>(sql, params);
-    return result.rows.map(formatSplit);
+    const rows = await queryRows(transactionSplitRowSchema, sql, params);
+    return rows.map(formatSplit);
   },
 
   /**
    * Split count for a transaction — the `total` for a paginated list.
    */
   async countSplitsByTransaction(transactionId: number): Promise<number> {
-    const result = await query<{ count: string }>(
+    const [row] = await queryRows(
+      countRowSchema,
       "SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1",
       [transactionId],
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseInt(row.count, 10);
   },
 
   /**
@@ -357,8 +356,7 @@ export const splitRepository = {
       WHERE ts.is_settled = false
       GROUP BY COALESCE(r.primary_recipient_id, r.id), COALESCE(pr.name, r.name)
     `;
-    const result = await query<SplitOutstandingRow>(sql, []);
-    return result.rows;
+    return queryRows(splitOutstandingRowSchema, sql, []);
   },
 
   /**
@@ -394,8 +392,7 @@ export const splitRepository = {
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
       ORDER BY t.date DESC
     ` + buildLimitOffset(params, { limit, offset });
-    const result = await query<OwedSplitRawRow>(sql, params);
-    return result.rows;
+    return queryRows(owedSplitRawRowSchema, sql, params);
   },
 
   /**
@@ -409,8 +406,8 @@ export const splitRepository = {
       FROM transaction_splits ts
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
     `;
-    const result = await query<{ count: string }>(sql, [recipientId]);
-    return parseInt(result.rows[0].count, 10);
+    const [row] = await queryRows(countRowSchema, sql, [recipientId]);
+    return parseInt(row.count, 10);
   },
 
   /**
@@ -466,10 +463,8 @@ export const splitRepository = {
       ORDER BY t.date ASC
     `;
 
-    const result = await query<
-      Omit<OwedExportRow, "amount"> & { amount: string }
-    >(sql, [recipientId]);
-    return result.rows.map((row) => ({
+    const rows = await queryRows(owedExportRawRowSchema, sql, [recipientId]);
+    return rows.map((row) => ({
       ...row,
       amount: toNumber(toDecimal(row.amount)),
     }));
@@ -488,19 +483,20 @@ export const splitRepository = {
     const sql =
       `SELECT * FROM split_payments WHERE split_id = $1 ORDER BY paid_at DESC` +
       buildLimitOffset(params, { limit, offset });
-    const result = await query<SplitPaymentRow>(sql, params);
-    return result.rows.map(formatPayment);
+    const rows = await queryRows(splitPaymentRowSchema, sql, params);
+    return rows.map(formatPayment);
   },
 
   /**
    * Payment count for a split — the `total` for a paginated list.
    */
   async countPayments(splitId: number): Promise<number> {
-    const result = await query<{ count: string }>(
+    const [row] = await queryRows(
+      countRowSchema,
       "SELECT COUNT(*) FROM split_payments WHERE split_id = $1",
       [splitId],
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseInt(row.count, 10);
   },
 
   /**
@@ -529,9 +525,13 @@ export const splitRepository = {
         SELECT SUM(amount) AS paid FROM split_payments WHERE split_id = settled.id
       ) sp_agg ON true
     `;
-    const runner: QueryRunner = client || { query };
-    const result = await runner.query(sql, [splitId]);
-    return result.rows[0] ? formatSplit(result.rows[0]) : null;
+    const [row] = await queryRows(
+      transactionSplitRowSchema,
+      sql,
+      [splitId],
+      client ?? undefined,
+    );
+    return row ? formatSplit(row) : null;
   },
 
   async settleAllByRecipient(
@@ -585,9 +585,13 @@ export const splitRepository = {
       ) sp_agg ON true
       WHERE ts.id = $1
     `;
-    const runner: QueryRunner = client || { query };
-    const result = await runner.query(sql, [splitId]);
-    return result.rows[0] ? formatSplit(result.rows[0]) : null;
+    const [row] = await queryRows(
+      transactionSplitRowSchema,
+      sql,
+      [splitId],
+      client ?? undefined,
+    );
+    return row ? formatSplit(row) : null;
   },
 
   /**

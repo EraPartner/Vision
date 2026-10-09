@@ -460,6 +460,8 @@ Monte Carlo projection of aggregate portfolio value. Results are not persisted; 
 | `currency`                      | string   | No       | app default         | Display currency for output values                                                                                                        |
 | `seed`                          | string   | No       | derived from inputs | PRNG seed for deterministic reproduction                                                                                                  |
 
+The body must be a JSON object; an array returns `400 VALIDATION_ERROR`. Numeric fields stay lenient and are read with `Number()`. A repeated `method`, `currency`, or `seed` value uses its first entry.
+
 **Response:** `200 OK`. When the portfolio or history is unavailable, `data.available` is `false` with `reason` set to `no_holdings` or `insufficient_history`.
 
 ```json
@@ -641,7 +643,7 @@ Auto-propose a per-provider symbol by running each search-capable, keyed provide
 
 Persist user-confirmed mappings (upsert one row per provider, default `status=confirmed`).
 
-**Body:** `{ instrument_key, key_type?, mappings: [ { provider, providerSymbol, resolvedName?, exchange?, currency? } ] }` (non-empty array). **Response:** canonical collection body `{ items: [...], total }` — the full stored set after upsert.
+**Body:** `{ instrument_key, key_type?, mappings: [ { provider, providerSymbol, resolvedName?, exchange?, currency? } ] }` (non-empty array). Each mapping needs a non-empty string `provider`; the other fields (camelCase or snake_case) must be strings or `null`. A mapping without a provider, or with a non-string field, returns `400 VALIDATION_ERROR` instead of a database `500`. **Response:** canonical collection body `{ items: [...], total }` — the full stored set after upsert.
 
 ### DELETE /api/research/mappings/:id
 
@@ -671,7 +673,7 @@ Returns the canonical collection body `{ items: [{ provider, label, envVar, conf
 
 ### PUT /api/research/provider-keys/:provider
 
-Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage` / `fred`) and returns the updated masked statuses in the same `{ items, total }` body as the GET. `400` on unknown provider or empty key.
+Body `{ api_key }`. Stores/replaces the key for `provider` (one of `twelve_data` / `finnhub` / `fmp` / `alpha_vantage` / `fred`) and returns the updated masked statuses in the same `{ items, total }` body as the GET. `400` on unknown provider (`Unknown keyed provider: <name>`) or a key that is not a non-empty string after trimming (`api_key must be a non-empty string`). Both are checked before the service runs.
 
 ### DELETE /api/research/provider-keys/:provider
 

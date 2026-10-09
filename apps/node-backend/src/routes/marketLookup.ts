@@ -6,8 +6,9 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import { ValidationError } from "../middleware/errorHandler.ts";
-import { optionalQueryString } from "../lib/httpParams.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import {
   getChart,
   getNews,
@@ -21,21 +22,56 @@ const router = Router();
 export { __clearQuoteCacheForTests } from "../services/marketLookupService.ts";
 
 /**
- * Coerce a query-string param to a single trimmed string. Express parses a
- * repeated key (`?symbols=A&symbols=B`) as an array — calling `.split` on it
- * throws a TypeError that surfaced as an opaque 502. Joining arrays keeps the
- * repeated-key form working and guarantees a string for callers.
+ * A comma-separated symbol list. Express parses a repeated key
+ * (`?symbols=A&symbols=B`) as an array; joining keeps that form working.
  */
-function coerceQueryString(value: unknown): string {
-  if (Array.isArray(value)) return value.map((v) => String(v)).join(",");
-  if (value == null) return "";
-  return String(value);
-}
+const symbolListSchema = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((value) =>
+    Array.isArray(value) ? value.join(",") : (value ?? ""),
+  );
+
+/** yahoo-finance2's chart interval vocabulary; anything else fails upstream. */
+const CHART_INTERVALS = [
+  "1m",
+  "2m",
+  "5m",
+  "15m",
+  "30m",
+  "60m",
+  "90m",
+  "1h",
+  "1d",
+  "5d",
+  "1wk",
+  "1mo",
+  "3mo",
+] as const;
+
+const searchQuerySchema = z.object({ q: z.string().optional() });
+
+const quoteQuerySchema = z.object({
+  symbols: symbolListSchema,
+  detail: z.string().optional(),
+});
+
+const chartQuerySchema = z.object({
+  symbol: z.string().optional(),
+  // Unknown ranges fall back to one month in the service.
+  range: z.string().optional(),
+  interval: z.enum(CHART_INTERVALS).optional(),
+});
+
+const newsQuerySchema = z.object({
+  symbols: symbolListSchema,
+  count: z.string().optional(),
+});
 
 // GET /api/market/search?q=apple
 router.get("/search", async (req, res) => {
-  const q = optionalQueryString(req.query, "q");
-  if (!q || q.length < 1) return res.ok({ items: [] });
+  const { q } = parseInput(searchQuerySchema, req.query);
+  if (!q) return res.ok({ items: [] });
 
   res.ok(await searchSymbols(q));
 });
@@ -45,9 +81,9 @@ router.get("/search", async (req, res) => {
 // fetches quoteSummary for fundamentals/analyst data. Results are per-symbol
 // cached and concurrent identical fetches are coalesced (see the service).
 router.get("/quote", async (req, res) => {
-  const symbols = coerceQueryString(req.query.symbols);
+  const { symbols, detail } = parseInput(quoteQuerySchema, req.query);
   if (!symbols) throw new ValidationError("symbols parameter required");
-  const basic = coerceQueryString(req.query.detail).trim() === "basic";
+  const basic = detail?.trim() === "basic";
 
   const symbolList = symbols
     .split(",")
@@ -59,10 +95,7 @@ router.get("/quote", async (req, res) => {
 
 // GET /api/market/chart?symbol=AAPL&range=1mo&interval=1d
 router.get("/chart", async (req, res) => {
-  const symbol = coerceQueryString(req.query.symbol);
-  // `range`/`interval` are passed through untouched — yahoo-finance2 validates
-  // them against its own literal-union types, so leave them loosely typed.
-  const { range, interval } = req.query;
+  const { symbol, range, interval } = parseInput(chartQuerySchema, req.query);
   if (!symbol) throw new ValidationError("symbol parameter required");
 
   res.ok(await getChart(symbol, { range, interval }));
@@ -70,10 +103,9 @@ router.get("/chart", async (req, res) => {
 
 // GET /api/market/news?symbols=AAPL,MSFT&count=20
 router.get("/news", async (req, res) => {
-  const symbols = coerceQueryString(req.query.symbols);
-  const count = coerceQueryString(req.query.count) || "20";
+  const { symbols, count } = parseInput(newsQuerySchema, req.query);
 
-  res.ok(await getNews(symbols, count));
+  res.ok(await getNews(symbols, count || "20"));
 });
 
 export default router;

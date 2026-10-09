@@ -16,6 +16,7 @@ import type {
 import type { VisualAnalysisPlan } from "./analysisCatalog.ts";
 import { getOllamaClient } from "../integrations/ollama/client.ts";
 import settings from "../config/config.ts";
+import { UpstreamError } from "../middleware/errorHandler.ts";
 
 function visualPlanFromSource(
   source: AnalysisVisualPlanSource,
@@ -163,7 +164,9 @@ export async function generateAnalysisProposal({
   const saved = await getSavedAnalysis(savedAnalysisId);
   if (!saved)
     throw Object.assign(new Error("Saved analysis not found"), { status: 404 });
-  const response = await getOllamaClient().chat({
+  // The local model is an upstream: a failed call or a malformed answer is a
+  // 502, not a fault in the caller's request.
+  const chatRequest = {
     model: model || undefined,
     format: "json",
     options: { num_ctx: settings.ollama.numCtx },
@@ -181,20 +184,36 @@ export async function generateAnalysisProposal({
         }),
       },
     ],
-  });
+  };
+  let response;
+  try {
+    response = await getOllamaClient().chat(chatRequest);
+  } catch (error) {
+    throw new UpstreamError(
+      `Local model request failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
   let candidate;
   try {
     candidate = JSON.parse(response.content);
   } catch {
-    throw new Error("The local model did not return a valid JSON proposal");
+    throw new UpstreamError(
+      "The local model did not return a valid JSON proposal",
+    );
   }
-  const proposal = aiAnalysisEditProposalSchema.parse({
+  const parsed = aiAnalysisEditProposalSchema.safeParse({
     schemaVersion: 1,
     savedAnalysisId: saved.id,
     baseVersion: saved.version,
-    rationale: candidate.rationale,
-    operations: candidate.operations,
+    rationale: candidate?.rationale,
+    operations: candidate?.operations,
   });
+  if (!parsed.success)
+    throw new UpstreamError(
+      "The local model returned a proposal outside the edit contract",
+    );
+  const proposal = parsed.data;
   return previewAnalysisProposal(proposal);
 }
 export async function applyAnalysisProposal(value: unknown) {

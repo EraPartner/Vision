@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
+import { txRow } from "./helpers/pgRows.ts";
 
 vi.mock("../src/database/connection.ts", () =>
   mockConnection({
@@ -277,7 +278,7 @@ describe("transaction list count cache", () => {
           return { rows: [{ id: 3 }] };
         }
         if (sql.includes("FROM transactions t")) {
-          return { rows: [{ id: 9 }] };
+          return { rows: [txRow({ id: 9 })] };
         }
         return { rows: [] };
       }),

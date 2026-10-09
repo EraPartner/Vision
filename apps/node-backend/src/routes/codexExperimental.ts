@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod";
 import type {
   ExpressNextFunction,
   ExpressRequest,
@@ -11,8 +12,8 @@ import {
   AppError,
   ForbiddenError,
   UnauthorizedError,
-  ValidationError,
 } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { createExperimentalCodexSession } from "../integrations/codex/experimentalSession.ts";
 
 const router = Router();
@@ -69,22 +70,20 @@ function enabled(
   next();
 }
 
+const NO_PAYLOAD = "This route accepts no data payload";
+// Express leaves `req.body` undefined without a JSON body; `{}` is an empty one.
+const emptyBodySchema = z.union(
+  [z.undefined(), z.strictObject({}, { error: NO_PAYLOAD })],
+  { error: NO_PAYLOAD },
+);
+
 function emptyBody(
   req: ExpressRequest,
   _res: ExpressResponse,
   next: ExpressNextFunction,
 ): void {
-  if (
-    req.body === undefined ||
-    (req.body &&
-      typeof req.body === "object" &&
-      !Array.isArray(req.body) &&
-      Object.keys(req.body).length === 0)
-  ) {
-    next();
-    return;
-  }
-  next(new ValidationError("This route accepts no data payload"));
+  parseInput(emptyBodySchema, req.body);
+  next();
 }
 
 function safeHandler(operation: () => Promise<unknown>) {

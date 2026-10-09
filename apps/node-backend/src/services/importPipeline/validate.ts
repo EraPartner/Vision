@@ -6,6 +6,7 @@
  * marks each row 'validated' or 'error'. Repeated equal rows remain valid.
  */
 
+import { z } from "zod";
 import { query } from "../../database/connection.ts";
 import { logger } from "../../config/logger.ts";
 import {
@@ -156,12 +157,25 @@ export async function validateBatch({
 }
 
 /**
+ * What a staged row needs to be committable. Messages are the stored
+ * `error_message`; key order is check order, so the first issue is the reason.
+ */
+const usableStagingRowSchema = z.object({
+  tx_date: z
+    .string({ error: "missing tx_date" })
+    .min(1, { error: "missing tx_date" }),
+  // NUMERIC arrives from pg as a string.
+  amount: z
+    .union([z.string(), z.number()], { error: "missing amount" })
+    .refine((amount) => Number.isFinite(Number(amount)), {
+      error: "invalid amount",
+    }),
+});
+
+/**
  * @returns the rejection reason, or null when the row is usable
  */
 function validateRow(row: PendingStagingRow): string | null {
-  if (!row.tx_date) return "missing tx_date";
-  if (row.amount == null) return "missing amount";
-  const n = Number(row.amount);
-  if (!Number.isFinite(n)) return "invalid amount";
-  return null;
+  const result = usableStagingRowSchema.safeParse(row);
+  return result.success ? null : result.error.issues[0].message;
 }

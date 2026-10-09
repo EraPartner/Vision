@@ -2,8 +2,8 @@
 title: Service Layer Reference
 type: reference
 status: active
-date: 2026-10-08
-last_modified: 2026-09-27
+date: 2026-10-09
+last_modified: 2026-10-08
 tags: [backend, services, reference, business-logic, phase-1, phase-c, import-pipeline, graceful-shutdown, bug-hunt-2026-05-05, error-handling, robustness, route-service-boundary, repo-service-boundary, layering, thin-seams, adr-067]
 description: Complete reference for backend service modules. June 2026 — all 15 route files now go through thin `services/<domain>Service.js` seams; the lint rule `vision-local/no-repo-direct-from-route` is enforced as ERROR. 14 new thin seam modules added. August 2026 — the inverse edge is enforced too: `vision-local/no-service-import-from-repo` is an ERROR on `src/repositories/**`, with a closed allowlist for the seven sanctioned currency-conversion importers.
 aliases: [services, service layer, business logic, backend services]
@@ -98,10 +98,12 @@ directly. See [[docs/integrations/bank-adapters#adding-new-banks|Adding New Bank
 - **Generic Adapter:** Accepts `column_mapping`, `date_format`, `separator`, `skip_rows` for arbitrary CSV formats
 - **Reverse Balance (Belfius):** Extracts last balance from CSV metadata, computes running balances backward
 - **Text Normalization:** Delegates to `cleanRecipientName`, `cleanKbcRecipientName` from [[apps/node-backend/src/lib/textNormalization.ts]]
+- **Output contract (ADR-193):** the registry wraps every adapter, including `generic`, with `withOutputContract`. Each `parse`/`parseWithConfig` result is checked once against `parsedBankTransactionsSchema` (`adapters/_shared.ts`) through `checkDataContract`. A mismatch is an adapter bug: it throws in tests and development, and in production too because `PRODUCTION_DATA_CONTRACT_MODE` is `"throw"` (the owner chose to block, 2026-10-09). `createAdapter` with a custom config and `stageBatch`'s generic fallback both go through the wrapped generic adapter. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 ### Dependencies
 
 - `lib/textNormalization.ts`
+- `lib/dataContract.ts`
 - `logger.js`
 
 ---

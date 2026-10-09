@@ -2,7 +2,7 @@
 title: Analysis Monitors API
 type: endpoint
 status: active
-date: 2026-09-19
+date: 2026-10-08
 tags: [api, analysis, monitoring, research, notifications]
 description: Eight additive operations for local monitor rules, durable observations, and the in-app notification inbox.
 path: /api/analysis/monitors
@@ -15,7 +15,10 @@ aliases: [monitor API, saved analysis monitoring endpoints]
 These eight operations are additive and use the standard `{ok:true,data:...}` envelope, except
 `DELETE` which returns empty `204`. The group uses the aggregation rate limiter. Invalid bodies,
 UUIDs, or pagination return `400`; missing rules or targets return `404`. Lists default to 50
-items, allow at most 200, and accept `offset` from 0 through 1,000,000.
+items, allow at most 200, and accept `offset` from 0 through 1,000,000. The route rejects a
+malformed UUID, out-of-range or non-integer pagination, a repeated pagination key, or a body that is
+not a JSON object with `400 VALIDATION_ERROR` before the service runs
+([[docs/adr/193-zod-runtime-contracts|ADR-193]]). The service still validates the rule shape.
 
 | Method   | Path                                            | Purpose                                                             |
 | -------- | ----------------------------------------------- | ------------------------------------------------------------------- |

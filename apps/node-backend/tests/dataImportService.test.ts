@@ -59,7 +59,7 @@ import {
   importRecipientsCSV,
   importCategoriesCSV,
 } from "../src/services/dataImportService.ts";
-import { partial } from "./helpers/partial.ts";
+import { loose, partial } from "./helpers/partial.ts";
 
 const readFile = vi.mocked(fs.promises.readFile);
 // csv-parse's overloaded generic signature does not survive vi.mocked; the
@@ -372,6 +372,53 @@ describe("Data Import Service", () => {
       await expect(importCategoriesCSV("/tmp/categories.csv")).rejects.toThrow(
         "CSV parse error: delimiter issue",
       );
+    });
+  });
+
+  // Parsed CSV records go through a row schema each (recipientCsvRowSchema /
+  // categoryCsvRowSchema); rejections stay counted errors with the same logs.
+  describe("parsed-row schemas", () => {
+    it("reads recipient headers case-insensitively and rejects a short row without a name", async () => {
+      parse.mockReturnValue([
+        { " NAME ": " Alice ", Account_Number: " BE11 ", Address: " Main St " },
+        // relax_column_count: a short row leaves the name cell absent.
+        loose<Record<string, string>>({ address: "Nowhere" }),
+      ]);
+      recipientRepository.createOrGet.mockResolvedValue(
+        partial<RecipientCreateOrGet>({ recipient: { id: 1 }, created: true }),
+      );
+      query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
+
+      const result = await importRecipientsCSV("/tmp/recipients.csv");
+
+      expect(result).toMatchObject({ imported: 1, errors: 1 });
+      expect(recipientRepository.createOrGet).toHaveBeenCalledWith({
+        name: "Alice",
+      });
+      expect(recipientBankAccountRepository.createOrGet).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientId: 1, accountNumber: "BE11" }),
+      );
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Recipient import: skipping row with missing name",
+      );
+    });
+
+    it("logs the established category reasons and stays silent on an empty cell", async () => {
+      parse.mockReturnValue([
+        { category: "  " },
+        loose<Record<string, string>>({}),
+        { category: "NOCOLON" },
+        { category: " FOOD: " },
+      ]);
+
+      const result = await importCategoriesCSV("/tmp/categories.csv");
+
+      expect(result).toMatchObject({ total_processed: 4, errors: 4 });
+      expect(vi.mocked(logger.warn).mock.calls).toEqual([
+        ['Category import: invalid format "NOCOLON" — expected GENERAL:DETAIL'],
+        ['Category import: empty general or detail in "FOOD:"'],
+      ]);
+      expect(categoryRepository.createOrGet).not.toHaveBeenCalled();
     });
   });
 });

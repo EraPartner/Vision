@@ -16,6 +16,7 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
+import { accountRow } from "../helpers/pgRows.ts";
 
 /**
  * Load the real connection module against a mocked pg pool, so `withTransaction`
@@ -110,7 +111,7 @@ describe("account merge atomicity (ADR-088)", () => {
         return { rows: [] };
       }
       if (sql.includes("FROM accounts WHERE id = $1")) {
-        return { rows: [{ id: 2, funding_account_id: null }] };
+        return { rows: [accountRow({ id: 2, funding_account_id: null })] };
       }
       if (sql.startsWith("UPDATE accounts SET")) {
         throw new Error("late account update failure");
@@ -243,8 +244,8 @@ describe("transfer mark atomicity (ADR-083)", () => {
       if (sql.includes("FOR UPDATE")) {
         return {
           rows: [
-            { id: 10, amount: -100, account_id: 1, is_active: true },
-            { id: 20, amount: 100, account_id: 2, is_active: true },
+            { id: 10, amount: "-100.0000", account_id: 1, is_active: true },
+            { id: 20, amount: "100.0000", account_id: 2, is_active: true },
           ],
         };
       }

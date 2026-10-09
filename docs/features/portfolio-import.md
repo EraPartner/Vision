@@ -2,7 +2,7 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 last_modified: 2026-10-08
 tags:
@@ -152,6 +152,16 @@ Workbook ZIP input is limited to 1,000 entries, 100 MiB of expanded content, and
 cells. Duplicate or encrypted entries, unsupported archive layouts, invalid expansion sizes, and
 non-workbook archives reject. Legacy XLS is accepted only for native IBKR funding history. Parsing does not extract files, execute
 macros, evaluate formulas, or follow external links. See [[docs/api/portfolio-imports]].
+
+**Output contract (ADR-193):** `parseWithConfig` in `portfolioGenericAdapter.ts` checks the result
+of the generic mapper and of every maintained format once, against `parsedPortfolioRowsSchema`
+(rows of `parsedPortfolioRowSchema`, plus the optional `skipped` and `sourceColumns`). The row
+schema is strict: an unknown key, a NaN number or a date that is not UTC midnight fails. A `null`
+date is allowed, because Validate reports it as a row error. Formats count unreadable rows as
+`skipped`, so a contract failure is an adapter bug. It goes through `checkDataContract`, which throws in every environment
+(`PRODUCTION_DATA_CONTRACT_MODE` is `"throw"`; the owner chose to block, 2026-10-09), so the import
+fails with a server error naming issue paths, never values. It is never a 400. See
+[[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's
 first metadata row as the CSV header. It trims the real column names, reads the Summary base
@@ -910,6 +920,9 @@ The `kind` discriminator (`'transaction'` | `'portfolio'`) means:
   non-portfolio accounts before staging.
 - Review always discloses the routing as “N trades to Broker” or “N trades to Unassigned”. If a
   saved account became unavailable, commit stays disabled until the user selects a replacement.
+- POST/PATCH bodies and stored rows share one schema per kind (`lib/parserConfigSchema.ts`). The
+  repository re-checks each stored config on read as a data contract
+  ([[docs/adr/193-zod-runtime-contracts|ADR-193]]).
 
 **Frontend:** `usePortfolioParserConfigs` hook, `PortfolioCsvColumnMapper` component, `portfolioImports` API client module.
 

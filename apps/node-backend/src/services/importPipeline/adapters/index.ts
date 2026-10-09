@@ -4,6 +4,8 @@
  * adapter tests.
  *
  * Each adapter module must default-export `{ name, bankName, detect, parse }`.
+ * Every adapter handed out from here has its parse output checked against
+ * `parsedBankTransactionsSchema` (data-contract mode, lib/dataContract.ts).
  */
 
 import belfius from "./belfius.ts";
@@ -15,8 +17,10 @@ import vision from "./vision.ts";
 import sabb from "./sabb.ts";
 import wise from "./wise.ts";
 import generic from "./generic.ts";
+import { parsedBankTransactionsSchema } from "./_shared.ts";
 import type { ParsedBankTransactions } from "./_shared.ts";
 import type { CustomTransactionParserConfig } from "./generic.ts";
+import { checkDataContract } from "../../../lib/dataContract.ts";
 
 /**
  * The interface every adapter module default-exports.
@@ -43,16 +47,41 @@ export interface BankCsvAdapter {
   multiCurrencyCash?: boolean;
 }
 
+/**
+ * Wraps `parse`/`parseWithConfig` so their result is checked against the
+ * shared row contract. Adapters already turn rows they cannot read into
+ * `skipped`, so a row breaking the contract is an adapter bug, not a malformed
+ * file: it follows data-contract mode instead of becoming a user-facing row
+ * error. Rows that pass through in production still meet validate.ts's checks.
+ */
+function withOutputContract(adapter: BankCsvAdapter): BankCsvAdapter {
+  const checked = (rows: ParsedBankTransactions) => {
+    checkDataContract(
+      parsedBankTransactionsSchema,
+      { rows, skipped: rows.skipped },
+      `bank adapter "${adapter.name}" output`,
+    );
+    return rows;
+  };
+  const { parseWithConfig } = adapter;
+  return {
+    ...adapter,
+    parse: async (filePath, config) =>
+      checked(await adapter.parse(filePath, config)),
+    ...(parseWithConfig && {
+      parseWithConfig: async (filePath, config) =>
+        checked(await parseWithConfig(filePath, config)),
+    }),
+  };
+}
+
+const GENERIC = withOutputContract(generic);
+
 const ADAPTERS: BankCsvAdapter[] = [
-  belfius,
-  revolut,
-  ing,
-  bnp,
-  kbc,
-  vision,
-  sabb,
-  wise,
-  generic,
+  ...[belfius, revolut, ing, bnp, kbc, vision, sabb, wise].map(
+    withOutputContract,
+  ),
+  GENERIC,
 ];
 
 const REGISTRY = new Map(ADAPTERS.map((adapter) => [adapter.name, adapter]));
@@ -119,8 +148,7 @@ export function createAdapter(
   customConfig: CustomTransactionParserConfig | null = null,
 ): (filePath: string) => Promise<ParsedBankTransactions> {
   if (customConfig) {
-    return (filePath: string) =>
-      generic.parseWithConfig(filePath, customConfig);
+    return (filePath: string) => GENERIC.parse(filePath, customConfig);
   }
   const adapter = getAdapter(bankName);
   if (!adapter) {

@@ -1,8 +1,13 @@
 import type { Recipient, RecipientCreate, RecipientsListResponse, RecipientUpdate } from '@/types/api';
-import { apiRequest } from '@/lib/api/client';
+import {
+    RecipientListSchema,
+    RecipientPatternListSchema,
+    RecipientSchema,
+} from '@vision/types/contracts';
+import { apiRequest, checkResponseContract } from '@/lib/api/client';
 import { requestWithQuery, createWithStatus } from '@/lib/api/helpers';
 
-export function getRecipients(params?: {
+export async function getRecipients(params?: {
     limit?: number;
     offset?: number;
     name?: string;
@@ -13,11 +18,15 @@ export function getRecipients(params?: {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
 }): Promise<RecipientsListResponse> {
-    return requestWithQuery<RecipientsListResponse>('/api/recipients', params);
+    return checkResponseContract(
+        RecipientListSchema,
+        await requestWithQuery<RecipientsListResponse>('/api/recipients', params),
+        'GET /api/recipients',
+    );
 }
 
 export function getRecipient(id: number): Promise<Recipient> {
-    return apiRequest<Recipient>(`/api/recipients/${id}`);
+    return apiRequest<Recipient>(`/api/recipients/${id}`, { schema: RecipientSchema });
 }
 
 export async function createRecipient(
@@ -93,7 +102,7 @@ export interface RecipientPatternUpdate {
 }
 
 export function listRecipientPatterns(recipientId: number): Promise<{ items: RecipientPattern[]; total: number }> {
-    return apiRequest(`/api/recipients/${recipientId}/patterns`);
+    return apiRequest(`/api/recipients/${recipientId}/patterns`, { schema: RecipientPatternListSchema });
 }
 
 export function createRecipientPattern(recipientId: number, data: RecipientPatternCreate): Promise<{ id: number }> {

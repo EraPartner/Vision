@@ -3,6 +3,7 @@
  */
 
 import { Router } from "express";
+import { z } from "zod";
 import recipientService from "../services/recipientService.ts";
 import { mergeRecipients as mergeRecipientsAtomic } from "../services/recipientMergeService.ts";
 import {
@@ -15,19 +16,19 @@ import {
 } from "../services/recipientPatternService.ts";
 import { findRecipientClusters } from "../services/recipientClusterService.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
-import {
-  validateIdParam,
-  validateIntParam,
-  assertOptionalId,
-  assertIdParam,
-  validateIntArray,
-} from "../middleware/validation.ts";
 import { parsePagination } from "../lib/pagination.ts";
 import { withCreateOutcome } from "../lib/createOutcome.ts";
+import { nullAsAbsent, parseInput } from "../lib/zodInput.ts";
 import {
-  optionalQueryString,
-  parseBooleanQueryParam,
-} from "../lib/httpParams.ts";
+  booleanQuery,
+  idParams,
+  idSchema,
+  nullableId,
+  optionalIdFilter,
+  pageFields,
+  requiredString,
+  singleQueryString,
+} from "./_requestSchemas.ts";
 // The MVs attribute transactions to categories via a 3-level resolution
 // (COALESCE(t.category_id, r.default_category_id, pr.default_category_id),
 // where pr is the recipient's PRIMARY recipient), so recipient edits/merges/
@@ -37,45 +38,110 @@ import { scheduleRefresh } from "../services/materializedViewService.ts";
 
 const router = Router();
 
+// ── Request schemas ──────────────────────────────────────────────────────────
+
+const patternParams = z.object({ id: idSchema(), patternId: idSchema() });
+
+const clustersQuery = z.object({
+  min_count: singleQueryString.transform((raw) =>
+    Math.max(2, parseInt(raw ?? "", 10) || 2),
+  ),
+});
+
+const listQuery = z
+  .object({
+    ...pageFields,
+    name: singleQueryString,
+    search: singleQueryString,
+    sort_by: singleQueryString,
+    // Anything but asc/desc falls back to the repository's default order.
+    sort_dir: z.enum(["asc", "desc"]).optional().catch(undefined),
+    // Same strict id parse as every other id query param: absent/empty is "no
+    // filter" (undefined, 200), malformed is a 400. `parseInt` truncated
+    // instead — ?default_category_id=12abc listed the recipients defaulting to
+    // category 12 — and a NaN reached Postgres as a 22P02 500.
+    default_category_id: optionalIdFilter,
+    active: booleanQuery(true),
+    uncategorized: booleanQuery(false),
+  })
+  .transform((query) => ({
+    ...parsePagination(query, { maxLimit: 1000 }),
+    name: query.name || undefined,
+    defaultCategoryId: query.default_category_id,
+    search: query.search ? query.search.slice(0, 200) : undefined,
+    active: query.active,
+    uncategorized: query.uncategorized,
+    sortBy: query.sort_by || undefined,
+    sortDir: query.sort_dir,
+  }));
+
+const optionalText = z.string().nullable().optional();
+
+const createBody = z.object({
+  name: requiredString,
+  default_category_id: nullableId,
+  notes: optionalText,
+});
+
+// null name / is_active mean "leave unchanged" in recipientRepository.update.
+const updateBody = z.object({
+  name: optionalText,
+  default_category_id: nullableId,
+  notes: optionalText,
+  is_active: z.boolean().nullable().optional(),
+});
+
+const mergeBody = z.object({
+  alias_ids: z
+    .array(idSchema(), {
+      error: "Missing required field: alias_ids (array of recipient IDs)",
+    })
+    .min(1, "Missing required field: alias_ids (array of recipient IDs)"),
+});
+
+const patternKind = z.enum(["literal_prefix", "glob", "regex"]);
+
+// recipient_match_patterns.priority is INTEGER.
+const patternFields = {
+  pattern_kind: patternKind.optional(),
+  case_sensitive: z.boolean().optional(),
+  priority: z.int32().optional(),
+  // null clears the note on PATCH (and stores none on create).
+  notes: z.string().nullable().optional(),
+};
+
+// On create and preview, null means "use the default" (createPattern's `??`);
+// on PATCH these columns are NOT NULL, so null stays a 400.
+const createPatternBody = z.object({
+  pattern: requiredString,
+  ...patternFields,
+  pattern_kind: nullAsAbsent(patternKind),
+  case_sensitive: nullAsAbsent(z.boolean()),
+  priority: nullAsAbsent(z.int32()),
+});
+
+const previewPatternBody = z.object({
+  pattern: requiredString,
+  pattern_kind: nullAsAbsent(patternKind),
+  case_sensitive: nullAsAbsent(z.boolean()),
+});
+
+const updatePatternBody = z.object({
+  pattern: z.string().optional(),
+  ...patternFields,
+  is_active: z.boolean().optional(),
+});
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
 router.get("/clusters", async (req, res) => {
-  const minCount = Math.max(
-    2,
-    parseInt(optionalQueryString(req.query, "min_count") ?? "", 10) || 2,
-  );
+  const { min_count: minCount } = parseInput(clustersQuery, req.query);
   const clusters = await findRecipientClusters({ minCount });
   res.ok({ items: clusters, total: clusters.length });
 });
 
 router.get("/", async (req, res) => {
-  const {
-    default_category_id,
-    active = "true",
-    uncategorized = "false",
-    sort_dir,
-  } = req.query;
-  const name = optionalQueryString(req.query, "name");
-  const search = optionalQueryString(req.query, "search");
-  const sort_by = optionalQueryString(req.query, "sort_by");
-
-  const { limit, offset } = parsePagination(req.query, { maxLimit: 1000 });
-  const opts: Parameters<typeof recipientService.getAll>[0] = {
-    limit,
-    offset,
-    name: name || undefined,
-    // Same strict id parse as every other id query param: absent/empty is "no
-    // filter" (undefined, 200), malformed is a 400. `parseInt` truncated instead —
-    // ?default_category_id=12abc listed the recipients defaulting to category
-    // 12 — and a NaN reached Postgres as a 22P02 500.
-    defaultCategoryId: assertOptionalId(
-      default_category_id,
-      "default_category_id",
-    ),
-    search: search ? search.slice(0, 200) : undefined,
-    active: parseBooleanQueryParam(active, true),
-    uncategorized: parseBooleanQueryParam(uncategorized),
-    sortBy: sort_by || undefined,
-    sortDir: sort_dir === "asc" || sort_dir === "desc" ? sort_dir : undefined,
-  };
+  const opts = parseInput(listQuery, req.query);
 
   const [items, total] = await Promise.all([
     recipientService.getAll(opts),
@@ -95,8 +161,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const { name, default_category_id, notes } = req.body;
-  if (!name) throw new ValidationError("Missing required field: name");
+  const { name, default_category_id, notes } = parseInput(createBody, req.body);
 
   const { recipient, created } = await recipientService.createOrGet({ name });
   // Only null if the row vanished between upsert and re-read.
@@ -114,22 +179,26 @@ router.post("/", async (req, res) => {
   res.ok(withCreateOutcome(finalRecipient ?? {}, created));
 });
 
-router.get("/:id", validateIdParam, async (req, res) => {
-  const recipient = await recipientService.getById(assertIdParam(req));
+router.get("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const recipient = await recipientService.getById(id);
   if (!recipient) throw new NotFoundError("Recipient not found");
   res.ok({ ...recipient, links: [] });
 });
 
-router.patch("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
-  const updated = await recipientService.update(id, req.body);
+router.patch("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const updated = await recipientService.update(
+    id,
+    parseInput(updateBody, req.body),
+  );
   if (!updated) throw new NotFoundError("Recipient not found");
   scheduleRefresh();
   res.ok({ ...updated, links: [] });
 });
 
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   const deleted = await recipientService.hardDelete(id);
   if (!deleted) throw new NotFoundError("Recipient not found");
   scheduleRefresh();
@@ -137,16 +206,9 @@ router.delete("/:id", validateIdParam, async (req, res) => {
   res.status(204).send();
 });
 
-router.post("/:id/merge", validateIdParam, async (req, res) => {
-  const primaryId = assertIdParam(req);
-  const { alias_ids } = req.body;
-  if (!alias_ids || !Array.isArray(alias_ids) || alias_ids.length === 0) {
-    throw new ValidationError(
-      "Missing required field: alias_ids (array of recipient IDs)",
-    );
-  }
-  const aliasIdsResult = validateIntArray(alias_ids, "alias_ids");
-  if (!aliasIdsResult.valid) throw new ValidationError(aliasIdsResult.error);
+router.post("/:id/merge", async (req, res) => {
+  const { id: primaryId } = parseInput(idParams, req.params);
+  const { alias_ids: aliasIds } = parseInput(mergeBody, req.body);
 
   const primary = await recipientService.getById(primaryId);
   if (!primary) throw new NotFoundError("Primary recipient not found");
@@ -158,7 +220,7 @@ router.post("/:id/merge", validateIdParam, async (req, res) => {
 
   const { mergedAliasIds, reassigned } = await mergeRecipientsAtomic(
     primaryId,
-    aliasIdsResult.value,
+    aliasIds,
   );
   const updatedPrimary = await recipientService.getById(primaryId);
   if (!updatedPrimary) throw new NotFoundError("Primary recipient not found");
@@ -200,8 +262,8 @@ router.post("/:id/merge", validateIdParam, async (req, res) => {
   });
 });
 
-router.post("/:id/unmerge", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.post("/:id/unmerge", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   const success = await recipientService.unmergeRecipient(id);
   if (!success) throw new NotFoundError("Recipient not found");
   const recipient = await recipientService.getById(id);
@@ -209,8 +271,8 @@ router.post("/:id/unmerge", validateIdParam, async (req, res) => {
   res.ok({ ...recipient, links: [] });
 });
 
-router.get("/:id/aliases", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.get("/:id/aliases", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   const aliases = await recipientService.getAliases(id);
   res.ok({
     items: aliases.map((a) => ({
@@ -223,16 +285,18 @@ router.get("/:id/aliases", validateIdParam, async (req, res) => {
 
 // ── Pattern sub-routes ───────────────────────────────────────────────────────
 
-router.get("/:id/patterns", validateIdParam, async (req, res) => {
-  const id = assertIdParam(req);
+router.get("/:id/patterns", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
   const patterns = await listPatternsForRecipient(id);
   res.ok({ items: patterns, total: patterns.length });
 });
 
-router.post("/:id/patterns", validateIdParam, async (req, res) => {
-  const recipientId = assertIdParam(req);
-  const { pattern, pattern_kind, case_sensitive, priority, notes } = req.body;
-  if (!pattern) throw new ValidationError("Missing required field: pattern");
+router.post("/:id/patterns", async (req, res) => {
+  const { id: recipientId } = parseInput(idParams, req.params);
+  const { pattern, pattern_kind, case_sensitive, priority, notes } = parseInput(
+    createPatternBody,
+    req.body,
+  );
   const result = await createPattern({
     recipientId,
     pattern,
@@ -245,9 +309,12 @@ router.post("/:id/patterns", validateIdParam, async (req, res) => {
   res.ok(result);
 });
 
-router.post("/:id/patterns/preview", validateIdParam, async (req, res) => {
-  const { pattern, pattern_kind, case_sensitive } = req.body;
-  if (!pattern) throw new ValidationError("Missing required field: pattern");
+router.post("/:id/patterns/preview", async (req, res) => {
+  parseInput(idParams, req.params);
+  const { pattern, pattern_kind, case_sensitive } = parseInput(
+    previewPatternBody,
+    req.body,
+  );
   const result = await previewPatternMatches({
     pattern,
     pattern_kind: pattern_kind ?? "literal_prefix",
@@ -256,27 +323,17 @@ router.post("/:id/patterns/preview", validateIdParam, async (req, res) => {
   res.ok(result);
 });
 
-router.patch(
-  "/:id/patterns/:patternId",
-  validateIdParam,
-  validateIntParam("patternId"),
-  async (req, res) => {
-    const patternId = assertIdParam(req, "patternId");
-    await updatePattern(patternId, req.body);
-    res.ok({ patternId });
-  },
-);
+router.patch("/:id/patterns/:patternId", async (req, res) => {
+  const { patternId } = parseInput(patternParams, req.params);
+  await updatePattern(patternId, parseInput(updatePatternBody, req.body));
+  res.ok({ patternId });
+});
 
-router.delete(
-  "/:id/patterns/:patternId",
-  validateIdParam,
-  validateIntParam("patternId"),
-  async (req, res) => {
-    const patternId = assertIdParam(req, "patternId");
-    await deletePattern(patternId);
-    // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
-    res.status(204).send();
-  },
-);
+router.delete("/:id/patterns/:patternId", async (req, res) => {
+  const { patternId } = parseInput(patternParams, req.params);
+  await deletePattern(patternId);
+  // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
+  res.status(204).send();
+});
 
 export default router;

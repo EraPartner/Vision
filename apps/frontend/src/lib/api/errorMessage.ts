@@ -24,7 +24,7 @@
 
 import { ApiErrorCode } from "@vision/types";
 
-import { ApiClientError } from "@/lib/api/client";
+import { ApiClientError, ApiContractError } from "@/lib/api/client";
 
 /** The `t` from `useLanguage()`. Kept structural so this module stays React-free. */
 export type TranslateFn = (
@@ -162,9 +162,11 @@ function transportKey(
  *  1. `ApiClientError` with a 5xx / rate-limit code → generic per-code copy.
  *  2. `ApiClientError` 4xx carrying an authored `detail` → that text verbatim.
  *  3. `ApiClientError` → per-code copy (validation / not-found / conflict / …).
- *  4. Transport sentinel (network / timeout / abort / retry exhaustion) → bucket copy.
- *  5. `Error` with authored text (app-thrown guards) → that text verbatim.
- *  6. Anything else → generic "something went wrong".
+ *  4. `ApiContractError` (a response broke its contract, ADR-193) → server copy;
+ *     its path list is for logs and devtools, not users.
+ *  5. Transport sentinel (network / timeout / abort / retry exhaustion) → bucket copy.
+ *  6. `Error` with authored text (app-thrown guards) → that text verbatim.
+ *  7. Anything else → generic "something went wrong".
  */
 export function apiErrorToMessage(err: unknown, t: TranslateFn): string {
     if (err instanceof ApiClientError) {
@@ -188,6 +190,8 @@ export function apiErrorToMessage(err: unknown, t: TranslateFn): string {
                     : API_ERROR_KEYS.unknown),
         );
     }
+
+    if (err instanceof ApiContractError) return t(API_ERROR_KEYS.server);
 
     const name = readString(err, "name");
     const message = readString(err, "message");

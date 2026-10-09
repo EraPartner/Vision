@@ -15,6 +15,7 @@ import {
     type ApiResponse,
     type ApiSuccess,
 } from "@vision/types";
+import type { z } from "zod";
 
 import { env } from "@/lib/env";
 import logger from "@/lib/logger";
@@ -168,6 +169,59 @@ export async function parseEnvelopeError(
 }
 
 /**
+ * A success response whose body does not match the schema its client declared.
+ * `issues` holds `path: message` strings only, never the offending values.
+ */
+export class ApiContractError extends Error {
+    public readonly endpoint: string;
+    public readonly issues: readonly string[];
+
+    constructor(endpoint: string, issues: readonly string[]) {
+        super(
+            `Response contract violation for ${endpoint}: ${issues.join("; ")}`,
+        );
+        this.name = "ApiContractError";
+        this.endpoint = endpoint;
+        this.issues = issues;
+    }
+}
+
+function formatIssuePath(path: readonly PropertyKey[]): string {
+    let out = "";
+    for (const segment of path) {
+        if (typeof segment === "number") out += `[${segment}]`;
+        else out += out ? `.${String(segment)}` : String(segment);
+    }
+    return out || "(root)";
+}
+
+/**
+ * Check `data` against `schema` and return `data` unchanged, or throw
+ * `ApiContractError`. The schema only validates: on success the caller keeps
+ * the wire value. `label` is "METHOD /path"; its query string is
+ * dropped because search terms can carry personal data.
+ */
+export function checkResponseContract<T>(
+    schema: z.ZodType,
+    data: T,
+    label: string,
+): T {
+    const result = schema.safeParse(data);
+    if (result.success) return data;
+
+    // A mismatch in data the backend produced is a bug, not bad input; the
+    // owner chose to block it in every build (ADR-193). Issue paths only: the
+    // values are personal financial data.
+    const endpoint = label.split("?")[0] ?? label;
+    throw new ApiContractError(
+        endpoint,
+        result.error.issues.map(
+            (issue) => `${formatIssuePath(issue.path)}: ${issue.message}`,
+        ),
+    );
+}
+
+/**
  * Extract `data` from a unified envelope body. Tolerates non-envelope
  * responses during migration — returns the body as-is when `ok` is absent.
  */
@@ -243,15 +297,24 @@ export async function rawFetch(
     }
 }
 
+export interface ApiRequestOptions extends RequestInit {
+    /**
+     * Response contract for the unwrapped `data`, checked by
+     * `checkResponseContract`. Omit it to skip the check.
+     */
+    schema?: z.ZodType;
+}
+
 /**
  * Core request with timeout, exponential-backoff retry, and envelope unwrap.
  * Domain modules import this instead of going through ApiClient.
  */
 export async function apiRequest<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: ApiRequestOptions = {},
     retries: number = MAX_RETRIES,
 ): Promise<T> {
+    const { schema, ...init } = options;
     const requestId = generateRequestId();
     // Attach the admin Bearer token only when one is stored. With no token the
     // header is omitted and the backend's loopback/private-network allowlist
@@ -262,11 +325,11 @@ export async function apiRequest<T>(
         "Content-Type": "application/json",
         "X-Request-Id": requestId,
         ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
-        ...options.headers,
+        ...init.headers,
     };
 
     const url = `${API_BASE_URL}${endpoint}`;
-    const method = options.method ?? "GET";
+    const method = init.method ?? "GET";
     const isIdempotent = ["GET", "PUT", "DELETE", "HEAD", "OPTIONS"].includes(
         method,
     );
@@ -289,7 +352,7 @@ export async function apiRequest<T>(
         });
 
         try {
-            const response = await rawFetch(url, { ...options, headers });
+            const response = await rawFetch(url, { ...init, headers });
 
             if (
                 RETRYABLE_STATUS_CODES.has(response.status) &&
@@ -351,6 +414,9 @@ export async function apiRequest<T>(
 
             const body = await response.json();
             const result = unwrapEnvelope<T>(body);
+            if (schema) {
+                checkResponseContract(schema, result, `${method} ${endpoint}`);
+            }
             const durationMs = performance.now() - startedAt;
             apiEventBus.emit({
                 id: requestId,
@@ -391,13 +457,14 @@ export async function apiRequest<T>(
             }
             lastError = err as Error;
             const nonRetryable =
-                err instanceof ApiClientError &&
-                (err.code === ApiErrorCode.VALIDATION_ERROR ||
-                    err.code === ApiErrorCode.RATE_LIMITED ||
-                    err.code === ApiErrorCode.UNAUTHORIZED ||
-                    err.code === ApiErrorCode.FORBIDDEN ||
-                    err.code === ApiErrorCode.NOT_FOUND ||
-                    err.code === ApiErrorCode.CONFLICT);
+                err instanceof ApiContractError ||
+                (err instanceof ApiClientError &&
+                    (err.code === ApiErrorCode.VALIDATION_ERROR ||
+                        err.code === ApiErrorCode.RATE_LIMITED ||
+                        err.code === ApiErrorCode.UNAUTHORIZED ||
+                        err.code === ApiErrorCode.FORBIDDEN ||
+                        err.code === ApiErrorCode.NOT_FOUND ||
+                        err.code === ApiErrorCode.CONFLICT));
             if (!isIdempotent || nonRetryable) {
                 throw err;
             }

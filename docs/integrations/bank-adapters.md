@@ -2,7 +2,7 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
@@ -93,15 +93,18 @@ Each bank adapter:
 
 ## Adding New Banks
 
-The adapter registry auto-discovers every module in
-`apps/node-backend/src/services/importPipeline/adapters/`, so adding a bank is two touchpoints:
+The adapter registry in `apps/node-backend/src/services/importPipeline/adapters/index.ts` lists
+every adapter module, so adding a bank is two touchpoints:
 
 1. Create `apps/node-backend/src/services/importPipeline/adapters/<bank>.js` whose **default export**
    is `{ name, bankName, detect, parse }` (see `adapters/wise.js` for a full example; shared CSV
    helpers — line splitting, amount/date parsing — live in `adapters/_shared.js`). Handle the
-   edge cases here: missing fields, date formats, decimal separators.
-2. Register it in `adapters/index.js`: add the `import` and append the module to the `ADAPTERS`
-   array.
+   edge cases here: missing fields, date formats, decimal separators. Every row `parse` returns
+   must satisfy `parsedBankTransactionSchema` ([[#Output contract (ADR-193)|Output contract]]);
+   count a row you cannot read as `skipped` instead of emitting a partial one.
+2. Register it in `adapters/index.ts`: add the `import` and add the module to the list that is
+   mapped through `withOutputContract` into the `ADAPTERS` array. Do not hand out an unwrapped
+   adapter; `stageBatch` and `createAdapter` both resolve adapters through the registry.
 
 Everything downstream is derived from the registry — `getSupportedBanks()`, the detection order,
 the UI catalog (`listAdapters()` → the import-statistics endpoint → the frontend picker), and
@@ -113,19 +116,42 @@ hash/dedup — so no other files (and no i18n keys) need editing.
 
 ## Field Mapping
 
-Each adapter maps to standard transaction:
+Each adapter maps every row to a `ParsedBankTransaction` (`adapters/_shared.ts`):
 
 ```javascript
 {
-  date: Date,
-  amount: Number,
+  date: Date,                // UTC midnight
+  bankAccount: String,       // non-empty; the OWN account identifier — see "Account Identification" below
   recipient: String,
   memo: String,
-  bankAccount: String, // the OWN account identifier — see "Account Identification" below
-  currency: String,
-  balance: Number
+  amount: Number,            // finite
+  currency: String | null,   // three uppercase letters when present
+  balance: Number | null,
+  recipientAccount: String | null,
+  recipientAddress: String | null,
+  recipientBankName: String | null,
+  comment: String | null,
+  rawData: String,
+  sourceId?: String | null,  // non-empty when present
 }
 ```
+
+### Output contract (ADR-193)
+
+`parsedBankTransactionSchema` in `adapters/_shared.ts` is the runtime contract for that shape. It
+is strict: an unknown key fails, so the internal `_seq` field must already be stripped.
+`parsedBankTransactionsSchema` covers the whole result: the rows plus the optional non-negative
+integer `skipped` counter.
+
+The registry wraps every adapter, including `generic`, with `withOutputContract`, so each
+`parse`/`parseWithConfig` result is checked once through `checkDataContract`
+(`lib/dataContract.ts`). Adapters already turn unreadable rows into `skipped`, so a row that breaks
+the contract is an adapter bug, not a malformed file. It never becomes a user-facing row error or a
+400. It throws in every environment: `PRODUCTION_DATA_CONTRACT_MODE` is `"throw"` (the owner chose to
+block, 2026-10-09), so the import fails with a server error. Messages carry issue paths and codes,
+never the values.
+`validateBatch` still applies its own row checks. `tests/bankAdapterContract.test.ts` pins the
+schema and the registry seam. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 ## Account Identification (ADR-088)
 

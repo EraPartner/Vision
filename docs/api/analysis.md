@@ -2,7 +2,7 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-10-01
+date: 2026-10-09
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, compile, bounded execution, cancellation, drill-through, and versioned saved-analysis operations under /api/analysis.
 path: /api/analysis
@@ -36,6 +36,43 @@ limiter. This is an additive API introduced with [[docs/adr/144-isolated-manual-
 | `POST`   | `/api/analysis/ai-proposals/preview`  | Inspect a version-bound AI edit                               |
 | `POST`   | `/api/analysis/ai-proposals/apply`    | Apply the inspected edit with conflict detection              |
 | `DELETE` | `/api/analysis/saved/:id`             | Delete one saved analysis and its private history             |
+
+## Request validation
+
+Each route parses its params, query, and body with a zod schema before any analysis work runs
+([[docs/adr/193-zod-runtime-contracts|ADR-193]]). A malformed request returns
+`400 VALIDATION_ERROR`. The schemas check the request envelope: every field a handler reads has a
+checked type. The catalog compiler, executor, and formula and extension engines still own semantic
+rules, such as allowed datasets, operators, and row limits.
+
+- A visual plan needs a string `datasetId`. `fields`, `groups`, `measures`, and `joins` are string
+  arrays. `filters` entries need string `fieldId` and `operator`, with a scalar `value`. `orderBy`
+  entries need `id` and a `direction` of `asc` or `desc`. `limit` is a number and
+  `reportingCurrency`, `from`, `to`, `symbol`, `range` and `costBasisMethod` are strings; `null`
+  for any of them means the same as leaving it out. Unknown plan keys are kept.
+- `/execute` accepts `mode: "visual"` with a `plan`, or an omitted `mode` or `mode: "sql"` with a
+  string `sql`. Any other `mode` returns `400`. Custom SQL `columns` need string `id` and `type`.
+- `/pivot` and `/drill` need a visual `plan`. `/formulas/evaluate` needs a `rows` array of objects.
+  `/extensions/evaluate` needs one of the six `operation` values and a `rows` array.
+- `/cancel/:requestId` rejects an id outside the `requestId` pattern with `400` instead of
+  reporting `not-running`.
+- `GET /saved?workspace=` accepts `budgeting`, `portfolio`, `research`, `cross-workspace`, or an
+  empty value for all workspaces. Any other value returns `400`.
+- `POST /saved` needs `name`, `workspace`, and `querySpec`. `PUT /saved/:id` needs `querySpec`.
+  A `querySpec` is `{ mode: "visual", plan }` or `{ mode: "sql", sql, datasetIds }`.
+  `refreshMode` is `live` or `frozen`.
+- `/restore` needs positive integer `version` and `expectedVersion`. `/ai-proposal` needs an
+  `instruction` of 1–2,000 characters after trimming. When the local model fails, returns invalid
+  JSON, or returns a proposal outside the edit contract, `/ai-proposal` answers
+  `502 BAD_GATEWAY` (it used to be `400`). A proposal that fails the saved analysis preview is
+  still `400`.
+- `/ai-proposals/preview` and `/apply` validate the whole typed proposal before the service runs:
+  `schemaVersion: 1`, `savedAnalysisId`, `baseVersion`, `rationale`, and 1–30 `operations`.
+  Unknown keys return `400`.
+
+A database connection, resource, or network failure is a server fault. It now returns `500` instead
+of a `400` rejection. This covers SQLSTATE classes `08`, `53`, `57P`, `58`, and `XX`, and socket
+errors such as `ECONNREFUSED`. Query cancellation (`57014`) still returns `408`.
 
 ## Execution contract
 

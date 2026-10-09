@@ -4,7 +4,7 @@ type: testing
 status: active
 date: 2026-10-08
 updated: 2026-10-08
-last-updated: 2026-10-07
+last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
 added_import_pipeline_tests: 2026-05-05
@@ -957,6 +957,12 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.ts]], [[apps/nod
 
 ### Recent Additions
 
+- Runtime contract coverage ([[docs/adr/193-zod-runtime-contracts|ADR-193]]):
+  - [[apps/node-backend/tests/zodInput.test.ts]] covers `parseInput`, `formatZodIssues`, `guardField` and `bareMessages` in [[apps/node-backend/src/lib/zodInput.ts]]. Route suites under `tests/routes/` pin the 400 texts after each router moved to `parseInput`.
+  - [[apps/node-backend/tests/dataContract.test.ts]] covers the mode switch and value-free logging in [[apps/node-backend/src/lib/dataContract.ts]]. [[apps/node-backend/tests/bankAdapterContract.test.ts]] and [[apps/node-backend/tests/portfolioAdapterContract.test.ts]] cover the adapter output schemas and the single check seam for each pipeline.
+  - [[apps/node-backend/tests/rowContracts.test.ts]] covers `checkRows`, `queryRows` and `queryOne` in [[apps/node-backend/src/database/rowContracts.ts]]. Tests run in strict mode, so a mocked `query` row must match its row schema; build such rows with [[apps/node-backend/tests/helpers/pgRows.ts]] (NUMERIC and BIGINT as strings, DATE and TIMESTAMPTZ as `Date`).
+  - `apps/frontend/src/lib/api/client.test.ts` covers `checkResponseContract` and `ApiContractError`; the domain client tests cover the seven reads that declare a schema.
+  - [[packaging/electron/runtime/ipc-schemas.test.js]] covers the per-channel IPC argument validators, and `packaging/electron/ipc-contract.test.js` checks that every invoke channel has a contract and that `registerHandler` validates after the sender check.
 - Settings and middleware validation coverage additions for this branch:
   - [[apps/node-backend/tests/routes/settings.test.ts]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
   - [[apps/node-backend/tests/validation.test.ts]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.ts]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.

@@ -66,6 +66,7 @@ const mockWarmCache = vi.fn();
 const mockClearMemoryCache = vi.fn();
 const mockListLatestStoredRates = vi.fn();
 const mockGetSnapshots = vi.fn();
+const mockGetBrokerSnapshots = vi.fn();
 const mockGetPortfolioSummary = vi.fn();
 const mockGetInsightsDigest = vi.fn();
 const mockGetInsightsCount = vi.fn();
@@ -88,6 +89,7 @@ vi.mock("../../src/services/currency/currencyConversionService.ts", () => ({
 
 vi.mock("../../src/services/portfolioPerformanceSnapshotService.ts", () => ({
   getSnapshots: mockGetSnapshots,
+  getBrokerSnapshots: mockGetBrokerSnapshots,
   computeMetrics: vi.fn(() => ({
     currentValue: 0,
     totalInvested: 0,
@@ -146,6 +148,7 @@ describe("Info Routes", () => {
     mockDetectRecurringPatterns.mockResolvedValue({ patterns: [], total: 0 });
     mockListLatestStoredRates.mockResolvedValue({ rows: [] });
     mockGetSnapshots.mockResolvedValue([]);
+    mockGetBrokerSnapshots.mockResolvedValue([]);
     mockGetPortfolioSummary.mockResolvedValue({
       currency: "EUR",
       computed_at: "2026-04-11T10:00:00.000Z",
@@ -1072,6 +1075,173 @@ describe("Info Routes", () => {
         .send({})
         .expect(500);
       expect(res.body).toEqual(errEnvelope({ message: expect.any(String) }));
+    });
+  });
+
+  describe("query and body validation (ADR-193)", () => {
+    const validationError = (message: string) =>
+      errEnvelope({ code: "VALIDATION_ERROR", message });
+
+    it.each([
+      "/portfolio-summary",
+      "/net-worth",
+      "/portfolio-performance",
+      "/portfolio-performance/by-broker",
+      "/planned-expenses-next-month",
+    ])("rejects a repeated currency key on %s", async (path) => {
+      const res = await api
+        .get(`${BASE}${path}?currency=USD&currency=GBP`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("currency must be a single value"),
+      );
+    });
+
+    it("rejects a repeated target_currency alias", async () => {
+      const res = await api
+        .get(
+          `${BASE}/portfolio-summary?target_currency=USD&target_currency=GBP`,
+        )
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("target_currency must be a single value"),
+      );
+      expect(mockGetPortfolioSummary).not.toHaveBeenCalled();
+    });
+
+    it("keeps the target_currency alias working", async () => {
+      await api
+        .get(`${BASE}/portfolio-summary`)
+        .query({ target_currency: "usd" })
+        .expect(200);
+      expect(mockGetPortfolioSummary).toHaveBeenCalledWith("USD");
+    });
+
+    it("rejects a repeated period key on /portfolio-performance", async () => {
+      const res = await api
+        .get(`${BASE}/portfolio-performance?period=1m&period=1y`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("period must be a single value"),
+      );
+      expect(mockGetSnapshots).not.toHaveBeenCalled();
+    });
+
+    it("rejects an unknown period on /portfolio-performance", async () => {
+      const res = await api
+        .get(`${BASE}/portfolio-performance?period=10y`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("period must be one of 1m, 3m, 6m, 1y, 3y, all"),
+      );
+      expect(mockGetSnapshots).not.toHaveBeenCalled();
+    });
+
+    it.each(["1m", "3y", "all", ""])(
+      "accepts period=%j on /portfolio-performance",
+      async (period) => {
+        await api
+          .get(`${BASE}/portfolio-performance`)
+          .query({ period })
+          .expect(200);
+      },
+    );
+
+    describe("GET /portfolio-performance/by-broker", () => {
+      it("defaults the window when from/to are absent or empty", async () => {
+        await api
+          .get(`${BASE}/portfolio-performance/by-broker`)
+          .query({ currency: "USD", from: "", to: "" })
+          .expect(200);
+        const [startDate, endDate, currency] =
+          mockGetBrokerSnapshots.mock.calls[0];
+        expect(startDate).toBe("2000-01-01");
+        expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(currency).toBe("USD");
+      });
+
+      it("passes a valid window through", async () => {
+        const res = await api
+          .get(`${BASE}/portfolio-performance/by-broker`)
+          .query({ from: "2024-02-29", to: "2024-12-31" })
+          .expect(200);
+        expect(mockGetBrokerSnapshots).toHaveBeenCalledWith(
+          "2024-02-29",
+          "2024-12-31",
+          "EUR",
+        );
+        expect(res.body.data).toMatchObject({
+          startDate: "2024-02-29",
+          endDate: "2024-12-31",
+        });
+      });
+
+      it.each([
+        ["from", "2024/01/01"],
+        ["from", "yesterday"],
+        ["to", "2024-1-5"],
+      ])("rejects a malformed %s=%s", async (name, value) => {
+        const res = await api
+          .get(`${BASE}/portfolio-performance/by-broker`)
+          .query({ [name]: value })
+          .expect(400);
+        expect(res.body).toEqual(
+          validationError(`${name} must be a YYYY-MM-DD date`),
+        );
+        expect(mockGetBrokerSnapshots).not.toHaveBeenCalled();
+      });
+
+      // The old regex accepted any NNNN-NN-NN, so an impossible calendar date
+      // reached the snapshot query's date parameter.
+      it("rejects an impossible calendar date", async () => {
+        await api
+          .get(`${BASE}/portfolio-performance/by-broker`)
+          .query({ to: "2026-02-31" })
+          .expect(400);
+        expect(mockGetBrokerSnapshots).not.toHaveBeenCalled();
+      });
+    });
+
+    it("rejects a repeated start_month on /inflation-rates", async () => {
+      const res = await api
+        .get(`${BASE}/inflation-rates?start_month=2024-01&start_month=2024-02`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("start_month must be a single value"),
+      );
+      expect(mockInflationService.getInflationRates).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed account_id on /transaction-count", async () => {
+      const res = await api
+        .get(`${BASE}/transaction-count`)
+        .query({ account_id: "12abc" })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("account_id must be a positive integer"),
+      );
+      expect(infoRepository.getTransactionCount).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed year on /deduction-candidates", async () => {
+      const res = await api
+        .get(`${BASE}/deduction-candidates`)
+        .query({ year: "2025abc" })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("year must be an integer between 1970 and 3000"),
+      );
+    });
+
+    it("reports insight-dismissal issues by message only", async () => {
+      const res = await api
+        .put(`${BASE}/insight-dismissals`)
+        .send({ kind: "subscription_new", recipient_id: -1 })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Too small: expected number to be >0"),
+      );
+      expect(mockDismissInsight).not.toHaveBeenCalled();
     });
   });
 });

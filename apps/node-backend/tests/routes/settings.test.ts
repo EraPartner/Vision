@@ -709,6 +709,117 @@ describe("Settings Routes", () => {
       expect(res.body.error.message).toBe("boom");
     });
   });
+  describe("request validation (ADR-193)", () => {
+    const validationError = (message: string) =>
+      errEnvelope({ code: "VALIDATION_ERROR", message });
+
+    it("serves the plain map for withBaselines=false", async () => {
+      settingsRepository.getAll.mockResolvedValue({});
+      await api.get(`${BASE}?withBaselines=false`).expect(200);
+      expect(settingsRepository.getAll).toHaveBeenCalled();
+    });
+
+    it.each(["yes", "TRUE"])(
+      "rejects withBaselines=%s instead of silently dropping the baselines",
+      async (value) => {
+        const res = await api
+          .get(BASE)
+          .query({ withBaselines: value })
+          .expect(400);
+        expect(res.body).toEqual(
+          validationError("withBaselines must be true or false"),
+        );
+        expect(settingsRepository.getAll).not.toHaveBeenCalled();
+      },
+    );
+
+    it("names the missing value on a single-key write", async () => {
+      const res = await api
+        .put(`${BASE}/includeTransfers`)
+        .send(singleBody({}))
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError('Missing "value" in request body'),
+      );
+    });
+
+    it("keeps the per-key prefix on a rejected value", async () => {
+      const res = await api
+        .put(`${BASE}/cost_basis_method`)
+        .send(singleBody({ value: "average" }))
+        .expect(400);
+      expect(res.body.error.message).toMatch(/^Invalid cost_basis_method: /);
+    });
+
+    it("rejects a single-key write without its baseline", async () => {
+      const res = await api
+        .put(`${BASE}/includeTransfers`)
+        .send({ value: true })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Missing or invalid expected setting baseline"),
+      );
+      expect(settingsRepository.replace).not.toHaveBeenCalled();
+    });
+
+    it("rejects a bulk write whose baseline map lacks a key", async () => {
+      const res = await api
+        .put(BASE)
+        .send({
+          settings: { includeTransfers: true, onboarding_complete: true },
+          expected: { includeTransfers: { exists: false } },
+        })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Missing or invalid expected setting baseline"),
+      );
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+    });
+
+    it("rejects a bulk write without a baseline map", async () => {
+      const res = await api
+        .put(BASE)
+        .send({ settings: { includeTransfers: true } })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Missing expected settings baselines"),
+      );
+    });
+
+    // zod's object/record parsing drops a `__proto__` key, so the bulk key
+    // checks must see the raw map or this write would be silently ignored.
+    it("rejects a bulk __proto__ key rather than dropping it", async () => {
+      const res = await api
+        .put(BASE)
+        .set("Content-Type", "application/json")
+        .send(
+          '{"settings":{"__proto__":{"x":1}},"expected":{"__proto__":{"exists":false}}}',
+        )
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Setting key '__proto__' is not allowed"),
+      );
+      expect(settingsRepository.replaceMany).not.toHaveBeenCalled();
+    });
+
+    it("rejects a delete without its baseline", async () => {
+      const res = await api.delete(`${BASE}/theme_settings`).expect(400);
+      expect(res.body).toEqual(
+        validationError("Missing or invalid expected setting baseline"),
+      );
+      expect(settingsRepository.deleteExpected).not.toHaveBeenCalled();
+    });
+
+    it("rejects an over-long key on delete", async () => {
+      const res = await api
+        .delete(`${BASE}/${"k".repeat(101)}`)
+        .send({ expected: { exists: true, value: {} } })
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("Setting key too long (max 100 chars)"),
+      );
+    });
+  });
 });
 
 function singleBody(body: Record<string, unknown>) {

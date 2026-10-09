@@ -23,33 +23,27 @@ import { dismissInsight } from "../../services/insightDismissalService.ts";
 import { computeDeductionCandidates } from "../../services/tax/deductionCandidatesService.ts";
 import { listAdapters } from "../../services/importPipeline/adapters/index.ts";
 import { logger } from "../../config/logger.ts";
-import { getTargetCurrency } from "./_queryParams.ts";
+import { targetCurrencyQuerySchema } from "./_queryParams.ts";
 import { assertOptionalId } from "../../middleware/validation.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
+import { bareMessages, guardField, parseInput } from "../../lib/zodInput.ts";
 
 const router = Router();
 
-const insightDismissalSchema = z.discriminatedUnion("kind", [
-  z.strictObject({
-    kind: z.enum(["subscription_new", "subscription_price_change"]),
-    recipient_id: z.number().int().positive(),
-  }),
-  z.strictObject({
-    kind: z.literal("category_outlier"),
-    category_id: z.number().int().positive(),
-    month_key: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
-  }),
-]);
-
-function parseInsightDismissal(body: unknown) {
-  const result = insightDismissalSchema.safeParse(body);
-  if (!result.success) {
-    throw new ValidationError(
-      result.error.issues.map((issue) => issue.message).join("; "),
-    );
-  }
-  return result.data;
-}
+// bareMessages: the 400 lists the issue messages without their paths.
+const insightDismissalSchema = bareMessages(
+  z.discriminatedUnion("kind", [
+    z.strictObject({
+      kind: z.enum(["subscription_new", "subscription_price_change"]),
+      recipient_id: z.number().int().positive(),
+    }),
+    z.strictObject({
+      kind: z.literal("category_outlier"),
+      category_id: z.number().int().positive(),
+      month_key: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    }),
+  ]),
+);
 
 // (Removed legacy GET /api/info and GET /api/info/transaction-summary — Phase 9
 // cutover (ADR-010): the aggregations.js routes superseded them and they had
@@ -68,7 +62,7 @@ router.get("/insights-count", async (_req, res) => {
 });
 
 router.put("/insight-dismissals", async (req, res) => {
-  res.ok(await dismissInsight(parseInsightDismissal(req.body)));
+  res.ok(await dismissInsight(parseInput(insightDismissalSchema, req.body)));
 });
 
 router.get("/supported-adapters", async (req, res) => {
@@ -80,14 +74,23 @@ router.get("/supported-adapters", async (req, res) => {
   res.ok({ items: adapters, total: adapters.length });
 });
 
+const transactionCountQuerySchema = bareMessages(
+  z.object({
+    account_id: guardField((value) => assertOptionalId(value, "account_id")),
+  }),
+);
+
 router.get("/transaction-count", async (req, res) => {
-  const accountId = assertOptionalId(req.query.account_id, "account_id");
+  const { account_id: accountId } = parseInput(
+    transactionCountQuerySchema,
+    req.query,
+  );
   const count = await infoService.getTransactionCount({ accountId });
   res.ok({ total_transactions: count });
 });
 
 router.get("/planned-expenses-next-month", async (req, res) => {
-  const targetCurrency = getTargetCurrency(req);
+  const { targetCurrency } = parseInput(targetCurrencyQuerySchema, req.query);
   const data = await infoService.getPlannedExpensesNextMonth(targetCurrency);
   res.ok({ ...data, links: [] });
 });
@@ -142,12 +145,18 @@ function assertOptionalYear(value: unknown): number | undefined {
   return year;
 }
 
+const deductionCandidatesQuerySchema = bareMessages(
+  z.object({ year: guardField(assertOptionalYear) }),
+);
+
 // Transaction-derived Belgian deduction-type candidates for the Tax Overview
 // review card. `year` defaults to the current calendar year. Same graceful
 // degradation as the siblings above — an empty candidate list instead of a 500
 // (a malformed `year` still 400s: it is validated before the try).
 router.get("/deduction-candidates", async (req, res) => {
-  const year = assertOptionalYear(req.query.year) ?? new Date().getFullYear();
+  const year =
+    parseInput(deductionCandidatesQuerySchema, req.query).year ??
+    new Date().getFullYear();
   try {
     const data = await computeDeductionCandidates({ year });
     res.ok(data);

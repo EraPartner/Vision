@@ -28,7 +28,7 @@ Retrieve a list of recipients.
 
 | Parameter           | Type    | Default | Description                                |
 | ------------------- | ------- | ------- | ------------------------------------------ |
-| limit               | integer | 50      | Max items (clamped: 1–5000)                |
+| limit               | integer | 50      | Max items (clamped: 1–1000)                |
 | offset              | integer | 0       | Items to skip (clamped: ≥0)                |
 | search              | string  | null    | Search in name                             |
 | active              | boolean | true    | Show active/inactive                       |
@@ -37,6 +37,10 @@ Retrieve a list of recipients.
 | uncategorized       | boolean | null    | Filter recipients without default category |
 | sort_by             | string  | name    | Sort field (name, created_at, updated_at)  |
 | sort_dir            | string  | asc     | Sort direction (asc, desc)                 |
+
+An unknown `sort_dir` uses the default order. A repeated `name`, `search`, or `sort_by` key returns
+`400 VALIDATION_ERROR`. `active` and `uncategorized` accept `true`/`false`/`1`/`0`; other values
+use the default.
 
 > [!warning] `default_category_id` is a strict id (changed 2026-08-11, breaking for malformed ids)
 > It accepts only a plain base-10 integer in 1..2,147,483,647; anything else — `12abc`, `12.5`,
@@ -96,6 +100,10 @@ create-or-get endpoint: it returns `201` with `created: true` for a new row and 
 
 **Required Fields:** name
 
+`name` must be a non-empty string. `default_category_id` is a positive int4 id or `null`; `notes` is
+a string or `null`. A wrong type returns `400 VALIDATION_ERROR` naming the field, for example
+`name: must be a string`; an empty or missing name returns `name: Missing required field`.
+
 **Behavior:** Automatically normalizes the name for matching (lowercase, trimmed).
 
 `SYSTEM` is reserved for server-generated opening and reconciliation rows. A public create or
@@ -152,6 +160,11 @@ Update a recipient.
   "notes": "New notes"
 }
 ```
+
+`name` and `notes` must be strings or `null`. `default_category_id` must be a positive int4 id or
+`null` (clear). `is_active` must be a JSON boolean or `null`. `null` for `name` or `is_active` leaves
+that field unchanged. A wrong type, such as `"is_active": "false"`, or a missing body returns
+`400 VALIDATION_ERROR` instead of a `500`.
 
 ### DELETE /api/recipients/:id
 
@@ -366,6 +379,12 @@ Create a new matching pattern for a recipient.
 An omitted `pattern_kind` is stored and validated as `literal_prefix`. A `regex` pattern that does not
 compile, or that risks catastrophic backtracking, is rejected with `400 VALIDATION_ERROR`.
 
+Field types are checked before the service runs. `pattern` must be a non-empty string.
+`pattern_kind` must be `literal_prefix`, `glob`, or `regex`. `case_sensitive` must be a JSON boolean,
+`priority` a 32-bit integer, and `notes` a string or `null`. On create and preview, `null` for
+`pattern_kind`, `case_sensitive` or `priority` means the default, as an omitted field does. A wrong
+type returns `400 VALIDATION_ERROR` naming the field.
+
 **Error Response (400):**
 
 ```json
@@ -373,7 +392,7 @@ compile, or that risks catastrophic backtracking, is rejected with `400 VALIDATI
   "ok": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "Missing required field: pattern"
+    "message": "pattern: Missing required field"
   }
 }
 ```
@@ -429,7 +448,10 @@ Update an existing pattern.
 | `id`        | Recipient ID |
 | `patternId` | Pattern ID   |
 
-**Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`.
+**Request Body:** Any subset of `pattern`, `pattern_kind`, `case_sensitive`, `priority`, `notes`,
+and `is_active`. The types match the create route; `is_active` must be a JSON boolean.
+`notes: null` clears the note. A non-string, non-null `notes` (for example `7`) returns
+`400 VALIDATION_ERROR`, as does a missing body.
 
 **Response:** `200 OK`
 
@@ -444,7 +466,7 @@ Update an existing pattern.
   "ok": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "patternId must be a positive integer"
+    "message": "patternId: must be a positive integer"
   }
 }
 ```
@@ -469,7 +491,7 @@ Delete a pattern.
   "ok": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "patternId must be a positive integer"
+    "message": "patternId: must be a positive integer"
   }
 }
 ```
@@ -506,6 +528,8 @@ The response data includes `created: true` with status `201`, or `created: false
   "set_as_primary": true
 }
 ```
+
+Field types are strict; see [[docs/api/recipientBankAccounts|Recipient Bank Accounts API]].
 
 ### PATCH /api/recipients/:id/bank-accounts/:accountId
 

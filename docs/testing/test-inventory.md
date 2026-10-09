@@ -3,9 +3,9 @@ title: Test Inventory
 type: testing
 status: active
 date: 2026-10-08
-last_modified: 2026-10-06
+last_modified: 2026-10-08
 updated: 2026-10-08
-last-updated: 2026-10-06
+last-updated: 2026-10-08
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_tax_pure_module_tests: 2026-05-29
 added_chart_aria_tests: 2026-05-29
@@ -719,7 +719,7 @@ New unit tests for the `chartAria.ts` accessibility helper module:
 **What landed:**
 
 - **MSW handlers expanded** (`src/test/msw/handlers.ts`): default handlers for every frontend-used endpoint that was previously unstubbed (admin update-check + vacuum, all aggregations including cashflow forecast methods/rolling/accuracy + sankey + pivot variants, AI chat/conversation/models, attachments, categories sub-routes, imports CRUD, info portfolio-summary + refresh-views + exchange-rates refresh, investments providers/refresh-prices/transactions/transactions-by-id, recipients clusters/aliases/merge/unmerge/patterns/preview, reports financial/portfolio/tax, saved-charts CRUD, splits batch/pay/settle/owed-by-recipient, transactions sub-routes including export endpoints, watchlist CRUD, market chart, planned-transactions execute + due-soon).
-- **Contract tests expanded** (`src/test/msw/contracts.test.ts` — `Phase F1: extended GET endpoint contracts` + `Phase F1: extended mutation contracts`): one Zod schema per frontend-used endpoint. Strict shared collection, pagination, link, and resource shapes live in `src/test/contracts/schemas.ts`, reject unknown fields, and keep fixtures and live responses from drifting between separate schema copies. Current contract test count: **131**.
+- **Contract tests expanded** (`src/test/msw/contracts.test.ts` — `Phase F1: extended GET endpoint contracts` + `Phase F1: extended mutation contracts`): one Zod schema per frontend-used endpoint. Strict shared collection, pagination, link, and resource shapes live in `packages/types/src/contracts/` (import `@vision/types/contracts`; `src/test/contracts/schemas.ts` re-exports them), reject unknown fields, and keep fixtures and live responses from drifting between separate schema copies. The same package holds the loose wire schemas the runtime API client checks ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Current contract test count: **131**.
 - **Live-API contract tests expanded** (`src/test/live-contracts/live-contracts.test.ts`): reduced live checks derive validators from the strict shared resource schemas with `.pick().passthrough()`, so selected fields stay contract-checked while other valid fields in the full backend resource remain allowed. They hit disposable backends through root `bun run test:frontend` and CI. Total live tests: 13 → **37**. The fast workspace unit command excludes this file.
 - **CI coverage:** frontend contract and component tests run with Vitest; live API contract tests exercise the native backend. Backup and restore are covered by Electron native smoke and frontend IPC component suites.
 

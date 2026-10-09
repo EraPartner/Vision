@@ -9,6 +9,7 @@
 
 import { Router } from "express";
 import multer from "multer";
+import { z } from "zod";
 import { attachmentRepository } from "../services/attachmentRecordService.ts";
 import {
   storeAttachment,
@@ -17,12 +18,17 @@ import {
   verifyAttachmentContent,
 } from "../services/attachmentService.ts";
 import { attachmentUpload } from "../middleware/attachmentUpload.ts";
-import { validateIdParam, assertIdParam } from "../middleware/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { logger } from "../config/logger.ts";
+import { idParams, pageFields } from "./_requestSchemas.ts";
 
 const router = Router();
+
+const listQuery = z
+  .object(pageFields)
+  .transform((query) => parseOptionalPagination(query, { maxLimit: 1000 }));
 
 // ── Upload ─────────────────────────────────────────────────────────────────────
 
@@ -36,7 +42,11 @@ const router = Router();
 // limiting middleware bound at the router-mount level in a different file.
 router.post(
   "/transaction/:id",
-  validateIdParam,
+  // Reject a bad :id before multer buffers the upload.
+  (req, _res, next) => {
+    parseInput(idParams, req.params);
+    next();
+  },
   (req, res, next) => {
     attachmentUpload.single("file")(req, res, (err: unknown) => {
       if (!err) return next();
@@ -48,7 +58,7 @@ router.post(
     });
   },
   async (req, res) => {
-    const transactionId = assertIdParam(req);
+    const { id: transactionId } = parseInput(idParams, req.params);
 
     if (!req.file) {
       throw new ValidationError(
@@ -120,9 +130,9 @@ router.post(
  * List attachments for a transaction. Pagination is opt-in: without
  * limit/offset every attachment is returned, as before.
  */
-router.get("/transaction/:id", validateIdParam, async (req, res) => {
-  const transactionId = assertIdParam(req);
-  const page = parseOptionalPagination(req.query, { maxLimit: 1000 });
+router.get("/transaction/:id", async (req, res) => {
+  const { id: transactionId } = parseInput(idParams, req.params);
+  const page = parseInput(listQuery, req.query);
   const attachments = await attachmentRepository.listByTransaction(
     transactionId,
     page ?? {},
@@ -144,8 +154,9 @@ router.get("/transaction/:id", validateIdParam, async (req, res) => {
 // applied to this whole router via mountRouter('/api/attachments',
 // attachmentRateLimiter, ...) in main.ts. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
-router.get("/:id/download", validateIdParam, async (req, res, next) => {
-  const attachment = await attachmentRepository.findById(assertIdParam(req));
+router.get("/:id/download", async (req, res, next) => {
+  const { id } = parseInput(idParams, req.params);
+  const attachment = await attachmentRepository.findById(id);
   if (!attachment) throw new NotFoundError("Attachment not found");
 
   const absPath = await resolveAbsolutePath(attachment.stored_path);
@@ -186,8 +197,9 @@ router.get("/:id/download", validateIdParam, async (req, res, next) => {
 // applied to this whole router via mountRouter('/api/attachments',
 // attachmentRateLimiter, ...) in main.ts. The scanner does not trace rate
 // limiting middleware bound at the router-mount level in a different file.
-router.delete("/:id", validateIdParam, async (req, res) => {
-  const attachment = await attachmentRepository.findById(assertIdParam(req));
+router.delete("/:id", async (req, res) => {
+  const { id } = parseInput(idParams, req.params);
+  const attachment = await attachmentRepository.findById(id);
   if (!attachment) throw new NotFoundError("Attachment not found");
 
   // Delete DB row first — if that fails the file is still present and recoverable.

@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
+import { ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
+import { ApiContractError } from "@/lib/api/client";
 
 import {
     getAccounts,
@@ -24,6 +26,7 @@ describe("accounts API client", () => {
                 ok({
                     items: [
                         {
+                            ...ACCOUNT_LIST_ITEM_STUB,
                             id: 1,
                             name: "Checking",
                             statement_balances: [
@@ -57,6 +60,7 @@ describe("accounts API client", () => {
                 ok({
                     items: [
                         {
+                            ...ACCOUNT_LIST_ITEM_STUB,
                             id: 2,
                             name: "Savings",
                             statement_balances: [],
@@ -73,6 +77,39 @@ describe("accounts API client", () => {
         expect(res.items[0].statement_balances).toEqual([]);
         expect(res.items[0].computed_balance).toBeUndefined();
         expect(res.items[0].drift).toBeUndefined();
+    });
+
+    it("getAccounts rejects an unknown account type in strict mode", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [{ ...ACCOUNT_LIST_ITEM_STUB, type: "credit_card" }],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+        );
+        const error = await getAccounts().catch((err: unknown) => err);
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues[0]).toMatch(
+            /^items\[0\]\.type: /,
+        );
+    });
+
+    it("getAccounts rejects a non-numeric balance string", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        { ...ACCOUNT_LIST_ITEM_STUB, computed_balance: "n/a" },
+                    ],
+                    total: 1,
+                }),
+            ),
+        );
+        await expect(getAccounts()).rejects.toThrow(
+            "items[0].computed_balance",
+        );
     });
 
     it("createAccount POSTs the payload", async () => {

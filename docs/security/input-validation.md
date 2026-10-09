@@ -2,7 +2,7 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 tags:
   [
@@ -66,11 +66,33 @@ re-exports the pure helpers for route compatibility. Lower layers import the lib
 do not depend on `middleware/validation.ts`; typed application errors remain owned by
 `middleware/errorHandler.ts` under the existing project-wide convention.
 
+### Request parsing with zod (ADR-193)
+
+Per [[docs/adr/193-zod-runtime-contracts|ADR-193]], routes parse `req.params`, `req.query` and
+`req.body` inside the handler with `parseInput(schema, value)` from `lib/zodInput.ts`. A failed
+parse throws `ValidationError`, so every route answers the same **400 `VALIDATION_ERROR`**. The
+message joins the issues as `path: message`. Shared request fields live in
+`routes/_requestSchemas.ts` (`idSchema`, `idParams`, `booleanQuery`, `clampedIntQuery`,
+`singleQueryString`, …), `routes/_inputBridges.ts` (bridges that keep older 400 texts) and
+`routes/_importInput.ts`. These fields wrap the guards described below, so each one keeps its
+accept set. See [[docs/reference/code-patterns#Request validation with parseInput (ADR-193)|Request validation]].
+
+A missing or non-object body is now a 400 where several routes used to answer 500. Stricter JSON
+types also reject values that were coerced before, for example a string `"false"` for a boolean
+field.
+
+Data Vision produced itself is checked separately: bank and portfolio adapter output, saved parser
+configs read back from the database, and PostgreSQL rows in the checked repositories. A mismatch
+there is a Vision bug, never a 400. It throws in every environment: tests and development always, and production through
+`PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"` (the owner chose to
+block, 2026-10-09). Messages and logs carry issue paths and codes only, never values, because the
+values are personal financial data.
+
 ## Validation Functions
 
 ### ID Validation
 
-Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, `splits.js`'s `validatedIdField`, `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
+Validates that an ID parameter is a positive integer. **The single definition of a valid id** — `validateIntArray`, `assertOptionalId`, `assertIdParam`, `validateIdParam`/`validateIntParam`, the zod fields `idSchema`/`optionalIdFilter`/`nullableId` (`routes/_requestSchemas.ts`) and `idField` (`routes/_inputBridges.ts`), `importBatchIds.js`'s `coercedIdSchema`, `aggregations.js`'s `parseIdArrayQueryParam` and the AI-chat tools' `parsePositiveInt` all delegate to it rather than re-deriving a shape rule. If you need an id check, add a call — not another parser.
 
 ```javascript
 validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
@@ -89,10 +111,11 @@ validateId(value, (fieldName = "id"), (max = MAX_INT32_ID));
 >
 > This tightens **every** route behind `validateIdParam` / `validateIntParam` / `assertOptionalId` and the `validatedIdField` zod adapter in `splits.js`. It only narrows what is accepted: every id that a well-behaved client sends (a plain integer) behaves exactly as before, and `openapi.yaml` already typed these params `integer` — the implementation now conforms to the published contract rather than deviating from it.
 
-Route handlers read numeric path parameters through `assertIdParam(req, name)`, which validates at
-the point of use and returns a number. `validateIdParam` and `validateIntParam(name)` remain at the
-router boundary for early rejection, but handler safety no longer depends on those middleware
-functions running first. Do not reintroduce `parseInt(req.params...)`, `Number(req.params...)`, or
+Route handlers read numeric path parameters at the point of use. Most routers call
+`parseInput(idParams, req.params)` or parse an object of `idSchema()` fields, which returns
+numbers. The routers that still carry `validateIdParam` read the number through
+`assertIdParam(req, name)`. Either way, handler safety does not depend on middleware running
+first. Do not reintroduce `parseInt(req.params...)`, `Number(req.params...)`, or
 a raw cast: a future route mounted without middleware would then be able to retarget a malformed id.
 
 **Returns:**
@@ -187,7 +210,7 @@ regression test. Route handlers must not use this helper.
 
 ### Single-Valued Query Params
 
-Express's default query parser turns a repeated key (`?search=a&search=b`) into an array and a bracketed key (`?search[x]=1`) into an object. A route that expects one string reads it with `optionalQueryString(req.query, "<name>")` from `lib/httpParams.ts`. The helper returns the string, returns `undefined` when the key is absent, and otherwise raises `ValidationError` → **400 `VALIDATION_ERROR`** (`"<name> must be a single value"`).
+Express's default query parser turns a repeated key (`?search=a&search=b`) into an array and a bracketed key (`?search[x]=1`) into an object. A route that expects one string declares it in its query schema as `singleQueryString` (`routes/_requestSchemas.ts`) or `singleQueryValue(name)` (`routes/_inputBridges.ts`), or reads it with `optionalQueryString(req.query, "<name>")` from `lib/httpParams.ts`. Each returns the string, returns `undefined` when the key is absent, and otherwise answers **400 `VALIDATION_ERROR`** (`"<name> must be a single value"`, or `"<name>: must be a single value"` for `singleQueryString`).
 
 Before 2026-10-07 these values reached string methods, SQL parameters or cache keys unchecked, which answered 500 or quietly used one of the values. Query params whose parser already accepts any shape (boolean flags, pagination, the repeatable id lists below) do not use it.
 
@@ -551,7 +574,7 @@ router.get("/:id", validateIdParam, async (req, res) => {
 });
 ```
 
-Applied in 14 routers: `accounts`, `attachments`, `categories`, `investments`, `plannedTransactions`, `recipientBankAccounts`, `recipients`, `research`, `savedCharts`, `splits`, `tags`, `transactions`, `watchlist`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.ts`, which registers the four saved-parser-config PATCH/DELETE operations on both).
+Still applied in `categories` (the `/tree/:id` operations), `plannedTransactions`, `research` and `savedCharts`, plus the two import routers via the shared `registerParserRoutes` (`routes/parserConfigRoutes.ts`, which registers the four saved-parser-config PATCH/DELETE operations on both). The other routers dropped it and parse `req.params` with `parseInput(idParams, req.params)` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]).
 
 ### validateIntParam
 
@@ -568,7 +591,7 @@ router.delete(
 );
 ```
 
-Used for `:patternId` (`recipients.js`), `:accountId` (`recipientBankAccounts.js`) and `:txnId` (`investments.js`). Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
+No route uses it any more: `:patternId` (`recipients.ts`), `:accountId` (`recipientBankAccounts.ts`) and `:txnId` (`investments.ts`) are now `idSchema()` fields in each route's params schema, parsed with `parseInput`. Unlike `validateIdParam` — which no-ops when there is no `:id` on the route — `validateIntParam` rejects a missing param, since a route that declares it always has it.
 
 > [!warning] Breaking change (2026-08-11) — the last six operations with no `:id` middleware
 > Six operations reached a repository with a hand-parsed id and no router-edge guard. All six now carry `validateIdParam`/`validateIntParam` **and** parse through `validateId`, so the guard runs twice and cannot disagree with itself.

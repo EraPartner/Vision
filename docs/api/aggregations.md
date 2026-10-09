@@ -54,7 +54,7 @@ related_code:
 > Legacy `/api/info/*` endpoints were removed in Phase 9. All aggregation requests now route through `/api/aggregations/*`.
 
 > [!warning] Id query params (2026-08-11 — breaking for malformed ids)
-> Every `integer[]` query param below (`excluded_category_ids[]`, `excluded_recipient_ids[]`, `recipient_ids[]`, `tag_ids[]`) accepts **only** a plain base-10 integer in 1..2,147,483,647 per element, repeated once per id (`?excluded_category_ids=5&excluded_category_ids=9`). One bad element rejects the whole request with **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) — no aggregation is computed.
+> Every `integer[]` query param below (`excluded_category_ids[]`, `excluded_recipient_ids[]`, `recipient_ids[]`, `tag_ids[]`) accepts **only** a plain base-10 integer in 1..2,147,483,647 per element, repeated once per id (`?excluded_category_ids=5&excluded_category_ids=9`). One bad element rejects the whole request with **400 `VALIDATION_ERROR`** (`"<field> contains invalid value: <value>"`) — no aggregation is computed. When several parameters are invalid, one `400` lists every problem, joined with `; ` (for example `start_date must not be after end_date; excluded_recipient_ids contains invalid value: x`).
 
 Category exclusions use effective category IDs (transaction, recipient default, then primary
 recipient default). Each selected ID excludes its own assignments and those of all descendants;

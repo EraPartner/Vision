@@ -19,8 +19,8 @@ import type { ResponseMeta as ApiResponseMeta } from "@vision/types/api";
 
 export interface ExpressRequest {
   params: Record<string, string>;
-  query: Record<string, any>;
-  body: any;
+  query: Record<string, unknown>;
+  body: unknown;
   headers: Record<string, string | string[] | undefined>;
   /** Node wire headers, before duplicate-field normalization. */
   rawHeaders?: string[];

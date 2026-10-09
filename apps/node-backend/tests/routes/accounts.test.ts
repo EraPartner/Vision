@@ -470,3 +470,40 @@ describe("GET /:id — real validateIdParam guard", () => {
     expect(accountService.get).not.toHaveBeenCalled();
   });
 });
+
+describe("Account Routes — params and query schemas (zod)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ["put", `${BASE}/1e3/statement-balances/USD`],
+    ["delete", `${BASE}/0/statement-balances/USD`],
+    ["post", `${BASE}/12abc/close`],
+    ["post", `${BASE}/-1/opening-balance`],
+    ["post", `${BASE}/0x10/reconcile`],
+    ["get", `${BASE}/abc/merge-preview?into=2`],
+  ] as const)(
+    "%s %s rejects a malformed :id before any service",
+    async (method, path) => {
+      const res = await api[method](path).send({}).expect(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(accountService.setStatementBalance).not.toHaveBeenCalled();
+      expect(accountService.removeStatementBalance).not.toHaveBeenCalled();
+      expect(closeAccount).not.toHaveBeenCalled();
+      expect(setOpeningBalance).not.toHaveBeenCalled();
+      expect(reconcileAccount).not.toHaveBeenCalled();
+      expect(previewMerge).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps an unrecognised ?active= meaning the active-only default", async () => {
+    accountService.list.mockResolvedValue({ items: [], total: 0 });
+    await api.get(`${BASE}?active=maybe`).expect(200);
+    expect(accountService.list).toHaveBeenCalledWith({ active: true });
+  });
+
+  it("keeps a bodiless merge as the service's empty source list", async () => {
+    mergeAccounts.mockResolvedValue(partial({ into: 1, merged: [] }));
+    await mergeRouteHandler()({ params: { id: "1" } }, { ok: vi.fn() });
+    expect(mergeAccounts).toHaveBeenCalledWith(1, []);
+  });
+});

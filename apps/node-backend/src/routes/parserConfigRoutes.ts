@@ -6,6 +6,7 @@
  */
 
 import type { Router } from "express";
+import { z } from "zod";
 import type { ExpressRequest } from "../types/express.ts";
 import {
   ValidationError,
@@ -14,6 +15,7 @@ import {
 } from "../middleware/errorHandler.ts";
 import { assertIdParam, validateIdParam } from "../middleware/validation.ts";
 import customParserConfigService from "../services/customParserConfigService.ts";
+import { bareMessages, guardField, parseInput } from "../lib/zodInput.ts";
 
 // (name, kind)-unique since migration 0041; both budgeting and portfolio parsers share it.
 export const PARSER_NAME_CONSTRAINT = "uq_custom_parser_configs_name_kind";
@@ -57,6 +59,21 @@ export function normalizeParserName(name: unknown): string {
 }
 
 /**
+ * POST and PATCH bodies. POST requires both fields; PATCH leaves an absent
+ * field unchanged. Each field keeps its normaliser's 400 message.
+ */
+function parserBodySchemas(normalizeConfig: (config: unknown) => object) {
+  const name = guardField(normalizeParserName);
+  const config = guardField(normalizeConfig);
+  return {
+    create: bareMessages(z.looseObject({ name, config })),
+    update: bareMessages(
+      z.looseObject({ name: name.optional(), config: config.optional() }),
+    ),
+  };
+}
+
+/**
  * Register the four saved-parser-config CRUD handlers (GET/POST/PATCH/DELETE
  * /parsers[/:id]) on a router. The transaction and portfolio import routers are
  * identical here apart from the parser `kind`, the config normaliser, and the
@@ -80,6 +97,7 @@ export function registerParserRoutes(
 ) {
   const conflictMessage = (name: string | undefined) =>
     `A ${label}parser named "${name}" already exists`;
+  const bodySchemas = parserBodySchemas(normalizeConfig);
 
   // Canonical collection shape `{items, total}`. Unpaginated, so `total` is
   // just the row count — it exists so pagination can be added without a
@@ -90,9 +108,7 @@ export function registerParserRoutes(
   });
 
   router.post("/parsers", async (req, res) => {
-    const body = req.body ?? {};
-    const name = normalizeParserName(body.name);
-    const config = normalizeConfig(body.config);
+    const { name, config } = parseInput(bodySchemas.create, req.body ?? {});
     try {
       const created = await customParserConfigService.create({
         name,
@@ -114,11 +130,7 @@ export function registerParserRoutes(
   // handler, so a malformed id never reaches a repository call.
   router.patch("/parsers/:id", validateIdParam, async (req, res) => {
     const id = parseParserId(req);
-    const body = req.body ?? {};
-    const name =
-      body.name !== undefined ? normalizeParserName(body.name) : undefined;
-    const config =
-      body.config !== undefined ? normalizeConfig(body.config) : undefined;
+    const { name, config } = parseInput(bodySchemas.update, req.body ?? {});
     try {
       const updated = await customParserConfigService.update(id, {
         name,

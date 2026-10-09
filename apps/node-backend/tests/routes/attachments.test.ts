@@ -196,3 +196,25 @@ describe('Attachment routes', () => {
     });
   });
 });
+
+describe('Attachment routes — :id params (zod)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it.each([
+    ['get', `${BASE}/transaction/1e3`],
+    ['get', `${BASE}/0/download`],
+    ['delete', `${BASE}/-1`],
+  ] as const)('%s %s rejects a malformed id before touching the store', async (method, path) => {
+    const res = await api[method](path).expect(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(attachmentRepository.listByTransaction).not.toHaveBeenCalled();
+    expect(attachmentRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it('keeps unparseable pagination falling back instead of rejecting', async () => {
+    attachmentRepository.listByTransaction.mockResolvedValue([]);
+    attachmentRepository.countByTransaction.mockResolvedValue(0);
+    await api.get(`${BASE}/transaction/4?limit=abc`).expect(200);
+    expect(attachmentRepository.listByTransaction).toHaveBeenCalledWith(4, { limit: 1000, offset: 0 });
+  });
+});

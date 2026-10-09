@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockConnection } from './helpers/repoMocks.ts';
+import { mockLogger } from './helpers/mockLogger.ts';
 vi.mock('../src/database/connection.ts', () => mockConnection());
+vi.mock('../src/config/logger.ts', () => ({ logger: mockLogger() }));
 
 import { query as rawQuery } from '../src/database/connection.ts';
+import { logger } from '../src/config/logger.ts';
 import type { PgQueryResult } from '../src/database/connection.ts';
 import repo from '../src/repositories/customParserConfigRepository.ts';
 import { partial } from './helpers/partial.ts';
@@ -25,6 +28,7 @@ function dbRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     name: 'My Bank',
+    kind: 'transaction',
     config_json: SAMPLE_CONFIG,
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-06-01T00:00:00Z',
@@ -120,5 +124,70 @@ describe('customParserConfigRepository.delete', () => {
   it('returns false when nothing was deleted', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     expect(await repo.delete(99)).toBe(false);
+  });
+});
+
+// Stored config_json must still pass the save-path schema of its kind
+// (lib/parserConfigSchema.ts). A row that does not is a data-contract
+// violation: strict in tests/development, logged and passed through in
+// production — never a 400.
+describe('customParserConfigRepository stored config contract', () => {
+  const PORTFOLIO_CONFIG = { dateColumn: 'Date', symbolColumn: 'Ticker', defaultAssetClass: 'stock' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('accepts stored configs of both kinds, including legacy rows without number_format', async () => {
+    query.mockResolvedValue(
+      partial<PgQueryResult>({
+        rows: [dbRow(), dbRow({ id: 2, kind: 'portfolio', config_json: PORTFOLIO_CONFIG })],
+      }),
+    );
+    const result = await repo.getAll();
+    expect(result.map((r) => r.config)).toEqual([SAMPLE_CONFIG, PORTFOLIO_CONFIG]);
+  });
+
+  it('throws on a stored config the save path would reject, naming paths but not values', async () => {
+    query.mockResolvedValue(
+      partial<PgQueryResult>({
+        rows: [dbRow({ id: 7, config_json: { ...SAMPLE_CONFIG, amountColumn: '', encoding: 'SECRET-ENC' } })],
+      }),
+    );
+    const error = await repo.getById(7).then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(
+      'Data contract violated: custom_parser_configs row 7 at config.amountColumn (custom), config.encoding (custom)',
+    );
+    expect((error as Error).message).not.toContain('SECRET-ENC');
+    expect(error).not.toHaveProperty('status');
+  });
+
+  it('checks a portfolio row against the portfolio schema', async () => {
+    query.mockResolvedValue(
+      partial<PgQueryResult>({
+        rows: [dbRow({ kind: 'portfolio', config_json: { dateColumn: 'Date', defaultAssetClass: 'stock' } })],
+      }),
+    );
+    await expect(repo.getById(1)).rejects.toThrow('custom_parser_configs row 1 at config (custom)');
+  });
+
+  it('blocks a stored config that breaks its schema in production too, without values', async () => {
+    vi.stubEnv('VITEST', '');
+    vi.stubEnv('ENVIRONMENT', '');
+    vi.stubEnv('NODE_ENV', 'production');
+    const broken = { ...SAMPLE_CONFIG, dateColumn: 42, encoding: 'SECRET-ENC' };
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: broken })] }));
+
+    const error = await repo.getById(1).catch((err: unknown) => err);
+
+    expect(String(error)).toContain(
+      'custom_parser_configs row 1 at config.dateColumn (custom), config.encoding (custom)',
+    );
+    expect(String(error)).not.toContain('SECRET-ENC');
   });
 });

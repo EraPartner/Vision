@@ -2,8 +2,8 @@
  * Planned Transaction routes.
  *
  * Leaf field validation (required fields, amount bounds, reminder lead time,
- * recurrence bounds/pattern) is zod (schema → safeParse → ValidationError),
- * the idiom established in settings.js/reports.js. The schemas are LOOSE:
+ * recurrence bounds/pattern) is zod, parsed with parseInput (ADR-193). The
+ * body schemas are LOOSE:
  * unvalidated fields pass through untouched and the repository allow-list
  * decides what is written. The loan-schedule computation is side-effectful and
  * stays imperative, running on the parsed body exactly as before.
@@ -19,6 +19,7 @@ import {
   assertYmd,
   assertOptionalId,
   validateId,
+  validateDateString,
   assertCurrency,
   assertIdParam,
 } from "../middleware/validation.ts";
@@ -34,7 +35,8 @@ import {
   ValidationError,
 } from "../middleware/errorHandler.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
-import { parsePagination } from "../lib/pagination.ts";
+import { parseIntClamped, parsePagination } from "../lib/pagination.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import {
   optionalQueryString,
   parseBooleanQueryParam,
@@ -368,21 +370,40 @@ const patchPlannedSchema = z.looseObject({
     .optional(),
 });
 
-// schema → safeParse → joined issues → ValidationError (settings.js idiom).
-function parsePlannedBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) =>
-        issue.path.length
-          ? `${issue.path.join(".")}: ${issue.message}`
-          : issue.message,
-      )
-      .join("; ");
-    throw new ValidationError(msg);
-  }
-  return result.data;
-}
+// POST /:id/execute body. Checked on the whole body (not per field) so the
+// messages keep their established unprefixed wording.
+const executeBodySchema = z
+  .object({
+    executed_transaction_id: z.unknown().optional(),
+    execution_date: z.unknown().optional(),
+  })
+  .transform((body, ctx) => {
+    if (!body.executed_transaction_id) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Missing required field: executed_transaction_id",
+      });
+      return z.NEVER;
+    }
+    // Malformed values otherwise surface as Postgres cast errors → 500.
+    const idCheck = validateId(
+      body.executed_transaction_id,
+      "executed_transaction_id",
+    );
+    if (!idCheck.valid) {
+      ctx.addIssue({ code: "custom", message: idCheck.error });
+      return z.NEVER;
+    }
+    const dateCheck = validateDateString(body.execution_date, "execution_date");
+    if (!dateCheck.valid) {
+      ctx.addIssue({ code: "custom", message: dateCheck.error });
+      return z.NEVER;
+    }
+    return {
+      executedTransactionId: idCheck.value,
+      executionDate: dateCheck.value ?? undefined,
+    };
+  });
 
 /**
  * This wrapper used to be type-agnostic: every throw became
@@ -541,7 +562,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const data = parsePlannedBody(createPlannedSchema, req.body);
+  const data = parseInput(createPlannedSchema, req.body);
 
   if (data.is_loan) {
     // createPlannedSchema is `z.looseObject({})` — raw values are forwarded
@@ -584,8 +605,10 @@ router.post("/", async (req, res) => {
  * within the next N days (default 7, max 365).  Used by bill-reminder widgets.
  */
 router.get("/due-soon", async (req, res) => {
-  const raw = parseInt(optionalQueryString(req.query, "days") ?? "", 10);
-  const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 365) : 7;
+  const days = parseIntClamped(optionalQueryString(req.query, "days"), {
+    max: 365,
+    fallback: 7,
+  });
   const rows = await plannedTransactionService.getDueSoon(days);
   const items = rows.map(formatPlannedTransaction);
   // Canonical collection shape `{items, total}` in the data body (never counts
@@ -632,9 +655,8 @@ router.patch(
 
     // Validate/coerce the typed leaf fields before any lookups run; loose
     // passthrough keeps the rest untouched for the repository allow-list.
-    const rawFields = parsePlannedBody(
-      patchPlannedSchema,
-      withoutPatchOnlyReadOnlyFields(req.body),
+    const rawFields = withoutPatchOnlyReadOnlyFields(
+      parseInput(patchPlannedSchema, req.body),
     );
     // Independent lookups — run in parallel, then apply immutably.
     const [recipientId, categoryId] = await Promise.all([
@@ -712,26 +734,15 @@ router.patch(
 
 router.post("/:id/execute", validateIdParam, async (req, res) => {
   const id = parseRouteId(req);
-  const { executed_transaction_id, execution_date } = req.body;
-
-  if (!executed_transaction_id) {
-    throw new ValidationError(
-      "Missing required field: executed_transaction_id",
-    );
-  }
-  // Validate body inputs up front: malformed values otherwise surface as
-  // Postgres cast errors → 500 instead of a 400.
-  const idCheck = validateId(
-    executed_transaction_id,
-    "executed_transaction_id",
+  const { executedTransactionId, executionDate } = parseInput(
+    executeBodySchema,
+    req.body ?? {},
   );
-  if (!idCheck.valid) throw new ValidationError(idCheck.error);
-  assertYmd(execution_date, "execution_date");
 
   const { current, duplicate } = await executePlanned({
     id,
-    executedTransactionId: executed_transaction_id,
-    executionDate: execution_date,
+    executedTransactionId,
+    executionDate,
   });
 
   if (duplicate) res.set("Idempotent-Replay", "true");

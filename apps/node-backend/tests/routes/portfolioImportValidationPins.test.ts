@@ -76,6 +76,7 @@ vi.mock("../../src/services/portfolioImportBatchService.ts", () => ({
   getPortfolioImportBatchPreview: vi.fn(),
   overrideInvestment: vi.fn(),
   createInvestmentForRow: vi.fn(),
+  resolveInvestmentRows: vi.fn(),
   rollbackBatch: vi.fn(),
 }));
 
@@ -109,6 +110,8 @@ import { query as rawDbQuery } from "../../src/database/connection.ts";
 import {
   getBatch as rawGetBatch,
   overrideInvestment as rawOverrideInvestment,
+  createInvestmentForRow as rawCreateInvestmentForRow,
+  resolveInvestmentRows as rawResolveInvestmentRows,
 } from "../../src/services/portfolioImportBatchService.ts";
 import rawAccountService from "../../src/services/accountService.ts";
 import rawCustomParserConfigRepository from "../../src/repositories/customParserConfigRepository.ts";
@@ -120,6 +123,8 @@ const commitReviewedPortfolioImport = vi.mocked(
 );
 const getBatch = vi.mocked(rawGetBatch);
 const overrideInvestment = vi.mocked(rawOverrideInvestment);
+const createInvestmentForRow = vi.mocked(rawCreateInvestmentForRow);
+const resolveInvestmentRows = vi.mocked(rawResolveInvestmentRows);
 const accountService = vi.mocked(rawAccountService);
 const customParserConfigRepository = vi.mocked(rawCustomParserConfigRepository);
 
@@ -820,4 +825,125 @@ describe("literal generic source identity HTTP mappings", () => {
       expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
     },
   );
+});
+
+/**
+ * Review/commit bodies parsed through one schema per route (parseInput,
+ * ADR-193). Checks abort in the order the hand-rolled guards ran, so each body
+ * still fails with the first applicable message, without a path prefix.
+ */
+describe("review body schemas", () => {
+  const bulk = (body: unknown) =>
+    api.post(`${BASE}/batches/5/rows/investment-override`).send(body as object);
+
+  it.each([
+    [{}, "row_ids must be a non-empty array"],
+    [{ row_ids: [] }, "row_ids must be a non-empty array"],
+    [{ row_ids: "1" }, "row_ids must be a non-empty array"],
+    [
+      { row_ids: Array.from({ length: 5001 }, (_, i) => i + 1) },
+      "row_ids must contain at most 5000 entries",
+    ],
+    [{ row_ids: [1, "x", "1e3"] }, "row_ids[1] must be a positive integer"],
+    [
+      { row_ids: [1, "1"], investment_id: 2 },
+      "row_ids must not contain duplicates",
+    ],
+    [
+      { row_ids: [1], create_new: false },
+      "create_new must be true when provided",
+    ],
+    [
+      { row_ids: [1] },
+      "Provide exactly one of investment_id or create_new: true",
+    ],
+    [
+      { row_ids: [1], create_new: true, investment_id: 3 },
+      "Provide exactly one of investment_id or create_new: true",
+    ],
+    [
+      { row_ids: [1], investment_id: "1e3" },
+      "investment_id must be a positive integer",
+    ],
+  ])("bulk override %j → %s", async (body, message) => {
+    const res = await bulk(body).expect(400);
+    expect(res.body.error.message).toBe(message);
+    expect(resolveInvestmentRows).not.toHaveBeenCalled();
+  });
+
+  it("bulk override hands the parsed ids to the service", async () => {
+    resolveInvestmentRows.mockResolvedValue(
+      loose({ investmentId: 7, created: false, resolved: 2 }),
+    );
+    await bulk({ row_ids: ["2", 3], investment_id: "7" }).expect(200);
+    expect(resolveInvestmentRows).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowIds: [2, 3],
+      investmentId: 7,
+      createNew: false,
+    });
+
+    await bulk({ row_ids: [4], create_new: true, investment_id: null }).expect(
+      200,
+    );
+    expect(resolveInvestmentRows).toHaveBeenLastCalledWith({
+      batchId: 5,
+      rowIds: [4],
+      investmentId: undefined,
+      createNew: true,
+    });
+  });
+
+  it("single-row create_new still ignores investment_id", async () => {
+    createInvestmentForRow.mockResolvedValue(loose({ id: 11 }));
+    const res = await api
+      .post(`${BASE}/batches/5/rows/6/investment-override`)
+      .send({ create_new: true, investment_id: "not-an-id" })
+      .expect(200);
+    expect(res.body.data).toMatchObject({ investment_id: 11, created: true });
+    expect(overrideInvestment).not.toHaveBeenCalled();
+  });
+
+  it("single-row override keeps parseOverrideId's message", async () => {
+    const res = await api
+      .post(`${BASE}/batches/5/rows/6/investment-override`)
+      .send({ create_new: "true", investment_id: "1e3" })
+      .expect(400);
+    expect(res.body.error.message).toBe(
+      "investment_id must be a positive integer or null",
+    );
+  });
+
+  it("commit treats null as absent but rejects a blank account_id", async () => {
+    getBatch.mockResolvedValue(loose({ id: 5, status: "awaiting_review" }));
+    commitReviewedPortfolioImport.mockResolvedValue(
+      loose({ imported: 1, duplicates: 0, errors: 0 }),
+    );
+    await api
+      .post(`${BASE}/batches/5/commit`)
+      .send({ account_id: null })
+      .expect(200);
+    expect(commitReviewedPortfolioImport).toHaveBeenLastCalledWith({
+      batchId: 5,
+      accountId: undefined,
+    });
+
+    const res = await api
+      .post(`${BASE}/batches/5/commit`)
+      .send({ account_id: "" })
+      .expect(400);
+    expect(res.body.error.message).toBe(
+      "account_id must be a positive integer",
+    );
+  });
+
+  it("reconciliation bodies report zod issues without path prefixes", async () => {
+    const res = await api
+      .post(`${BASE}/reconciliation/preview`)
+      .send({ batch_ids: [] })
+      .expect(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(res.body.error.message).not.toMatch(/^batch_ids/);
+    expect(res.body.error.message).toMatch(/>=1/);
+  });
 });

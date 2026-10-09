@@ -4,7 +4,8 @@ import type {
     AccountUpdate,
     AccountsListResponse,
 } from "@/types/api";
-import { apiRequest } from "@/lib/api/client";
+import { AccountListSchema } from "@vision/types/contracts";
+import { apiRequest, checkResponseContract } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
 // Money fields the Account type declares as numbers. Collection readings can
@@ -38,9 +39,10 @@ function normalizeAccount(a: Account): Account {
 export async function getAccounts(params?: {
     active?: "true" | "false" | "all";
 }): Promise<AccountsListResponse> {
-    const res = await requestWithQuery<AccountsListResponse>(
-        "/api/accounts",
-        params,
+    const res = checkResponseContract(
+        AccountListSchema,
+        await requestWithQuery<AccountsListResponse>("/api/accounts", params),
+        "GET /api/accounts",
     );
     return { ...res, items: res.items.map(normalizeAccount) };
 }

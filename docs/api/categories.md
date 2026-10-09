@@ -4,8 +4,8 @@ type: endpoint
 method: GET, POST, PATCH, DELETE
 path: /api/categories
 description: Ordered category hierarchy with stable IDs and a compatible GENERAL:DETAIL API
-date: 2026-10-07
-updated: 2026-09-19
+date: 2026-10-08
+updated: 2026-10-08
 tags: [api, categories, organization, GENERAL-DETAIL, atomic, phase-6]
 status: active
 aliases: [categories-api, category-management, labels, tags, GENERAL-DETAIL]
@@ -34,6 +34,8 @@ show them; assignment controls should still respect `is_active`.
 `POST /api/categories/tree` accepts `{ "name": "SOLAR", "parentId": 12,
 "description": "..." }`. Omit `parentId` or send null for a depth-one root. Names are trimmed,
 uppercased, and unique among siblings. Missing or inactive parents and invalid names are rejected.
+A malformed tree body returns `400 VALIDATION_ERROR`. Each issue now starts with its field path,
+for example `targetId: …`.
 
 `GET /api/categories/tree/:id` returns one node. `PATCH /api/categories/tree/:id` accepts
 optional `name`, `parentId` (including null to make a root), `description`, and `is_active`.
@@ -119,6 +121,10 @@ Create a new category or get existing category.
 
 **Required Fields:** general, detail
 
+`general` and `detail` must be non-empty strings; `description` is a string or `null`. A missing or
+empty field returns `400` with `Missing required fields: general, detail`. A field of another type
+returns `400 VALIDATION_ERROR` instead of reaching the repository as a `500`.
+
 **Behavior:** Returns existing category if "GENERAL:DETAIL" combination already exists (idempotent create-or-get).
 
 Implementation note:
@@ -145,6 +151,10 @@ Update a category.
 }
 ```
 
+`general`, `detail`, and `description` must be strings or `null`. `is_active` must be a JSON boolean
+or `null`; a string such as `"false"` returns `400 VALIDATION_ERROR`. `null` for `general`, `detail`,
+or `is_active` leaves that field unchanged. A missing body returns `400`.
+
 ### DELETE /api/categories/:id
 
 Permanently delete a category (hard delete).
@@ -163,7 +173,9 @@ Canonical resource-action endpoint. Assign the identified category to multiple r
 }
 ```
 
-For compatibility, `recipient_ids` also accepts one integer.
+For compatibility, `recipient_ids` also accepts one integer. Each id must be a positive int4, as an
+integer or a digit string. A missing value returns `400 Missing recipient_ids`; any other bad id
+returns `400` with `recipient_ids contains invalid value: <value>` instead of a database `500`.
 
 **Response:**
 

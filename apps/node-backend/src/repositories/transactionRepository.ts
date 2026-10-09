@@ -17,6 +17,17 @@ import {
   queryPrepared,
   withTransaction,
 } from "../database/connection.ts";
+import { checkRows, queryRows } from "../database/rowContracts.ts";
+import {
+  countRowSchema,
+  enrichedTransactionDbRowSchema,
+  transactionTagRowSchema,
+  transferLegRowSchema,
+  transferSuggestionRowSchema,
+  uncategorisedPageRowSchema,
+  uncategorisedTotalRowSchema,
+  unlinkedTransactionRowSchema,
+} from "../database/rowSchemas.ts";
 import { sanitizeUpdateFields } from "../lib/validation.ts";
 import { buildTransactionWhere } from "../lib/filterBuilder.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
@@ -342,7 +353,8 @@ async function attachTagsToRows(
 ): Promise<EnrichedTransactionRow[]> {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
-  const result = await query<TransactionTagRef & { transaction_id: number }>(
+  const tagRows = await queryRows(
+    transactionTagRowSchema,
     `SELECT tt.transaction_id, tg.id, tg.slug, tg.color, tg.is_active
      FROM transaction_tags tt
      JOIN tags tg ON tg.id = tt.tag_id
@@ -350,7 +362,7 @@ async function attachTagsToRows(
     [ids],
   );
   const tagMap = new Map<number, TransactionTagRef[]>();
-  for (const row of result.rows) {
+  for (const row of tagRows) {
     const list = tagMap.get(row.transaction_id) ?? [];
     list.push({
       id: row.id,
@@ -477,8 +489,8 @@ export const transactionRepository = {
     `;
     params.push(limit, offset);
 
-    const result = await query<EnrichedTransactionDbRow>(sql, params);
-    return attachTagsToRows(result.rows);
+    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    return attachTagsToRows(rows);
   },
 
   /**
@@ -531,8 +543,8 @@ export const transactionRepository = {
       WHERE ${where}
     `;
 
-    const result = await query<{ count: string }>(sql, params);
-    return parseInt(result.rows[0].count, 10);
+    const [row] = await queryRows(countRowSchema, sql, params);
+    return parseInt(row.count, 10);
   },
 
   /**
@@ -593,8 +605,8 @@ export const transactionRepository = {
       ORDER BY t.date DESC, t.id DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`;
     params.push(limit, offset);
 
-    const result = await query<EnrichedTransactionDbRow>(sql, params);
-    return attachTagsToRows(result.rows);
+    const rows = await queryRows(enrichedTransactionDbRowSchema, sql, params);
+    return attachTagsToRows(rows);
   },
 
   /**
@@ -707,22 +719,19 @@ export const transactionRepository = {
     `;
 
     // The LEFT JOIN onto total_cte yields one all-NULL row when the page is
-    // empty, so `id` may be null here.
-    const result = await query<
-      Omit<EnrichedTransactionDbRow, "id"> & {
-        id: number | null;
-        total_count: number;
-        _row_order: string | null;
-      }
-    >(sql, params);
+    // empty, so only `total_count` is guaranteed on every row; the page rows
+    // are checked once that sentinel is filtered out.
+    const result = await query(sql, params);
+    const [totalRow] = checkRows(
+      uncategorisedTotalRowSchema,
+      result.rows.slice(0, 1),
+    );
     // String(): total_count is COUNT(*)::int; parseInt coerced it the same way.
-    const total =
-      result.rows.length > 0
-        ? parseInt(String(result.rows[0].total_count), 10)
-        : 0;
-    const rows = result.rows
-      .filter((row): row is typeof row & { id: number } => row.id != null)
-      .map(({ total_count: _total_count, _row_order, ...row }) => row);
+    const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
+    const rows = checkRows(
+      uncategorisedPageRowSchema,
+      result.rows.filter((row: { id: unknown }) => row.id != null),
+    ).map(({ total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
   },
@@ -742,7 +751,7 @@ export const transactionRepository = {
       WHERE t.id = $1
     `;
     const result = await queryPrepared("tx_get_by_id", sql, [id]);
-    const row = result.rows[0] || null;
+    const [row] = checkRows(enrichedTransactionDbRowSchema, result.rows);
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
     return enriched;
@@ -794,19 +803,23 @@ export const transactionRepository = {
             );
           }
         }
-        const res = await client.query(sql, [
-          transaction_date,
-          accountId,
-          recipient_id,
-          amount,
-          memo ? memo.toUpperCase() : null,
-          // Default to EUR rather than NULL: currency is NOT NULL at the DB level
-          // (migration 0046) and the read layer already coalesces missing → EUR.
-          currency ? currency.toUpperCase() : "EUR",
-          category_id,
-          comment,
-        ]);
-        const inserted = res.rows[0];
+        const [inserted] = await queryRows(
+          enrichedTransactionDbRowSchema,
+          sql,
+          [
+            transaction_date,
+            accountId,
+            recipient_id,
+            amount,
+            memo ? memo.toUpperCase() : null,
+            // Default to EUR rather than NULL: currency is NOT NULL at the DB level
+            // (migration 0046) and the read layer already coalesces missing → EUR.
+            currency ? currency.toUpperCase() : "EUR",
+            category_id,
+            comment,
+          ],
+          client,
+        );
         if (!inserted) return null;
         if (tags !== null) {
           await setTransactionTags(client, inserted.id, tags);
@@ -991,8 +1004,13 @@ export const transactionRepository = {
         if (tags !== undefined) {
           await setTransactionTags(client, id, tags ?? []);
         }
-        const res = await client.query(fetchSql, [id]);
-        return res.rows[0] || null;
+        const [fetched] = await queryRows(
+          enrichedTransactionDbRowSchema,
+          fetchSql,
+          [id],
+          client,
+        );
+        return fetched ?? null;
       },
     );
     if (!row) return null;
@@ -1027,7 +1045,8 @@ export const transactionRepository = {
   }: {
     sinceDate: string;
   }): Promise<UnlinkedTransactionRow[]> {
-    const result = await query<UnlinkedTransactionRow>(
+    return queryRows(
+      unlinkedTransactionRowSchema,
       `SELECT t.id,
               t.recipient_id,
               COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_cluster_id,
@@ -1048,7 +1067,6 @@ export const transactionRepository = {
         ORDER BY t.date DESC, t.id DESC`,
       [sinceDate],
     );
-    return result.rows;
   },
 
   // ---------------------------------------------------------------------------
@@ -1214,14 +1232,14 @@ export const transactionRepository = {
   ): Promise<TransferSuggestionRow[]> {
     // bank_account is derived from accounts.name over the FK (ADR-088) so the
     // display label survives the out-of-band drop of the string column.
-    const { rows } = await query<TransferSuggestionRow>(
+    return queryRows(
+      transferSuggestionRowSchema,
       `SELECT t.id, t.date, t.amount, t.currency, acct.name AS bank_account, t.memo, t.recipient_id
        FROM transactions t
        LEFT JOIN accounts acct ON t.account_id = acct.id
        WHERE t.id = ANY($1)`,
       [ids],
     );
-    return rows;
   },
 
   /**
@@ -1266,13 +1284,11 @@ export const transactionRepository = {
   ): Promise<
     Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active">[]
   > {
-    const { rows } = await query<
-      Pick<TransactionRow, "id" | "amount" | "account_id" | "is_active">
-    >(
+    return queryRows(
+      transferLegRowSchema,
       `SELECT id, amount, account_id, is_active FROM transactions WHERE id = ANY($1) FOR UPDATE`,
       [ids],
     );
-    return rows;
   },
 
   /**

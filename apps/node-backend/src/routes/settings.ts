@@ -13,6 +13,7 @@ import { z } from "zod";
 import settingsService from "../services/settingsService.ts";
 import { validateIntArray } from "../middleware/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { bareMessages, guardField, parseInput } from "../lib/zodInput.ts";
 
 const router = Router();
 
@@ -309,9 +310,20 @@ function assertSettingKeyLength(key: string, includeKeyInMessage = false) {
   }
 }
 
+const listQuerySchema = bareMessages(
+  z.object({
+    withBaselines: z
+      .enum(["true", "false"], {
+        error: "withBaselines must be true or false",
+      })
+      .optional(),
+  }),
+);
+
 router.get("/", async (req, res) => {
+  const { withBaselines } = parseInput(listQuerySchema, req.query);
   const settings =
-    req.query.withBaselines === "true"
+    withBaselines === "true"
       ? await settingsService.getAllWithBaselines()
       : await settingsService.getAll();
   res.ok(settings);
@@ -399,8 +411,111 @@ function assertKnownSettingKey(key: string) {
   }
 }
 
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+/** Baselines are persisted JSON, not display defaults or a fresh read at save time. */
+function isSettingExpectation(
+  expected: unknown,
+): expected is SettingExpectation {
+  return (
+    isJsonObject(expected) &&
+    typeof expected.exists === "boolean" &&
+    Object.keys(expected).every((key) => key === "exists" || key === "value") &&
+    (expected.exists
+      ? Object.hasOwn(expected, "value")
+      : !Object.hasOwn(expected, "value"))
+  );
+}
+
+/* ── Request schemas ─────────────────────────────────────────────────────────
+ * The guards above keep their messages (bareMessages drops zod's path prefix).
+ * A body that is not a JSON object reads as an empty one, so it gets the same
+ * "missing …" message as an absent field. */
+
+const keyParam = (check: (key: string) => void) =>
+  bareMessages(
+    z.object({
+      key: guardField((value) => {
+        const key = String(value);
+        check(key);
+        return key;
+      }),
+    }),
+  );
+const readKeyParamsSchema = z.object({ key: z.string() });
+const writeKeyParamsSchema = keyParam((key) => {
+  assertSettingKeyLength(key);
+  assertKnownSettingKey(key);
+});
+const deleteKeyParamsSchema = keyParam((key) => assertSettingKeyLength(key));
+
+const objectBody = <S extends z.ZodType>(schema: S) =>
+  bareMessages(
+    z.preprocess((body) => (isJsonObject(body) ? body : {}), schema),
+  );
+
+const settingExpectationSchema = z.custom<SettingExpectation>(
+  isSettingExpectation,
+  { message: "Missing or invalid expected setting baseline" },
+);
+
+const putSettingBodySchema = objectBody(
+  z.object({
+    // z.custom, not a refine: zod 4 skips an optional key's refinements when
+    // the key is absent.
+    value: z.custom<unknown>((value) => value !== undefined, {
+      message: 'Missing "value" in request body',
+    }),
+    expected: settingExpectationSchema,
+  }),
+);
+
+const deleteSettingBodySchema = objectBody(
+  z.object({ expected: settingExpectationSchema }),
+);
+
+// Key checks run on the RAW map: zod's record/object parsing would silently
+// drop a `__proto__` key instead of letting it reach the forbidden-key 400.
+const bulkSettingsBodySchema = objectBody(
+  z
+    .object({
+      settings: guardField((settings) => {
+        if (!isJsonObject(settings)) {
+          throw new ValidationError(
+            "Body must be a JSON object of key→value pairs",
+          );
+        }
+        for (const key of Object.keys(settings)) {
+          assertSettingKeyLength(key, true);
+          assertKnownSettingKey(key);
+        }
+        return settings;
+      }),
+      expected: guardField((expected) => {
+        if (!isJsonObject(expected)) {
+          throw new ValidationError("Missing expected settings baselines");
+        }
+        // Each entry the write uses (one per `settings` key) is checked below.
+        return expected as Record<string, SettingExpectation>;
+      }),
+    })
+    .superRefine(({ settings, expected }, ctx) => {
+      if (
+        Object.keys(settings).some(
+          (key) => !isSettingExpectation(expected[key]),
+        )
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Missing or invalid expected setting baseline",
+        });
+      }
+    }),
+);
+
 router.get("/:key", async (req, res) => {
-  const { key } = req.params;
+  const { key } = parseInput(readKeyParamsSchema, req.params);
   const { value, expected } = await settingsService.getRecord(key);
   if (!expected.exists) {
     if (Object.hasOwn(SETTING_DEFAULTS, key)) {
@@ -421,48 +536,12 @@ function validateSettingValue(key: string, value: unknown): unknown {
     ? SETTING_SCHEMAS[key]
     : undefined;
   if (!schema) return value;
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) =>
-        issue.path.length
-          ? `${issue.path.join(".")}: ${issue.message}`
-          : issue.message,
-      )
-      .join("; ");
-    throw new ValidationError(`Invalid ${key}: ${msg}`);
-  }
-  return result.data;
-}
-
-/** Baselines are persisted JSON, not display defaults or a fresh read at save time. */
-function assertExpected(
-  expected: unknown,
-): asserts expected is SettingExpectation {
-  if (
-    !expected ||
-    typeof expected !== "object" ||
-    Array.isArray(expected) ||
-    !("exists" in expected) ||
-    typeof expected.exists !== "boolean" ||
-    Object.keys(expected).some((key) => key !== "exists" && key !== "value") ||
-    (expected.exists && !Object.hasOwn(expected, "value")) ||
-    (!expected.exists && Object.hasOwn(expected, "value"))
-  ) {
-    throw new ValidationError("Missing or invalid expected setting baseline");
-  }
+  return parseInput(schema, value, { prefix: `Invalid ${key}` });
 }
 
 router.put("/:key", async (req, res) => {
-  const { key } = req.params;
-  const { value, expected } = req.body || {};
-
-  assertSettingKeyLength(key);
-  assertKnownSettingKey(key);
-  if (value === undefined)
-    throw new ValidationError('Missing "value" in request body');
-
-  assertExpected(expected);
+  const { key } = parseInput(writeKeyParamsSchema, req.params);
+  const { value, expected } = parseInput(putSettingBodySchema, req.body);
   const result = await settingsService.replace(
     key,
     validateSettingValue(key, value),
@@ -472,19 +551,7 @@ router.put("/:key", async (req, res) => {
 });
 
 router.put("/", async (req, res) => {
-  const { settings, expected } = req.body || {};
-  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
-    throw new ValidationError("Body must be a JSON object of key→value pairs");
-  }
-
-  for (const key of Object.keys(settings)) {
-    assertSettingKeyLength(key, true);
-    assertKnownSettingKey(key);
-  }
-
-  if (!expected || typeof expected !== "object" || Array.isArray(expected))
-    throw new ValidationError("Missing expected settings baselines");
-  for (const key of Object.keys(settings)) assertExpected(expected[key]);
+  const { settings, expected } = parseInput(bulkSettingsBodySchema, req.body);
   const validatedEntries = new Map();
   for (const [key, value] of Object.entries(settings)) {
     validatedEntries.set(key, validateSettingValue(key, value));
@@ -496,10 +563,9 @@ router.put("/", async (req, res) => {
 });
 
 router.delete("/:key", async (req, res) => {
-  const { key } = req.params;
-  assertSettingKeyLength(key);
-  assertExpected(req.body?.expected);
-  const deleted = await settingsService.deleteExpected(key, req.body.expected);
+  const { key } = parseInput(deleteKeyParamsSchema, req.params);
+  const { expected } = parseInput(deleteSettingBodySchema, req.body);
+  const deleted = await settingsService.deleteExpected(key, expected);
   if (!deleted) throw new NotFoundError(`Setting '${key}' not found`);
   // Hard delete → 204 No Content (docs/reference/code-patterns.md, "DELETE responses").
   res.status(204).send();

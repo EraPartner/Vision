@@ -136,7 +136,8 @@ Reset the database (requires explicit confirmation).
 ```
 
 The required confirmation is the exact JSON boolean body `{ "force": true }`. Query-string and
-string-valued confirmations are rejected.
+string-valued confirmations are rejected. A non-boolean `force` fails body validation with
+`400 VALIDATION_ERROR`; `force: false` or a missing `force` returns the confirmation error below.
 
 **Response:** `200 OK`
 
@@ -274,34 +275,23 @@ See [[docs/features/database-maintenance|Database Maintenance Feature]] for deta
 
 Run `VACUUM ANALYZE` on one or all tables.
 
-**Query Parameters:**
+**Request Body (JSON, optional):**
 
-| Parameter | Type    | Required          | Description                                       |
-| --------- | ------- | ----------------- | ------------------------------------------------- |
-| `table`   | string  | No                | Specific table name to vacuum; omit to vacuum all |
-| `analyze` | boolean | No (default true) | Run ANALYZE after VACUUM                          |
+| Field   | Type           | Required | Description                                                  |
+| ------- | -------------- | -------- | ------------------------------------------------------------ |
+| `table` | string \| null | No       | Table to vacuum; omit or send `null` to vacuum every table |
+
+`table` must be a non-empty string naming a table in `pg_stat_user_tables`. A non-string or empty
+`table` returns `400 VALIDATION_ERROR`; an unknown name returns `400` with `Unknown table: <name>`.
+The route always runs `VACUUM ANALYZE`.
 
 **Response:** `200 OK`
 
 ```json
-{
-  "success": true,
-  "message": "VACUUM ANALYZE completed on 3 table(s)",
-  "tables_vacuumed": [
-    {
-      "table_name": "transactions",
-      "status": "completed",
-      "duration_ms": 245
-    },
-    {
-      "table_name": "investments",
-      "status": "completed",
-      "duration_ms": 67
-    }
-  ],
-  "total_duration_ms": 312
-}
+{ "ok": true, "data": { "vacuumed": "transactions" } }
 ```
+
+`vacuumed` is `"all"` when no table was given. Insufficient database privileges return `403`.
 
 **Response:** `409 Conflict` (VACUUM already running)
 
@@ -447,6 +437,11 @@ The service fetches `limit + 1` rows to derive `hasMore`. It does not run `COUNT
 
 The raw `where` parameter was removed. Use only the structured, parameterized `filters` array. A malformed cursor or one reused with different sort or filter state returns `400 Bad Request`.
 
+`filters` must be valid JSON for an array of objects. Each object needs a string `column`; `op`, if
+present, must be a string. Invalid JSON, a non-array, or an entry such as `null` returns
+`400 VALIDATION_ERROR` with an `Invalid filters parameter:` message. Any query parameter sent more
+than once returns `400`.
+
 ---
 
 ### POST /api/admin/database/tables/:table/mutate (ADR-101)
@@ -520,6 +515,11 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 }
 ```
 
+`dryRun` must be a JSON boolean. Any other type, including the string `"true"`, returns
+`400 VALIDATION_ERROR`, so a mistyped preview can never commit. `changes` must be an array of
+objects whose `op` is `insert`, `update`, or `delete`; `values`, `set`, and `pk` must be objects;
+`xmin` may be a string or a number.
+
 **Commit response (`dryRun: false` or omitted):** `200 OK`
 
 ```json
@@ -543,7 +543,7 @@ Execute a batch of insert/update/delete operations against a single table. Suppo
 
 | Status | Scenario                                                                                          |
 | ------ | ------------------------------------------------------------------------------------------------- |
-| `400`  | Unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
+| `400`  | Malformed body (`changes`/`dryRun` shape), unknown table, missing PK for update/delete, constraint violation (NOT NULL, CHECK, invalid type) |
 | `403`  | Protected audit table is inaccessible through the generic data editor                             |
 | `409`  | `xmin` mismatch (optimistic concurrency conflict) or UNIQUE constraint violation                  |
 | `500`  | Unexpected database error (rolled back)                                                           |

@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-07
-updated: 2026-09-19
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   [
     reference,
@@ -56,11 +56,26 @@ Bun, Vite and the backend's checkJs program read the implementation's own types.
 [[docs/adr/185-shared-packages-typescript|ADR-185]].
 
 Electron inter-process communication has a separate shared contract because it is not HTTP or
-OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 23 invoke channels,
+OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 29 invoke channels,
 6 event channels, their payloads and results, and the five optional `Window` bridges. The
 `@vision/types/electron` entry point is a thin type re-export used by the frontend. Preload JSDoc
 and main-process channel registration import the canonical declaration directly, while
-`packaging/electron/ipc-contract.test.js` enforces channel-set parity.
+`packaging/electron/ipc-contract.test.js` enforces channel-set parity. Types are not checked at
+runtime, so each invoke channel also has an argument validator in
+`packaging/electron/runtime/ipc-schemas.js`; `registerHandler` refuses a channel without one
+([[docs/architecture/electron#Context Isolation & Preload|Electron preload]]).
+
+`@vision/types/contracts` (`packages/types/src/contracts/`) holds zod response schemas
+([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Strict fixture schemas (`z.strictObject`) back
+the frontend MSW contract tests. Loose wire schemas (`z.looseObject`, identity fields required,
+other fields optional but typed) are what `apiRequest`'s `schema` option checks at runtime. See
+[[docs/reference/frontend-api-client#Response contracts|Response contracts]].
+
+On the backend, the raw row types of the transaction, planned-transaction, account and split
+repositories in `apps/node-backend/src/types/rows.ts` are `z.output<typeof …Schema>` of the zod
+schemas in `apps/node-backend/src/database/rowSchemas.ts`. Those repositories check their rows
+against the same schemas, so the type and the runtime shape cannot drift. Field documentation for
+these rows lives on the schemas.
 
 > [!info] generated.ts is now load-bearing
 > The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.

@@ -97,6 +97,9 @@ Add item to watchlist.
 
 **Required Fields:** `name`, `asset_class`, `target_price`
 
+A missing body is treated as empty and returns `400` with
+`name, asset_class, and target_price are required`; it used to fail as a `500`.
+
 **`added_price` (June 2026, ADR-097, migration 0058):**
 
 Optional field. When omitted, the backend attempts to snapshot the live quote for `symbol` at add time and set `added_price` automatically. If no quote is available, `added_price` is stored as `null`. The frontend displays "Since added {date} +X%" only when `added_price` is non-null.

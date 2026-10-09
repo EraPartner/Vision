@@ -416,10 +416,10 @@ export function parseRequestId(req: ExpressRequest): number {
  * Parse `:txnId` for the two portfolio-transaction routes.
  *
  * Delegates to `validateId`, so the accept set is every other id param's: a
- * plain base-10 digit string or an integer number, 1..2^31-1. `routes/
- * investments.js` also puts `validateIntParam('txnId')` in front of both
- * routes for early validation. This point-of-use parser is the explicit
- * numeric handoff to the service.
+ * plain base-10 digit string or an integer number, 1..2^31-1.
+ * `routes/investments.ts` also parses `txnId` with a zod params schema in
+ * front of both routes. This point-of-use parser is the explicit numeric
+ * handoff to the service.
  *
  * It was `parseInt` guarded by `isNaN`/`<= 0`, which takes the leading digits
  * of anything: `DELETE /investments/transactions/12abc` returned **204 having
@@ -518,7 +518,9 @@ function parseDefaultListOptions(query: ExpressRequest["query"]): {
   return {
     limit,
     offset,
-    assetClass: asset_class || null,
+    // routes/investments.ts gates these to a single string before we run.
+    assetClass:
+      typeof asset_class === "string" && asset_class ? asset_class : null,
     active: parseBooleanQueryParam(active, true),
   };
 }
@@ -549,7 +551,7 @@ function parseBulkTransactionsOptions(
   });
   return {
     investmentIds,
-    type: type || null,
+    type: typeof type === "string" && type ? type : null,
     perInvestmentLimit: parseIntClamped(per_investment_limit, {
       max: BULK_PER_INVESTMENT_MAX_LIMIT,
       fallback: 1000,
@@ -575,7 +577,7 @@ function parseInvestmentTransactionsOptions(
   });
   return {
     investmentId,
-    type: type || null,
+    type: typeof type === "string" && type ? type : null,
     limit,
     offset,
   };

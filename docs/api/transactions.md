@@ -64,6 +64,7 @@ Notes:
 
 - `target_currency` is only applied when `normalize_to_eur=true`.
 - If `target_currency` is invalid or unsupported, conversion falls back to EUR behavior.
+- A repeated or bracketed `target_currency`, `bank_account`, `recipient_name`, `search`, or `sort_by` key returns `400 VALIDATION_ERROR` (`<name> must be a single value`). When several query parameters are invalid, the `400` message lists every problem, joined with `; `.
 - `amount_min`, `amount_max`, `amount_exact` filter on `ABS(t.amount)` by default — magnitude-based, so they do not distinguish income from expenses. Use `transaction_type=income|expense` to restrict by sign, OR pass `amount_signed=true` to compare the signed amount directly (2026-06-28, additive, non-breaking — [[apps/node-backend/src/lib/filterBuilder.ts]]).
 - `amount_signed=true` switches the comparison column from `ABS(t.amount)` to `t.amount`, so the bounds may be negative and `+50` vs `-50` match exactly. It is orthogonal to `transaction_type` (both can be combined). The frontend search-suggestion UI sends it automatically when the user prefixes the amount with `+` or `-`.
 - `amount_exact` sets both bounds to the same value and takes precedence when `amount_min`/`amount_max` are also supplied.
@@ -338,6 +339,7 @@ Update an existing transaction.
 - `recipient_name`: Resolves to recipient_id automatically
 - `category_name`: Resolves to category_id using "GENERAL:DETAIL" format
 - `recipient_id` / `category_id`: `null` clears the column (both are nullable) and an absent key leaves it unchanged, but a present value must be a plain base-10 integer in 1..2,147,483,647 (changed 2026-08-11, breaking for malformed ids — `1e3` used to re-attribute the transaction to recipient 1000 rather than 400)
+- A missing body or a body that is not a JSON object returns `400 VALIDATION_ERROR`; it used to fail as a `500`.
 
 Implementation notes:
 

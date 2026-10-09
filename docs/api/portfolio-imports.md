@@ -591,7 +591,7 @@ or
 
 When `create_new: true`, a new investment record is created from this row's `symbol` / `name` / `default_asset_class` and linked to this row. The review page uses the group endpoint below when resolving a complete symbol/name group.
 
-`investment_id: null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than a link to investment 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]).
+`investment_id: null`, or an absent field, clears the override (200). A present value must be a positive integer; it is validated with `validateId`, not coerced, so `"1e3"` is a **400** rather than a link to investment 1000 (see [[docs/security/input-validation#FK ids in write bodies (`parseOverrideId` and the zod FK fields)|input validation]]). The body must be a JSON object: a JSON array returns `400 VALIDATION_ERROR` instead of clearing the override.
 
 **Responses:**
 
@@ -621,6 +621,7 @@ or:
 
 - `row_ids` is required, unique, non-empty, and limited to 5,000 positive safe-integer staging-row ids.
 - Provide exactly one of `investment_id` or `create_new: true`.
+- The body must be a JSON object. Checks stop at the first failure, so a `400` carries one message.
 - Existing-investment mode verifies the investment before changing staging rows.
 - Create-new mode creates one holding from the first requested row, then links the complete set to it.
 - The batch and complete row set are locked before holding lookup or creation; the set-based update shares the same database transaction.
@@ -679,6 +680,7 @@ concurrent recommits cannot change the selected account between validation and i
 Because the whole batch inherits it, the value is validated with `validateId` before the account
 existence check rather than coerced: `"1e3"` used to arrive as the real account 1000, pass the
 existence check and stamp every committed lot with it. Malformed values now return **400**.
+A body that is not a JSON object, such as an array, also returns `400 VALIDATION_ERROR`.
 The account column was introduced by migration 0057 (`portfolio_import_batches.account_id`).
 
 Instrument-free dividend, interest, fee, and tax cash rows use the current

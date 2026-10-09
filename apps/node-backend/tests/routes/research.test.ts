@@ -55,12 +55,14 @@ import { researchMappingService as rawResearchMappingService } from "../../src/s
 import {
   clearKey as rawClearKey,
   listKeyStatuses,
+  setKey as rawSetKey,
 } from "../../src/services/research/researchProviderKeyService.ts";
 import { runPortfolioForecast as rawRunPortfolioForecast } from "../../src/services/research/projection/portfolioProjection.ts";
 
 const researchAggregator = vi.mocked(rawResearchAggregator);
 const researchMappingService = vi.mocked(rawResearchMappingService);
 const clearKey = vi.mocked(rawClearKey);
+const setKey = vi.mocked(rawSetKey);
 const runPortfolioForecast = vi.mocked(rawRunPortfolioForecast);
 
 type ForecastResult = Awaited<ReturnType<typeof rawRunPortfolioForecast>>;
@@ -362,9 +364,9 @@ describe("Research route parameter guards", () => {
     });
   });
 
-  // The route has no body schema, so an unknown key is ignored rather than
-  // rejected: a camelCase spelling now reaches runPortfolioForecast as
-  // `undefined` and the projection service applies its own defaults.
+  // The body schema strips unknown keys rather than rejecting them: a camelCase
+  // spelling reaches runPortfolioForecast as `undefined` and the projection
+  // service applies its own defaults.
   describe("POST /portfolio-forecast body casing", () => {
     it("reads the snake_case spellings", async () => {
       runPortfolioForecast.mockResolvedValue(forecastResult({ bands: [] }));
@@ -486,6 +488,90 @@ describe("Research route parameter guards", () => {
           monthlyContribution: undefined,
         }),
       );
+    });
+  });
+
+  describe("zod request schemas (ADR-193)", () => {
+    it("POST /portfolio-forecast rejects a non-object body", async () => {
+      const res = await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send([{ horizon_months: 12 }])
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(runPortfolioForecast).not.toHaveBeenCalled();
+    });
+
+    it("POST /portfolio-forecast keeps the cross-field message unprefixed", async () => {
+      const res = await api
+        .post(`${BASE}/portfolio-forecast`)
+        .send({ horizon_months: 12, goal_month: "3", target_value: 10 })
+        .expect(400);
+      expect(res.body.error.message).toBe(
+        "goal_month must be within horizon_months and accompanied by a positive target_value",
+      );
+    });
+
+    it("POST /mappings rejects an item without a provider", async () => {
+      const res = await api
+        .post(`${BASE}/mappings`)
+        .send({ instrument_key: "X", mappings: [{ providerSymbol: "AAPL" }] })
+        .expect(400);
+      expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
+      expect(res.body.error.message).toMatch(/^0\.provider: /);
+      expect(researchMappingService.save).not.toHaveBeenCalled();
+    });
+
+    it("POST /mappings accepts null proposal fields and forwards them as absent", async () => {
+      await api
+        .post(`${BASE}/mappings`)
+        .send({
+          instrument_key: "X",
+          mappings: [
+            { provider: "yahoo", providerSymbol: "AAPL", resolvedName: null },
+          ],
+        })
+        .expect(200);
+      expect(researchMappingService.save).toHaveBeenCalledWith({
+        instrumentKey: "X",
+        keyType: "isin",
+        mappings: [{ provider: "yahoo", providerSymbol: "AAPL" }],
+      });
+    });
+
+    it("PUT /provider-keys/:provider rejects an unknown provider before the service", async () => {
+      const res = await api
+        .put(`${BASE}/provider-keys/nope`)
+        .send({ api_key: "k" })
+        .expect(400);
+      expect(res.body.error.message).toBe("Unknown keyed provider: nope");
+      expect(setKey).not.toHaveBeenCalled();
+    });
+
+    it("PUT /provider-keys/:provider rejects a blank or missing api_key", async () => {
+      for (const body of [{}, { api_key: "  " }, { api_key: 42 }]) {
+        const res = await api
+          .put(`${BASE}/provider-keys/finnhub`)
+          .send(body)
+          .expect(400);
+        expect(res.body.error.message).toBe(
+          "api_key must be a non-empty string",
+        );
+      }
+      expect(setKey).not.toHaveBeenCalled();
+    });
+
+    it("PUT /provider-keys/:provider stores the trimmed key", async () => {
+      vi.mocked(listKeyStatuses).mockResolvedValue([]);
+      await api
+        .put(`${BASE}/provider-keys/finnhub`)
+        .send({ api_key: " secret " })
+        .expect(200);
+      expect(setKey).toHaveBeenCalledWith("finnhub", "secret");
+    });
+
+    it("DELETE /provider-keys/:provider rejects an unknown provider", async () => {
+      await api.delete(`${BASE}/provider-keys/nope`).expect(400);
+      expect(clearKey).not.toHaveBeenCalled();
     });
   });
 

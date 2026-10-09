@@ -7,6 +7,10 @@ const test = require("node:test");
 
 const main = fs.readFileSync(path.join(__dirname, "main.js"), "utf8");
 const preload = fs.readFileSync(path.join(__dirname, "preload.js"), "utf8");
+const ipcSchemas = fs.readFileSync(
+  path.join(__dirname, "runtime", "ipc-schemas.js"),
+  "utf8",
+);
 const rootPackage = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8"),
 );
@@ -17,7 +21,10 @@ test("native language bridge validates language and rebuilds menus", () => {
     /setLanguage: \(language\) => ipcRenderer\.invoke\(["']app:set-language["'], language\)/,
   );
   assert.match(main, /registerHandler\(\s*["']app:set-language["']/);
-  assert.match(main, /language !== ["']en["'] && language !== ["']nl["']/);
+  assert.match(
+    ipcSchemas,
+    /language !== ["']en["'] && language !== ["']nl["']/,
+  );
   assert.match(main, /request !== nativeLanguageRequest/);
   assert.match(main, /settings\.nativeLanguage = language/);
   assert.match(main, /await initI18n\(persistedSettings\.nativeLanguage\)/);
@@ -169,7 +176,7 @@ test("desktop menus do not emit retired browser deep links", () => {
 test("macOS vibrancy is enabled only through the validated renderer request", () => {
   assert.doesNotMatch(main, /vibrancy:\s*["']under-window["']/);
   assert.match(main, /registerHandler\(\s*["']app:set-vibrancy["']/);
-  assert.match(main, /typeof enabled !== ["']boolean["']/);
+  assert.match(ipcSchemas, /typeof enabled !== ["']boolean["']/);
   assert.match(
     main,
     /mainWindow\.setVibrancy\(enabled \? ["']under-window["'] : null\)/,

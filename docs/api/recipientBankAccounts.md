@@ -2,8 +2,8 @@
 title: Recipient Bank Accounts API
 type: endpoint
 status: active
-date: 2026-10-07
-updated: 2026-08-31
+date: 2026-10-08
+updated: 2026-10-08
 tags:
   - api
   - recipients
@@ -91,6 +91,11 @@ Create or retrieve a bank account for a recipient.
 | `account_label`  | string  | No       | Custom label for the account    |
 | `set_as_primary` | boolean | No       | Set this as the primary account |
 
+`account_number` must be a non-empty string of at most 34 characters; a number such as
+`123456` is rejected. `bank_name`, `address`, and `account_label` are strings or `null`.
+`set_as_primary` must be a JSON boolean or `null`. A wrong type or a missing body returns
+`400 VALIDATION_ERROR` naming the field instead of a `500`.
+
 **Response:** `201 Created` (new account)
 
 ```json
@@ -126,8 +131,8 @@ Create or retrieve a bank account for a recipient.
 {
   "ok": false,
   "error": {
-    "code": "APP_ERROR",
-    "message": "Missing required field: account_number"
+    "code": "VALIDATION_ERROR",
+    "message": "account_number: Missing required field"
   }
 }
 ```
@@ -152,6 +157,8 @@ Update a bank account's details.
 | `bank_name`     | string | New bank name     |
 | `address`       | string | New bank address  |
 | `account_label` | string | New account label |
+
+Each field is a string or `null`. A wrong type or a missing body returns `400 VALIDATION_ERROR`.
 
 **Response:** `200 OK`
 

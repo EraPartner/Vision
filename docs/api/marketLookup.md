@@ -39,7 +39,9 @@ Search for stock tickers and companies.
 
 | Parameter | Type   | Required | Description                  |
 | --------- | ------ | -------- | ---------------------------- |
-| `q`       | string | Yes      | Search query (e.g., "apple") |
+| `q`       | string | No       | Search query (e.g., "apple") |
+
+A missing or empty `q` returns `{ "items": [] }`. A repeated `q` returns `400 VALIDATION_ERROR`.
 
 **Response:** `200 OK`
 
@@ -173,8 +175,8 @@ Same canonical collection body (`{ "items": [ … ], "total": n }`), but each qu
 
 **Validation Notes:**
 
-- The `symbols` parameter must be a non-empty string. If `symbols` is missing or not a string, returns `400 Bad Request` with `ValidationError`. If the string cannot be split (malformed), returns `502 Bad Gateway` with `AppError`.
-- An unrecognised `detail` value is treated as `"full"` (permissive fallback).
+- `symbols` is required. A missing or empty value returns `400 Bad Request`. A repeated key (`?symbols=A&symbols=B`) is joined into one comma-separated list.
+- An unrecognised `detail` value is treated as `"full"` (permissive fallback). A repeated `detail` returns `400 VALIDATION_ERROR`.
 
 **Frontend callers and detail mode:**
 
@@ -199,7 +201,12 @@ Get historical price chart data for a symbol.
 | ---------- | ------ | -------- | ------- | -------------------------------------------------------------------- |
 | `symbol`   | string | Yes      | -       | Stock symbol (e.g., "AAPL")                                          |
 | `range`    | string | No       | `1mo`   | Time range: `1d`, `5d`, `1mo`, `3mo`, `6mo`, `1y`, `2y`, `5y`, `max` |
-| `interval` | string | No       | `1d`    | Data interval: `1d`, `1wk`, `1mo`                                    |
+| `interval` | string | No       | `1d`    | Data interval (see below)                                            |
+
+`interval` must be one of Yahoo Finance's chart intervals: `1m`, `2m`, `5m`, `15m`, `30m`, `60m`,
+`90m`, `1h`, `1d`, `5d`, `1wk`, `1mo`, or `3mo`. Any other value returns `400 VALIDATION_ERROR`.
+An unknown `range` falls back to `1mo`. A missing `symbol` returns `400`. A repeated `symbol`,
+`range`, or `interval` returns `400 VALIDATION_ERROR`.
 
 **Response:** `200 OK`
 
@@ -234,6 +241,9 @@ Get news articles for one or more symbols.
 | --------- | ------ | -------- | ------------- | -------------------------------- |
 | `symbols` | string | No       | `SPY,QQQ,DIA` | Comma-separated symbols (max 10) |
 | `count`   | number | No       | 20            | Number of articles (max 50)      |
+
+A repeated `symbols` key is joined into one list. A repeated `count` returns `400 VALIDATION_ERROR`.
+A non-numeric `count` falls back to 20.
 
 **Response:** `200 OK`
 

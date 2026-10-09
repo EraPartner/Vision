@@ -31,13 +31,6 @@ vi.mock("../src/services/importPipeline/adapters/index.ts", () => ({
   getAdapter: (...args: unknown[]) => getAdapter(...args),
 }));
 
-vi.mock("../src/services/importPipeline/adapters/generic.ts", () => ({
-  default: {
-    name: "generic",
-    parseWithConfig: (...args: unknown[]) => genericParseWithConfig(...args),
-  },
-}));
-
 vi.mock(
   "../src/services/portfolioImportPipeline/portfolioGenericAdapter.ts",
   () => ({
@@ -122,8 +115,19 @@ describe("stageBatch adapter resolution", () => {
     portfolioParseWithConfig.mockResolvedValue([]);
   });
 
-  it("falls back to the generic adapter when a named custom adapter is not in the registry", async () => {
-    getAdapter.mockReturnValue(null); // "My Bank" is not a registered adapter
+  it("falls back to the registry's generic adapter when a named custom adapter is not in the registry", async () => {
+    // "My Bank" is not a registered adapter. The fallback must come from the
+    // registry, whose adapters carry the output contract (ADR-193).
+    getAdapter.mockImplementation((name: string) =>
+      name === "generic"
+        ? {
+            name: "generic",
+            parse: vi.fn(),
+            parseWithConfig: (...args: unknown[]) =>
+              genericParseWithConfig(...args),
+          }
+        : null,
+    );
 
     await stageBatch({
       batchId: 1,
@@ -132,6 +136,7 @@ describe("stageBatch adapter resolution", () => {
       customConfig: CONFIG,
     });
 
+    expect(getAdapter).toHaveBeenCalledWith("generic");
     expect(genericParseWithConfig).toHaveBeenCalledWith("/tmp/x.csv", CONFIG);
   });
 

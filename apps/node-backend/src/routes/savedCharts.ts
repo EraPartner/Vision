@@ -1,8 +1,7 @@
 /**
  * Saved Charts routes.
  *
- * Bodies are validated with zod (schema → safeParse → ValidationError), the
- * idiom established in settings.js/reports.js.
+ * Bodies are validated with zod through parseInput (ADR-193).
  */
 
 import { Router } from "express";
@@ -13,7 +12,8 @@ import {
   validateIdParam,
   assertIdParam,
 } from "../middleware/validation.ts";
-import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
+import { NotFoundError } from "../middleware/errorHandler.ts";
+import { parseInput } from "../lib/zodInput.ts";
 import { listBody, parseOptionalPagination } from "../lib/pagination.ts";
 
 const router = Router();
@@ -151,21 +151,6 @@ const updateChartSchema = z
   })
   .superRefine(assertValidCombination);
 
-function parseChartBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    const msg = result.error.issues
-      .map((issue) =>
-        issue.path.length
-          ? `${issue.path.join(".")}: ${issue.message}`
-          : issue.message,
-      )
-      .join("; ");
-    throw new ValidationError(msg);
-  }
-  return result.data;
-}
-
 // Canonical collection shape `{items, total}`. Pagination is opt-in: without
 // limit/offset this still answers every saved chart (the chart picker lists them
 // all), and `total` is the row count — no COUNT round-trip needed.
@@ -177,7 +162,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const data = parseChartBody(createChartSchema, req.body);
+  const data = parseInput(createChartSchema, req.body);
   const chart = await savedChartsService.create(data);
   res.status(201);
   res.ok(chart);
@@ -187,7 +172,7 @@ router.patch("/:id", validateIdParam, async (req, res) => {
   const id = assertIdParam(req);
   // Only fields present in the body reach the repository — buildSetClauses
   // skips absent/undefined fields, so partial updates stay partial.
-  const data = parseChartBody(updateChartSchema, req.body);
+  const data = parseInput(updateChartSchema, req.body);
   const updated = await savedChartsService.update(id, data);
   if (!updated) throw new NotFoundError("Saved chart not found");
   res.ok(updated);

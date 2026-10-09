@@ -36,10 +36,14 @@ const { runBundleBackup, runBundleRestore, runRestore } = backupRestore;
 const { restoreWithAuditRecovery } = require("./backup/native-transport");
 const {
   MAX_PAGE_SIZE,
-  validateReadOptions,
   validateSnapshot,
   buildExport,
 } = require("./audit-viewer");
+const {
+  REJECT_INVALID,
+  createIpcArgumentContracts,
+  isValidHslComponents,
+} = require("./runtime/ipc-schemas");
 const updater = require("./updater");
 const { createRuntimeProvider } = require("./runtime");
 const {
@@ -1020,19 +1024,8 @@ let mainWindow = null;
 const SPLASH_THEME_KEY = "splashTheme";
 const DEFAULT_BRAND_PRIMARY = "158 64% 52%";
 
-// HSL component strings only ("158 64% 52%"): digits, spaces, %, dots. The value
-// is interpolated into the splash HTML/CSS, so this guards against CSS/HTML
-// injection — anything outside the pattern is rejected and the slate fallback wins.
-const HSL_COMPONENTS_RE =
-  /^\d{1,3}(?:\.\d+)?\s+\d{1,3}(?:\.\d+)?%\s+\d{1,3}(?:\.\d+)?%$/;
-function isValidHslComponents(value) {
-  return (
-    typeof value === "string" &&
-    value.length <= 32 &&
-    HSL_COMPONENTS_RE.test(value)
-  );
-}
-
+// Persisted colors pass isValidHslComponents (runtime/ipc-schemas.js) on write
+// and again here on read, because the values are interpolated into splash HTML/CSS.
 function readSplashTheme() {
   try {
     const data = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
@@ -1511,12 +1504,25 @@ function httpPut(url, payload) {
 //     whose contract has no failure shape (pure reads) pass REJECT_SENDER,
 //     which rejects the invoke promise instead of inventing a return value.
 //   • requireWorkDir — precondition for handlers that need the runtime root.
+//   • argument contract — every channel MUST have an entry in
+//     runtime/ipc-schemas.js; registration throws otherwise. Its `validate`
+//     runs on the raw renderer arguments and the handler receives only the
+//     normalized result; invalid calls get the entry's `invalidResult`.
 //   • wrapErrors — uniform catch → { success: false, error: String(err) }.
 // Nothing currently opts out: the app has exactly one BrowserWindow, new
 // windows are denied (setWindowOpenHandler), and the splash + error pages load
 // into that same window — so the recovery channels reached from error.html do
 // come from its trusted main frame like every other channel.
 const REJECT_SENDER = Symbol("reject-unauthorized-sender");
+
+// Paths blessed by a user-driven file-picker dialog. Only these can be passed
+// to `backup:restore` — prevents a compromised renderer from passing an
+// arbitrary filesystem path (e.g. /etc/passwd, malicious .sql) for restore.
+const ALLOWED_RESTORE_PATHS = new Set();
+
+const ipcArgumentContracts = createIpcArgumentContracts({
+  isAllowedRestorePath: (resolved) => ALLOWED_RESTORE_PATHS.has(resolved),
+});
 
 /**
  * @param {import("./electron-api").ElectronInvokeChannel} channel
@@ -1537,7 +1543,16 @@ function registerHandler(
     wrapErrors = false,
   } = {},
 ) {
-  ipcMain.handle(channel, async (event, ...args) => {
+  const argumentContract = Object.hasOwn(ipcArgumentContracts, channel)
+    ? ipcArgumentContracts[channel]
+    : undefined;
+  if (typeof argumentContract?.validate !== "function") {
+    throw new Error(
+      `IPC channel ${channel} has no argument contract in runtime/ipc-schemas.js`,
+    );
+  }
+  const { validate, invalidResult } = argumentContract;
+  ipcMain.handle(channel, async (event, ...rawArgs) => {
     const frame = event.senderFrame;
     const trustedSender =
       mainWindow &&
@@ -1557,6 +1572,19 @@ function registerHandler(
     }
     if (requireWorkDir && !workDir)
       return { success: false, error: "workDir not set" };
+    let args;
+    try {
+      args = validate(rawArgs);
+    } catch (error) {
+      // Validator messages are fixed strings; renderer values are never logged.
+      console.warn(`[ipc] ${channel} rejected: ${error.message}`);
+      if (invalidResult === REJECT_INVALID) {
+        throw new Error(`Invalid arguments for ${channel}`);
+      }
+      return typeof invalidResult === "function"
+        ? invalidResult(error)
+        : invalidResult;
+    }
     if (!wrapErrors) return fn(event, ...args);
     try {
       return await fn(event, ...args);
@@ -1620,7 +1648,7 @@ registerHandler("audit:enroll", async () => {
   }
 });
 
-registerHandler("audit:read", async (_event, options) => {
+registerHandler("audit:read", async (_event, range) => {
   if (
     activeRuntime?.mode !== "native" ||
     !activeRuntime.readVerifiedAuditEntries
@@ -1628,7 +1656,6 @@ registerHandler("audit:read", async (_event, options) => {
     return { success: false, status: "unavailable" };
   }
   try {
-    const range = validateReadOptions(options);
     const raw = await activeRuntime.readVerifiedAuditEntries(range);
     if (["failed", "unavailable"].includes(raw?.verification?.status)) {
       reportAuditStatus(raw.verification.status);
@@ -1861,53 +1888,8 @@ registerHandler("update:pre-update-backup", async () => {
 });
 
 // ── IPC: restore ──────────────────────────────────────────────────────────────
-// Paths blessed by a user-driven file-picker dialog. Only these can be passed
-// to `backup:restore` — prevents a compromised renderer from passing an
-// arbitrary filesystem path (e.g. /etc/passwd, malicious .sql) for restore.
-const ALLOWED_RESTORE_PATHS = new Set();
-
-// macOS system directories that must never be used as a backup destination.
-// '/Library' is the SYSTEM-level library (a previous entry listed the
-// nonexistent '/Library/System'); per-user backups live under
-// /Users/<name>/Library (e.g. iCloud Drive), which this does not match.
-const BLOCKED_BACKUP_PREFIXES = [
-  "/System",
-  "/usr",
-  "/bin",
-  "/sbin",
-  "/etc",
-  "/private/etc",
-  "/private/var/db",
-  "/Library",
-];
-
-// Shared destination validation for every path that can set or use a backup
-// directory (backup:run, backup:save-settings → quit-time backup). Returns an
-// error string, or null when the destination is acceptable.
-function validateBackupDest(dir) {
-  if (typeof dir !== "string" || !dir) return "Invalid backup directory";
-  const resolved = path.resolve(dir);
-  if (!path.isAbsolute(resolved))
-    return "Backup directory must be an absolute path";
-  if (
-    BLOCKED_BACKUP_PREFIXES.some(
-      (p) => resolved === p || resolved.startsWith(p + "/"),
-    )
-  ) {
-    return "Backup to system directories is not allowed";
-  }
-  return null;
-}
-
-const ALLOWED_RESTORE_EXTS = new Set([".visionbak", ".enc", ".sql"]);
-function hasAllowedRestoreExt(p) {
-  const lower = String(p).toLowerCase();
-  if (lower.endsWith(".visionbak.enc")) return true;
-  for (const ext of ALLOWED_RESTORE_EXTS) {
-    if (lower.endsWith(ext)) return true;
-  }
-  return false;
-}
+// backup:select-file adds the chosen file to ALLOWED_RESTORE_PATHS; the
+// backup:is-encrypted and backup:restore argument contracts accept nothing else.
 
 registerHandler(
   "backup:select-file",
@@ -1934,11 +1916,8 @@ registerHandler(
 
 registerHandler(
   "backup:is-encrypted",
-  async (_event, filePath) => {
+  async (_event, resolved) => {
     try {
-      if (typeof filePath !== "string" || !filePath) return false;
-      const resolved = path.resolve(filePath);
-      if (!ALLOWED_RESTORE_PATHS.has(resolved)) return false;
       if (!fs.existsSync(resolved)) return false;
       if (
         resolved.endsWith(".visionbak") ||
@@ -1956,20 +1935,7 @@ registerHandler(
 
 registerHandler(
   "backup:restore",
-  async (event, filePath, opts) => {
-    if (typeof filePath !== "string" || !filePath) {
-      return { success: false, error: "Invalid restore path" };
-    }
-    const resolved = path.resolve(filePath);
-    if (!ALLOWED_RESTORE_PATHS.has(resolved)) {
-      return {
-        success: false,
-        error: "Restore path was not selected via the file picker",
-      };
-    }
-    if (!hasAllowedRestoreExt(resolved)) {
-      return { success: false, error: "Unsupported backup file extension" };
-    }
+  async (event, resolved, { passphrase }) => {
     if (!fs.existsSync(resolved)) {
       return { success: false, error: "Backup file not found" };
     }
@@ -1996,9 +1962,6 @@ registerHandler(
     });
     if (response !== 0)
       return { success: false, error: "Restore cancelled by user" };
-
-    const passphrase =
-      opts && typeof opts === "object" ? opts.passphrase : undefined;
 
     // Pause health monitoring while restore stops and recreates the database.
     stopHealthWatchdog();
@@ -2070,10 +2033,7 @@ registerHandler(
 let backupInFlight = false;
 registerHandler(
   "backup:run",
-  async (event, destDir, frontendStateJson = null) => {
-    const destError = validateBackupDest(destDir);
-    if (destError) return { success: false, error: destError };
-    const resolvedDest = path.resolve(destDir);
+  async (event, resolvedDest, frontendStateJson) => {
     if (backupInFlight)
       return { success: false, error: "A backup is already in progress" };
     backupInFlight = true;
@@ -2107,19 +2067,12 @@ registerHandler(
 registerHandler(
   "backup:save-settings",
   async (event, { backupDir, backupOnQuit }) => {
-    // Validate the destination NOW: the quit-time backup (will-quit handler)
-    // writes wherever this setting points, with no further checks.
-    if (backupDir) {
-      const destError = validateBackupDest(backupDir);
-      if (destError) return { success: false, error: destError };
-    }
+    // The argument contract has already validated backupDir: the quit-time
+    // backup (will-quit handler) writes wherever this setting points.
     // Persist to database via the running backend API (source of truth).
     // Also mirror to local settings.json as a fallback for the will-quit handler
     // in case the backend is already shutting down.
-    const payload = {
-      backupDir: backupDir || "",
-      backupOnQuit: !!backupOnQuit,
-    };
+    const payload = { backupDir, backupOnQuit };
     try {
       await settingsWriter.save("backup_settings", payload);
       await updateSettings((cur) => {
@@ -2143,10 +2096,7 @@ registerHandler(
 
 registerHandler(
   "backup:set-passphrase",
-  async (_event, passphrase) => {
-    const value = typeof passphrase === "string" ? passphrase : "";
-    return await setBackupPassphrase(value.trim());
-  },
+  async (_event, passphrase) => await setBackupPassphrase(passphrase.trim()),
   {
     senderFailure: {
       success: false,
@@ -2205,8 +2155,7 @@ registerHandler(
 // stopped responding.
 registerHandler(
   "services:save-settings",
-  async (event, { keepServicesOnQuit } = {}) => {
-    const payload = { keepServicesOnQuit: !!keepServicesOnQuit };
+  async (event, payload) => {
     try {
       await settingsWriter.save("services_settings", payload);
       await updateSettings((cur) => {
@@ -2306,23 +2255,7 @@ function sendToApp(channel, payload) {
 
 registerHandler(
   "app:renderer-failure",
-  (_event, payload) => {
-    const kind = ["error", "resource", "unhandledrejection"].includes(
-      payload?.kind,
-    )
-      ? payload.kind
-      : "error";
-    const name =
-      typeof payload?.name === "string" &&
-      /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(payload.name)
-        ? payload.name
-        : "UnknownError";
-    const source =
-      typeof payload?.source === "string" &&
-      /^[A-Za-z0-9_.-]{1,160}$/.test(payload.source)
-        ? payload.source
-        : "unknown";
-    const line = Number.isSafeInteger(payload?.line) ? payload.line : 0;
+  (_event, { kind, name, source, line }) => {
     console.error(
       `[renderer] ${kind} (${name}) at ${source}${line > 0 ? `:${line}` : ""}`,
     );
@@ -2597,10 +2530,7 @@ function windowsBadgeOverlay(count) {
 
 registerHandler(
   "app:set-badge",
-  (event, count) => {
-    const n = Number(count);
-    if (!Number.isFinite(n)) return { success: false };
-    const clamped = Math.max(0, Math.min(999, Math.floor(n)));
+  (event, clamped) => {
     if (process.platform === "win32") {
       windowsBadgeOverlay(clamped);
       return { success: true };
@@ -2618,7 +2548,6 @@ registerHandler(
 registerHandler(
   "app:set-language",
   async (event, language) => {
-    if (language !== "en" && language !== "nl") return { success: false };
     const request = ++nativeLanguageRequest;
     if (nativeLanguage === language) return { success: true };
     const nextI18n = await loadI18nAsync(language);
@@ -2641,7 +2570,6 @@ registerHandler(
 registerHandler(
   "app:set-vibrancy",
   (event, enabled) => {
-    if (typeof enabled !== "boolean") return { success: false };
     if (process.platform !== "darwin") return { success: false };
     if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
     mainWindow.setVibrancy(enabled ? "under-window" : null);
@@ -2675,27 +2603,9 @@ registerHandler(
 registerHandler(
   "theme:persist-splash",
   async (event, colors) => {
-    if (
-      !colors ||
-      !isValidHslComponents(colors.background) ||
-      !isValidHslComponents(colors.foreground) ||
-      (colors.mode != null &&
-        colors.mode !== "light" &&
-        colors.mode !== "dark") ||
-      (colors.surface != null && !isValidHslComponents(colors.surface)) ||
-      (colors.text != null && !isValidHslComponents(colors.text))
-    ) {
-      return { success: false };
-    }
     try {
       await updateSettings((cur) => {
-        cur[SPLASH_THEME_KEY] = {
-          mode: colors.mode,
-          background: colors.background,
-          foreground: colors.foreground,
-          surface: colors.surface,
-          text: colors.text,
-        };
+        cur[SPLASH_THEME_KEY] = colors;
       });
       return { success: true };
     } catch (err) {
