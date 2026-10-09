@@ -7573,7 +7573,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description Invalid model output or proposal */
+            /** @description Invalid instruction */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7582,6 +7582,13 @@ export interface operations {
             };
             /** @description Saved analysis not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12008,8 +12015,8 @@ export interface operations {
             query?: {
                 /** @description Target currency (3-letter code; `target_currency` is an alias). A malformed code falls back to EUR. A repeated key returns 400. */
                 currency?: string;
-                /** @description Chart window (`5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all`, the default). An unknown value is served unfiltered. A repeated key returns 400. */
-                period?: string;
+                /** @description Chart window. Absent or empty means `all`. An unknown value or a repeated key returns 400. */
+                period?: "1m" | "3m" | "6m" | "1y" | "3y" | "all";
             };
             header?: never;
             path?: never;
@@ -12026,7 +12033,7 @@ export interface operations {
                     "application/json": components["schemas"]["Envelope"];
                 };
             };
-            /** @description VALIDATION_ERROR: currency or period sent more than once */
+            /** @description VALIDATION_ERROR: currency or period sent more than once, or an unknown period */
             400: {
                 headers: {
                     [name: string]: unknown;

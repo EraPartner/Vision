@@ -119,19 +119,19 @@ describe("parseWithConfig output contract", () => {
     );
   });
 
-  it("logs paths only and passes the rows through in production", async () => {
+  it("blocks a bad row in production too, naming paths but not values", async () => {
     vi.stubEnv("VITEST", "");
     vi.stubEnv("ENVIRONMENT", "production");
-    const parsed = result([row({ units: NaN, symbolRaw: "SECRETCO" })]);
-    saxo.mockResolvedValue(parsed);
+    saxo.mockResolvedValue(
+      result([row({ units: NaN, symbolRaw: "SECRETCO" })]),
+    );
 
-    expect(await parseWithConfig("/tmp/saxo.csv", SAXO)).toBe(parsed);
-    expect(logger.warn).toHaveBeenCalledWith(
-      '[data-contract] portfolio adapter "saxo_transaction_history" output does not match its schema',
-      { issues: ["rows.0.units (invalid_type)"], issueCount: 1 },
+    const error = await parseWithConfig("/tmp/saxo.csv", SAXO).catch(
+      (err: unknown) => err,
     );
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain(
-      "SECRETCO",
+    expect(String(error)).toContain(
+      'portfolio adapter "saxo_transaction_history" output at rows.0.units (invalid_type)',
     );
+    expect(String(error)).not.toContain("SECRETCO");
   });
 });

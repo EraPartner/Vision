@@ -168,24 +168,6 @@ export async function parseEnvelopeError(
     });
 }
 
-/** How a response that fails its declared schema is handled. */
-export type ResponseContractMode = "strict" | "warn";
-
-/**
- * Production handling of a response-contract mismatch. A mismatch in data the
- * backend produced is a bug, not bad input. Whether production blocks it
- * ("strict") or logs and renders it ("warn") is an open owner decision, so this
- * constant is the single switch.
- */
-const PRODUCTION_RESPONSE_CONTRACT_MODE: ResponseContractMode = "warn";
-
-/** Strict in development and tests; the production switch otherwise. */
-export function responseContractMode(): ResponseContractMode {
-    return import.meta.env.DEV || import.meta.env.MODE === "test"
-        ? "strict"
-        : PRODUCTION_RESPONSE_CONTRACT_MODE;
-}
-
 /**
  * A success response whose body does not match the schema its client declared.
  * `issues` holds `path: message` strings only, never the offending values.
@@ -214,9 +196,9 @@ function formatIssuePath(path: readonly PropertyKey[]): string {
 }
 
 /**
- * Check `data` against `schema` and return `data` unchanged. The schema only
- * validates: the caller keeps the wire value, so strict and warn modes hand
- * screens the same object. `label` is "METHOD /path"; its query string is
+ * Check `data` against `schema` and return `data` unchanged, or throw
+ * `ApiContractError`. The schema only validates: on success the caller keeps
+ * the wire value. `label` is "METHOD /path"; its query string is
  * dropped because search terms can carry personal data.
  */
 export function checkResponseContract<T>(
@@ -227,22 +209,16 @@ export function checkResponseContract<T>(
     const result = schema.safeParse(data);
     if (result.success) return data;
 
+    // A mismatch in data the backend produced is a bug, not bad input; the
+    // owner chose to block it in every build (ADR-193). Issue paths only: the
+    // values are personal financial data.
     const endpoint = label.split("?")[0] ?? label;
-    if (responseContractMode() === "strict") {
-        throw new ApiContractError(
-            endpoint,
-            result.error.issues.map(
-                (issue) => `${formatIssuePath(issue.path)}: ${issue.message}`,
-            ),
-        );
-    }
-    // Paths and issue codes only: the values are personal financial data.
-    logger.warn(`api:contract ${endpoint} response does not match its schema`, {
-        issues: result.error.issues.map(
-            (issue) => `${formatIssuePath(issue.path)} (${issue.code})`,
+    throw new ApiContractError(
+        endpoint,
+        result.error.issues.map(
+            (issue) => `${formatIssuePath(issue.path)}: ${issue.message}`,
         ),
-    });
-    return data;
+    );
 }
 
 /**

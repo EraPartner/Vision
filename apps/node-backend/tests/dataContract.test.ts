@@ -21,7 +21,7 @@ describe("dataContractMode", () => {
     expect(dataContractMode("Development")).toBe("throw");
     expect(dataContractMode("production")).toBe(PRODUCTION_DATA_CONTRACT_MODE);
     expect(dataContractMode("staging")).toBe(PRODUCTION_DATA_CONTRACT_MODE);
-    expect(PRODUCTION_DATA_CONTRACT_MODE).toBe("log");
+    expect(PRODUCTION_DATA_CONTRACT_MODE).toBe("throw");
   });
 
   it("treats any Vitest run as a test run, whatever NODE_ENV says", () => {
@@ -33,7 +33,7 @@ describe("dataContractMode", () => {
     vi.stubEnv("VITEST", "");
     vi.stubEnv("ENVIRONMENT", "production");
     vi.stubEnv("NODE_ENV", "development");
-    expect(dataContractMode()).toBe("log");
+    expect(dataContractMode()).toBe(PRODUCTION_DATA_CONTRACT_MODE);
     vi.stubEnv("ENVIRONMENT", "");
     vi.stubEnv("NODE_ENV", "");
     expect(dataContractMode()).toBe("throw");

@@ -2,7 +2,7 @@
 title: Database Query Patterns & Optimization
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 tags:
   [
@@ -78,8 +78,9 @@ installed.
 - The row types in `src/types/rows.ts` are `z.output<typeof …Schema>`, so type and check share one
   definition.
 - A mismatch is a bug, not bad input. Tests and development throw `RowContractError` (a 500).
-  Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, currently
-  `"log"`: warn and return the rows unchanged. The check stops at the first failing row.
+  Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is
+  `"throw"` (the owner chose to block, 2026-10-09), so production answers 500 too. The check stops
+  at the first failing row.
 - Messages name the query, the row index, column paths and type names. They never contain values.
 
 The account, planned-transaction, split and transaction repositories read through these helpers.

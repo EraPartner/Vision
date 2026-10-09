@@ -156,20 +156,20 @@ describe("adapter registry output contract", () => {
     expect(genericParse).toHaveBeenCalledWith("/tmp/x.csv", config);
   });
 
-  it("logs paths only and passes the rows through in production", async () => {
+  it("blocks a bad row in production too, naming paths but not values", async () => {
     vi.stubEnv("VITEST", "");
     vi.stubEnv("ENVIRONMENT", "production");
-    const parsed = result([row({ amount: NaN, recipient: "SECRET PAYEE" })]);
-    kbcParse.mockResolvedValue(parsed);
+    kbcParse.mockResolvedValue(
+      result([row({ amount: NaN, recipient: "SECRET PAYEE" })]),
+    );
 
-    expect(await getAdapter("kbc")!.parse("/tmp/kbc.csv")).toBe(parsed);
-    expect(logger.warn).toHaveBeenCalledWith(
-      '[data-contract] bank adapter "kbc" output does not match its schema',
-      { issues: ["rows.0.amount (invalid_type)"], issueCount: 1 },
+    const error = await getAdapter("kbc")!
+      .parse("/tmp/kbc.csv")
+      .catch((err: unknown) => err);
+    expect(String(error)).toContain(
+      'bank adapter "kbc" output at rows.0.amount (invalid_type)',
     );
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain(
-      "SECRET",
-    );
+    expect(String(error)).not.toContain("SECRET");
   });
 
   it("leaves detection untouched", () => {

@@ -14,10 +14,11 @@ import { logger } from "../config/logger.ts";
 export type DataContractMode = "throw" | "log";
 
 /**
- * Production behaviour on a mismatch, pending the owner's decision:
- * `"log"` warns and passes the data through, `"throw"` blocks it.
+ * Production behaviour on a mismatch. The owner chose to block (2026-10-09):
+ * `"throw"` fails the request or import; `"log"` would warn and pass the data
+ * through.
  */
-export const PRODUCTION_DATA_CONTRACT_MODE: DataContractMode = "log";
+export const PRODUCTION_DATA_CONTRACT_MODE: DataContractMode = "throw";
 
 /**
  * Tests and development are strict; every other environment uses

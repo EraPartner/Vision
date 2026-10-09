@@ -2,7 +2,7 @@
 title: Feature - Portfolio Import
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 last_modified: 2026-10-08
 tags:
@@ -158,9 +158,9 @@ of the generic mapper and of every maintained format once, against `parsedPortfo
 (rows of `parsedPortfolioRowSchema`, plus the optional `skipped` and `sourceColumns`). The row
 schema is strict: an unknown key, a NaN number or a date that is not UTC midnight fails. A `null`
 date is allowed, because Validate reports it as a row error. Formats count unreadable rows as
-`skipped`, so a contract failure is an adapter bug. It goes through `checkDataContract`: tests and
-development throw, other environments log issue paths only (`PRODUCTION_DATA_CONTRACT_MODE`,
-currently `"log"`) and pass the rows on. It is never a 400. See
+`skipped`, so a contract failure is an adapter bug. It goes through `checkDataContract`, which throws in every environment
+(`PRODUCTION_DATA_CONTRACT_MODE` is `"throw"`; the owner chose to block, 2026-10-09), so the import
+fails with a server error naming issue paths, never values. It is never a 400. See
 [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 
 The IBKR adapter locates the `Transaction History,Header` record instead of treating the statement's

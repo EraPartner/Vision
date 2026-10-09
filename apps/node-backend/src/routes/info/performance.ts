@@ -19,7 +19,10 @@ import {
   PERF_CACHE_TTL_MS,
   resolveCacheWithInflight,
 } from "../../services/info/cache.ts";
-import { buildPortfolioPerformancePayload } from "../../services/info/performanceHelpers.ts";
+import {
+  buildPortfolioPerformancePayload,
+  PERFORMANCE_PERIODS,
+} from "../../services/info/performanceHelpers.ts";
 import { bareMessages, parseInput } from "../../lib/zodInput.ts";
 import { singleQueryValue } from "../_inputBridges.ts";
 
@@ -51,9 +54,15 @@ const brokerDateQuerySchema = bareMessages(
   }),
 );
 
-// Unknown periods are served unfiltered (filterSnapshotsByPeriod).
+// An empty period means "all". Other values must be known: each one is its
+// own cache entry, so arbitrary strings would grow the cache without bound.
 const performanceQuerySchema = bareMessages(
-  z.object({ period: singleQueryValue("period") }),
+  z.object({
+    period: singleQueryValue("period").refine(
+      (period) => !period || PERFORMANCE_PERIODS.includes(period),
+      `period must be one of ${PERFORMANCE_PERIODS.join(", ")}`,
+    ),
+  }),
 );
 
 router.get(

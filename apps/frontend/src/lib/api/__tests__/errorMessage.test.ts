@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ApiErrorCode } from '@vision/types';
 
-import { ApiClientError } from '@/lib/api/client';
+import { ApiClientError, ApiContractError } from '@/lib/api/client';
 import { API_ERROR_KEYS, apiErrorToMessage, isAuthoredMessage } from '@/lib/api/errorMessage';
 import en from '@/locales/en';
 import nl from '@/locales/nl';
@@ -127,6 +127,15 @@ describe('apiErrorToMessage — raw transport errors', () => {
 
     it('maps the bare "Request failed" fallback to the unknown bucket', () => {
         expect(apiErrorToMessage(new Error('Request failed'), t)).toBe(API_ERROR_KEYS.unknown);
+    });
+});
+
+describe('apiErrorToMessage — response contract mismatches', () => {
+    it('maps a drifted response to the server bucket without leaking issue paths', () => {
+        const err = new ApiContractError('/api/transactions', ['items[0].currency: Invalid input']);
+        const out = apiErrorToMessage(err, t);
+        expect(out).toBe(API_ERROR_KEYS.server);
+        expect(out).not.toContain('currency');
     });
 });
 

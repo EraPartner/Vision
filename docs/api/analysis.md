@@ -2,7 +2,7 @@
 title: Analysis API
 type: endpoint
 status: active
-date: 2026-10-08
+date: 2026-10-09
 tags: [api, analysis, sql, query-builder, saved-analysis]
 description: Catalog, compile, bounded execution, cancellation, drill-through, and versioned saved-analysis operations under /api/analysis.
 path: /api/analysis
@@ -62,7 +62,10 @@ rules, such as allowed datasets, operators, and row limits.
   A `querySpec` is `{ mode: "visual", plan }` or `{ mode: "sql", sql, datasetIds }`.
   `refreshMode` is `live` or `frozen`.
 - `/restore` needs positive integer `version` and `expectedVersion`. `/ai-proposal` needs an
-  `instruction` of 1–2,000 characters after trimming.
+  `instruction` of 1–2,000 characters after trimming. When the local model fails, returns invalid
+  JSON, or returns a proposal outside the edit contract, `/ai-proposal` answers
+  `502 BAD_GATEWAY` (it used to be `400`). A proposal that fails the saved analysis preview is
+  still `400`.
 - `/ai-proposals/preview` and `/apply` validate the whole typed proposal before the service runs:
   `schemaVersion: 1`, `savedAnalysisId`, `baseVersion`, `rationale`, and 1–30 `operations`.
   Unknown keys return `400`.

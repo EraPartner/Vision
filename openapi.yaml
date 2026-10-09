@@ -5361,8 +5361,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Envelope" }
-        "400": { description: Invalid model output or proposal }
+        "400": { description: Invalid instruction, or the proposal fails the saved analysis preview }
         "404": { description: Saved analysis not found }
+        "502": { description: "BAD_GATEWAY: the local model failed, returned invalid JSON, or returned a proposal outside the edit contract" }
 
   /api/analysis/saved/{id}/restore:
     parameters:
@@ -9230,12 +9231,13 @@ paths:
             type: string
         - in: query
           name: period
-          description: Chart window (`5d`, `1m`, `3m`, `6m`, `1y`, `3y`, or `all`, the default). An unknown value is served unfiltered. A repeated key returns 400.
+          description: Chart window. Absent or empty means `all`. An unknown value or a repeated key returns 400.
           schema:
             type: string
+            enum: [1m, 3m, 6m, 1y, 3y, all]
       responses:
         "400":
-          description: "VALIDATION_ERROR: currency or period sent more than once"
+          description: "VALIDATION_ERROR: currency or period sent more than once, or an unknown period"
         "200":
           description: Performance snapshots
           content:

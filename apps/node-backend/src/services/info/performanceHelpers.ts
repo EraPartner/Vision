@@ -73,6 +73,9 @@ const PERIOD_OFFSETS: Record<string, number> = {
   "3y": 1095,
 };
 
+/** Every `period` /portfolio-performance accepts. */
+export const PERFORMANCE_PERIODS = [...Object.keys(PERIOD_OFFSETS), "all"];
+
 /** @param value a NUMERIC column (pg string), or a `??` fallback string */
 function parseSnapshotNumber(value: DecimalInput): number {
   return toNumber(toDecimal(value));

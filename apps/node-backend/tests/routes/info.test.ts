@@ -1127,6 +1127,26 @@ describe("Info Routes", () => {
       expect(mockGetSnapshots).not.toHaveBeenCalled();
     });
 
+    it("rejects an unknown period on /portfolio-performance", async () => {
+      const res = await api
+        .get(`${BASE}/portfolio-performance?period=10y`)
+        .expect(400);
+      expect(res.body).toEqual(
+        validationError("period must be one of 1m, 3m, 6m, 1y, 3y, all"),
+      );
+      expect(mockGetSnapshots).not.toHaveBeenCalled();
+    });
+
+    it.each(["1m", "3y", "all", ""])(
+      "accepts period=%j on /portfolio-performance",
+      async (period) => {
+        await api
+          .get(`${BASE}/portfolio-performance`)
+          .query({ period })
+          .expect(200);
+      },
+    );
+
     describe("GET /portfolio-performance/by-broker", () => {
       it("defaults the window when from/to are absent or empty", async () => {
         await api

@@ -2,7 +2,7 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-10-08
+date: 2026-10-09
 updated: 2026-10-08
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
@@ -147,8 +147,9 @@ The registry wraps every adapter, including `generic`, with `withOutputContract`
 `parse`/`parseWithConfig` result is checked once through `checkDataContract`
 (`lib/dataContract.ts`). Adapters already turn unreadable rows into `skipped`, so a row that breaks
 the contract is an adapter bug, not a malformed file. It never becomes a user-facing row error or a
-400. Tests and development throw. Other environments follow `PRODUCTION_DATA_CONTRACT_MODE`,
-currently `"log"`: log the issue paths and codes, never the values, and pass the rows on.
+400. It throws in every environment: `PRODUCTION_DATA_CONTRACT_MODE` is `"throw"` (the owner chose to
+block, 2026-10-09), so the import fails with a server error. Messages carry issue paths and codes,
+never the values.
 `validateBatch` still applies its own row checks. `tests/bankAdapterContract.test.ts` pins the
 schema and the registry seam. See [[docs/adr/193-zod-runtime-contracts|ADR-193]].
 

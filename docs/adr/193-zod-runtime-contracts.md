@@ -2,9 +2,9 @@
 title: "ADR-193: Zod runtime contracts at the boundaries"
 type: adr
 status: accepted
-date: 2026-10-08
+date: 2026-10-09
 tags: [adr, type-safety, zod, validation, backend, frontend, electron, adr-192]
-description: "Data crossing a boundary is checked at runtime with zod: HTTP requests through one parseInput helper (400 on failure), bank and portfolio adapter output, stored parser configs and PostgreSQL rows through data contracts (strict in tests and development, one production switch, never a 400), selected frontend API reads, and every Electron IPC channel. Phase 4 of the type-safety plan."
+description: "Data crossing a boundary is checked at runtime with zod: HTTP requests through one parseInput helper (400 on failure), bank and portfolio adapter output, stored parser configs and PostgreSQL rows through data contracts (they block in every environment, never a 400), selected frontend API reads, and every Electron IPC channel. Phase 4 of the type-safety plan."
 aliases: [adr-193, zod runtime contracts, type-safety phase 4]
 ---
 
@@ -18,7 +18,7 @@ TypeScript.
 
 ## Date
 
-2026-10-08
+2026-10-08 (production mode decided 2026-10-09)
 
 ## Context
 
@@ -68,22 +68,25 @@ column whose type drifted from its TypeScript type went unnoticed.
 - A mismatch is a bug in Vision, not bad input. `dataContractMode()` in `src/lib/dataContract.ts`
   throws in tests and development (including an unset `ENVIRONMENT`/`NODE_ENV`) and follows
   `PRODUCTION_DATA_CONTRACT_MODE` everywhere else. That one constant is the production switch for
-  adapter output, parser configs and rows. It is `"log"`: warn with issue paths and codes, then
-  pass the data through unchanged.
+  adapter output, parser configs and rows. The owner chose to block (2026-10-09), so it is
+  `"throw"`: the request or import fails with a 500. `"log"` (warn with issue paths and codes,
+  pass the data through) stays available as a mode.
 - Messages and logs carry paths, codes and type names only, never values, because the values are
   personal financial data.
 
 ### Frontend API responses
 
 - `apiRequest` in `apps/frontend/src/lib/api/client.ts` takes an optional `schema`, and
-  `checkResponseContract` checks reads that go through `requestWithQuery`. Strict in development
-  and tests (`ApiContractError`, not retried); in production `PRODUCTION_RESPONSE_CONTRACT_MODE`
-  is `"warn"`: log the endpoint path without its query string and the issue paths, return the
-  data unchanged.
+  `checkResponseContract` checks reads that go through `requestWithQuery`. A mismatch throws
+  `ApiContractError` in every build (the owner chose to block, 2026-10-09). It is not retried, and
+  `apiErrorToMessage` shows the generic server copy, so the screen shows its error state. The
+  error names the endpoint path without its query string and the issue paths.
 - The schemas live in `packages/types/src/contracts` (`@vision/types/contracts`). The first
   checked reads are transactions, accounts, categories (list and tree) and recipients (list,
   detail, patterns). Their runtime schemas require only identity fields and type-check every
-  other field when present, because many screen-test fixtures are partial.
+  other field when present, because many screen-test fixtures are partial. A transaction's
+  `currency` may be absent but not `null`: the column is NOT NULL, so a `null` is a contract
+  violation rather than a legacy row to show as EUR (owner, 2026-10-09).
 
 ### Electron IPC
 
@@ -105,8 +108,11 @@ column whose type drifted from its TypeScript type went unnoticed.
   rejected. Each is listed in the pull request and pinned by a route test.
 - A schema or fixture that disagrees with the real data fails tests loudly. Test fixtures for the
   checked repositories and responses must be shaped like real rows and responses.
-- Changing the production behaviour from logging to blocking is a one-line change per side
-  (`PRODUCTION_DATA_CONTRACT_MODE`, `PRODUCTION_RESPONSE_CONTRACT_MODE`).
+- Production blocks on a mismatch: a drifted row, adapter result or stored config fails the
+  request or import with a 500, and a drifted API response puts the screen in its error state.
+  This surfaces a schema/database drift immediately instead of rendering wrong data, at the cost
+  of availability until the schema or data is fixed. Going back to logging on the backend is a
+  one-line change to `PRODUCTION_DATA_CONTRACT_MODE`.
 - Checking costs a few microseconds per row. Most repository queries (about 850 sites) are not
   checked yet; they convert one repository at a time, starting with NUMERIC, BIGINT, `COUNT(*)`
   and JSON-aggregate columns.

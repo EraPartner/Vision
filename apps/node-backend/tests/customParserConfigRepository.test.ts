@@ -176,20 +176,18 @@ describe('customParserConfigRepository stored config contract', () => {
     await expect(repo.getById(1)).rejects.toThrow('custom_parser_configs row 1 at config (custom)');
   });
 
-  it('logs issue paths and passes the stored config through unchanged in production', async () => {
+  it('blocks a stored config that breaks its schema in production too, without values', async () => {
     vi.stubEnv('VITEST', '');
     vi.stubEnv('ENVIRONMENT', '');
     vi.stubEnv('NODE_ENV', 'production');
     const broken = { ...SAMPLE_CONFIG, dateColumn: 42, encoding: 'SECRET-ENC' };
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: broken })] }));
 
-    const result = await repo.getById(1);
+    const error = await repo.getById(1).catch((err: unknown) => err);
 
-    expect(result?.config).toBe(broken);
-    expect(logger.warn).toHaveBeenCalledWith(
-      '[data-contract] custom_parser_configs row 1 does not match its schema',
-      { issues: ['config.dateColumn (custom)', 'config.encoding (custom)'], issueCount: 2 },
+    expect(String(error)).toContain(
+      'custom_parser_configs row 1 at config.dateColumn (custom), config.encoding (custom)',
     );
-    expect(JSON.stringify(vi.mocked(logger.warn).mock.calls)).not.toContain('SECRET-ENC');
+    expect(String(error)).not.toContain('SECRET-ENC');
   });
 });

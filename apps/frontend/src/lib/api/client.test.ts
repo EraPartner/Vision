@@ -6,7 +6,6 @@ import { z } from "zod";
 import {
     ApiContractError,
     checkResponseContract,
-    responseContractMode,
     backoffDelay,
     generateRequestId,
     ApiClientError,
@@ -492,12 +491,6 @@ describe("response contracts", () => {
         vi.restoreAllMocks();
     });
 
-    it("is strict under the test runner and warn-only in production", () => {
-        expect(responseContractMode()).toBe("strict");
-        useProductionMode();
-        expect(responseContractMode()).toBe("warn");
-    });
-
     it("returns a matching body unchanged, extra keys included", async () => {
         serve({ items: [{ id: 1, amount: 2.5, extra: true }] });
         const result = await apiRequest("/api/client-test", {
@@ -508,7 +501,7 @@ describe("response contracts", () => {
         });
     });
 
-    it("strict mode throws ApiContractError with paths, not values, and does not retry", async () => {
+    it("throws ApiContractError with paths, not values, and does not retry", async () => {
         const calls = serve(DRIFTED);
         const error = await apiRequest("/api/client-test?search=rent", {
             schema: ItemListSchema,
@@ -525,22 +518,20 @@ describe("response contracts", () => {
         expect(calls()).toBe(1);
     });
 
-    it("production mode warns with issue paths only and passes the body through", async () => {
+    it("blocks a drifted response in production builds too", async () => {
         useProductionMode();
         const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         serve(DRIFTED);
 
-        const result = await apiRequest("/api/client-test?search=rent", {
+        const error = await apiRequest("/api/client-test?search=rent", {
             schema: ItemListSchema,
-        });
+        }).catch((err: unknown) => err);
 
-        expect(result).toEqual(DRIFTED);
-        expect(warn).toHaveBeenCalledTimes(1);
-        const logged = JSON.stringify(warn.mock.calls[0]);
-        expect(logged).toContain("GET /api/client-test");
-        expect(logged).toContain("items[0].amount (invalid_type)");
-        expect(logged).not.toContain("1234.56");
-        expect(logged).not.toContain("rent");
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues).toEqual([
+            "items[0].amount: Invalid input: expected number, received string",
+        ]);
+        expect(warn).not.toHaveBeenCalled();
     });
 
     it("skips the check when no schema is given", async () => {

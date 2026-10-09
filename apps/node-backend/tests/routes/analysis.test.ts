@@ -54,6 +54,7 @@ import {
   previewAnalysisProposal,
 } from "../../src/services/aiAnalysisProposalService.ts";
 import { executeAnalysisPivot } from "../../src/services/analysisPivotService.ts";
+import { UpstreamError } from "../../src/middleware/errorHandler.ts";
 
 type SqlResult = Awaited<ReturnType<typeof executeAnalysisSql>>;
 
@@ -507,6 +508,17 @@ describe("Analysis routes request validation", () => {
         /^instruction: /,
       );
       expect(generateAnalysisProposal).not.toHaveBeenCalled();
+    });
+
+    it("answers 502 when the local model fails", async () => {
+      vi.mocked(generateAnalysisProposal).mockRejectedValue(
+        new UpstreamError("Local model request failed: down"),
+      );
+      const res = await api
+        .post(`${BASE}/saved/saved-1/ai-proposal`)
+        .send({ instruction: "add a filter" })
+        .expect(502);
+      expect(res.body.error.code).toBe("BAD_GATEWAY");
     });
 
     it("passes a trimmed instruction and model to the generator", async () => {

@@ -199,7 +199,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         ).toBeInTheDocument();
     });
 
-    it("treats a NULL-currency ledger row as EUR on a USD account", async () => {
+    it("refuses a ledger row without a currency instead of showing it as EUR", async () => {
         const usdAccount = {
             ...CHECKING,
             id: 4,
@@ -230,16 +230,15 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         });
         renderDetail("/accounts/4");
 
-        const table = await screen.findByRole("table");
-        const legacyRow = within(table)
-            .getByText("Legacy null row")
-            .closest("tr") as HTMLElement;
-        expect(legacyRow).toHaveTextContent("€");
-        // Only one USD point remains, so the compact sparkline does not join
-        // it to the legacy row's separate EUR series.
+        // transactions.currency is NOT NULL; a NULL is a contract violation,
+        // so the ledger shows the server error rather than guessing EUR.
         expect(
-            screen.queryByLabelText(/account balance trend/i),
-        ).not.toBeInTheDocument();
+            await screen.findByText(
+                "The server ran into a problem. Try again in a moment.",
+            ),
+        ).toBeInTheDocument();
+        expect(screen.queryByText("Legacy null row")).not.toBeInTheDocument();
+        expect(screen.queryByText("Dollar row")).not.toBeInTheDocument();
     });
 
     it("renders header (name, balance, provenance) over the running-balance ledger", async () => {

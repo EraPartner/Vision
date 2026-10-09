@@ -42,9 +42,9 @@ export const TransactionSchema = z.looseObject({
   transaction_date: TransactionItemSchema.shape.transaction_date,
   amount: TransactionItemSchema.shape.amount,
   bank_account: z.string().nullable().optional(),
-  // NOT NULL since the ISO-4217 CHECK migration, but screens still render a
-  // legacy NULL row as EUR (AccountDetailPage), so null is tolerated here.
-  currency: z.string().nullable().optional(),
+  // NOT NULL since the ISO-4217 CHECK migration; a NULL currency is a
+  // contract violation, not a legacy row to render as EUR (owner, 2026-10-09).
+  currency: z.string().optional(),
   account_id: IdSchema.nullable().optional(),
   is_transfer: z.boolean().optional(),
   transfer_peer_id: IdSchema.nullable().optional(),

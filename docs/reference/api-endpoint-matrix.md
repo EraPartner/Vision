@@ -2,9 +2,9 @@
 title: API Endpoint Matrix
 type: reference
 status: active
-date: 2026-10-08
-updated: 2026-10-08
-last_modified: 2026-10-08
+date: 2026-10-09
+updated: 2026-10-09
+last_modified: 2026-10-09
 adr-reference: 026
 # Authoritative HTTP-operation count from openapi.yaml. The CI checker also
 # compares every method/path pair; update concrete resource rows when routes change.
@@ -83,6 +83,8 @@ aliases:
 > **300 HTTP API operations** (the count and concrete method/path pairs in `openapi.yaml` are checked by `scripts/check-endpoint-matrix.js` in CI), 2 unversioned `/health` endpoints, and 25 Electron invoke channels. `openapi.yaml` owns HTTP operations; `packaging/electron/electron-api.d.ts` owns Electron invoke and event channels.
 >
 > **Note:** As of Phase 2.4, `openapi.yaml` is the authoritative API specification. This matrix provides a quick lookup; see the OpenAPI spec for formal schemas and examples.
+>
+> **2026-10-09 — two status changes (operation count unchanged):** `GET /api/info/portfolio-performance` rejects a `period` outside `1m`, `3m`, `6m`, `1y`, `3y`, `all` with `400 VALIDATION_ERROR` (absent or empty still means `all`; an unknown value used to be served unfiltered). `POST /api/analysis/saved/:id/ai-proposal` answers `502 BAD_GATEWAY` instead of `400` when the local model fails, returns invalid JSON, or returns a proposal outside the edit contract. Breaking only for clients that sent an unknown period or branched on the old `400`.
 >
 > **2026-10-08 — request input parsed with zod at the route edge (runtime validation; operation count unchanged):** routes parse `req.params`, `req.query`, and `req.body` with `parseInput` (`apps/node-backend/src/lib/zodInput.ts`), and every failure is `400 VALIDATION_ERROR` ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Accounts, Attachments, Investments, Recipients, Recipient Bank Accounts, Splits, Tags, Transactions, and Watchlist no longer use `validateIdParam`/`validateIntParam`; their ids go through `idParams`/`idSchema` (`routes/_requestSchemas.ts`) or `idParamsSchema` (`routes/_inputBridges.ts`) with the same accept set. Categories (legacy and `/tree`), Planned Transactions, Research (`DELETE /mappings/:id`), Saved Charts, and the saved-parser routes still use `validateIdParam`. Some 400 texts now carry a field path (for example `id: must be a positive integer`). Newly rejected inputs include mistyped body fields that used to reach the database as `500`s, `withBaselines` values other than `true`/`false`, malformed `by-broker` `from`/`to` dates, repeated `currency` keys on `/api/info/*`, an admin `dryRun` sent as a string, an unknown `/api/market/chart` `interval`, and JSON array bodies on import overrides. `openapi.yaml` also corrects request parameters that never matched the routes: `range` (not `period`) on `/api/market/chart`, `symbols`/`count` on `/api/market/news`, `active` (not `is_active`) on `GET /api/tags` and `GET /api/recipients`, `period` on `/api/info/portfolio-performance`, `start_month`/`end_month`/`db_only` on `/api/info/inflation-rates`, and the recipient-pattern and bank-account update fields. Breaking only for clients that sent the now-rejected inputs.
 >
