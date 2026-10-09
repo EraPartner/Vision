@@ -169,6 +169,11 @@ interface VirtualDataTableProps<T> {
         index: number,
         helpers: { startEditing: () => void },
     ) => React.ReactNode;
+    /** Replaces the idle inline-edit button; save and cancel remain available while editing. */
+    renderRowActions?: (
+        row: T,
+        helpers: { startEditing: () => void },
+    ) => React.ReactNode;
     /** Server-side sort / search / pagination. Omit for a fully local table. */
     serverMode?: VirtualTableServerMode;
     /** Height of the virtual scroll container. Defaults to 600 */
@@ -224,6 +229,7 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     onRowSelect?: (row: T, index: number) => void;
     isSelected: boolean;
     rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"];
+    renderRowActions?: VirtualDataTableProps<T>["renderRowActions"];
     startEditing: (sourceIndex: number, row: T) => void;
     saveEditing?: (sourceIndex: number, row: T) => void;
     cancelEditing: () => void;
@@ -257,6 +263,7 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
     onRowSelect,
     isSelected,
     rowContextMenu,
+    renderRowActions,
     startEditing,
     saveEditing,
     cancelEditing,
@@ -289,7 +296,9 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
         } else if (restoreEditFocus.current) {
             restoreEditFocus.current = false;
             rowRef.current
-                ?.querySelector<HTMLElement>("[data-inline-edit-action]")
+                ?.querySelector<HTMLElement>(
+                    "[data-inline-edit-action], [data-row-actions] button",
+                )
                 ?.focus();
         }
     }, [isEditing]);
@@ -345,7 +354,8 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
             onClick={
                 rowsInteractive
                     ? (event) => {
-                          if (isEditing || isControlTarget(event.target)) return;
+                          if (isEditing || isControlTarget(event.target))
+                              return;
                           if (onRowSelect) {
                               onRowSelect(row, sourceIndex);
                               return;
@@ -534,6 +544,13 @@ function VirtualizedTableRow<T extends Record<string, unknown>>({
                                 <X className="h-4 w-4" />
                             </Button>
                         </div>
+                    ) : renderRowActions ? (
+                        <div data-row-actions>
+                            {renderRowActions(row, {
+                                startEditing: () =>
+                                    startEditing(sourceIndex, row),
+                            })}
+                        </div>
                     ) : (
                         <Button
                             variant="ghost"
@@ -583,6 +600,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
     onRowSelect,
     selectedRowKey,
     rowContextMenu,
+    renderRowActions,
     serverMode,
     maxHeight = 600,
     rowHeight = 44,
@@ -1276,7 +1294,12 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
             )}
 
             {/* Search bar */}
-            <div className="px-6 pb-3 flex flex-wrap items-center gap-3">
+            <div
+                className={cn(
+                    "px-6 pb-4 flex flex-wrap items-center gap-3",
+                    !(title || subtitle || actions) && "pt-6",
+                )}
+            >
                 <div
                     className="relative min-w-0 flex-1 basis-48"
                     ref={searchContainerRef}
@@ -1325,7 +1348,8 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                         onClick={clearAllFilters}
                         className="shrink-0 gap-1 text-label-secondary hover:text-destructive"
                     >
-                        <X aria-hidden="true" className="h-3 w-3" /> {t("table.clearAll")}
+                        <X aria-hidden="true" className="h-3 w-3" />{" "}
+                        {t("table.clearAll")}
                         {activeFilterCount > 0 && (
                             <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 type-caption font-medium tabular-nums text-primary">
                                 {activeFilterCount}
@@ -1345,7 +1369,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                 key={key}
                                 className="inline-flex items-center gap-1 rounded-chip bg-primary/10 px-2 py-1 type-footnote font-medium text-primary"
                             >
-                                <Filter aria-hidden="true" className="h-3 w-3" />
+                                <Filter
+                                    aria-hidden="true"
+                                    className="h-3 w-3"
+                                />
                                 {col?.header || key}: {val}
                                 <button
                                     type="button"
@@ -1375,7 +1402,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 {/* Sticky header */}
                 <div
                     ref={headerScrollRef}
-                    className="overflow-x-auto border-b border-border"
+                    className="overflow-x-hidden border-b border-border"
                     role="rowgroup"
                 >
                     <div
@@ -1583,7 +1610,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                 {/* Virtualised scrollable body */}
                 <div
                     ref={parentRef}
-                    className="overflow-auto"
+                    className="overflow-auto overscroll-x-contain"
                     style={{ maxHeight: `${maxHeight}px` }}
                     role="rowgroup"
                     onScroll={(e) => {
@@ -1687,6 +1714,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                 rowKey === selectedRowKey
                                             }
                                             rowContextMenu={rowContextMenu}
+                                            renderRowActions={renderRowActions}
                                             startEditing={startEditing}
                                             saveEditing={
                                                 isEditing
@@ -1731,7 +1759,10 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                     {/* Loading more indicator */}
                     {isFetchingMore && (
                         <div className="flex items-center justify-center gap-2 py-4 text-label-secondary">
-                            <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                            <Loader2
+                                aria-hidden="true"
+                                className="h-4 w-4 animate-spin"
+                            />
                             <span className="type-body">
                                 {t("table.loadingMore")}
                             </span>

@@ -12,9 +12,6 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import {
     Card,
     CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
 } from "@/components/ui/card";
 import {
     Select,
@@ -66,6 +63,7 @@ import {
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import type { ImportProgress } from "@/types/apiClient";
 import { isImportCancelled } from "@/lib/api/importCancelled";
+import { PageHeader } from "@/components/shared/PageHeader";
 import { PageShell } from "@/components/shared/PageShell";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -383,23 +381,16 @@ export function PortfolioImportPage() {
     };
 
     return (
-        <PageShell className="mx-auto max-w-3xl space-y-6 p-4">
+        <PageShell>
+            <PageHeader title={t("portfolioImport.title")} subtitle={t("portfolioImport.desc")} icon={PortfolioImportIcon} />
             <PortfolioImportSession accounts={brokerAccounts} />
             <Disclosure variant="card">
                 <DisclosureSummary padded>
                     {t("portfolioImport.session.advanced")}
                 </DisclosureSummary>
                 <Card className="rounded-t-none border-x-0 border-b-0 shadow-none">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <PortfolioImportIcon className="h-5 w-5 text-primary" />
-                            {t("portfolioImport.title")}
-                        </CardTitle>
-                        <CardDescription>
-                            {t("portfolioImport.desc")}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
+
+                    <CardContent variant="headerless" className="space-y-6">
                         {/* Dropzone */}
                         <CsvDropzone
                             file={file}

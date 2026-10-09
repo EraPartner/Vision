@@ -114,7 +114,7 @@ export function ChatComposer({
                             id={toolsId}
                             checked={useTools}
                             onCheckedChange={onUseToolsChange}
-                            disabled={isStreaming}
+                            disabled={disabled || isStreaming}
                             aria-label={t("aiChat.tools")}
                         />
                         <Label

@@ -52,7 +52,7 @@ export function ChartCard({
     return (
         <Card className={className}>
             <CardHeader className={cn("pb-4", headerClassName)}>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                         <CardTitle variant="sm" className={titleClassName}>
                             <span className="truncate">{title}</span>
@@ -64,7 +64,7 @@ export function ChartCard({
                         ) : null}
                     </div>
                     {actions ? (
-                        <div className="flex shrink-0 items-center gap-1 self-start">
+                        <div className="flex max-w-full flex-wrap items-center gap-2 self-start">
                             {actions}
                         </div>
                     ) : null}

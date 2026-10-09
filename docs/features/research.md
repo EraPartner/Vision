@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-09
+updated: 2026-10-09
 tags:
   - url-state
   - feature
@@ -356,7 +356,7 @@ surfaces remain consistent with the workspace.
 
 ## Chart Builder controls and search feedback
 
-Chart Builder places series entry before layout management. Range remains visible; Chart options groups scale and presets, with active log scale or rebasing shown in its summary. The header ••• menu groups New chart, Copy share link and Delete saved layout; series and indicators are `List` rows with a row ••• menu (Remove). Market Lookup, Compare, and Chart Builder distinguish empty searches from unavailable searches. Results for an earlier query are hidden while a changed query is debouncing.
+Chart Builder places layout and range controls first, then the chart, followed by detailed series configuration. The series helper points to the time range above the chart. Indicator controls stay within a compact list beside their names. Range remains visible; Chart options groups scale and presets, with active log scale or rebasing shown in its summary. The header ••• menu groups New chart, Copy share link and Delete saved layout; series and indicators are `List` rows with a row ••• menu (Remove). Market Lookup, Compare, and Chart Builder distinguish empty searches from unavailable searches. Results for an earlier query are hidden while a changed query is debouncing.
 
 ## Task-focused guidance and hierarchy
 
@@ -373,3 +373,11 @@ The saved-scenario picker is a select with a _New…_ entry, and deleting a save
 ### Comparison history context
 
 Compare explains that each price series starts at 100 at its own first available price, with 110 meaning a 10% increase. The metrics table shows each symbol's actual first and last valid-price dates in the selected range. A short note makes differing history windows explicit. Returns, volatility, drawdown and correlation calculations are unchanged.
+
+## Presentation and interpretation
+
+Research home lets news and watchlist cards keep independent heights. Forecast labels monetary
+inputs with their currency and displays a persistent legend for every plotted series. Its interval
+explanation identifies P10–P90 as simulated percentiles and P50 as the median, without presenting
+those scenarios as guaranteed outcomes. Research ratios and compact market values follow the
+selected number format; Market lookup uses the interface language for abbreviated month names.

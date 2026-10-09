@@ -20,7 +20,9 @@ export function UpcomingPaymentsList() {
     const { appSettings } = useAppSettings();
     const { visibleUpcoming } = useUpcomingPlannedPayments();
     const today = todayYmd();
-    const rows = visibleUpcoming.slice(0, MAX_ROWS);
+    const rows = [...visibleUpcoming]
+        .sort((a, b) => a.planned_date.localeCompare(b.planned_date) || a.id - b.id)
+        .slice(0, MAX_ROWS);
 
     const dayLabel = (ymd: string) => {
         const date = ymd.slice(0, 10);

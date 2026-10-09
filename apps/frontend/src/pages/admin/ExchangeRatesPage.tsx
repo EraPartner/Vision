@@ -10,16 +10,18 @@ import {
     SegmentedControl,
     SegmentedControlItem,
 } from "@/components/ui/segmented-control";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RefreshCw, Database, Globe, AlertTriangle } from "lucide-react";
+import { RefreshCw, Database, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { formatCurrency, numberFormatToLocale } from "@/utils/currency";
 import { toast } from "sonner";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
-import { formatDateTimeStringWithAppSettings } from "@/lib/dateUtils";
+import {
+    formatDateStringWithAppSettings,
+    formatDateTimeStringWithAppSettings,
+} from "@/lib/dateUtils";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -54,7 +56,6 @@ function RatesTable({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);
-    const defaultCurrency = appSettings.defaultCurrency || "EUR";
 
     return (
         <Table>
@@ -86,15 +87,21 @@ function RatesTable({
                             {currency}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums">
-                            {rate.toFixed(6)}
+                            {rate.toLocaleString(locale, {
+                                minimumFractionDigits: 6,
+                                maximumFractionDigits: 6,
+                            })}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums">
-                            {(1 / rate).toFixed(4)}
+                            {(1 / rate).toLocaleString(locale, {
+                                minimumFractionDigits: 4,
+                                maximumFractionDigits: 4,
+                            })}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                             {formatCurrency(
                                 100 * rate,
-                                defaultCurrency,
+                                "EUR",
                                 locale,
                                 appSettings.showDecimalPlaces ?? 2,
                             )}
@@ -159,9 +166,9 @@ export default function ExchangeRatesPage() {
         return (
             <PageShell {...loadingSurfaceProps}>
                 {header}
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-4 xl:grid-cols-3">
                     {Array.from({ length: 3 }).map((_, index) => (
-                        <Card key={index}>
+                        <Card key={index} className="min-w-0">
                             <CardContent
                                 variant="headerless"
                                 className="space-y-3"
@@ -194,6 +201,9 @@ export default function ExchangeRatesPage() {
     const liveRates = data?.rates ?? [];
     const rateDate = liveRates[0]?.rate_date ?? null;
     const fetchedAt = liveRates[0]?.fetched_at ?? null;
+    const formattedRateDate = rateDate
+        ? formatDateStringWithAppSettings(rateDate, appSettings.dateFormat)
+        : "—";
 
     const fallbackEntries = Object.entries(data?.fallback_rates ?? {})
         .filter(([k]) => k !== "EUR")
@@ -204,19 +214,19 @@ export default function ExchangeRatesPage() {
         {
             icon: Database,
             title: t("exchangeRates.storedRates"),
-            value: data?.total_rates ?? 0,
+            value: (data?.total_rates ?? 0).toLocaleString(locale),
             sub: t("exchangeRates.storedRatesDesc"),
         },
         {
             icon: Globe,
             title: t("exchangeRates.fallbackCurrencies"),
-            value: fallbackEntries.length,
+            value: fallbackEntries.length.toLocaleString(locale),
             sub: t("exchangeRates.fallbackCurrenciesDesc"),
         },
         {
             icon: RefreshCw,
             title: t("exchangeRates.latestFetch"),
-            value: rateDate ?? "—",
+            value: formattedRateDate,
             sub: fetchedAt
                 ? t("exchangeRates.fetchedAt", {
                       date: formatDateTimeStringWithAppSettings(
@@ -233,28 +243,9 @@ export default function ExchangeRatesPage() {
         <PageShell>
             {header}
 
-            {(data?.is_stale || data?.source === "fallback") && (
-                <Alert variant="warning">
-                    <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-                    <AlertDescription>
-                        {data?.source === "fallback"
-                            ? t("exchangeRates.fallbackInUse")
-                            : t("exchangeRates.staleWarning", {
-                                  date: data?.last_fetched_at
-                                      ? formatDateTimeStringWithAppSettings(
-                                            data.last_fetched_at,
-                                            appSettings.dateFormat,
-                                            locale,
-                                        )
-                                      : "—",
-                              })}
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 xl:grid-cols-3">
                 {summaryCards.map(({ icon: Icon, title, value, sub }) => (
-                    <Card key={title}>
+                    <Card key={title} className="min-w-0">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle variant="label">{title}</CardTitle>
                             <Icon
@@ -326,7 +317,7 @@ export default function ExchangeRatesPage() {
                             <CardDescription>
                                 {t("exchangeRates.latestEcbDesc", {
                                     count: liveRates.length,
-                                    date: rateDate ?? "",
+                                    date: formattedRateDate,
                                     fetchedAt: fetchedAt
                                         ? formatDateTimeStringWithAppSettings(
                                               fetchedAt,

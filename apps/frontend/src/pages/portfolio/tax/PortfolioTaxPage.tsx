@@ -255,7 +255,7 @@ export default function PortfolioTaxPage() {
                         />
                     )}
 
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         {isVisible("taxByAssetClass") &&
                             taxByAssetClass.length > 0 && (
                                 <AssetClassTaxChart
@@ -319,7 +319,7 @@ export default function PortfolioTaxPage() {
                             }
                         />
                     </div>
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2 lg:[&>*:only-child]:col-span-2">
                         <PortfolioBudgetCard
                             totalPIT={calculation.totalPIT}
                             totalTaxes={totalTaxes}

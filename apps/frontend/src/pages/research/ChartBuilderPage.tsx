@@ -828,6 +828,212 @@ export default function ChartBuilderPage() {
                 }
             />
 
+            {/* Layout, range and options */}
+            <Card>
+                <CardContent variant="headerless" className="space-y-4">
+                    <div className="flex flex-wrap items-end gap-4">
+                        <div className="min-w-52 space-y-1.5">
+                            <Label htmlFor="chart-builder-layout">
+                                {t("research.builder.layout")}
+                            </Label>
+                            <Select
+                                value={library.activeLayoutId ?? "__draft__"}
+                                onValueChange={(value) =>
+                                    setLibrary((previous) => ({
+                                        ...previous,
+                                        activeLayoutId:
+                                            value === "__draft__"
+                                                ? null
+                                                : value,
+                                    }))
+                                }
+                            >
+                                <SelectTrigger id="chart-builder-layout">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__draft__">
+                                        {t("research.builder.unnamedDraft")}
+                                    </SelectItem>
+                                    {library.layouts.map((layout) => (
+                                        <SelectItem
+                                            key={layout.id}
+                                            value={layout.id}
+                                        >
+                                            {layout.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <p
+                                id="chart-builder-range-label"
+                                className="type-body font-medium text-foreground"
+                            >
+                                {t("research.builder.range")}
+                            </p>
+                            <ResearchRangeSelector
+                                aria-labelledby="chart-builder-range-label"
+                                options={RANGES}
+                                value={range}
+                                onChange={(option) =>
+                                    patch({ range: option.range })
+                                }
+                            />
+                        </div>
+                        <p
+                            role="status"
+                            className="self-center type-footnote text-label-secondary sm:ml-auto"
+                        >
+                            {t(
+                                storageFailed
+                                    ? "research.builder.storageFailed"
+                                    : persistedLibrary === library
+                                      ? "research.builder.savedLocally"
+                                      : "research.builder.savingLocally",
+                            )}
+                        </p>
+                    </div>
+                    <Disclosure variant="card">
+                        <DisclosureSummary padded>
+                            {t("research.builder.options")}
+                            {activeOptions.length > 0 && (
+                                <span className="ml-2 type-footnote font-normal text-label-secondary">
+                                    {activeOptions.join(" · ")}
+                                </span>
+                            )}
+                        </DisclosureSummary>
+                        <DisclosureContent className="space-y-4 border-t border-border/50 p-4">
+                            <List>
+                                <ListRow
+                                    title={
+                                        <Label htmlFor="log">
+                                            {t("research.builder.logScale")}
+                                        </Label>
+                                    }
+                                    trailing={
+                                        <Switch
+                                            id="log"
+                                            checked={logLeft}
+                                            onCheckedChange={(v) =>
+                                                patch({ logLeft: v })
+                                            }
+                                        />
+                                    }
+                                />
+                                <ListRow
+                                    title={
+                                        <Label htmlFor="rebase">
+                                            {t("research.builder.rebase")}
+                                        </Label>
+                                    }
+                                    trailing={
+                                        <Switch
+                                            id="rebase"
+                                            checked={rebaseAll}
+                                            onCheckedChange={(v) =>
+                                                patch({ rebase: v })
+                                            }
+                                        />
+                                    }
+                                />
+                            </List>
+                            <div className="space-y-2">
+                                <p className="type-footnote text-label-secondary">
+                                    {t("research.builder.presets")}
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    {[
+                                        "priceVolume",
+                                        "sma",
+                                        "bollinger",
+                                        "rsi",
+                                        "macd",
+                                        "rebased",
+                                    ].map((p) => (
+                                        <Button
+                                            key={p}
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={priceSeries.length === 0}
+                                            onClick={() => applyPreset(p)}
+                                        >
+                                            {t(`research.builder.preset.${p}`)}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        </DisclosureContent>
+                    </Disclosure>
+                </CardContent>
+            </Card>
+
+            {/* Chart */}
+            {series.length === 0 ? (
+                <Card>
+                    <CardContent variant="state">
+                        <EmptyState
+                            icon={LineChartIcon}
+                            title={t("research.builder.emptyTitle")}
+                            description={t("research.builder.emptyHint")}
+                        />
+                    </CardContent>
+                </Card>
+            ) : (
+                <Card>
+                    <CardContent variant="headerless">
+                        <p className="mb-4 type-callout text-label-secondary">
+                            {t("research.builder.chartHelp")}
+                        </p>
+                        {isLoading ? (
+                            <Skeleton
+                                {...loadingSurfaceProps}
+                                className="h-[400px] w-full"
+                            />
+                        ) : rows.length > 0 ? (
+                            <ComposedChart<Row>
+                                data={rows}
+                                xAccessor={(d) => new Date(d.time)}
+                                xIsDate
+                                height={400}
+                                logLeft={logLeft}
+                                series={composed}
+                                xTickFormat={(v) =>
+                                    formatDateWithAppSettings(
+                                        v as Date,
+                                        appSettings.dateFormat,
+                                    )
+                                }
+                                leftTickFormat={(v) =>
+                                    rebaseAll
+                                        ? v.toFixed(0)
+                                        : v.toLocaleString(locale)
+                                }
+                                rightTickFormat={(v) =>
+                                    v.toLocaleString(locale)
+                                }
+                                tooltipTitle={(d) =>
+                                    formatDateWithAppSettings(
+                                        new Date(d.time),
+                                        appSettings.dateFormat,
+                                    )
+                                }
+                                tooltipValueFormat={(v) =>
+                                    v.toLocaleString(locale, {
+                                        maximumFractionDigits: 2,
+                                    })
+                                }
+                            />
+                        ) : (
+                            <div className="flex h-[400px] items-center justify-center type-callout text-label-secondary">
+                                {t("market.noChartData")}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Series builder */}
             <Card className={cn(searchOpen && "relative z-20")}>
                 <CardHeader className="pb-4">
@@ -1103,7 +1309,7 @@ export default function ChartBuilderPage() {
                                 ))}
                             </div>
                             {indicators.length > 0 && (
-                                <List>
+                                <List className="max-w-md">
                                     {indicators.map((ind) => {
                                         const name = indicatorName(ind);
                                         return (
@@ -1174,212 +1380,6 @@ export default function ChartBuilderPage() {
                     )}
                 </CardContent>
             </Card>
-
-            {/* Layout, range and options */}
-            <Card>
-                <CardContent variant="headerless" className="space-y-4">
-                    <div className="flex flex-wrap items-end gap-4">
-                        <div className="min-w-52 space-y-1.5">
-                            <Label htmlFor="chart-builder-layout">
-                                {t("research.builder.layout")}
-                            </Label>
-                            <Select
-                                value={library.activeLayoutId ?? "__draft__"}
-                                onValueChange={(value) =>
-                                    setLibrary((previous) => ({
-                                        ...previous,
-                                        activeLayoutId:
-                                            value === "__draft__"
-                                                ? null
-                                                : value,
-                                    }))
-                                }
-                            >
-                                <SelectTrigger id="chart-builder-layout">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="__draft__">
-                                        {t("research.builder.unnamedDraft")}
-                                    </SelectItem>
-                                    {library.layouts.map((layout) => (
-                                        <SelectItem
-                                            key={layout.id}
-                                            value={layout.id}
-                                        >
-                                            {layout.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <p
-                                id="chart-builder-range-label"
-                                className="type-body font-medium text-foreground"
-                            >
-                                {t("research.builder.range")}
-                            </p>
-                            <ResearchRangeSelector
-                                aria-labelledby="chart-builder-range-label"
-                                options={RANGES}
-                                value={range}
-                                onChange={(option) =>
-                                    patch({ range: option.range })
-                                }
-                            />
-                        </div>
-                        <p
-                            role="status"
-                            className="self-center type-footnote text-label-secondary sm:ml-auto"
-                        >
-                            {t(
-                                storageFailed
-                                    ? "research.builder.storageFailed"
-                                    : persistedLibrary === library
-                                      ? "research.builder.savedLocally"
-                                      : "research.builder.savingLocally",
-                            )}
-                        </p>
-                    </div>
-                    <Disclosure variant="card">
-                        <DisclosureSummary padded>
-                            {t("research.builder.options")}
-                            {activeOptions.length > 0 && (
-                                <span className="ml-2 type-footnote font-normal text-label-secondary">
-                                    {activeOptions.join(" · ")}
-                                </span>
-                            )}
-                        </DisclosureSummary>
-                        <DisclosureContent className="space-y-4 border-t border-border/50 p-4">
-                            <List>
-                                <ListRow
-                                    title={
-                                        <Label htmlFor="log">
-                                            {t("research.builder.logScale")}
-                                        </Label>
-                                    }
-                                    trailing={
-                                        <Switch
-                                            id="log"
-                                            checked={logLeft}
-                                            onCheckedChange={(v) =>
-                                                patch({ logLeft: v })
-                                            }
-                                        />
-                                    }
-                                />
-                                <ListRow
-                                    title={
-                                        <Label htmlFor="rebase">
-                                            {t("research.builder.rebase")}
-                                        </Label>
-                                    }
-                                    trailing={
-                                        <Switch
-                                            id="rebase"
-                                            checked={rebaseAll}
-                                            onCheckedChange={(v) =>
-                                                patch({ rebase: v })
-                                            }
-                                        />
-                                    }
-                                />
-                            </List>
-                            <div className="space-y-2">
-                                <p className="type-footnote text-label-secondary">
-                                    {t("research.builder.presets")}
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                    {[
-                                        "priceVolume",
-                                        "sma",
-                                        "bollinger",
-                                        "rsi",
-                                        "macd",
-                                        "rebased",
-                                    ].map((p) => (
-                                        <Button
-                                            key={p}
-                                            size="sm"
-                                            variant="outline"
-                                            disabled={priceSeries.length === 0}
-                                            onClick={() => applyPreset(p)}
-                                        >
-                                            {t(`research.builder.preset.${p}`)}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
-                        </DisclosureContent>
-                    </Disclosure>
-                </CardContent>
-            </Card>
-
-            {/* Chart */}
-            {series.length === 0 ? (
-                <Card>
-                    <CardContent variant="state">
-                        <EmptyState
-                            icon={LineChartIcon}
-                            title={t("research.builder.emptyTitle")}
-                            description={t("research.builder.emptyHint")}
-                        />
-                    </CardContent>
-                </Card>
-            ) : (
-                <Card>
-                    <CardContent variant="headerless">
-                        <p className="mb-4 type-callout text-label-secondary">
-                            {t("research.builder.chartHelp")}
-                        </p>
-                        {isLoading ? (
-                            <Skeleton
-                                {...loadingSurfaceProps}
-                                className="h-[400px] w-full"
-                            />
-                        ) : rows.length > 0 ? (
-                            <ComposedChart<Row>
-                                data={rows}
-                                xAccessor={(d) => new Date(d.time)}
-                                xIsDate
-                                height={400}
-                                logLeft={logLeft}
-                                series={composed}
-                                xTickFormat={(v) =>
-                                    formatDateWithAppSettings(
-                                        v as Date,
-                                        appSettings.dateFormat,
-                                    )
-                                }
-                                leftTickFormat={(v) =>
-                                    rebaseAll
-                                        ? v.toFixed(0)
-                                        : v.toLocaleString(locale)
-                                }
-                                rightTickFormat={(v) =>
-                                    v.toLocaleString(locale)
-                                }
-                                tooltipTitle={(d) =>
-                                    formatDateWithAppSettings(
-                                        new Date(d.time),
-                                        appSettings.dateFormat,
-                                    )
-                                }
-                                tooltipValueFormat={(v) =>
-                                    v.toLocaleString(locale, {
-                                        maximumFractionDigits: 2,
-                                    })
-                                }
-                            />
-                        ) : (
-                            <div className="flex h-[400px] items-center justify-center type-callout text-label-secondary">
-                                {t("market.noChartData")}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
 
             {/* Oscillator */}
             {series.length > 0 && (

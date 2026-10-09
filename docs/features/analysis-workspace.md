@@ -42,9 +42,9 @@ an empty side column. Selected preparation operations, formula scope and scenari
 contextual guidance. Missing prerequisites and conflicting output names explain what to correct.
 
 1. Choose a ledger dataset or Current positions, Current cost basis, Portfolio/Broker valuation history, Stored dated exchange rates, or Benchmark price history.
-2. Select fields and measures. Every selected field must be grouped when a measure is present.
-3. Add typed filters, ordering, and the published many-to-one account join when needed.
-4. Run the plan and inspect the generated SQL.
+2. Search fields by their displayed label or identifier and select fields and measures. Technical fields hides unselected identifier/path fields by default; selected fields remain visible. Every selected field must be grouped when a measure is present.
+3. Add typed filters and ordering. Boolean filters use Yes/No choices. The published many-to-one account join is available under Advanced.
+4. Use Run above the builder and inspect the generated SQL.
 5. Double-click a grouped result to read at most 100 contributing source records.
 
 The default example groups non-transfer active cash flow by month, category, and currency. Join IDs come from
@@ -140,10 +140,14 @@ compatible visual origin is retained when the result shape is unchanged.
 - Catalog choices and recognized result columns use readable English or Dutch labels in the builder,
   table, chart selectors, and pivot. Custom column aliases remain unchanged. Display labels do not
   replace the identifiers used by queries, sorting, drill-through, saved definitions, or CSV exports.
-- Numeric table, chart, and pivot values use the selected number-format separators while preserving
-  the available decimal precision. Identifiers and text remain literal; display formatting does not
-  round or modify the underlying result or export values.
-- The grid pages through server results and shows whether more rows exist or a byte limit truncated it.
+- Table values default to Exact: locale separators with available decimal precision. Formatted is
+  an explicit display choice using the configured decimal places (half-even rounding) and date format.
+  Raw shows the original scalar strings. Numeric cells align right and retain their original value in
+  a title. These choices do not change result values, exports, charts or pivots. Chart and pivot values
+  continue to use locale separators without reducing available precision.
+- The grid first pages within the loaded server window using the configured default page size.
+  Its labelled loaded-row controls are separate from server paging; server controls still report
+  additional rows and byte-limit truncation. Display paging does not limit chart, pivot or export input.
 - Header sorting reruns visual SQL with the selected order. Saving, reopening, and refreshing a
   visual analysis retain that order.
 - Drill-through uses the selected group values as typed filters.

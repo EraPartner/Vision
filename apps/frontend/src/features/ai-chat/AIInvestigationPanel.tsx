@@ -453,7 +453,7 @@ export function AIInvestigationPanel() {
                         ))}
                     </div>
                 )}
-                <Card asChild>
+                <Card asChild className="rounded-none border-x-0 border-t-0 bg-transparent shadow-none">
                     <Disclosure>
                         <DisclosureSummary
                             padded
@@ -569,7 +569,7 @@ export function AIInvestigationPanel() {
                     </p>
                 </div>
             )}
-            <Card asChild>
+            <Card asChild className="rounded-none border-x-0 border-t-0 bg-transparent shadow-none">
                 <Disclosure>
                     <DisclosureSummary
                         padded
@@ -939,7 +939,7 @@ export function AIInvestigationPanel() {
                         : t("aiResearch.localDefault")}
                 </span>
             </div>
-            <Card asChild>
+            <Card asChild className="rounded-none border-x-0 border-t-0 bg-transparent shadow-none">
                 <Disclosure>
                     <DisclosureSummary
                         padded

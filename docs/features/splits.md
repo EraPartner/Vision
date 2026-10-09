@@ -322,3 +322,9 @@ i18n keys are defined in `i18n/source/en.json` and `i18n/source/nl.json` and acc
 ## Clarity and recovery feedback
 
 Debt-summary and recipient-detail query failures show a retry action rather than No outstanding debts or All settled. Cached details remain available with failure feedback when a refresh fails.
+
+## Debt list presentation
+
+Who owes you uses a fixed-width amount/progress column. Recipient detail separates the outstanding
+summary from recent transactions. A successfully loaded empty transaction list shows one empty
+state without search, table headings or zero-row pagination; loading and failure handling are retained.

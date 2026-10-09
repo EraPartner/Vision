@@ -661,12 +661,19 @@ export default function AnalysisMonitorsPage() {
                                             kind: next as MonitorKind,
                                         })
                                     }
-                                    className="w-full"
+                                    className="grid h-auto w-full grid-cols-1"
+                                    orientation="vertical"
                                 >
-                                    <SegmentedControlItem value="analysis-threshold">
+                                    <SegmentedControlItem
+                                        value="analysis-threshold"
+                                        className="min-h-10 whitespace-normal py-2 [&>span:last-child]:whitespace-normal [&>span:last-child]:overflow-visible"
+                                    >
                                         {t("monitors.kind.threshold")}
                                     </SegmentedControlItem>
-                                    <SegmentedControlItem value="dossier-evidence">
+                                    <SegmentedControlItem
+                                        value="dossier-evidence"
+                                        className="min-h-10 whitespace-normal py-2 [&>span:last-child]:whitespace-normal [&>span:last-child]:overflow-visible"
+                                    >
                                         {t("monitors.kind.evidence")}
                                     </SegmentedControlItem>
                                 </SegmentedControl>
@@ -678,6 +685,9 @@ export default function AnalysisMonitorsPage() {
                                                 label={t("monitors.analysis")}
                                             >
                                                 <Select
+                                                    disabled={
+                                                        eligible.length === 0
+                                                    }
                                                     value={form.savedAnalysisId}
                                                     onValueChange={(value) =>
                                                         setForm((current) => ({
@@ -1037,154 +1047,165 @@ export default function AnalysisMonitorsPage() {
                             </form>
                         </CardContent>
                     </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle variant="sm">
-                                {t("monitors.rules")}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {monitors.isLoading && (
-                                <LoadingRows label={t("monitors.rules")} />
-                            )}
-                            {monitors.isError && (
-                                <RetryAlert
-                                    message={t("monitors.loadFailed")}
-                                    pending={monitors.isFetching}
-                                    onRetry={() => void monitors.refetch()}
-                                />
-                            )}
-                            {!monitors.isLoading &&
-                                !monitors.isError &&
-                                !monitors.data?.items.length && (
-                                    <EmptyState
-                                        size="compact"
-                                        headingLevel={3}
-                                        icon={ListChecks}
-                                        title={t("monitors.empty")}
+                    {(monitors.isLoading ||
+                        monitors.isError ||
+                        !!monitors.data?.items.length) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle variant="sm">
+                                    {t("monitors.rules")}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {monitors.isLoading && (
+                                    <LoadingRows label={t("monitors.rules")} />
+                                )}
+                                {monitors.isError && (
+                                    <RetryAlert
+                                        message={t("monitors.loadFailed")}
+                                        pending={monitors.isFetching}
+                                        onRetry={() => void monitors.refetch()}
                                     />
                                 )}
-                            {monitors.data &&
-                                monitors.data.items.length > 0 && (
-                                    <List>
-                                        {monitors.data.items.map((monitor) => {
-                                            const active =
-                                                monitor.id === selectedId;
-                                            return (
-                                                <ListRow
-                                                    key={monitor.id}
-                                                    selected={active}
-                                                    title={monitor.title}
-                                                    subtitle={
-                                                        <>
-                                                            {
-                                                                monitor.targetLabel
-                                                            }{" "}
-                                                            ·{" "}
-                                                            {t(
-                                                                `monitors.status.${monitor.lastStatus ?? "never"}`,
-                                                            )}{" "}
-                                                            ·{" "}
-                                                            {monitor.enabled
-                                                                ? t(
-                                                                      "monitors.enabled",
-                                                                  )
-                                                                : t(
-                                                                      "monitors.disabled",
-                                                                  )}
-                                                        </>
-                                                    }
-                                                    onActivate={() =>
-                                                        selectMonitor(
-                                                            monitor.id,
-                                                        )
-                                                    }
-                                                    actions={
-                                                        <RowMenu
-                                                            label={t(
-                                                                "monitors.rowMenu",
-                                                                {
-                                                                    name: monitor.title,
-                                                                },
-                                                            )}
-                                                            disabled={busy}
-                                                        >
-                                                            <DropdownMenuItem
-                                                                onSelect={() =>
-                                                                    void check(
-                                                                        monitor,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Play
-                                                                    className="mr-2 h-4 w-4 text-label-secondary"
-                                                                    aria-hidden="true"
-                                                                />
-                                                                {t(
-                                                                    "monitors.checkNow",
-                                                                )}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem
-                                                                onSelect={() =>
-                                                                    void toggleEnabled(
-                                                                        monitor,
-                                                                    )
-                                                                }
-                                                            >
-                                                                {monitor.enabled ? (
-                                                                    <Pause
-                                                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                ) : (
-                                                                    <Play
-                                                                        className="mr-2 h-4 w-4 text-label-secondary"
-                                                                        aria-hidden="true"
-                                                                    />
-                                                                )}
-                                                                {monitor.enabled
-                                                                    ? t(
-                                                                          "monitors.disable",
-                                                                      )
-                                                                    : t(
-                                                                          "monitors.enable",
-                                                                      )}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                variant="destructive"
-                                                                onSelect={() =>
-                                                                    void remove(
-                                                                        monitor,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Trash2
-                                                                    className="mr-2 h-4 w-4"
-                                                                    aria-hidden="true"
-                                                                />
-                                                                {t(
-                                                                    "monitors.delete",
-                                                                )}
-                                                            </DropdownMenuItem>
-                                                        </RowMenu>
-                                                    }
-                                                />
-                                            );
-                                        })}
-                                    </List>
-                                )}
-                            {monitors.data &&
-                                monitors.data.total > PAGE_SIZE && (
-                                    <Pager
-                                        offset={monitorOffset}
-                                        total={monitors.data.total}
-                                        pageSize={PAGE_SIZE}
-                                        onChange={setMonitorOffset}
-                                    />
-                                )}
-                        </CardContent>
-                    </Card>
+                                {!monitors.isLoading &&
+                                    !monitors.isError &&
+                                    !monitors.data?.items.length && (
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={ListChecks}
+                                            title={t("monitors.empty")}
+                                        />
+                                    )}
+                                {monitors.data &&
+                                    monitors.data.items.length > 0 && (
+                                        <List>
+                                            {monitors.data.items.map(
+                                                (monitor) => {
+                                                    const active =
+                                                        monitor.id ===
+                                                        selectedId;
+                                                    return (
+                                                        <ListRow
+                                                            key={monitor.id}
+                                                            selected={active}
+                                                            title={
+                                                                monitor.title
+                                                            }
+                                                            subtitle={
+                                                                <>
+                                                                    {
+                                                                        monitor.targetLabel
+                                                                    }{" "}
+                                                                    ·{" "}
+                                                                    {t(
+                                                                        `monitors.status.${monitor.lastStatus ?? "never"}`,
+                                                                    )}{" "}
+                                                                    ·{" "}
+                                                                    {monitor.enabled
+                                                                        ? t(
+                                                                              "monitors.enabled",
+                                                                          )
+                                                                        : t(
+                                                                              "monitors.disabled",
+                                                                          )}
+                                                                </>
+                                                            }
+                                                            onActivate={() =>
+                                                                selectMonitor(
+                                                                    monitor.id,
+                                                                )
+                                                            }
+                                                            actions={
+                                                                <RowMenu
+                                                                    label={t(
+                                                                        "monitors.rowMenu",
+                                                                        {
+                                                                            name: monitor.title,
+                                                                        },
+                                                                    )}
+                                                                    disabled={
+                                                                        busy
+                                                                    }
+                                                                >
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() =>
+                                                                            void check(
+                                                                                monitor,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Play
+                                                                            className="mr-2 h-4 w-4 text-label-secondary"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        {t(
+                                                                            "monitors.checkNow",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onSelect={() =>
+                                                                            void toggleEnabled(
+                                                                                monitor,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {monitor.enabled ? (
+                                                                            <Pause
+                                                                                className="mr-2 h-4 w-4 text-label-secondary"
+                                                                                aria-hidden="true"
+                                                                            />
+                                                                        ) : (
+                                                                            <Play
+                                                                                className="mr-2 h-4 w-4 text-label-secondary"
+                                                                                aria-hidden="true"
+                                                                            />
+                                                                        )}
+                                                                        {monitor.enabled
+                                                                            ? t(
+                                                                                  "monitors.disable",
+                                                                              )
+                                                                            : t(
+                                                                                  "monitors.enable",
+                                                                              )}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        variant="destructive"
+                                                                        onSelect={() =>
+                                                                            void remove(
+                                                                                monitor,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <Trash2
+                                                                            className="mr-2 h-4 w-4"
+                                                                            aria-hidden="true"
+                                                                        />
+                                                                        {t(
+                                                                            "monitors.delete",
+                                                                        )}
+                                                                    </DropdownMenuItem>
+                                                                </RowMenu>
+                                                            }
+                                                        />
+                                                    );
+                                                },
+                                            )}
+                                        </List>
+                                    )}
+                                {monitors.data &&
+                                    monitors.data.total > PAGE_SIZE && (
+                                        <Pager
+                                            offset={monitorOffset}
+                                            total={monitors.data.total}
+                                            pageSize={PAGE_SIZE}
+                                            onChange={setMonitorOffset}
+                                        />
+                                    )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
                 <div className="space-y-6">
                     {selected && edit && (
@@ -1425,233 +1446,255 @@ export default function AnalysisMonitorsPage() {
                             </CardContent>
                         </Card>
                     )}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle variant="sm">
-                                {t("monitors.observations")}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {selectedId ? (
-                                <>
-                                    {observations.isLoading && (
-                                        <LoadingRows
-                                            label={t("monitors.observations")}
-                                        />
-                                    )}
-                                    {observations.isError && (
-                                        <RetryAlert
-                                            message={t(
-                                                "monitors.observationsFailed",
+                    {selectedId && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle variant="sm">
+                                    {t("monitors.observations")}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {selectedId ? (
+                                    <>
+                                        {observations.isLoading && (
+                                            <LoadingRows
+                                                label={t(
+                                                    "monitors.observations",
+                                                )}
+                                            />
+                                        )}
+                                        {observations.isError && (
+                                            <RetryAlert
+                                                message={t(
+                                                    "monitors.observationsFailed",
+                                                )}
+                                                pending={
+                                                    observations.isFetching
+                                                }
+                                                onRetry={() =>
+                                                    void observations.refetch()
+                                                }
+                                            />
+                                        )}
+                                        {!observations.isError &&
+                                            observations.data &&
+                                            !observations.data.items.length && (
+                                                <EmptyState
+                                                    size="compact"
+                                                    headingLevel={3}
+                                                    icon={Activity}
+                                                    title={t(
+                                                        "monitors.noObservations",
+                                                    )}
+                                                />
                                             )}
-                                            pending={observations.isFetching}
-                                            onRetry={() =>
-                                                void observations.refetch()
-                                            }
-                                        />
-                                    )}
-                                    {!observations.isError &&
-                                        observations.data &&
-                                        !observations.data.items.length && (
-                                            <EmptyState
-                                                size="compact"
-                                                headingLevel={3}
-                                                icon={Activity}
-                                                title={t(
-                                                    "monitors.noObservations",
-                                                )}
-                                            />
-                                        )}
-                                    {observations.data &&
-                                        observations.data.items.length > 0 && (
-                                            <List>
-                                                {observations.data.items.map(
-                                                    (item) => (
-                                                        <Observation
-                                                            key={item.id}
-                                                            item={item}
-                                                        />
-                                                    ),
-                                                )}
-                                            </List>
-                                        )}
-                                    {!observations.isError &&
-                                        observations.data &&
-                                        observations.data.total > PAGE_SIZE && (
-                                            <Pager
-                                                offset={observationOffset}
-                                                total={observations.data.total}
-                                                pageSize={PAGE_SIZE}
-                                                onChange={setObservationOffset}
-                                                showRange={false}
-                                            />
-                                        )}
-                                </>
-                            ) : (
-                                <EmptyState
-                                    size="compact"
-                                    headingLevel={3}
-                                    icon={Activity}
-                                    title={t("monitors.selectRule")}
-                                />
-                            )}
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle variant="sm">
-                                {t("monitors.inbox")}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {notifications.isLoading && (
-                                <LoadingRows label={t("monitors.inbox")} />
-                            )}
-                            {notifications.isError && (
-                                <RetryAlert
-                                    message={t("monitors.inboxFailed")}
-                                    pending={notifications.isFetching}
-                                    onRetry={() => void notifications.refetch()}
-                                />
-                            )}
-                            {!notifications.isError &&
-                                notifications.data &&
-                                !notifications.data.items.length && (
+                                        {observations.data &&
+                                            observations.data.items.length >
+                                                0 && (
+                                                <List>
+                                                    {observations.data.items.map(
+                                                        (item) => (
+                                                            <Observation
+                                                                key={item.id}
+                                                                item={item}
+                                                            />
+                                                        ),
+                                                    )}
+                                                </List>
+                                            )}
+                                        {!observations.isError &&
+                                            observations.data &&
+                                            observations.data.total >
+                                                PAGE_SIZE && (
+                                                <Pager
+                                                    offset={observationOffset}
+                                                    total={
+                                                        observations.data.total
+                                                    }
+                                                    pageSize={PAGE_SIZE}
+                                                    onChange={
+                                                        setObservationOffset
+                                                    }
+                                                    showRange={false}
+                                                />
+                                            )}
+                                    </>
+                                ) : (
                                     <EmptyState
                                         size="compact"
                                         headingLevel={3}
-                                        icon={Bell}
-                                        title={t("monitors.noNotifications")}
+                                        icon={Activity}
+                                        title={t("monitors.selectRule")}
                                     />
                                 )}
-                            {notifications.data &&
-                                notifications.data.items.length > 0 && (
-                                    <List>
-                                        {notifications.data.items.map(
-                                            (item) => {
-                                                const unread = !item.readAt;
-                                                return (
-                                                    <ListRow
-                                                        key={item.id}
-                                                        className={cn(
-                                                            unread &&
-                                                                "bg-primary/[0.04]",
-                                                        )}
-                                                        leading={
-                                                            <span
-                                                                aria-hidden={
-                                                                    unread
-                                                                        ? undefined
-                                                                        : "true"
-                                                                }
-                                                                role={
-                                                                    unread
-                                                                        ? "img"
-                                                                        : undefined
-                                                                }
-                                                                aria-label={
-                                                                    unread
-                                                                        ? t(
-                                                                              "monitors.unread",
-                                                                          )
-                                                                        : undefined
-                                                                }
-                                                                className={cn(
-                                                                    "inline-flex h-2 w-2 shrink-0 rounded-full",
-                                                                    unread
-                                                                        ? "bg-primary"
-                                                                        : "bg-transparent",
-                                                                )}
-                                                            />
-                                                        }
-                                                        title={
-                                                            <span
-                                                                className={cn(
-                                                                    "flex flex-wrap items-baseline gap-x-2",
-                                                                    unread &&
-                                                                        "font-medium",
-                                                                )}
-                                                            >
-                                                                <span className="truncate">
-                                                                    {item.title}
-                                                                </span>
-                                                                <span className="type-footnote font-normal text-label-secondary tabular-nums">
-                                                                    {dateTime(
-                                                                        item.createdAt,
+                            </CardContent>
+                        </Card>
+                    )}
+                    {(notifications.isLoading ||
+                        notifications.isError ||
+                        !!notifications.data?.items.length) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle variant="sm">
+                                    {t("monitors.inbox")}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {notifications.isLoading && (
+                                    <LoadingRows label={t("monitors.inbox")} />
+                                )}
+                                {notifications.isError && (
+                                    <RetryAlert
+                                        message={t("monitors.inboxFailed")}
+                                        pending={notifications.isFetching}
+                                        onRetry={() =>
+                                            void notifications.refetch()
+                                        }
+                                    />
+                                )}
+                                {!notifications.isError &&
+                                    notifications.data &&
+                                    !notifications.data.items.length && (
+                                        <EmptyState
+                                            size="compact"
+                                            headingLevel={3}
+                                            icon={Bell}
+                                            title={t(
+                                                "monitors.noNotifications",
+                                            )}
+                                        />
+                                    )}
+                                {notifications.data &&
+                                    notifications.data.items.length > 0 && (
+                                        <List>
+                                            {notifications.data.items.map(
+                                                (item) => {
+                                                    const unread = !item.readAt;
+                                                    return (
+                                                        <ListRow
+                                                            key={item.id}
+                                                            className={cn(
+                                                                unread &&
+                                                                    "bg-primary/[0.04]",
+                                                            )}
+                                                            leading={
+                                                                <span
+                                                                    aria-hidden={
+                                                                        unread
+                                                                            ? undefined
+                                                                            : "true"
+                                                                    }
+                                                                    role={
+                                                                        unread
+                                                                            ? "img"
+                                                                            : undefined
+                                                                    }
+                                                                    aria-label={
+                                                                        unread
+                                                                            ? t(
+                                                                                  "monitors.unread",
+                                                                              )
+                                                                            : undefined
+                                                                    }
+                                                                    className={cn(
+                                                                        "inline-flex h-2 w-2 shrink-0 rounded-full",
+                                                                        unread
+                                                                            ? "bg-primary"
+                                                                            : "bg-transparent",
                                                                     )}
-                                                                </span>
-                                                            </span>
-                                                        }
-                                                        subtitle={
-                                                            <span className="block whitespace-normal type-body text-foreground">
-                                                                {reasonLabel(
-                                                                    item.reasonCode,
-                                                                    item.reason,
-                                                                    t,
-                                                                ) ??
-                                                                    t(
-                                                                        "monitors.notificationReasonUnknown",
+                                                                />
+                                                            }
+                                                            title={
+                                                                <span
+                                                                    className={cn(
+                                                                        "flex flex-wrap items-baseline gap-x-2",
+                                                                        unread &&
+                                                                            "font-medium",
                                                                     )}
-                                                                {(item.previousValue !==
-                                                                    null ||
-                                                                    item.currentValue !==
-                                                                        null) && (
-                                                                    <span className="block type-footnote text-label-secondary tabular-nums">
-                                                                        {t(
-                                                                            "monitors.valueChange",
-                                                                            {
-                                                                                previous:
-                                                                                    item.previousValue ??
-                                                                                    "—",
-                                                                                current:
-                                                                                    item.currentValue ??
-                                                                                    "—",
-                                                                            },
+                                                                >
+                                                                    <span className="truncate">
+                                                                        {
+                                                                            item.title
+                                                                        }
+                                                                    </span>
+                                                                    <span className="type-footnote font-normal text-label-secondary tabular-nums">
+                                                                        {dateTime(
+                                                                            item.createdAt,
                                                                         )}
                                                                     </span>
-                                                                )}
-                                                            </span>
-                                                        }
-                                                        actions={
-                                                            unread && (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    disabled={
-                                                                        busy
-                                                                    }
-                                                                    onClick={() =>
-                                                                        void markRead(
-                                                                            item.id,
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    {t(
-                                                                        "monitors.markRead",
+                                                                </span>
+                                                            }
+                                                            subtitle={
+                                                                <span className="block whitespace-normal type-body text-foreground">
+                                                                    {reasonLabel(
+                                                                        item.reasonCode,
+                                                                        item.reason,
+                                                                        t,
+                                                                    ) ??
+                                                                        t(
+                                                                            "monitors.notificationReasonUnknown",
+                                                                        )}
+                                                                    {(item.previousValue !==
+                                                                        null ||
+                                                                        item.currentValue !==
+                                                                            null) && (
+                                                                        <span className="block type-footnote text-label-secondary tabular-nums">
+                                                                            {t(
+                                                                                "monitors.valueChange",
+                                                                                {
+                                                                                    previous:
+                                                                                        item.previousValue ??
+                                                                                        "—",
+                                                                                    current:
+                                                                                        item.currentValue ??
+                                                                                        "—",
+                                                                                },
+                                                                            )}
+                                                                        </span>
                                                                     )}
-                                                                </Button>
-                                                            )
-                                                        }
-                                                    />
-                                                );
-                                            },
-                                        )}
-                                    </List>
-                                )}
-                            {!notifications.isError &&
-                                notifications.data &&
-                                notifications.data.total > PAGE_SIZE && (
-                                    <Pager
-                                        offset={notificationOffset}
-                                        total={notifications.data.total}
-                                        pageSize={PAGE_SIZE}
-                                        onChange={setNotificationOffset}
-                                        showRange={false}
-                                    />
-                                )}
-                        </CardContent>
-                    </Card>
+                                                                </span>
+                                                            }
+                                                            actions={
+                                                                unread && (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        disabled={
+                                                                            busy
+                                                                        }
+                                                                        onClick={() =>
+                                                                            void markRead(
+                                                                                item.id,
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {t(
+                                                                            "monitors.markRead",
+                                                                        )}
+                                                                    </Button>
+                                                                )
+                                                            }
+                                                        />
+                                                    );
+                                                },
+                                            )}
+                                        </List>
+                                    )}
+                                {!notifications.isError &&
+                                    notifications.data &&
+                                    notifications.data.total > PAGE_SIZE && (
+                                        <Pager
+                                            offset={notificationOffset}
+                                            total={notifications.data.total}
+                                            pageSize={PAGE_SIZE}
+                                            onChange={setNotificationOffset}
+                                            showRange={false}
+                                        />
+                                    )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
             <ConfirmDialog />

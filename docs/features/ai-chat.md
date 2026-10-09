@@ -103,10 +103,10 @@ related_code:
 The page shows one workflow at a time through a **Chat** | **Investigation** `SegmentedControl` in the page header ([[docs/adr/187-completeness-sweep|ADR-187]]). Chat is the
 default; `?mode=investigation` restores the investigation view. The conversation selection remains
 in the separate `c` query parameter. The conversation rail and its mobile drawer button appear
-only in Chat. A shared Ollama status banner remains above both modes.
+only in Chat. The Ollama status banner is also limited to Chat. Investigation checks availability for its own selected local or cloud route.
 
 Both panels stay mounted while the inactive panel is hidden. Switching modes therefore preserves
-the chat composer draft, investigation inputs, and the investigation panel's current job state.
+investigation inputs and the investigation panel's current job state, along with the chat draft while its composer remains available.
 The page subtitle describes the active mode's purpose; the two question forms are not shown together. Deleting an attached research document in the investigation panel asks for confirmation (`aiResearch.deleteDocumentConfirm`).
 
 ## Investigation controls
@@ -403,7 +403,7 @@ Tools are declared with JSON Schema params. Backend validates args before dispat
 - **Streaming indicator in sidebar** — `ChatConversationList` calls `useStreamingConversationIds()` to get the set of active streams. Pulsing indicator renders on matching conversation rows via `motion-safe:animate-pulse` CSS class.
 - **URL-backed selection** — `AIChatPage` reads `?c=<id>` from URL on mount; if absent and a stream is in-flight, an effect auto-selects that stream (`streamingIds[0]`). This enables deep-linking and restores selection on page reload.
 - **Conversation switch does not abort prior stream** — when user clicks a new conversation in the list, the sidebar updates `selectedId` via `setSelectedId` (which updates URL), but the prior conversation's stream **keeps running in the background**. The new conversation's message list renders clean because `useSendChatMessage(selectedId)` is keyed to the new `selectedId`.
-- **Ollama unreachable** — `GET /api/ai/status` returns `{ok: false}`; frontend shows one `OllamaStatusBanner` with a localized setup hint and guide link, without repeating the failure in the page header or exposing the raw connection error as primary UI copy; composer disabled. Loading and ready states still appear in the header.
+- **Ollama unreachable** — `GET /api/ai/status` returns `{ok: false}`; frontend shows one `OllamaStatusBanner` with a localized setup hint and guide link, without repeating the failure in the page header or exposing the raw connection error as primary UI copy; a fresh chat hides the unavailable composer and question starters. Existing transcript remains readable, and an active stream retains its cancellation control. Loading and ready states still appear in the header.
 - **Model not pulled** — Ollama returns 404 on chat request; surface "Model not installed. Run `ollama pull <model>` or pick another." in the banner.
 - **Context window overflow** — the service first applies the message-count ceiling, then admits history newest-first under an approximate character budget after reserving the system prompt and current user request. The newest history item is shortened instead of dropped when only part fits. Ollama receives the configured `num_ctx` for both streaming and non-streaming calls.
 - **LLM picks an unknown tool name** — dispatcher returns a structured error back to the LLM as a `tool` message; LLM retries or apologizes.
@@ -475,3 +475,10 @@ See [[docs/security/ai-data-access|AI Data Access Policy]] for the full security
 - [[docs/features/belgian-tax|Belgian Tax]] — data surfaced by tax tools
 
 Research question starters fill and focus the editable question without submitting or changing privacy options. Local-model unavailability is a calm status with Retry and setup actions; connection details remain available in a disclosure.
+
+## Unavailable and investigation layout
+
+Investigation keeps configuration, evidence and history in flat bordered sections rather than
+repeated nested cards. Its panel stays mounted across mode switches. In Chat, an unavailable local
+model disables new-message and tool controls; an ongoing stream keeps Cancel available. The status
+surface provides recovery without duplicating a disabled onboarding form.

@@ -1,6 +1,6 @@
 import { PageError } from "@/components/shared/PageError";
 import { PAGE_ICONS } from "@/lib/pageIcons";
-import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -34,11 +34,6 @@ import { useMarketQuotesQuery } from "@/hooks/useMarketQuotesQuery";
 import { useConfirmDialog } from "@/hooks/useConfirmDialog";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { TextLink } from "@/components/shared/TextLink";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipTrigger,
-} from "@/components/ui/tooltip";
 
 import { watchlistKeys } from "@/lib/queryKeys";
 import {
@@ -119,8 +114,6 @@ export default function WatchlistPage() {
 
     /* The row surface opens the chart; the symbol link sits inside it, so its
        events must not fall through to the row. */
-    const stopRowActivation = (event: MouseEvent | KeyboardEvent) =>
-        event.stopPropagation();
 
     const addButton = (
         <Button onClick={() => setAddDialogOpen(true)}>
@@ -191,7 +184,7 @@ export default function WatchlistPage() {
                     </CardContent>
                 </Card>
             ) : (
-                <List>
+                <List className="@container">
                     {data.items.map((item) => {
                         const quote = item.symbol
                             ? priceMap.get(item.symbol)
@@ -248,38 +241,25 @@ export default function WatchlistPage() {
                         return (
                             <ListRow
                                 key={item.id}
-                                asChild
+                                className={cn(
+                                    "[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words [&>div]:flex-wrap [&>div>span:last-child]:basis-full @[36rem]:[&>div]:flex-nowrap @[36rem]:[&>div>span:last-child]:basis-auto",
+                                    isBelowTarget && "bg-success/[0.06]",
+                                )}
                                 leading={Icon ? <Icon /> : undefined}
                                 title={
-                                    <span className="inline-flex max-w-full items-center gap-2">
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                                {item.symbol ? (
-                                                    <TextLink
-                                                        className="truncate"
-                                                        to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
-                                                        onClick={
-                                                            stopRowActivation
-                                                        }
-                                                        onKeyDown={
-                                                            stopRowActivation
-                                                        }
-                                                    >
-                                                        {name}
-                                                    </TextLink>
-                                                ) : (
-                                                    <span
-                                                        className="truncate"
-                                                        tabIndex={0}
-                                                    >
-                                                        {name}
-                                                    </span>
-                                                )}
-                                            </TooltipTrigger>
-                                            <TooltipContent>
+                                    <span className="flex max-w-full flex-wrap items-baseline gap-x-2 gap-y-1">
+                                        {item.symbol ? (
+                                            <TextLink
+                                                className="min-w-0 whitespace-normal break-words"
+                                                to={`/research/market?symbol=${encodeURIComponent(item.symbol)}`}
+                                            >
                                                 {name}
-                                            </TooltipContent>
-                                        </Tooltip>
+                                            </TextLink>
+                                        ) : (
+                                            <span className="min-w-0 whitespace-normal break-words">
+                                                {name}
+                                            </span>
+                                        )}
                                         {item.symbol && (
                                             <Badge
                                                 variant="outline"
@@ -294,7 +274,7 @@ export default function WatchlistPage() {
                                 subtitle={subtitle}
                                 trailing={
                                     <>
-                                        <span className="flex flex-col items-end">
+                                        <span className="flex w-full min-w-0 flex-col items-start gap-1 tabular-nums @[36rem]:w-48 @[36rem]:items-end">
                                             <span className="text-foreground">
                                                 {currentPrice != null
                                                     ? formatDisplayCurrency(
@@ -304,14 +284,18 @@ export default function WatchlistPage() {
                                                                   item.currency,
                                                           },
                                                       )
-                                                    : "—"}
+                                                    : t(
+                                                          "watchlist.quoteUnavailable",
+                                                      )}
                                             </span>
-                                            <span className="inline-flex items-center gap-1.5 type-footnote">
+                                            <span className="flex w-full flex-wrap items-center justify-start gap-1.5 type-footnote @[36rem]:justify-end">
                                                 {t("watchlist.targetPrice")}{" "}
                                                 {formatDisplayCurrency(
                                                     item.target_price,
                                                     { currency: item.currency },
                                                 )}
+                                            </span>
+                                            <span className="flex min-h-5 items-center justify-end type-footnote">
                                                 {isBelowTarget ? (
                                                     <Badge
                                                         variant="success"
@@ -345,59 +329,52 @@ export default function WatchlistPage() {
                                     </>
                                 }
                                 actions={
-                                    <RowMenu
-                                        label={t("watchlist.rowMenu", {
-                                            name,
-                                        })}
-                                    >
-                                        <DropdownMenuItem onSelect={openChart}>
-                                            <LineChart className="mr-2 h-4 w-4 text-label-secondary" />
-                                            {t("watchlist.openChart")}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem
-                                            disabled={!item.symbol}
-                                            onSelect={() =>
-                                                item.symbol &&
-                                                navigate(
-                                                    `/research/market?symbol=${encodeURIComponent(item.symbol)}`,
-                                                )
-                                            }
+                                    <>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={openChart}
+                                            aria-label={`${t("watchlist.openChart")}: ${name}`}
                                         >
-                                            <Search className="mr-2 h-4 w-4 text-label-secondary" />
-                                            {t("watchlist.openLookup")}
-                                        </DropdownMenuItem>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuItem
-                                            variant="destructive"
-                                            onSelect={() =>
-                                                void handleRemove(item)
-                                            }
+                                            <LineChart className="h-4 w-4" />
+                                        </Button>
+                                        <RowMenu
+                                            label={t("watchlist.rowMenu", {
+                                                name,
+                                            })}
                                         >
-                                            <Trash2 className="mr-2 h-4 w-4" />
-                                            {t("aria.removeFromWatchlist")}
-                                        </DropdownMenuItem>
-                                    </RowMenu>
+                                            <DropdownMenuItem
+                                                onSelect={openChart}
+                                            >
+                                                <LineChart className="mr-2 h-4 w-4 text-label-secondary" />
+                                                {t("watchlist.openChart")}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                disabled={!item.symbol}
+                                                onSelect={() =>
+                                                    item.symbol &&
+                                                    navigate(
+                                                        `/research/market?symbol=${encodeURIComponent(item.symbol)}`,
+                                                    )
+                                                }
+                                            >
+                                                <Search className="mr-2 h-4 w-4 text-label-secondary" />
+                                                {t("watchlist.openLookup")}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                variant="destructive"
+                                                onSelect={() =>
+                                                    void handleRemove(item)
+                                                }
+                                            >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                {t("aria.removeFromWatchlist")}
+                                            </DropdownMenuItem>
+                                        </RowMenu>
+                                    </>
                                 }
-                            >
-                                <div
-                                    role="button"
-                                    tabIndex={0}
-                                    aria-label={`${t("watchlist.openChart")}: ${name}${item.symbol ? ` (${item.symbol})` : ""}`}
-                                    className={cn(
-                                        isBelowTarget && "bg-success/[0.06]",
-                                    )}
-                                    onClick={openChart}
-                                    onKeyDown={(event) => {
-                                        if (
-                                            event.key === "Enter" ||
-                                            event.key === " "
-                                        ) {
-                                            event.preventDefault();
-                                            openChart();
-                                        }
-                                    }}
-                                />
-                            </ListRow>
+                            />
                         );
                     })}
                 </List>

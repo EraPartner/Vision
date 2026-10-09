@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -314,75 +316,183 @@ function ResultTable({
 }) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
+    const [valueMode, setValueMode] = useState("exact");
+    const rawValues = valueMode === "raw";
+    const [page, setPage] = useState(0);
+    const pageSize = appSettings.defaultPageSize;
+    const pageCount = Math.max(1, Math.ceil(result.rows.length / pageSize));
+    const currentPage = Math.min(page, pageCount - 1);
+    useEffect(() => setPage(0), [result]);
+    const numeric = (column: string) =>
+        /^(decimal|number|integer|numeric|float|double)$/.test(
+            inferColumnType(result, column),
+        );
+    const displayValue = (column: string, value: AnalysisValue | undefined) => {
+        if (value == null) return "—";
+        if (rawValues) return String(value);
+        const type = inferColumnType(result, column);
+        if (valueMode === "exact")
+            return formatAnalysisValue(
+                value,
+                type,
+                column,
+                appSettings.numberFormat,
+            );
+        if (type === "date" && /^\d{4}-\d{2}-\d{2}$/.test(String(value)))
+            return formatDateStringWithAppSettings(
+                String(value),
+                appSettings.dateFormat,
+            );
+        const rounded =
+            numeric(column) &&
+            !/(^|[_.])id$/.test(column) &&
+            /^-?\d+(\.\d+)?$/.test(String(value))
+                ? new Decimal(String(value)).toFixed(
+                      appSettings.showDecimalPlaces,
+                      Decimal.ROUND_HALF_EVEN,
+                  )
+                : value;
+        return formatAnalysisValue(
+            rounded,
+            type,
+            column,
+            appSettings.numberFormat,
+        );
+    };
     const columns = result.declaredColumns?.length
         ? result.declaredColumns.map((column) => column.id)
         : result.columns.map((column) => column.id);
     return (
-        <div
-            className="overflow-hidden rounded-card corner-continuous border border-border/60 focus-ring"
-            tabIndex={0}
-        >
-            <Table>
-                <TableHeader className="bg-foreground/[0.03]">
-                    <TableRow>
-                        {columns.map((column) => (
-                            <TableHead
-                                key={column}
-                                scope="col"
-                                className="px-2"
-                            >
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="xs"
-                                    className="gap-1 px-2 text-label-secondary hover:text-foreground"
-                                    onClick={() => onSort(column)}
-                                >
-                                    {analysisColumnLabel(
-                                        result,
-                                        column,
-                                        datasets,
-                                        t,
-                                    )}
-                                    <ArrowUpDown
-                                        aria-hidden="true"
-                                        className="h-3 w-3 opacity-60"
-                                    />
-                                </Button>
-                            </TableHead>
-                        ))}
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {result.rows.map((row, index) => (
-                        <TableRow
-                            key={index}
-                            className="focus-ring focus-visible:outline-offset-[-3px]"
-                            onDoubleClick={() => onDrill?.(row)}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" && onDrill) {
-                                    onDrill(row);
-                                }
-                            }}
-                            tabIndex={onDrill ? 0 : undefined}
-                        >
+        <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <Select value={valueMode} onValueChange={setValueMode}>
+                    <SelectTrigger
+                        className="w-44"
+                        aria-label={t("analysis.displayValues")}
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="exact">
+                            {t("analysis.exactValues")}
+                        </SelectItem>
+                        <SelectItem value="formatted">
+                            {t("analysis.formattedValues")}
+                        </SelectItem>
+                        <SelectItem value="raw">
+                            {t("analysis.rawValues")}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+                <p className="type-footnote text-label-secondary">
+                    {t("analysis.displayPrecisionHelp")}
+                </p>
+            </div>
+            <div
+                className="overflow-hidden rounded-card corner-continuous border border-border/60 focus-ring"
+                tabIndex={0}
+            >
+                <Table>
+                    <TableHeader className="bg-foreground/[0.03]">
+                        <TableRow>
                             {columns.map((column) => (
-                                <TableCell
+                                <TableHead
                                     key={column}
-                                    className="max-w-72 truncate py-2 font-mono type-footnote"
+                                    scope="col"
+                                    className={
+                                        numeric(column)
+                                            ? "px-2 text-right"
+                                            : "px-2"
+                                    }
                                 >
-                                    {formatAnalysisValue(
-                                        row[column],
-                                        inferColumnType(result, column),
-                                        column,
-                                        appSettings.numberFormat,
-                                    )}
-                                </TableCell>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="xs"
+                                        className="gap-1 px-2 text-label-secondary hover:text-foreground"
+                                        onClick={() => onSort(column)}
+                                    >
+                                        {analysisColumnLabel(
+                                            result,
+                                            column,
+                                            datasets,
+                                            t,
+                                        )}
+                                        <ArrowUpDown
+                                            aria-hidden="true"
+                                            className="h-3 w-3 opacity-60"
+                                        />
+                                    </Button>
+                                </TableHead>
                             ))}
                         </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+                    </TableHeader>
+                    <TableBody>
+                        {result.rows
+                            .slice(
+                                currentPage * pageSize,
+                                (currentPage + 1) * pageSize,
+                            )
+                            .map((row, index) => (
+                                <TableRow
+                                    key={index}
+                                    className="focus-ring focus-visible:outline-offset-[-3px]"
+                                    onDoubleClick={() => onDrill?.(row)}
+                                    onKeyDown={(event) => {
+                                        if (event.key === "Enter" && onDrill)
+                                            onDrill(row);
+                                    }}
+                                    tabIndex={onDrill ? 0 : undefined}
+                                >
+                                    {columns.map((column) => (
+                                        <TableCell
+                                            key={column}
+                                            className={`max-w-72 truncate py-2 type-footnote ${numeric(column) ? "text-right tabular-nums" : ""} ${rawValues ? "font-mono" : ""}`}
+                                            title={String(row[column] ?? "")}
+                                        >
+                                            {displayValue(column, row[column])}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                    </TableBody>
+                </Table>
+            </div>
+            {result.rows.length > pageSize && (
+                <nav
+                    aria-label={t("analysis.loadedRows")}
+                    className="flex items-center justify-between gap-3"
+                >
+                    <span className="type-footnote text-label-secondary">
+                        {t("analysis.loadedPage", {
+                            start: currentPage * pageSize + 1,
+                            end: Math.min(
+                                (currentPage + 1) * pageSize,
+                                result.rows.length,
+                            ),
+                            total: result.rows.length,
+                        })}
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={currentPage === 0}
+                            onClick={() => setPage(currentPage - 1)}
+                        >
+                            {t("analysis.previous")}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={currentPage + 1 >= pageCount}
+                            onClick={() => setPage(currentPage + 1)}
+                        >
+                            {t("analysis.next")}
+                        </Button>
+                    </div>
+                </nav>
+            )}
         </div>
     );
 }
@@ -404,6 +514,8 @@ export default function AnalysisWorkspacePage() {
     const [workspace, setWorkspace] = useState<AnalysisWorkspace>("budgeting");
     const [templatesOpen, setTemplatesOpen] = useState(true);
     const [builderOpen, setBuilderOpen] = useState(true);
+    const [fieldSearch, setFieldSearch] = useState("");
+    const [technicalFields, setTechnicalFields] = useState(false);
     const [toolsOpen, setToolsOpen] = useState(false);
     const templateSummaryRef = useRef<HTMLElement>(null);
     const builderSummaryRef = useRef<HTMLElement>(null);
@@ -1278,6 +1390,34 @@ export default function AnalysisWorkspacePage() {
                                     </div>
                                 </dl>
                             )}
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={() => execute(0, plan, true)}
+                                    disabled={!!activeRequest}
+                                >
+                                    {activeRequest ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+                                    ) : (
+                                        <Play className="mr-2 h-4 w-4" />
+                                    )}
+                                    {activeRequest
+                                        ? t("analysis.running")
+                                        : t("analysis.run")}
+                                </Button>
+                                {activeRequest && (
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() =>
+                                            apiClient.cancelAnalysis(
+                                                activeRequest,
+                                            )
+                                        }
+                                    >
+                                        <Square className="mr-2 h-4 w-4" />
+                                        {t("analysis.cancel")}
+                                    </Button>
+                                )}
+                            </div>
                             <Disclosure
                                 open={builderOpen}
                                 onToggle={(event) =>
@@ -1429,9 +1569,60 @@ export default function AnalysisWorkspacePage() {
                                                             "analysis.fieldsHelp",
                                                         )}
                                                     </p>
+                                                    <Input
+                                                        className="mt-2"
+                                                        value={fieldSearch}
+                                                        onChange={(event) =>
+                                                            setFieldSearch(
+                                                                event.target
+                                                                    .value,
+                                                            )
+                                                        }
+                                                        placeholder={t(
+                                                            "analysis.searchFields",
+                                                        )}
+                                                        aria-label={t(
+                                                            "analysis.searchFields",
+                                                        )}
+                                                    />
+                                                    <label className="mt-2 flex items-center gap-2 type-footnote text-label-secondary">
+                                                        <Checkbox
+                                                            checked={
+                                                                technicalFields
+                                                            }
+                                                            onCheckedChange={(
+                                                                checked,
+                                                            ) =>
+                                                                setTechnicalFields(
+                                                                    checked ===
+                                                                        true,
+                                                                )
+                                                            }
+                                                        />
+                                                        {t(
+                                                            "analysis.technicalFields",
+                                                        )}
+                                                    </label>
                                                     <div className="mt-2 grid max-h-48 grid-cols-2 gap-2 overflow-auto">
-                                                        {dataset.fields.map(
-                                                            (field) => (
+                                                        {dataset.fields
+                                                            .filter(
+                                                                (field) =>
+                                                                    technicalFields ||
+                                                                    plan.fields.includes(
+                                                                        field.id,
+                                                                    ) ||
+                                                                    !/(^|[_.])id$|_ids$|_segments$/.test(
+                                                                        field.id,
+                                                                    ),
+                                                            )
+                                                            .filter((field) =>
+                                                                `${field.label} ${field.id}`
+                                                                    .toLowerCase()
+                                                                    .includes(
+                                                                        fieldSearch.toLowerCase(),
+                                                                    ),
+                                                            )
+                                                            .map((field) => (
                                                                 <label
                                                                     key={
                                                                         field.id
@@ -1481,8 +1672,7 @@ export default function AnalysisWorkspacePage() {
                                                                         field.label
                                                                     }
                                                                 </label>
-                                                            ),
-                                                        )}
+                                                            ))}
                                                     </div>
                                                 </fieldset>
                                                 <fieldset>
@@ -1544,43 +1734,50 @@ export default function AnalysisWorkspacePage() {
                                                                 </label>
                                                             ),
                                                         )}
-                                                        {dataset.joins.map(
-                                                            (join) => (
-                                                                <label
-                                                                    key={
-                                                                        join.id
-                                                                    }
-                                                                    className={
-                                                                        checkLabelClass
-                                                                    }
-                                                                >
-                                                                    <Checkbox
-                                                                        checked={plan.joins.includes(
-                                                                            join.id,
-                                                                        )}
-                                                                        onCheckedChange={(
-                                                                            checked,
-                                                                        ) =>
-                                                                            setPlan(
-                                                                                (
-                                                                                    current,
-                                                                                ) => ({
-                                                                                    ...current,
-                                                                                    joins: checked
-                                                                                        ? [
-                                                                                              join.id,
-                                                                                          ]
-                                                                                        : [],
-                                                                                }),
-                                                                            )
+                                                        <Disclosure>
+                                                            <DisclosureSummary>
+                                                                {t(
+                                                                    "analysis.advanced",
+                                                                )}
+                                                            </DisclosureSummary>
+                                                            {dataset.joins.map(
+                                                                (join) => (
+                                                                    <label
+                                                                        key={
+                                                                            join.id
                                                                         }
-                                                                    />
-                                                                    {t(
-                                                                        "analysis.safeAccountJoin",
-                                                                    )}
-                                                                </label>
-                                                            ),
-                                                        )}
+                                                                        className={
+                                                                            checkLabelClass
+                                                                        }
+                                                                    >
+                                                                        <Checkbox
+                                                                            checked={plan.joins.includes(
+                                                                                join.id,
+                                                                            )}
+                                                                            onCheckedChange={(
+                                                                                checked,
+                                                                            ) =>
+                                                                                setPlan(
+                                                                                    (
+                                                                                        current,
+                                                                                    ) => ({
+                                                                                        ...current,
+                                                                                        joins: checked
+                                                                                            ? [
+                                                                                                  join.id,
+                                                                                              ]
+                                                                                            : [],
+                                                                                    }),
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                        {t(
+                                                                            "analysis.safeAccountJoin",
+                                                                        )}
+                                                                    </label>
+                                                                ),
+                                                            )}
+                                                        </Disclosure>
                                                     </div>
                                                 </fieldset>
                                             </div>
@@ -1813,84 +2010,183 @@ export default function AnalysisWorkspacePage() {
                                                                         )}
                                                                     </SelectContent>
                                                                 </Select>
-                                                                <Input
-                                                                    aria-label={t(
-                                                                        "analysis.filterValue",
-                                                                        {
-                                                                            number:
-                                                                                index +
-                                                                                1,
-                                                                            field:
+                                                                {dataset.fields.find(
+                                                                    (field) =>
+                                                                        field.id ===
+                                                                        filter.fieldId,
+                                                                )?.type ===
+                                                                "boolean" ? (
+                                                                    <select
+                                                                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-ring"
+                                                                        aria-label={t(
+                                                                            "analysis.filterValue",
+                                                                            {
+                                                                                number:
+                                                                                    index +
+                                                                                    1,
+                                                                                field:
+                                                                                    dataset.fields.find(
+                                                                                        (
+                                                                                            field,
+                                                                                        ) =>
+                                                                                            field.id ===
+                                                                                            filter.fieldId,
+                                                                                    )
+                                                                                        ?.label ??
+                                                                                    filter.fieldId,
+                                                                            },
+                                                                        )}
+                                                                        value={String(
+                                                                            filter.value ??
+                                                                                "",
+                                                                        )}
+                                                                        disabled={[
+                                                                            "is-null",
+                                                                            "is-not-null",
+                                                                        ].includes(
+                                                                            filter.operator,
+                                                                        )}
+                                                                        onChange={(
+                                                                            event,
+                                                                        ) => {
+                                                                            const field =
                                                                                 dataset.fields.find(
                                                                                     (
-                                                                                        field,
+                                                                                        entry,
                                                                                     ) =>
-                                                                                        field.id ===
+                                                                                        entry.id ===
                                                                                         filter.fieldId,
-                                                                                )
-                                                                                    ?.label ??
-                                                                                filter.fieldId,
-                                                                        },
-                                                                    )}
-                                                                    value={String(
-                                                                        filter.value ??
-                                                                            "",
-                                                                    )}
-                                                                    disabled={[
-                                                                        "is-null",
-                                                                        "is-not-null",
-                                                                    ].includes(
-                                                                        filter.operator,
-                                                                    )}
-                                                                    onChange={(
-                                                                        event,
-                                                                    ) => {
-                                                                        const field =
-                                                                            dataset.fields.find(
+                                                                                );
+                                                                            const raw =
+                                                                                event
+                                                                                    .target
+                                                                                    .value;
+                                                                            const value: AnalysisValue =
+                                                                                field?.type ===
+                                                                                "boolean"
+                                                                                    ? raw ===
+                                                                                      "true"
+                                                                                    : field?.type ===
+                                                                                        "integer"
+                                                                                      ? Number(
+                                                                                            raw,
+                                                                                        )
+                                                                                      : raw;
+                                                                            setPlan(
                                                                                 (
-                                                                                    entry,
-                                                                                ) =>
-                                                                                    entry.id ===
-                                                                                    filter.fieldId,
+                                                                                    current,
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    filters:
+                                                                                        current.filters.map(
+                                                                                            (
+                                                                                                item,
+                                                                                                i,
+                                                                                            ) =>
+                                                                                                i ===
+                                                                                                index
+                                                                                                    ? {
+                                                                                                          ...item,
+                                                                                                          value,
+                                                                                                      }
+                                                                                                    : item,
+                                                                                        ),
+                                                                                }),
                                                                             );
-                                                                        const raw =
-                                                                            event
-                                                                                .target
-                                                                                .value;
-                                                                        const value: AnalysisValue =
-                                                                            field?.type ===
-                                                                            "boolean"
-                                                                                ? raw ===
-                                                                                  "true"
-                                                                                : field?.type ===
-                                                                                    "integer"
-                                                                                  ? Number(
-                                                                                        raw,
-                                                                                    )
-                                                                                  : raw;
-                                                                        setPlan(
-                                                                            (
-                                                                                current,
-                                                                            ) => ({
-                                                                                ...current,
-                                                                                filters:
-                                                                                    current.filters.map(
+                                                                        }}
+                                                                    >
+                                                                        <option value="" disabled>—</option>
+                                                                        <option value="true">
+                                                                            {t(
+                                                                                "common.yes",
+                                                                            )}
+                                                                        </option>
+                                                                        <option value="false">
+                                                                            {t(
+                                                                                "common.no",
+                                                                            )}
+                                                                        </option>
+                                                                    </select>
+                                                                ) : (
+                                                                    <Input
+                                                                        aria-label={t(
+                                                                            "analysis.filterValue",
+                                                                            {
+                                                                                number:
+                                                                                    index +
+                                                                                    1,
+                                                                                field:
+                                                                                    dataset.fields.find(
                                                                                         (
-                                                                                            item,
-                                                                                            i,
+                                                                                            field,
                                                                                         ) =>
-                                                                                            i ===
-                                                                                            index
-                                                                                                ? {
-                                                                                                      ...item,
-                                                                                                      value,
-                                                                                                  }
-                                                                                                : item,
-                                                                                    ),
-                                                                            }),
-                                                                        );
-                                                                    }}
-                                                                />
+                                                                                            field.id ===
+                                                                                            filter.fieldId,
+                                                                                    )
+                                                                                        ?.label ??
+                                                                                    filter.fieldId,
+                                                                            },
+                                                                        )}
+                                                                        value={String(
+                                                                            filter.value ??
+                                                                                "",
+                                                                        )}
+                                                                        disabled={[
+                                                                            "is-null",
+                                                                            "is-not-null",
+                                                                        ].includes(
+                                                                            filter.operator,
+                                                                        )}
+                                                                        onChange={(
+                                                                            event,
+                                                                        ) => {
+                                                                            const field =
+                                                                                dataset.fields.find(
+                                                                                    (
+                                                                                        entry,
+                                                                                    ) =>
+                                                                                        entry.id ===
+                                                                                        filter.fieldId,
+                                                                                );
+                                                                            const raw =
+                                                                                event
+                                                                                    .target
+                                                                                    .value;
+                                                                            const value: AnalysisValue =
+                                                                                field?.type ===
+                                                                                "boolean"
+                                                                                    ? raw ===
+                                                                                      "true"
+                                                                                    : field?.type ===
+                                                                                        "integer"
+                                                                                      ? Number(
+                                                                                            raw,
+                                                                                        )
+                                                                                      : raw;
+                                                                            setPlan(
+                                                                                (
+                                                                                    current,
+                                                                                ) => ({
+                                                                                    ...current,
+                                                                                    filters:
+                                                                                        current.filters.map(
+                                                                                            (
+                                                                                                item,
+                                                                                                i,
+                                                                                            ) =>
+                                                                                                i ===
+                                                                                                index
+                                                                                                    ? {
+                                                                                                          ...item,
+                                                                                                          value,
+                                                                                                      }
+                                                                                                    : item,
+                                                                                        ),
+                                                                                }),
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                )}
                                                                 <Button
                                                                     variant="ghost"
                                                                     size="icon"
@@ -2112,34 +2408,7 @@ export default function AnalysisWorkspacePage() {
                                     )}
                                 </div>
                             </Disclosure>
-                            <div className="flex gap-2">
-                                <Button
-                                    onClick={() => execute(0, plan, true)}
-                                    disabled={!!activeRequest}
-                                >
-                                    {activeRequest ? (
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
-                                    ) : (
-                                        <Play className="mr-2 h-4 w-4" />
-                                    )}
-                                    {activeRequest
-                                        ? t("analysis.running")
-                                        : t("analysis.run")}
-                                </Button>
-                                {activeRequest && (
-                                    <Button
-                                        variant="destructive"
-                                        onClick={() =>
-                                            apiClient.cancelAnalysis(
-                                                activeRequest,
-                                            )
-                                        }
-                                    >
-                                        <Square className="mr-2 h-4 w-4" />
-                                        {t("analysis.cancel")}
-                                    </Button>
-                                )}
-                            </div>
+
                             {error && (
                                 <Alert variant="destructive">
                                     <AlertDescription>

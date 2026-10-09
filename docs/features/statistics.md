@@ -558,3 +558,11 @@ is separate from the server-generated PDF export above.
 - [[docs/features/rolling-averages|Rolling Averages]] — Phase 7 trend overlays
 - [[docs/features/pdf-report-export|PDF Report Export]] — Phase 7 financial report download
 - [[docs/features/ai-chat|AI Chat]] — local narration surface for the Insights digest
+
+## Chart controls and legends
+
+Chart-specific year, view and range controls share the header toolbar with the quieter Exclusions
+control. Category distribution includes a visible legend with category names and amounts; yearly
+comparison also identifies its series without requiring hover. Selection and exclusion calculations
+are unchanged. Same-page URL changes preserve scroll position as described in
+[[docs/reference/frontend-routes|Frontend routes]].

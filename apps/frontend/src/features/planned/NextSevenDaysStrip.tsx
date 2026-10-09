@@ -210,7 +210,7 @@ export function NextSevenDaysStrip({
                             <li
                                 key={bucket.offset}
                                 className={cn(
-                                    "flex min-h-[6.5rem] flex-col gap-1.5 rounded-card corner-continuous border p-2 transition-colors duration-fast ease-glide",
+                                    "flex min-h-[6.5rem] min-w-0 flex-col gap-1.5 rounded-card corner-continuous border p-2 transition-colors duration-fast ease-glide",
                                     isToday
                                         ? "border-primary/45 bg-primary/[0.07]"
                                         : bucket.items.length > 0
@@ -259,11 +259,11 @@ export function NextSevenDaysStrip({
                                                 "plannedPage.next7.itemTitle",
                                                 { name: p.name },
                                             )}
-                                            className="group/item h-auto w-full flex-col items-stretch gap-0 rounded-chip px-1 py-0.5 text-left font-normal hover:bg-primary/10 [&_svg]:size-3"
+                                            className="group/item h-auto min-w-0 w-full flex-col items-stretch gap-0.5 whitespace-normal rounded-chip px-1 py-0.5 text-left font-normal hover:bg-primary/10 [&_svg]:size-3"
                                         >
                                             <span
                                                 className={cn(
-                                                    "flex items-center gap-1 truncate type-caption",
+                                                    "flex min-w-0 items-start gap-1 type-caption",
                                                     p.is_executed
                                                         ? "text-label-secondary line-through"
                                                         : "text-foreground group-hover/item:text-primary",
@@ -275,7 +275,9 @@ export function NextSevenDaysStrip({
                                                         aria-hidden
                                                     />
                                                 )}
-                                                {p.name}
+                                                <span className="min-w-0 break-words [overflow-wrap:anywhere]">
+                                                    {p.name}
+                                                </span>
                                             </span>
                                             <span
                                                 className={cn(

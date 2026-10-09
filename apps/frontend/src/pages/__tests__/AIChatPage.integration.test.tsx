@@ -65,6 +65,7 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("restores the investigation mode from its URL and supports keyboard switching", async () => {
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />, {
             initialEntries: ["/ai-chat?mode=investigation"],
@@ -80,7 +81,7 @@ describe("AIChatPage (integration)", () => {
         ).toHaveFocus();
         expect(screen.getByRole("region", { name: "Chat" })).toBeVisible();
         expect(
-            screen.getByPlaceholderText(/ask about your spending/i),
+            await screen.findByPlaceholderText(/ask about your spending/i),
         ).toBeVisible();
     });
 
@@ -120,22 +121,26 @@ describe("AIChatPage (integration)", () => {
         expect(await screen.findByRole("status")).toBeInTheDocument();
     });
 
-    it("renders empty state heading when no messages exist", async () => {
+    it("shows one setup state without onboarding or unusable composer when local AI is unreachable", async () => {
         renderWithApp(<AIChatPage />);
+        await screen.findByRole("status");
         expect(
-            await screen.findByRole("heading", {
+            screen.queryByRole("heading", {
                 name: /ask anything about your finances/i,
             }),
-        ).toBeInTheDocument();
-    });
-
-    it("disables composer textarea when local AI is unreachable", async () => {
-        renderWithApp(<AIChatPage />);
-        // Default MSW returns { ok: false } → composerDisabled = true
-        const textarea = await screen.findByPlaceholderText(
-            /ask about your spending/i,
-        );
-        expect(textarea).toBeDisabled();
+        ).not.toBeInTheDocument();
+        expect(
+            screen.queryByPlaceholderText(/ask about your spending/i),
+        ).not.toBeInTheDocument();
+        await userEvent
+            .setup()
+            .click(screen.getByRole("radio", { name: "Investigation" }));
+        expect(
+            screen.queryByText("Local AI model unreachable"),
+        ).not.toBeInTheDocument();
+        expect(
+            screen.getByRole("region", { name: "Investigation" }),
+        ).toBeVisible();
     });
 
     it("shows Retry button in status banner when AI is unreachable", async () => {
@@ -174,7 +179,8 @@ describe("AIChatPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows empty state body text", async () => {
+    it("shows empty state body text when AI is reachable", async () => {
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
         renderWithApp(<AIChatPage />);
         // aiChat.emptyState = "Start a conversation -- ask about spending, portfolio returns..."
         expect(

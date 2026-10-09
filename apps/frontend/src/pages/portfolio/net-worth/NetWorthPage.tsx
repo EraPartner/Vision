@@ -51,7 +51,7 @@ import { buildNetWorthAccountRows } from "./netWorthByAccount";
 
 const PERIOD_CODEC = enumSearchParamCodec<ChartPeriod>(
     ["1m", "3m", "6m", "1y", "3y", "all"],
-    "all",
+    "1y",
 );
 
 /** Amounts below half a cent read as nothing to show. */

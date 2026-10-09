@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { screen } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { renderWithApp } from "@/test/renderWithApp";
 import type { TableTransaction } from "../../types";
@@ -24,7 +24,7 @@ vi.mock("@/components/shared/VirtualDataTable", () => ({
     }) => (
         <div>
             {columns.map((column) => (
-                <div key={column.key}>
+                <div key={column.key} data-column={column.key}>
                     <span>{column.header}</span>
                     {data.map((row) => (
                         <div
@@ -44,6 +44,17 @@ import { TransactionsTable } from "../TransactionsTable";
 
 describe("TransactionsTable currency balances", () => {
     it("shows an explicit ISO currency and formats each balance in that currency", async () => {
+        let resize: ResizeObserverCallback | undefined;
+        vi.stubGlobal(
+            "ResizeObserver",
+            class {
+                constructor(callback: ResizeObserverCallback) {
+                    resize = callback;
+                }
+                observe() {}
+                disconnect() {}
+            },
+        );
         const user = userEvent.setup();
         renderWithApp(
             <TransactionsTable
@@ -116,5 +127,29 @@ describe("TransactionsTable currency balances", () => {
         ).toHaveLength(2);
         expect(document.body.textContent).toContain("35");
         expect(document.body.textContent).toContain("110");
+        expect(document.querySelector('[data-column="date"]')).not.toBeNull();
+        act(() =>
+            resize?.(
+                [{ contentRect: { width: 560 } } as ResizeObserverEntry],
+                {} as ResizeObserver,
+            ),
+        );
+        expect(document.querySelector('[data-column="date"]')).toBeNull();
+        expect(document.querySelector('[data-column="bank"]')).toBeNull();
+        expect(
+            document.querySelector('[data-column="compactSummary"]'),
+        ).not.toBeNull();
+        expect(screen.getByText("USD row")).toBeInTheDocument();
+        expect(screen.getByText("EUR row")).toBeInTheDocument();
+        expect(document.querySelector('[data-column="amount"]')).not.toBeNull();
+        expect(screen.getByText("Running balance")).toBeInTheDocument();
+        act(() =>
+            resize?.(
+                [{ contentRect: { width: 1200 } } as ResizeObserverEntry],
+                {} as ResizeObserver,
+            ),
+        );
+        expect(document.querySelector('[data-column="date"]')).not.toBeNull();
+        vi.unstubAllGlobals();
     });
 });

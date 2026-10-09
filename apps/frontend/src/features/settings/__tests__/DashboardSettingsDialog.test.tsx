@@ -40,7 +40,7 @@ describe("DashboardSettingsDialog", () => {
         for (const name of [
             /^general$/i,
             /^appearance$/i,
-            /^statistics$/i,
+            /^insights$/i,
             /^behavior$/i,
             /^AI & research$/i,
             /^backup$/i,
@@ -64,25 +64,28 @@ describe("DashboardSettingsDialog", () => {
         expect(await screen.findByText(/theme variant/i)).toBeInTheDocument();
     });
 
-    it("switching to Statistics shows exclusion content", async () => {
+    it("switching to Insights shows exclusion content", async () => {
         const user = userEvent.setup();
         renderDialog(true, "general");
         await screen.findByRole("dialog");
 
         await user.click(
-            await screen.findByRole("tab", { name: /^statistics$/i }),
+            await screen.findByRole("tab", { name: /^insights$/i }),
         );
 
-        expect(await screen.findAllByText(/where exclusions apply/i)).not.toHaveLength(
-            0,
-        );
+        expect(
+            await screen.findAllByText(/where exclusions apply/i),
+        ).not.toHaveLength(0);
     });
 
     it("names the window Settings and shows the section in the title bar", async () => {
         renderDialog(true, "appearance");
         const dialog = await screen.findByRole("dialog", { name: "Settings" });
         expect(
-            within(dialog).getByRole("heading", { level: 2, name: "Appearance" }),
+            within(dialog).getByRole("heading", {
+                level: 2,
+                name: "Appearance",
+            }),
         ).toBeInTheDocument();
         expect(
             within(dialog).queryByRole("button", { name: /^done$/i }),

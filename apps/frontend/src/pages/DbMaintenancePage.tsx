@@ -138,13 +138,13 @@ function TableStatRow({
                     {Number(row.dead_rows).toLocaleString(locale)}
                 </span>
             </TableCell>
-            <TableCell className="type-footnote text-label-secondary">
+            <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
                 {fmt(row.last_autovacuum)}
             </TableCell>
-            <TableCell className="type-footnote text-label-secondary">
+            <TableCell className="min-w-40 whitespace-nowrap type-footnote tabular-nums text-label-secondary">
                 {fmt(row.last_autoanalyze)}
             </TableCell>
-            <TableCell className="text-right font-medium tabular-nums">
+            <TableCell className="min-w-24 whitespace-nowrap text-right font-medium tabular-nums">
                 {row.size}
             </TableCell>
             <TableCell className="text-right">

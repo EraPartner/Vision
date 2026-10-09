@@ -2,7 +2,7 @@
 title: Analysis Monitors
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-09
 tags: [feature, analysis, monitoring, research, dossiers, notifications]
 description: Local scheduled checks for saved-analysis thresholds and dossier evidence changes, with durable observations and an in-app inbox.
 aliases: [saved analysis conditions, evidence change monitors]
@@ -42,7 +42,7 @@ Saved rules are `List` rows. Each row has a ••• menu with **Check now**, *
 
 ## Creating and editing a rule
 
-Choose the condition type and its saved analysis or dossier first. Until a target is selected,
+Choose the condition type and its saved analysis or dossier first. Condition types are stacked full-width options with wrapping labels so both choices remain readable in narrow forms. Until a target is selected,
 the form hides the rule title, condition inputs, schedule, and create button. If no eligible
 analysis or dossier exists, the empty state links to Analysis or Dossiers to create one.
 For numeric rules, **How alerts work** expands the eligibility and alert explanation.
@@ -68,3 +68,10 @@ form, focus moves to it so the value can be corrected.
 Rules, target analyses and dossiers, observations, and the inbox offer Retry when loading fails. A failed request does not also claim the list is empty. Available cached rules, observations, and notifications remain visible with the failure message. Retrying preserves the current rule form and selection.
 
 Rules, observations and inbox sections announce initial loading rather than leaving an unexplained blank area. Inbox actions wrap within narrow windows.
+
+## Initial page state
+
+With no saved rules or inbox entries, the page shows the creation step instead of empty dependent
+panels. Observations appear only after a rule is selected. Loading and errors remain visible for
+rules and the inbox, and cached records retain their failure feedback. When no eligible saved
+analysis exists, the analysis selector is disabled and the link to create an analysis remains visible.

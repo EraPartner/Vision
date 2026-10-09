@@ -87,7 +87,7 @@ export function PortfolioTaxSummaryCards({
             <section aria-labelledby="portfolio-tax-total-costs">
                 <CardContent
                     variant="headerless"
-                    className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between"
+                    className="grid gap-6 xl:grid-cols-[minmax(14rem,1fr)_3fr] xl:items-start"
                 >
                     <div className="min-w-0">
                         <h3
@@ -103,15 +103,15 @@ export function PortfolioTaxSummaryCards({
                             {t("tax.combinedTaxesAndFeesYear", { year })}
                         </p>
                     </div>
-                    <dl className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-3 lg:grid-cols-5">
+                    <dl className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-3">
                         {figures.map((figure) => (
                             <div key={figure.key} className="min-w-0">
-                                <dt className="truncate type-caption text-label-tertiary">
+                                <dt className="type-caption text-label-tertiary">
                                     {figure.label}
                                 </dt>
                                 <dd
                                     className={cn(
-                                        "mt-1 truncate type-title-3 tabular-nums",
+                                        "mt-1 type-title-3 tabular-nums",
                                         figure.tone,
                                     )}
                                 >

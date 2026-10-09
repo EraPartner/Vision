@@ -1132,3 +1132,10 @@ A statement may be staged with comma-separated asset symbols. Empty scope import
 Literal Kinesis deposits may identify a unique existing gift with six-decimal rounding only when the retained primary record, exact Portfolio Performance gift, account, date, asset and original basis all agree. The original transaction ID is adopted. Complete same-day Kinesis withdrawal groups may cover separate net transfers and repeated fee deliveries with up to 0.0000001 unit of rounding per entry; the broker quantities and fees remain unchanged. Additional or materially different fee deliveries block review.
 
 Weighted-average custody allocation assigns the final eligible lot the exact remaining requested units. This prevents Decimal proportional-allocation residuals from falsely blocking a later fee that consumes the exact wallet remainder; real unit overdraws remain rejected.
+
+## File selection presentation
+
+Portfolio import uses the shared page header and a full-width file drop zone. The same accessible
+file input supports browsing or dropping multiple accepted statement files; account selection,
+review, reconciliation and commit retain their existing staged workflow. Plain-language labels
+explain those steps without changing batch statuses or review requirements.

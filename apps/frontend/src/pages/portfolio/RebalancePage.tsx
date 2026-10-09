@@ -501,7 +501,7 @@ export default function RebalancePage() {
                 icon={PAGE_ICONS["/portfolio/rebalance"]}
             />
 
-            <Card>
+            <Card className="max-w-4xl">
                 <CardContent
                     variant="compact"
                     className="flex flex-wrap items-start gap-3"
@@ -583,6 +583,24 @@ export default function RebalancePage() {
                                 currency,
                             })}
                         </p>
+                    </div>
+                    <div className="pt-6">
+                        <Button
+                            aria-describedby="rebalance-compute-help"
+                            onClick={() => compute.mutate()}
+                            disabled={
+                                compute.isPending ||
+                                (showEditor && !hasValidRows)
+                            }
+                            className="gap-2"
+                        >
+                            {compute.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <Scale className="h-4 w-4" />
+                            )}
+                            {t("rebalance.compute")}
+                        </Button>
                     </div>
                 </CardContent>
                 {presetModel && (
@@ -886,35 +904,14 @@ export default function RebalancePage() {
             )}
 
             <div className="space-y-3">
-                <Card>
-                    <CardContent
-                        variant="row"
-                        className="flex flex-wrap items-center justify-between gap-3"
+                <div className="max-w-4xl">
+                    <p
+                        id="rebalance-compute-help"
+                        className="max-w-2xl type-body text-label-secondary"
                     >
-                        <p
-                            id="rebalance-compute-help"
-                            className="max-w-2xl type-body text-label-secondary"
-                        >
-                            {t("rebalance.noSellNote")}
-                        </p>
-                        <Button
-                            aria-describedby="rebalance-compute-help"
-                            onClick={() => compute.mutate()}
-                            disabled={
-                                compute.isPending ||
-                                (showEditor && !hasValidRows)
-                            }
-                            className="gap-2"
-                        >
-                            {compute.isPending ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Scale className="h-4 w-4" />
-                            )}
-                            {t("rebalance.compute")}
-                        </Button>
-                    </CardContent>
-                </Card>
+                        {t("rebalance.noSellNote")}
+                    </p>
+                </div>
                 {compute.isError && (
                     <Alert variant="destructive">
                         <AlertDescription>
