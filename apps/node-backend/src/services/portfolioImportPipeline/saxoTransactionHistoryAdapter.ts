@@ -141,8 +141,8 @@ function isStringArray(value: unknown): value is string[] {
 }
 
 /** Workbook-only metadata; every workbook record is registered on creation. */
-function metadataOf(record: SaxoRecord): RecordMetadata {
-  const metadata = RECORD_METADATA.get(record);
+function metadataOf(record: SaxoRecord | undefined): RecordMetadata {
+  const metadata = record && RECORD_METADATA.get(record);
   if (!metadata) throw new TypeError("Saxo record has no workbook metadata");
   return metadata;
 }
@@ -186,7 +186,8 @@ function currency(value: unknown): string | null {
 }
 
 function instrumentSymbol(value: unknown): string {
-  return cleanCell(value).split(":", 1)[0].trim();
+  // split always yields at least one element.
+  return (cleanCell(value).split(":", 1)[0] ?? "").trim();
 }
 
 function date(record: SaxoRecord): Date | null {
@@ -282,7 +283,8 @@ function parseTrade(record: SaxoRecord): ParsedPortfolioRow {
       : accountFees;
 
   return baseRow(record, {
-    typeRaw: /^(koop|buy)$/i.test(match[1]) ? "Buy" : "Sell",
+    // The action group is mandatory, so a match carries it.
+    typeRaw: /^(koop|buy)$/i.test(match[1]!) ? "Buy" : "Sell",
     units,
     pricePerUnit: price,
     amount: null,
@@ -539,7 +541,8 @@ function parseWorkbookRecord(
         "Saxo workbook trade details are missing or ambiguous",
       );
     }
-    const trade = trades[0];
+    // The check above admits exactly one trade.
+    const trade = trades[0]!;
     if (
       DETAIL_COLUMNS.some(
         (column) => cleanCell(trade[column]) !== cleanCell(record[column]),
@@ -575,7 +578,8 @@ function parseWorkbookRecord(
       throw new ValidationError(
         "Saxo workbook trade is missing its exchange rate",
       );
-    const principal = number(entries("principal")[0].Boekingsbedrag);
+    // The trade check above admits exactly one principal entry.
+    const principal = number(entries("principal")[0]!.Boekingsbedrag);
     if (
       (parsed.typeRaw === "Buy" && isNonNegative(principal)) ||
       (parsed.typeRaw === "Sell" && isNonPositive(principal)) ||
@@ -612,7 +616,8 @@ function parseWorkbookRecord(
       [...buckets.keys()].some(
         (key) => !["dividend", "tax", "fee"].includes(key),
       ) ||
-      isNonPositive(number(entries("dividend")[0].Boekingsbedrag)) ||
+      // Reached only when exactly one dividend entry exists (checked above).
+      isNonPositive(number(entries("dividend")[0]!.Boekingsbedrag)) ||
       [...entries("tax"), ...entries("fee")].some((entry) =>
         isPositive(number(entry.Boekingsbedrag)),
       )
@@ -668,20 +673,23 @@ export function getSaxoWorkbookReconciliationEvidence(
       envelope.records.length > 1000
     )
       return undefined;
-    const groups: Record<string, SaxoRecord[]> = {
+    type SaxoSheet = "Transacties" | "_Transacties" | "Bookings";
+    const groups: Record<SaxoSheet, SaxoRecord[]> = {
       Transacties: [],
       _Transacties: [],
       Bookings: [],
     };
-    const columns: Record<string, string[]> = {
+    const columns: Record<SaxoSheet, string[]> = {
       Transacties: REQUIRED_COLUMNS,
       _Transacties: TRADE_COLUMNS,
       Bookings: BOOKING_COLUMNS,
     };
+    const isSheet = (name: string): name is SaxoSheet =>
+      Object.hasOwn(groups, name);
     const locations = new Set<string>();
     for (const retained of envelope.records) {
       if (
-        !Object.hasOwn(groups, retained.sheet) ||
+        !isSheet(retained.sheet) ||
         !Number.isSafeInteger(retained.row) ||
         retained.row < 2 ||
         !isStringArray(retained.headers) ||
@@ -723,8 +731,8 @@ export function getSaxoWorkbookReconciliationEvidence(
       metadataOf(record).row = retained.row;
       groups[retained.sheet].push(record);
     }
-    if (groups.Transacties.length !== 1) return undefined;
-    const record = groups.Transacties[0];
+    const [record] = groups.Transacties;
+    if (groups.Transacties.length !== 1 || !record) return undefined;
     const identity = joinKey(record);
     const bookingIds = new Set<string>();
     for (const detail of [...groups._Transacties, ...groups.Bookings])
@@ -785,14 +793,17 @@ export function getSaxoCsvCompanionEvidence(
       skip_empty_lines: false,
       relax_column_count: false,
     });
+    const [tuple] = tuples;
     if (
       tuples.length !== 1 ||
-      tuples[0].length !== headers.length ||
-      rawDataForCsvRecord(tuples[0]) !== rawData
+      !tuple ||
+      tuple.length !== headers.length ||
+      rawDataForCsvRecord(tuple) !== rawData
     )
       return undefined;
     const csv: Record<string, string> = Object.fromEntries(
-      headers.map((header, index) => [header, tuples[0][index]]),
+      // The length check above gives every header its cell.
+      headers.map((header, index) => [header, tuple[index]!]),
     );
     if (
       !cleanCell(csv["Rekening-ID"]) ||
@@ -875,11 +886,12 @@ async function parseWorkbook(
   const sheets = await readPortfolioWorkbook(filePath);
   const table = (name: string, columns: string[]) => {
     const matches = sheets.filter((sheet) => sheet.sheet === name);
-    if (matches.length !== 1)
+    const [match] = matches;
+    if (matches.length !== 1 || !match)
       throw new ValidationError(
         `Saxo XLSX workbook requires one ${name} sheet`,
       );
-    return workbookRecords(matches[0], columns);
+    return workbookRecords(match, columns);
   };
   const main = table("Transacties", REQUIRED_COLUMNS);
   const trades = table("_Transacties", TRADE_COLUMNS);

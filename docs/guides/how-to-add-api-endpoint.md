@@ -2,7 +2,7 @@
 title: How to Add a New API Endpoint
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
@@ -204,9 +204,11 @@ export default <resource>Repository;
 ```
 
 > [!tip] Row contracts
-> To check what PostgreSQL returns, add a schema to `database/rowSchemas.ts` and read through
-> `queryRows(schema, sql, params)` or `queryOne(...)` from `database/rowContracts.ts`. Derive the
-> row type from the schema in `types/rows.ts`. See
+> Check what PostgreSQL returns: add a schema to the area module `database/rows/<area>.ts`
+> (built from the `pg*` primitives in `database/rowSchemas.ts`) and read through
+> `queryRows(schema, sql, params)` or `queryOne(...)` from `database/rowContracts.ts`. Export the
+> row type as `z.output<typeof schema>` next to the schema. A bare `query()` returns `unknown`
+> rows. See
 > [[docs/reference/code-patterns#Row contracts for new queries (ADR-193)|Row contracts]].
 
 ### 5. Create the Database Migration
@@ -268,18 +270,20 @@ The endpoint is not "done" until the API contract and the generated frontend typ
 3. Add the row(s) to [[docs/reference/api-endpoint-matrix|api-endpoint-matrix.md]] (and bump its `api_operation_count`).
 4. Create `docs/api/<resource>.md` following the pattern in [[docs/api/transactions\|Transactions API]], and add it to [[docs/api/index\|API Index]].
 5. Update the data-model reference if you added a table, and the [[docs/architecture/backend-architecture\|Backend Architecture]] diagram if significant.
+6. If the frontend calls the endpoint, add a wire schema to the area module in `packages/types/src/contracts/` and pass it as the `schema` option of `apiRequest` or `requestWithQuery`, for reads and for saves whose result the UI uses ([[docs/reference/frontend-api-client#Response contracts\|Response contracts]]).
 
 ## Checklist
 
 - [ ] Route file created (thin — parses input with `parseInput`, delegates to the service, uses `res.ok()`, throws typed errors)
 - [ ] Service module created (ADR-067 seam; validation + orchestration)
-- [ ] Repository created (parameterized SQL via `query` from `database/connection.ts`)
+- [ ] Repository created (parameterized SQL; rows read through `queryRows`/`queryOne` with a schema in `database/rows/<area>.ts`)
 - [ ] Route registered in `main.ts` via `mountRouter`
 - [ ] Database migration created and tested
 - [ ] Tests written for all endpoints
 - [ ] `openapi.yaml` updated **and** `bun run generate:types` run
 - [ ] `docs/reference/api-endpoint-matrix.md` row + count updated
 - [ ] `docs/api/<resource>.md` created and API index updated
+- [ ] Frontend client checks the response with a schema from `@vision/types/contracts`
 - [ ] Frontmatter includes `type`, `tags`, `description`, `related_code`
 
 ## Related

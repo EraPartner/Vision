@@ -126,11 +126,12 @@ function assertAuditBridgeAccess(
   const header = req.headers.authorization;
   const match =
     typeof header === "string" ? /^Bearer ([^\s]+)$/i.exec(header) : null;
+  const presented = match?.[1];
   if (
     typeof configured !== "string" ||
     configured.length < 32 ||
-    !match ||
-    !tokenEquals(match[1], configured)
+    presented === undefined ||
+    !tokenEquals(presented, configured)
   ) {
     throw new UnauthorizedError("Unauthorized");
   }

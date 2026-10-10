@@ -16,7 +16,7 @@ describe("AttachmentPanel", () => {
                 ok({
                     items: [
                         {
-                            id: 3,
+                            id: "3",
                             transaction_id: 7,
                             filename: "receipt.pdf",
                             stored_path: "attachments/receipt.pdf",
@@ -25,6 +25,7 @@ describe("AttachmentPanel", () => {
                             created_at: "2026-01-01T00:00:00Z",
                         },
                     ],
+                    total: 1,
                 }),
             ),
         );

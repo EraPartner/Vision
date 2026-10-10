@@ -23,7 +23,11 @@ import {
   normalizeForMatching,
 } from '../calculations/normalization.ts';
 import { loadActivePatterns, applyPatterns } from '../recipientPatternService.ts';
-import type { ImportStagingRow } from '../../types/rows.ts';
+import { queryRows } from '../../database/rowContracts.ts';
+import {
+  matchStagingRowSchema,
+  recipientIdentityRowSchema,
+} from '../../database/rows/imports.ts';
 import type { ImportBatchId, ImportProgressCallback } from './index.ts';
 
 type MatchSource = 'pattern' | 'exact' | 'fuzzy' | 'new';
@@ -33,11 +37,6 @@ interface RecipientResolution {
   matchSource: MatchSource;
   matchSimilarity: number | null;
   matchedPatternId: number | null;
-}
-
-interface RecipientIdRow {
-  id: number;
-  normalized_name: string;
 }
 
 const MATCH_UPDATE_CHUNK = 500;
@@ -60,9 +59,8 @@ export async function matchBatch({
 }> {
   await query(`UPDATE import_batches SET status = 'matching' WHERE id = $1`, [batchId]);
 
-  const { rows: staged } = await query<
-    Pick<ImportStagingRow, 'id' | 'recipient_raw'>
-  >(
+  const staged = await queryRows(
+    matchStagingRowSchema,
     `SELECT id, recipient_raw
        FROM import_staging_rows
       WHERE batch_id = $1 AND status = 'validated'
@@ -121,7 +119,8 @@ export async function matchBatch({
     const normalizedNames = toUpsert.map((r) => r.normalized);
 
     // Batch insert — ON CONFLICT DO NOTHING returns only newly created rows.
-    const inserted = await query<RecipientIdRow>(
+    const inserted = await queryRows(
+      recipientIdentityRowSchema,
       `INSERT INTO recipients (name, normalized_name, is_active)
        SELECT UNNEST($1::text[]), UNNEST($2::text[]), true
        ON CONFLICT (normalized_name) DO NOTHING
@@ -129,17 +128,18 @@ export async function matchBatch({
       [upperNames, normalizedNames],
     );
     const insertedByNorm = new Map(
-      inserted.rows.map((r) => [r.normalized_name, r.id]),
+      inserted.map((r) => [r.normalized_name, r.id]),
     );
 
     // Fetch ids for names that already existed (conflict — not returned above).
     const conflicted = normalizedNames.filter((n) => !insertedByNorm.has(n));
     if (conflicted.length > 0) {
-      const existing = await query<RecipientIdRow>(
+      const existing = await queryRows(
+        recipientIdentityRowSchema,
         `SELECT id, normalized_name FROM recipients WHERE normalized_name = ANY($1::text[])`,
         [conflicted],
       );
-      for (const r of existing.rows) {
+      for (const r of existing) {
         insertedByNorm.set(r.normalized_name, r.id);
       }
     }

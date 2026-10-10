@@ -29,7 +29,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import pg from "pg";
+import { z } from "zod";
 import { logger } from "../config/logger.ts";
+import { checkRows } from "./rowContracts.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -63,11 +65,7 @@ export interface ParsedDbUrl {
 /** The slice of `pg.Client` this module calls. */
 export interface PgOneShotClient {
   connect: () => Promise<unknown>;
-  query: (
-    text: string,
-    params?: unknown[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) => Promise<{ rows: any[] }>;
+  query: (text: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
   end: () => Promise<void>;
 }
 
@@ -158,6 +156,22 @@ function renderGrantStatements({
  *
  * @returns number of relation-specific grant failures
  */
+/** pg_catalog `name` and `"char"` columns arrive as strings. */
+const relationGrantRowSchema = z
+  .object({
+    schema_name: z.string(),
+    relation_name: z.string(),
+    relkind: z.string(),
+    owner_name: z.string(),
+  })
+  .describe("role bootstrap relation row");
+const roleSuperRowSchema = z
+  .object({ rolsuper: z.boolean() })
+  .describe("role bootstrap rolsuper row");
+const canCreateRowSchema = z
+  .object({ can_create: z.boolean() })
+  .describe("role bootstrap can_create row");
+
 async function grantCurrentRelations(
   client: PgOneShotClient,
   appRole: string,
@@ -177,7 +191,7 @@ async function grantCurrentRelations(
     ORDER BY relation.relname
   `);
   let failures = 0;
-  for (const row of result.rows) {
+  for (const row of checkRows(relationGrantRowSchema, result.rows)) {
     if (row.owner_name === appRole) continue;
     const privileges =
       row.relkind === "m" ? "SELECT" : "SELECT, INSERT, UPDATE, DELETE";
@@ -346,9 +360,9 @@ export async function ensureAppRole({
         "SELECT rolsuper FROM pg_roles WHERE rolname = $1",
         [appConn.user],
       );
-      let roleExists = roleRes.rows.length > 0;
-      const appRoleIsSuperuser =
-        roleExists && roleRes.rows[0].rolsuper === true;
+      const roleRows = checkRows(roleSuperRowSchema, roleRes.rows);
+      let roleExists = roleRows.length > 0;
+      const appRoleIsSuperuser = roleExists && roleRows[0]?.rolsuper === true;
       if (appRoleIsSuperuser) {
         log.warn(
           `[role-bootstrap] app role ${appConn.user} is a SUPERUSER — least-privilege is not in effect. ` +
@@ -361,7 +375,9 @@ export async function ensureAppRole({
         const privRes = await client.query(
           "SELECT (rolsuper OR rolcreaterole) AS can_create FROM pg_roles WHERE rolname = current_user",
         );
-        if (privRes.rows[0]?.can_create !== true) {
+        if (
+          checkRows(canCreateRowSchema, privRes.rows)[0]?.can_create !== true
+        ) {
           log.warn(
             `[role-bootstrap] app role ${appConn.user} does not exist and the migration role lacks CREATEROLE — ` +
               "cannot bootstrap it. Create the role manually with config/postgres/app-role-grants.sql.tpl " +

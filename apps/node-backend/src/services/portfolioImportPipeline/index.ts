@@ -22,6 +22,8 @@
  */
 
 import { query } from "../../database/connection.ts";
+import { queryOne } from "../../database/rowContracts.ts";
+import { batchBrokerageRowSchema } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import { invalidatePortfolioCaches } from "../info/cache.ts";
@@ -127,11 +129,12 @@ async function prepareImport({
 
   // Brokerage imports (ADR-095) ALWAYS go through staged review — the user must
   // confirm cash-vs-trade routing and instrument matching before any fan-out.
-  const { rows: brRows } = await query<{ is_brokerage: boolean }>(
+  const brRow = await queryOne(
+    batchBrokerageRowSchema,
     `SELECT is_brokerage FROM portfolio_import_batches WHERE id = $1`,
     [batchId],
   );
-  const isBrokerage = brRows[0]?.is_brokerage === true;
+  const isBrokerage = brRow?.is_brokerage === true;
 
   // Conservative: only a batch where every row matched by exact symbol and
   // nothing errored or went unresolved is safe to auto-commit. Name matches are

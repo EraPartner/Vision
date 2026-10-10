@@ -188,11 +188,14 @@ export async function executeAnalysisPivot(
         return `SELECT ${selected.join(", ")} FROM (${level.compiled.sql}) AS pivot_level`;
       })
       .join(" UNION ALL ");
+    // The level loops always compile the (0, 0) grand-total level first.
+    const [baseLevel] = compiledLevels;
+    if (!baseLevel) throw new Error("Pivot compiled no levels");
     const result = await execute({
       requestId,
       sql,
-      values: compiledLevels[0].compiled.values,
-      datasetIds: compiledLevels[0].compiled.datasetIds,
+      values: baseLevel.compiled.values,
+      datasetIds: baseLevel.compiled.datasetIds,
       limit: 1000,
       offset: 0,
     });
@@ -224,7 +227,9 @@ export async function executeAnalysisPivot(
           ),
       });
   }
-  const totals = levels[0].rows;
+  const [totalsLevel] = levels;
+  if (!totalsLevel) throw new Error("Pivot produced no levels");
+  const totals = totalsLevel.rows;
   for (const level of levels) {
     level.rows = level.rows.map((row) => {
       const total = totals.find((candidate) =>

@@ -2,7 +2,14 @@
  * Info sub-repository: net worth from portfolio snapshots + bank balances.
  */
 
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  firstDataDateRowSchema,
+  netWorthCurrentBalanceRowSchema,
+  netWorthFlowRowSchema,
+  netWorthHistoryRowSchema,
+  snapshotInvestmentRowSchema,
+} from "../database/rows/info.ts";
 import { logger } from "../config/logger.ts";
 import {
   computedBalanceByCurrencyAggLateral,
@@ -22,16 +29,9 @@ import {
   mapRowsForAmountConversion,
   convertRowsWithHistoricalRateFallback,
 } from "./infoRepositoryHelpers.ts";
+import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
 
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
-
-/** A current-point balance row: one per in-net-worth account. */
-type CurrentBalanceRow = {
-  bank_account: string;
-  is_liability: boolean;
-  account_currency: string;
-  balance_parts: Array<{ currency: string; balance: string }> | null;
-};
 
 // ── Shared row-level resolution ────────────────────────────────────────────
 // Both of these read `transactions.account_id` and nothing else, exactly like
@@ -197,7 +197,8 @@ export const netWorthRepository = {
     // deliberately counts those rows. See that constant and WALK_ANSWERS_CTE.
     // The active transaction arm carries it so an unattributed row cannot move
     // the start bound when the account walk is the answering path.
-    const firstDateResult = await query(
+    const firstDateRows = await queryRows(
+      firstDataDateRowSchema,
       `
       WITH ${WALK_ANSWERS_CTE}
       SELECT LEAST(
@@ -209,12 +210,10 @@ export const netWorthRepository = {
       [targetCurrency, todayYmd],
     );
 
-    const firstDataDate = firstDateResult.rows[0]?.first_data_date;
+    const firstDataDate = firstDateRows[0]?.first_data_date;
 
     const firstDataDateYmd = firstDataDate
-      ? firstDataDate instanceof Date
-        ? formatDateToYmd(firstDataDate)
-        : String(firstDataDate).split("T")[0]
+      ? formatDateToYmd(firstDataDate)
       : null;
 
     if (!firstDataDateYmd) {
@@ -227,7 +226,8 @@ export const netWorthRepository = {
       };
     }
 
-    const snapshotResult = await query(
+    const snapshotRows = await queryRows(
+      snapshotInvestmentRowSchema,
       `
       SELECT to_char(snapshot_date, 'YYYY-MM-DD') AS day, value AS investments
       FROM portfolio_performance_snapshots
@@ -238,14 +238,15 @@ export const netWorthRepository = {
     );
 
     const investmentsByDay: Record<string, number> = {};
-    for (const row of snapshotResult.rows) {
+    for (const row of snapshotRows) {
       investmentsByDay[row.day] = Number(row.investments) || 0;
     }
 
     // History walk and the unified current-point balances (the same
     // anchor+delta definition bounded at app-timezone today) are independent.
-    const [bankHistoryResult, currentBalancesResult] = await Promise.all([
-      query(
+    const [bankHistoryRows, currentBalancesRows] = await Promise.all([
+      queryRows(
+        netWorthHistoryRowSchema,
         `
       WITH bounds AS (
         SELECT $1::date AS start_date, $2::date AS end_date
@@ -314,7 +315,8 @@ export const netWorthRepository = {
       // per account) form keeps SQL output at one row per account. After empty
       // partitions are removed, the `.length > 0` guard below means at least
       // one account has an as-of balance that can safely replace the fallback.
-      query<CurrentBalanceRow>(
+      queryRows(
+        netWorthCurrentBalanceRowSchema,
         `
       SELECT a.name AS bank_account,
              (a.type = 'liability') AS is_liability,
@@ -334,7 +336,7 @@ export const netWorthRepository = {
     const [bankHistoryConvertedInitial, currentBalancesConverted] =
       await Promise.all([
         convertRowsWithHistoricalRateFallback(
-          mapRowsForAmountConversion(bankHistoryResult.rows, "balance"),
+          mapRowsForAmountConversion(bankHistoryRows, "balance"),
           targetCurrency,
           "day",
         ),
@@ -345,7 +347,7 @@ export const netWorthRepository = {
             // synthetic zero here: in an unattributed ledger that zero would
             // make the current-point override erase the transaction-flow
             // fallback that supplied the real balance.
-            currentBalancesResult.rows.flatMap((r) => {
+            currentBalancesRows.flatMap((r) => {
               const base = {
                 bank_account: r.bank_account,
                 is_liability: r.is_liability,
@@ -365,7 +367,12 @@ export const netWorthRepository = {
           "day",
         ),
       ]);
-    let bankHistoryConverted = bankHistoryConvertedInitial;
+    // The transaction-flow fallback below projects different columns; the
+    // daily fold only reads these.
+    let bankHistoryConverted: ConvertedRow<{
+      day: string;
+      is_liability: boolean;
+    }>[] = bankHistoryConvertedInitial;
 
     // Reached whenever the walk produced no rows at all: no in-net-worth
     // account owns an active row. That covers the unattributed ledger this was
@@ -396,7 +403,8 @@ export const netWorthRepository = {
         },
       );
 
-      const liquidFlowResult = await query(
+      const liquidFlowRows = await queryRows(
+        netWorthFlowRowSchema,
         `
         WITH bounds AS (
           SELECT $1::date AS start_date, $2::date AS end_date
@@ -470,7 +478,7 @@ export const netWorthRepository = {
       );
 
       bankHistoryConverted = await convertRowsWithHistoricalRateFallback(
-        mapRowsForAmountConversion(liquidFlowResult.rows, "value"),
+        mapRowsForAmountConversion(liquidFlowRows, "value"),
         targetCurrency,
         "day",
       );
@@ -506,8 +514,12 @@ export const netWorthRepository = {
       const dayKey = getDayKeyUtc(day);
       const liquid = roundToCents(liquidByDay[dayKey] || 0);
       const liabilities = roundToCents(liabilitiesByDay[dayKey] || 0);
-      if (Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey)) {
-        lastInvestments = investmentsByDay[dayKey];
+      const dayInvestments = investmentsByDay[dayKey];
+      if (
+        Object.prototype.hasOwnProperty.call(investmentsByDay, dayKey) &&
+        dayInvestments !== undefined
+      ) {
+        lastInvestments = dayInvestments;
       }
       const investments = roundToCents(lastInvestments);
       snapshots.push({
@@ -529,7 +541,8 @@ export const netWorthRepository = {
     // at least one current balance partition. Skipped when no such partition
     // exists (for example, an unattributed ledger plus a future-only account),
     // keeping the walk/fallback-derived point instead.
-    if (currentBalancesConverted.length > 0 && sanitizedSnapshots.length > 0) {
+    const lastSnapshot = sanitizedSnapshots.at(-1);
+    if (currentBalancesConverted.length > 0 && lastSnapshot) {
       let liquidNow = toDecimal(0);
       let liabilitiesNow = toDecimal(0);
       for (const row of currentBalancesConverted) {
@@ -537,11 +550,12 @@ export const netWorthRepository = {
           liabilitiesNow = liabilitiesNow.plus(toDecimal(row.amount_eur));
         else liquidNow = liquidNow.plus(toDecimal(row.amount_eur));
       }
-      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
-      last.liquid = roundToCents(toNumber(liquidNow));
-      last.liabilities = roundToCents(toNumber(liabilitiesNow));
-      last.netWorth = roundToCents(
-        last.liquid + last.liabilities + last.investments,
+      lastSnapshot.liquid = roundToCents(toNumber(liquidNow));
+      lastSnapshot.liabilities = roundToCents(toNumber(liabilitiesNow));
+      lastSnapshot.netWorth = roundToCents(
+        lastSnapshot.liquid +
+          lastSnapshot.liabilities +
+          lastSnapshot.investments,
       );
     }
 
@@ -553,12 +567,11 @@ export const netWorthRepository = {
     // price refresh. The caller passes the live total so the latest snapshot
     // (headline, last chart point, and latest table row) always matches those
     // two surfaces. See ADR-064.
-    if (Number.isFinite(liveInvestments) && sanitizedSnapshots.length > 0) {
-      const last = sanitizedSnapshots[sanitizedSnapshots.length - 1];
+    if (Number.isFinite(liveInvestments) && lastSnapshot) {
       const investments = roundToCents(liveInvestments);
-      last.investments = investments;
-      last.netWorth = roundToCents(
-        last.liquid + (last.liabilities || 0) + investments,
+      lastSnapshot.investments = investments;
+      lastSnapshot.netWorth = roundToCents(
+        lastSnapshot.liquid + (lastSnapshot.liabilities || 0) + investments,
       );
     }
 

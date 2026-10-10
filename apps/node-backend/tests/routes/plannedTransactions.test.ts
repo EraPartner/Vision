@@ -666,7 +666,7 @@ describe("Planned Transaction Routes", () => {
         end_date: "y",
       }).expect(201);
 
-      const arg = plannedTransactionRepository.create.mock.calls[0][0];
+      const arg = plannedTransactionRepository.create.mock.calls[0]![0];
       expect("max_occurrences" in arg).toBe(false);
       expect("recurrence_end_date" in arg).toBe(false);
       expect("frequency" in arg).toBe(false);
@@ -1134,8 +1134,9 @@ describe("Planned Transaction Routes", () => {
 
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
-      const call = plannedTransactionRepository.executeAndAdvance.mock.calls[0];
-      expect(call[3]!.is_executed).toBe(false);
+      const call =
+        plannedTransactionRepository.executeAndAdvance.mock.calls[0]!;
+      expect(call![3]!.is_executed).toBe(false);
     });
 
     it("advances a monthly recurrence in APP_TIMEZONE without a UTC day-shift", async () => {
@@ -1161,7 +1162,7 @@ describe("Planned Transaction Routes", () => {
       await execute(1, { executed_transaction_id: 10 }).expect(200);
 
       const updateFields =
-        plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
+        plannedTransactionRepository.executeAndAdvance.mock.calls[0]![3];
       expect(updateFields!.planned_date).toBe("2026-02-28"); // not 2026-02-27 (the UTC day)
     });
 
@@ -1188,7 +1189,7 @@ describe("Planned Transaction Routes", () => {
       await execute(1, { executed_transaction_id: 11 }).expect(200);
 
       const updateFields =
-        plannedTransactionRepository.executeAndAdvance.mock.calls[0][3];
+        plannedTransactionRepository.executeAndAdvance.mock.calls[0]![3];
       expect(updateFields!.planned_date).toBe("2026-03-28");
     });
 

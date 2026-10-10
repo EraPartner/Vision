@@ -34,7 +34,10 @@ export function buildThemeCss(tokens: ThemeTokens): string {
   // `:root {}` block (see HSL_COMPONENT_RE above). Rejected tokens fall through
   // to the defaults below.
   const vars = Object.entries(colorTokens)
-    .map(([key, value]) => [key, typeof value === "string" ? value.trim() : ""])
+    .map(([key, value]): [string, string] => [
+      key,
+      typeof value === "string" ? value.trim() : "",
+    ])
     .filter(([, value]) => HSL_COMPONENT_RE.test(value))
     .map(([key, value]) => `  ${tokenToCssVar(key)}: ${value};`)
     .join("\n");

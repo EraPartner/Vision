@@ -1,5 +1,22 @@
 /** Source-owned cash inserts, full after-images and guarded rollback. */
 import { query, withTransaction } from "../database/connection.ts";
+import { checkRows, queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  accountLabelRowSchema,
+  batchIdOnlyRowSchema,
+  bigintIdRowSchema,
+  cashSnapshotRowSchema,
+  ibkrCashReceiptRowSchema,
+  ibkrCashSnapshotRowSchema,
+  intIdRowSchema,
+  statementBalanceSnapshotRowSchema,
+} from "../database/rows/portfolioImport.ts";
+import type {
+  CashTransactionSnapshot,
+  IbkrCashReceipt,
+  IbkrCashSnapshot,
+  StatementBalanceSnapshot,
+} from "../database/rows/portfolioImport.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 import recipientRepository from "./recipientRepository.ts";
 import {
@@ -11,31 +28,12 @@ import type {
   ReconciliationSourceRow,
 } from "./portfolioImportReconciliationRepository.ts";
 
-/**
- * Full after-image of a `transactions` row as built by CASH_SNAPSHOT_SQL
- * (jsonb: NUMERIC columns as exact text, `date` as 'YYYY-MM-DD').
- */
-export interface CashTransactionSnapshot {
-  id: number;
-  date: string;
-  amount: string;
-  currency: string | null;
-  memo: string | null;
-  comment: string | null;
-  balance: string | null;
-  account_id: number | null;
-  recipient_id: number | null;
-  recipient_bank_account_id: number | null;
-  category_id: number | null;
-  is_active: boolean;
-  import_batch_id: number | null;
-  source_record_hash: string | null;
-  dedup_fingerprint: string | null;
-  dedup_fingerprint_version: number | null;
-  is_transfer: boolean;
-  transfer_source: string | null;
-  transfer_peer_id: number | null;
-}
+export type {
+  CashTransactionSnapshot,
+  IbkrCashReceipt,
+  IbkrCashSnapshot,
+  StatementBalanceSnapshot,
+};
 /** Proven cash movement values (see portfolioKinesisCashScope). */
 export interface KinesisCashValues {
   /** 'YYYY-MM-DD' */
@@ -45,14 +43,6 @@ export interface KinesisCashValues {
   currency: string;
   accountId: number;
   isTransfer: boolean;
-}
-/** An `account_statement_balances` row as `to_jsonb` (NUMERIC as a JSON number). */
-export interface StatementBalanceSnapshot {
-  account_id: number;
-  currency: string;
-  balance: number;
-  /** 'YYYY-MM-DD' */
-  balance_date: string;
 }
 
 const CASH_SNAPSHOT_SQL = `jsonb_build_object('id',t.id,'date',to_char(t.date,'YYYY-MM-DD'),
@@ -77,16 +67,18 @@ export interface KinesisCashContext {
 export async function readKinesisCashContext(): Promise<KinesisCashContext> {
   // Whole ledger binds competing identities; no date-window guesses are adopted.
   const ledger = (
-    await query<{ snapshot: CashTransactionSnapshot }>(
+    await queryRows(
+      cashSnapshotRowSchema,
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t ORDER BY t.id`,
     )
-  ).rows.map((item) => item.snapshot);
+  ).map((item) => item.snapshot);
   const ids = (
-    await query<{
-      batch_id: string;
-    }>(`SELECT DISTINCT batch_id FROM portfolio_import_staging_rows
-    WHERE route='cash' AND committed_txn_id IS NOT NULL AND raw_data LIKE '%"portfolioCashReceipt"%' ORDER BY batch_id`)
-  ).rows.map((item) => Number(item.batch_id));
+    await queryRows(
+      batchIdOnlyRowSchema,
+      `SELECT DISTINCT batch_id FROM portfolio_import_staging_rows
+    WHERE route='cash' AND committed_txn_id IS NOT NULL AND raw_data LIKE '%"portfolioCashReceipt"%' ORDER BY batch_id`,
+    )
+  ).map((item) => Number(item.batch_id));
   const [sources, batches] = ids.length
     ? await Promise.all([
         readReconciliationSources(ids),
@@ -94,10 +86,11 @@ export async function readKinesisCashContext(): Promise<KinesisCashContext> {
       ])
     : [[], []];
   const statementBalances = (
-    await query<{ snapshot: StatementBalanceSnapshot }>(
+    await queryRows(
+      statementBalanceSnapshotRowSchema,
       "SELECT to_jsonb(s) AS snapshot FROM account_statement_balances s ORDER BY account_id,currency",
     )
-  ).rows.map((item) => item.snapshot);
+  ).map((item) => item.snapshot);
   return { ledger, sources, batches, statementBalances };
 }
 export async function lockKinesisCashLedger(
@@ -141,20 +134,19 @@ export async function insertKinesisCash({
   feeAfter?: CashTransactionSnapshot;
   recordedCash: number;
 }> {
-  const account = (
-    await query<{ institution: string | null; name: string }>(
-      "SELECT institution,name FROM accounts WHERE id=$1",
-      [values.accountId],
-    )
-  ).rows[0];
+  const account = await queryOne(
+    accountLabelRowSchema,
+    "SELECT institution,name FROM accounts WHERE id=$1",
+    [values.accountId],
+  );
   const label = String(account?.institution || account?.name || "").trim();
   const recipientId = label
     ? // getById right after the upsert that returned this id: never null.
       (await recipientRepository.createOrGet({ name: label })).recipient!.id
     : await recipientRepository.getOrCreateSystemId();
-  const inserted = (
-    await query<{ id: number }>(
-      `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,category_id,
+  const inserted = await queryOne(
+    intIdRowSchema,
+    `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,category_id,
     source_record_hash,dedup_fingerprint,dedup_fingerprint_version,is_transfer,transfer_source,transfer_peer_id,is_active)
     VALUES($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,$10,'brokerage',NULL,true) ON CONFLICT DO NOTHING RETURNING id`,
       [
@@ -169,20 +161,14 @@ export async function insertKinesisCash({
         row.dedup_fingerprint_version,
         values.isTransfer,
       ],
-    )
-  ).rows[0];
+  );
   if (!inserted) throw stale();
-  const after = (
-    await query<{ snapshot: CashTransactionSnapshot }>(
-      `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE id=$1`,
-      [inserted.id],
-    )
-  ).rows[0].snapshot;
+  const after = await readCashImage(inserted.id);
   let feeAfter: CashTransactionSnapshot | undefined;
   if (feeValues) {
-    const fee = (
-      await query<{ id: number }>(
-        `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,category_id,
+    const fee = await queryOne(
+      intIdRowSchema,
+      `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,category_id,
       source_record_hash,dedup_fingerprint,dedup_fingerprint_version,is_transfer,transfer_source,transfer_peer_id,is_active)
       VALUES($1,$2,$3,$4,$5,$6,NULL,$7,$8,$9,false,'brokerage',NULL,true) ON CONFLICT DO NOTHING RETURNING id`,
         [
@@ -196,15 +182,9 @@ export async function insertKinesisCash({
           feeFingerprint,
           row.dedup_fingerprint_version,
         ],
-      )
-    ).rows[0];
+    );
     if (!fee) throw stale();
-    feeAfter = (
-      await query<{ snapshot: CashTransactionSnapshot }>(
-        `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE id=$1`,
-        [fee.id],
-      )
-    ).rows[0].snapshot;
+    feeAfter = await readCashImage(fee.id);
   }
   const envelope = JSON.stringify({
     primaryRawData,
@@ -232,15 +212,26 @@ export async function insertKinesisCash({
     recordedCash: feeAfter ? 2 : 1,
   };
 }
+/** The after-image of a row this transaction just inserted (so it exists). */
+async function readCashImage(id: number): Promise<CashTransactionSnapshot> {
+  const row = await queryOne(
+    cashSnapshotRowSchema,
+    `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE id=$1`,
+    [id],
+  );
+  if (!row) throw new Error("Inserted cash transaction is missing its image");
+  return row.snapshot;
+}
 export async function readCashImagesForUpdate(
   ids: readonly number[],
 ): Promise<CashTransactionSnapshot[]> {
   return (
-    await query<{ snapshot: CashTransactionSnapshot }>(
+    await queryRows(
+      cashSnapshotRowSchema,
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE`,
       [ids],
     )
-  ).rows.map((item) => item.snapshot);
+  ).map((item) => item.snapshot);
 }
 
 // Categories and ordinary bank pairing can change after adoption. They do not
@@ -248,11 +239,6 @@ export async function readCashImagesForUpdate(
 const IBKR_CASH_SNAPSHOT_SQL = `(${CASH_SNAPSHOT_SQL}) - ARRAY['category_id','is_transfer','transfer_source','transfer_peer_id']::text[]`;
 export const __IBKR_CASH_SNAPSHOT_SQL = IBKR_CASH_SNAPSHOT_SQL;
 
-/** IBKR_CASH_SNAPSHOT_SQL: the cash after-image without categorization/pairing. */
-export type IbkrCashSnapshot = Omit<
-  CashTransactionSnapshot,
-  "category_id" | "is_transfer" | "transfer_source" | "transfer_peer_id"
->;
 /** The compared financial/provenance subset of an IBKR cash image. */
 export type IbkrCashFinancialImage = {
   [K in
@@ -277,8 +263,8 @@ export interface IbkrCashSourceBinding {
   id: number;
   batch_id: number;
   account_id: number;
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any -- adapter-specific batch config */
-  custom_config: any;
+  /** The batch's stored config JSON, compared verbatim with the batch row. */
+  custom_config: unknown;
   staging: Record<string, unknown>;
 }
 /** The authenticated original base-currency cash event. */
@@ -334,17 +320,6 @@ export interface IbkrCashEnvelope {
   snapshot: IbkrCashFinancialImage;
   proof: IbkrCashProof;
 }
-export interface IbkrCashReceipt {
-  id: string;
-  batch_id: string;
-  staging_row_id: string;
-  transaction_id: number;
-  action: "adopt" | "restore";
-  policy: string;
-  previous_entry_id: string | null;
-  before_data: IbkrCashEnvelope;
-  after_data: IbkrCashEnvelope;
-}
 export interface IbkrCashCorrectionContext {
   ledger: CashTransactionSnapshot[];
   sources: ReconciliationSourceRow[];
@@ -369,32 +344,42 @@ export interface IbkrCashCorrectionAction {
 
 export async function readIbkrCashCorrectionContext(): Promise<IbkrCashCorrectionContext> {
   const ledger = (
-    await query<{ snapshot: CashTransactionSnapshot }>(
+    await queryRows(
+      cashSnapshotRowSchema,
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t ORDER BY t.id`,
     )
-  ).rows.map((item) => item.snapshot);
+  ).map((item) => item.snapshot);
   const ids = (
-    await query<{ id: string }>(`SELECT id FROM portfolio_import_batches
-      WHERE custom_config::jsonb->>'format'='ibkr_transaction_history' ORDER BY id`)
-  ).rows.map((item) => Number(item.id));
+    await queryRows(
+      bigintIdRowSchema,
+      `SELECT id FROM portfolio_import_batches
+      WHERE custom_config::jsonb->>'format'='ibkr_transaction_history' ORDER BY id`,
+    )
+  ).map((item) => Number(item.id));
   const [sources, batches, receipts] = await Promise.all([
     ids.length ? readReconciliationSources(ids) : [],
     ids.length ? readReconciliationBatchScope(ids) : [],
-    query<IbkrCashReceipt>(`SELECT a.* FROM portfolio_import_reconciliation_journal a
+    queryRows(
+      ibkrCashReceiptRowSchema,
+      `SELECT a.* FROM portfolio_import_reconciliation_journal a
       WHERE a.action='adopt' AND a.after_data->>'ledgerKind'='cash'
         AND NOT EXISTS(SELECT 1 FROM portfolio_import_reconciliation_journal r WHERE r.previous_entry_id=a.id)
       ORDER BY a.id`),
   ]);
-  return { ledger, sources, batches, receipts: receipts.rows };
+  return { ledger, sources, batches, receipts };
 }
 
 export async function readIbkrCashImagesForUpdate(
   ids: readonly number[],
 ): Promise<IbkrCashSnapshot[]> {
   return (
-    await query<{ snapshot: IbkrCashSnapshot }>(`SELECT ${IBKR_CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t
-      WHERE id=ANY($1::integer[]) ORDER BY id FOR UPDATE`, [ids])
-  ).rows.map((item) => item.snapshot);
+    await queryRows(
+      ibkrCashSnapshotRowSchema,
+      `SELECT ${IBKR_CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t
+      WHERE id=ANY($1::integer[]) ORDER BY id FOR UPDATE`,
+      [ids],
+    )
+  ).map((item) => item.snapshot);
 }
 
 /** Compare every financial and source field; preserve user categorization/pairs. */
@@ -402,15 +387,16 @@ export async function compareAndSetIbkrCashImage(
   before: IbkrCashFinancialImage,
   after: IbkrCashFinancialImage,
 ): Promise<IbkrCashSnapshot> {
-  const result = await query<{ snapshot: IbkrCashSnapshot }>(`UPDATE transactions t SET
+  const result = await query(`UPDATE transactions t SET
       amount=($2::jsonb->>'amount')::numeric, currency=$2::jsonb->>'currency',
       dedup_fingerprint=$2::jsonb->>'dedup_fingerprint',
       dedup_fingerprint_version=($2::jsonb->>'dedup_fingerprint_version')::smallint
     WHERE t.id=$1 AND ${IBKR_CASH_SNAPSHOT_SQL}=$3::jsonb
     RETURNING ${IBKR_CASH_SNAPSHOT_SQL} AS snapshot`,
   [before.id, JSON.stringify(after), JSON.stringify(before)]);
-  if (result.rows.length !== 1) throw stale();
-  return result.rows[0].snapshot;
+  const [row, ...extra] = checkRows(ibkrCashSnapshotRowSchema, result.rows);
+  if (!row || extra.length) throw stale();
+  return row.snapshot;
 }
 
 async function assertIbkrSourceBindings(
@@ -449,11 +435,14 @@ export async function writeIbkrCashCorrection(
     await query("LOCK TABLE transactions IN SHARE ROW EXCLUSIVE MODE");
     await assertIbkrSourceBindings(action.sourceBindings);
     const after = await compareAndSetIbkrCashImage(action.before.snapshot, action.after.snapshot);
-    const receipt = (await query<{ id: string }>(`INSERT INTO portfolio_import_reconciliation_journal
+    const receipt = await queryOne(
+      bigintIdRowSchema,
+      `INSERT INTO portfolio_import_reconciliation_journal
       (batch_id,staging_row_id,transaction_id,action,policy,before_data,after_data)
       VALUES($1,$2,$3,'adopt','prefer_source',$4::jsonb,$5::jsonb) RETURNING id`,
-    [action.row.batch_id, action.row.id, action.transactionId,
-      JSON.stringify(action.before), JSON.stringify(action.after)])).rows[0];
+      [action.row.batch_id, action.row.id, action.transactionId,
+        JSON.stringify(action.before), JSON.stringify(action.after)],
+    );
     await settleIbkrNativeSource(action.row);
     return { receiptId: Number(receipt!.id), after, recordedCash: 0 as const };
   });

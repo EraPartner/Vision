@@ -3,6 +3,12 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { countRowSchema } from '../database/rowSchemas.ts';
+import {
+  watchlistCountedRowSchema,
+  watchlistRowSchema,
+} from '../database/rows/portfolio.ts';
 import { coerceNumericFields } from '../lib/money.ts';
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 import type { FormattedWatchlistRow, WatchlistRow } from '../types/rows.ts';
@@ -57,8 +63,8 @@ export const watchlistRepository = {
     sql += ` ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
-    const result = await query<WatchlistRow>(sql, params);
-    return result.rows.map(mapWatchlistRow);
+    const rows = await queryRows(watchlistRowSchema, sql, params);
+    return rows.map(mapWatchlistRow);
   },
 
   async getAllWithCount({
@@ -80,12 +86,14 @@ export const watchlistRepository = {
       LIMIT $${idx} OFFSET $${idx + 1}
     `;
     const queryParams = [...params, limit, offset];
-    const result = await query<WatchlistRow & { total_count: string }>(
+    const countedRows = await queryRows(
+      watchlistCountedRowSchema,
       sql,
       queryParams,
     );
-    const total = result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) =>
+    const [first] = countedRows;
+    const total = first ? parseInt(first.total_count, 10) : 0;
+    const rows = countedRows.map(({ total_count: _total_count, ...row }) =>
       mapWatchlistRow(row),
     );
     return { rows, total };
@@ -97,13 +105,13 @@ export const watchlistRepository = {
     const { where, params } = this.buildWhereClause({ assetClass });
     const sql = `SELECT count(*) FROM watchlist ${where}`;
 
-    const result = await query<{ count: string }>(sql, params);
-    return parseInt(result.rows[0].count, 10);
+    const row = await queryOne(countRowSchema, sql, params);
+    return parseInt(row!.count, 10);
   },
 
   async getById(id: number): Promise<FormattedWatchlistRow | null> {
-    const result = await query<WatchlistRow>('SELECT * FROM watchlist WHERE id = $1', [id]);
-    return result.rows[0] ? mapWatchlistRow(result.rows[0]) : null;
+    const row = await queryOne(watchlistRowSchema, 'SELECT * FROM watchlist WHERE id = $1', [id]);
+    return row ? mapWatchlistRow(row) : null;
   },
 
   async create({
@@ -125,12 +133,15 @@ export const watchlistRepository = {
     price_provider_id?: string | null;
     added_price?: number | string | null;
   }): Promise<FormattedWatchlistRow> {
-    const result = await query<WatchlistRow>(
+    const row = await queryOne(
+      watchlistRowSchema,
       `INSERT INTO watchlist (name, symbol, asset_class, target_price, currency, notes, price_provider_id, added_price)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [name, symbol || null, asset_class, target_price, currency, notes || null, price_provider_id || null, added_price ?? null]
     );
-    return mapWatchlistRow(result.rows[0]);
+    // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
+    if (!row) throw new Error('Watchlist insert returned no row');
+    return mapWatchlistRow(row);
   },
 
   /** @param fields Patch; only `allowed` keys are applied. */
@@ -145,8 +156,8 @@ export const watchlistRepository = {
 
     params.push(id);
     const sql = `UPDATE watchlist SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`;
-    const result = await query<WatchlistRow>(sql, params);
-    return result.rows[0] ? mapWatchlistRow(result.rows[0]) : null;
+    const row = await queryOne(watchlistRowSchema, sql, params);
+    return row ? mapWatchlistRow(row) : null;
   },
 
   /** @returns true if a row was removed */

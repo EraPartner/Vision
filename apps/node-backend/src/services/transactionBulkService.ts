@@ -10,6 +10,11 @@
  */
 
 import { query as dbQuery, withTransaction } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  tagSlugRowSchema,
+  transactionIdRowSchema,
+} from "../database/rows/ledger.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import { validateInt4Ids } from "../lib/filterBuilder.ts";
 import { resolveBulkSelection } from "./bulkSelection.ts";
@@ -49,11 +54,12 @@ export async function bulkTagTransactions({
   const allUnknown: string[] = [];
 
   if (addSlugs.length > 0) {
-    const r = await dbQuery<{ id: number; slug: string }>(
+    const rows = await queryRows(
+      tagSlugRowSchema,
       "SELECT id, slug FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
       [addSlugs],
     );
-    const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+    const found = new Map(rows.map((row) => [row.slug, row.id]));
     for (const s of addSlugs) {
       const id = found.get(s);
       if (id === undefined) allUnknown.push(s);
@@ -62,11 +68,12 @@ export async function bulkTagTransactions({
   }
 
   if (removeSlugs.length > 0) {
-    const r = await dbQuery<{ id: number; slug: string }>(
+    const rows = await queryRows(
+      tagSlugRowSchema,
       "SELECT id, slug FROM tags WHERE slug = ANY($1::text[])",
       [removeSlugs],
     );
-    const found = new Map(r.rows.map((row) => [row.slug, row.id]));
+    const found = new Map(rows.map((row) => [row.slug, row.id]));
     for (const s of removeSlugs) {
       const id = found.get(s);
       if (id === undefined) allUnknown.push(s);
@@ -86,7 +93,8 @@ export async function bulkTagTransactions({
     const affectedTxIds = new Set<number>();
 
     if (addTagIds.length > 0) {
-      const r = await client.query(
+      const rows = await queryRows(
+        transactionIdRowSchema,
         `INSERT INTO transaction_tags (transaction_id, tag_id)
          SELECT t_id, g_id
          FROM unnest($1::int[]) AS t(t_id)
@@ -94,24 +102,23 @@ export async function bulkTagTransactions({
          ON CONFLICT DO NOTHING
          RETURNING transaction_id`,
         [txIds, addTagIds],
+        client,
       );
-      added = r.rows.length;
-      r.rows.forEach((row: { transaction_id: number }) =>
-        affectedTxIds.add(row.transaction_id),
-      );
+      added = rows.length;
+      rows.forEach((row) => affectedTxIds.add(row.transaction_id));
     }
 
     if (removeTagIds.length > 0) {
-      const r = await client.query(
+      const rows = await queryRows(
+        transactionIdRowSchema,
         `DELETE FROM transaction_tags
          WHERE transaction_id = ANY($1::int[]) AND tag_id = ANY($2::int[])
          RETURNING transaction_id`,
         [txIds, removeTagIds],
+        client,
       );
-      removed = r.rows.length;
-      r.rows.forEach((row: { transaction_id: number }) =>
-        affectedTxIds.add(row.transaction_id),
-      );
+      removed = rows.length;
+      rows.forEach((row) => affectedTxIds.add(row.transaction_id));
     }
 
     return { added, removed, transactions_affected: affectedTxIds.size };

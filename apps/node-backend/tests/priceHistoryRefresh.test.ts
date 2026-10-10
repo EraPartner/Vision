@@ -109,7 +109,7 @@ describe("historical price refresh cache", () => {
     ]);
     expect(repeated).toEqual(older);
     expect(chart).toHaveBeenCalledTimes(2);
-    expect(chart.mock.calls[1][1].period1.getTime()).toBe(olderFrom);
+    expect(chart.mock.calls[1]![1].period1.getTime()).toBe(olderFrom);
   });
 
   it("keys Yahoo history by the end of the requested window too", async () => {
@@ -130,7 +130,9 @@ describe("historical price refresh cache", () => {
     expect(expanded).toEqual([
       { timestampMs: Date.UTC(2026, 1, 28, 12), price: 100 },
     ]);
-    expect(chart.mock.calls[1][1].period2.getTime()).toBe(Date.UTC(2026, 2, 1));
+    expect(chart.mock.calls[1]![1].period2.getTime()).toBe(
+      Date.UTC(2026, 2, 1),
+    );
   });
 
   it("keeps overlapping Yahoo windows separate when the narrow request finishes last", async () => {
@@ -199,9 +201,9 @@ describe("historical price refresh cache", () => {
 
     expect(result).toHaveLength(1001);
     expect(timeout.mock.calls).toEqual([[8000], [8000]]);
-    expect(fetchSpy.mock.calls[0][1].signal).toBe(controllers[0].signal);
-    expect(fetchSpy.mock.calls[1][1].signal).toBe(controllers[1].signal);
-    expect(controllers[0].signal).not.toBe(controllers[1].signal);
+    expect(fetchSpy.mock.calls[0]![1].signal).toBe(controllers[0]!.signal);
+    expect(fetchSpy.mock.calls[1]![1].signal).toBe(controllers[1]!.signal);
+    expect(controllers[0]!.signal).not.toBe(controllers[1]!.signal);
   });
 
   it("returns DB history when a later Binance page times out and permits a fresh retry", async () => {
@@ -253,8 +255,8 @@ describe("historical price refresh cache", () => {
     expect(retry).toEqual([{ timestampMs: middleMs, price: 200 }]);
     expect(fetchSpy).toHaveBeenCalledTimes(3);
     expect(controllers).toHaveLength(3);
-    expect(fetchSpy.mock.calls[2][1].signal).toBe(controllers[2].signal);
-    expect(controllers[2].signal.aborted).toBe(false);
+    expect(fetchSpy.mock.calls[2]![1].signal).toBe(controllers[2]!.signal);
+    expect(controllers[2]!.signal.aborted).toBe(false);
     expect(saveHistory).toHaveBeenCalledTimes(1);
   });
 

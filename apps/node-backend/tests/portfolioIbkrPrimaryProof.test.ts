@@ -19,6 +19,7 @@ import {
   applyPortfolioAssetScope,
   stageBatch,
 } from "../src/services/portfolioImportPipeline/stage.ts";
+import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
 
 type ScopeRow = Parameters<typeof ibkrPrimaryEvidenceIdentifiesLegacy>[0];
 
@@ -149,16 +150,16 @@ describe("literal IBKR primary context and transcription proof", () => {
     const { rows, sources, legacy } = fixtures();
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[0],
-        sources[0],
+        rows[0]!,
+        sources[0]!,
         legacy("sell"),
         rows,
       ),
     ).toBe(true);
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[0],
-        sources[0],
+        rows[0]!,
+        sources[0]!,
         legacy("sell", { amount: "17", price_per_unit: "8.5" }),
         rows,
       ),
@@ -168,14 +169,14 @@ describe("literal IBKR primary context and transcription proof", () => {
     const { rows, sources, legacy } = fixtures();
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend"),
         rows,
       ),
     ).toBe(true);
-    expect(sources[1].taxes).toBe("0");
-    expect(getIbkrPrimaryReconciliationEvidence(rows[2])!.amount).toBe(
+    expect(sources[1]!.taxes).toBe("0");
+    expect(getIbkrPrimaryReconciliationEvidence(rows[2]!)!.amount).toBe(
       "0.3333333",
     );
   });
@@ -183,16 +184,16 @@ describe("literal IBKR primary context and transcription proof", () => {
     const { rows, sources, legacy } = fixtures();
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend", { taxes: "0" }),
         rows.slice(0, 2),
       ),
     ).toBe(true);
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend"),
         rows.slice(0, 2),
       ),
@@ -210,17 +211,16 @@ describe("literal IBKR primary context and transcription proof", () => {
     "changed units",
   ])("rejects %s", (kind) => {
     const { rows } = fixtures();
-    const row = rows[0];
-    if (kind === "missing context")
-      delete row.custom_config.ibkr_source_context;
-    if (kind === "wrong base")
-      row.custom_config.ibkr_source_context.base_currency = "USD";
+    const row = rows[0]!;
+    // The fixtures always carry an IBKR config with its source context.
+    const config = batchConfigFields(row.custom_config)!;
+    const context = config.ibkr_source_context!;
+    if (kind === "missing context") delete config.ibkr_source_context;
+    if (kind === "wrong base") context.base_currency = "USD";
     if (kind === "wrong header")
-      row.custom_config.ibkr_source_context.header_record =
-        "Transaction History,Header,Unknown";
+      context.header_record = "Transaction History,Header,Unknown";
     if (kind === "changed source hash") row.source_record_hash = "b".repeat(64);
-    if (kind === "outside source file")
-      row.custom_config.ibkr_source_context.record_hashes = [];
+    if (kind === "outside source file") context.record_hashes = [];
     if (kind === "different date") row.tx_date = "2026-01-02";
     if (kind === "changed fee") row.fees = "1.1";
     if (kind === "changed FX") row.fx_rate_to_eur = "0.86";
@@ -229,11 +229,11 @@ describe("literal IBKR primary context and transcription proof", () => {
   });
   it("uses actual reordered header columns rather than a presumed schema order", () => {
     const { rows, records } = fixtures();
-    const row = rows[0];
+    const row = rows[0]!;
     const order = columns.toReversed();
-    row.raw_data = raw(records[0], order);
+    row.raw_data = raw(records[0]!, order);
     row.source_record_hash = hash(row.raw_data);
-    Object.assign(row.custom_config.ibkr_source_context, {
+    Object.assign(batchConfigFields(row.custom_config)!.ibkr_source_context!, {
       source_columns: order,
       header_record: ["Transaction History", "Header", ...order].join(","),
       record_hashes: [row.source_record_hash],
@@ -242,22 +242,22 @@ describe("literal IBKR primary context and transcription proof", () => {
   });
   it("binds the unchanged primary record beneath optional XML evidence", () => {
     const { rows } = fixtures();
-    rows[0].raw_data = JSON.stringify({ primaryRawData: rows[0].raw_data });
-    expect(getIbkrPrimaryReconciliationEvidence(rows[0])).toBeDefined();
+    rows[0]!.raw_data = JSON.stringify({ primaryRawData: rows[0]!.raw_data });
+    expect(getIbkrPrimaryReconciliationEvidence(rows[0]!)).toBeDefined();
   });
   it("rejects nearby dates, double withholding, non-cent legacy values and an ambiguous tax pair", () => {
     const { rows, sources, legacy } = fixtures();
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend", { date: "2026-01-02" }),
         rows,
       ),
     ).toBe(false);
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
+        rows[1]!,
         { ...sources[1], taxes: "0.33" },
         legacy("dividend"),
         rows,
@@ -265,18 +265,18 @@ describe("literal IBKR primary context and transcription proof", () => {
     ).toBe(false);
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend", { amount: "3.331" }),
         rows,
       ),
     ).toBe(false);
     expect(
       ibkrPrimaryEvidenceIdentifiesLegacy(
-        rows[1],
-        sources[1],
+        rows[1]!,
+        sources[1]!,
         legacy("dividend"),
-        [...rows, { ...rows[2], id: 4 }],
+        [...rows, { ...rows[2]!, id: 4 }],
       ),
     ).toBe(false);
   });
@@ -296,7 +296,7 @@ describe("literal IBKR primary context and transcription proof", () => {
     expect(context.record_hashes).toEqual(parsed.map((r) => hash(r.rawData)));
     const scoped = applyPortfolioAssetScope(parsed, ["EXM"]);
     expect(scoped.ibkrSourceContext).toEqual(context);
-    expect(scoped[0].rawData).toBe(parsed[0].rawData);
+    expect(scoped[0]!.rawData).toBe(parsed[0]!.rawData);
     vi.mocked(query).mockClear();
     await stageBatch({
       batchId: 1,

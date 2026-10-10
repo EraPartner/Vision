@@ -244,7 +244,7 @@ describe("saveToDatabase", () => {
     });
     await saveToDatabase({ EUR: 1, USD: 0.91, GBP: 1.18 });
     expect(mockClient.query).toHaveBeenCalledTimes(3); // 1 update + 2 upserts
-    const updateCall = mockClient.query.mock.calls[0];
+    const updateCall = mockClient.query.mock.calls[0]!;
     expect(updateCall[0]).toContain("UPDATE exchange_rates");
     expect(updateCall[1][0]).toEqual(["USD", "GBP"]);
   });
@@ -261,7 +261,7 @@ describe("saveHistoricalRate", () => {
   it("upserts a non-latest rate row", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     await saveHistoricalRate("USD", "2024-12-31", 0.9);
-    const [sql, args] = query.mock.calls[0];
+    const [sql, args] = query.mock.calls[0]!;
     expect(sql).toContain("is_latest");
     expect(sql).toContain("ON CONFLICT (currency_code, rate_date)");
     expect(args).toEqual(["USD", 0.9, "2024-12-31"]);
@@ -294,7 +294,7 @@ describe("getUnindexedRatesToEurForDates", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledTimes(1);
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("FROM UNNEST");
     expect(params).toEqual([
       ["USD", "USD"],
@@ -350,7 +350,7 @@ describe("getUnindexedRatesToEurForDates", () => {
     );
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][1]).toEqual([
+    expect(query.mock.calls[0]![1]).toEqual([
       ["USD", "USD"],
       [0.5, 0.25],
       ["2025-04-01", "2020-01-04"],
@@ -370,8 +370,8 @@ describe("getPriorRateFromDatabase", () => {
       0.92,
       4,
     );
-    expect(query.mock.calls[0][0]).toContain("rate_date <= $2::date");
-    expect(query.mock.calls[0][0]).toContain("ORDER BY rate_date DESC");
+    expect(query.mock.calls[0]![0]).toContain("rate_date <= $2::date");
+    expect(query.mock.calls[0]![0]).toContain("ORDER BY rate_date DESC");
   });
 });
 
@@ -383,7 +383,7 @@ describe("buildHistoricalRateIndex", () => {
       { currency_code: "gbp", rate_date: "2025-04-01", rate_to_eur: "1.18" },
     ]);
     expect(idx.get("USD")).toHaveLength(2);
-    expect(idx.get("USD")![0].date).toBe("2025-04-01");
+    expect(idx.get("USD")![0]!.date).toBe("2025-04-01");
     expect(idx.get("GBP")).toHaveLength(1);
   });
 

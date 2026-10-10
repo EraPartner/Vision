@@ -95,7 +95,7 @@ function getOrCreateStore(routeKey: string): BucketStore | null {
 function percentile(sorted: number[], p: number): number | null {
   if (sorted.length === 0) return null;
   const idx = Math.ceil((p / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)];
+  return sorted[Math.max(0, idx)] ?? null;
 }
 
 function normalizeRoute(req: ExpressRequest): string {
@@ -158,7 +158,7 @@ export function getMetrics(): RouteMetrics[] {
 
     allLatencies.sort((a, b) => a - b);
 
-    const [method, ...pathParts] = routeKey.split(' ');
+    const [method = '', ...pathParts] = routeKey.split(' ');
     results.push({
       route: routeKey,
       method,

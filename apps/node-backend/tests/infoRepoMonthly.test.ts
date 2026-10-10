@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
+import {
+  mockCurrencyConversion,
+  mockedConvertRowsToEur,
+} from "./helpers/mockCurrencyConversion.ts";
 
 import { mockLogger } from "./helpers/mockLogger.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
@@ -36,7 +39,7 @@ import { todayAppDateString } from "../src/lib/timezone.ts";
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
 >;
-const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 const mvAvailable = vi.mocked(rawMvAvailable);
 
 beforeEach(() => vi.clearAllMocks());
@@ -95,9 +98,9 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
       const r = await getMonthlyFinancialSummary([], "EUR", [], false);
 
-      expect(query.mock.calls[0][0]).toContain("UPPER(currency)"); // homogeneity probe
-      expect(query.mock.calls[1][0]).toContain("FROM mv_monthly_summary"); // MV aggregation
-      expect(query.mock.calls[1][0]).toContain("GROUP BY month_start");
+      expect(query.mock.calls[0]![0]).toContain("UPPER(currency)"); // homogeneity probe
+      expect(query.mock.calls[1]![0]).toContain("FROM mv_monthly_summary"); // MV aggregation
+      expect(query.mock.calls[1]![0]).toContain("GROUP BY month_start");
       // Zero-filled to the full 6-month window (matches the live path).
       expect(r.months).toHaveLength(6);
       const april = r.months.find((m) => m.year === 2025 && m.month === 4);
@@ -137,7 +140,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
       const r = await getMonthlyFinancialSummary([], "EUR", [], false);
 
-      const [sql, params] = query.mock.calls[1];
+      const [sql, params] = query.mock.calls[1]!;
       expect(sql).not.toContain("CURRENT_DATE");
       expect(params).toEqual(["2025-04-01"]);
       expect(
@@ -162,8 +165,8 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([], "EUR", [], false);
 
-    expect(query.mock.calls[0][0]).toContain("generate_series");
-    expect(query.mock.calls[0][0]).toContain("filtered_transactions");
+    expect(query.mock.calls[0]![0]).toContain("generate_series");
+    expect(query.mock.calls[0]![0]).toContain("filtered_transactions");
   });
 
   it("falls through to the live path when the MV holds a non-target currency", async () => {
@@ -177,9 +180,9 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([], "EUR", [], false);
 
-    expect(query.mock.calls[0][0]).toContain("UPPER(currency)"); // probe ran
-    expect(query.mock.calls[1][0]).toContain("generate_series"); // live path, not MV
-    expect(query.mock.calls[1][0]).toContain("filtered_transactions");
+    expect(query.mock.calls[0]![0]).toContain("UPPER(currency)"); // probe ran
+    expect(query.mock.calls[1]![0]).toContain("generate_series"); // live path, not MV
+    expect(query.mock.calls[1]![0]).toContain("filtered_transactions");
   });
 
   it("always uses live query when category exclusions present", async () => {
@@ -189,7 +192,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([5, 7], "EUR", [], false);
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("excluded.ancestor_id IN ($1, $2)");
     // The app-date window anchor rides after the exclusion params (ADR-009).
     expect(params).toEqual([5, 7, todayAppDateString()]);
@@ -201,7 +204,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     convertRowsToEur.mockResolvedValueOnce([]);
 
     await getMonthlyFinancialSummary([], "EUR", [3, 4], false);
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual([3, 4, todayAppDateString()]);
   });
 
@@ -211,7 +214,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
     convertRowsToEur.mockResolvedValueOnce([]);
 
     await getMonthlyFinancialSummary([1], "EUR", [99], false);
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("excluded.ancestor_id IN ($1)");
     // Alias-aware recipient exclusion (canonical), not bare t.recipient_id.
     expect(sql).toContain(
@@ -248,7 +251,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([2147483647, 99], "EUR", [5], false);
 
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual([2147483647, 99, 5, todayAppDateString()]);
   });
 
@@ -259,7 +262,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     await getMonthlyFinancialSummary([], "EUR", [], true);
 
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain("SELECT MIN(date_trunc");
   });
 
@@ -277,7 +280,7 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
       "2026-09-07",
     );
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("date_trunc('month', $1::date)");
     expect(sql).toContain("date_trunc('month', $2::date)");
     expect(sql).toContain("t.date >= $1::date");
@@ -291,14 +294,15 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
 
     // Live path now returns SQL aggregates grouped by (date, currency): income
     // and spending are pre-summed per day. Empty months arrive with date null.
+    // DATE columns arrive as local-midnight Dates.
     query.mockResolvedValueOnce({
       rows: [
         {
           month: 4,
           year: 2025,
-          period_start: "2025-04-01",
-          period_end: "2025-04-30",
-          date: "2025-04-05",
+          period_start: new Date(2025, 3, 1),
+          period_end: new Date(2025, 3, 30),
+          date: new Date(2025, 3, 5),
           currency: "EUR",
           cnt: "1",
           income_amount: "500",
@@ -307,9 +311,9 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
         {
           month: 4,
           year: 2025,
-          period_start: "2025-04-01",
-          period_end: "2025-04-30",
-          date: "2025-04-10",
+          period_start: new Date(2025, 3, 1),
+          period_end: new Date(2025, 3, 30),
+          date: new Date(2025, 3, 10),
           currency: "EUR",
           cnt: "2",
           income_amount: "0",
@@ -318,8 +322,8 @@ describe("getMonthlyFinancialSummary — materialized-view fast path", () => {
         {
           month: 5,
           year: 2025,
-          period_start: "2025-05-01",
-          period_end: "2025-05-31",
+          period_start: new Date(2025, 4, 1),
+          period_end: new Date(2025, 4, 31),
           date: null,
           currency: null,
           cnt: null,

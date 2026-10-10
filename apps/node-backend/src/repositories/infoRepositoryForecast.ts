@@ -32,7 +32,16 @@
  *    contiguous prefix of $-indices it references.
  */
 
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  categoryDailyAmountRowSchema,
+  dailyAmountDomRowSchema,
+  dailyAmountMonthRowSchema,
+  dailyAmountRowSchema,
+  ledgerStartRowSchema,
+  plannedDailyAmountDomRowSchema,
+  plannedDailyAmountMonthRowSchema,
+} from "../database/rows/info.ts";
 import {
   addAll,
   divide,
@@ -124,10 +133,8 @@ function computeAvgCumulativeByDay(
   monthDayNet: Record<string, Record<string, number>>,
   monthCount: number,
 ): Record<string, number> {
-  const monthKeys = Object.keys(monthDayNet);
   const out: Record<string, number> = {};
-  for (const mk of monthKeys) {
-    const dayNet = monthDayNet[mk];
+  for (const dayNet of Object.values(monthDayNet)) {
     let cum = 0;
     for (let d = 1; d <= 31; d++) {
       cum = addMoney(cum, dayNet[d] || 0);
@@ -283,17 +290,27 @@ export async function getCashflowComparison(
   `;
 
   const [
-    pastResult,
-    currentResult,
-    plannedCurrentResult,
-    plannedHistResult,
-    ledgerStartResult,
+    pastRows,
+    currentRows,
+    plannedCurrentRows,
+    plannedHistRows,
+    ledgerStartRows,
   ] = await Promise.all([
-    query(sqlPast, [...excludeParams, todayYmd, HISTORY_MONTHS]),
-    query(sqlCurrent, [...excludeParams, todayYmd]),
-    query(sqlPlannedCurrent, [todayYmd]),
-    query(sqlPlannedHist, [todayYmd, HISTORY_MONTHS]),
-    query(sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
+    queryRows(dailyAmountMonthRowSchema, sqlPast, [
+      ...excludeParams,
+      todayYmd,
+      HISTORY_MONTHS,
+    ]),
+    queryRows(dailyAmountDomRowSchema, sqlCurrent, [
+      ...excludeParams,
+      todayYmd,
+    ]),
+    queryRows(plannedDailyAmountDomRowSchema, sqlPlannedCurrent, [todayYmd]),
+    queryRows(plannedDailyAmountMonthRowSchema, sqlPlannedHist, [
+      todayYmd,
+      HISTORY_MONTHS,
+    ]),
+    queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, HISTORY_MONTHS]),
   ]);
 
   const [
@@ -303,10 +320,10 @@ export async function getCashflowComparison(
     plannedHistConverted,
   ] = await batchConvertGroupsWithHistoricalRateFallback(
     [
-      mapRowsForAmountConversion(pastResult.rows, "amount", false),
-      mapRowsForAmountConversion(currentResult.rows, "amount", false),
-      mapRowsForAmountConversion(plannedCurrentResult.rows, "amount", false),
-      mapRowsForAmountConversion(plannedHistResult.rows, "amount", false),
+      mapRowsForAmountConversion(pastRows, "amount", false),
+      mapRowsForAmountConversion(currentRows, "amount", false),
+      mapRowsForAmountConversion(plannedCurrentRows, "amount", false),
+      mapRowsForAmountConversion(plannedHistRows, "amount", false),
     ],
     targetCurrency,
     "date",
@@ -370,7 +387,7 @@ export async function getCashflowComparison(
   const lastCompleteMonthIdx =
     Number(todayYmd.slice(0, 4)) * 12 + (Number(todayYmd.slice(5, 7)) - 1) - 1;
   const observedMonths = countObservedMonths(
-    monthKeyFromDbDate(ledgerStartResult.rows[0]?.first_date),
+    monthKeyFromDbDate(ledgerStartRows[0]?.first_date),
     lastCompleteMonthIdx,
     HISTORY_MONTHS,
   );
@@ -514,21 +531,28 @@ export async function getCashflowForecastData(
     GROUP BY pt.planned_date, pt.currency
   `;
 
-  const [histRes, currentRes, plannedCurRes, plannedHistRes] =
+  const [histRows, currentRows, plannedCurRows, plannedHistRows] =
     await Promise.all([
-      query(sqlHistory, [...excludeParams, todayYmd, historyMonths]),
-      query(sqlCurrent, [...excludeParams, todayYmd]),
-      query(sqlPlannedCurrent, [todayYmd]),
-      query(sqlPlannedHist, [todayYmd, historyMonths]),
+      queryRows(dailyAmountRowSchema, sqlHistory, [
+        ...excludeParams,
+        todayYmd,
+        historyMonths,
+      ]),
+      queryRows(dailyAmountRowSchema, sqlCurrent, [...excludeParams, todayYmd]),
+      queryRows(dailyAmountRowSchema, sqlPlannedCurrent, [todayYmd]),
+      queryRows(dailyAmountRowSchema, sqlPlannedHist, [
+        todayYmd,
+        historyMonths,
+      ]),
     ]);
 
   const [histConv, currentConv, plannedCurConv, plannedHistConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
-        mapRowsForAmountConversion(histRes.rows, "amount", false),
-        mapRowsForAmountConversion(currentRes.rows, "amount", false),
-        mapRowsForAmountConversion(plannedCurRes.rows, "amount", false),
-        mapRowsForAmountConversion(plannedHistRes.rows, "amount", false),
+        mapRowsForAmountConversion(histRows, "amount", false),
+        mapRowsForAmountConversion(currentRows, "amount", false),
+        mapRowsForAmountConversion(plannedCurRows, "amount", false),
+        mapRowsForAmountConversion(plannedHistRows, "amount", false),
       ],
       targetCurrency,
       "date",
@@ -632,18 +656,28 @@ export async function getCashflowForecastDataRolling(
     GROUP BY pt.planned_date, pt.currency
   `;
 
-  const [histRes, currentRes, plannedRes] = await Promise.all([
-    query(sqlHistory, [...excludeParams, todayYmd, daysBack, historyMonths]),
-    query(sqlCurrent, [...excludeParams, todayYmd, daysBack, daysForward]),
-    query(sqlPlannedFuture, [todayYmd, daysForward]),
+  const [histRows, currentRows, plannedRows] = await Promise.all([
+    queryRows(dailyAmountRowSchema, sqlHistory, [
+      ...excludeParams,
+      todayYmd,
+      daysBack,
+      historyMonths,
+    ]),
+    queryRows(dailyAmountRowSchema, sqlCurrent, [
+      ...excludeParams,
+      todayYmd,
+      daysBack,
+      daysForward,
+    ]),
+    queryRows(dailyAmountRowSchema, sqlPlannedFuture, [todayYmd, daysForward]),
   ]);
 
   const [histConv, currentConv, plannedConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
-        mapRowsForAmountConversion(histRes.rows, "amount", false),
-        mapRowsForAmountConversion(currentRes.rows, "amount", false),
-        mapRowsForAmountConversion(plannedRes.rows, "amount", false),
+        mapRowsForAmountConversion(histRows, "amount", false),
+        mapRowsForAmountConversion(currentRows, "amount", false),
+        mapRowsForAmountConversion(plannedRows, "amount", false),
       ],
       targetCurrency,
       "date",
@@ -755,23 +789,30 @@ export async function getCashflowForecastDataByCategory(
     ${groupByCols}
   `;
 
-  const [histRes, currentRes] = await Promise.all([
-    query(sqlHistory, [...excludeParams, todayYmd, historyMonths]),
-    query(sqlCurrent, [...excludeParams, todayYmd]),
+  const [histRows, currentRows] = await Promise.all([
+    queryRows(categoryDailyAmountRowSchema, sqlHistory, [
+      ...excludeParams,
+      todayYmd,
+      historyMonths,
+    ]),
+    queryRows(categoryDailyAmountRowSchema, sqlCurrent, [
+      ...excludeParams,
+      todayYmd,
+    ]),
   ]);
 
   const [histConv, currentConv] =
     await batchConvertGroupsWithHistoricalRateFallback(
       [
-        mapRowsForAmountConversion(histRes.rows, "amount", false),
-        mapRowsForAmountConversion(currentRes.rows, "amount", false),
+        mapRowsForAmountConversion(histRows, "amount", false),
+        mapRowsForAmountConversion(currentRows, "amount", false),
       ],
       targetCurrency,
       "date",
     );
 
   const aggregateByDateAndCategory = (
-    rows: ConvertedRow[],
+    rows: typeof histConv,
   ): CategoryDayNet[] => {
     const map = new Map<string, CategoryDayNet>();
     for (const r of rows) {

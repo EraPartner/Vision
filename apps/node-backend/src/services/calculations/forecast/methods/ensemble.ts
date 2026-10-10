@@ -40,10 +40,14 @@ const DEFAULT_SAMPLE_DAYS = SHRINKAGE_PRIOR_DAYS;
  * @returns methodId → normalized weight in [0, 1]
  */
 export function computeWeights(
-  accuracyRows: Array<{ methodId: string; rmse: number; sampleDays?: number }>,
+  accuracyRows: Array<{ methodId: string; rmse: number | null; sampleDays?: number | null }>,
   methodIds: string[],
 ): Map<string, number> {
-  const rows = accuracyRows.filter((r) => r.rmse > 0 && methodIds.includes(r.methodId));
+  // A stored NULL rmse is excluded exactly as `null > 0` excluded it before.
+  const rows = accuracyRows.filter(
+    (r): r is typeof r & { rmse: number } =>
+      r.rmse !== null && r.rmse > 0 && methodIds.includes(r.methodId),
+  );
   if (rows.length === 0) return new Map();
 
   // Shrinkage target: the average RMSE across the methods we're weighting.

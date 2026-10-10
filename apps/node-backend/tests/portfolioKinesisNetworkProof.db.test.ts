@@ -56,10 +56,10 @@ async function stage(scope: StageScope) {
       await pool.query(
         "INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,rows_error,account_id,is_brokerage) VALUES($1,$2,'awaiting_review',$3,0,$4,true) RETURNING id",
         [
-          scope.batches[0].custom_config.format ?? "portfolio_generic",
-          JSON.stringify(scope.batches[0].custom_config),
+          scope.batches[0]!.custom_config.format ?? "portfolio_generic",
+          JSON.stringify(scope.batches[0]!.custom_config),
           scope.rows.length,
-          scope.batches[0].account_id,
+          scope.batches[0]!.account_id,
         ],
       )
     ).rows[0].id,

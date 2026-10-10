@@ -284,7 +284,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: false });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.is_active).toBe(false);
     expect(fields.closed_at).toBeInstanceOf(Date);
   });
@@ -301,7 +301,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: false });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.is_active).toBe(false);
     expect(fields.in_net_worth).toBe(false);
   });
@@ -318,7 +318,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: false, in_net_worth: true });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.in_net_worth).toBe(true); // explicit intent respected
   });
 
@@ -334,7 +334,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: true });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect("in_net_worth" in fields).toBe(false);
   });
 
@@ -351,7 +351,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: false });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect("closed_at" in fields).toBe(false);
   });
 
@@ -368,7 +368,7 @@ describe("accountService.update", () => {
       partial<AccountRow>({ id: 1 }),
     );
     await accountService.update(1, { is_active: true });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect(fields.closed_at).toBeNull();
   });
 
@@ -380,7 +380,7 @@ describe("accountService.update", () => {
       display_name: "X",
       closed_at: "2020-01-01T00:00:00Z",
     });
-    const fields = accountRepository.update.mock.calls[0][1];
+    const fields = accountRepository.update.mock.calls[0]![1];
     expect("closed_at" in fields).toBe(false);
   });
 });
@@ -432,10 +432,10 @@ describe("accountService — funding chain cycles", () => {
     });
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]!);
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.update.mock.invocationCallOrder[0]);
+    ).toBeLessThan(accountRepository.update.mock.invocationCallOrder[0]!);
   });
 
   // The pre-existing-cycle case: this guard did not exist before, so the stored
@@ -465,10 +465,10 @@ describe("accountService — funding chain cycles", () => {
     });
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]);
+    ).toBeLessThan(accountRepository.getById.mock.invocationCallOrder[0]!);
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.create.mock.invocationCallOrder[0]);
+    ).toBeLessThan(accountRepository.create.mock.invocationCallOrder[0]!);
     expect(accountRepository.getById).toHaveBeenCalledTimes(1); // existence check only
   });
 });
@@ -570,7 +570,7 @@ describe("accountService — sanitize pins (create)", () => {
       ["liquidity_class", "frozen"],
       ["tax_wrapper", "offshore"],
       ["owner", "them"],
-    ]) {
+    ] as [string, string][]) {
       await expect(
         accountService.create({ name: "A", [key]: bad }),
       ).rejects.toThrow(ValidationError);
@@ -637,7 +637,7 @@ describe("accountService.remove", () => {
     await expect(accountService.remove(7)).resolves.toBe(7);
     expect(
       accountRepository.lockFundingGraphForMutation.mock.invocationCallOrder[0],
-    ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]);
+    ).toBeLessThan(accountRepository.remove.mock.invocationCallOrder[0]!);
   });
 });
 

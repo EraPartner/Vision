@@ -235,7 +235,7 @@ export async function syntheticKinesisScope({
     portfolioIdentityBase(row, { accountIdentity: "UNASSIGNED" }),
   );
   rows.forEach((row, index) => {
-    if (row.route) row.dedup_fingerprint = identities[index].fingerprint;
+    if (row.route) row.dedup_fingerprint = identities[index]!.fingerprint;
   });
   const batch: SyntheticKinesisBatch = {
     id: batchId,

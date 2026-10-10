@@ -14,7 +14,8 @@
  * of dismiss records lives elsewhere (UI layer owns it).
  */
 
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { categoryOutlierExpenseRowSchema } from "../database/rows/catalog.ts";
 import { logger } from "../config/logger.ts";
 import { addAll, roundMoney, toDecimal } from "../lib/money.ts";
 import { median } from "../lib/math.ts";
@@ -327,7 +328,9 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
     // Expenses of the last ~7 calendar months: the current (partial) month
     // plus 6 full prior months for the baseline. Bounded so the scan cost
     // stays flat regardless of total history size.
-    const result = await query<CategoryOutlierExpenseRow>(`
+    const rows = await queryRows(
+      categoryOutlierExpenseRowSchema,
+      `
       SELECT t.date, t.amount, t.category_id,
              c.path_name AS category_name
       FROM transactions t
@@ -337,9 +340,10 @@ async function getRawFindings(): Promise<CategoryOutlierFinding[]> {
         AND t.amount < 0
         AND t.date >= CURRENT_DATE - INTERVAL '7 months'
       ORDER BY t.category_id, t.date
-    `);
+    `,
+    );
 
-    const findings = computeOutliers(result.rows, new Date());
+    const findings = computeOutliers(rows, new Date());
     outlierCache = {
       value: findings,
       expiresAt: Date.now() + CATEGORY_OUTLIER_CACHE_TTL_MS,

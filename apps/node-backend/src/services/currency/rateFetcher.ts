@@ -6,6 +6,11 @@
  */
 
 import { query, withTransaction } from "../../database/connection.ts";
+import { checkRows, queryOne } from "../../database/rowContracts.ts";
+import {
+  fxRateRowSchema,
+  rateToEurRowSchema,
+} from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
@@ -121,6 +126,8 @@ function parseEcbXml(xmlText: string): RateTable | null {
   let match: RegExpExecArray | null;
   while ((match = currencyPattern.exec(xmlText)) !== null) {
     const [, currency, rateStr] = match;
+    // Both groups are mandatory in the pattern; the guard only narrows.
+    if (currency === undefined || rateStr === undefined) continue;
     const eurToX = parseFloat(rateStr);
     if (Number.isFinite(eurToX) && eurToX > 0.0001 && eurToX < 100000) {
       rates[currency] = 1.0 / eurToX;
@@ -140,8 +147,8 @@ function parseEcbHistoricalXml(xmlText: string): RatesByDate {
     ) || [];
   for (const block of dayBlocks) {
     const timeMatch = block.match(/time=['"]([0-9]{4}-[0-9]{2}-[0-9]{2})['"]/);
-    if (!timeMatch) continue;
-    const date = timeMatch[1];
+    const date = timeMatch?.[1];
+    if (date === undefined) continue;
     const rates = parseEcbXml(block);
     if (rates) byDate.set(date, rates);
   }
@@ -310,7 +317,8 @@ export function rateOnOrBeforeFromMap(
   maxLookbackDays = 7,
 ): number | undefined {
   if (!byDate || byDate.size === 0) return undefined;
-  const [y, m, d] = dateStr.split("-").map(Number);
+  // A missing part stays NaN, as it was when read past the end of the split.
+  const [y = NaN, m = NaN, d = NaN] = dateStr.split("-").map(Number);
   let ts = Date.UTC(y, m - 1, d);
   for (let back = 0; back <= maxLookbackDays; back += 1) {
     const day = epochMsToUtcYmd(ts);
@@ -330,26 +338,30 @@ export function rateOnOrBeforeFromMap(
  * @returns null when nothing is stored or the query failed
  */
 export async function loadFromDatabase(): Promise<RateTable | null> {
+  let rawRows: unknown[];
   try {
-    const result = await query<
-      Pick<ExchangeRateRow, "currency_code" | "rate_to_eur">
-    >(
-      `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
-    );
-    if (result.rows.length === 0) return null;
-
-    const rates: RateTable = { EUR: 1.0 };
-    for (const row of result.rows) {
-      rates[row.currency_code] = toNumber(toDecimal(row.rate_to_eur));
-    }
-    logger.debug(`Loaded ${result.rows.length} exchange rates from database`);
-    return rates;
+    rawRows = (
+      await query(
+        `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
+      )
+    ).rows;
   } catch (err) {
     logger.error("Failed to load exchange rates from database", {
       error: errorMessage(err),
     });
     return null;
   }
+  // Checked outside the try: a database failure degrades to the fallback
+  // rates, but a row that breaks its contract is a bug that must surface.
+  const rows = checkRows(fxRateRowSchema, rawRows);
+  if (rows.length === 0) return null;
+
+  const rates: RateTable = { EUR: 1.0 };
+  for (const row of rows) {
+    rates[row.currency_code] = toNumber(toDecimal(row.rate_to_eur));
+  }
+  logger.debug(`Loaded ${rows.length} exchange rates from database`);
+  return rates;
 }
 
 /**
@@ -501,7 +513,8 @@ async function getPriorRateFromDatabase(
   currencyCode: string,
   dateStr: string,
 ): Promise<number | undefined> {
-  const result = await query<Pick<ExchangeRateRow, "rate_to_eur">>(
+  const row = await queryOne(
+    rateToEurRowSchema,
     `SELECT rate_to_eur
      FROM exchange_rates
      WHERE currency_code = $1 AND rate_date <= $2::date
@@ -509,8 +522,8 @@ async function getPriorRateFromDatabase(
      LIMIT 1`,
     [currencyCode, dateStr],
   );
-  if (result.rows.length === 0) return undefined;
-  return toNumber(toDecimal(result.rows[0].rate_to_eur));
+  if (!row) return undefined;
+  return toNumber(toDecimal(row.rate_to_eur));
 }
 
 /**
@@ -530,7 +543,8 @@ export async function getStoredRateToEurOnOrBefore(
   if (code === "EUR") return 1.0;
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
-  const result = await query<Pick<ExchangeRateRow, "rate_to_eur">>(
+  const row = await queryOne(
+    rateToEurRowSchema,
     `SELECT rate_to_eur
      FROM exchange_rates
      WHERE currency_code = $1
@@ -540,8 +554,8 @@ export async function getStoredRateToEurOnOrBefore(
      LIMIT 1`,
     [code, dateStr, maxLookbackDays],
   );
-  if (result.rows.length === 0) return undefined;
-  return toNumber(toDecimal(result.rows[0].rate_to_eur));
+  if (!row) return undefined;
+  return toNumber(toDecimal(row.rate_to_eur));
 }
 
 // ─── Historical rate index (in-memory binary search) ─────────────────────────
@@ -606,16 +620,16 @@ function searchRateIndex(
   let hi = entries.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    const midDate = entries[mid].date;
-    if (midDate === dateStr) return entries[mid].rate;
-    if (midDate < dateStr) lo = mid + 1;
+    const midEntry = entries[mid];
+    // lo <= mid <= hi stay inside the list; the guard only narrows the type.
+    if (midEntry === undefined) break;
+    if (midEntry.date === dateStr) return midEntry.rate;
+    if (midEntry.date < dateStr) lo = mid + 1;
     else hi = mid - 1;
   }
 
-  return resolve(
-    hi >= 0 ? entries[hi] : null,
-    lo < entries.length ? entries[lo] : null,
-  );
+  // Out-of-range neighbours (hi = -1, lo = length) are absent: null.
+  return resolve(entries[hi] ?? null, entries[lo] ?? null);
 }
 
 /**
@@ -655,15 +669,16 @@ export async function getRateToEurForDate(
   const dateStr = normalizeDateInput(dateValue);
   if (!dateStr) return undefined;
 
-  const exact = await query<Pick<ExchangeRateRow, "rate_to_eur">>(
+  const exact = await queryOne(
+    rateToEurRowSchema,
     `SELECT rate_to_eur
      FROM exchange_rates
      WHERE currency_code = $1 AND rate_date = $2::date
      LIMIT 1`,
     [currencyCode, dateStr],
   );
-  if (exact.rows.length > 0) {
-    return toNumber(toDecimal(exact.rows[0].rate_to_eur));
+  if (exact) {
+    return toNumber(toDecimal(exact.rate_to_eur));
   }
 
   // Recent dates: 90-day ECB feed (small download), on-or-before for weekends.

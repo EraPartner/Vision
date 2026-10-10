@@ -51,7 +51,9 @@ describe("literal CSV records", () => {
       skip_empty_lines: true,
     });
     expect(records[0]).toEqual({ A: "1", B: 'hello; "friend"\nnext' });
-    expect(rawDataForCsvRecord(records[0])).toBe('1;"hello; ""friend""\nnext"');
+    expect(rawDataForCsvRecord(records[0]!)).toBe(
+      '1;"hello; ""friend""\nnext"',
+    );
   });
 });
 

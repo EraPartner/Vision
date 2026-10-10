@@ -79,7 +79,7 @@ describe("NavItemBadge monitors", () => {
     it("shows the server-side unread count", async () => {
         server.use(
             http.get(`${API_BASE}/api/analysis/monitors/notifications`, () =>
-                ok({ items: [], total: 0, unreadCount: 2, links: [] }),
+                ok({ items: [], total: 0, unreadCount: 2, limit: 200, offset: 0 }),
             ),
         );
         renderWithApp(<NavItemBadge kind="monitors" />);

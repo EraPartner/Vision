@@ -52,14 +52,18 @@ function number(value: DecimalInput): Decimal | undefined {
 }
 
 function eligible(item: RepairItem) {
-  let config = item.row.custom_config;
+  let config: unknown = item.row.custom_config;
   try {
     if (typeof config === "string") config = JSON.parse(config);
   } catch {
     return false;
   }
+  const format =
+    typeof config === "object" && config !== null
+      ? (config as Record<string, unknown>).format
+      : undefined;
   return (
-    config?.format === "ibkr_transaction_history" &&
+    format === "ibkr_transaction_history" &&
     item.imported &&
     id(item.imported.id) &&
     id(item.imported.import_batch_id) &&
@@ -96,7 +100,8 @@ function comparison(
     !/^[A-Z]{3}$/.test(String(source.currency))
   )
     return undefined;
-  const values: Record<string, [Decimal, Decimal]> = {};
+  const values: Partial<Record<keyof typeof PLACES, [Decimal, Decimal]>> =
+    {};
   for (const [field, places] of Object.entries(PLACES) as Array<
     [keyof typeof PLACES, number]
   >) {
@@ -108,26 +113,29 @@ function comparison(
       right.toDecimalPlaces(places),
     ];
   }
+  // The loop above fills every PLACES field or returns early.
+  const { units, amount, price_per_unit: pricePerUnit } = values;
+  if (!units || !amount || !pricePerUnit) return undefined;
   if (
-    !values.units[0].eq(values.units[1]) ||
-    !values.units[0]
-      .times(values.price_per_unit[0])
+    !units[0].eq(units[1]) ||
+    !units[0]
+      .times(pricePerUnit[0])
       .toDecimalPlaces(4)
-      .eq(values.amount[0]) ||
-    !values.units[1]
-      .times(values.price_per_unit[1])
+      .eq(amount[0]) ||
+    !units[1]
+      .times(pricePerUnit[1])
       .toDecimalPlaces(4)
-      .eq(values.amount[1])
+      .eq(amount[1])
   )
     return undefined;
   if (
-    values.amount[0].eq(values.amount[1]) &&
-    values.price_per_unit[0].eq(values.price_per_unit[1])
+    amount[0].eq(amount[1]) &&
+    pricePerUnit[0].eq(pricePerUnit[1])
   )
     return "exact";
   if (
-    values.amount[0].eq(values.amount[1]) ||
-    values.price_per_unit[0].eq(values.price_per_unit[1])
+    amount[0].eq(amount[1]) ||
+    pricePerUnit[0].eq(pricePerUnit[1])
   )
     return undefined;
   // A gross/net explanation remains ambiguous even with a different displayed price.
@@ -137,10 +145,10 @@ function comparison(
       const charges = toDecimal(source.fees).plus(source.taxes);
       if (!charges.isFinite() || charges.lt(0)) return undefined;
       if (
-        values.amount[0]
+        amount[0]
           .plus(charges.times(sign))
           .toDecimalPlaces(4)
-          .eq(values.amount[1])
+          .eq(amount[1])
       )
         return undefined;
     } catch {

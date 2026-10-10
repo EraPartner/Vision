@@ -1,3 +1,10 @@
+import {
+    AnalysisMonitorPageSchema,
+    AnalysisMonitorSchema,
+    MonitorNotificationPageSchema,
+    MonitorObservationPageSchema,
+    MonitorObservationSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 
 export type MonitorStatus =
@@ -107,11 +114,14 @@ const path = (id: string) => `${base}/${encodeURIComponent(id)}`;
 const paging = (offset: number) => `?limit=200&offset=${offset}`;
 
 export const listMonitors = (offset = 0) =>
-    apiRequest<MonitorPage<AnalysisMonitor>>(`${base}${paging(offset)}`);
+    apiRequest<MonitorPage<AnalysisMonitor>>(`${base}${paging(offset)}`, {
+        schema: AnalysisMonitorPageSchema,
+    });
 export const createMonitor = (input: MonitorCreate) =>
     apiRequest<AnalysisMonitor>(base, {
         method: "POST",
         body: JSON.stringify(input),
+        schema: AnalysisMonitorSchema,
     });
 export const updateMonitor = (id: string, patch: MonitorUpdate) =>
     apiRequest<AnalysisMonitor>(path(id), {
@@ -121,14 +131,19 @@ export const updateMonitor = (id: string, patch: MonitorUpdate) =>
 export const deleteMonitor = (id: string) =>
     apiRequest<void>(path(id), { method: "DELETE" });
 export const checkMonitor = (id: string) =>
-    apiRequest<MonitorObservation>(`${path(id)}/check`, { method: "POST" });
+    apiRequest<MonitorObservation>(`${path(id)}/check`, {
+        method: "POST",
+        schema: MonitorObservationSchema,
+    });
 export const listMonitorObservations = (id: string, offset = 0) =>
     apiRequest<MonitorPage<MonitorObservation>>(
         `${path(id)}/observations${paging(offset)}`,
+        { schema: MonitorObservationPageSchema },
     );
 export const listMonitorNotifications = (offset = 0) =>
     apiRequest<MonitorPage<MonitorNotification>>(
         `${base}/notifications${paging(offset)}`,
+        { schema: MonitorNotificationPageSchema },
     );
 export const readMonitorNotification = (id: string) =>
     apiRequest<MonitorNotification>(

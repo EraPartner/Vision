@@ -10,6 +10,7 @@ import rollingRepo, { get as rollingGet, isFresh as rollingIsFresh, upsert as ro
 import accuracyRepo from '../src/repositories/cashflowForecastAccuracyRepository.ts';
 import providerHealthRepo from '../src/repositories/providerHealthRepository.ts';
 import { partial } from './helpers/partial.ts';
+import { providerHealthDbRow } from './helpers/portfolioPgRows.ts';
 
 const query = vi.mocked(rawQuery);
 
@@ -56,7 +57,7 @@ describe('cashflowForecastMcRepository.upsert', () => {
   it('serialises payload to JSON and binds 5 params', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await mcUpsert({ userId: 'u1', month: '2025-04', filterHash: 'h', mcPaths: 1000, payload: { p: 1 } });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('INSERT INTO cashflow_forecast_mc');
     expect(sql).toContain('ON CONFLICT (user_id, month, filter_hash)');
     expect(params).toEqual(['u1', '2025-04', 'h', 1000, JSON.stringify({ p: 1 })]);
@@ -100,7 +101,7 @@ describe('cashflowForecastMcRollingRepository.get', () => {
   it('binds the 5-key composite lookup', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ payload: {}, computed_at: new Date() }] }));
     await rollingGet({ userId: 'u', todayIso: '2025-04-01', daysBack: 30, daysForward: 60, filterHash: 'h' });
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual(['u', '2025-04-01', 30, 60, 'h']);
   });
 
@@ -128,7 +129,7 @@ describe('cashflowForecastMcRollingRepository.upsert', () => {
     await rollingUpsert({
       userId: 'u', todayIso: '2025-04-01', daysBack: 30, daysForward: 60, filterHash: 'h', mcPaths: 500, payload: { x: 1 },
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('INSERT INTO cashflow_forecast_mc_rolling');
     expect(params).toEqual(['u', '2025-04-01', 30, 60, 'h', 500, JSON.stringify({ x: 1 })]);
   });
@@ -145,7 +146,7 @@ describe('cashflowForecastAccuracyRepository.upsert', () => {
     await accuracyRepo.upsert({
       userId: 'u', methodId: 'naive', asOfMonth: '2025-04', mae: 10, rmse: 12, mape: 0.05, sampleDays: 30,
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('ON CONFLICT (user_id, method_id, as_of_month)');
     expect(params).toEqual(['u', 'naive', '2025-04', 10, 12, 0.05, 30]);
   });
@@ -155,7 +156,7 @@ describe('cashflowForecastAccuracyRepository.getHistory', () => {
   it('uses default limitMonths=24 and orders by as_of_month DESC', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await accuracyRepo.getHistory({ userId: 'u', methodId: 'naive' });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('ORDER BY as_of_month DESC');
     expect(params).toEqual(['u', 'naive', 24]);
   });
@@ -163,11 +164,22 @@ describe('cashflowForecastAccuracyRepository.getHistory', () => {
   it('passes custom limitMonths', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await accuracyRepo.getHistory({ userId: 'u', methodId: 'm', limitMonths: 6 });
-    expect(query.mock.calls[0][1]).toEqual(['u', 'm', 6]);
+    expect(query.mock.calls[0]![1]).toEqual(['u', 'm', 6]);
   });
 
   it('returns rows from the result', async () => {
-    const rows = [{ method_id: 'naive', mae: 1 }];
+    const rows = [
+      {
+        user_id: 'u',
+        method_id: 'naive',
+        as_of_month: '2026-05',
+        mae: 1,
+        rmse: 1.5,
+        mape: null,
+        sample_days: 31,
+        recorded_at: new Date('2026-06-01T00:00:00Z'),
+      },
+    ];
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows }));
     expect(await accuracyRepo.getHistory({ userId: 'u', methodId: 'm' })).toEqual(rows);
   });
@@ -177,7 +189,7 @@ describe('cashflowForecastAccuracyRepository.getLatestByMethod', () => {
   it('uses DISTINCT ON to get newest per method', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await accuracyRepo.getLatestByMethod({ userId: 'u' });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('DISTINCT ON (method_id)');
     expect(params).toEqual(['u']);
   });
@@ -187,13 +199,13 @@ describe('cashflowForecastAccuracyRepository.getAllHistory', () => {
   it('uses default limitMonths=24', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await accuracyRepo.getAllHistory({ userId: 'u' });
-    expect(query.mock.calls[0][1]).toEqual(['u', 24]);
+    expect(query.mock.calls[0]![1]).toEqual(['u', 24]);
   });
 
   it('uses custom limit and orders chronologically', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await accuracyRepo.getAllHistory({ userId: 'u', limitMonths: 12 });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('ORDER BY method_id, as_of_month ASC');
     expect(params).toEqual(['u', 12]);
   });
@@ -203,12 +215,12 @@ describe('providerHealthRepository.listAll', () => {
   it('orders by kind, then provider', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await providerHealthRepo.listAll();
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain('ORDER BY kind ASC, provider ASC');
   });
 
   it('returns rows from query', async () => {
-    const rows = [{ provider: 'binance', kind: 'price' }];
+    const rows = [providerHealthDbRow({ provider: 'binance', kind: 'price' })];
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows }));
     expect(await providerHealthRepo.listAll()).toEqual(rows);
   });
@@ -221,7 +233,7 @@ describe('providerHealthRepository.findByProvider', () => {
   });
 
   it('returns the matching row', async () => {
-    const row = { provider: 'binance' };
+    const row = providerHealthDbRow({ provider: 'binance' });
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [row] }));
     expect(await providerHealthRepo.findByProvider('binance')).toBe(row);
   });
@@ -229,7 +241,7 @@ describe('providerHealthRepository.findByProvider', () => {
   it('binds provider as the only param', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await providerHealthRepo.findByProvider('ecb');
-    expect(query.mock.calls[0][1]).toEqual(['ecb']);
+    expect(query.mock.calls[0]![1]).toEqual(['ecb']);
   });
 });
 
@@ -237,7 +249,7 @@ describe('providerHealthRepository.recordSuccess', () => {
   it('resets consecutive_failures via UPSERT', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await providerHealthRepo.recordSuccess('binance', 'price');
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('consecutive_failures = 0');
     expect(sql).toContain('ON CONFLICT (provider)');
     expect(params).toEqual(['binance', 'price']);
@@ -249,7 +261,7 @@ describe('providerHealthRepository.recordError', () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     const longMsg = 'x'.repeat(2000);
     await providerHealthRepo.recordError('binance', 'price', longMsg);
-    const params = query.mock.calls[0][1];
+    const params = query.mock.calls[0]![1];
     expect(params![2]).toHaveLength(1000);
   });
 
@@ -257,14 +269,14 @@ describe('providerHealthRepository.recordError', () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     // @ts-expect-error -- deliberately passes a non-string to check the runtime String() coercion
     await providerHealthRepo.recordError('binance', 'price', { code: 500 });
-    const params = query.mock.calls[0][1];
+    const params = query.mock.calls[0]![1];
     expect(typeof params![2]).toBe('string');
   });
 
   it('increments consecutive_failures on conflict', async () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     await providerHealthRepo.recordError('binance', 'price', 'fail');
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain('consecutive_failures = provider_health.consecutive_failures + 1');
   });
 });

@@ -8,6 +8,8 @@
  */
 
 import { query, withTransaction } from "../../database/connection.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import { importBatchIdRowSchema } from "../../database/rows/imports.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { getAdapter } from "./adapters/index.ts";
@@ -50,7 +52,8 @@ export async function createBatch({
   sizeBytes?: number | null;
   customConfig?: object | null;
 }): Promise<number> {
-  const result = await query<{ id: string }>(
+  const [row] = await queryRows(
+    importBatchIdRowSchema,
     `INSERT INTO import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config, status, started_at)
      VALUES ($1, $2, $3, $4, 'pending', NOW())
@@ -62,7 +65,9 @@ export async function createBatch({
       customConfig ? JSON.stringify(customConfig) : null,
     ],
   );
-  return normalizeCreatedBatchId(result.rows[0].id);
+  // INSERT ... RETURNING without ON CONFLICT yields its row or throws.
+  if (!row) throw new Error("import_batches insert returned no row");
+  return normalizeCreatedBatchId(row.id);
 }
 
 /**

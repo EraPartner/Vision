@@ -13,6 +13,43 @@ vi.mock("../src/lib/textNormalization.ts", () => ({
 
 import * as connection from "../src/database/connection.ts";
 import recipientRepository from "../src/repositories/recipientRepository.ts";
+import type {
+  EnrichedRecipientRow,
+  RecipientRow,
+} from "../src/repositories/recipientRepository.ts";
+
+const STAMP = new Date("2026-01-01T00:00:00Z");
+
+/** A complete `recipients` row (`SELECT *`), as the checked reads require. */
+function recipientRow(
+  fields: Partial<RecipientRow> & { id: number },
+): RecipientRow {
+  return {
+    name: "RECIPIENT",
+    normalized_name: "recipient",
+    default_category_id: null,
+    primary_recipient_id: null,
+    notes: null,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...fields,
+  };
+}
+
+/** A list / detail / update row: the recipient plus its join columns. */
+function enrichedRow(
+  fields: Partial<EnrichedRecipientRow> & { id: number },
+): EnrichedRecipientRow {
+  return {
+    ...recipientRow(fields),
+    default_category_name: null,
+    primary_bank_account: null,
+    primary_recipient_name: null,
+    alias_count: 0,
+    ...fields,
+  };
+}
 
 // The connection module is the mock surface; its spies stay untyped because
 // the tests read raw SQL and params from mock.calls.
@@ -23,10 +60,11 @@ describe("recipientRepository", () => {
 
   describe("getAll", () => {
     it("uses default sort and pagination params", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+      const row = enrichedRow({ id: 1 });
+      query.mockResolvedValueOnce({ rows: [row] });
       const rows = await recipientRepository.getAll();
-      expect(rows).toEqual([{ id: 1 }]);
-      const [sql, params] = query.mock.calls[0];
+      expect(rows).toEqual([row]);
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain("ORDER BY r.name ASC");
       expect(sql).toContain("r.is_active = true"); // active defaults true
       // [...whereParams, limit, offset]; default limit 50 offset 0
@@ -43,7 +81,7 @@ describe("recipientRepository", () => {
         sortDir: "desc",
         active: false,
       });
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain("r.name ILIKE");
       expect(sql).toContain("rba.account_number ILIKE");
       expect(sql).toContain("r.notes DESC, r.name ASC");
@@ -58,7 +96,7 @@ describe("recipientRepository", () => {
         uncategorized: true,
         defaultCategoryId: 5,
       });
-      const sql = query.mock.calls[0][0];
+      const sql = query.mock.calls[0]![0];
       // Existence probe now hits transactions directly (agg_recipient_totals
       // was dropped in migration 0080); assert the equivalent semantics.
       expect(sql).not.toContain("agg_recipient_totals");
@@ -75,7 +113,7 @@ describe("recipientRepository", () => {
         sortBy: "evil; DROP",
         sortDir: "asc",
       });
-      expect(query.mock.calls[0][0]).toContain("ORDER BY r.name ASC");
+      expect(query.mock.calls[0]![0]).toContain("ORDER BY r.name ASC");
     });
   });
 
@@ -84,7 +122,7 @@ describe("recipientRepository", () => {
       query.mockResolvedValueOnce({ rows: [{ count: "42" }] });
       const n = await recipientRepository.getCount({ defaultCategoryId: 9 });
       expect(n).toBe(42);
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain("count(*)");
       expect(sql).toContain(
         "r.default_category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id = $1)",
@@ -95,11 +133,9 @@ describe("recipientRepository", () => {
 
   describe("getById / getByName", () => {
     it("getById returns the row", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 3, name: "X" }] });
-      expect(await recipientRepository.getById(3)).toEqual({
-        id: 3,
-        name: "X",
-      });
+      const row = enrichedRow({ id: 3, name: "X" });
+      query.mockResolvedValueOnce({ rows: [row] });
+      expect(await recipientRepository.getById(3)).toEqual(row);
     });
 
     it("getById returns null when absent", async () => {
@@ -108,7 +144,7 @@ describe("recipientRepository", () => {
     });
 
     it("getByName normalizes the lookup", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 4 }] });
+      query.mockResolvedValueOnce({ rows: [recipientRow({ id: 4 })] });
       const r = await recipientRepository.getByName("  Aldi ");
       expect(r!.id).toBe(4);
       expect(query).toHaveBeenCalledWith(
@@ -123,12 +159,14 @@ describe("recipientRepository", () => {
       query
         .mockResolvedValueOnce({ rows: [] }) // initial lookup misses
         .mockResolvedValueOnce({ rows: [{ id: 10, created: true }] })
-        .mockResolvedValueOnce({ rows: [{ id: 10, name: "ALDI" }] }); // getById
+        .mockResolvedValueOnce({
+          rows: [enrichedRow({ id: 10, name: "ALDI" })],
+        }); // getById
       const r = await recipientRepository.createOrGet({ name: "aldi" });
       expect(r.created).toBe(true);
-      expect(r.recipient).toEqual({ id: 10, name: "ALDI" });
-      expect(query.mock.calls[1][1]).toEqual(["ALDI", "norm:aldi"]); // upper + normalized
-      expect(query.mock.calls[1][0]).toContain(
+      expect(r.recipient).toEqual(enrichedRow({ id: 10, name: "ALDI" }));
+      expect(query.mock.calls[1]![1]).toEqual(["ALDI", "norm:aldi"]); // upper + normalized
+      expect(query.mock.calls[1]![0]).toContain(
         "ON CONFLICT (normalized_name) DO UPDATE",
       );
     });
@@ -136,7 +174,9 @@ describe("recipientRepository", () => {
     it("returns created=false when the recipient already exists", async () => {
       query
         .mockResolvedValueOnce({ rows: [{ id: 7 }] }) // initial lookup
-        .mockResolvedValueOnce({ rows: [{ id: 7, name: "ALDI" }] }); // getById
+        .mockResolvedValueOnce({
+          rows: [enrichedRow({ id: 7, name: "ALDI" })],
+        }); // getById
       const r = await recipientRepository.createOrGet({ name: "Aldi" });
       expect(r.created).toBe(false);
       expect(r.recipient!.id).toBe(7);
@@ -146,10 +186,12 @@ describe("recipientRepository", () => {
       query
         .mockResolvedValueOnce({ rows: [] }) // concurrent miss
         .mockResolvedValueOnce({ rows: [{ id: 8, created: false }] })
-        .mockResolvedValueOnce({ rows: [{ id: 8, name: "ALDI" }] });
+        .mockResolvedValueOnce({
+          rows: [enrichedRow({ id: 8, name: "ALDI" })],
+        });
       const result = await recipientRepository.createOrGet({ name: "Aldi" });
       expect(result).toEqual({
-        recipient: { id: 8, name: "ALDI" },
+        recipient: enrichedRow({ id: 8, name: "ALDI" }),
         created: false,
       });
     });
@@ -175,7 +217,7 @@ describe("recipientRepository", () => {
       query.mockResolvedValueOnce({ rows: [{ id: 900 }] });
       expect(await recipientRepository.getOrCreateSystemId()).toBe(900);
       expect(query).toHaveBeenCalledTimes(1);
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toMatch(
         /^\s*SELECT id FROM recipients WHERE normalized_name/,
       );
@@ -187,7 +229,7 @@ describe("recipientRepository", () => {
         .mockResolvedValueOnce({ rows: [] }) // miss
         .mockResolvedValueOnce({ rows: [{ id: 901 }] });
       expect(await recipientRepository.getOrCreateSystemId()).toBe(901);
-      const [sql, params] = query.mock.calls[1];
+      const [sql, params] = query.mock.calls[1]!;
       expect(sql).toMatch(/INSERT INTO recipients/);
       // Created inactive, and DO UPDATE (not DO NOTHING) so a concurrent
       // uncommitted insert blocks and still returns an id.
@@ -199,14 +241,16 @@ describe("recipientRepository", () => {
 
   describe("update", () => {
     it("builds SET clauses for name (upper + normalized) and other fields", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 1, name: "NEW" }] });
+      query.mockResolvedValueOnce({
+        rows: [enrichedRow({ id: 1, name: "NEW" })],
+      });
       const r = await recipientRepository.update(1, {
         name: "new",
         notes: "hi",
         is_active: false,
       });
       expect(r!.name).toBe("NEW");
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain("name = $1");
       expect(sql).toContain("normalized_name = $2");
       expect(sql).toContain("updated_at = NOW()");
@@ -214,11 +258,11 @@ describe("recipientRepository", () => {
     });
 
     it("falls back to getById when nothing to update", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+      query.mockResolvedValueOnce({ rows: [enrichedRow({ id: 1 })] });
       const r = await recipientRepository.update(1, {});
       expect(r!.id).toBe(1);
       expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0][0]).toContain("WHERE r.id = $1");
+      expect(query.mock.calls[0]![0]).toContain("WHERE r.id = $1");
     });
 
     it("does not allow a public recipient to be renamed to SYSTEM", async () => {
@@ -245,8 +289,9 @@ describe("recipientRepository", () => {
     });
 
     it("getAliases returns rows", async () => {
-      query.mockResolvedValueOnce({ rows: [{ id: 8 }] });
-      expect(await recipientRepository.getAliases(1)).toEqual([{ id: 8 }]);
+      const alias = { ...recipientRow({ id: 8 }), default_category_name: null };
+      query.mockResolvedValueOnce({ rows: [alias] });
+      expect(await recipientRepository.getAliases(1)).toEqual([alias]);
     });
   });
 
@@ -271,7 +316,7 @@ describe("recipientRepository", () => {
       const map = await recipientRepository.getClusterRootMap([1, 2, 2, null]);
       expect(map.get(1)).toBe(1);
       expect(map.get(2)).toBe(1);
-      expect(query.mock.calls[0][1]).toEqual([[1, 2]]);
+      expect(query.mock.calls[0]![1]).toEqual([[1, 2]]);
     });
   });
 });

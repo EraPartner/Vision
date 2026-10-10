@@ -9,6 +9,9 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { LinkTransactionDialog } from "@/features/planned/LinkTransactionDialog";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import {
+    transactionRow,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -28,10 +31,9 @@ const PAYMENT: PlannedPayment = {
     created_at: "2025-01-01T00:00:00.000Z",
 };
 
-const CANDIDATE_TX = {
+const CANDIDATE_TX = transactionRow({
     id: 42,
     transaction_date: "2025-02-01",
-    date: "2025-02-01",
     memo: "Rent payment",
     recipient_name: "Landlord",
     recipient_id: 1,
@@ -44,9 +46,8 @@ const CANDIDATE_TX = {
     comment: null,
     balance: null,
     created_at: "2025-02-01T00:00:00.000Z",
-    updated_at: null,
     links: [],
-};
+});
 
 function setupCandidateHandler() {
     server.use(

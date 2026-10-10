@@ -126,7 +126,7 @@ export function rateLimiter({
     // string|string[] only because that's the general header-value shape.
     const xff = (req.headers?.["x-forwarded-for"] ?? "") as string;
     const forwarded = isTrustedProxyAddr(remoteAddr)
-      ? xff.split(",")[0].trim()
+      ? (xff.split(",")[0] ?? "").trim()
       : "";
     const ip = forwarded || remoteAddr || "unknown";
     const key = `${keyPrefix}:${ip}`;

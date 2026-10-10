@@ -25,7 +25,8 @@ export interface ExpressLayer {
 export interface ExpressApp {
   router?: { stack?: ExpressLayer[] };
   _router?: { stack?: ExpressLayer[] };
-  use: (path: string, ...fns: any[]) => void;
+  // Method syntax so Express's overloaded `use` stays assignable.
+  use(path: string, ...fns: unknown[]): void;
 }
 
 /**

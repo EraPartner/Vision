@@ -21,6 +21,14 @@ import {
   getTableCount,
   query,
 } from "../database/connection.ts";
+// eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption: checks the stats/VACUUM catalog rows above
+import { checkRows } from "../database/rowContracts.ts";
+// eslint-disable-next-line vision-local/no-repo-direct-from-route -- same ADR-067 exemption as above
+import {
+  databaseSizeRowSchema,
+  tableStatsRowSchema,
+  userTableNameRowSchema,
+} from "../database/rows/admin.ts";
 import settings from "../config/config.ts";
 import { env } from "../config/env.ts";
 import { logger } from "../config/logger.ts";
@@ -358,9 +366,10 @@ router.get("/database/stats", async (_req, res) => {
       [],
     ),
   ]);
+  const [size] = checkRows(databaseSizeRowSchema, sizeResult.rows);
   res.ok({
-    tables: tablesResult.rows,
-    db_size: sizeResult.rows[0]?.db_size ?? null,
+    tables: checkRows(tableStatsRowSchema, tablesResult.rows),
+    db_size: size?.db_size ?? null,
   });
 });
 
@@ -376,7 +385,7 @@ router.post("/database/vacuum", adminMutateLimiter, async (req, res) => {
     [],
   );
   const allowedNames = new Set(
-    allowed.rows.map((r: { relname: string }) => r.relname),
+    checkRows(userTableNameRowSchema, allowed.rows).map((r) => r.relname),
   );
 
   if (table != null && !allowedNames.has(table)) {

@@ -67,7 +67,11 @@ describe("AppLayout a11y landmarks", () => {
         // Completed onboarding, otherwise the wizard dialog opens and traps focus.
         server.use(
             http.get(`${API_BASE}/api/settings/onboarding_complete`, () =>
-                ok({ value: true }),
+                ok({
+                    key: "onboarding_complete",
+                    value: true,
+                    expected: { exists: true, value: true },
+                }),
             ),
         );
     });

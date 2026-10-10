@@ -4,6 +4,13 @@
  * Wraps /api/admin/* routes for database maintenance, provider health, etc.
  */
 
+import {
+    DbStatsSchema,
+    EndpointManifestSchema,
+    ProbeResultSchema,
+    ProviderHealthListSchema,
+    RouteMetricListSchema,
+} from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,7 +31,7 @@ export interface DbStats {
     db_size: string | null;
 }
 
-export type ProviderKind = 'price' | 'fx' | 'inflation';
+export type ProviderKind = 'price' | 'fx' | 'inflation' | 'research';
 
 export interface ProviderHealth {
     provider: string;
@@ -50,8 +57,8 @@ export interface RouteMetric {
     count: number;
     errors: number;
     error_rate: number;
-    p50_ms: number;
-    p95_ms: number;
+    p50_ms: number | null;
+    p95_ms: number | null;
     window_minutes: number;
 }
 
@@ -63,7 +70,7 @@ export interface EndpointEntry {
 // ── Database Maintenance ──────────────────────────────────────────────────────
 
 export function getDbStats(): Promise<DbStats> {
-    return apiRequest<DbStats>('/api/admin/database/stats');
+    return apiRequest<DbStats>('/api/admin/database/stats', { schema: DbStatsSchema });
 }
 
 export function vacuumTable(table: string | null): Promise<{ vacuumed: string }> {
@@ -77,13 +84,16 @@ export function vacuumTable(table: string | null): Promise<{ vacuumed: string }>
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getProviderHealth(): Promise<ProviderHealth[]> {
-    const { items } = await apiRequest<{ items: ProviderHealth[]; total: number }>('/api/admin/providers/health');
+    const { items } = await apiRequest<{ items: ProviderHealth[]; total: number }>('/api/admin/providers/health', {
+        schema: ProviderHealthListSchema,
+    });
     return items;
 }
 
 export function probeProvider(provider: string): Promise<ProbeResult> {
     return apiRequest<ProbeResult>(`/api/admin/providers/${encodeURIComponent(provider)}/probe`, {
         method: 'POST',
+        schema: ProbeResultSchema,
     });
 }
 
@@ -91,7 +101,9 @@ export function probeProvider(provider: string): Promise<ProbeResult> {
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getRequestMetrics(): Promise<RouteMetric[]> {
-    const { items } = await apiRequest<{ items: RouteMetric[]; total: number }>('/api/admin/metrics/requests');
+    const { items } = await apiRequest<{ items: RouteMetric[]; total: number }>('/api/admin/metrics/requests', {
+        schema: RouteMetricListSchema,
+    });
     return items;
 }
 
@@ -99,7 +111,9 @@ export async function getRequestMetrics(): Promise<RouteMetric[]> {
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getEndpointManifest(): Promise<EndpointEntry[]> {
-    const { items } = await apiRequest<{ items: EndpointEntry[]; total: number }>('/api/admin/endpoints');
+    const { items } = await apiRequest<{ items: EndpointEntry[]; total: number }>('/api/admin/endpoints', {
+        schema: EndpointManifestSchema,
+    });
     return items;
 }
 

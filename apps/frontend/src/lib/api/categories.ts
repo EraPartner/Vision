@@ -11,10 +11,10 @@ import {
     CategoryListSchema,
     CategoryTreeSchema,
 } from "@vision/types/contracts";
-import { apiRequest, checkResponseContract } from "@/lib/api/client";
+import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery, createWithStatus } from "@/lib/api/helpers";
 
-export async function getCategories(params?: {
+export function getCategories(params?: {
     limit?: number;
     offset?: number;
     general?: string;
@@ -22,14 +22,9 @@ export async function getCategories(params?: {
     active?: boolean;
     search?: string;
 }): Promise<CategoriesListResponse> {
-    return checkResponseContract(
-        CategoryListSchema,
-        await requestWithQuery<CategoriesListResponse>(
-            "/api/categories",
-            params,
-        ),
-        "GET /api/categories",
-    );
+    return requestWithQuery<CategoriesListResponse>("/api/categories", params, {
+        schema: CategoryListSchema,
+    });
 }
 
 export async function createCategory(

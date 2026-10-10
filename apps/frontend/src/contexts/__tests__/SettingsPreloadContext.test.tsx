@@ -58,6 +58,23 @@ describe("SettingsPreloadContext", () => {
     });
 
     it("returns value from array of { key, value } response format", async () => {
+        // The wire always sends `settings` as a key map (the contract rejects an
+        // array), so the context's legacy array branch is reached only through
+        // a caller-supplied value.
+        const spy = vi
+            .spyOn(apiClient, "getSettings")
+            .mockResolvedValueOnce([
+                { key: "theme_settings", value: { mode: "dark" } },
+            ] as unknown as Record<string, unknown>);
+        const { result } = renderHook(() => usePreloadedSetting("theme_settings"), {
+            wrapper: makeWrapper(),
+        });
+        await waitFor(() => expect(result.current.isLoading).toBe(false));
+        expect(result.current.value).toEqual({ mode: "dark" });
+        spy.mockRestore();
+    });
+
+    it("falls back to defaults when the settings body breaks the contract", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
                 ok({
@@ -70,11 +87,13 @@ describe("SettingsPreloadContext", () => {
                 }),
             ),
         );
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
         const { result } = renderHook(() => usePreloadedSetting("theme_settings"), {
             wrapper: makeWrapper(),
         });
         await waitFor(() => expect(result.current.isLoading).toBe(false));
-        expect(result.current.value).toEqual({ mode: "dark" });
+        expect(result.current.value).toBeNull();
+        warnSpy.mockRestore();
     });
 
     it("returns null for all keys when the settings API fails", async () => {

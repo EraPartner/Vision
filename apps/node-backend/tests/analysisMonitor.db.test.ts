@@ -200,7 +200,7 @@ describe.skipIf(!hasTestDatabase())("analysis monitors (real Postgres)", () => {
         lease_token: null,
       });
       expect(
-        (await listMonitorObservations(monitorId, {})).items[0].status,
+        (await listMonitorObservations(monitorId, {})).items[0]!.status,
       ).toBe("triggered");
       expect(
         (await listMonitorNotifications({})).items.filter(

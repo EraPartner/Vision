@@ -90,7 +90,7 @@ describe("cloud-authored analysis plans", () => {
         ),
       }),
     );
-    expect(result.rows[0].sum_spending).toBe("100");
+    expect(result.rows[0]!.sum_spending).toBe("100");
   });
 
   it("rechecks workspace authority at the local execution boundary", async () => {
@@ -153,7 +153,7 @@ describe("cloud-authored analysis plans", () => {
         { execute },
       );
       expect(result.formulaSummaries.total).toBe(total);
-      expect(result.rows[0].local).toBe("200");
+      expect(result.rows[0]!.local).toBe("200");
       if (total === null) {
         expect(result.formulaErrors).toEqual([
           expect.objectContaining({

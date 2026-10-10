@@ -83,11 +83,11 @@ describe("proved paired Kinesis income", () => {
     const source = await syntheticKinesisIncomePair();
     if (kind === "missing_context")
       delete (
-        source.batches[0].custom_config as Partial<SyntheticKinesisConfig>
+        source.batches[0]!.custom_config as Partial<SyntheticKinesisConfig>
       ).kinesis_source_context;
     if (kind === "filtered")
       (
-        source.batches[0].custom_config as SyntheticKinesisConfig & {
+        source.batches[0]!.custom_config as SyntheticKinesisConfig & {
           included_symbols?: string[];
         }
       ).included_symbols = ["KAU"];
@@ -98,13 +98,13 @@ describe("proved paired Kinesis income", () => {
     if (kind === "income_fee") source.income.fees = "1.0000";
     if (kind === "income_date") source.income.tx_date = "2026-01-06";
     if (kind === "unit_receipt") source.kinesisAdoptionContext.receipts = [];
-    if (kind === "unit_afterimage") source.history[0].note = "Changed note";
-    if (kind === "unit_account") source.history[0].account_id = 8;
+    if (kind === "unit_afterimage") source.history[0]!.note = "Changed note";
+    if (kind === "unit_account") source.history[0]!.account_id = 8;
     if (kind === "ambiguous_unit")
-      source.history.push({ ...source.history[0], id: 41 });
+      source.history.push({ ...source.history[0]!, id: 41 });
     if (kind === "nonunit_asset") source.income.asset_class = "savings";
     if (kind === "different_file")
-      source.kinesisAdoptionContext.batches[0].custom_config.kinesis_source_context.source_file_hash =
+      source.kinesisAdoptionContext.batches[0]!.custom_config.kinesis_source_context.source_file_hash =
         "f".repeat(64);
     expect(plan(source)).toMatchObject({
       ready: false,
@@ -123,7 +123,7 @@ describe("proved paired Kinesis income", () => {
   it("rejects a competing full-history income claim", async () => {
     const source = await syntheticKinesisIncomePair();
     source.history.push({
-      ...source.history[0],
+      ...source.history[0]!,
       id: 41,
       type: "dividend",
       units: null,
@@ -171,14 +171,14 @@ it("accepts a unique unchanged imported acquisition from the same complete sourc
   )!;
   unit.status = "committed";
   unit.committed_txn_id = 40;
-  source.history[0].import_batch_id = "1";
-  source.history[0].note = unit.note;
+  source.history[0]!.import_batch_id = "1";
+  source.history[0]!.note = unit.note;
   source.kinesisAdoptionContext.receipts = [];
   expect(plan(source)).toMatchObject({
     ready: true,
     summary: { record_income: 1 },
   });
-  source.history[0].note = "Changed imported note";
+  source.history[0]!.note = "Changed imported note";
   expect(plan(source)).toMatchObject({
     ready: false,
     summary: { record_income: 0 },
@@ -196,28 +196,28 @@ it("normalizes explicit standard afterimages without rewriting old receipts", as
     summary: { record_income: 1 },
   });
   expect(
-    source.kinesisAdoptionContext.receipts[0].after_data,
+    source.kinesisAdoptionContext.receipts[0]!.after_data,
   ).not.toHaveProperty("income_recognition_role");
 });
 
 it("binds literal USD income to an unchanged zero-basis EUR acquisition afterimage", async () => {
   const source = await syntheticKinesisIncomePair();
-  source.history[0].currency = "EUR";
-  source.kinesisAdoptionContext.receipts[0].after_data.currency = "EUR";
+  source.history[0]!.currency = "EUR";
+  source.kinesisAdoptionContext.receipts[0]!.after_data.currency = "EUR";
   expect(plan(source)).toMatchObject({
     ready: true,
     summary: { record_income: 1 },
   });
-  expect(plan(source).actions[0].source!.currency).toBe("USD");
-  expect(source.history[0].currency).toBe("EUR");
+  expect(plan(source).actions[0]!.source!.currency).toBe("USD");
+  expect(source.history[0]!.currency).toBe("EUR");
 });
 
 it("defers unavailable historical income rates and binds usable quotes in the preview fingerprint", async () => {
   const source = await syntheticKinesisIncomePair();
   const initial = plan(source);
-  source.historicalFxContext[0].rate = "0.9";
+  source.historicalFxContext[0]!.rate = "0.9";
   expect(plan(source).planFingerprint).not.toBe(initial.planFingerprint);
-  source.historicalFxContext[0].rate = null;
+  source.historicalFxContext[0]!.rate = null;
   expect(plan(source)).toMatchObject({
     ready: true,
     summary: { record_income: 0 },

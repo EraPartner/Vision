@@ -26,10 +26,11 @@ export interface AccuracyRecord {
   userId: string;
   methodId: string;
   asOfMonth: string;
-  mae: number;
-  rmse: number;
+  /** NULL in the stored row when the backtest produced no value. */
+  mae: number | null;
+  rmse: number | null;
   mape: number | null;
-  sampleDays: number;
+  sampleDays: number | null;
   recordedAt: string;
 }
 

@@ -34,13 +34,13 @@ describe("KBCAdapter", () => {
     for (const txn of txns) {
       expect(txn.bankAccount).toMatch(/^BE\d{14}$/);
     }
-    expect(txns[0].bankAccount).toBe("BE61734041478017");
+    expect(txns[0]!.bankAccount).toBe("BE61734041478017");
   });
 
   it("parses transaction fields correctly", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    const txn1 = txns[0];
+    const txn1 = txns[0]!;
     expect(txn1.amount).toBe(-775.08);
     expect(txn1.currency).toBe("EUR");
     expect(txn1.balance).toBe(0.0);
@@ -60,44 +60,44 @@ describe("KBCAdapter", () => {
   it("detects credit and debit transactions", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].amount).toBeLessThan(0);
-    expect(txns[0].comment).toContain("DEBIT");
-    expect(txns[1].amount).toBeGreaterThan(0);
-    expect(txns[1].comment).toContain("CREDIT");
+    expect(txns[0]!.amount).toBeLessThan(0);
+    expect(txns[0]!.comment).toContain("DEBIT");
+    expect(txns[1]!.amount).toBeGreaterThan(0);
+    expect(txns[1]!.comment).toContain("CREDIT");
   });
 
   it("extracts BIC codes", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].comment).toContain("BIC: REVOBEB2XXX");
-    expect(txns[1].comment).toContain("BIC: KREDBEBBXXX");
+    expect(txns[0]!.comment).toContain("BIC: REVOBEB2XXX");
+    expect(txns[1]!.comment).toContain("BIC: KREDBEBBXXX");
   });
 
   it("extracts structured communication", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[2].comment).toContain("Structured: +++123/4567/89012+++");
+    expect(txns[2]!.comment).toContain("Structured: +++123/4567/89012+++");
   });
 
   it("extracts free communication", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[2].comment).toContain("Free: Monthly transfer");
+    expect(txns[2]!.comment).toContain("Free: Monthly transfer");
   });
 
   it("extracts statement numbers", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].comment).toContain("Statement: 02026001");
-    expect(txns[2].comment).toContain("Statement: 01026001");
+    expect(txns[0]!.comment).toContain("Statement: 02026001");
+    expect(txns[2]!.comment).toContain("Statement: 01026001");
   });
 
   it("extracts recipient accounts", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].recipientAccount).toBe("BE89 6509 6582 5185");
-    expect(txns[1].recipientAccount).toBe("BE34 7440 1076 7090");
-    expect(txns[2].recipientAccount).toBe("BE61 7340 4147 8017");
+    expect(txns[0]!.recipientAccount).toBe("BE89 6509 6582 5185");
+    expect(txns[1]!.recipientAccount).toBe("BE34 7440 1076 7090");
+    expect(txns[2]!.recipientAccount).toBe("BE61 7340 4147 8017");
   });
 
   it("keeps a quoted delimiter inside the free-communication field (no column shift)", async () => {
@@ -107,25 +107,25 @@ describe("KBCAdapter", () => {
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
     expect(txns).toHaveLength(1);
-    expect(txns[0].amount).toBe(-12.5);
-    expect(txns[0].recipient).toBe("ENERGIE NV");
-    expect(txns[0].comment).toContain("Free: Factuur 123; klant 456");
+    expect(txns[0]!.amount).toBe(-12.5);
+    expect(txns[0]!.recipient).toBe("ENERGIE NV");
+    expect(txns[0]!.comment).toContain("Free: Factuur 123; klant 456");
   });
 
   it("parses amounts with comma decimal separator", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].amount).toBe(-775.08);
-    expect(txns[1].amount).toBe(775.08);
-    expect(txns[2].amount).toBe(-1000.0);
+    expect(txns[0]!.amount).toBe(-775.08);
+    expect(txns[1]!.amount).toBe(775.08);
+    expect(txns[2]!.amount).toBe(-1000.0);
   });
 
   it("parses balance values", async () => {
     tmpPath = writeTempCSV(SAMPLE_KBC_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].balance).toBe(0.0);
-    expect(txns[1].balance).toBe(775.08);
-    expect(txns[2].balance).toBe(500.0);
+    expect(txns[0]!.balance).toBe(0.0);
+    expect(txns[1]!.balance).toBe(775.08);
+    expect(txns[2]!.balance).toBe(500.0);
   });
 
   it("normalizes text to uppercase", async () => {
@@ -179,6 +179,6 @@ BE61734041478017;                                                  ;TEST;EUR;  1
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
     expect(txns).toHaveLength(1);
-    expect(txns[0].amount).toBe(-50.0);
+    expect(txns[0]!.amount).toBe(-50.0);
   });
 });

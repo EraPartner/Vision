@@ -329,8 +329,10 @@ export async function fetchPublicWebPage(
         `Page returned ${response.status}`,
         response.status,
       );
-    const mediaType = (response.headers.get("content-type") || "")
-      .split(";")[0]
+    const [contentType = ""] = (
+      response.headers.get("content-type") || ""
+    ).split(";");
+    const mediaType = contentType
       .trim()
       .toLowerCase();
     if (!["text/html", "text/plain"].includes(mediaType))

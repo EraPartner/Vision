@@ -1,6 +1,7 @@
 /** Shared SQL helpers for the split portfolio-transaction repository. */
 
-import { query } from "../database/connection.ts";
+import { queryOne } from "../database/rowContracts.ts";
+import { presentRowSchema } from "../database/rows/portfolio.ts";
 
 let _hasPortfolioTransactionImportBatchIdColumn: boolean | undefined;
 
@@ -8,7 +9,8 @@ export async function hasPortfolioTransactionImportBatchIdColumn(): Promise<bool
   if (_hasPortfolioTransactionImportBatchIdColumn !== undefined) {
     return _hasPortfolioTransactionImportBatchIdColumn;
   }
-  const result = await query<{ present: boolean }>(
+  const row = await queryOne(
+    presentRowSchema,
     `SELECT EXISTS (
        SELECT 1 FROM pg_attribute
         WHERE attrelid = to_regclass('public.portfolio_transactions')
@@ -17,9 +19,7 @@ export async function hasPortfolioTransactionImportBatchIdColumn(): Promise<bool
           AND NOT attisdropped
      ) AS present`,
   );
-  _hasPortfolioTransactionImportBatchIdColumn = Boolean(
-    result.rows[0]?.present,
-  );
+  _hasPortfolioTransactionImportBatchIdColumn = Boolean(row?.present);
   return _hasPortfolioTransactionImportBatchIdColumn;
 }
 

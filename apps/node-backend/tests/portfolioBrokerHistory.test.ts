@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { partial } from "./helpers/partial.ts";
 import { mockTxConnection } from "./helpers/repoMocks.ts";
+import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 
 vi.mock("../src/database/connection.ts", () => mockTxConnection());
 vi.mock("../src/config/logger.ts", () => ({
@@ -63,10 +64,10 @@ describe("forward-only broker snapshots", () => {
     const inserts = query.mock.calls.filter(([sql]) =>
       sql.includes("INSERT INTO portfolio_broker_snapshots"),
     );
-    expect(inserts[0][1]).toContain("account:7");
-    expect(inserts[0][1]).toContain("Broker Seven");
-    expect(inserts[1][1]).toContain("unassigned");
-    expect(inserts[1][1]).toContain("Unassigned");
+    expect(inserts[0]![1]).toContain("account:7");
+    expect(inserts[0]![1]).toContain("Broker Seven");
+    expect(inserts[1]![1]).toContain("unassigned");
+    expect(inserts[1]![1]).toContain("Unassigned");
   });
 
   it("refuses a broker split that does not reconcile with the global total", async () => {
@@ -135,7 +136,7 @@ describe("forward-only broker snapshots", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            snapshot_date: "2026-09-12",
+            snapshot_date: pgLocalDate("2026-09-12"),
             currency: "EUR",
             account_key: "account:7",
             account_id: 7,
@@ -143,7 +144,7 @@ describe("forward-only broker snapshots", () => {
             value: "10.00",
             invested: "8.00",
             gain_loss: "2.00",
-            computed_at: "2026-09-12T20:00:00Z",
+            computed_at: new Date("2026-09-12T20:00:00Z"),
           },
         ],
       });
@@ -157,5 +158,41 @@ describe("forward-only broker snapshots", () => {
         value: 10,
       }),
     ]);
+  });
+  it("reports a DATE snapshot on its own calendar day east of UTC", async () => {
+    // node-postgres parses a DATE as local midnight; in Brussels that instant
+    // is the previous day in UTC, which the old toISOString() slice reported.
+    const previousTz = process.env.TZ;
+    process.env.TZ = "Europe/Brussels";
+    try {
+      query
+        .mockResolvedValueOnce({
+          rows: [{ relation: "portfolio_broker_snapshots" }],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              snapshot_date: pgLocalDate("2026-09-12"),
+              currency: "EUR",
+              account_key: "account:7",
+              account_id: 7,
+              account_name: "Broker",
+              value: "10.00",
+              invested: "8.00",
+              gain_loss: "2.00",
+              computed_at: new Date("2026-09-12T20:00:00Z"),
+            },
+          ],
+        });
+      const [snapshot] = await getBrokerSnapshots(
+        "2026-09-01",
+        "2026-09-30",
+        "EUR",
+      );
+      expect(snapshot?.date).toBe("2026-09-12");
+    } finally {
+      if (previousTz === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTz;
+    }
   });
 });

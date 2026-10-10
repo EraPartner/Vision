@@ -36,8 +36,11 @@ import { todayAppDateString } from "../src/lib/timezone.ts";
 // The MoM window's "today": the APP_TIMEZONE day the repository binds (ADR-009).
 const TODAY_SQL = `'${todayAppDateString()}'::date`;
 
-const cat: Record<string, number> = {};
-const rec: Record<string, number> = {};
+const cat = {} as Record<"Food" | "Bills", number>;
+const rec = {} as Record<
+  "delhaize" | "delhaizeAlias" | "colruyt" | "electrabel",
+  number
+>;
 
 /**
  * Categories plus the alias topology:
@@ -56,7 +59,7 @@ async function seedBase() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
   const addRecipient = async (
     name: string,
@@ -189,7 +192,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
-      for (const bag of [cat, rec])
+      for (const bag of [cat, rec] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
       clearMemoryCache();
       clearMvCache();
@@ -370,8 +373,8 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         expect(merchant(insights, "Colruyt")!.totalSpend).toBe(25); // 2024-06-01 rate, not the latest 0.90
-        expect(byYear.recipientsByYear["2024"][0].totalSpend).toBe(25);
-        expect(pivot.recipientPivot["2024-06"][0].total).toBe(25);
+        expect(byYear.recipientsByYear["2024"]![0]!.totalSpend).toBe(25);
+        expect(pivot.recipientPivot["2024-06"]![0]!.total).toBe(25);
       });
 
       // Per-date conversion must not disturb the per-recipient reduction: two
@@ -634,7 +637,7 @@ describe.skipIf(!hasTestDatabase())(
         const r = await recipientInsightsRepository.getRecipientByYear({
           targetCurrency: "EUR",
         });
-        expect(r.recipientsByYear["2024"][0].totalSpend).toBe(25);
+        expect(r.recipientsByYear["2024"]![0]!.totalSpend).toBe(25);
       });
 
       it("applies category and recipient exclusions together", async () => {

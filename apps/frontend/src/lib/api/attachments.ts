@@ -2,10 +2,12 @@
  * Attachment API client — receipt and document uploads for transactions.
  */
 
+import { AttachmentListSchema } from '@vision/types/contracts';
 import { API_BASE_URL, apiRequest, rawFetch, parseEnvelopeError } from '@/lib/api/client';
 
 export interface Attachment {
-    id: number;
+    /** BIGSERIAL, sent as decimal text. */
+    id: string;
     transaction_id: number;
     filename: string;
     stored_path: string;
@@ -16,7 +18,9 @@ export interface Attachment {
 
 /** List all attachments for a transaction. */
 export function listAttachments(transactionId: number): Promise<{ items: Attachment[] }> {
-    return apiRequest(`/api/attachments/transaction/${transactionId}`);
+    return apiRequest(`/api/attachments/transaction/${transactionId}`, {
+        schema: AttachmentListSchema,
+    });
 }
 
 /** Upload a file attachment for a transaction. */
@@ -38,11 +42,11 @@ export async function uploadAttachment(transactionId: number, file: File): Promi
 }
 
 /** Delete an attachment by ID. Responds 204 No Content — nothing to unwrap. */
-export async function deleteAttachment(attachmentId: number): Promise<void> {
+export async function deleteAttachment(attachmentId: string): Promise<void> {
     await apiRequest<void>(`/api/attachments/${attachmentId}`, { method: 'DELETE' });
 }
 
 /** Build the URL to download/view an attachment in the browser. */
-export function getAttachmentDownloadUrl(attachmentId: number): string {
+export function getAttachmentDownloadUrl(attachmentId: string): string {
     return `${API_BASE_URL}/api/attachments/${attachmentId}/download`;
 }

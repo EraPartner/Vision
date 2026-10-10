@@ -34,7 +34,7 @@ describe('report route response', () => {
       type: 'financial',
       currency: 'EUR',
     }));
-    expect(generateReport.mock.calls[0][0]).not.toHaveProperty('res');
+    expect(generateReport.mock.calls[0]![0]).not.toHaveProperty('res');
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
     expect(res.setHeader).toHaveBeenCalledWith(
       'Content-Disposition',

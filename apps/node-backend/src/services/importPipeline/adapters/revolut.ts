@@ -14,6 +14,7 @@ import {
   parseDecimalSafe,
   parseDateFlexibleUtc,
   normalizeIsoCurrency,
+  cellAt,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -52,16 +53,16 @@ function buildBankAccount(product: string | null | undefined): string {
 function parseRow(parts: string[]): ParsedBankTransaction | null {
   if (parts.length < MIN_FIELDS) return null;
 
-  const transactionType = parts[0].trim();
-  const product = parts[1].trim();
-  const completedDateStr = parts[3].trim();
-  const description = parts[4].trim();
-  const amountStr = parts[5].trim();
-  const feeStr = parts[6].trim();
-  const currencyCell = parts[7].trim();
+  const transactionType = cellAt(parts, 0).trim();
+  const product = cellAt(parts, 1).trim();
+  const completedDateStr = cellAt(parts, 3).trim();
+  const description = cellAt(parts, 4).trim();
+  const amountStr = cellAt(parts, 5).trim();
+  const feeStr = cellAt(parts, 6).trim();
+  const currencyCell = cellAt(parts, 7).trim();
   const currency = normalizeIsoCurrency(currencyCell);
-  const state = parts[8].trim();
-  const balanceStr = parts[9].trim();
+  const state = cellAt(parts, 8).trim();
+  const balanceStr = cellAt(parts, 9).trim();
 
   if (state.toUpperCase() !== "COMPLETED") return null;
   if (!completedDateStr) return null;
@@ -129,7 +130,7 @@ export function detect(csvSample: string | null | undefined): boolean {
 }
 
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {
-  const records = await parseCsvFile(filePath, {
+  const records = await parseCsvFile<string[]>(filePath, {
     columns: false,
     skip_empty_lines: true,
     relax_column_count: true,
@@ -137,8 +138,7 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   const transactions: ParsedBankTransactions = [];
   let skipped = 0;
 
-  for (let i = 0; i < records.length; i++) {
-    const parts = records[i];
+  for (const [i, parts] of records.entries()) {
     if (i === 0 && parts[0] && parts[0].trim() === "Type") continue;
     const tx = parseRow(parts);
     if (tx) transactions.push(tx);

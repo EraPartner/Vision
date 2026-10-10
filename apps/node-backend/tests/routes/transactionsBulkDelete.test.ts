@@ -200,7 +200,7 @@ describe("POST /bulk-delete — filter-mode", () => {
   it("reports selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
       .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
-      .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

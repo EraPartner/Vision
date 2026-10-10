@@ -7,6 +7,15 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  investmentCountedDbRowSchema,
+  investmentDbRowSchema,
+  latestPriceUpdatedAtRowSchema,
+  portfolioIntIdRowSchema,
+} from "../database/rows/portfolio.ts";
+import type { InvestmentDbRow } from "../database/rows/portfolio.ts";
 import { VALID_ASSET_CLASSES } from "../lib/assetClasses.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { coerceNumericFields } from "../lib/money.ts";
@@ -16,25 +25,6 @@ import { buildSetClauses } from "../lib/sqlClauses.ts";
 import type { InvestmentRow } from "../types/rows.ts";
 
 export type { InvestmentRow };
-
-/**
- * A raw `investments` row before `mapInvestmentRow`: the NUMERIC columns are
- * still pg strings and `maturity_date` a DATE (`Date`).
- */
-type InvestmentDbRow = Omit<
-  InvestmentRow,
-  | "current_price"
-  | "interest_rate"
-  | "cadastral_income"
-  | "municipality_tax_rate"
-  | "maturity_date"
-> & {
-  current_price: string | null;
-  interest_rate: string | null;
-  cadastral_income: string | null;
-  municipality_tax_rate: string | null;
-  maturity_date: Date | string | null;
-};
 
 /**
  * The caller-facing create payload — one key per column in
@@ -190,12 +180,13 @@ async function ensureSymbolIsUnique(
   symbol: unknown,
   excludeId: number,
 ): Promise<void> {
-  const result = await query(
+  const duplicate = await queryOne(
+    portfolioIntIdRowSchema,
     "SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1",
     [symbol, excludeId],
   );
 
-  if (result.rows[0]) {
+  if (duplicate) {
     throw makeValidationError("symbol must be unique");
   }
 }
@@ -237,8 +228,8 @@ export const investmentRepository = {
     sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
-    const result = await query<InvestmentDbRow>(sql, params);
-    return result.rows.map(mapInvestmentRow);
+    const rows = await queryRows(investmentDbRowSchema, sql, params);
+    return rows.map(mapInvestmentRow);
   },
 
   async getCount({
@@ -255,8 +246,8 @@ export const investmentRepository = {
       params.push(assetClass);
     }
 
-    const result = await query<{ count: string }>(sql, params);
-    return parseInt(result.rows[0].count, 10);
+    const row = await queryOne(countRowSchema, sql, params);
+    return parseInt(row!.count, 10);
   },
 
   async getAllWithCount({
@@ -286,24 +277,26 @@ export const investmentRepository = {
     sql += ` ORDER BY i.name LIMIT $${idx} OFFSET $${idx + 1}`;
     params.push(limit, offset);
 
-    const result = await query<InvestmentDbRow & { total_count: string }>(
+    const countedRows = await queryRows(
+      investmentCountedDbRowSchema,
       sql,
       params,
     );
-    const total =
-      result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-    const rows = result.rows.map(({ total_count: _total_count, ...row }) =>
+    const [first] = countedRows;
+    const total = first ? parseInt(first.total_count, 10) : 0;
+    const rows = countedRows.map(({ total_count: _total_count, ...row }) =>
       mapInvestmentRow(row),
     );
     return { rows, total };
   },
 
   async getById(id: number): Promise<InvestmentRow | null> {
-    const result = await query<InvestmentDbRow>(
+    const row = await queryOne(
+      investmentDbRowSchema,
       `SELECT i.*, ${TICKER_PREF_SELECT} FROM investments i ${TICKER_PREF_JOIN} WHERE i.id = $1`,
       [id],
     );
-    return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
+    return row ? mapInvestmentRow(row) : null;
   },
 
   async create({
@@ -379,12 +372,14 @@ export const investmentRepository = {
     );
     const values = INVESTMENT_INSERT_FIELDS.map((f) => f.value(payload));
 
-    const result = await query<InvestmentDbRow>(
+    const row = await queryOne(
+      investmentDbRowSchema,
       `INSERT INTO investments (${columns})
        VALUES (${placeholders}) RETURNING *`,
       values,
     );
-    return mapInvestmentRow(result.rows[0]);
+    // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
+    return row ? mapInvestmentRow(row) : null;
   },
 
   async update(
@@ -457,12 +452,12 @@ export const investmentRepository = {
 
     params.push(id);
     const sql = `UPDATE investments SET ${setClauses.join(", ")} WHERE id = $${idx} RETURNING *`;
-    const result = await query<InvestmentDbRow>(sql, params);
-    if (!result.rows[0]) return null;
+    const row = await queryOne(investmentDbRowSchema, sql, params);
+    if (!row) return null;
     // Re-read when the ticker pref changed so the joined value is in the response.
     return showInTicker !== undefined
       ? this.getById(id)
-      : mapInvestmentRow(result.rows[0]);
+      : mapInvestmentRow(row);
   },
 
   async updatePrice(
@@ -475,14 +470,15 @@ export const investmentRepository = {
       price_updated_at: string | Date | null;
     },
   ): Promise<InvestmentRow | null> {
-    const result = await query<InvestmentDbRow>(
+    const row = await queryOne(
+      investmentDbRowSchema,
       `UPDATE investments
           SET current_price = $1, price_updated_at = $2
         WHERE id = $3
       RETURNING *`,
       [current_price, price_updated_at, id],
     );
-    return result.rows[0] ? mapInvestmentRow(result.rows[0]) : null;
+    return row ? mapInvestmentRow(row) : null;
   },
 
   /**
@@ -519,14 +515,15 @@ export const investmentRepository = {
 
   /** @returns TIMESTAMPTZ — a `Date`, not a string. */
   async getLatestPriceUpdatedAt(): Promise<Date | null> {
-    const result = await query<{ latest: Date | null }>(
+    const row = await queryOne(
+      latestPriceUpdatedAtRowSchema,
       `SELECT MAX(price_updated_at) AS latest
          FROM investments
         WHERE is_active = true
           AND price_provider IS NOT NULL
           AND price_provider <> 'manual'`,
     );
-    return result.rows[0]?.latest ?? null;
+    return row?.latest ?? null;
   },
 
   async hardDelete(id: number): Promise<boolean> {

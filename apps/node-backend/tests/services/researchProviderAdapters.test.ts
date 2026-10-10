@@ -125,7 +125,7 @@ describe('twelveDataAdapter', () => {
     }]]);
     const { points } = await twelveData.chart('AAPL');
     expect(points).toHaveLength(1);
-    expect(points[0].close).toBe(1.5);
+    expect(points[0]!.close).toBe(1.5);
   });
 });
 
@@ -209,7 +209,7 @@ describe('finnhubAdapter', () => {
     mockFetch([['/company-news', [null, 'junk', { headline: 'H1', url: 'http://x' }]]]);
     const { articles } = await finnhub.news('AAPL');
     expect(articles).toHaveLength(1);
-    expect(articles[0].title).toBe('H1');
+    expect(articles[0]!.title).toBe('H1');
   });
 });
 
@@ -257,7 +257,7 @@ describe('fmpAdapter', () => {
     ]);
     const { items } = await fmp.search('apple');
     expect(items.map((i) => i.symbol)).toEqual(['AAPL', 'APC.DE']);
-    expect(items[1].exchange).toBe('XETRA');
+    expect(items[1]!.exchange).toBe('XETRA');
   });
 
   it('search degrades to no items when both endpoints return non-arrays', async () => {
@@ -346,7 +346,7 @@ describe('alphaVantageAdapter', () => {
     }]]);
     const { points } = await alphaVantage.chart('AAPL', { range: '1mo' });
     expect(points).toHaveLength(1);
-    expect(points[0].close).toBe(2.5);
+    expect(points[0]!.close).toBe(2.5);
   });
 
   // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──

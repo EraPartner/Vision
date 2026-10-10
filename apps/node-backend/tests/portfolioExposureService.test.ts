@@ -88,8 +88,8 @@ describe("portfolio exposure aggregation", () => {
     });
     const result = aggregatePortfolioExposure(summary, sources);
     expect(result.issuer.rows[0]).toMatchObject({ id: "apple", amount: 1000 });
-    expect(result.issuer.rows[0].weightPercent).toBe(6.54);
-    expect(result.issuer.rows[0].contributions).toHaveLength(3);
+    expect(result.issuer.rows[0]!.weightPercent).toBe(6.54);
+    expect(result.issuer.rows[0]!.contributions).toHaveLength(3);
     expect(result.uncoveredValue).toBe(14300);
     expect(result.uncoveredWeightPercent).toBe(93.46);
     expect(
@@ -151,7 +151,7 @@ describe("portfolio exposure aggregation", () => {
     );
 
     expect(document.staleness.status).toBe("current");
-    expect(result.issuer.rows[0].contributions[0]).toMatchObject({
+    expect(result.issuer.rows[0]!.contributions[0]).toMatchObject({
       sourceAsOfDate: "2026-09-01",
       stale: true,
     });

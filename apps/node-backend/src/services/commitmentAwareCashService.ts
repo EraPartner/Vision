@@ -72,9 +72,13 @@ export async function computeCommitmentAwareCash({
     const dates = expandOccurrences(row, horizonEnd, {
       maxOccurrences: Math.min(remaining, 500),
     });
+    const lastExpanded = dates.at(-1);
     const nextDate =
-      row.is_recurring && remaining > 500 && dates.length === 500
-        ? nextOccurrenceYmd(dates[dates.length - 1], row.recurrence_pattern)
+      row.is_recurring &&
+      remaining > 500 &&
+      dates.length === 500 &&
+      lastExpanded !== undefined
+        ? nextOccurrenceYmd(lastExpanded, row.recurrence_pattern)
         : undefined;
     if (
       nextDate &&
@@ -110,7 +114,8 @@ export async function computeCommitmentAwareCash({
     freshAfter.setUTCDate(freshAfter.getUTCDate() - 7);
     const cutoff = freshAfter.toISOString().slice(0, 10);
     for (const code of conversionCurrencies) {
-      if (!Number.isFinite(rates[code]) || rates[code] <= 0) {
+      const rate = rates[code];
+      if (rate === undefined || !Number.isFinite(rate) || rate <= 0) {
         throw new Error(
           `Cash estimate unavailable: no exchange rate for ${code}`,
         );

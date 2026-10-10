@@ -67,15 +67,15 @@ describe.skipIf(!hasTestDatabase())("IBKR native funding cash persistence", () =
     const before = await image(f.transactionId);
     const selected = await plan(f);
     expect(selected.blockers).toEqual([]);
-    await applyIbkrCashCorrection(selected.actions[0]);
-    expect(await image(f.transactionId)).toMatchObject({ ...before, amount: "100.0000", currency: "USD", dedup_fingerprint: selected.actions[0].after.snapshot.dedup_fingerprint });
-    const source = (await readReconciliationSources([f.originalBatch]))[0];
+    await applyIbkrCashCorrection(selected.actions[0]!);
+    expect(await image(f.transactionId)).toMatchObject({ ...before, amount: "100.0000", currency: "USD", dedup_fingerprint: selected.actions[0]!.after.snapshot.dedup_fingerprint });
+    const source = (await readReconciliationSources([f.originalBatch]))[0]!;
     expect(source).toMatchObject({ status: "committed", currency: "EUR", amount: "80.0000", committed_txn_id: f.transactionId });
     expect((await readReconciliationSources([f.nativeBatch]))[0]).toMatchObject({ status: "duplicate", committed_txn_id: null });
     expect(await __findIbkrCashSourceAlias(source)).toBe(f.transactionId);
     const repeated = await plan(f);
     expect(repeated).toMatchObject({ blockers: [], actions: [], duplicates: [{ settled: true, transactionId: f.transactionId }] });
-    await settleIbkrCashCorrectionRepeat(repeated.duplicates[0]);
+    await settleIbkrCashCorrectionRepeat(repeated.duplicates[0]!);
     expect(await receipts(f)).toHaveLength(1);
     expect((await pool.query("SELECT rows_duplicate FROM portfolio_import_batches WHERE id=$1", [f.nativeBatch])).rows[0].rows_duplicate).toBe(1);
   });
@@ -83,23 +83,23 @@ describe.skipIf(!hasTestDatabase())("IBKR native funding cash persistence", () =
     const f = await fixture();
     const selected = await plan(f);
     await pool.query("UPDATE transactions SET amount=81 WHERE id=$1", [f.transactionId]);
-    await expect(applyIbkrCashCorrection(selected.actions[0])).rejects.toThrow("Owned cash source or ledger image changed");
+    await expect(applyIbkrCashCorrection(selected.actions[0]!)).rejects.toThrow("Owned cash source or ledger image changed");
     expect(await receipts(f)).toEqual([]);
-    expect((await readReconciliationSources([f.nativeBatch]))[0].status).toBe("matched");
+    expect((await readReconciliationSources([f.nativeBatch]))[0]!.status).toBe("matched");
     expect((await image(f.transactionId)).amount).toBe("81.0000");
   });
   it("rejects a changed literal source atomically", async () => {
     const f = await fixture();
     const selected = await plan(f);
     await pool.query("UPDATE portfolio_import_staging_rows SET note='Edited after preview' WHERE batch_id=$1", [f.originalBatch]);
-    await expect(applyIbkrCashCorrection(selected.actions[0])).rejects.toThrow("Owned cash source or ledger image changed");
+    await expect(applyIbkrCashCorrection(selected.actions[0]!)).rejects.toThrow("Owned cash source or ledger image changed");
     expect((await image(f.transactionId)).currency).toBe("EUR");
     expect(await receipts(f)).toEqual([]);
   });
   it("restores guarded cash images while preserving ordinary transfer metadata", async () => {
     const f = await fixture();
     const selected = await plan(f);
-    await applyIbkrCashCorrection(selected.actions[0]);
+    await applyIbkrCashCorrection(selected.actions[0]!);
     await expect(guardOriginalIbkrCashRollback(f.originalBatch)).rejects.toThrow("Owned cash source or ledger image changed");
     await pool.query("UPDATE transactions SET is_transfer=true,transfer_source='manual' WHERE id=$1", [f.transactionId]);
     const active = await validateIbkrCashCorrectionRollback(await receipts(f));
@@ -110,7 +110,7 @@ describe.skipIf(!hasTestDatabase())("IBKR native funding cash persistence", () =
   });
   it("refuses restoration after a financial or source change", async () => {
     const f = await fixture();
-    await applyIbkrCashCorrection((await plan(f)).actions[0]);
+    await applyIbkrCashCorrection((await plan(f)).actions[0]!);
     const receipt = (await receipts(f))[0];
     await pool.query("UPDATE transactions SET comment='Changed after adoption' WHERE id=$1", [f.transactionId]);
     await expect(validateIbkrCashCorrectionRollback([receipt])).rejects.toThrow("IBKR cash source or ledger image changed");

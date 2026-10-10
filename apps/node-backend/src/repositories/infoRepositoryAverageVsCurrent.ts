@@ -13,7 +13,11 @@
  * template-interpolated into the SQL text.
  */
 
-import { query } from '../database/connection.ts';
+import { queryRows } from '../database/rowContracts.ts';
+import {
+  ledgerStartRowSchema,
+  signedDailyAmountRowSchema,
+} from '../database/rows/info.ts';
 import { toDecimal, toNumber, addAll, roundMoney as roundToCents } from '../lib/money.ts';
 import { formatDateToYmd } from '../lib/dateFormat.ts';
 import { extractYearMonth } from '../lib/dateKeys.ts';
@@ -113,14 +117,14 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
       AND t.date >= date_trunc('month', $1::date) - make_interval(months => $2::int)
   `;
 
-  const [past6Result, currentResult, ledgerStartResult] = await Promise.all([
-    query(sql6m, [todayYmd, WINDOW_MONTHS]),
-    query(sqlCurrent, [todayYmd]),
-    query(sqlLedgerStart, [todayYmd, WINDOW_MONTHS]),
+  const [past6Rows, currentRows, ledgerStartRows] = await Promise.all([
+    queryRows(signedDailyAmountRowSchema, sql6m, [todayYmd, WINDOW_MONTHS]),
+    queryRows(signedDailyAmountRowSchema, sqlCurrent, [todayYmd]),
+    queryRows(ledgerStartRowSchema, sqlLedgerStart, [todayYmd, WINDOW_MONTHS]),
   ]);
 
   const past6Converted = await convertRowsToEur(
-    mapRowsForAmountConversion(past6Result.rows, 'amount', false),
+    mapRowsForAmountConversion(past6Rows, 'amount', false),
     targetCurrency
   );
 
@@ -159,7 +163,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   // two readings of one clock — not the host's, and not the DB session's.
   const lastCompleteMonthIdx = nowYear * 12 + (nowMonth - 1) - 1;
   const monthsCount = countObservedMonths(
-    monthKeyFromDbDate(ledgerStartResult.rows[0]?.first_date),
+    monthKeyFromDbDate(ledgerStartRows[0]?.first_date),
     lastCompleteMonthIdx,
     WINDOW_MONTHS,
   );
@@ -171,7 +175,7 @@ export async function getAverageVsCurrentSpending(targetCurrency = 'EUR') {
   const avgDailySpending = totalMonthlySpending / calendarDaysObserved;
 
   const currentConverted = await convertRowsToEur(
-    mapRowsForAmountConversion(currentResult.rows, 'amount', false),
+    mapRowsForAmountConversion(currentRows, 'amount', false),
     targetCurrency
   );
 

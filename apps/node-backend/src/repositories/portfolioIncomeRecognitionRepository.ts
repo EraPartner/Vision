@@ -1,5 +1,13 @@
 /** Immutable in-kind income pairing and selected-only canonical writes. */
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  batchIdRowSchema,
+  incomeRecognitionJournalRowSchema,
+  portfolioIntIdRowSchema,
+  portfolioTransactionSnapshotRowSchema,
+} from "../database/rows/portfolio.ts";
+import type { IncomeRecognitionJournalDbRow } from "../database/rows/portfolio.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 import {
   readKinesisAdoptionContext,
@@ -18,22 +26,9 @@ import type {
 type Id = number | string;
 /**
  * A `portfolio_import_income_recognition_journal` row (BIGINT columns arrive as
- * strings from pg).
+ * strings from pg). Derived from the checked row schema.
  */
-export interface IncomeRecognitionJournalRow {
-  id: string;
-  batch_id: string;
-  staging_row_id: string;
-  unit_staging_row_id: string;
-  income_transaction_id: number;
-  unit_transaction_id: number;
-  action: "record" | "restore";
-  previous_entry_id: string | null;
-  income_data: Record<string, unknown>;
-  unit_data: Record<string, unknown>;
-  proof_data: Record<string, unknown>;
-  created_at: Date;
-}
+export type IncomeRecognitionJournalRow = IncomeRecognitionJournalDbRow;
 
 export async function readKinesisIncomeUnitContext(
   history: readonly ReconciliationHistoryLike[],
@@ -50,8 +45,9 @@ export async function readKinesisIncomeUnitContext(
   if (!ids.length) return adopted;
   const batches = (await readReconciliationBatchScope(ids)).filter(
     (batch) =>
-      (batch.custom_config?.format || batch.adapter_name) ===
-      "kinesis_transaction_history",
+      ((typeof batch.custom_config === "object"
+        ? batch.custom_config?.format
+        : undefined) || batch.adapter_name) === "kinesis_transaction_history",
   );
   const sources = await readReconciliationSources(
     batches.map((batch) => Number(batch.id)),
@@ -67,14 +63,13 @@ export async function readIncomeRecognitionContext(
     .filter((row) => row.type === "dividend" || row.type === "gift")
     .map((row) => Number(row.id));
   if (!ids.length) return { receipts: [], sources: [], batches: [] };
-  const receipts = (
-    await query<IncomeRecognitionJournalRow>(
-      `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.action='record'
+  const receipts = await queryRows(
+    incomeRecognitionJournalRowSchema,
+    `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.action='record'
     AND (r.unit_transaction_id=ANY($1::integer[]) OR r.income_transaction_id=ANY($1::integer[]))
     AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY r.id`,
-      [ids],
-    )
-  ).rows;
+    [ids],
+  );
   const batchIds = [...new Set(receipts.map((row) => Number(row.batch_id)))];
   if (!batchIds.length) return { receipts, sources: [], batches: [] };
   const [sources, batches] = await Promise.all([
@@ -113,34 +108,36 @@ export async function recordPairedPortfolioIncome({
   unitSource,
   proof,
 }: PairedIncomeRecord): Promise<PortfolioTransactionSnapshot> {
-  const inserted = (
-    await query<{ id: number }>(
-      `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,fx_rate_to_eur,note,account_id,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,income_recognition_role)
+  const inserted = await queryOne(
+    portfolioIntIdRowSchema,
+    `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,fx_rate_to_eur,note,account_id,import_batch_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version,income_recognition_role)
     VALUES($1,'dividend',$2,$3,NULL,NULL,0,0,$4,NULL,$5,$6,$7,$8,$9,$10,'included_in_units') ON CONFLICT DO NOTHING RETURNING id`,
-      [
-        row.investment_id,
-        row.tx_date,
-        row.amount,
-        row.currency,
-        row.note,
-        row.account_id,
-        row.batch_id,
-        row.source_record_hash,
-        row.dedup_fingerprint,
-        row.dedup_fingerprint_version,
-      ],
-    )
-  ).rows[0];
+    [
+      row.investment_id,
+      row.tx_date,
+      row.amount,
+      row.currency,
+      row.note,
+      row.account_id,
+      row.batch_id,
+      row.source_record_hash,
+      row.dedup_fingerprint,
+      row.dedup_fingerprint_version,
+    ],
+  );
   if (!inserted)
     throw new ConflictError("Paired income identity changed", {
       details: { reason: "stale_reconciliation_plan" },
     });
-  const income = (
-    await query<{ snapshot: PortfolioTransactionSnapshot }>(
-      `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS snapshot FROM portfolio_transactions pt WHERE id=$1`,
-      [inserted.id],
-    )
-  ).rows[0].snapshot;
+  const incomeRow = await queryOne(
+    portfolioTransactionSnapshotRowSchema,
+    `SELECT ${PORTFOLIO_TRANSACTION_SNAPSHOT_SQL} AS snapshot FROM portfolio_transactions pt WHERE id=$1`,
+    [inserted.id],
+  );
+  // The row was inserted a statement ago in the same transaction.
+  if (!incomeRow)
+    throw new Error("Paired income transaction vanished after insert");
+  const income: PortfolioTransactionSnapshot = incomeRow.snapshot;
   const transitioned = await query(
     "UPDATE portfolio_import_staging_rows SET status='committed',committed_txn_id=$2 WHERE id=$1 AND status='matched' RETURNING id",
     [row.id, inserted.id],
@@ -171,13 +168,12 @@ export async function recordPairedPortfolioIncome({
 export async function restorePairedPortfolioIncomeForBatch(
   batchId: Id,
 ): Promise<IncomeRecognitionJournalRow[]> {
-  const receipts = (
-    await query<IncomeRecognitionJournalRow>(
-      `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.batch_id=$1 AND r.action='record'
+  const receipts = await queryRows(
+    incomeRecognitionJournalRowSchema,
+    `SELECT r.* FROM portfolio_import_income_recognition_journal r WHERE r.batch_id=$1 AND r.action='record'
     AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY r.id`,
-      [batchId],
-    )
-  ).rows;
+    [batchId],
+  );
   for (const receipt of receipts)
     await query(
       `INSERT INTO portfolio_import_income_recognition_journal(batch_id,staging_row_id,unit_staging_row_id,income_transaction_id,unit_transaction_id,action,previous_entry_id,income_data,unit_data,proof_data)
@@ -201,11 +197,12 @@ export async function readPairedIncomeRollbackBatchIds(
   batchId: Id,
 ): Promise<number[]> {
   return (
-    await query<{ batch_id: string }>(
+    await queryRows(
+      batchIdRowSchema,
       `SELECT DISTINCT source.batch_id FROM portfolio_import_income_recognition_journal r
     JOIN portfolio_import_staging_rows source ON source.id=r.unit_staging_row_id WHERE r.batch_id=$1 AND r.action='record'
     AND NOT EXISTS(SELECT 1 FROM portfolio_import_income_recognition_journal undo WHERE undo.previous_entry_id=r.id) ORDER BY source.batch_id`,
       [batchId],
     )
-  ).rows.map((row) => Number(row.batch_id));
+  ).map((row) => Number(row.batch_id));
 }

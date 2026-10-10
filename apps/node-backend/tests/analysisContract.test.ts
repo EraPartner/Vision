@@ -81,33 +81,33 @@ describe("shared analysis contract", () => {
       ).toEqual({ compatible: true });
     }
 
-    const recurring = ANALYSIS_REFERENCE_QUESTIONS_V1[1];
+    const recurring = ANALYSIS_REFERENCE_QUESTIONS_V1[1]!;
     expect(
       recurring.result.data.rows.map(({ values }) => values.classification),
     ).toEqual(["recurring", "discretionary"]);
-    const contracts = ANALYSIS_REFERENCE_QUESTIONS_V1[2];
+    const contracts = ANALYSIS_REFERENCE_QUESTIONS_V1[2]!;
     expect(
       contracts.result.data.rows.map(({ values }) => values.contract),
     ).toEqual(["A", "B"]);
-    const overlap = ANALYSIS_REFERENCE_QUESTIONS_V1[4];
+    const overlap = ANALYSIS_REFERENCE_QUESTIONS_V1[4]!;
     expect(overlap.result.coverage.dimensions[0]).toMatchObject({
       status: "partial",
       missingRatio: "0.12",
     });
-    const filing = ANALYSIS_REFERENCE_QUESTIONS_V1[6];
+    const filing = ANALYSIS_REFERENCE_QUESTIONS_V1[6]!;
     expect(filing.result.data.rows.map(({ values }) => values.version)).toEqual(
       ["2026-q2", "2026-q2-amended"],
     );
-    const contradiction = ANALYSIS_REFERENCE_QUESTIONS_V1[8];
+    const contradiction = ANALYSIS_REFERENCE_QUESTIONS_V1[8]!;
     expect(
       contradiction.result.data.rows.map(({ values }) => values.source_status),
     ).toEqual(["supports", "contradicts"]);
-    expect(contradiction.result.coverage.dimensions[0].status).toBe(
+    expect(contradiction.result.coverage.dimensions[0]!.status).toBe(
       "unavailable",
     );
 
     const refund =
-      ANALYSIS_REFERENCE_QUESTIONS_V1[0].result.data.rows[0].values;
+      ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.result.data.rows[0]!.values;
     expect(Number(refund.gross_spend) + Number(refund.refunds)).toBe(
       Number(refund.net_flow),
     );
@@ -117,7 +117,7 @@ describe("shared analysis contract", () => {
       value: "480",
     });
 
-    const portfolio = ANALYSIS_REFERENCE_QUESTIONS_V1[3];
+    const portfolio = ANALYSIS_REFERENCE_QUESTIONS_V1[3]!;
     const canonical = calculateCostBasis(portfolio.canonicalPortfolioInput!);
     expect(String(canonical.realizedGain)).toBe(
       portfolio.canonicalPortfolioExpected!.realizedGain,
@@ -135,7 +135,7 @@ describe("shared analysis contract", () => {
         ),
     );
     expect(portfolioRecordIds).toContain("partial-sale-usd");
-    expect(portfolio.result.data.rows[0].values.source_currency).toBe("USD");
+    expect(portfolio.result.data.rows[0]!.values.source_currency).toBe("USD");
   });
 
   it("preserves custom SQL and proves the paired visual result", () => {
@@ -198,7 +198,7 @@ describe("shared analysis contract", () => {
   });
 
   it("rejects dangling references, raw visual predicates, and presentation drift", () => {
-    const definition = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0].definition);
+    const definition = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.definition);
     definition.datasets.push({ ...definition.datasets[0] });
     definition.presentations[0].bindings.columns.push("missing_output");
     const parsed = analysisDefinitionSchema.safeParse(definition);
@@ -209,12 +209,12 @@ describe("shared analysis contract", () => {
       ]),
     );
 
-    const raw = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[1].definition);
+    const raw = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[1]!.definition);
     raw.source.filters = ["amount > :minimum"];
     expect(analysisDefinitionSchema.safeParse(raw).success).toBe(false);
 
     const missingSelection = clone(
-      ANALYSIS_REFERENCE_QUESTIONS_V1[1].definition,
+      ANALYSIS_REFERENCE_QUESTIONS_V1[1]!.definition,
     );
     missingSelection.source.select = missingSelection.source.select.filter(
       ({ id }: { id: string }) => id !== "amount",
@@ -223,7 +223,7 @@ describe("shared analysis contract", () => {
       messages(analysisDefinitionSchema.safeParse(missingSelection)),
     ).toContain("Raw result column is not selected: amount");
 
-    const presentation = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0].definition);
+    const presentation = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.definition);
     presentation.presentations[0].requires.columns =
       presentation.presentations[0].requires.columns.map(
         (value: object, index: number) =>
@@ -233,8 +233,8 @@ describe("shared analysis contract", () => {
       messages(analysisDefinitionSchema.safeParse(presentation)),
     ).toContain("Presentation column contract differs: gross_spend");
 
-    const chartFixture = ANALYSIS_REFERENCE_QUESTIONS_V1[3];
-    expect(chartFixture.definition.presentations[0].kind).toBe("bar");
+    const chartFixture = ANALYSIS_REFERENCE_QUESTIONS_V1[3]!;
+    expect(chartFixture.definition.presentations[0]!.kind).toBe("bar");
     const chartResult = clone(chartFixture.result);
     chartResult.data.columns[1] = {
       ...chartResult.data.columns[1],
@@ -249,7 +249,7 @@ describe("shared analysis contract", () => {
   });
 
   it("validates defaults, effective inputs, and reporting scope", () => {
-    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[2];
+    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[2]!;
     const definition = clone(fixture.definition);
     definition.assumptions[0].defaultValue = 40;
     expect(messages(analysisDefinitionSchema.safeParse(definition))).toContain(
@@ -291,7 +291,7 @@ describe("shared analysis contract", () => {
   });
 
   it("enforces terminal status and row-window invariants", () => {
-    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0];
+    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0]!;
     const running = clone(fixture.result);
     running.status = "running";
     expect(analysisExecutionResultSchema.safeParse(running).success).toBe(
@@ -340,7 +340,7 @@ describe("shared analysis contract", () => {
   });
 
   it("enforces dataset, coverage, lineage, grain, and row identity", () => {
-    const result = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0].result);
+    const result = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.result);
     result.coverage.datasets.pop();
     result.data.rows[0].lineage[0].datasetId = "undeclared";
     result.data.rowGrain.keys = ["missing"];
@@ -363,7 +363,7 @@ describe("shared analysis contract", () => {
       ]),
     );
 
-    const falseComplete = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[3].result);
+    const falseComplete = clone(ANALYSIS_REFERENCE_QUESTIONS_V1[3]!.result);
     falseComplete.coverage.datasets[0].missingRatio = "1";
     expect(
       messages(analysisExecutionResultSchema.safeParse(falseComplete)),
@@ -371,7 +371,7 @@ describe("shared analysis contract", () => {
   });
 
   it("fails closed on definition, dataset, calculation, column, and completeness drift", () => {
-    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0];
+    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0]!;
     const result = clone(fixture.result);
     result.definitionRef.definitionVersion = 2;
     result.sourceVersions[0].schemaVersion = 2;
@@ -391,7 +391,7 @@ describe("shared analysis contract", () => {
   });
 
   it("rejects calculation errors and malformed row values", () => {
-    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0];
+    const fixture = ANALYSIS_REFERENCE_QUESTIONS_V1[0]!;
     const result = clone(fixture.result);
     result.data.rows[0].values.net_flow = 420;
     result.data.rows[0].values.unexpected = "value";
@@ -409,7 +409,7 @@ describe("shared analysis contract", () => {
       kind: "metric",
       version: "transfer-refund-v1",
       type: "decimal",
-      unit: clone(fixture.definition.calculations[0].unit),
+      unit: clone(fixture.definition.calculations[0]!.unit),
       error: { code: "metric-failed", message: "Fixture failure" },
     };
     expect(reasonCodes(fixture.definition, errored)).toContain(
@@ -419,9 +419,9 @@ describe("shared analysis contract", () => {
 
   it("does not mutate saved definitions or frozen results", () => {
     const definition = deepFreeze(
-      clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0].definition),
+      clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.definition),
     );
-    const result = deepFreeze(clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0].result));
+    const result = deepFreeze(clone(ANALYSIS_REFERENCE_QUESTIONS_V1[0]!.result));
     const beforeDefinition = JSON.stringify(definition);
     const beforeResult = JSON.stringify(result);
     expect(checkAnalysisResultCompatibility(definition, result)).toEqual({

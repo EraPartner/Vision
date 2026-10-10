@@ -5,7 +5,13 @@
  * while preserving junction row history.
  */
 
-import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { countRowSchema } from '../database/rowSchemas.ts';
+import {
+  requireRow,
+  tagRowSchema,
+  tagUpsertRowSchema,
+} from '../database/rows/catalog.ts';
 import { buildLimitOffset, buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { TagRow } from '../types/rows.ts';
@@ -40,8 +46,7 @@ export const tagRepository = {
     sql += ` ORDER BY slug`;
     const params: unknown[] = [];
     sql += buildLimitOffset(params, { limit, offset });
-    const result = await query<TagRow>(sql, params);
-    return result.rows;
+    return queryRows(tagRowSchema, sql, params);
   },
 
   /**
@@ -60,18 +65,18 @@ export const tagRepository = {
       sql += ` AND is_active = false`;
     }
 
-    const result = await query<{ count: string }>(sql, params);
-    return parseInt(result.rows[0].count, 10);
+    const row = await queryOne(countRowSchema, sql, params);
+    return parseInt(requireRow(row, 'tag count').count, 10);
   },
 
   async getById(id: number): Promise<TagRow | null> {
-    const result = await query<TagRow>('SELECT * FROM tags WHERE id = $1', [id]);
-    return result.rows[0] ?? null;
+    const row = await queryOne(tagRowSchema, 'SELECT * FROM tags WHERE id = $1', [id]);
+    return row ?? null;
   },
 
   async getBySlug(slug: string): Promise<TagRow | null> {
-    const result = await query<TagRow>('SELECT * FROM tags WHERE slug = $1', [slug]);
-    return result.rows[0] ?? null;
+    const row = await queryOne(tagRowSchema, 'SELECT * FROM tags WHERE slug = $1', [slug]);
+    return row ?? null;
   },
 
   /**
@@ -79,11 +84,11 @@ export const tagRepository = {
    */
   async getManyBySlugs(slugs: string[]): Promise<TagRow[]> {
     if (slugs.length === 0) return [];
-    const result = await query<TagRow>(
+    return queryRows(
+      tagRowSchema,
       'SELECT * FROM tags WHERE slug = ANY($1::text[])',
       [slugs]
     );
-    return result.rows;
   },
 
   /**
@@ -97,7 +102,8 @@ export const tagRepository = {
     slug: string,
     color: string | null = null,
   ): Promise<{ tag: TagRow; reactivated: boolean }> {
-    const result = await query<TagRow & { was_conflict: boolean }>(
+    const result = await queryOne(
+      tagUpsertRowSchema,
       `INSERT INTO tags (slug, color)
        VALUES ($1, $2)
        ON CONFLICT (slug) DO UPDATE
@@ -107,7 +113,7 @@ export const tagRepository = {
        RETURNING *, (xmax <> 0) AS was_conflict`,
       [slug, color]
     );
-    const row = result.rows[0];
+    const row = requireRow(result, 'tag upsert');
     const reactivated = row.was_conflict && row.is_active;
     const { was_conflict: _wc, ...tag } = row;
     return { tag, reactivated };
@@ -135,33 +141,36 @@ export const tagRepository = {
 
     setClauses.push('updated_at = NOW()');
     params.push(id);
-    const result = await query<TagRow>(
+    const row = await queryOne(
+      tagRowSchema,
       `UPDATE tags SET ${setClauses.join(', ')} WHERE id = $${idx} RETURNING *`,
       params
     );
-    return result.rows[0] ?? null;
+    return row ?? null;
   },
 
   /**
    * Soft delete: set is_active = false.
    */
   async softDelete(id: number): Promise<TagRow | null> {
-    const result = await query<TagRow>(
+    const row = await queryOne(
+      tagRowSchema,
       `UPDATE tags SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
       [id]
     );
-    return result.rows[0] ?? null;
+    return row ?? null;
   },
 
   /**
    * Count how many transactions reference a given tag (for reactivation toast).
    */
   async countTransactionReferences(tagId: number): Promise<number> {
-    const result = await query<{ count: string }>(
+    const row = await queryOne(
+      countRowSchema,
       'SELECT COUNT(*) FROM transaction_tags WHERE tag_id = $1',
       [tagId]
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseInt(requireRow(row, 'tag reference count').count, 10);
   },
 };
 

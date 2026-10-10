@@ -11,7 +11,13 @@
  * so this module never needs to touch `updated_at` manually.
  */
 
-import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  aiConversationRowSchema,
+  aiMessageRowSchema,
+  intTotalRowSchema,
+  uuidIdRowSchema,
+} from "../database/rows/ai.ts";
 import type { AiConversationRow, AiMessageRow } from "../types/rows.ts";
 
 export type { AiConversationRow, AiMessageRow };
@@ -57,21 +63,23 @@ const aiChatRepository = {
     limit: number;
     offset: number;
   }): Promise<{ items: AiConversationRow[]; total: number }> {
-    const [itemsResult, countResult] = await Promise.all([
-      query<AiConversationRow>(
+    const [items, countRows] = await Promise.all([
+      queryRows(
+        aiConversationRowSchema,
         `SELECT ${CONVERSATION_COLUMNS}
            FROM ai_conversations
           ORDER BY updated_at DESC
           LIMIT $1 OFFSET $2`,
         [page.limit, page.offset],
       ),
-      query<{ total: number }>(
+      queryRows(
+        intTotalRowSchema,
         `SELECT COUNT(*)::int AS total FROM ai_conversations`,
       ),
     ]);
     return {
-      items: itemsResult.rows,
-      total: Number(countResult.rows[0]?.total) || 0,
+      items,
+      total: Number(countRows[0]?.total) || 0,
     };
   },
 
@@ -79,11 +87,12 @@ const aiChatRepository = {
    * @param id UUID.
    */
   async getConversation(id: string): Promise<AiConversationRow | null> {
-    const result = await query<AiConversationRow>(
+    const row = await queryOne(
+      aiConversationRowSchema,
       `SELECT ${CONVERSATION_COLUMNS} FROM ai_conversations WHERE id = $1`,
       [id],
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   async createConversation({
@@ -93,13 +102,15 @@ const aiChatRepository = {
     title: string;
     model: string;
   }): Promise<AiConversationRow> {
-    const result = await query<AiConversationRow>(
+    const row = await queryOne(
+      aiConversationRowSchema,
       `INSERT INTO ai_conversations (title, model)
        VALUES ($1, $2)
        RETURNING ${CONVERSATION_COLUMNS}`,
       [title, model],
     );
-    return result.rows[0];
+    if (!row) throw new Error("ai_conversations insert returned no row");
+    return row;
   },
 
   /**
@@ -109,14 +120,15 @@ const aiChatRepository = {
     id: string,
     title: string,
   ): Promise<AiConversationRow | null> {
-    const result = await query<AiConversationRow>(
+    const row = await queryOne(
+      aiConversationRowSchema,
       `UPDATE ai_conversations
           SET title = $2, updated_at = NOW()
         WHERE id = $1
         RETURNING ${CONVERSATION_COLUMNS}`,
       [id, title],
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   /**
@@ -126,14 +138,15 @@ const aiChatRepository = {
     id: string,
     model: string,
   ): Promise<AiConversationRow | null> {
-    const result = await query<AiConversationRow>(
+    const row = await queryOne(
+      aiConversationRowSchema,
       `UPDATE ai_conversations
           SET model = $2, updated_at = NOW()
         WHERE id = $1
         RETURNING ${CONVERSATION_COLUMNS}`,
       [id, model],
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   /**
@@ -141,25 +154,26 @@ const aiChatRepository = {
    * @returns true if a row was removed
    */
   async deleteConversation(id: string): Promise<boolean> {
-    const result = await query<{ id: string }>(
+    const rows = await queryRows(
+      uuidIdRowSchema,
       `DELETE FROM ai_conversations WHERE id = $1 RETURNING id`,
       [id],
     );
-    return result.rows.length > 0;
+    return rows.length > 0;
   },
 
   /**
    * @param conversationId UUID.
    */
   async getMessages(conversationId: string): Promise<AiMessageRow[]> {
-    const result = await query<AiMessageRow>(
+    return queryRows(
+      aiMessageRowSchema,
       `SELECT ${MESSAGE_COLUMNS}
          FROM ai_messages
         WHERE conversation_id = $1
         ORDER BY created_at ASC, id ASC`,
       [conversationId],
     );
-    return result.rows;
   },
 
   async appendMessage({
@@ -180,7 +194,8 @@ const aiChatRepository = {
     status?: string;
   }): Promise<AiMessageRow> {
     try {
-      const result = await query<AiMessageRow>(
+      const row = await queryOne(
+        aiMessageRowSchema,
         `INSERT INTO ai_messages
            (conversation_id, role, content, tool_name, tool_args, tool_result, status)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)
@@ -195,7 +210,8 @@ const aiChatRepository = {
           status,
         ],
       );
-      return result.rows[0];
+      if (!row) throw new Error("ai_messages insert returned no row");
+      return row;
     } catch (err) {
       if (
         typeof err === "object" &&

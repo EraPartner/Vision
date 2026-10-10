@@ -30,7 +30,7 @@ import {
   getPortfolioSummary,
   getSnapshots,
 } from '../../portfolioPerformanceSnapshotService.ts';
-import { mean, stdev, quantile, clamp, flowAdjustedLogReturns } from './stats.ts';
+import { mean, stdev, quantile, clamp, flowAdjustedLogReturns, valueAt } from './stats.ts';
 
 const TRADING_DAYS_PER_MONTH = 21;
 const TRADING_DAYS_PER_YEAR = 252;
@@ -88,7 +88,8 @@ function sumBootstrapResiduals(
   let idx = Math.floor(rng() * L) % L;
   let sum = 0;
   for (let filled = 0; filled < n; filled++) {
-    sum += residuals[idx];
+    // The caller passes at least two residuals, so idx stays in 0..L-1.
+    sum += valueAt(residuals, idx);
     if (rng() < pNewBlock) idx = Math.floor(rng() * L) % L;
     else idx = (idx + 1) % L;
   }
@@ -268,20 +269,25 @@ export async function runPortfolioForecast(
 
   // ── Simulate ──
   const rng = makeRng(seed);
-  const monthValues = Array.from({ length: horizonMonths }, () => new Array<number>(paths));
+  // One entry per horizon month (contributions has horizonMonths entries).
+  const months = contributions.map((contribution) => ({
+    contribution,
+    values: new Array<number>(paths),
+  }));
   const finals = new Array<number>(paths);
   for (let p = 0; p < paths; p++) {
     let v = startValue;
-    for (let h = 0; h < horizonMonths; h++) {
+    for (const month of months) {
       const logRet = method === 'block_bootstrap'
         // residuals is always set on the block_bootstrap path (see above).
         ? monthlyDrift + sumBootstrapResiduals(residuals!, TRADING_DAYS_PER_MONTH, MEAN_BLOCK_LENGTH, rng)
         : monthlyDrift + monthlyVol * gaussian(rng);
-      v = v * Math.exp(logRet) + contributions[h];
-      monthValues[h][p] = v;
+      v = v * Math.exp(logRet) + month.contribution;
+      month.values[p] = v;
     }
     finals[p] = v;
   }
+  const monthValues = months.map((month) => month.values);
 
   // ── Aggregate ──
   const today = d.today();
@@ -290,7 +296,7 @@ export async function runPortfolioForecast(
     return {
       monthIndex: h + 1,
       date: firstOfMonthYmd(today, h + 1),
-      netInvested: round2(startInvested + cumulativeContributions[h]),
+      netInvested: round2(startInvested + valueAt(cumulativeContributions, h)),
       p10: round2(quantile(sorted, 10)),
       p25: round2(quantile(sorted, 25)),
       p50: round2(quantile(sorted, 50)),
@@ -300,10 +306,11 @@ export async function runPortfolioForecast(
   });
 
   const sortedFinals = finals.slice().sort((a, b) => a - b);
-  const totalContributions = cumulativeContributions[horizonMonths - 1];
+  const totalContributions = valueAt(cumulativeContributions, horizonMonths - 1);
   const netInvested = startInvested + totalContributions;
   const probBelowInvested = finals.filter((v) => v < netInvested).length / paths;
-  const goalValues = goalMonth === undefined ? finals : monthValues[goalMonth - 1];
+  // goalMonth is clamped to 1..horizonMonths above.
+  const goalValues = goalMonth === undefined ? finals : valueAt(monthValues, goalMonth - 1);
   const probTarget = targetValue ? goalValues.filter((v) => v >= targetValue).length / paths : undefined;
 
   return {

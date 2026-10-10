@@ -67,7 +67,7 @@ async function seedAccount(name: string, displayName: string) {
     `INSERT INTO accounts (name, display_name) VALUES ($1, $2) RETURNING id`,
     [name, displayName],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function seedInvestment(name: string, currentPrice: number) {
@@ -76,7 +76,7 @@ async function seedInvestment(name: string, currentPrice: number) {
      VALUES ($1, $1, 'stock', 'EUR', $2) RETURNING id`,
     [name, currentPrice],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function seedTxn(
@@ -94,7 +94,7 @@ async function seedTxn(
      VALUES ($1, $2, $3::date, $4, $5, 'EUR', $6) RETURNING id`,
     [investmentId, type, date, amount, units, accountId],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function wipe() {

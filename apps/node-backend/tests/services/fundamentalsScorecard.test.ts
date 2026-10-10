@@ -26,7 +26,7 @@ describe('fundamentalsScorecard', () => {
     expect(r.grade).toBe('poor');
     expect(r.counts.risk).toBeGreaterThanOrEqual(4);
     // Worst-first ordering.
-    expect(r.flags[0].severity).toBe('risk');
+    expect(r.flags[0]!.severity).toBe('risk');
   });
 
   it('scores a healthy company highly', () => {
@@ -50,9 +50,9 @@ describe('fundamentalsScorecard', () => {
   });
 
   it('grades the current-ratio thresholds', () => {
-    expect(fundamentalsScorecard({ currentRatio: 0.8 }).flags[0].severity).toBe('risk');
-    expect(fundamentalsScorecard({ currentRatio: 1.2 }).flags[0].severity).toBe('caution');
-    expect(fundamentalsScorecard({ currentRatio: 2 }).flags[0].severity).toBe('ok');
+    expect(fundamentalsScorecard({ currentRatio: 0.8 }).flags[0]!.severity).toBe('risk');
+    expect(fundamentalsScorecard({ currentRatio: 1.2 }).flags[0]!.severity).toBe('caution');
+    expect(fundamentalsScorecard({ currentRatio: 2 }).flags[0]!.severity).toBe('ok');
   });
 
   it('flags a dividend that exceeds earnings', () => {

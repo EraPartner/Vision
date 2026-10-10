@@ -207,11 +207,19 @@ function mockAccountApi({ reconcileFails = false } = {}) {
         http.post(
             `${API_BASE}/api/accounts/:id/opening-balance`,
             async ({ request, params }) => {
-                calls.opening.push({
-                    id: String(params.id),
-                    body: (await request.json()) as Record<string, unknown>,
+                const body = (await request.json()) as Record<string, unknown>;
+                calls.opening.push({ id: String(params.id), body });
+                // The anchor is a raw `RETURNING *` row: its NUMERIC(18,4)
+                // balance arrives as a decimal string.
+                return ok({
+                    transaction: {
+                        id: 1,
+                        balance: Number(body.balance).toFixed(4),
+                        transfer_source: "opening",
+                    },
+                    warning: null,
+                    links: [],
                 });
-                return ok({ warning: null });
             },
         ),
     );

@@ -44,7 +44,7 @@ export function useImportReviewMutations(
             rowId,
             recipientId,
         }: {
-            rowId: number;
+            rowId: string;
             recipientId: number | null;
         }) => apiClient.overrideImportRow(batchId, rowId, recipientId),
         meta: { suppressErrorToast: true },
@@ -55,7 +55,7 @@ export function useImportReviewMutations(
             rowId,
             categoryId,
         }: {
-            rowId: number;
+            rowId: string;
             categoryId: number | null;
         }) => apiClient.overrideImportRowCategory(batchId, rowId, categoryId),
         meta: { suppressErrorToast: true },
@@ -154,7 +154,7 @@ export function useImportReviewMutations(
     });
 
     return {
-        overrideRows: async (rowIds: number[], recipientId: number | null) => {
+        overrideRows: async (rowIds: string[], recipientId: number | null) => {
             await Promise.all(
                 rowIds.map((rowId) =>
                     overrideRecipient.mutateAsync({ rowId, recipientId }),
@@ -164,7 +164,7 @@ export function useImportReviewMutations(
                 queryKey: importKeys.preview(batchId),
             });
         },
-        overrideCategories: (rowIds: number[], categoryId: number | null) =>
+        overrideCategories: (rowIds: string[], categoryId: number | null) =>
             Promise.all(
                 rowIds.map((rowId) =>
                     overrideCategory.mutateAsync({ rowId, categoryId }),

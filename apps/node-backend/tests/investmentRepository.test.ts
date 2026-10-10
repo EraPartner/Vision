@@ -7,6 +7,7 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import investmentRepository from "../src/repositories/investmentRepository.ts";
 import { partial } from "./helpers/partial.ts";
+import { investmentDbRow } from "./helpers/portfolioPgRows.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -20,7 +21,9 @@ describe("investmentRepository.create", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] })) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 1, name: "BTC", asset_class: "crypto" }],
+          rows: [
+            investmentDbRow({ id: 1, name: "BTC", asset_class: "crypto" }),
+          ],
         }),
       );
 
@@ -65,7 +68,7 @@ describe("investmentRepository.create", () => {
         null,
       ],
     );
-    expect(result).toEqual({ id: 1, name: "BTC", asset_class: "crypto" });
+    expect(result).toMatchObject({ id: 1, name: "BTC", asset_class: "crypto" });
   });
 
   it("carries provider URL/path fields through the insert", async () => {
@@ -73,7 +76,9 @@ describe("investmentRepository.create", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] })) // symbol-uniqueness check (no duplicate)
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 8, asset_class: "metals", name: "Napoleon" }],
+          rows: [
+            investmentDbRow({ id: 8, asset_class: "metals", name: "Napoleon" }),
+          ],
         }),
       );
 
@@ -119,7 +124,11 @@ describe("investmentRepository.create", () => {
         "price",
       ],
     );
-    expect(result).toEqual({ id: 8, asset_class: "metals", name: "Napoleon" });
+    expect(result).toMatchObject({
+      id: 8,
+      asset_class: "metals",
+      name: "Napoleon",
+    });
   });
 });
 
@@ -154,7 +163,9 @@ describe("investmentRepository.create symbol uniqueness", () => {
   it("skips the uniqueness check when no symbol is provided", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [{ id: 12, asset_class: "savings", name: "Book" }],
+        rows: [
+          investmentDbRow({ id: 12, asset_class: "savings", name: "Book" }),
+        ],
       }),
     );
 
@@ -165,7 +176,11 @@ describe("investmentRepository.create symbol uniqueness", () => {
       interest_rate: 2,
     });
 
-    expect(result).toEqual({ id: 12, asset_class: "savings", name: "Book" });
+    expect(result).toMatchObject({
+      id: 12,
+      asset_class: "savings",
+      name: "Book",
+    });
     expect(query).not.toHaveBeenCalledWith(
       "SELECT id FROM investments WHERE LOWER(symbol) = LOWER($1) AND id <> $2 LIMIT 1",
       expect.anything(),
@@ -182,11 +197,15 @@ describe("investmentRepository.update", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 1, asset_class: "stock", name: "AAPL" }],
+          rows: [
+            investmentDbRow({ id: 1, asset_class: "stock", name: "AAPL" }),
+          ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ id: 1, name: "AAPL" }] }),
+        partial<PgQueryResult>({
+          rows: [investmentDbRow({ id: 1, name: "AAPL" })],
+        }),
       );
 
     const result = await investmentRepository.update(1, {
@@ -204,12 +223,14 @@ describe("investmentRepository.update", () => {
       "UPDATE investments SET current_price = $1 WHERE id = $2 RETURNING *",
       [123.45, 1],
     );
-    expect(result).toEqual({ id: 1, name: "AAPL" });
+    expect(result).toMatchObject({ id: 1, name: "AAPL" });
   });
 
   it("rejects changing asset_class", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ id: 2, asset_class: "stock" }] }),
+      partial<PgQueryResult>({
+        rows: [investmentDbRow({ id: 2, asset_class: "stock" })],
+      }),
     );
 
     await expect(
@@ -223,7 +244,7 @@ describe("investmentRepository.update", () => {
   it("rejects empty symbol", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [{ id: 3, asset_class: "stock", symbol: "OLD" }],
+        rows: [investmentDbRow({ id: 3, asset_class: "stock", symbol: "OLD" })],
       }),
     );
 
@@ -239,7 +260,9 @@ describe("investmentRepository.update", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 4, asset_class: "stock", symbol: "OLD" }],
+          rows: [
+            investmentDbRow({ id: 4, asset_class: "stock", symbol: "OLD" }),
+          ],
         }),
       )
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 99 }] }));
@@ -262,19 +285,21 @@ describe("investmentRepository.update", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 5, asset_class: "stock", name: "AAPL" }],
+          rows: [
+            investmentDbRow({ id: 5, asset_class: "stock", name: "AAPL" }),
+          ],
         }),
       ) // getById (existing)
       .mockResolvedValueOnce(partial<PgQueryResult>({ rowCount: 1 })) // UPSERT preference
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            investmentDbRow({
               id: 5,
               asset_class: "stock",
               name: "AAPL",
               show_in_ticker: false,
-            },
+            }),
           ],
         }),
       ); // getById (joined)
@@ -302,7 +327,13 @@ describe("investmentRepository.updatePrice", () => {
   it("updates price columns in one statement", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [{ id: 1, asset_class: "etf", current_price: "90.50" }],
+        rows: [
+          investmentDbRow({
+            id: 1,
+            asset_class: "etf",
+            current_price: "90.50",
+          }),
+        ],
       }),
     );
 
@@ -316,7 +347,11 @@ describe("investmentRepository.updatePrice", () => {
       expect.stringContaining("UPDATE investments"),
       [90.5, "2026-03-23T11:50:00.000Z", 1],
     );
-    expect(result).toEqual({ id: 1, asset_class: "etf", current_price: 90.5 });
+    expect(result).toMatchObject({
+      id: 1,
+      asset_class: "etf",
+      current_price: 90.5,
+    });
   });
 
   it("returns null for a missing investment", async () => {
@@ -400,12 +435,16 @@ describe("investmentRepository read helpers and extra branches", () => {
   it("supports getAll/getCount/getAllWithCount/getById branch paths", async () => {
     query
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ id: 1, name: "A" }] }),
+        partial<PgQueryResult>({
+          rows: [investmentDbRow({ id: 1, name: "A" })],
+        }),
       )
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ count: "3" }] }))
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ id: 2, name: "B", total_count: "5" }],
+          rows: [
+            { ...investmentDbRow({ id: 2, name: "B" }), total_count: "5" },
+          ],
         }),
       )
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
@@ -438,13 +477,13 @@ describe("investmentRepository read helpers and extra branches", () => {
   it("returns existing row when update has no allowed fields", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [{ id: 5, asset_class: "stock", name: "AAPL" }],
+        rows: [investmentDbRow({ id: 5, asset_class: "stock", name: "AAPL" })],
       }),
     );
 
     const result = await investmentRepository.update(5, { unknownField: "x" });
 
-    expect(result).toEqual({ id: 5, asset_class: "stock", name: "AAPL" });
+    expect(result).toMatchObject({ id: 5, asset_class: "stock", name: "AAPL" });
     expect(query).toHaveBeenCalledTimes(1);
   });
 

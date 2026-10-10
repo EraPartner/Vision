@@ -117,7 +117,7 @@ describe("fund holdings source and import contract", () => {
 
   it("accepts stale and partial coverage only when both remain explicit", () => {
     const partial = clone(completeDocument);
-    partial.holdings[0].weightPercent = "50";
+    partial.holdings[0]!.weightPercent = "50";
     partial.coverage = {
       status: "partial",
       reportedWeightPercent: "90",
@@ -148,7 +148,7 @@ describe("fund holdings source and import contract", () => {
     for (const exposureKind of ["derivative", "synthetic"] as const) {
       const partial = clone(completeDocument);
       partial.holdings[1] = {
-        ...partial.holdings[1],
+        ...partial.holdings[1]!,
         name: `${exposureKind} position`,
         instrumentType: "derivative",
         exposureKind,
@@ -167,8 +167,8 @@ describe("fund holdings source and import contract", () => {
         "partial",
       );
 
-      partial.holdings[1].exposureStatus = "supported";
-      delete partial.holdings[1].unsupportedReason;
+      partial.holdings[1]!.exposureStatus = "supported";
+      delete partial.holdings[1]!.unsupportedReason;
       expect(messages(fundHoldingsDocumentSchema.safeParse(partial))).toContain(
         `${exposureKind} exposure must be unsupported`,
       );
@@ -177,15 +177,15 @@ describe("fund holdings source and import contract", () => {
 
   it("rejects duplicate identifiers, malformed weights, and inconsistent totals", () => {
     const duplicate = clone(completeDocument);
-    duplicate.holdings[1].identifiers = clone(
-      duplicate.holdings[0].identifiers,
+    duplicate.holdings[1]!.identifiers = clone(
+      duplicate.holdings[0]!.identifiers,
     );
     expect(messages(fundHoldingsDocumentSchema.safeParse(duplicate))).toContain(
       "Constituent identifiers must be unique across rows",
     );
 
     const invalidWeight = clone(completeDocument);
-    invalidWeight.holdings[0].weightPercent = "60.000";
+    invalidWeight.holdings[0]!.weightPercent = "60.000";
     expect(fundHoldingsDocumentSchema.safeParse(invalidWeight).success).toBe(
       false,
     );

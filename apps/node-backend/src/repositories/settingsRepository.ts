@@ -6,6 +6,11 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  settingRowSchema,
+  settingValueRowSchema,
+} from "../database/rows/catalog.ts";
 import { ConflictError } from "../middleware/errorHandler.ts";
 
 /**
@@ -17,21 +22,25 @@ import { ConflictError } from "../middleware/errorHandler.ts";
 const STRING_VALUED_KEYS = new Set(["cost_basis_method"]);
 
 /**
- * A parsed JSONB setting value. Deliberately `any`: every setting has its own
- * shape and the JavaScript callers read fields straight off it.
+ * A parsed JSONB setting value. Every setting has its own shape, so callers
+ * narrow it themselves (see {@link settingField}).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SettingValue = any;
+type SettingValue = unknown;
+
+/**
+ * `value?.[field]` for a setting value of unknown shape: `undefined` for a
+ * missing (null/undefined) value, otherwise the property as JavaScript reads
+ * it (primitives are boxed, exactly like optional chaining does).
+ */
+export function settingField(value: SettingValue, field: string): unknown {
+  if (value === null || value === undefined) return undefined;
+  return (Object(value) as Record<string, unknown>)[field];
+}
 
 /** The value a conditional write expects to find (optimistic concurrency). */
 export interface SettingExpectation {
   exists: boolean;
   value?: unknown;
-}
-
-interface SettingRow {
-  key: string;
-  value: SettingValue;
 }
 
 /**
@@ -58,17 +67,15 @@ export const settingsRepository = {
     settings: Record<string, SettingValue>;
     expected: Record<string, SettingExpectation>;
   }> {
-    const result = await query<SettingRow>(
+    const rows = await queryRows(
+      settingRowSchema,
       "SELECT key, value FROM user_settings ORDER BY key",
     );
     const settings = Object.fromEntries(
-      result.rows.map((row) => [
-        row.key,
-        reviveLegacyJsonString(row.key, row.value),
-      ]),
+      rows.map((row) => [row.key, reviveLegacyJsonString(row.key, row.value)]),
     );
     const expected = Object.fromEntries(
-      result.rows.map((row) => [row.key, { exists: true, value: row.value }]),
+      rows.map((row) => [row.key, { exists: true, value: row.value }]),
     );
     return { settings, expected };
   },
@@ -77,14 +84,15 @@ export const settingsRepository = {
   async getRecord(
     key: string,
   ): Promise<{ value?: SettingValue; expected: SettingExpectation }> {
-    const result = await query<Pick<SettingRow, "value">>(
+    const row = await queryOne(
+      settingValueRowSchema,
       "SELECT value FROM user_settings WHERE key = $1",
       [key],
     );
-    if (!result.rows.length) return { expected: { exists: false } };
+    if (!row) return { expected: { exists: false } };
     return {
-      value: reviveLegacyJsonString(key, result.rows[0].value),
-      expected: { exists: true, value: result.rows[0].value },
+      value: reviveLegacyJsonString(key, row.value),
+      expected: { exists: true, value: row.value },
     };
   },
 
@@ -124,7 +132,11 @@ export const settingsRepository = {
   ): Promise<void> {
     return withTransaction(async () => {
       for (const key of Object.keys(settings).sort()) {
-        await settingsRepository.replace(key, settings[key], expected[key]);
+        // The route requires a baseline per key; a missing one is a caller bug.
+        const baseline = expected[key];
+        if (!baseline)
+          throw new Error(`Missing expected baseline for setting ${key}`);
+        await settingsRepository.replace(key, settings[key], baseline);
       }
     });
   },
@@ -151,23 +163,25 @@ export const settingsRepository = {
    * @returns Parsed JSONB value, or null.
    */
   async get(key: string): Promise<SettingValue> {
-    const result = await query<Pick<SettingRow, "value">>(
+    const row = await queryOne(
+      settingValueRowSchema,
       "SELECT value FROM user_settings WHERE key = $1",
       [key],
     );
-    if (result.rows.length === 0) return null;
-    return reviveLegacyJsonString(key, result.rows[0].value);
+    if (!row) return null;
+    return reviveLegacyJsonString(key, row.value);
   },
 
   /**
    * Get all settings as a key→value map.
    */
   async getAll(): Promise<Record<string, SettingValue>> {
-    const result = await query<SettingRow>(
+    const rows = await queryRows(
+      settingRowSchema,
       "SELECT key, value FROM user_settings ORDER BY key",
     );
     const settings: Record<string, SettingValue> = {};
-    for (const row of result.rows) {
+    for (const row of rows) {
       settings[row.key] = reviveLegacyJsonString(row.key, row.value);
     }
     return settings;

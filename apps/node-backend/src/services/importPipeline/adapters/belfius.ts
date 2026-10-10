@@ -18,6 +18,7 @@ import {
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
+  cellAt,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -45,7 +46,7 @@ function parseLastBalance(line: string): number | null {
   if (parts.length < 2) return null;
   // "12.345,67 EUR" — a bare comma swap left "12.345.67" (NaN), so running
   // balances silently never applied for balances ≥ €1000.
-  const balStr = parts[1].replace(" EUR", "").trim();
+  const balStr = cellAt(parts, 1).replace(" EUR", "").trim();
   const val = parseCommaDecimal(balStr);
   return isNaN(val) ? null : val;
 }
@@ -74,8 +75,11 @@ function applyRunningBalances(
       (a, b) => b._seq[0] - a._seq[0] || b._seq[1] - a._seq[1],
     );
   } else {
+    // Non-empty: the early return above covers an empty statement.
+    const first = transactions[0];
+    const last = transactions.at(-1);
     const isDescending =
-      transactions[0].date >= transactions[transactions.length - 1].date;
+      first !== undefined && last !== undefined && first.date >= last.date;
     newestToOldest = isDescending
       ? [...transactions]
       : [...transactions].reverse();
@@ -99,16 +103,16 @@ function parseTransactionLine(
 ): SequencedBankTransaction | null {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
-  const accountNumber = parts[0].trim();
-  const transactionDateStr = parts[1].trim();
-  const statementNumber = parts[2].trim();
-  const transactionNumber = parts[3].trim();
-  const recipientAccount = parts[4].trim();
-  const recipientName = parts[5].trim();
-  const street = parts[6].trim();
-  const location = parts[7].trim();
-  const transactionDescription = parts[8].trim();
-  const amountStr = parts[10].trim();
+  const accountNumber = cellAt(parts, 0).trim();
+  const transactionDateStr = cellAt(parts, 1).trim();
+  const statementNumber = cellAt(parts, 2).trim();
+  const transactionNumber = cellAt(parts, 3).trim();
+  const recipientAccount = cellAt(parts, 4).trim();
+  const recipientName = cellAt(parts, 5).trim();
+  const street = cellAt(parts, 6).trim();
+  const location = cellAt(parts, 7).trim();
+  const transactionDescription = cellAt(parts, 8).trim();
+  const amountStr = cellAt(parts, 10).trim();
   const currency = normalizeIsoCurrency(parts[11]);
   const bicCode = parts[12] ? parts[12].trim() : "";
   const countryCode = parts[13] ? parts[13].trim() : "";
@@ -182,7 +186,7 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   const content = await readTextWithEncodingFallback(filePath);
   const lines = splitCsvLines(content);
   let malformed = 0;
-  const records = parseCsvText(content, {
+  const records = parseCsvText<string[]>(content, {
     delimiter: ";",
     from_line: HEADER_ROWS + 1,
     skip_empty_lines: true,
@@ -194,10 +198,9 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
     },
   });
   const transactions: SequencedBankTransaction[] = [];
+  const balanceLine = lines[BALANCE_LINE_INDEX];
   const lastBalance =
-    lines.length > BALANCE_LINE_INDEX
-      ? parseLastBalance(lines[BALANCE_LINE_INDEX].trim())
-      : null;
+    balanceLine !== undefined ? parseLastBalance(balanceLine.trim()) : null;
 
   let skipped = malformed;
   for (const parts of records) {

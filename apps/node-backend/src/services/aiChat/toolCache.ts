@@ -14,10 +14,11 @@
  * The cached value is the factory's promise, so concurrent callers share one
  * in-flight query rather than racing duplicates.
  *
- * `cache` is typed loosely (`Map<string, Promise<any>>`) rather than per-call:
- * one cache instance is shared across a turn's differently-shaped tool fetches
- * (investments, transactions, …), each keyed distinctly — this function's own
- * `T` generic gives each call site the precise return type it needs.
+ * One cache instance is shared across a turn's differently-shaped tool
+ * fetches (investments, transactions, …), so its values are `unknown`. Each
+ * key names exactly one fetch, so the promise stored under `key` is the one a
+ * `factory` of this call's `T` produced; that invariant is what the cast on
+ * the way out relies on.
  */
 export function memoizeAsync<T>(
   cache: ToolCache | undefined,
@@ -26,9 +27,8 @@ export function memoizeAsync<T>(
 ): Promise<T> {
   if (!cache) return factory();
   if (!cache.has(key)) cache.set(key, factory());
-  return cache.get(key)!;
+  return cache.get(key) as Promise<T>;
 }
 
-/** The per-turn cache; see memoizeAsync for why its values are untyped. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see memoizeAsync
-export type ToolCache = Map<string, Promise<any>>;
+/** The per-turn cache; see memoizeAsync for why its values are `unknown`. */
+export type ToolCache = Map<string, Promise<unknown>>;

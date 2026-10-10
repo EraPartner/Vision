@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { StatisticsSection } from "../StatisticsSection";
+import { categoryNode } from "@/test/msw/rowFixtures";
 
 describe("Statistics category groups", () => {
     it("names group checkboxes and supports keyboard and label toggles", async () => {
@@ -14,21 +15,20 @@ describe("Statistics category groups", () => {
             http.get("http://localhost:3002/api/categories/tree", () =>
                 ok({
                     items: [
-                        {
+                        categoryNode({
                             id: 701,
                             name: "Fees",
                             path: ["Finance", "Fees"],
                             is_active: true,
-                        },
-                        {
+                        }),
+                        categoryNode({
                             id: 702,
                             name: "Interest",
                             path: ["Finance", "Interest"],
                             is_active: true,
-                        },
+                        }),
                     ],
                     total: 2,
-                    links: [],
                 }),
             ),
         );

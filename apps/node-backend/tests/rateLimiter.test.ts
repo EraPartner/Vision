@@ -60,7 +60,7 @@ describe("rateLimiter middleware", () => {
     limiter(req, res, next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(next.mock.calls[0][0]).toBeUndefined();
+    expect(next.mock.calls[0]![0]).toBeUndefined();
     expect(res.setHeader).toHaveBeenCalledWith("X-RateLimit-Limit", 2);
     expect(res.setHeader).toHaveBeenCalledWith("X-RateLimit-Remaining", 1);
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -88,7 +88,7 @@ describe("rateLimiter middleware", () => {
     limiter(req, blockedRes, blockedNext);
 
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    const error = blockedNext.mock.calls[0][0];
+    const error = blockedNext.mock.calls[0]![0];
     expect(error).toBeInstanceOf(RateLimitedError);
     expect(error.details).toEqual({ retry_after: 1 });
     expect(blockedRes.setHeader).toHaveBeenCalledWith("Retry-After", 1);
@@ -114,7 +114,7 @@ describe("rateLimiter middleware", () => {
     limiter(req, createResponse(), next);
 
     expect(next).toHaveBeenCalledTimes(1);
-    expect(next.mock.calls[0][0]).toBeUndefined();
+    expect(next.mock.calls[0]![0]).toBeUndefined();
   });
 
   it("falls back to remoteAddress when req.ip is unavailable", () => {
@@ -134,7 +134,7 @@ describe("rateLimiter middleware", () => {
     limiter(req, createResponse(), blockedNext);
 
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
   });
 
   it("uses unknown fallback key when IP fields are missing", () => {
@@ -154,7 +154,7 @@ describe("rateLimiter middleware", () => {
     limiter(req, createResponse(), blockedNext);
 
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
   });
 
   it("adminRateLimiter allows high-volume read traffic (500/min)", () => {
@@ -189,7 +189,7 @@ describe("rateLimiter middleware", () => {
 
     expect(next).toHaveBeenCalledTimes(30);
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
     expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
@@ -210,7 +210,7 @@ describe("rateLimiter middleware", () => {
 
     expect(next).toHaveBeenCalledTimes(20);
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
     expect(blockedRes.status).not.toHaveBeenCalled();
   });
 
@@ -237,7 +237,7 @@ describe("rateLimiter middleware", () => {
     limiter(make("2.2.2.2"), createResponse(), blockedNext);
 
     expect(blockedNext).toHaveBeenCalledTimes(1);
-    expect(blockedNext.mock.calls[0][0]).toBeInstanceOf(RateLimitedError);
+    expect(blockedNext.mock.calls[0]![0]).toBeInstanceOf(RateLimitedError);
   });
 
   it("ipMatchesRule matches exact IPs and IPv4 CIDR ranges", () => {

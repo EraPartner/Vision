@@ -139,7 +139,7 @@ function createResearchAggregator({
         }
         try {
           // usableChain() only yields providers whose adapter has `method`.
-          const data = await adapters[provider][method]!(symbol, {
+          const data = await adapters[provider]![method]!(symbol, {
             range,
             count,
           });
@@ -219,7 +219,7 @@ function createResearchAggregator({
         }
         try {
           // `order` keeps only providers whose adapter has fundamentals().
-          const data = await adapters[provider].fundamentals!(symbol, {});
+          const data = await adapters[provider]!.fundamentals!(symbol, {});
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           return { provider, data };
         } catch (err) {
@@ -277,7 +277,7 @@ function createResearchAggregator({
         }
         try {
           // `providers` keeps only adapters that implement macroSearch().
-          const res = await adapters[provider].macroSearch!(q);
+          const res = await adapters[provider]!.macroSearch!(q);
           Promise.resolve(recordSuccess(provider)).catch(() => {});
           return Array.isArray(res?.items) ? res.items : [];
         } catch (err) {
@@ -336,7 +336,7 @@ function createResearchAggregator({
     }
     try {
       // adapterSupports() above guarantees the macroSeries method exists.
-      const data = await adapters[provider].macroSeries!(seriesId, { range });
+      const data = await adapters[provider]!.macroSeries!(seriesId, { range });
       Promise.resolve(recordSuccess(provider)).catch(() => {});
       const result = { provider, data };
       cache.set(key, result, ttlForType("macro_series"));

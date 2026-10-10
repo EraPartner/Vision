@@ -6,7 +6,15 @@ import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ACCOUNT_STUB, err, INVESTMENT_STUB, ok } from "@/test/msw/handlers";
+import {
+    ACCOUNT_STUB,
+    err,
+    INVESTMENT_STUB,
+    ok,
+    PORTFOLIO_SUMMARY_ITEM_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import StocksPage from "@/pages/portfolio/StocksPage";
 import CryptoPage from "@/pages/portfolio/CryptoPage";
 import MetalsPage from "@/pages/portfolio/MetalsPage";
@@ -20,6 +28,7 @@ import MarketLookupPage from "@/pages/research/MarketLookupPage";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import { InvestmentDetailDialog } from "@/features/portfolio/InvestmentDetailDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -93,14 +102,16 @@ describe("Portfolio pages (integration)", () => {
             ),
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2025-01-15T10:00:00Z",
-                    totals: {},
                     byAccount: [],
                     summaries: [
                         {
+                            ...PORTFOLIO_SUMMARY_ITEM_STUB,
                             ...PORTFOLIO_INVESTMENT,
                             ...INVESTMENT_STUB,
+                            // The summary reports a missing rate as 0.
+                            interest_rate: 0,
                             originalCurrency: "EUR",
                             fullyAssigned: true,
                             oversold: false,
@@ -339,28 +350,30 @@ describe("Portfolio pages (integration)", () => {
     it("NetWorthPage reconciles the displayed By Account rows to its headline", async () => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [
-                        {
-                            ...ACCOUNT_STUB,
-                            id: 10,
-                            name: "Daily cash",
-                            display_name: "Daily cash",
-                            currency: "USD",
-                            computed_balance: 1000,
-                        },
-                        {
-                            ...ACCOUNT_STUB,
-                            id: 20,
-                            name: "Broker",
-                            display_name: "Broker",
-                            type: "brokerage",
-                            computed_balance: 100,
-                        },
-                    ],
-                    total: 2,
-                    links: [],
-                }),
+                ok(
+                    accountsBody({
+                        items: [
+                            accountListItem({
+                                ...ACCOUNT_STUB,
+                                id: 10,
+                                name: "Daily cash",
+                                display_name: "Daily cash",
+                                currency: "USD",
+                                computed_balance: 1000,
+                            }),
+                            accountListItem({
+                                ...ACCOUNT_STUB,
+                                id: 20,
+                                name: "Broker",
+                                display_name: "Broker",
+                                type: "brokerage",
+                                computed_balance: 100,
+                            }),
+                        ],
+                        total: 2,
+                        links: [],
+                    }),
+                ),
             ),
             http.get(`${API_BASE}/api/info/exchange-rates`, () =>
                 ok({
@@ -375,13 +388,20 @@ describe("Portfolio pages (integration)", () => {
                     fallback_rates: {},
                     base: "EUR",
                     date: "2026-09-08",
+                    total_rates: 1,
+                    source: "database",
+                    is_stale: false,
+                    last_fetched_at: "2026-09-08T00:00:00Z",
                 }),
             ),
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: { totalPortfolioValue: 950 },
+                    totals: {
+                        ...PORTFOLIO_SUMMARY_STUB.totals,
+                        totalPortfolioValue: 950,
+                    },
                     summaries: [],
                     byAccount: [
                         {
@@ -456,24 +476,25 @@ describe("Portfolio pages (integration)", () => {
         });
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [
-                        {
-                            ...ACCOUNT_STUB,
-                            id: 10,
-                            currency: "USD",
-                            computed_balance: 100,
-                        },
-                    ],
-                    total: 1,
-                    links: [],
-                }),
+                ok(
+                    accountsBody({
+                        items: [
+                            accountListItem({
+                                ...ACCOUNT_STUB,
+                                id: 10,
+                                currency: "USD",
+                                computed_balance: 100,
+                            }),
+                        ],
+                        total: 1,
+                        links: [],
+                    }),
+                ),
             ),
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [],
                 }),
@@ -522,6 +543,7 @@ describe("Portfolio pages (integration)", () => {
                 ok({
                     current: {
                         liquid: 5_000,
+                        liabilities: 0,
                         investments: 7_000,
                         netWorth: 12_000,
                     },
@@ -531,12 +553,14 @@ describe("Portfolio pages (integration)", () => {
                         {
                             date: "2026-07-01",
                             liquid: 5_000,
+                            liabilities: 0,
                             investments: 6_500,
                             netWorth: 11_500,
                         },
                         {
                             date: "2026-08-01",
                             liquid: 5_000,
+                            liabilities: 0,
                             investments: 7_000,
                             netWorth: 12_000,
                         },
@@ -569,6 +593,7 @@ describe("Portfolio pages (integration)", () => {
                 ok({
                     current: {
                         liquid: 5_000,
+                        liabilities: 0,
                         investments: 7_000,
                         netWorth: 12_000,
                     },
@@ -578,6 +603,7 @@ describe("Portfolio pages (integration)", () => {
                         {
                             date: "2026-08-01",
                             liquid: 5_000,
+                            liabilities: 0,
                             investments: 7_000,
                             netWorth: 12_000,
                         },
@@ -632,6 +658,9 @@ describe("Portfolio pages (integration)", () => {
                         },
                     ],
                     fallback_rates: { EUR: 1, GBP: 1.17 },
+                    source: "database",
+                    is_stale: false,
+                    last_fetched_at: "2026-08-26T09:00:00Z",
                 }),
             ),
         );
@@ -1143,6 +1172,7 @@ describe("Portfolio pages (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/investments`, () =>
                 ok({
+                    ...INVESTMENT_STUB,
                     id: 1,
                     name: "Bitcoin",
                     asset_class: "crypto",
@@ -1313,6 +1343,9 @@ describe("Portfolio pages (integration)", () => {
             currency: "EUR",
             notes: null,
             price_provider_id: null,
+            added_price: null,
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
         };
 
         server.use(
@@ -1350,6 +1383,9 @@ describe("Portfolio pages (integration)", () => {
             currency: "EUR",
             notes: null,
             price_provider_id: null,
+            added_price: null,
+            created_at: "2025-01-01T00:00:00Z",
+            updated_at: "2025-01-01T00:00:00Z",
         };
 
         server.use(
@@ -1519,6 +1555,7 @@ describe("Portfolio pages (integration)", () => {
                     () => {
                         posted = true;
                         return ok({
+                            ...PORTFOLIO_TRANSACTION_STUB,
                             id: 99,
                             investment_id: 1,
                             type: "buy",
@@ -1741,6 +1778,7 @@ describe("Portfolio pages (integration)", () => {
                 target_price: 200,
                 notes: null,
                 price_provider_id: "AAPL",
+                added_price: null,
                 created_at: "2025-01-01T00:00:00Z",
                 updated_at: "2025-01-01T00:00:00Z",
             };
@@ -1821,6 +1859,7 @@ describe("Portfolio pages (integration)", () => {
                 }),
                 http.post(`${API_BASE}/api/investments`, () =>
                     ok({
+                        ...INVESTMENT_STUB,
                         id: 99,
                         name: "Bitcoin",
                         asset_class: "crypto",
@@ -1867,6 +1906,7 @@ describe("Portfolio pages (integration)", () => {
                 }),
                 http.post(`${API_BASE}/api/investments`, () =>
                     ok({
+                        ...INVESTMENT_STUB,
                         id: 100,
                         name: "Apple",
                         asset_class: "stock",

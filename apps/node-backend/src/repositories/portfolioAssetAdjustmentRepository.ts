@@ -1,30 +1,23 @@
 /** Immutable source-backed unit corrections, with no cash or disposal legs. */
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  eligibleYieldSourceRowSchema,
+  portfolioAssetAdjustmentRowSchema,
+  portfolioBigintIdRowSchema,
+} from "../database/rows/portfolio.ts";
+import type {
+  EligibleYieldSourceDbRow,
+  PortfolioAssetAdjustmentDbRow,
+} from "../database/rows/portfolio.ts";
 
-/** BIGINT ids and NUMERIC units arrive from pg as strings. */
-export type PortfolioAssetAdjustmentRow = {
-  id: string;
-  investment_id: number;
-  account_id: number;
-  /** `to_char(date, 'YYYY-MM-DD')` */
-  date: string;
-  units: string;
-  adjustment_kind: "yield_reversal" | "asset_fee";
-  basis_policy: "zero_yield_only" | "carried";
-  eligible_source_record_hashes: string[];
-  basis_allocations: Record<string, unknown>;
-  import_batch_id: string;
-  staging_row_id: string;
-  source_record_hash: string;
-  dedup_fingerprint: string;
-  dedup_fingerprint_version: number;
-  created_at: Date;
-};
+/**
+ * BIGINT ids and NUMERIC units arrive from pg as strings. Derived from the
+ * checked row schema.
+ */
+export type PortfolioAssetAdjustmentRow = PortfolioAssetAdjustmentDbRow;
 
-export type EligibleYieldSourceRow = {
-  source_record_hash: string;
-  staging_row_id: string;
-};
+export type EligibleYieldSourceRow = EligibleYieldSourceDbRow;
 
 export type PortfolioAssetAdjustmentInsert = {
   investment_id: number;
@@ -46,9 +39,9 @@ export async function getEligibleYieldSources(
   investmentId: number,
   accountId: number,
 ): Promise<EligibleYieldSourceRow[]> {
-  return (
-    await query<EligibleYieldSourceRow>(
-      `SELECT s.source_record_hash,MIN(s.id) AS staging_row_id FROM portfolio_import_staging_rows s
+  return queryRows(
+    eligibleYieldSourceRowSchema,
+    `SELECT s.source_record_hash,MIN(s.id) AS staging_row_id FROM portfolio_import_staging_rows s
        JOIN portfolio_import_batches b ON b.id=s.batch_id
        WHERE COALESCE(s.user_override_investment_id,s.resolved_investment_id)=$1
          AND b.account_id=$2 AND s.type='gift'
@@ -56,9 +49,8 @@ export async function getEligibleYieldSources(
          AND s.asset_adjustment_details->>'basisPolicy'='zero'
          AND s.status IN ('matched','committed','duplicate')
          AND s.source_record_hash IS NOT NULL GROUP BY s.source_record_hash ORDER BY s.source_record_hash`,
-      [investmentId, accountId],
-    )
-  ).rows;
+    [investmentId, accountId],
+  );
 }
 
 export async function getEligibleYieldSourceHashes(
@@ -85,51 +77,51 @@ export async function findAssetAdjustmentFingerprint(
   fingerprint: string,
   version: number,
 ): Promise<PortfolioAssetAdjustmentRow | undefined> {
-  return (
-    await query<PortfolioAssetAdjustmentRow>(
-      "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE dedup_fingerprint=$1 AND dedup_fingerprint_version=$2",
-      [fingerprint, version],
-    )
-  ).rows[0];
+  return queryOne(
+    portfolioAssetAdjustmentRowSchema,
+    "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE dedup_fingerprint=$1 AND dedup_fingerprint_version=$2",
+    [fingerprint, version],
+  );
 }
 
 export async function insertAssetAdjustment(
   event: PortfolioAssetAdjustmentInsert,
 ): Promise<{ id: string }> {
-  return (
-    await query<{ id: string }>(
-      `INSERT INTO portfolio_asset_adjustments
+  const row = await queryOne(
+    portfolioBigintIdRowSchema,
+    `INSERT INTO portfolio_asset_adjustments
       (investment_id,account_id,date,units,adjustment_kind,basis_policy,basis_allocations,eligible_source_record_hashes,
        import_batch_id,staging_row_id,source_record_hash,dedup_fingerprint,dedup_fingerprint_version)
       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::text[],$9,$10,$11,$12,$13) RETURNING id`,
-      [
-        event.investment_id,
-        event.account_id,
-        event.date,
-        event.units,
-        event.adjustment_kind,
-        event.basis_policy,
-        JSON.stringify(event.basis_allocations),
-        event.eligible_source_record_hashes,
-        event.import_batch_id,
-        event.staging_row_id,
-        event.source_record_hash,
-        event.dedup_fingerprint,
-        event.dedup_fingerprint_version,
-      ],
-    )
-  ).rows[0];
+    [
+      event.investment_id,
+      event.account_id,
+      event.date,
+      event.units,
+      event.adjustment_kind,
+      event.basis_policy,
+      JSON.stringify(event.basis_allocations),
+      event.eligible_source_record_hashes,
+      event.import_batch_id,
+      event.staging_row_id,
+      event.source_record_hash,
+      event.dedup_fingerprint,
+      event.dedup_fingerprint_version,
+    ],
+  );
+  // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
+  if (!row) throw new Error("Asset adjustment insert returned no row");
+  return row;
 }
 
 export async function getAssetAdjustmentsForBatch(
   batchId: string | number,
 ): Promise<PortfolioAssetAdjustmentRow[]> {
-  return (
-    await query<PortfolioAssetAdjustmentRow>(
-      "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE import_batch_id=$1 ORDER BY a.investment_id,a.date,a.id",
-      [batchId],
-    )
-  ).rows;
+  return queryRows(
+    portfolioAssetAdjustmentRowSchema,
+    "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE import_batch_id=$1 ORDER BY a.investment_id,a.date,a.id",
+    [batchId],
+  );
 }
 
 export async function deleteAssetAdjustmentsForBatch(

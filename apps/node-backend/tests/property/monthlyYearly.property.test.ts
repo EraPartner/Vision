@@ -64,7 +64,7 @@ describe("property: production monthly summary", () => {
       expect(summary.transaction_count).toBe(
         entries.reduce((total, entry) => total + entry.count, 0),
       );
-      expect(summary.period_start).toBe(months[0].period_start);
+      expect(summary.period_start).toBe(months[0]!.period_start);
       expect(summary.period_end).toBe(months.at(-1)!.period_end);
     }
   });

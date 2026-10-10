@@ -78,8 +78,9 @@ describe("validateBatch", () => {
       .mockResolvedValueOnce({ rows: [row] }); // SELECT pending
   }
 
+  // validate's projection: `tx_date` through to_char, plus the batch adapter.
   const baseRow = makeImportStagingRow({
-    id: 1,
+    id: "1",
     row_index: 0,
     tx_date: "2024-01-15",
     amount: "-12.50",
@@ -89,6 +90,8 @@ describe("validateBatch", () => {
     raw_data: null,
     bank_account: "BE12",
     balance: null,
+    source_id: null,
+    adapter_name: "kbc",
   });
 
   function getValidationUpdate() {
@@ -156,7 +159,7 @@ describe("validateBatch", () => {
   });
 
   it("stores no rejection reason for a usable row", async () => {
-    setupPending({ ...baseRow, amount: 12 });
+    setupPending({ ...baseRow, amount: "12" });
     await validateBatch({ batchId: 9 });
     const call = poolQuery.mock.calls.find(([sql]) =>
       sql.includes("FROM unnest"),
@@ -166,7 +169,7 @@ describe("validateBatch", () => {
   });
 
   it("keeps identical occurrences and assigns distinct fingerprints", async () => {
-    const dupRow = { ...baseRow, id: 2, row_index: 1, raw_data: null };
+    const dupRow = { ...baseRow, id: "2", row_index: 1, raw_data: null };
     poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='validating'
       .mockResolvedValueOnce({ rows: [baseRow, dupRow] }); // SELECT pending — two identical rows
@@ -184,8 +187,8 @@ describe("validateBatch", () => {
   it("keeps occurrence ordinals stable when validation resumes after a chunk", async () => {
     poolQuery.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
       rows: [
-        { ...baseRow, id: 1, row_index: 0, status: "validated" },
-        { ...baseRow, id: 2, row_index: 1, status: "pending" },
+        { ...baseRow, id: "1", row_index: 0, status: "validated" },
+        { ...baseRow, id: "2", row_index: 1, status: "pending" },
       ],
     });
 
@@ -198,7 +201,7 @@ describe("validateBatch", () => {
   });
 
   it("keeps fallback-hash rows in different currencies distinct", async () => {
-    const usdRow = { ...baseRow, id: 2, row_index: 1, currency: "USD" };
+    const usdRow = { ...baseRow, id: "2", row_index: 1, currency: "USD" };
     poolQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [baseRow, usdRow] });
@@ -215,7 +218,7 @@ describe("validateBatch", () => {
 
   it("treats a blank fallback currency as the EUR default", async () => {
     const blankRow = { ...baseRow, currency: null };
-    const eurRow = { ...baseRow, id: 2, row_index: 1, currency: "EUR" };
+    const eurRow = { ...baseRow, id: "2", row_index: 1, currency: "EUR" };
     poolQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [blankRow, eurRow] })
@@ -236,7 +239,7 @@ describe("validateBatch", () => {
     const first = { ...baseRow, raw_data: "literal source row" };
     const changedFallbackFields = {
       ...baseRow,
-      id: 2,
+      id: "2",
       row_index: 1,
       recipient_raw: "OTHER",
       memo: "different",
@@ -315,7 +318,7 @@ describe("matchBatch", () => {
   it("marks a pattern-matched row as matched with source=pattern", async () => {
     poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='matching'
-      .mockResolvedValueOnce({ rows: [{ id: 1, recipient_raw: "COLRUYT" }] });
+      .mockResolvedValueOnce({ rows: [{ id: "1", recipient_raw: "COLRUYT" }] });
     loadActivePatterns.mockResolvedValue([]);
     applyPatterns.mockResolvedValue(
       new Map([["COLRUYT", { recipientId: 42, patternId: 7 }]]),
@@ -331,7 +334,7 @@ describe("matchBatch", () => {
   it("marks row as unresolved when recipient_raw is null", async () => {
     poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='matching'
-      .mockResolvedValueOnce({ rows: [{ id: 2, recipient_raw: null }] });
+      .mockResolvedValueOnce({ rows: [{ id: "2", recipient_raw: null }] });
     loadActivePatterns.mockResolvedValue([]);
     applyPatterns.mockResolvedValue(new Map());
     findBestRecipientMatches.mockResolvedValue(new Map());
@@ -350,7 +353,7 @@ describe("matchBatch", () => {
       String(sql).includes("UPDATE import_staging_rows"),
     )!;
     expect(updateCall[0]).toContain("'matched'");
-    expect(updateCall[1][0]).toEqual([2]); // staging row ids
+    expect(updateCall[1][0]).toEqual(["2"]); // staging row ids (BIGINT text)
     expect(updateCall[1][1]).toEqual([null]); // resolved_recipient_id stays NULL
   });
 });
@@ -361,7 +364,7 @@ describe("matchBatch", () => {
 
 describe("commitBatch", () => {
   const matchedRow = makeImportStagingRow({
-    id: 1,
+    id: "1",
     row_index: 0,
     tx_date: "2024-01-15",
     bank_account: "BE12",
@@ -376,6 +379,10 @@ describe("commitBatch", () => {
     matched_pattern_id: 7,
     override_category_id: null,
     recipient_default_category_id: 3,
+    source_record_hash: null,
+    dedup_fingerprint: null,
+    dedup_fingerprint_version: null,
+    dedup_occurrence: null,
   });
 
   // The account id the run's one distinct staging label ('BE12') resolves to
@@ -493,7 +500,7 @@ describe("commitBatch", () => {
     };
     const second = {
       ...first,
-      id: 2,
+      id: "2",
       row_index: 1,
       tx_hash: "fingerprint-2",
       dedup_fingerprint: "fingerprint-2",
@@ -605,10 +612,11 @@ describe("commitBatch", () => {
     expect(countReads).toBe(2);
   });
 
-  it("inserts the local calendar day when tx_date is a Date (no UTC day-shift)", async () => {
-    // node-postgres parses DATE columns into a server-local-midnight Date.
-    // toISOString() would roll this back a day under a TZ east of UTC.
-    setupCommit({ ...matchedRow, tx_date: new Date(2026, 5, 15) });
+  it("inserts the to_char calendar day verbatim (no UTC day-shift)", async () => {
+    // The SELECT projects tx_date through to_char(..., 'YYYY-MM-DD'), so no
+    // server-local-midnight Date (which toISOString() would roll back a day
+    // under a TZ east of UTC) ever reaches the insert.
+    setupCommit({ ...matchedRow, tx_date: "2026-06-15" });
     mockClient.query.mockImplementation(async (sql, params) => {
       if (/INSERT INTO transactions\s+\(/.test(sql)) {
         return { rows: [{ id: 100, tx_hash: null }] };
@@ -700,7 +708,7 @@ describe("commitBatch", () => {
       String(sql).includes("status = 'error'"),
     )!;
     expect(errorUpdate[1]).toEqual([
-      [1],
+      ["1"],
       expect.stringContaining("unresolved recipient"),
     ]);
     const counterUpdate = poolQuery.mock.calls.find(([sql]) =>
@@ -738,9 +746,9 @@ describe("commitBatch", () => {
     // reaching the bulk INSERT used to fail the chunk to the per-row replay.
     // With the decision made before commit, the remaining rows still commit.
     const rows = [
-      { ...matchedRow, id: 1, row_index: 0, resolved_recipient_id: null },
-      { ...matchedRow, id: 2, row_index: 1, memo: "coffee 1", tx_hash: "h1" },
-      { ...matchedRow, id: 3, row_index: 2, memo: "coffee 2", tx_hash: "h2" },
+      { ...matchedRow, id: "1", row_index: 0, resolved_recipient_id: null },
+      { ...matchedRow, id: "2", row_index: 1, memo: "coffee 1", tx_hash: "h1" },
+      { ...matchedRow, id: "3", row_index: 2, memo: "coffee 2", tx_hash: "h2" },
     ];
     poolQuery
       .mockResolvedValueOnce({ rows: [] }) // UPDATE status='committing'
@@ -784,7 +792,7 @@ describe("commitBatch", () => {
     const errorUpdate = poolQuery.mock.calls.find(([sql]) =>
       String(sql).includes("status = 'error'"),
     )!;
-    expect(errorUpdate[1][0]).toEqual([1]);
+    expect(errorUpdate[1][0]).toEqual(["1"]);
   });
 
   it("rejects a non-integer staging row.id before issuing SAVEPOINT", async () => {

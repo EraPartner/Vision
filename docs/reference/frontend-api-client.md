@@ -2,7 +2,7 @@
 title: Frontend API Client Architecture
 type: reference
 status: active
-date: 2026-10-09
+date: 2026-10-10
 updated: 2026-10-08
 tags: [reference, frontend, api-client, typescript, http, phase-1, phase-2, phase-q, client-side, environment, domain-split, openapi, recipient-groups, market-search]
 description: Architecture of the frontend HTTP client split into modular layers (transport, types, domain methods) with OpenAPI type generation. Phase Q: getTransactions supports recipient_group_id parameter. 2026-04-29: searchMarket wrapper added to market.ts module; AddToWatchlistDialog migrated to apiClient methods.
@@ -180,7 +180,11 @@ export function unwrapEnvelope<T>(body: ApiResponse<T>, status: number): T {
 Per [[docs/adr/193-zod-runtime-contracts|ADR-193]], a domain module can declare a zod schema for
 a response. `ApiRequestOptions` extends `RequestInit` with an optional `schema`. After the
 envelope is unwrapped, `apiRequest` runs `checkResponseContract(schema, data, "METHOD /path")`.
-Modules that build their URL with `requestWithQuery` call `checkResponseContract` themselves.
+`requestWithQuery(endpoint, params, options)` takes `{ signal, schema }` as its third argument and
+passes both to `apiRequest`; a bare `AbortSignal` is still accepted. Paths that do not go through
+`apiRequest` call `checkResponseContract` themselves: the research and AI research reads on
+`rawFetch`, the multipart import uploads, `createRecipient` (`createWithStatus` takes no schema)
+and the `getTransactions` list, which checks after its `transaction_date` guard.
 
 A mismatch throws `ApiContractError` (`endpoint`, `issues`) in every build, production included
 (the owner chose to block, 2026-10-09). `apiRequest` does not retry it, and `apiErrorToMessage`
@@ -192,11 +196,26 @@ carry paths, never values, and the endpoint label drops the query string because
 carry personal data. An `ApiContractError` thrown inside `apiRequest` is emitted to the devtools
 bus as an `error` event with the contract message.
 
-Schemas live in `packages/types/src/contracts/` and are imported from `@vision/types/contracts`.
-They are loose on purpose: identity fields are required, other fields are optional but typed.
-The frontend contract tests re-export the same schemas from `src/test/contracts/schemas.ts`.
-Current reads with a schema: `getTransactions`, `getAccounts`, `getCategories`, `getCategoryTree`,
-`getRecipients`, `getRecipient` and `listRecipientPatterns`.
+Schemas live in `packages/types/src/contracts/`, one module per API area, and are imported from
+`@vision/types/contracts`. Wire schemas (`z.looseObject`) require every field the backend always
+sends: `.optional()` marks a key the backend omits on some responses and `.nullable()` a
+SQL-nullable value. Added backend fields pass. `common.ts` holds the shared pieces
+(`IdSchema`, `NumericSchema`, `WireDateSchema`, `WireTimestampSchema`, `CurrencyCodeSchema`,
+`wireListOf`, `wirePageOf`, `wireCollectionOf`). Test fixtures must be shaped like real
+responses; `src/test/msw/rowFixtures.ts` builds full transaction, account, category and
+recipient rows from the fields a test sets. The
+frontend contract tests re-export the strict fixture schemas from `src/test/contracts/schemas.ts`.
+See [[docs/adr/194-runtime-contracts-completion|ADR-194]], which replaced ADR-193's
+identity-fields-only rule.
+
+These domain modules in `src/lib/api/` check their reads and the save (mutation) responses whose
+result the UI uses: transactions, accounts, categories, recipients, planned, splits, tags,
+settings, admin and the database editor, analysis and monitors, AI chat, attachments, imports,
+cross-workspace, portfolio, portfolio exposure, portfolio imports, market, info, aggregations,
+charts, research, AI research and research dossiers. The rule for a new call: declare a schema
+unless the caller ignores the body (a delete, or a save whose result the UI does not read) or the
+body is binary. Some module calls still have no schema, so check the call site before relying on
+one.
 
 ### Shared Types (`types.ts`)
 

@@ -1,8 +1,6 @@
 import { query } from "../database/connection.ts";
-
-type CashProjectionRow = {
-  month_end_net_cashflow: string | null;
-};
+import { queryOne } from "../database/rowContracts.ts";
+import { cashProjectionRowSchema } from "../database/rows/info.ts";
 
 /** @param month YYYY-MM */
 export async function getProjection(
@@ -10,14 +8,15 @@ export async function getProjection(
   currency: string,
   methodId: string,
 ): Promise<number | undefined> {
-  const result = await query<CashProjectionRow>(
+  const row = await queryOne(
+    cashProjectionRowSchema,
     `SELECT month_end_net_cashflow
        FROM insight_cash_projections
       WHERE month_start = ($1 || '-01')::date
         AND currency = $2 AND method_id = $3`,
     [month, currency, methodId],
   );
-  const value = result.rows[0]?.month_end_net_cashflow;
+  const value = row?.month_end_net_cashflow;
   return value == null ? undefined : Number(value);
 }
 

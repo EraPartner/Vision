@@ -6,14 +6,21 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err, ACCOUNT_STUB } from "@/test/msw/handlers";
+import {
+    ok,
+    err,
+    ACCOUNT_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import { EditPortfolioTxnDialog } from "@/features/portfolio/EditPortfolioTxnDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 import type { PortfolioTransaction } from "@/types/api";
+import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 const PORTFOLIO_TXN_STUB = {
+    ...PORTFOLIO_TRANSACTION_STUB,
     id: 101,
     investment_id: 1,
     type: "buy" as const,
@@ -22,15 +29,25 @@ const PORTFOLIO_TXN_STUB = {
     amount: 900,
     fees: 2.5,
     taxes: 0,
-    date: "2025-01-10T00:00:00.000Z",
+    date: "2025-01-10",
     currency: "EUR",
     note: null,
     is_recurring: false,
-    recurrence_interval: undefined,
-    recurrence_end_date: undefined,
+    recurrence_interval: null,
+    recurrence_end_date: null,
     created_at: "2025-01-10T10:00:00Z",
-    updated_at: null,
+    updated_at: "2025-01-10T10:00:00Z",
 };
+
+/** A transaction as the PATCH route returns it: unset columns are null. */
+function txnRow(txn: PortfolioTransaction) {
+    const row: Record<string, unknown> = { ...PORTFOLIO_TRANSACTION_STUB };
+    for (const [key, value] of Object.entries(txn)) {
+        row[key] = value === undefined ? null : value;
+    }
+    row.date = txn.date.slice(0, 10);
+    return row;
+}
 
 const INVESTMENT: InvestmentSummary = {
     id: 1,
@@ -439,7 +456,7 @@ describe("EditPortfolioTxnDialog", () => {
         server.use(
             http.patch(`${API_BASE}/api/investments/transactions/103`, () => {
                 patched = true;
-                return ok(dividendTxn);
+                return ok(txnRow(dividendTxn));
             }),
         );
         const user = userEvent.setup();
@@ -590,7 +607,7 @@ describe("EditPortfolioTxnDialog", () => {
         };
         server.use(
             http.patch(`${API_BASE}/api/investments/transactions/102`, () =>
-                ok({ ...dividendTxn, amount: 30 }),
+                ok(txnRow({ ...dividendTxn, amount: 30 })),
             ),
         );
         const user = userEvent.setup();
@@ -628,17 +645,19 @@ describe("EditPortfolioTxnDialog", () => {
         let capturedBody: Record<string, unknown> | undefined;
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [
-                        {
-                            ...ACCOUNT_STUB,
-                            id: 5,
-                            name: "IBKR",
-                            display_name: "IBKR",
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    accountsBody({
+                        items: [
+                            accountListItem({
+                                ...ACCOUNT_STUB,
+                                id: 5,
+                                name: "IBKR",
+                                display_name: "IBKR",
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
             http.patch(
                 `${API_BASE}/api/investments/transactions/101`,

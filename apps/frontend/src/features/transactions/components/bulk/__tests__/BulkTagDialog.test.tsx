@@ -10,6 +10,11 @@ import { BulkTagDialog } from "@/features/transactions/components/bulk/BulkTagDi
 
 const API_BASE = "http://localhost:3002";
 
+const TAG_TIMESTAMPS = {
+    created_at: "2026-01-01T00:00:00.000Z",
+    updated_at: "2026-01-01T00:00:00.000Z",
+};
+
 const TAGS = {
     items: [
         {
@@ -18,12 +23,21 @@ const TAGS = {
             slug: "groceries",
             color: null,
             is_active: true,
+            ...TAG_TIMESTAMPS,
         },
-        { id: 2, name: "travel", slug: "travel", color: null, is_active: true },
+        {
+            id: 2,
+            name: "travel",
+            slug: "travel",
+            color: null,
+            is_active: true,
+            ...TAG_TIMESTAMPS,
+        },
     ],
     total: 2,
     limit: 200,
     offset: 0,
+    links: [],
 };
 
 /** Pick the first tag in the "add" combobox (the first of the two pickers). */

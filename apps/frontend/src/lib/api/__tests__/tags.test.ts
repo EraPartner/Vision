@@ -9,20 +9,76 @@ import { getTags, createTag, updateTag, deleteTag, bulkTagTransactions } from "@
 afterEach(() => server.resetHandlers());
 
 describe("tags API client", () => {
-  it("getTags forwards is_active/limit as query params and unwraps the envelope", async () => {
+  const TAG_ROW = {
+    id: 1,
+    slug: "groceries",
+    color: null,
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-01T00:00:00.000Z",
+  };
+
+  it("getTags forwards the filter and limit as query params and unwraps the envelope", async () => {
     let url = "";
     server.use(
       http.get(`${API_BASE}/api/tags`, ({ request }) => {
         url = request.url;
-        return ok({ items: [{ id: 1, slug: "groceries" }], total: 1, limit: 25, offset: 0 });
+        return ok({ items: [TAG_ROW], total: 1, limit: 25, offset: 0, links: [] });
       }),
     );
 
     const res = await getTags({ is_active: true, limit: 25 });
 
-    expect(url).toContain("is_active=true");
     expect(url).toContain("limit=25");
     expect(res.items[0].slug).toBe("groceries");
+  });
+
+  // Regression: GET /api/tags reads `?active=` (routes/tags.ts, activeOrAllQuery)
+  // and ignores unknown keys, so the `is_active` the client used to send was a
+  // no-op: `{ is_active: false }` still listed the active tags.
+  it.each([
+    [true, "true"],
+    [false, "false"],
+  ])("getTags sends is_active=%s as the route's active=%s", async (isActive, expected) => {
+    let query = new URLSearchParams();
+    server.use(
+      http.get(`${API_BASE}/api/tags`, ({ request }) => {
+        query = new URL(request.url).searchParams;
+        return ok({ items: [], total: 0, links: [] });
+      }),
+    );
+
+    await getTags({ is_active: isActive });
+
+    expect(query.get("active")).toBe(expected);
+    expect(query.has("is_active")).toBe(false);
+  });
+
+  it("getTags sends no filter when none is given (the route then lists active tags)", async () => {
+    let query = new URLSearchParams("x=1");
+    server.use(
+      http.get(`${API_BASE}/api/tags`, ({ request }) => {
+        query = new URL(request.url).searchParams;
+        return ok({ items: [], total: 0, links: [] });
+      }),
+    );
+
+    await getTags();
+
+    expect([...query.keys()]).toEqual([]);
+  });
+
+  it("getTags rejects a tag row that breaks the response contract", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/tags`, () =>
+        ok({ items: [{ ...TAG_ROW, is_active: "yes" }], total: 1, links: [] }),
+      ),
+    );
+
+    await expect(getTags()).rejects.toMatchObject({
+      name: "ApiContractError",
+      endpoint: "GET /api/tags",
+    });
   });
 
   it("createTag POSTs the body and returns the created tag", async () => {

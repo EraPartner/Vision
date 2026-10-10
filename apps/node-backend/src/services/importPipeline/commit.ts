@@ -30,10 +30,14 @@ import {
   markStagingRowError,
 } from "../../repositories/importBatchRepository.ts";
 import { logger } from "../../config/logger.ts";
-import { formatDateToYmd } from "../../lib/dateFormat.ts";
 import { autoLinkTransactions } from "../plannedMatchService.ts";
 import { getAdapter } from "./adapters/index.ts";
-import type { ImportStagingRow } from "../../types/rows.ts";
+import { queryOne, queryRows } from "../../database/rowContracts.ts";
+import {
+  commitStagingRowSchema,
+  importBatchAdapterRowSchema,
+} from "../../database/rows/imports.ts";
+import type { CommitStagingRow as CommitStagingDbRow } from "../../database/rows/imports.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
 
 /**
@@ -59,33 +63,11 @@ export type ChunkResult = {
 };
 
 /**
- * The projection commitBatch reads. `tx_date` is `to_char`-ed to a
- * 'YYYY-MM-DD' string, and `amount` is non-null because validate marks a
- * NULL-amount row 'error' before it can become 'matched'.
+ * The projection commitBatch reads (`commitStagingRowSchema`), plus the
+ * account id `resolveChunkAccounts` stamps onto each row before the chunk
+ * commits.
  */
-type CommitStagingRow = Pick<
-  ImportStagingRow,
-  | "id"
-  | "row_index"
-  | "bank_account"
-  | "recipient_raw"
-  | "memo"
-  | "currency"
-  | "balance"
-  | "comment"
-  | "source_record_hash"
-  | "dedup_fingerprint"
-  | "dedup_fingerprint_version"
-  | "dedup_occurrence"
-  | "resolved_recipient_id"
-  | "user_override_recipient_id"
-  | "matched_pattern_id"
-  | "override_category_id"
-> & {
-  tx_date: string | Date;
-  amount: string;
-  recipient_default_category_id: number | null;
-  /** Stamped by resolveChunkAccounts before the chunk commits. */
+type CommitStagingRow = CommitStagingDbRow & {
   resolved_account_id?: number | null;
 };
 
@@ -93,6 +75,12 @@ type CommitStagingRow = Pick<
 interface DerivedRow {
   row: CommitStagingRow;
   dateStr: string;
+  /**
+   * The staging amount. NULL is possible in principle (see dateStr) and is
+   * passed on unchanged, as before the row contract, so the transactions
+   * INSERT's NOT NULL constraint rejects the row inside its savepoint.
+   */
+  amount: string;
   recipientId: number | null;
   memoNorm: string;
   accountId: number | null;
@@ -153,14 +141,11 @@ function currencyKeyOf(currency: string | null | undefined): string {
  * the batched planner and the per-row fallback so they cannot drift.
  */
 function deriveRow(row: CommitStagingRow): DerivedRow {
-  // tx_date arrives as a 'YYYY-MM-DD' string (the SELECT uses to_char).
-  // The Date branch is defensive only: node-postgres parses DATE columns
-  // into a server-local-midnight Date, so use LOCAL getters — toISOString()
-  // would roll back a day for any TZ east of UTC.
-  const dateStr =
-    row.tx_date instanceof Date
-      ? formatDateToYmd(row.tx_date)
-      : String(row.tx_date).slice(0, 10);
+  // tx_date arrives as a 'YYYY-MM-DD' string (the SELECT uses to_char), or
+  // NULL: the SELECT filters only on status = 'matched'. VALIDATE keeps NULL
+  // dates out of 'matched' in practice; a NULL still becomes "null" here, as
+  // before the row contract.
+  const dateStr = String(row.tx_date).slice(0, 10);
 
   const recipientId =
     row.user_override_recipient_id ?? row.resolved_recipient_id ?? null;
@@ -175,6 +160,7 @@ function deriveRow(row: CommitStagingRow): DerivedRow {
   return {
     row,
     dateStr,
+    amount: row.amount as string,
     recipientId,
     memoNorm: (row.memo ?? "").trim(),
     // Stamped onto the row by resolveChunkAccounts (commitChunk, inside the
@@ -232,7 +218,7 @@ async function commitChunkWithFingerprints({
         ? 0
         : await transactionRepository.countLegacyImportDuplicates({
             date: d.dateStr,
-            amount: row.amount,
+            amount: d.amount,
             recipientId: d.recipientId,
             memo: d.memoNorm,
             accountId: d.accountId,
@@ -261,7 +247,7 @@ async function commitChunkWithFingerprints({
           accountId: d.accountId,
           recipientId: d.recipientId,
           categoryId: d.categoryId,
-          amount: row.amount,
+          amount: d.amount,
           memo: row.memo || "",
           currency: d.currencyKey,
           balance: row.balance != null ? row.balance : null,
@@ -282,7 +268,7 @@ async function commitChunkWithFingerprints({
       inserted.push({
         id: insertedId,
         recipient_id: d.recipientId,
-        amount: row.amount,
+        amount: d.amount,
         transaction_date: d.dateStr,
       });
       await markStagingRowCommitted(row.id);
@@ -387,17 +373,19 @@ export async function commitBatch({
   errors: number;
   autoLinkedCount: number;
 }> {
-  const statusResult = await query<{ adapter_name: string }>(
+  const statusRow = await queryOne(
+    importBatchAdapterRowSchema,
     `UPDATE import_batches SET status = 'committing' WHERE id = $1
      RETURNING adapter_name`,
     [batchId],
   );
-  const adapter = getAdapter(statusResult.rows[0]?.adapter_name);
+  const adapter = getAdapter(statusRow?.adapter_name);
   const capabilities = {
     multiCurrencyCash: adapter?.multiCurrencyCash === true,
   };
 
-  const { rows: reviewed } = await query<CommitStagingRow>(
+  const reviewed: CommitStagingRow[] = await queryRows(
+    commitStagingRowSchema,
     `SELECT isr.id,
             isr.row_index,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,

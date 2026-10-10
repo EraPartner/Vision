@@ -48,7 +48,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       /not found/i,
     );
     // First (and only) query is the lock, and it must take FOR UPDATE.
-    expect(query.mock.calls[0][0]).toMatch(/FOR UPDATE/);
+    expect(query.mock.calls[0]![0]).toMatch(/FOR UPDATE/);
   });
 
   it("rejects when the account has no statement balance", async () => {
@@ -57,7 +57,8 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
             statement_balance: null,
             balance_parts: [{ currency: "EUR", balance: "100" }],
           },
@@ -74,8 +75,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 100,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "100.0000",
             balance_parts: [{ currency: "EUR", balance: "100" }],
           },
         ],
@@ -91,28 +93,29 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 120,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "120.0000",
             balance_parts: [{ currency: "EUR", balance: "100" }],
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [{ id: 77, amount: 20, transfer_source: "adjustment" }],
+        rows: [{ id: 77, amount: "20.0000", transfer_source: "adjustment" }],
       });
 
     await reconcileAccount(5, { mode: "adjustment" });
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
     // First query is the row lock, taken before the drift read.
-    const [lockSql, lockParams] = query.mock.calls[0];
+    const [lockSql, lockParams] = query.mock.calls[0]!;
     expect(lockSql).toMatch(
       /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/,
     );
     expect(lockParams).toEqual([5]);
-    expect(query.mock.calls[1][0]).toMatch(/s\.balance AS statement_balance/);
-    expect(query.mock.calls[1][0]).not.toMatch(/a\.statement_balance/);
+    expect(query.mock.calls[1]![0]).toMatch(/s\.balance AS statement_balance/);
+    expect(query.mock.calls[1]![0]).not.toMatch(/a\.statement_balance/);
   });
 
   it("accept mode rewrites the statement balance to the computed figure (drift → 0)", async () => {
@@ -121,13 +124,14 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 120,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "120.0000",
             balance_parts: [{ currency: "EUR", balance: "100" }],
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ balance: 100 }] });
+      .mockResolvedValueOnce({ rows: [{ balance: "100.0000" }] });
 
     const result = await reconcileAccount(5, { mode: "accept" });
 
@@ -140,7 +144,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     });
 
     // Third call atomically upserts the authoritative currency row.
-    const [sql, params] = query.mock.calls[2];
+    const [sql, params] = query.mock.calls[2]!;
     expect(sql).toMatch(/INSERT INTO account_statement_balances/);
     expect(sql).not.toMatch(/UPDATE accounts/);
     expect(params[0]).toBe(5);
@@ -155,15 +159,16 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 120,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "120.0000",
             balance_parts: [{ currency: "EUR", balance: "100" }],
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [{ id: 77, amount: 20, transfer_source: "adjustment" }],
+        rows: [{ id: 77, amount: "20.0000", transfer_source: "adjustment" }],
       });
 
     const result = await reconcileAccount(5, { mode: "adjustment" });
@@ -181,7 +186,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
 
     // Fourth call is the INSERT (lock, drift read, system-recipient upsert,
     // INSERT); amount is the drift, no `balance` column is written.
-    const [sql, params] = query.mock.calls[3];
+    const [sql, params] = query.mock.calls[3]!;
     expect(sql).toMatch(/INSERT INTO transactions/);
     expect(sql).toMatch(/transfer_source/);
     expect(sql).not.toMatch(/\bbalance\b/);
@@ -193,7 +198,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
     // column must actually be in the statement (omitting it raised 23502 live).
     expect(sql).toMatch(/recipient_id/);
     expect(params[5]).toBe(900);
-    expect(query.mock.calls[2][0]).toMatch(
+    expect(query.mock.calls[2]![0]).toMatch(
       /SELECT id FROM recipients WHERE normalized_name/,
     );
   });
@@ -204,20 +209,21 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "USD",
-            statement_balance: 80,
+            account_currency: "USD",
+            reconcile_currency: "USD",
+            statement_balance: "80.0000",
             balance_parts: [{ currency: "USD", balance: "100" }],
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [{ id: 78, amount: -20, transfer_source: "adjustment" }],
+        rows: [{ id: 78, amount: "-20.0000", transfer_source: "adjustment" }],
       });
 
     const result = await reconcileAccount(5, { mode: "adjustment" });
     expect(result.computed_balance).toBe(80);
-    const [, params] = query.mock.calls[3];
+    const [, params] = query.mock.calls[3]!;
     expect(params[1]).toBe(-20);
   });
 
@@ -233,8 +239,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 120,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "120.0000",
             balance_parts: [
               { currency: "EUR", balance: "100" },
               { currency: "USD", balance: "100" },
@@ -244,7 +251,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [{ id: 79, amount: 20, transfer_source: "adjustment" }],
+        rows: [{ id: 79, amount: "20.0000", transfer_source: "adjustment" }],
       });
 
     const result = await reconcileAccount(5, { mode: "adjustment" });
@@ -254,7 +261,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       statement_balance: 120,
       computed_balance: 120,
     });
-    const [, params] = query.mock.calls[3];
+    const [, params] = query.mock.calls[3]!;
     expect(params[1]).toBe(20); // 120 − the EUR partition's 100 (not 120 − 200)
     expect(params[2]).toBe("EUR");
   });
@@ -267,8 +274,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 100,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "100.0000",
             balance_parts: [
               { currency: "EUR", balance: "100" },
               { currency: "USD", balance: "100" },
@@ -292,20 +300,21 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 120,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "120.0000",
             balance_parts: [{ currency: "USD", balance: "100" }],
           },
         ],
       })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [{ id: 80, amount: 20, transfer_source: "adjustment" }],
+        rows: [{ id: 80, amount: "20.0000", transfer_source: "adjustment" }],
       });
 
     await reconcileAccount(5, { mode: "adjustment" });
 
-    const [, params] = query.mock.calls[3];
+    const [, params] = query.mock.calls[3]!;
     expect(params[1]).toBe(20); // 120 − the sole (USD) partition's 100
     expect(params[2]).toBe("USD");
   });
@@ -318,8 +327,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "EUR",
-            statement_balance: 100,
+            account_currency: "EUR",
+            reconcile_currency: "EUR",
+            statement_balance: "100.0000",
             balance_parts: [
               { currency: "GBP", balance: "0" },
               { currency: "USD", balance: "100" },
@@ -341,8 +351,9 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       .mockResolvedValueOnce({
         rows: [
           {
-            currency: "GBP",
-            statement_balance: 50,
+            account_currency: "GBP",
+            reconcile_currency: "GBP",
+            statement_balance: "50.0000",
             balance_parts: [
               { currency: "EUR", balance: "100" },
               { currency: "USD", balance: "100" },
@@ -350,7 +361,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ balance: 0 }] });
+      .mockResolvedValueOnce({ rows: [{ balance: "0.0000" }] });
 
     const result = await reconcileAccount(5, { mode: "accept" });
 
@@ -360,7 +371,7 @@ describe("reconcileAccount (ADR-094 Phase C)", () => {
       statement_balance: 0,
       computed_balance: 0,
     });
-    expect(query.mock.calls[2][1][1]).toBe("GBP");
-    expect(query.mock.calls[2][1][2]).toBe(0);
+    expect(query.mock.calls[2]![1][1]).toBe("GBP");
+    expect(query.mock.calls[2]![1][2]).toBe(0);
   });
 });

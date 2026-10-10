@@ -35,6 +35,7 @@ import {
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
+  cellAt,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -73,13 +74,13 @@ function isNonExecutedRow(status: string, rejectionReason: string): boolean {
 function parseLine(parts: string[]): ParsedBankTransaction | null {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
-  const sequenceNumber = parts[0].trim();
-  const executionDateStr = parts[1].trim();
-  const amountStr = parts[3].trim();
+  const sequenceNumber = cellAt(parts, 0).trim();
+  const executionDateStr = cellAt(parts, 1).trim();
+  const amountStr = cellAt(parts, 3).trim();
   const currency = normalizeIsoCurrency(parts[4]);
-  const accountNumber = parts[5].trim();
-  const transactionType = parts[6].trim();
-  const counterpartyAccount = parts[7].trim();
+  const accountNumber = cellAt(parts, 5).trim();
+  const transactionType = cellAt(parts, 6).trim();
+  const counterpartyAccount = cellAt(parts, 7).trim();
   const counterpartyName = parts[8] ? parts[8].trim() : "";
   const message = parts[9] ? parts[9].trim() : "";
   const details = parts[10] ? parts[10].trim() : "";
@@ -141,7 +142,7 @@ export function detect(csvSample: string | null | undefined): boolean {
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   const content = await readTextWithEncodingFallback(filePath);
   let malformed = 0;
-  const records = parseCsvText(content, {
+  const records = parseCsvText<string[]>(content, {
     delimiter: ";",
     skip_empty_lines: true,
     relax_column_count: true,

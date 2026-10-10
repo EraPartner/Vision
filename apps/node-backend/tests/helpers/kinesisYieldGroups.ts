@@ -223,12 +223,12 @@ export async function syntheticKinesisYieldGroup(
           .div(row.units!)
           .toFixed(6);
         current.fx_rate_to_eur = "1.0000000000";
-      } else current.date = reference.events[index].date;
+      } else current.date = reference.events[index]!.date;
       return current;
     });
     for (const index of [0, 4]) {
-      const row = giftRows[index];
-      const event = reference.events[index];
+      const row = giftRows[index]!;
+      const event = reference.events[index]!;
       Object.assign(
         row,
         retainedEvidenceRow(row, reference, event, "recorded_native", {
@@ -245,17 +245,17 @@ export async function syntheticKinesisYieldGroup(
     }
     const priorRouting = [
       {
-        batchId: prior.batches[0].id,
+        batchId: prior.batches[0]!.id,
         accountId: base.account,
         originAccountId: null,
         destinationAccountId: null,
       },
     ];
-    prior.batches[0].custom_config.portfolio_performance_reference = {
+    prior.batches[0]!.custom_config.portfolio_performance_reference = {
       sourceHash: reference.sourceHash,
       reconciliationScope: "correct_existing_only",
-      originalBatchIds: [prior.batches[0].id],
-      effectiveBatchIds: [prior.batches[0].id],
+      originalBatchIds: [prior.batches[0]!.id],
+      effectiveBatchIds: [prior.batches[0]!.id],
       routing: priorRouting,
       stagingBinding: portfolioReferenceStagingBinding(
         asSourceRows(prior.rows),
@@ -266,8 +266,8 @@ export async function syntheticKinesisYieldGroup(
     };
     const receipts: SyntheticAdoptionReceipt[] = [];
     for (const index of [0, 3, 4]) {
-      const row = giftRows[index];
-      const before = structuredClone(history[index]);
+      const row = giftRows[index]!;
+      const before = structuredClone(history[index]!);
       const after = {
         ...before,
         account_id: base.account,
@@ -284,7 +284,7 @@ export async function syntheticKinesisYieldGroup(
         });
       receipts.push({
         id: index + 1,
-        batch_id: prior.batches[0].id,
+        batch_id: prior.batches[0]!.id,
         staging_row_id: row.id,
         transaction_id: before.id,
         policy: index === 3 ? "preserve_existing" : "prefer_source",
@@ -361,38 +361,38 @@ export function retainedKinesisYieldEvidence(
     throw new Error(
       "Synthetic retained group must have exactly five fixture members",
     );
-  const capture = source.batches[0].custom_config.kinesis_source_context;
+  const capture = source.batches[0]!.custom_config.kinesis_source_context;
   // Present by construction: the yield group is built on an adopted prior batch.
   const context = source.kinesisAdoptionContext!;
   const manifest = {
     sourceFileHash: capture.source_file_hash,
     referenceHash: reference.sourceHash,
-    accountId: Number(source.batches[0].account_id),
-    investmentId: Number(gifts[0].investment_id),
+    accountId: Number(source.batches[0]!.account_id),
+    investmentId: Number(gifts[0]!.investment_id),
     portfolioId: "portfolio-one",
     securityId: "security-eth",
     lower: "2024-01-02",
     upper: "2024-04-30",
     boundaries: [0, 4].map((index) => ({
-      canonicalId: Number(history[index].id),
+      canonicalId: Number(history[index]!.id),
       receiptId: Number(
         context.receipts.find(
           (receipt) =>
-            Number(receipt.transaction_id) === Number(history[index].id),
+            Number(receipt.transaction_id) === Number(history[index]!.id),
         )!.id,
       ),
-      sourceHash: gifts[index].source_record_hash,
-      referenceId: reference.events[index].id,
+      sourceHash: gifts[index]!.source_record_hash,
+      referenceId: reference.events[index]!.id,
     })),
     members: [1, 2, 3].map((index) => ({
-      canonicalId: Number(history[index].id),
-      eventKey: capture.events[gifts[index].row_index].eventKey,
-      sourceHash: gifts[index].source_record_hash,
-      sourceId: gifts[index].source_transaction_id,
-      referenceId: reference.events[index].id,
-      recordedDate: reference.events[index].date,
-      paymentDate: gifts[index].tx_date,
-      units: toDecimal(history[index].units).toFixed(8),
+      canonicalId: Number(history[index]!.id),
+      eventKey: capture.events[gifts[index]!.row_index]!.eventKey,
+      sourceHash: gifts[index]!.source_record_hash,
+      sourceId: gifts[index]!.source_transaction_id,
+      referenceId: reference.events[index]!.id,
+      recordedDate: reference.events[index]!.date,
+      paymentDate: gifts[index]!.tx_date,
+      units: toDecimal(history[index]!.units).toFixed(8),
     })),
   };
   return {
@@ -402,7 +402,7 @@ export function retainedKinesisYieldEvidence(
     accountMappings: [
       {
         portfolioId: "portfolio-one",
-        accountId: Number(source.batches[0].account_id),
+        accountId: Number(source.batches[0]!.account_id),
       },
     ],
     manifests: [manifest],

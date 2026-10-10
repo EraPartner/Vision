@@ -49,7 +49,9 @@ import type { InvestmentRow } from "../src/types/rows.ts";
 import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import { logger } from "../src/config/logger.ts";
+import { RowContractError } from "../src/database/rowContracts.ts";
 import { __clearHistoricalIndexCache as clearHistoricalIndexCache } from "../src/services/currency/currencyConversionService.ts";
+import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -656,6 +658,29 @@ describe("Price Provider Service", () => {
       expect(typeof result).toBe("object");
       // Manual should be skipped, others failed gracefully
     });
+
+    it("surfaces a row-contract violation from the historical price fallback", async () => {
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("Network error"),
+      );
+      // The fallback's latest-point read returns a row breaking its contract.
+      query.mockImplementation(async (sql: string) =>
+        sql.includes("asset_price_history")
+          ? { rows: [{ investment_id: "not-an-id" }] }
+          : { rows: [] },
+      );
+
+      await expect(
+        fetchLivePricesDetailed([
+          partial<InvestmentRow>({
+            id: 1,
+            price_provider: "binance",
+            price_provider_id: "BTCUSDT",
+            currency: "USD",
+          }),
+        ]),
+      ).rejects.toBeInstanceOf(RowContractError);
+    });
   });
 
   describe("fetchHistoricalPrices", () => {
@@ -665,8 +690,8 @@ describe("Price Provider Service", () => {
 
       query.mockResolvedValue({
         rows: [
-          { price_date: "2026-01-01", close_price: "100" },
-          { price_date: "2026-01-10", close_price: "120" },
+          { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
+          { price_date: pgLocalDate("2026-01-10"), close_price: "120" },
         ],
       });
 
@@ -693,11 +718,11 @@ describe("Price Provider Service", () => {
       query
         .mockResolvedValueOnce({
           rows: [
-            { price_date: "2026-01-01", close_price: "100" },
-            { price_date: "2026-01-02", close_price: "101" },
-            { price_date: "2026-01-03", close_price: "1200" },
-            { price_date: "2026-01-04", close_price: "102" },
-            { price_date: "2026-01-05", close_price: "103" },
+            { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
+            { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
+            { price_date: pgLocalDate("2026-01-03"), close_price: "1200" },
+            { price_date: pgLocalDate("2026-01-04"), close_price: "102" },
+            { price_date: pgLocalDate("2026-01-05"), close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({});
@@ -730,7 +755,7 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({})
         .mockResolvedValueOnce({
-          rows: [{ price_date: "2023-11-14", close_price: "710" }],
+          rows: [{ price_date: pgLocalDate("2023-11-14"), close_price: "710" }],
         });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -774,7 +799,7 @@ describe("Price Provider Service", () => {
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
+        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       vi.spyOn(globalThis, "fetch").mockRejectedValue(
@@ -803,7 +828,7 @@ describe("Price Provider Service", () => {
       const toMs = Date.UTC(2026, 0, 20, 23, 59, 59, 999);
 
       query.mockResolvedValue({
-        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
+        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1001,7 +1026,7 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({
-          rows: [{ price_date: "2026-01-01", close_price: "100" }],
+          rows: [{ price_date: pgLocalDate("2026-01-01"), close_price: "100" }],
         });
 
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -1020,7 +1045,7 @@ describe("Price Provider Service", () => {
       );
 
       expect(points).toHaveLength(1);
-      expect(points[0].price).toBe(100);
+      expect(points[0]!.price).toBe(100);
     });
 
     it("paginates binance history beyond a single 1000-row page", async () => {
@@ -1064,7 +1089,7 @@ describe("Price Provider Service", () => {
 
       // Two pages fetched; the second request advances startTime past the first page.
       expect(fetchSpy).toHaveBeenCalledTimes(2);
-      expect(String(fetchSpy.mock.calls[1][0])).toContain(
+      expect(String(fetchSpy.mock.calls[1]![0])).toContain(
         `startTime=${base + 1000 * DAY}`,
       );
       // All 1001 daily points survive into the merged series (old 365-day cap would drop most).
@@ -1073,7 +1098,7 @@ describe("Price Provider Service", () => {
 
     it("falls back to cached db points when kinesis has no symbol", async () => {
       query.mockResolvedValueOnce({
-        rows: [{ price_date: "2026-01-03", close_price: "104.5" }],
+        rows: [{ price_date: pgLocalDate("2026-01-03"), close_price: "104.5" }],
       });
 
       const points = await fetchHistoricalPrices(
@@ -1094,8 +1119,8 @@ describe("Price Provider Service", () => {
     it("returns db-only custom history when dbOnly mode is enabled", async () => {
       query.mockResolvedValueOnce({
         rows: [
-          { price_date: "2026-01-01", close_price: "99" },
-          { price_date: "2026-01-02", close_price: "101" },
+          { price_date: pgLocalDate("2026-01-01"), close_price: "99" },
+          { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
         ],
       });
 
@@ -1112,12 +1137,12 @@ describe("Price Provider Service", () => {
       );
 
       expect(points).toHaveLength(2);
-      expect(points[0].price).toBe(99);
+      expect(points[0]!.price).toBe(99);
     });
 
     it("returns db fallback for unsupported providers", async () => {
       query.mockResolvedValueOnce({
-        rows: [{ price_date: "2026-01-04", close_price: "88" }],
+        rows: [{ price_date: pgLocalDate("2026-01-04"), close_price: "88" }],
       });
 
       const points = await fetchHistoricalPrices(
@@ -1150,11 +1175,11 @@ describe("Price Provider Service", () => {
         .mockResolvedValueOnce({ rows: [{ id: 42 }] })
         .mockResolvedValueOnce({
           rows: [
-            { price_date: "2026-01-01", close_price: "100" },
-            { price_date: "2026-01-02", close_price: "101" },
-            { price_date: "2026-01-03", close_price: "1200" },
-            { price_date: "2026-01-04", close_price: "102" },
-            { price_date: "2026-01-05", close_price: "103" },
+            { price_date: pgLocalDate("2026-01-01"), close_price: "100" },
+            { price_date: pgLocalDate("2026-01-02"), close_price: "101" },
+            { price_date: pgLocalDate("2026-01-03"), close_price: "1200" },
+            { price_date: pgLocalDate("2026-01-04"), close_price: "102" },
+            { price_date: pgLocalDate("2026-01-05"), close_price: "103" },
           ],
         })
         .mockResolvedValueOnce({ rows: [] });

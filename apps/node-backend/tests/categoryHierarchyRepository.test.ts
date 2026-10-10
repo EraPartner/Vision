@@ -15,12 +15,25 @@ import {
 
 beforeEach(() => mockClientQuery.mockReset());
 
+/** A merge participant as the locked merge projection returns it. */
+function mergeNode(id: number) {
+  return {
+    id,
+    is_active: true,
+    general: `__HIERARCHY_${id}`,
+    detail: `NODE ${id}`,
+    legacy_compatible: false,
+    hierarchy_only: false,
+  };
+}
+
 describe("category hierarchy mutations", () => {
   it("creates an assignable depth-one node with a stable id", async () => {
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: 42 }] })
+      // nextval() is BIGINT: pg hands it back as a string.
+      .mockResolvedValueOnce({ rows: [{ id: "42" }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [
@@ -32,6 +45,7 @@ describe("category hierarchy mutations", () => {
             names: ["SAVINGS"],
             path_name: "SAVINGS",
             depth: 1,
+            description: null,
             is_active: true,
             hierarchy_only: false,
             legacy_compatible: false,
@@ -49,7 +63,7 @@ describe("category hierarchy mutations", () => {
     });
     expect(mockClientQuery).toHaveBeenCalledWith(
       expect.stringContaining("INSERT INTO categories"),
-      [42, "__HIERARCHY_42", "SAVINGS", "SAVINGS", null, null],
+      ["42", "__HIERARCHY_42", "SAVINGS", "SAVINGS", null, null],
     );
   });
 
@@ -82,10 +96,7 @@ describe("category hierarchy mutations", () => {
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [
-          { id: 1, is_active: true },
-          { id: 2, is_active: true },
-        ],
+        rows: [mergeNode(1), mergeNode(2)],
       })
       .mockResolvedValueOnce({ rows: [{ "?column?": 1 }] });
 
@@ -102,10 +113,7 @@ describe("category hierarchy mutations", () => {
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [
-          { id: 1, is_active: true },
-          { id: 2, is_active: true },
-        ],
+        rows: [mergeNode(1), mergeNode(2)],
       })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
@@ -124,21 +132,33 @@ describe("category hierarchy mutations", () => {
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [
-          { id: 2, name: "TARGET", ids: [2], names: ["TARGET"], depth: 1 },
+          {
+            id: 2,
+            name: "TARGET",
+            parent_id: null,
+            ids: [2],
+            names: ["TARGET"],
+            path_name: "TARGET",
+            depth: 1,
+            description: null,
+            is_active: true,
+            hierarchy_only: false,
+            legacy_compatible: false,
+          },
         ],
       });
 
     const node = await mergeCategoryNodes(1, 2);
 
     expect(node?.id).toBe(2);
-    expect(mockClientQuery.mock.calls[3][0]).toContain(
+    expect(mockClientQuery.mock.calls[3]![0]).toContain(
       "UPDATE categories SET parent_id",
     );
     expect(mockClientQuery.mock.calls[5]).toEqual([
       expect.stringContaining('UPDATE public."transactions"'),
       [1, 2],
     ]);
-    expect(mockClientQuery.mock.calls[8][0]).toContain(
+    expect(mockClientQuery.mock.calls[8]![0]).toContain(
       "DELETE FROM categories",
     );
   });
@@ -147,7 +167,22 @@ describe("category hierarchy mutations", () => {
     mockClientQuery
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
-        rows: [{ id: 2, name: "SOLAR", parent_id: 1, is_active: true }],
+        rows: [
+          {
+            id: 2,
+            general: "__HIERARCHY_2",
+            detail: "SOLAR",
+            description: null,
+            is_active: true,
+            created_at: new Date("2026-01-01T00:00:00Z"),
+            updated_at: new Date("2026-01-01T00:00:00Z"),
+            parent_id: 1,
+            name: "SOLAR",
+            hierarchy_only: false,
+            legacy_compatible: false,
+            path_name: "ROOT:SOLAR",
+          },
+        ],
       })
       .mockResolvedValueOnce({ rows: [{ id: 1, is_active: true }] })
       .mockRejectedValueOnce(

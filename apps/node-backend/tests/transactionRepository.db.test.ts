@@ -44,11 +44,14 @@ import { toWireDate } from "../src/lib/dateFormat.ts";
 const ymd = (d: Date | string) => toWireDate(d);
 
 // Fixture ids, repopulated by seedCorpus() before each test.
-const cat: Record<string, number> = {}; // Food, Bills, Salary
-const rec: Record<string, number> = {}; // delhaize, delhaizeAlias, electrabel, electrabelAlias, employer
+const cat = {} as Record<"Food" | "Bills" | "Salary" | "Zzz", number>; // Zzz: one describe only
+const rec = {} as Record<
+  "delhaize" | "delhaizeAlias" | "electrabel" | "electrabelAlias" | "employer",
+  number
+>;
 const acc: Record<string, number> = {}; // KBC CURRENT, WISE USD
-const tag: Record<string, number> = {}; // groceries (active), archived (inactive)
-const T: Record<string, number> = {}; // t1..t7
+const tag = {} as Record<"groceries" | "archived", number>; // groceries active, archived inactive
+const T = {} as Record<"t1" | "t2" | "t3" | "t4" | "t5" | "t6" | "t7", number>;
 
 /**
  * Ensure an accounts row exists for a label, returning its id. Uses the
@@ -153,7 +156,7 @@ async function seedCorpus() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
 
   const addRecipient = async (
@@ -192,7 +195,7 @@ async function seedCorpus() {
       "INSERT INTO tags (slug, color, is_active) VALUES ($1, $2, $3) RETURNING id",
       [slug, color, isActive],
     );
-    tag[key] = rows[0].id;
+    tag[key as keyof typeof tag] = rows[0].id;
   }
 
   T.t1 = await insertTxn({
@@ -279,7 +282,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
       await deleteAllCategoryFixtures(pool);
-      for (const bag of [cat, rec, acc, tag, T])
+      for (const bag of [cat, rec, acc, tag, T] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
     });
 
@@ -314,28 +317,28 @@ describe.skipIf(!hasTestDatabase())(
         const rows = await transactionRepository.getAll({});
         const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
         // Alias rows display the PRIMARY's name.
-        expect(byId[T.t1].recipient_name).toBe("Delhaize");
-        expect(byId[T.t3].recipient_name).toBe("Electrabel");
+        expect(byId[T.t1]!.recipient_name).toBe("Delhaize");
+        expect(byId[T.t3]!.recipient_name).toBe("Electrabel");
         // Effective category: own → recipient default → primary default → null.
-        expect(byId[T.t2].effective_category_id).toBe(cat.Food);
-        expect(byId[T.t7].effective_category_id).toBe(cat.Bills);
-        expect(byId[T.t3].effective_category_id).toBe(cat.Bills); // via the PRIMARY's default
-        expect(byId[T.t3].category_name).toBe("Bills:Utilities");
-        expect(byId[T.t1].effective_category_id).toBeNull();
-        expect(byId[T.t1].category_name).toBeNull();
+        expect(byId[T.t2]!.effective_category_id).toBe(cat.Food);
+        expect(byId[T.t7]!.effective_category_id).toBe(cat.Bills);
+        expect(byId[T.t3]!.effective_category_id).toBe(cat.Bills); // via the PRIMARY's default
+        expect(byId[T.t3]!.category_name).toBe("Bills:Utilities");
+        expect(byId[T.t1]!.effective_category_id).toBeNull();
+        expect(byId[T.t1]!.category_name).toBeNull();
       });
 
       it("attaches tags per row (junction truth, inactive tags included) and [] otherwise", async () => {
         const rows = await transactionRepository.getAll({});
         const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
-        expect(byId[T.t1].tags.map((t) => t.slug).sort()).toEqual([
+        expect(byId[T.t1]!.tags.map((t) => t.slug).sort()).toEqual([
           "archived",
           "groceries",
         ]);
         expect(
-          byId[T.t1].tags.find((t) => t.slug === "archived")!.is_active,
+          byId[T.t1]!.tags.find((t) => t.slug === "archived")!.is_active,
         ).toBe(false);
-        expect(byId[T.t2].tags).toEqual([
+        expect(byId[T.t2]!.tags).toEqual([
           {
             id: tag.groceries,
             slug: "groceries",
@@ -343,7 +346,7 @@ describe.skipIf(!hasTestDatabase())(
             is_active: true,
           },
         ]);
-        expect(byId[T.t4].tags).toEqual([]);
+        expect(byId[T.t4]!.tags).toEqual([]);
       });
 
       it("filters by accountId and bankAccount (ILIKE substring)", async () => {
@@ -580,7 +583,7 @@ describe.skipIf(!hasTestDatabase())(
           const rows = await read({ includeBalance: true, limit: 100 });
           const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
           for (const [id, balance] of Object.entries(expected)) {
-            expect(Number(byId[id].running_balance)).toBe(balance);
+            expect(Number(byId[id]!.running_balance)).toBe(balance);
             expect(byId[id]).not.toHaveProperty("cumulative");
             expect(byId[id]).not.toHaveProperty("stamp");
           }
@@ -686,7 +689,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         const banks = rows.map((r) => r.bank_account);
         expect(banks).toEqual([...banks].sort());
-        expect(rows[rows.length - 1].bank_account).toBe("WISE USD");
+        expect(rows.at(-1)!.bank_account).toBe("WISE USD");
         expect(banks).toContain("KBC CURRENT");
         expect(banks).toContain("CANONICAL KBC");
       });
@@ -926,7 +929,7 @@ describe.skipIf(!hasTestDatabase())(
       // that differ from a sibling in exactly ONE dimension — a filter that is
       // still ignored cannot pass any of these by accident.
       describe("the route-supplied filters narrow rows AND total", () => {
-        const U: Record<string, number> = {};
+        const U = {} as Record<"small" | "big" | "income", number>;
         let bakery: number;
 
         beforeEach(async () => {

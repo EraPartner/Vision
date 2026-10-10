@@ -7,14 +7,102 @@ import { Link, Route, Routes, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ACCOUNT_STUB, RECIPIENT_STUB, err, ok } from "@/test/msw/handlers";
+import {
+    ACCOUNT_STUB,
+    IMPORT_CSV_RESULT_STUB,
+    RECIPIENT_STUB,
+    err,
+    ok,
+} from "@/test/msw/handlers";
 import ImportReviewPage from "@/pages/ImportReviewPage";
 import ImportPage from "@/pages/ImportPage";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/lib/api";
 import { importKeys } from "@/lib/queryKeys";
+import {
+    accountListItem,
+    accountsBody,
+    recipientRow,
+    recipientsBody,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
+
+// `buildImportBatchPreview` (services/importBatchService.ts) emits every group
+// and staging-row key, and the staging-row id is a BIGSERIAL (decimal text).
+// Cases spell out only the keys they care about; these fill in the rest.
+const PREVIEW_GROUP_DEFAULTS: Record<string, unknown> = {
+    recipient_id: null,
+    recipient_name: null,
+    recipient_default_category_id: null,
+    recipient_default_category_label: null,
+    override_category_id: null,
+    current_category_id: null,
+    current_category_label: null,
+    matched_pattern_id: null,
+    matched_pattern_text: null,
+    matched_pattern_kind: null,
+};
+const STAGING_ROW_DEFAULTS: Record<string, unknown> = {
+    row_index: 0,
+    recipient_raw: null,
+    amount: null,
+    currency: null,
+    tx_date: null,
+    memo: null,
+    bank_account: null,
+    match_source: null,
+    match_similarity: null,
+    matched_pattern_id: null,
+    user_override_recipient_id: null,
+    override_category_id: null,
+};
+
+function withDefaults(
+    defaults: Record<string, unknown>,
+    value: Record<string, unknown>,
+): Record<string, unknown> {
+    const filled: Record<string, unknown> = { ...defaults, ...value };
+    for (const [key, fallback] of Object.entries(defaults)) {
+        if (filled[key] === undefined) filled[key] = fallback;
+    }
+    return filled;
+}
+
+function previewBody(body: {
+    batch_id: number;
+    groups: ReadonlyArray<
+        Record<string, unknown> & {
+            rows: ReadonlyArray<Record<string, unknown> & { id: number }>;
+        }
+    >;
+    totals: Record<string, number>;
+}) {
+    return {
+        ...body,
+        groups: body.groups.map((group) => ({
+            ...withDefaults(PREVIEW_GROUP_DEFAULTS, group),
+            rows: group.rows.map((row) => ({
+                ...withDefaults(STAGING_ROW_DEFAULTS, row),
+                id: String(row.id),
+            })),
+        })),
+    };
+}
+
+/** `commitBatch` answers with the full CSV-import result body. */
+function commitBody(counts: {
+    batch_id: number;
+    imported: number;
+    duplicates: number;
+    errors: number;
+}) {
+    return {
+        ...IMPORT_CSV_RESULT_STUB,
+        ...counts,
+        total: counts.imported + counts.duplicates + counts.errors,
+    };
+}
 
 function renderReviewPage() {
     return renderWithApp(
@@ -154,7 +242,7 @@ describe("ImportReviewPage (integration)", () => {
     it("shows accordion group names when preview has groups", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -183,7 +271,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -196,7 +284,7 @@ describe("ImportReviewPage (integration)", () => {
     it("shows row count badge in accordion trigger", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -214,7 +302,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -229,7 +317,7 @@ describe("ImportReviewPage (integration)", () => {
     it("shows correct row count in Approve button label when preview has groups", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -254,7 +342,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -275,12 +363,12 @@ describe("ImportReviewPage (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () => {
                 commitCalled = true;
-                return ok({
+                return ok(commitBody({
                     batch_id: 1,
                     imported: 0,
                     duplicates: 0,
                     errors: 0,
-                });
+                }));
             }),
         );
 
@@ -303,7 +391,7 @@ describe("ImportReviewPage (integration)", () => {
                 return ok({ items: [], total: 0, limit: 10, offset: 0 });
             }),
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
-                ok({ batch_id: 1, imported: 0, duplicates: 0, errors: 0 }),
+                ok(commitBody({ batch_id: 1, imported: 0, duplicates: 0, errors: 0 })),
             ),
         );
 
@@ -336,7 +424,7 @@ describe("ImportReviewPage (integration)", () => {
         const user = userEvent.setup({ delay: null });
         server.use(
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
-                ok({ batch_id: 1, imported: 2, duplicates: 1, errors: 0 }),
+                ok(commitBody({ batch_id: 1, imported: 2, duplicates: 1, errors: 0 })),
             ),
             http.get(`${API_BASE}/api/import/parsers`, () =>
                 ok({ items: [], total: 0 }),
@@ -406,7 +494,7 @@ describe("ImportReviewPage (integration)", () => {
     it("explains every match badge in a legend with this file's counts", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [],
                     totals: {
@@ -416,7 +504,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 3,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -443,7 +531,7 @@ describe("ImportReviewPage (integration)", () => {
         let deleted = false;
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [groupWithRecipient(1, "Amazon", 10)],
                     totals: {
@@ -453,11 +541,11 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
             http.delete(`${API_BASE}/api/import/batches/:batchId`, () => {
                 deleted = true;
-                return ok({ deleted: 0 });
+                return ok({ deleted: 0, recipientsRemoved: 0 });
             }),
         );
 
@@ -493,7 +581,7 @@ describe("ImportReviewPage (integration)", () => {
         server.use(
             http.delete(`${API_BASE}/api/import/batches/:batchId`, () => {
                 deleted = true;
-                return ok({ deleted: 0 });
+                return ok({ deleted: 0, recipientsRemoved: 0 });
             }),
         );
 
@@ -516,7 +604,7 @@ describe("ImportReviewPage (integration)", () => {
         const user = userEvent.setup({ delay: null });
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -543,10 +631,10 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
-                ok({ batch_id: 1, imported: 2, duplicates: 0, errors: 0 }),
+                ok(commitBody({ batch_id: 1, imported: 2, duplicates: 0, errors: 0 })),
             ),
         );
 
@@ -578,7 +666,7 @@ describe("ImportReviewPage (integration)", () => {
     it("shows match source badges in summary area", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [],
                     totals: {
@@ -588,7 +676,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 3,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -607,7 +695,7 @@ describe("ImportReviewPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -636,7 +724,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -658,7 +746,7 @@ describe("ImportReviewPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -687,7 +775,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -707,7 +795,7 @@ describe("ImportReviewPage (integration)", () => {
     it("renders category controls when group is expanded (ADR-046)", async () => {
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -742,7 +830,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -777,7 +865,7 @@ describe("ImportReviewPage (integration)", () => {
     });
 
     const previewWithRows = (rows: ReturnType<typeof disclosureRow>[]) =>
-        ok({
+        ok(previewBody({
             batch_id: 1,
             groups: [
                 {
@@ -795,17 +883,17 @@ describe("ImportReviewPage (integration)", () => {
                 new: 0,
                 unresolved: 0,
             },
-        });
+        }));
 
     it("shows per-account disclosure counts and flags only unknown labels as new (WP-B6)", async () => {
         server.use(
             // Existing account "KBC" — identity is case/whitespace-insensitive (D1).
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }],
+                ok(accountsBody({
+                    items: [accountListItem({ ...ACCOUNT_STUB, id: 5, name: "KBC" })],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 previewWithRows([
@@ -868,7 +956,7 @@ describe("ImportReviewPage (integration)", () => {
                 previewWithRows([disclosureRow(1, "Fresh Bank")]),
             ),
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
-                ok({ batch_id: 1, imported: 1, duplicates: 0, errors: 0 }),
+                ok(commitBody({ batch_id: 1, imported: 1, duplicates: 0, errors: 0 })),
             ),
         );
 
@@ -899,17 +987,17 @@ describe("ImportReviewPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [{ ...ACCOUNT_STUB, id: 5, name: "KBC" }],
+                ok(accountsBody({
+                    items: [accountListItem({ ...ACCOUNT_STUB, id: 5, name: "KBC" })],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
                 previewWithRows([disclosureRow(1, "KBC")]),
             ),
             http.post(`${API_BASE}/api/import/batches/:batchId/commit`, () =>
-                ok({ batch_id: 1, imported: 1, duplicates: 0, errors: 0 }),
+                ok(commitBody({ batch_id: 1, imported: 1, duplicates: 0, errors: 0 })),
             ),
         );
 
@@ -967,20 +1055,20 @@ describe("ImportReviewPage (integration)", () => {
     function useThreeGroups() {
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
+                ok(recipientsBody({
                     items: [
-                        { ...RECIPIENT_STUB, id: 1, name: "Amazon" },
-                        { ...RECIPIENT_STUB, id: 2, name: "Netflix" },
-                        { ...RECIPIENT_STUB, id: 3, name: "Spotify" },
+                        recipientRow({ ...RECIPIENT_STUB, id: 1, name: "Amazon" }),
+                        recipientRow({ ...RECIPIENT_STUB, id: 2, name: "Netflix" }),
+                        recipientRow({ ...RECIPIENT_STUB, id: 3, name: "Spotify" }),
                     ],
                     total: 3,
                     limit: 100,
                     offset: 0,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         groupWithRecipient(1, "Amazon", 10),
@@ -994,7 +1082,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
     }
@@ -1077,16 +1165,16 @@ describe("ImportReviewPage (integration)", () => {
         // must be identical — including this fallback.
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [{ ...RECIPIENT_STUB, id: 1, name: "Amazon" }],
+                ok(recipientsBody({
+                    items: [recipientRow({ ...RECIPIENT_STUB, id: 1, name: "Amazon" })],
                     total: 1,
                     limit: 100,
                     offset: 0,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [groupWithRecipient(2, "Netflix", 11)],
                     totals: {
@@ -1096,7 +1184,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
         );
 
@@ -1115,7 +1203,7 @@ describe("ImportReviewPage (integration)", () => {
         useThreeGroups();
         server.use(
             http.get(`${API_BASE}/api/import/batches/:batchId/preview`, () =>
-                ok({
+                ok(previewBody({
                     batch_id: 1,
                     groups: [
                         {
@@ -1134,7 +1222,7 @@ describe("ImportReviewPage (integration)", () => {
                         new: 0,
                         unresolved: 0,
                     },
-                }),
+                })),
             ),
             http.post(
                 `${API_BASE}/api/import/batches/:batchId/rows/:rowId/override`,

@@ -6,6 +6,11 @@
  */
 
 import { query, withTransaction } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import {
+  recipientBankAccountRowSchema,
+  requireRow,
+} from '../database/rows/catalog.ts';
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 
 import type { RecipientBankAccountRow } from '../types/rows.ts';
@@ -14,22 +19,24 @@ export type { RecipientBankAccountRow };
 
 export const recipientBankAccountRepository = {
   async getById(id: number): Promise<RecipientBankAccountRow | null> {
-    const result = await query<RecipientBankAccountRow>(
+    const row = await queryOne(
+      recipientBankAccountRowSchema,
       `SELECT * FROM recipient_bank_accounts WHERE id = $1`,
       [id]
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   async getByAccountNumber(
     accountNumber: string | null | undefined,
   ): Promise<RecipientBankAccountRow | null> {
     if (!accountNumber) return null;
-    const result = await query<RecipientBankAccountRow>(
+    const row = await queryOne(
+      recipientBankAccountRowSchema,
       `SELECT * FROM recipient_bank_accounts WHERE account_number = $1`,
       [accountNumber.trim().toUpperCase()]
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   async getByRecipientId(
@@ -43,20 +50,20 @@ export const recipientBankAccountRepository = {
     if (activeOnly) sql += ` AND is_active = true`;
     sql += ` ORDER BY is_primary DESC, created_at ASC`;
 
-    const result = await query<RecipientBankAccountRow>(sql, [recipientId]);
-    return result.rows;
+    return queryRows(recipientBankAccountRowSchema, sql, [recipientId]);
   },
 
   async getPrimaryAccount(
     recipientId: number,
   ): Promise<RecipientBankAccountRow | null> {
-    const result = await query<RecipientBankAccountRow>(
+    const row = await queryOne(
+      recipientBankAccountRowSchema,
       `SELECT * FROM recipient_bank_accounts
        WHERE recipient_id = $1 AND is_primary = true AND is_active = true
        LIMIT 1`,
       [recipientId]
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   /**
@@ -127,12 +134,14 @@ export const recipientBankAccountRepository = {
           [recipientId]
         );
       }
-      const result = await client.query(
+      const row = await queryOne(
+        recipientBankAccountRowSchema,
         `INSERT INTO recipient_bank_accounts (recipient_id, account_number, bank_name, address, account_label, is_primary, is_active)
          VALUES ($1, $2, $3, $4, $5, $6, true) RETURNING *`,
-        [recipientId, accountNumber.trim().toUpperCase(), bankName, address, accountLabel, willBePrimary]
+        [recipientId, accountNumber.trim().toUpperCase(), bankName, address, accountLabel, willBePrimary],
+        client
       );
-      return result.rows[0];
+      return requireRow(row, 'recipient bank account insert');
     });
 
     return { bankAccount: created, created: true };
@@ -160,8 +169,8 @@ export const recipientBankAccountRepository = {
     updates.push(`updated_at = NOW()`);
     params.push(id);
     const sql = `UPDATE recipient_bank_accounts SET ${updates.join(', ')} WHERE id = $${paramIdx} RETURNING *`;
-    const result = await query<RecipientBankAccountRow>(sql, params);
-    return result.rows[0] || null;
+    const row = await queryOne(recipientBankAccountRowSchema, sql, params);
+    return row || null;
   },
 
   /** @returns true if a row was deactivated */

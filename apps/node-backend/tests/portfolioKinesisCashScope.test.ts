@@ -146,11 +146,11 @@ describe("complete source-owned Kinesis cash", () => {
     const row = source.rows.find((item) => item.route === "cash")!;
     if (kind === "missing_capture")
       delete (
-        source.batches[0].custom_config as Partial<SyntheticKinesisConfig>
+        source.batches[0]!.custom_config as Partial<SyntheticKinesisConfig>
       ).kinesis_source_context;
     if (kind === "filtered")
       (
-        source.batches[0].custom_config as SyntheticKinesisConfig & {
+        source.batches[0]!.custom_config as SyntheticKinesisConfig & {
           included_symbols?: string[];
         }
       ).included_symbols = ["KAU"];
@@ -213,8 +213,8 @@ describe("complete source-owned Kinesis cash", () => {
           line[16] = String(Number(line[16]) + 1);
         }
       if (kind === "chain_gap") {
-        lines[3][14] = "101";
-        lines[3][16] = "41";
+        lines[3]![14] = "101";
+        lines[3]![16] = "41";
       }
       if (kind === "fee_total") withdrawal[7] = "28";
       if (kind === "fee_currency") withdrawal[11] = "USD";
@@ -244,19 +244,19 @@ describe("complete source-owned Kinesis cash", () => {
   it("defers every cash member when a historical quote is unavailable and binds rate changes", async () => {
     const source = await cashSource();
     const first = plan(source);
-    source.historicalFxContext[0].rate = null;
+    source.historicalFxContext[0]!.rate = null;
     expect(plan(source)).toMatchObject({
       ready: true,
       summary: { cash: 0 },
       selectedRowIds: [],
       pending: 9,
     });
-    source.historicalFxContext[0].rate = "0.9";
+    source.historicalFxContext[0]!.rate = "0.9";
     expect(plan(source).planFingerprint).not.toBe(first.planFingerprint);
   });
   it("rejects existing cash resemblance without an owned immutable image", async () => {
     const source = await cashSource();
-    const row = source.rows[0];
+    const row = source.rows[0]!;
     source.cashContext.ledger.push({
       id: 500,
       date: row.tx_date,
@@ -276,7 +276,7 @@ describe("complete source-owned Kinesis cash", () => {
         date: "2020-01-01",
         amount: "0.0100",
         currency: kind === "other_currency" ? "GBP" : "EUR",
-        account_id: source.batches[0].account_id,
+        account_id: source.batches[0]!.account_id,
         is_active: true,
         transfer_source: kind === "opening" ? "opening" : null,
       });
@@ -288,7 +288,7 @@ describe("complete source-owned Kinesis cash", () => {
           expect.objectContaining({ reason: "cash_account_not_empty" }),
         ]),
       });
-      source.cashContext.ledger[0].is_active = false;
+      source.cashContext.ledger[0]!.is_active = false;
       expect(plan(source)).toMatchObject({ ready: true, summary: { cash: 6 } });
     },
   );
@@ -297,7 +297,7 @@ describe("complete source-owned Kinesis cash", () => {
     const first = plan(source);
     source.cashContext.statementBalances = [
       {
-        account_id: source.batches[0].account_id,
+        account_id: source.batches[0]!.account_id,
         currency: "EUR",
         balance: "0.0000",
         balance_date: "2020-01-01",
@@ -319,7 +319,7 @@ describe("complete source-owned Kinesis cash", () => {
       loose<Parameters<typeof proveKinesisCashSources>[1]>(prior.batches),
       "own_account_transfer",
     );
-    const ledger = proof.groups[0].members.flatMap((member, index) => {
+    const ledger = proof.groups[0]!.members.flatMap((member, index) => {
       const after = {
         id: 500 + index,
         amount: member.values.amount,
@@ -381,7 +381,7 @@ describe("complete source-owned Kinesis cash", () => {
       summary: { duplicate: 0 },
     });
     ownedRow.status = "committed";
-    source.cashContext.ledger[0].is_transfer = false;
+    source.cashContext.ledger[0]!.is_transfer = false;
     expect(plan(source)).toMatchObject({
       ready: false,
       summary: { cash: 0, duplicate: 0 },

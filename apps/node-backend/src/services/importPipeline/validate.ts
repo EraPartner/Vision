@@ -13,28 +13,19 @@ import {
   assignImportIdentities,
   budgetingIdentityBase,
 } from "../importIdentity.ts";
-import type { ImportStagingRow } from "../../types/rows.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import { pendingStagingRowSchema } from "../../database/rows/imports.ts";
+import type { PendingStagingRow } from "../../database/rows/imports.ts";
 import type { ImportBatchId, ImportProgressCallback } from "./index.ts";
 
 const VALIDATE_CHUNK = 500;
 
 /**
- * The projection validate.js reads. `tx_date` is `to_char`-ed to a
- * 'YYYY-MM-DD' string rather than selected raw (see the comment below), so it
- * overrides the raw DATE on {@link ImportStagingRow}.
+ * The projection validate.js reads (`pendingStagingRowSchema`). `tx_date` is
+ * `to_char`-ed to a 'YYYY-MM-DD' string rather than selected raw (see the
+ * comment below), so it overrides the raw DATE of a staging row.
  */
-export type PendingStagingRow = Pick<
-  ImportStagingRow,
-  | "id"
-  | "row_index"
-  | "amount"
-  | "recipient_raw"
-  | "memo"
-  | "currency"
-  | "raw_data"
-  | "bank_account"
-  | "balance"
-> & { tx_date: string | null; source_id?: string | null; adapter_name: string };
+export type { PendingStagingRow };
 
 /**
  * Run the validate phase: reject unusable rows, hash the rest, and flag
@@ -55,9 +46,8 @@ export async function validateBatch({
   // server-local-midnight Date whose toISOString() (in the fallback hash below)
   // rolls back a day east of UTC — and silently changes fallback hashes if the
   // server timezone ever changes between imports.
-  const { rows: batchRows } = await query<
-    PendingStagingRow & Pick<ImportStagingRow, "status">
-  >(
+  const batchRows = await queryRows(
+    pendingStagingRowSchema,
     `SELECT s.id, s.row_index, s.status, to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date,
             s.amount, s.recipient_raw, s.memo, s.currency, s.raw_data,
             s.bank_account, s.balance,
@@ -94,8 +84,7 @@ export async function validateBatch({
     const fingerprintVersions: (number | null)[] = [];
     const occurrences: (number | null)[] = [];
     const errorMessages: (string | null)[] = [];
-    for (let chunkIndex = 0; chunkIndex < chunk.length; chunkIndex++) {
-      const row = chunk[chunkIndex];
+    for (const row of chunk) {
       // Every pending row is one of batchRows, which keyed identityById.
       const identity = identityById.get(String(row.id))!;
       const issue = validateRow(row);
@@ -177,5 +166,8 @@ const usableStagingRowSchema = z.object({
  */
 function validateRow(row: PendingStagingRow): string | null {
   const result = usableStagingRowSchema.safeParse(row);
-  return result.success ? null : result.error.issues[0].message;
+  if (result.success) return null;
+  // A failed parse always carries at least one issue.
+  const [issue] = result.error.issues;
+  return issue ? issue.message : "invalid staging row";
 }

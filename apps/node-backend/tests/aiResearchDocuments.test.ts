@@ -60,7 +60,7 @@ describe("local research documents", () => {
     const stored = result as unknown as {
       passages: Array<{ embedding: { model: string } }>;
     };
-    expect(stored.passages[0].embedding.model).toBe("synthetic-embed");
+    expect(stored.passages[0]!.embedding.model).toBe("synthetic-embed");
   });
   it("falls back visibly to keyword retrieval when semantic search is unavailable", async () => {
     repository.keywordSearch.mockResolvedValue([

@@ -79,27 +79,27 @@ describe("cashflow-forecast endpoints — include_backtest default drift", () =>
 
   it("methods defaults include_backtest ON when the param is omitted", async () => {
     await run("/cashflow-forecast-methods");
-    expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(true);
+    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(true);
   });
 
   it("rolling defaults include_backtest OFF when the param is omitted", async () => {
     await run("/cashflow-forecast-rolling");
-    expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(false);
+    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(false);
   });
 
   it('both endpoints accept the same spellings (methods "0" → false, rolling "1" → true)', async () => {
     await run("/cashflow-forecast-methods", { include_backtest: "0" });
-    expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(false);
+    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(false);
 
     await run("/cashflow-forecast-rolling", { include_backtest: "1" });
-    expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(true);
+    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(true);
   });
 
   it("explicit override flips each default", async () => {
     await run("/cashflow-forecast-methods", { include_backtest: "false" });
-    expect(methodsSpy.mock.calls[0][0].includeBacktest).toBe(false);
+    expect(methodsSpy.mock.calls[0]![0].includeBacktest).toBe(false);
 
     await run("/cashflow-forecast-rolling", { include_backtest: "true" });
-    expect(rollingSpy.mock.calls[0][0].includeBacktest).toBe(true);
+    expect(rollingSpy.mock.calls[0]![0].includeBacktest).toBe(true);
   });
 });

@@ -16,7 +16,7 @@ const depositColumns = ["Request Date", "Reference Number", "Method", "Account I
   "Routing Number", "Date Received", "Date Available for Trading", "Date Available for Withdrawal - Original Bank",
   "Date Available for Withdrawal - Other Bank", "Amount", "Status"];
 function identity<R extends PortfolioIdentityRow & { raw_data?: unknown }>(row: R) {
-  const value = assignImportIdentities([row], (source) => portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }))[0];
+  const value = assignImportIdentities([row], (source) => portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }))[0]!;
   return { ...row, dedup_fingerprint: value.fingerprint, dedup_fingerprint_version: value.version, dedup_occurrence: value.occurrence };
 }
 export function syntheticIbkrCashCorrection({ sourceAccount = "U12345678", nativeAccount = sourceAccount, baseAmount = "80", rate = "0.8", kind = "deposit" }: IbkrCashCorrectionOptions = {}) {

@@ -122,7 +122,7 @@ describe("portfolio workbook multipart boundary", () => {
   );
   it("rejects incomplete financial joins before creating a batch", async () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[2].records.shift();
+    sheets[2]!.records.shift();
     await writeSyntheticWorkbook(file, sheets);
     const response = await request().expect(400);
     expect(response.body.error.message).toContain("do not reconcile");

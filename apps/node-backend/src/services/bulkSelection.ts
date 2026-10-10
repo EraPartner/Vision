@@ -12,6 +12,9 @@
  */
 
 import { query as dbQuery } from "../database/connection.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import { idRowSchema } from "../database/rowSchemas.ts";
+import { intCountRowSchema } from "../database/rows/ledger.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 import {
   buildTransactionWhere,
@@ -396,7 +399,7 @@ export async function resolveBulkSelection(
     `SELECT COUNT(*)::int AS n ${EXPORT_JOINS_SQL} WHERE ${whereSql}`,
     params,
   );
-  const countRow = countResult.rows[0] as { n: number } | undefined;
+  const [countRow] = checkRows(intCountRowSchema, countResult.rows);
   const matched = countRow?.n ?? 0;
 
   if (matched === 0 && !opts.allowEmpty) {
@@ -412,7 +415,7 @@ export async function resolveBulkSelection(
     `SELECT t.id ${EXPORT_JOINS_SQL} WHERE ${whereSql} ORDER BY t.id`,
     params,
   );
-  return (idsResult.rows as Array<{ id: number }>).map((row) => row.id);
+  return checkRows(idRowSchema, idsResult.rows).map((row) => row.id);
 }
 
 const BULK_SELECTION_DEFAULTS = Object.freeze({

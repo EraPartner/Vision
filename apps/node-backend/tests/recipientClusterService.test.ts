@@ -35,7 +35,7 @@ describe('recipientClusterService', () => {
       },
     ]);
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('ORDER BY name, id');
     expect(sql).toContain('LIMIT $1');
     expect(params).toEqual([10_000]);
@@ -55,7 +55,7 @@ describe('recipientClusterService', () => {
     const clusters = await findRecipientClusters();
 
     expect(clusters).toHaveLength(50);
-    expect(clusters[0].recipientIds).toEqual([1, 2]);
+    expect(clusters[0]!.recipientIds).toEqual([1, 2]);
     expect(clusters.at(-1)!.recipientIds).toEqual([99, 100]);
   });
 });

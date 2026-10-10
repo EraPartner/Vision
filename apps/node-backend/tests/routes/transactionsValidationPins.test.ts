@@ -303,7 +303,7 @@ describe("PATCH /:id — validation pins", () => {
 
   it("absent fields stay absent in the patch handed to the repository", async () => {
     await patch({ memo: "only-this" }).expect(200);
-    const patchArg = transactionRepository.update.mock.calls[0][1];
+    const patchArg = transactionRepository.update.mock.calls[0]![1];
     expect("amount" in patchArg).toBe(false);
     expect("transaction_date" in patchArg).toBe(false);
     expect("currency" in patchArg).toBe(false);
@@ -327,7 +327,7 @@ describe("PATCH /:id — validation pins", () => {
     await patch({ id: 99, created_at: "x", links: ["a"], memo: "ok" }).expect(
       200,
     );
-    const patchArg = transactionRepository.update.mock.calls[0][1];
+    const patchArg = transactionRepository.update.mock.calls[0]![1];
     expect("id" in patchArg).toBe(false);
     expect("created_at" in patchArg).toBe(false);
     expect("links" in patchArg).toBe(false);

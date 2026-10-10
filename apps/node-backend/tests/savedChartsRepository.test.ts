@@ -25,6 +25,12 @@ const storedRow = {
   all_categories: false,
   all_recipients: false,
   all_tags: false,
+  chart_variant: "default",
+  time_bucket: "monthly",
+  date_range_start: null,
+  date_range_end: "2026-01-31",
+  created_at: new Date("2026-01-01T00:00:00Z"),
+  updated_at: new Date("2026-01-01T00:00:00Z"),
 };
 
 beforeEach(() => {
@@ -41,7 +47,7 @@ describe("savedChartsRepository normalized memberships", () => {
       tag_ids: [5],
     });
 
-    const sql = mocks.query.mock.calls[0][0];
+    const sql = mocks.query.mock.calls[0]![0];
     expect(sql).toContain("FROM saved_chart_categories");
     expect(sql).toContain("FROM saved_chart_recipients");
     expect(sql).toContain("FROM saved_chart_tags");
@@ -95,7 +101,7 @@ describe("savedChartsRepository normalized memberships", () => {
 
     await savedChartsRepository.update(7, { categoryIds: [9, 9] });
 
-    expect(mocks.query.mock.calls[0][0]).toContain("FOR UPDATE");
+    expect(mocks.query.mock.calls[0]![0]).toContain("FOR UPDATE");
     expect(mocks.query).toHaveBeenCalledWith(
       expect.stringContaining("DELETE FROM saved_chart_categories"),
       [7],

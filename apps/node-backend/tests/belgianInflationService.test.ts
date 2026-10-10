@@ -42,12 +42,16 @@ describe("belgianInflationService", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       );
 
@@ -160,7 +164,9 @@ describe("belgianInflationService", () => {
     // a blanket mock keeps the test robust to the exact query count.
     query.mockResolvedValue(
       partial<PgQueryResult>({
-        rows: [{ month_date: "2023-12-01", monthly_rate: "0.00150000" }],
+        rows: [
+          { month_date: new Date(2023, 11, 1), monthly_rate: "0.00150000" },
+        ],
       }),
     );
 
@@ -209,7 +215,9 @@ describe("belgianInflationService", () => {
     vi.useFakeTimers();
     query.mockResolvedValue(
       partial<PgQueryResult>({
-        rows: [{ month_date: "2023-12-01", monthly_rate: "0.00150000" }],
+        rows: [
+          { month_date: new Date(2023, 11, 1), monthly_rate: "0.00150000" },
+        ],
       }),
     );
 
@@ -295,12 +303,16 @@ describe("belgianInflationService", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       );
 
@@ -336,12 +348,16 @@ describe("belgianInflationService", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       );
 
@@ -389,7 +405,7 @@ describe("belgianInflationService", () => {
     );
     expect(insertCalls).toHaveLength(1);
 
-    const [sql, params] = insertCalls[0];
+    const [sql, params] = insertCalls[0]!;
     // Three rows × three params per row = 9 params bound to the single query.
     expect(params).toHaveLength(9);
     // VALUES list contains three placeholder groups.
@@ -402,12 +418,16 @@ describe("belgianInflationService", () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
-          rows: [{ month_date: "2024-01-01", monthly_rate: "0.00400000" }],
+          rows: [
+            { month_date: new Date(2024, 0, 1), monthly_rate: "0.00400000" },
+          ],
         }),
       );
 

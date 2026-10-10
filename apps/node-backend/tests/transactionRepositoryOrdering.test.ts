@@ -59,7 +59,7 @@ afterEach(() => {
 describe("transaction list ORDER BY tiebreaker", () => {
   it("getAllWithCount default sort ends with t.id DESC", async () => {
     await transactionRepository.getAllWithCount({ limit: 50, offset: 0 });
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("ORDER BY t.date DESC, t.id DESC");
   });
 
@@ -70,7 +70,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
       sortBy: "amount",
       sortDir: "asc",
     });
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toMatch(/ORDER BY .+, t\.date DESC, t\.id DESC/);
   });
 
@@ -78,7 +78,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
     "%s partitions requested balances by account and currency",
     async (method) => {
       await transactionRepository[method]({ includeBalance: true });
-      const sql = query.mock.calls[0][0];
+      const sql = query.mock.calls[0]![0];
       expect(sql).toContain(
         "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
       );
@@ -95,7 +95,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
   it("getAllWithCount count query uses only the recipient join needed by filters", async () => {
     await transactionRepository.getAllWithCount({ recipientName: "shop" });
 
-    const countSql = query.mock.calls[1][0];
+    const countSql = query.mock.calls[1]![0];
     expect(countSql).toContain(
       "LEFT JOIN recipients r ON t.recipient_id = r.id",
     );
@@ -109,7 +109,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
       limit: 50,
       offset: 0,
     });
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("ORDER BY t.date DESC, t.id DESC");
   });
 
@@ -120,7 +120,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
       sortBy: "amount",
       sortDir: "asc",
     });
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain(
       "ROW_NUMBER() OVER (ORDER BY t.amount ASC, t.date DESC, t.id DESC)",
     );
@@ -132,7 +132,7 @@ describe("transaction list ORDER BY tiebreaker", () => {
     await transactionRepository.getUncategorisedWithCount({
       includeBalance: true,
     });
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain(
       "SUM(t.amount) OVER (PARTITION BY t.account_id, COALESCE(t.currency, 'EUR') ORDER BY t.date ASC, t.id ASC) AS cumulative",
     );

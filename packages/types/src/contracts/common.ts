@@ -8,11 +8,10 @@ import { z } from "zod";
  *   silently. Used by the frontend contract tests.
  * - Wire contracts (`z.looseObject`): what the frontend checks at runtime on a
  *   real response. They reuse the fixture field definitions and accept added
- *   fields, so a new backend column does not break a screen. Only the identity
- *   fields a screen cannot render without are required; every other field is
- *   optional but type-checked when present, so a type drift (a NUMERIC string
- *   where a number belongs, a renamed enum value) is caught while a partial
- *   test fixture or a narrower projection still passes.
+ *   fields, so a new backend column does not break a screen. A field the
+ *   backend always sends is required; `.optional()` marks a key the backend
+ *   omits on some responses and `.nullable()` a SQL-nullable value. Test
+ *   fixtures must therefore be shaped like real responses.
  */
 
 export const LinkSchema = z.strictObject({ rel: z.string(), href: z.string() });
@@ -42,6 +41,15 @@ export const linkedCollectionOf = <T extends z.ZodTypeAny>(item: T) =>
 export const IdSchema = z.number().int().positive();
 const CountSchema = z.number().int().nonnegative();
 
+/** A DATE column as the backend emits it (`toWireDate`): `YYYY-MM-DD`. */
+export const WireDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** A TIMESTAMPTZ column: a pg `Date` serialized by `JSON.stringify`. */
+export const WireTimestampSchema = z.string();
+
+/** A currency column guarded by an ISO-4217 `CHECK (~ '^[A-Z]{3}$')`. */
+export const CurrencyCodeSchema = z.string().regex(/^[A-Z]{3}$/);
+
 /**
  * A money/NUMERIC figure: a JSON number, or the decimal string node-postgres
  * returns for an unconverted NUMERIC column. Only for fields whose client
@@ -70,3 +78,17 @@ export const wireListOf = <T extends z.ZodTypeAny>(item: T) =>
     offset: CountSchema.optional(),
     links: z.array(WireLinkSchema).optional(),
   });
+
+/** A list body the backend always paginates: `PaginationFields` plus `links`. */
+export const wirePageOf = <T extends z.ZodTypeAny>(item: T) =>
+  z.looseObject({
+    items: z.array(item),
+    total: CountSchema,
+    limit: z.number().int().positive(),
+    offset: CountSchema,
+    links: z.array(WireLinkSchema),
+  });
+
+/** `{ items, total }` — an unpaginated collection body. */
+export const wireCollectionOf = <T extends z.ZodTypeAny>(item: T) =>
+  z.looseObject({ items: z.array(item), total: CountSchema });

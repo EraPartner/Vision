@@ -105,7 +105,7 @@ describe("POST /bulk-update — FK pre-checks", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns 400 when category does not exist", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // category lookup
+    dbQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // category lookup
 
     await bulkUpdate({ ids: [1], fields: { category_id: 999 } }).expect(400);
 
@@ -113,7 +113,7 @@ describe("POST /bulk-update — FK pre-checks", () => {
   });
 
   it("returns 400 when recipient does not exist", async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // recipient lookup
+    dbQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // recipient lookup
 
     await bulkUpdate({ ids: [1], fields: { recipient_id: 999 } }).expect(400);
 
@@ -197,7 +197,7 @@ describe("POST /bulk-update — success paths", () => {
   it("reports filter selection drift to zero without scheduling reconciliation", async () => {
     dbQuery
       .mockResolvedValueOnce({ rows: [{ n: 0 }] } as PgQueryResult)
-      .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const clientQuery = vi
       .fn()
       .mockResolvedValueOnce({})

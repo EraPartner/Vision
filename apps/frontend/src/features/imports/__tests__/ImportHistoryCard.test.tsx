@@ -63,6 +63,8 @@ describe("ImportHistoryCard", () => {
                         }),
                     ],
                     total: 3,
+                    limit: 10,
+                    offset: 0,
                 }),
             ),
         );
@@ -99,6 +101,8 @@ describe("ImportHistoryCard", () => {
                         }),
                     ],
                     total: 2,
+                    limit: 10,
+                    offset: 0,
                 }),
             ),
         );
@@ -126,6 +130,8 @@ describe("ImportHistoryCard", () => {
                         }),
                     ],
                     total: 1,
+                    limit: 10,
+                    offset: 0,
                 }),
             ),
         );
@@ -161,13 +167,15 @@ describe("ImportHistoryCard", () => {
                         }),
                     ],
                     total: 1,
+                    limit: 10,
+                    offset: 0,
                 });
             }),
             http.delete(
                 `${API_BASE}/api/import/batches/:batchId`,
                 ({ params }) => {
                     deleteSpy(params.batchId);
-                    return ok({ deleted: 4 });
+                    return ok({ deleted: 4, recipientsRemoved: 0 });
                 },
             ),
         );
@@ -208,11 +216,13 @@ describe("ImportHistoryCard", () => {
                         }),
                     ],
                     total: 1,
+                    limit: 10,
+                    offset: 0,
                 }),
             ),
             http.delete(`${API_BASE}/api/import/batches/:batchId`, () => {
                 deleteSpy();
-                return ok({ deleted: 0 });
+                return ok({ deleted: 0, recipientsRemoved: 0 });
             }),
         );
 
@@ -246,7 +256,7 @@ describe("ImportHistoryCard", () => {
 
         server.use(
             http.get(`${API_BASE}/api/import/batches`, () =>
-                ok({ items: manyBatches, total: 25 }),
+                ok({ items: manyBatches, total: 25, limit: 10, offset: 0 }),
             ),
         );
 

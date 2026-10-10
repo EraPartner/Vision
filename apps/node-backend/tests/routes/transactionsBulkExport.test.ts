@@ -59,15 +59,18 @@ function useClientResults(...results: object[]) {
   return { query, release };
 }
 
+// Shaped like a real chunk row: pg DATE as a local-midnight Date, NUMERIC as
+// strings.
 const SAMPLE_ROW = {
   id: 1,
-  date: "2026-05-08",
+  date: new Date(2026, 4, 8),
   bank_account: "BE12 3456",
+  account_id: 1,
   recipient_name: "Trader Joe",
   memo: "Groceries",
-  amount: -42.5,
+  amount: "-42.5000",
   currency: "EUR",
-  balance: 100,
+  balance: "100.0000",
   category_name: "FOOD:GROCERIES",
   comment: "",
   tags: ["weekly"],
@@ -106,7 +109,7 @@ describe("POST /bulk-export — CSV success", () => {
     expect(res.text).toMatch(/^Date,Bank Account,Recipient/);
     expect(res.text).toContain("Trader Joe");
     expect(res.text).toContain("weekly");
-    expect(query.mock.calls[0][0]).toBe(
+    expect(query.mock.calls[0]![0]).toBe(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
     );
     expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");
@@ -146,7 +149,7 @@ describe("POST /bulk-export — NDJSON success", () => {
     expect(res.headers["x-exported-count"]).toBe("1");
 
     const firstLine = res.text.split("\n").filter(Boolean)[0];
-    const parsed = JSON.parse(firstLine);
+    const parsed = JSON.parse(firstLine!);
     expect(parsed.id).toBe(1);
     expect(parsed.recipient).toBe("Trader Joe");
     expect(parsed.tags).toEqual(["weekly"]);

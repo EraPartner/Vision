@@ -8,9 +8,57 @@ import { listCustomParserConfigs, createCustomParserConfig, updateCustomParserCo
 
 afterEach(() => server.resetHandlers());
 
+/** `customParserConfigRepository.mapRow`. */
+const PARSER_CONFIG = {
+  id: 1,
+  name: "C",
+  kind: "transaction",
+  config: { dateColumn: "Date", dateFormat: "YYYY-MM-DD" },
+  created_at: "2025-01-01T00:00:00.000Z",
+  updated_at: "2025-01-01T00:00:00.000Z",
+};
+
+/** `buildImportBatchPreview` with one matched row (BIGSERIAL id and NUMERIC amount as text). */
+const PREVIEW = {
+  batch_id: 7,
+  groups: [
+    {
+      recipient_id: 3,
+      recipient_name: "Grocer",
+      recipient_default_category_id: null,
+      recipient_default_category_label: null,
+      override_category_id: null,
+      current_category_id: null,
+      current_category_label: null,
+      matched_pattern_id: null,
+      matched_pattern_text: null,
+      matched_pattern_kind: null,
+      row_count: 1,
+      rows: [
+        {
+          id: "41",
+          row_index: 0,
+          recipient_raw: "GROCER 123",
+          amount: "-12.5000",
+          currency: "EUR",
+          tx_date: "2025-01-15",
+          memo: null,
+          bank_account: null,
+          match_source: "exact",
+          match_similarity: null,
+          matched_pattern_id: null,
+          user_override_recipient_id: null,
+          override_category_id: null,
+        },
+      ],
+    },
+  ],
+  totals: { exact: 1, fuzzy: 0, pattern: 0, new: 0, unresolved: 0 },
+};
+
 describe("imports API client", () => {
   it("listCustomParserConfigs fetches configs", async () => {
-    server.use(http.get(`${API_BASE}/api/import/parsers`, () => ok({ items: [{ id: 1, name: "C" }], total: 1 })));
+    server.use(http.get(`${API_BASE}/api/import/parsers`, () => ok({ items: [PARSER_CONFIG], total: 1 })));
     expect((await listCustomParserConfigs())[0].name).toBe("C");
   });
 
@@ -41,7 +89,7 @@ describe("imports API client", () => {
     server.use(
       http.get(`${API_BASE}/api/import/batches`, ({ request }) => {
         url = request.url;
-        return ok({ items: [], total: 0 });
+        return ok({ items: [], total: 0, limit: 20, offset: 0 });
       }),
     );
     await listImportBatches(10, 5);
@@ -50,13 +98,13 @@ describe("imports API client", () => {
   });
 
   it("rollbackImportBatch DELETEs and returns deleted count", async () => {
-    server.use(http.delete(`${API_BASE}/api/import/batches/7`, () => ok({ deleted: 3 })));
+    server.use(http.delete(`${API_BASE}/api/import/batches/7`, () => ok({ deleted: 3, recipientsRemoved: 0 })));
         expect((await rollbackImportBatch("7")).deleted).toBe(3);
   });
 
   it("getImportPreview fetches the preview", async () => {
-    server.use(http.get(`${API_BASE}/api/import/batches/7/preview`, () => ok({ rows: [] })));
-    expect(await getImportPreview(7)).toMatchObject({ rows: [] });
+    server.use(http.get(`${API_BASE}/api/import/batches/7/preview`, () => ok(PREVIEW)));
+    expect(await getImportPreview(7)).toEqual(PREVIEW);
   });
 
   it("overrideImportRow posts recipient_id", async () => {
@@ -88,7 +136,17 @@ describe("imports API client", () => {
   it("commitImportBatch POSTs the commit", async () => {
     server.use(
       http.post(`${API_BASE}/api/import/batches/7/commit`, () =>
-        ok({ batch_id: 7, imported: 4, duplicates: 0, errors: 0 }),
+        ok({
+          batch_id: 7,
+          total: 4,
+          imported: 4,
+          duplicates: 0,
+          errors: 0,
+          auto_linked_count: 0,
+          status: "completed",
+          error_message: null,
+          links: [],
+        }),
       ),
     );
     expect((await commitImportBatch(7)).imported).toBe(4);

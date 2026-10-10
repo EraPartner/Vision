@@ -14,6 +14,16 @@ import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 import { z } from "zod";
 import { PORTFOLIO_INCOME_RECOGNITION_ROLES } from "@vision/types/portfolioTxnTypes";
+import {
+    InvestmentListSchema,
+    InvestmentPriceHistorySchema,
+    InvestmentSchema,
+    PortfolioBrokerRetagReceiptSchema,
+    PortfolioTransactionListSchema,
+    PortfolioTransactionSchema,
+    PriceProviderListSchema,
+    RefreshPricesResultSchema,
+} from "@vision/types/contracts";
 
 const incomeRoleSchema = z
     .enum(PORTFOLIO_INCOME_RECOGNITION_ROLES)
@@ -55,6 +65,7 @@ export function getInvestments(params?: {
     return requestWithQuery<InvestmentsListResponse>(
         "/api/investments",
         params,
+        { schema: InvestmentListSchema },
     );
 }
 
@@ -62,6 +73,7 @@ export function createInvestment(data: InvestmentCreate): Promise<Investment> {
     return apiRequest<Investment>("/api/investments", {
         method: "POST",
         body: JSON.stringify(data),
+        schema: InvestmentSchema,
     });
 }
 
@@ -78,17 +90,25 @@ export async function getSupportedPriceProviders(): Promise<
 > {
     const { providers } = await apiRequest<{
         providers: SupportedPriceProvider[];
-    }>("/api/investments/providers");
+    }>("/api/investments/providers", { schema: PriceProviderListSchema });
     return providers;
 }
 
+/**
+ * With no live-priced holding the route answers only `{ updated: 0, message }`;
+ * otherwise the counts and per-investment maps (a provider may answer null).
+ */
 export function refreshInvestmentPrices(): Promise<{
     updated: number;
-    total: number;
-    prices: Record<string, number>;
-    priceSources: Record<string, PriceSource>;
+    message?: string;
+    total?: number;
+    prices?: Record<string, number | null>;
+    priceSources?: Record<string, PriceSource>;
 }> {
-    return apiRequest("/api/investments/refresh-prices", { method: "POST" });
+    return apiRequest("/api/investments/refresh-prices", {
+        method: "POST",
+        schema: RefreshPricesResultSchema,
+    });
 }
 
 export function updateInvestment(
@@ -98,6 +118,7 @@ export function updateInvestment(
     return apiRequest<Investment>(`/api/investments/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
+        schema: InvestmentSchema,
     });
 }
 
@@ -116,6 +137,7 @@ export function getInvestmentPriceHistory(
     return requestWithQuery(
         `/api/investments/${investmentId}/price-history`,
         params,
+        { schema: InvestmentPriceHistorySchema },
     );
 }
 
@@ -126,6 +148,7 @@ export async function getPortfolioTransactions(
     const res = await requestWithQuery<PortfolioTransactionsListResponse>(
         `/api/investments/${investmentId}/transactions`,
         params,
+        { schema: PortfolioTransactionListSchema },
     );
     return {
         ...res,
@@ -143,6 +166,7 @@ export async function getPortfolioTransactionsBulk(params: {
     const res = await requestWithQuery<PortfolioTransactionsListResponse>(
         "/api/investments/transactions",
         params,
+        { schema: PortfolioTransactionListSchema },
     );
     return {
         ...res,
@@ -161,6 +185,7 @@ export async function createPortfolioTransaction(
             {
                 method: "POST",
                 body: JSON.stringify(data),
+                schema: PortfolioTransactionSchema,
             },
         ),
     );
@@ -177,6 +202,7 @@ export async function updatePortfolioTransaction(
             {
                 method: "PATCH",
                 body: JSON.stringify(data),
+                schema: PortfolioTransactionSchema,
             },
         ),
     );
@@ -193,6 +219,10 @@ export function bulkRetagPortfolioTransactions(
 ): Promise<PortfolioBrokerRetagReceipt> {
     return apiRequest<PortfolioBrokerRetagReceipt>(
         "/api/investments/transactions/broker",
-        { method: "PUT", body: JSON.stringify(data) },
+        {
+            method: "PUT",
+            body: JSON.stringify(data),
+            schema: PortfolioBrokerRetagReceiptSchema,
+        },
     );
 }

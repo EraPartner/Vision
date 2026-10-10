@@ -37,6 +37,7 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import { getHistoricalRateIndex as rawGetHistoricalRateIndex } from "../src/services/currency/currencyConversionService.ts";
 import { buildHistoricalRateIndex } from "../src/services/currency/rateFetcher.ts";
 import { fetchPortfolioData } from "../src/services/reports/dataFetcherPortfolio.ts";
+import { RowContractError } from "../src/database/rowContracts.ts";
 
 /** The structural slice of pg's query surface this fake implements. */
 type FakeQuery = (
@@ -95,5 +96,27 @@ describe("descriptive income portfolio reporting", () => {
       totalInKindIncome: 16,
       inKindIncomeCount: 1,
     });
+  });
+
+  it("surfaces a row contract mismatch instead of skipping the dividend section", async () => {
+    query.mockResolvedValue({
+      rows: [
+        {
+          investment_id: 1,
+          investment_name: "Synthetic asset",
+          symbol: "TEST",
+          asset_class: "stock",
+          year: 2021,
+          month: 2,
+          amount: 20,
+          currency: "EUR",
+          rate_date: "2021-02-05",
+          income_recognition_role: "standard",
+        },
+      ],
+    });
+    await expect(
+      fetchPortfolioData("EUR", { kind: "year", year: 2021 }),
+    ).rejects.toBeInstanceOf(RowContractError);
   });
 });

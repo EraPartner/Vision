@@ -5,10 +5,21 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, INVESTMENT_STUB } from "@/test/msw/handlers";
 import ResearchDossiersPage from "@/pages/research/ResearchDossiersPage";
 
 const api = "http://localhost:3002/api";
+const TIMESTAMP = "2025-01-01T00:00:00.000Z";
+
+/** researchDossierService's hydrated dossier around saved content. */
+function dossierRow<T extends object>(content: T) {
+    return {
+        linkDetails: [],
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+        ...content,
+    };
+}
 
 describe("ResearchDossiersPage", () => {
     it("creates a dossier only on save and keeps explicit evidence origin", async () => {
@@ -23,22 +34,26 @@ describe("ResearchDossiersPage", () => {
             http.get(`${api}/investments`, () =>
                 ok({
                     items: Array.from({ length: 10 }, (_, index) => ({
+                        ...INVESTMENT_STUB,
                         id: index + 1,
                         name: `Investment ${index + 1}`,
                     })),
                     total: 10,
                     limit: 1000,
                     offset: 0,
+                    links: [],
                 }),
             ),
             http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
-            http.get(`${api}/ai-research/documents`, () => ok({ items: [] })),
+            http.get(`${api}/ai-research/documents`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.post(`${api}/research-dossiers`, async ({ request }) => {
                 posted = (await request.json()) as Record<string, unknown>;
-                return ok({ id: "d-1", version: 1, ...posted });
+                return ok(dossierRow({ id: "d-1", version: 1, ...posted }));
             }),
             http.get(`${api}/research-dossiers/d-1`, () =>
-                ok({ id: "d-1", version: 1, ...posted }),
+                ok(dossierRow({ id: "d-1", version: 1, ...posted })),
             ),
             http.get(`${api}/research-dossiers/d-1/versions`, () =>
                 ok({ items: [] }),
@@ -111,8 +126,13 @@ describe("ResearchDossiersPage", () => {
             links: { categoryIds: [], investmentIds: [], savedAnalysisIds: [] },
         };
         const dossiers = [
-            { ...content, id: "first", version: 1 },
-            { ...content, id: "second", title: "Second dossier", version: 1 },
+            dossierRow({ ...content, id: "first", version: 1 }),
+            dossierRow({
+                ...content,
+                id: "second",
+                title: "Second dossier",
+                version: 1,
+            }),
         ];
         let writes = 0;
         server.use(
@@ -128,9 +148,13 @@ describe("ResearchDossiersPage", () => {
             http.get(`${api}/categories/tree`, () =>
                 ok({ items: [], total: 0 }),
             ),
-            http.get(`${api}/investments`, () => ok({ items: [], total: 0 })),
+            http.get(`${api}/investments`, () =>
+                ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
+            ),
             http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
-            http.get(`${api}/ai-research/documents`, () => ok({ items: [] })),
+            http.get(`${api}/ai-research/documents`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.post(`${api}/research-dossiers`, () => {
                 writes += 1;
                 return ok({});

@@ -448,14 +448,16 @@ export function parseKinesisSourceRecordForBasisPolicy(
       skip_empty_lines: true,
       relax_column_count: false,
     });
+    const [record] = records;
     if (
       records.length !== 1 ||
+      !record ||
       ![...DISTRIBUTION_TYPES, "Holder's_Distribution_Adjustment"].includes(
-        cleanCell(records[0].Transaction_Type),
+        cleanCell(record.Transaction_Type),
       )
     )
       return undefined;
-    return parseNonTrade(records[0], config);
+    return parseNonTrade(record, config);
   } catch {
     return undefined;
   }
@@ -481,9 +483,10 @@ export function reparseKinesisSourceEvents(
         skip_empty_lines: true,
         relax_column_count: false,
       });
-      if (parsed.length !== 1)
+      const [record] = parsed;
+      if (parsed.length !== 1 || !record)
         throw new Error("Expected one literal Kinesis record");
-      return parsed[0];
+      return record;
     });
     const result: ParsedPortfolioRow[] = [];
     const orders = new Set<string>();
@@ -536,11 +539,12 @@ export async function parseKinesisTransactionHistory(
     config.encoding || "utf-8",
   );
 
-  if (records.length === 0) {
+  const [firstRecord] = records;
+  if (!firstRecord) {
     throw new Error("Kinesis Transaction Statement is empty");
   }
   const missing = REQUIRED_COLUMNS.filter(
-    (column) => !Object.prototype.hasOwnProperty.call(records[0], column),
+    (column) => !Object.prototype.hasOwnProperty.call(firstRecord, column),
   );
   if (missing.length > 0) {
     throw new Error(
@@ -587,7 +591,7 @@ export async function parseKinesisTransactionHistory(
   }
 
   rows.skipped = skipped;
-  rows.sourceColumns = Object.keys(records[0]);
+  rows.sourceColumns = Object.keys(firstRecord);
   logger.info(
     `Kinesis Transaction Statement parsed: ${rows.length} rows, ${skipped} source rows skipped`,
   );

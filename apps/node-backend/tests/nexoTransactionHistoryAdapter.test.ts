@@ -180,8 +180,8 @@ describe("Nexo transaction history portfolio adapter", () => {
       encoding: "utf-8",
     });
 
-    expect(rows[0].rawData).toContain("NX-TRADE-1,Deposit To Exchange");
-    expect(rows[0].rawData).not.toContain("|");
+    expect(rows[0]!.rawData).toContain("NX-TRADE-1,Deposit To Exchange");
+    expect(rows[0]!.rawData).not.toContain("|");
   });
   it("carries configured incoming custody without inventing a purchase or network fee", async () => {
     const approved = await wrapperFixture([
@@ -212,7 +212,7 @@ describe("Nexo transaction history portfolio adapter", () => {
         await parseNexoTransactionHistory(file, {
           transfer_origin_account_id: 2,
         })
-      )[0].typeRaw,
+      )[0]!.typeRaw,
     ).toBe("Unsupported Nexo event: Top up Crypto");
   });
   it("accepts the explicit dash fee placeholder without inventing asset acquisition basis", async () => {
@@ -249,8 +249,8 @@ describe("Nexo transaction history portfolio adapter", () => {
       amount: 0,
       assetTransfer: { direction: "internal", basisStatus: "not_applicable" },
     });
-    expect(rows[0].rawData).toContain("NX-PRO-IN,Transfer From Pro Wallet");
-    expect(rows[2].typeRaw).toMatch(/^Unsupported/);
+    expect(rows[0]!.rawData).toContain("NX-PRO-IN,Transfer From Pro Wallet");
+    expect(rows[2]!.typeRaw).toMatch(/^Unsupported/);
     expect(rows.skipped).toBe(0);
   });
 
@@ -285,9 +285,9 @@ describe("Nexo transaction history portfolio adapter", () => {
       ["Deposit", 25, "EUR", ""],
     ]);
     expect(rows.skipped).toBe(4);
-    expect(rows[0].rawData).toContain("D1,Deposit To Exchange");
-    expect(rows[0].rawData).toContain("DC1,Exchange Deposited On");
-    expect(rows[1].sourceId).toBe("D1:fee");
+    expect(rows[0]!.rawData).toContain("D1,Deposit To Exchange");
+    expect(rows[0]!.rawData).toContain("DC1,Exchange Deposited On");
+    expect(rows[1]!.sourceId).toBe("D1:fee");
   });
 
   it("blocks missing, ambiguous, distant and cross-day cash companions", async () => {
@@ -328,8 +328,8 @@ describe("Nexo transaction history portfolio adapter", () => {
       typeRaw: "Unsupported Nexo event: Exchange To Withdraw",
       note: "Nexo cash principal and fee do not reconcile",
     });
-    expect(rows[0].rawData).toContain("W1,Exchange To Withdraw");
-    expect(rows[0].rawData).toContain("WC1,Withdraw Exchanged");
+    expect(rows[0]!.rawData).toContain("W1,Exchange To Withdraw");
+    expect(rows[0]!.rawData).toContain("WC1,Withdraw Exchanged");
   });
 
   it("blocks unequal top-up principal and invalid fees without losing the companion evidence", async () => {
@@ -343,10 +343,10 @@ describe("Nexo transaction history portfolio adapter", () => {
       ]);
       const rows = await parseNexoTransactionHistory(file);
       expect(rows).toHaveLength(1);
-      expect(rows[0].typeRaw).toBe(
+      expect(rows[0]!.typeRaw).toBe(
         "Unsupported Nexo event: Deposit To Exchange",
       );
-      expect(rows[0].rawData).toContain("DC1,Exchange Deposited On");
+      expect(rows[0]!.rawData).toContain("DC1,Exchange Deposited On");
     }
   });
 });

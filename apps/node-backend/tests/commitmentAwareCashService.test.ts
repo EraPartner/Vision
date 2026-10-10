@@ -9,7 +9,11 @@ vi.mock("../src/services/crossWorkspaceDataService.ts", () => ({
 vi.mock("../src/services/currency/currencyConversionService.ts", () => ({
   listLatestStoredRates: vi.fn().mockResolvedValue({
     rows: [
-      { currency_code: "USD", rate_to_eur: "0.5", rate_date: "2026-09-18" },
+      {
+        currency_code: "USD",
+        rate_to_eur: "0.5",
+        rate_date: new Date(2026, 8, 18),
+      },
     ],
   }),
   convertWithRates: vi.fn((amount, from, to) =>
@@ -32,6 +36,7 @@ const plannedTransactionRepository = vi.mocked(rawPlannedTransactionRepository);
 const assembleRebalanceInputs = vi.mocked(rawAssembleRebalanceInputs);
 const convertWithRates = vi.mocked(rawConvertWithRates);
 const listLatestStoredRates = vi.mocked(rawListLatestStoredRates);
+type StoredRatesResult = Awaited<ReturnType<typeof rawListLatestStoredRates>>;
 type RebalanceInputs = Awaited<ReturnType<typeof rawAssembleRebalanceInputs>>;
 /** Fixture rows carry wire-shaped string dates; the service normalizes both. */
 const commitmentRows = (rows: unknown[]) => loose<PlannedCommitmentRow[]>(rows);
@@ -44,9 +49,13 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-09-19T12:00:00Z"));
   listLatestStoredRates.mockResolvedValue(
-    partial<PgQueryResult>({
+    partial<StoredRatesResult>({
       rows: [
-        { currency_code: "USD", rate_to_eur: "0.5", rate_date: "2026-09-18" },
+        {
+          currency_code: "USD",
+          rate_to_eur: "0.5",
+          rate_date: new Date(2026, 8, 18),
+        },
       ],
     }),
   );
@@ -229,9 +238,13 @@ describe("computeCommitmentAwareCash", () => {
       ]),
     );
     listLatestStoredRates.mockResolvedValue(
-      partial<PgQueryResult>({
+      partial<StoredRatesResult>({
         rows: [
-          { currency_code: "USD", rate_to_eur: "0.5", rate_date: "2026-08-01" },
+          {
+            currency_code: "USD",
+            rate_to_eur: "0.5",
+            rate_date: new Date(2026, 7, 1),
+          },
         ],
       }),
     );
@@ -246,7 +259,7 @@ describe("computeCommitmentAwareCash", () => {
 
   it("needs no exchange rate when all cash and bills share the target currency", async () => {
     listLatestStoredRates.mockResolvedValue(
-      partial<PgQueryResult>({ rows: [] }),
+      partial<StoredRatesResult>({ rows: [] }),
     );
     assembleRebalanceInputs.mockResolvedValue(
       partial<RebalanceInputs>({
@@ -276,7 +289,7 @@ describe("computeCommitmentAwareCash", () => {
 
   it("ignores missing rates for bills with no remaining occurrence", async () => {
     listLatestStoredRates.mockResolvedValue(
-      partial<PgQueryResult>({ rows: [] }),
+      partial<StoredRatesResult>({ rows: [] }),
     );
     plannedTransactionRepository.getForCommitmentProjection.mockResolvedValue(
       commitmentRows([

@@ -19,6 +19,20 @@ import {
   setOpeningBalance,
 } from "../src/services/openingBalanceService.ts";
 import { loose, partial } from "./helpers/partial.ts";
+import { makeTransactionRow } from "./builders/domainRows.ts";
+
+/** A realistic `RETURNING *` anchor row (pg NUMERIC strings, DATE as Date). */
+function anchorRow(id: number, balance: string) {
+  return makeTransactionRow({
+    id,
+    amount: "0.0000",
+    balance,
+    memo: "OPENING BALANCE",
+    category_id: null,
+    is_transfer: true,
+    transfer_source: "opening",
+  });
+}
 
 const query = vi.mocked(rawQuery);
 const accountRepository = vi.mocked(rawAccountRepository);
@@ -167,9 +181,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ earliest: null }] }) // no prior activity
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
       .mockResolvedValueOnce({
-        rows: [
-          { id: 42, amount: 0, balance: 1000, transfer_source: "opening" },
-        ],
+        rows: [anchorRow(42, "1000.0000")],
       });
 
     const result = await setOpeningBalance(5, {
@@ -182,14 +194,14 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
 
     // Whole upsert runs in a transaction; the first query locks the account row.
     expect(withTransaction).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toMatch(
+    expect(query.mock.calls[0]![0]).toMatch(
       /SELECT id FROM accounts WHERE id = \$1 FOR UPDATE/,
     );
-    expect(query.mock.calls[0][1]).toEqual([5]);
+    expect(query.mock.calls[0]![1]).toEqual([5]);
 
     // Fourth query is the upsert (lock, earliest-activity probe, system-recipient
     // upsert, upsert); params carry the server-stamped balance and currency.
-    const [sql, params] = query.mock.calls[3];
+    const [sql, params] = query.mock.calls[3]!;
     expect(sql).toMatch(/transfer_source = 'opening'/);
     expect(sql).toMatch(/is_transfer, transfer_source, is_active/);
     expect(params).toEqual([
@@ -207,7 +219,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
     expect(
       sql.slice(sql.indexOf("updated AS"), sql.indexOf("inserted AS")),
     ).not.toMatch(/recipient_id/);
-    expect(query.mock.calls[2][0]).toMatch(
+    expect(query.mock.calls[2]![0]).toMatch(
       /SELECT id FROM recipients WHERE normalized_name/,
     );
   });
@@ -215,9 +227,9 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
   it("warns when the anchor date does not precede existing activity", async () => {
     mockClient.query
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
-      .mockResolvedValueOnce({ rows: [{ earliest: "2023-06-01" }] }) // activity predates the anchor
+      .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 0, 15) }] }) // activity predates the anchor
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
-      .mockResolvedValueOnce({ rows: [{ id: 7 }] });
+      .mockResolvedValueOnce({ rows: [anchorRow(7, "500.0000")] });
 
     const result = await setOpeningBalance(5, {
       balance: 500,
@@ -235,7 +247,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2023, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
-      .mockResolvedValueOnce({ rows: [{ id: 8 }] });
+      .mockResolvedValueOnce({ rows: [anchorRow(8, "500.0000")] });
 
     const result = await setOpeningBalance(5, {
       balance: 500,
@@ -249,7 +261,7 @@ describe("setOpeningBalance (ADR-094 D4)", () => {
       .mockResolvedValueOnce({ rows: [{ id: 5 }] }) // lock
       .mockResolvedValueOnce({ rows: [{ earliest: new Date(2024, 5, 1) }] })
       .mockResolvedValueOnce({ rows: [{ id: 900 }] }) // system recipient (SELECT-first hit)
-      .mockResolvedValueOnce({ rows: [{ id: 9 }] });
+      .mockResolvedValueOnce({ rows: [anchorRow(9, "500.0000")] });
 
     const result = await setOpeningBalance(5, {
       balance: 500,

@@ -129,7 +129,7 @@ describeDb("portfolio broker bulk re-tag (real Postgres)", () => {
     await expect(
       retagPortfolioTransactions({
         ...request(uuid("2")),
-        transaction_ids: [fixture.transactionIds[0]],
+        transaction_ids: [fixture.transactionIds[0]!],
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
     const rows = await pool.query(

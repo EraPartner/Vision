@@ -20,10 +20,19 @@ beforeEach(() => {
   getIncludeTransfers.mockResolvedValue(false);
 });
 
+/** An uncategorised aggregate as pg returns it (SUM(NUMERIC) as text). */
+const sankeyRow = {
+  category_id: null,
+  category_name: null,
+  currency: "EUR",
+  is_income: false,
+  amount: "12.5000",
+};
+
 describe("getSankeyAggregates", () => {
   it("owns grouped SQL, category identity, canonical exclusions, and transfer policy", async () => {
     query.mockResolvedValueOnce({
-      rows: [{ category_id: null }],
+      rows: [sankeyRow],
     } as PgQueryResult);
 
     const rows = await getSankeyAggregates({
@@ -33,8 +42,8 @@ describe("getSankeyAggregates", () => {
       excludedRecipientIds: [9],
     });
 
-    const [sql, params] = query.mock.calls[0];
-    expect(rows).toEqual([{ category_id: null }]);
+    const [sql, params] = query.mock.calls[0]!;
+    expect(rows).toEqual([sankeyRow]);
     expect(sql).toContain("c.id AS category_id");
     expect(sql).toContain("SUM(ABS(t.amount))");
     expect(sql).toContain(
@@ -50,11 +59,11 @@ describe("getSankeyAggregates", () => {
 
   it("omits the transfer predicate only when requested", async () => {
     getIncludeTransfers.mockResolvedValueOnce(true);
-    query.mockResolvedValueOnce({ rows: [] } as PgQueryResult);
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
     await getSankeyAggregates({
       yearStart: "2025-01-01",
       yearEnd: "2025-12-31",
     });
-    expect(query.mock.calls[0][0]).not.toContain("t.is_transfer = false");
+    expect(query.mock.calls[0]![0]).not.toContain("t.is_transfer = false");
   });
 });

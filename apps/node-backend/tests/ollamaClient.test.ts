@@ -195,7 +195,7 @@ describe("ollama client", () => {
         model: "nomic-embed-text",
         embeddings: [[0.1, 0.2]],
       });
-      expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({
+      expect(JSON.parse(fetchImpl.mock.calls[0]![1].body)).toEqual({
         model: "nomic-embed-text",
         input: ["passage"],
         truncate: false,
@@ -282,7 +282,7 @@ describe("ollama client", () => {
         totalDurationMs: 1200,
       });
 
-      const [, init] = fetchImpl.mock.calls[0];
+      const [, init] = fetchImpl.mock.calls[0]!;
       expect(init.method).toBe("POST");
       const body = JSON.parse(init.body);
       expect(body).toEqual({
@@ -309,7 +309,7 @@ describe("ollama client", () => {
         options: { num_ctx: 8192 },
       });
 
-      const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+      const body = JSON.parse(fetchImpl.mock.calls[0]![1].body);
       expect(body.tools).toEqual(tools);
       expect(body.options).toEqual({ num_ctx: 8192 });
     });
@@ -338,7 +338,7 @@ describe("ollama client", () => {
       });
 
       expect(res.toolCalls).toHaveLength(1);
-      expect(res.toolCalls[0].function!.name).toBe("getSpendByCategory");
+      expect(res.toolCalls[0]!.function!.name).toBe("getSpendByCategory");
     });
 
     it("rejects empty messages", async () => {
@@ -433,7 +433,7 @@ describe("ollama client", () => {
         totalDurationMs: 2500,
       });
 
-      const [, init] = fetchImpl.mock.calls[0];
+      const [, init] = fetchImpl.mock.calls[0]!;
       const sent = JSON.parse(init.body);
       expect(sent.stream).toBe(true);
       expect(sent.messages).toEqual([{ role: "user", content: "hi" }]);
@@ -506,7 +506,7 @@ describe("ollama client", () => {
       });
 
       expect(res.toolCalls).toHaveLength(1);
-      expect(res.toolCalls[0].function!.name).toBe("getSpendByCategory");
+      expect(res.toolCalls[0]!.function!.name).toBe("getSpendByCategory");
       expect(res.doneReason).toBe("tool_calls");
     });
 
@@ -677,7 +677,7 @@ describe("ollama client", () => {
         options: { num_ctx: 8192 },
       });
 
-      const sent = JSON.parse(fetchImpl.mock.calls[0][1].body);
+      const sent = JSON.parse(fetchImpl.mock.calls[0]![1].body);
       expect(sent.tools).toEqual(tools);
       expect(sent.options).toEqual({ num_ctx: 8192 });
       expect(sent.stream).toBe(true);

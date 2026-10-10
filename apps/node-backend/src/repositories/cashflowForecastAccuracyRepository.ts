@@ -6,19 +6,16 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { forecastAccuracyRowSchema } from "../database/rows/info.ts";
+import type { ForecastAccuracyRow } from "../database/rows/info.ts";
 
-export interface AccuracyRow {
-  user_id: string;
-  method_id: string;
-  /** 'YYYY-MM' */
-  as_of_month: string;
-  mae: number;
-  rmse: number;
-  mape: number;
-  sample_days: number;
-  /** TIMESTAMPTZ, pg default parser (see types/rows.ts) */
-  recorded_at: Date;
-}
+/**
+ * A `cashflow_forecast_accuracy` read (`as_of_month` as 'YYYY-MM'), derived
+ * from its checked row schema. `mape` is NULL when no month had a percentage
+ * sample.
+ */
+export type AccuracyRow = ForecastAccuracyRow;
 
 export interface AccuracyUpsert {
   userId: string;
@@ -69,7 +66,8 @@ async function getHistory({
   methodId: string;
   limitMonths?: number;
 }): Promise<AccuracyRow[]> {
-  const result = await query<AccuracyRow>(
+  return queryRows(
+    forecastAccuracyRowSchema,
     `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
             mae, rmse, mape, sample_days, recorded_at
        FROM cashflow_forecast_accuracy
@@ -78,7 +76,6 @@ async function getHistory({
       LIMIT $3`,
     [userId, methodId, limitMonths],
   );
-  return result.rows;
 }
 
 /**
@@ -89,7 +86,8 @@ async function getLatestByMethod({
 }: {
   userId: string;
 }): Promise<AccuracyRow[]> {
-  const result = await query<AccuracyRow>(
+  return queryRows(
+    forecastAccuracyRowSchema,
     `SELECT DISTINCT ON (method_id)
             user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
             mae, rmse, mape, sample_days, recorded_at
@@ -98,7 +96,6 @@ async function getLatestByMethod({
       ORDER BY method_id, as_of_month DESC`,
     [userId],
   );
-  return result.rows;
 }
 
 /**
@@ -112,7 +109,8 @@ async function getAllHistory({
   userId: string;
   limitMonths?: number;
 }): Promise<AccuracyRow[]> {
-  const result = await query<AccuracyRow>(
+  return queryRows(
+    forecastAccuracyRowSchema,
     `SELECT user_id, method_id, to_char(as_of_month, 'YYYY-MM') AS as_of_month,
             mae, rmse, mape, sample_days, recorded_at
        FROM cashflow_forecast_accuracy
@@ -122,7 +120,6 @@ async function getAllHistory({
       ORDER BY method_id, as_of_month ASC`,
     [userId, limitMonths],
   );
-  return result.rows;
 }
 
 export default { upsert, getHistory, getLatestByMethod, getAllHistory };

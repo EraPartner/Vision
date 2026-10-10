@@ -237,8 +237,8 @@ describe.skipIf(!hasTestDatabase())("historical FX backfill provenance", () => {
         dateField: "date",
       },
     );
-    expect(converted[0].amount_eur).toBe(10);
-    expect(converted[0].used_fallback_rate).not.toBe(true);
+    expect(converted[0]!.amount_eur).toBe(10);
+    expect(converted[0]!.used_fallback_rate).not.toBe(true);
     expect((await snapshot(id)).fx_rate_to_eur).toBeNull();
   });
 

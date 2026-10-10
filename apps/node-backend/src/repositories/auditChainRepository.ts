@@ -9,6 +9,17 @@
  */
 import { query, withTransaction } from "../database/connection.ts";
 import type { PgQueryResult } from "../database/connection.ts";
+import { checkRows, queryRows } from "../database/rowContracts.ts";
+import {
+  auditCheckpointInsertedRowSchema,
+  auditCheckpointRowSchema,
+  auditEntryCreatedRowSchema,
+  auditEntryHashRowSchema,
+  auditEntryRowSchema,
+  auditHeadDetailRowSchema,
+  auditHeadRowSchema,
+  auditLatestEntryRowSchema,
+} from "../database/rows/audit.ts";
 import {
   AUDIT_CHAIN_GENESIS_HASH,
   AUDIT_CHAIN_VERSION,
@@ -21,33 +32,9 @@ const HASH_PATTERN = /^[0-9a-f]{64}$/;
 
 type RunQuery = (sql: string, params?: unknown[]) => Promise<PgQueryResult>;
 
-/** BIGINT sequence columns arrive from pg as strings. */
-type AuditHeadRow = {
-  last_sequence: string;
-  last_hash: string;
-};
-
-type AuditEntryRow = {
-  sequence: string;
-  version: number;
-  previous_hash: string;
-  entry_hash: string;
-  /** JSONB, constrained to an object. */
-  payload: Record<string, unknown>;
-  created_at: Date;
-};
-
 export type StoredAuditEntry = Omit<AuditEntry, "payload"> & {
   payload: Record<string, unknown>;
   createdAt: Date;
-};
-
-type AuditCheckpointRow = {
-  id: string;
-  sequence: string;
-  head_hash: string;
-  receipt_hash: string;
-  created_at: Date;
 };
 
 export type AuditCheckpointReceipt = {
@@ -91,8 +78,9 @@ export async function appendAuditEvent(
       WHERE singleton = true
       FOR UPDATE`,
     );
-    const head: AuditHeadRow | undefined = headResult.rows[0];
-    if (!head || headResult.rows.length !== 1) {
+    const headRows = checkRows(auditHeadRowSchema, headResult.rows);
+    const head = headRows[0];
+    if (!head || headRows.length !== 1) {
       throw new Error("Audit chain head is missing or duplicated");
     }
     const lastSequence = parseSequence(head.last_sequence);
@@ -102,8 +90,7 @@ export async function appendAuditEvent(
       ORDER BY sequence DESC
       LIMIT 1`,
     );
-    const latest: Pick<AuditEntryRow, "sequence" | "entry_hash"> | undefined =
-      latestResult.rows[0];
+    const [latest] = checkRows(auditLatestEntryRowSchema, latestResult.rows);
     const expectedHash = latest?.entry_hash ?? AUDIT_CHAIN_GENESIS_HASH;
     const expectedSequence = latest ? parseSequence(latest.sequence) : 0;
     if (lastSequence !== expectedSequence || head.last_hash !== expectedHash) {
@@ -142,8 +129,7 @@ export async function appendAuditEvent(
     if (updated.rowCount !== 1) {
       throw new Error("Audit chain head changed during append");
     }
-    const insertedRow: Pick<AuditEntryRow, "created_at"> | undefined =
-      inserted.rows[0];
+    const [insertedRow] = checkRows(auditEntryCreatedRowSchema, inserted.rows);
     return { ...entry, createdAt: insertedRow?.created_at };
   };
   return client
@@ -163,7 +149,8 @@ export async function readAuditSegment({
   if (!Number.isInteger(limit) || limit < 1 || limit > 10_000) {
     throw new RangeError("Audit segment limit must be between 1 and 10000");
   }
-  const result = await query<AuditEntryRow>(
+  const rows = await queryRows(
+    auditEntryRowSchema,
     `SELECT sequence, version, previous_hash, entry_hash, payload, created_at
        FROM audit_chain_entries
       WHERE sequence > $1
@@ -171,7 +158,7 @@ export async function readAuditSegment({
       LIMIT $2`,
     [afterSequence, limit],
   );
-  return result.rows.map((row) => ({
+  return rows.map((row) => ({
     sequence: parseSequence(row.sequence),
     version: Number(row.version),
     previousHash: row.previous_hash,
@@ -191,22 +178,16 @@ export async function readAuditHead(): Promise<{
     retagMaxId: number;
   };
 }> {
-  const result = await query<
-    AuditHeadRow & {
-      updated_at: Date;
-      legacy_db_editor_max_id: string;
-      legacy_split_max_id: string;
-      legacy_retag_max_id: string;
-    }
-  >(
+  const rows = await queryRows(
+    auditHeadDetailRowSchema,
     `SELECT last_sequence, last_hash, updated_at,
             legacy_db_editor_max_id, legacy_split_max_id,
             legacy_retag_max_id
        FROM audit_chain_head
       WHERE singleton = true`,
   );
-  const row = result.rows[0];
-  if (!row || result.rows.length !== 1) {
+  const row = rows[0];
+  if (!row || rows.length !== 1) {
     throw new Error("Audit chain head is missing or duplicated");
   }
   return {
@@ -245,34 +226,37 @@ export async function recordAuditCheckpoint(
     throw new TypeError("Invalid audit checkpoint metadata");
   }
   return withTransaction(async () => {
-    const locked = await query<AuditHeadRow>(
+    const locked = await queryRows(
+      auditHeadRowSchema,
       `SELECT last_sequence, last_hash
        FROM audit_chain_head
       WHERE singleton = true
       FOR UPDATE`,
     );
-    if (locked.rows.length !== 1) {
+    const [lockedHead] = locked;
+    if (!lockedHead || locked.length !== 1) {
       throw new Error("Audit chain head is missing or duplicated");
     }
-    const currentSequence = parseSequence(locked.rows[0].last_sequence);
+    const currentSequence = parseSequence(lockedHead.last_sequence);
     if (receipt.sequence > currentSequence) {
       throw new Error("Audit checkpoint is ahead of current head");
     }
     const anchoredHash =
       receipt.sequence === currentSequence
-        ? locked.rows[0].last_hash
+        ? lockedHead.last_hash
         : receipt.sequence === 0
           ? AUDIT_CHAIN_GENESIS_HASH
           : (
-              await query<Pick<AuditEntryRow, "entry_hash">>(
+              await queryRows(
+                auditEntryHashRowSchema,
                 `SELECT entry_hash FROM audit_chain_entries WHERE sequence = $1`,
                 [receipt.sequence],
               )
-            ).rows[0]?.entry_hash;
+            )[0]?.entry_hash;
     if (anchoredHash !== receipt.headHash) {
       throw new Error("Audit checkpoint does not match stored history");
     }
-    const result = await query<Pick<AuditCheckpointRow, "id" | "created_at">>(
+    const result = await query(
       `INSERT INTO audit_chain_checkpoints
        (sequence, head_hash, anchor_kind, receipt_id, receipt_hash)
      VALUES ($1, $2, $3, $4, $5)
@@ -286,18 +270,21 @@ export async function recordAuditCheckpoint(
         receipt.receiptHash,
       ],
     );
-    if (result.rowCount === 1) {
-      return { id: result.rows[0].id, createdAt: result.rows[0].created_at };
+    const [inserted] = checkRows(auditCheckpointInsertedRowSchema, result.rows);
+    if (result.rowCount === 1 && inserted) {
+      return { id: inserted.id, createdAt: inserted.created_at };
     }
-    const existing = await query<AuditCheckpointRow>(
+    const existing = await queryRows(
+      auditCheckpointRowSchema,
       `SELECT id, sequence, head_hash, receipt_hash, created_at
          FROM audit_chain_checkpoints
         WHERE anchor_kind = $1 AND receipt_id = $2`,
       [receipt.anchorKind, receipt.receiptId],
     );
-    const row = existing.rows[0];
+    const row = existing[0];
     if (
-      existing.rows.length !== 1 ||
+      !row ||
+      existing.length !== 1 ||
       parseSequence(row.sequence) !== receipt.sequence ||
       row.head_hash !== receipt.headHash ||
       row.receipt_hash !== receipt.receiptHash

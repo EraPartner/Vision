@@ -171,6 +171,14 @@ export function usePortfolioSummaries({
                     {
                         ...inv,
                         ...canonical,
+                        // The summary passes `SELECT i.*` through untyped: NUMERIC
+                        // columns arrive as strings and maturity_date as a
+                        // serialized local-midnight Date (the previous UTC day east
+                        // of UTC). The investment row carries them correctly.
+                        cadastral_income: inv.cadastral_income,
+                        municipality_tax_rate: inv.municipality_tax_rate,
+                        maturity_date: inv.maturity_date,
+                        maturityDate: inv.maturity_date,
                         totalInKindIncome: canonical.totalInKindIncome ?? 0,
                         assetClass: inv.asset_class,
                         asset_class: inv.asset_class,

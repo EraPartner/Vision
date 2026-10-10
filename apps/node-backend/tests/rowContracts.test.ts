@@ -133,7 +133,7 @@ describe("checkRows in log mode (production default)", () => {
     expect(result).toBe(rows);
     expect(result[1]).toBe(rows[1]);
     expect(warn).toHaveBeenCalledTimes(1);
-    const [line, ...extra] = warn.mock.calls[0];
+    const [line, ...extra] = warn.mock.calls[0]!;
     expect(extra).toEqual([]);
     expect(line).toContain("(transactions row) at row 2 of 2");
     expect(line).toContain("amount: expected string, received number");
@@ -146,7 +146,7 @@ describe("checkRows in log mode (production default)", () => {
       mode: "log",
     });
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0][0]).toContain("at row 1 of 3");
+    expect(warn.mock.calls[0]![0]).toContain("at row 1 of 3");
   });
 });
 

@@ -7,6 +7,13 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { countRowSchema } from '../database/rowSchemas.ts';
+import {
+  attachmentPathRowSchema,
+  attachmentRowSchema,
+  requireRow,
+} from '../database/rows/catalog.ts';
 import { buildLimitOffset } from '../lib/sqlClauses.ts';
 
 import type { AttachmentRow, FormattedAttachment } from '../types/rows.ts';
@@ -53,19 +60,20 @@ export const attachmentRepository = {
       WHERE transaction_id = $1
       ORDER BY created_at DESC
     ` + buildLimitOffset(params, { limit, offset });
-    const result = await query<AttachmentRow>(sql, params);
-    return result.rows.map(formatRow);
+    const rows = await queryRows(attachmentRowSchema, sql, params);
+    return rows.map(formatRow);
   },
 
   /**
    * Attachment count for a transaction — the `total` for a paginated list.
    */
   async countByTransaction(transactionId: number): Promise<number> {
-    const result = await query<{ count: string }>(
+    const row = await queryOne(
+      countRowSchema,
       'SELECT COUNT(*) FROM attachments WHERE transaction_id = $1',
       [transactionId],
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseInt(requireRow(row, 'attachment count').count, 10);
   },
 
   /**
@@ -75,11 +83,12 @@ export const attachmentRepository = {
    */
   async listPathsByTransactionIds(transactionIds: number[]): Promise<string[]> {
     if (!Array.isArray(transactionIds) || transactionIds.length === 0) return [];
-    const result = await query<{ stored_path: string }>(
+    const rows = await queryRows(
+      attachmentPathRowSchema,
       'SELECT stored_path FROM attachments WHERE transaction_id = ANY($1::int[])',
       [transactionIds],
     );
-    return result.rows.map((row) => row.stored_path);
+    return rows.map((row) => row.stored_path);
   },
 
   /**
@@ -103,22 +112,22 @@ export const attachmentRepository = {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const result = await query<AttachmentRow>(sql, [
+    const row = await queryOne(attachmentRowSchema, sql, [
       transaction_id,
       filename,
       stored_path,
       mime_type,
       size_bytes,
     ]);
-    return formatRow(result.rows[0]);
+    return formatRow(requireRow(row, 'attachment insert'));
   },
 
   /**
    * Fetch a single attachment by ID. Returns null if not found.
    */
   async findById(id: number | string): Promise<FormattedAttachment | null> {
-    const result = await query<AttachmentRow>('SELECT * FROM attachments WHERE id = $1', [id]);
-    return result.rows[0] ? formatRow(result.rows[0]) : null;
+    const row = await queryOne(attachmentRowSchema, 'SELECT * FROM attachments WHERE id = $1', [id]);
+    return row ? formatRow(row) : null;
   },
 
   /**

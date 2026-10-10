@@ -351,9 +351,9 @@ describe("audit chain adversarial PostgreSQL verification", () => {
       console.log(
         JSON.stringify({
           auditAppendSample: "single transaction, 100 synthetic entries",
-          medianMs: Number(samples[49].toFixed(3)),
-          p95Ms: Number(samples[94].toFixed(3)),
-          maxMs: Number(samples[99].toFixed(3)),
+          medianMs: Number(samples[49]!.toFixed(3)),
+          p95Ms: Number(samples[94]!.toFixed(3)),
+          maxMs: Number(samples[99]!.toFixed(3)),
         }),
       );
       expect(samples).toHaveLength(100);

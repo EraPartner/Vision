@@ -2,7 +2,7 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 tags:
   [
@@ -67,15 +67,29 @@ runtime, so each invoke channel also has an argument validator in
 
 `@vision/types/contracts` (`packages/types/src/contracts/`) holds zod response schemas
 ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). Strict fixture schemas (`z.strictObject`) back
-the frontend MSW contract tests. Loose wire schemas (`z.looseObject`, identity fields required,
-other fields optional but typed) are what `apiRequest`'s `schema` option checks at runtime. See
+the frontend MSW contract tests. Wire schemas (`z.looseObject`) are what `apiRequest`'s `schema`
+option checks at runtime: every field the backend always sends is required, `.optional()` marks a
+key some responses omit, and added fields pass
+([[docs/adr/194-runtime-contracts-completion|ADR-194]]). See
 [[docs/reference/frontend-api-client#Response contracts|Response contracts]].
 
-On the backend, the raw row types of the transaction, planned-transaction, account and split
-repositories in `apps/node-backend/src/types/rows.ts` are `z.output<typeof …Schema>` of the zod
-schemas in `apps/node-backend/src/database/rowSchemas.ts`. Those repositories check their rows
-against the same schemas, so the type and the runtime shape cannot drift. Field documentation for
-these rows lives on the schemas.
+On the backend, raw row types are `z.output<typeof …Schema>` of zod row schemas. The `pg*`
+primitives and the transaction, planned-transaction, account and split schemas live in
+`apps/node-backend/src/database/rowSchemas.ts`; every other area has its own module in
+`apps/node-backend/src/database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `audit`, `catalog`,
+`imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), which exports its row types.
+`apps/node-backend/src/types/rows.ts` derives or re-exports the raw row types; the hand-written
+types left there describe mapped or formatted shapes (for example `InvestmentRow` after
+`mapInvestmentRow`, `FormattedSplit`), not what node-postgres returns. The repositories and services check their rows against the same schemas, so the
+type and the runtime shape cannot drift. Field documentation for these rows lives on the schemas.
+
+`query<R>()` (`src/database/connection.ts`) and `QueryRunner` (`src/types/rows.ts`) default to
+`unknown` rows; a type argument on `query<R>()` is an unchecked claim. No explicit `any` remains
+in backend source. Backend `tsconfig.json` and `tsconfig.tests.json` turn on
+`noUncheckedIndexedAccess`, so indexed access is `T | undefined`. The OpenAI egress helper
+`src/integrations/openai/egress-helper.mjs` stays JavaScript (it runs inside a macOS Seatbelt
+sandbox) and is type-checked through `// @ts-check` and JSDoc as part of the backend
+`tsconfig.json`. See [[docs/adr/194-runtime-contracts-completion|ADR-194]].
 
 > [!info] generated.ts is now load-bearing
 > The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.
