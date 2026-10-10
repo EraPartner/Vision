@@ -78,7 +78,7 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("restores the investigation mode from its URL and supports keyboard switching", async () => {
-        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)));
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />, {
             initialEntries: ["/ai-chat?mode=investigation"],
@@ -186,7 +186,7 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("shows empty state body text when AI is reachable", async () => {
-        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)));
         renderWithApp(<AIChatPage />);
         // aiChat.emptyState = "Start a conversation -- ask about spending, portfolio returns..."
         expect(

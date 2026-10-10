@@ -328,7 +328,7 @@ describe("portfolio API client", () => {
                     body = await request.json();
                     return ok({
                         receipt_id: 9,
-                        idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
+                        idempotency_key: "receipt-key",
                         from_account_id: null,
                         to_account_id: 7,
                         transaction_ids: [1, 2],

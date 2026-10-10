@@ -33,6 +33,16 @@ describe("local research documents", () => {
       __extractDocument(Buffer.from("pdf"), "application/pdf"),
     ).toMatchObject({ status: "unsupported", passages: [] });
   });
+  it("decodes each HTML entity once so escaped entities stay literal", () => {
+    expect(
+      __extractDocument(
+        Buffer.from(
+          "<p>AT&amp;amp;T writes &amp;lt;b&amp;gt; for &lt;b&gt;</p>",
+        ),
+        "text/html",
+      ).passages[0]?.content,
+    ).toBe("AT&amp;T writes &lt;b&gt; for <b>");
+  });
   it("batches optional local embeddings and stores only derived passages", async () => {
     repository.createDocument.mockImplementation(async (doc, passages) => ({
       ...doc,

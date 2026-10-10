@@ -275,7 +275,7 @@ describe("IBKR native funding history workbook", () => {
       /original Deposit/,
     );
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit.M2 = {
+      workbook.Sheets.Deposit!.M2 = {
         t: "s",
         v: "USD 1,234.56",
         f: '"USD 1,234.56"',
@@ -301,7 +301,7 @@ describe("IBKR native funding history workbook", () => {
 
   it("rejects excessive cell bounds before enumerating rows", async () => {
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit["!ref"] = "A1:N50000";
+      workbook.Sheets.Deposit!["!ref"] = "A1:N50000";
     });
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/cell limits/);
   });

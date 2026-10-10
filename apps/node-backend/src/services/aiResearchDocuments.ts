@@ -39,6 +39,7 @@ const TARGET_CHARS = 1800;
 const EMBEDDING_BATCH_SIZE = 16;
 let embeddingTail: Promise<unknown> = Promise.resolve([]);
 
+// `&amp;` is decoded last, so an escaped entity such as `&amp;lt;` stays the literal `&lt;`.
 function cleanHtml(value: string) {
   return value
     .replace(/<(script|style|noscript|iframe)[^>]*>[\s\S]*?<\/\1>/gi, " ")
@@ -46,9 +47,9 @@ function cleanHtml(value: string) {
     .replace(/<\/p>|<\/div>|<\/h[1-6]>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">");
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
 }
 
 function decodeUtf8(buffer: Buffer) {

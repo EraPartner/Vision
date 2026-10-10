@@ -66,7 +66,7 @@ function installPreview(count = 2, transactionIds = [11, 12]) {
 function retagReceipt(toAccountId: number | null) {
     return {
         receipt_id: 1,
-        idempotency_key: "75557a9d-4dee-453a-9ef6-3b1b56a54b86",
+        idempotency_key: "receipt-key",
         from_account_id: 7,
         to_account_id: toAccountId,
         transaction_ids: [11, 12],
