@@ -160,14 +160,16 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows the Recent transactions list with a See all link", async () => {
+    it("shows the Recent transactions list with a View all link", async () => {
         renderWithApp(<DashboardPage />);
         const matches = await screen.findAllByText(/recent transactions/i);
         expect(matches.length).toBeGreaterThan(0);
-        expect(screen.getByRole("link", { name: /see all/i })).toHaveAttribute(
-            "href",
-            "/transactions",
-        );
+        // home.recent.seeAll = "View all"; the Accounts card has its own
+        // "View all" link to /accounts, so pick the one leading to Transactions.
+        const transactionsLinks = screen
+            .getAllByRole("link", { name: /view all/i })
+            .filter((link) => link.getAttribute("href") === "/transactions");
+        expect(transactionsLinks).toHaveLength(1);
     });
 
     it("shows Total Transactions stat card once Summary cards are switched on", async () => {
@@ -295,9 +297,9 @@ describe("DashboardPage (integration)", () => {
 
         await openCustomize(user);
 
-        // widgets.showAll = "Show All"
+        // widgets.showAll = "View all"
         expect(
-            screen.getByRole("button", { name: /show all/i }),
+            screen.getByRole("button", { name: /view all/i }),
         ).toBeInTheDocument();
     });
 

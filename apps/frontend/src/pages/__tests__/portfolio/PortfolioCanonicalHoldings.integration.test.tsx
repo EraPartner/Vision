@@ -153,13 +153,13 @@ describe("canonical portfolio holdings", () => {
             ),
         );
         renderWithApp(<CryptoPage />);
-        const units = await screen.findByText("0.04987654");
+        const units = await screen.findByText("0,04987654");
         const row = units.closest("tr")!;
         expect(within(row).getByText(investment.name)).toBeInTheDocument();
         expect(
             within(row).queryByRole("status", { name: /oversold broker/i }),
         ).not.toBeInTheDocument();
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
     });
 
     it("does not show ordinary-only quantities while the canonical summary loads", async () => {
@@ -178,12 +178,12 @@ describe("canonical portfolio holdings", () => {
         );
         renderWithApp(<CryptoPage />);
         await waitFor(() => expect(requested).toBe(true));
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
         expect(
             screen.queryByRole("heading", { name: /no crypto assets/i }),
         ).not.toBeInTheDocument();
         release();
-        expect(await screen.findByText("0.04987654")).toBeInTheDocument();
+        expect(await screen.findByText("0,04987654")).toBeInTheDocument();
     });
 
     it("shows the summary failure instead of an ordinary-only holding", async () => {
@@ -197,7 +197,7 @@ describe("canonical portfolio holdings", () => {
         expect(
             await screen.findByText("Canonical custody unavailable"),
         ).toBeInTheDocument();
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
     });
 
     it.each(["EUR", "USD"])(

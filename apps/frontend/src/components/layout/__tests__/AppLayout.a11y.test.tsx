@@ -123,7 +123,8 @@ describe("AppLayout a11y landmarks", () => {
             await screen.findByRole("tab", { name: "Appearance" }),
         ).toHaveAttribute("aria-selected", "true");
 
-        await user.click(screen.getByRole("tab", { name: "Statistics" }));
+        // settings.section.statistics = "Insights" (internal key stays "statistics")
+        await user.click(screen.getByRole("tab", { name: "Insights" }));
         await waitFor(() =>
             expect(screen.getByLabelText("location")).toHaveTextContent(
                 "/?keep=1&settings=statistics",

@@ -677,8 +677,9 @@ describe("Portfolio pages (integration)", () => {
             }),
         ).toBeInTheDocument();
         expect(within(liveTable).getByText("USD")).toBeInTheDocument();
-        expect(within(liveTable).getByText("0.920000")).toBeInTheDocument();
-        expect(within(liveTable).getByText("1.0870")).toBeInTheDocument();
+        // Rate values follow the selected number format (default "eu").
+        expect(within(liveTable).getByText("0,920000")).toBeInTheDocument();
+        expect(within(liveTable).getByText("1,0870")).toBeInTheDocument();
         expect(within(liveTable).getByText(/92[.,]00/)).toBeInTheDocument();
 
         await user.click(
@@ -1332,7 +1333,7 @@ describe("Portfolio pages (integration)", () => {
 
     // ─── WatchlistPage mutation tests ─────────────────────────────────────────
 
-    it("WatchlistPage discloses truncated company names by pointer and keyboard", async () => {
+    it("WatchlistPage shows full company names to pointer and keyboard users", async () => {
         const user = userEvent.setup();
         const mockItem = {
             id: 1,
@@ -1358,18 +1359,26 @@ describe("Portfolio pages (integration)", () => {
 
         const link = await screen.findByRole("link", { name: mockItem.name });
         expect(link).toHaveAttribute("href", "/research/market?symbol=LONG");
-        expect(link.closest("[class*='truncate']")).toBeInTheDocument();
-
-        await user.hover(link);
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            mockItem.name,
+        // Names wrap instead of truncating, so the full name stays visible
+        // without a tooltip: the link wraps and the row lifts the list
+        // title's truncation.
+        expect(link).toHaveTextContent(mockItem.name);
+        expect(link).toHaveClass("whitespace-normal", "break-words");
+        expect(link).not.toHaveClass("truncate");
+        expect(link.closest("li")).toHaveClass(
+            "[&_.truncate]:overflow-visible",
+            "[&_.truncate]:whitespace-normal",
         );
 
-        await user.unhover(link);
         link.focus();
-        expect(await screen.findByRole("tooltip")).toHaveTextContent(
-            mockItem.name,
-        );
+        expect(link).toHaveFocus();
+        // watchlist.openChart = "Open chart"
+        await user.tab();
+        expect(
+            screen.getByRole("button", {
+                name: `Open chart: ${mockItem.name}`,
+            }),
+        ).toHaveFocus();
     });
 
     it("WatchlistPage remove item shows success toast after DELETE", async () => {
