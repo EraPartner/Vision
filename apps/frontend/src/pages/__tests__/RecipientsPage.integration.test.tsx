@@ -7,6 +7,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import RecipientsPage from "@/pages/RecipientsPage";
+import { recipientRow, recipientsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -241,20 +242,22 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 2,
-                            name: "A very long recipient name",
-                            primary_recipient_id: 1,
-                            primary_recipient_name:
-                                "A very long primary recipient name",
-                            is_active: true,
-                            alias_count: 0,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 2,
+                                name: "A very long recipient name",
+                                primary_recipient_id: 1,
+                                primary_recipient_name:
+                                    "A very long primary recipient name",
+                                is_active: true,
+                                alias_count: 0,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
         );
 
@@ -374,18 +377,20 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            name: "Alice",
-                            primary_bank_account: "BE12345",
-                            is_active: true,
-                            alias_count: 0,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 1,
+                                name: "Alice",
+                                primary_bank_account: "BE12345",
+                                is_active: true,
+                                alias_count: 0,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
             http.get(`${API_BASE}/api/recipients/1/patterns`, () =>
                 ok({ items: [], total: 0 }),
@@ -443,18 +448,20 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            name: "Alice",
-                            primary_bank_account: "BE12345",
-                            is_active: true,
-                            alias_count: 0,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 1,
+                                name: "Alice",
+                                primary_bank_account: "BE12345",
+                                is_active: true,
+                                alias_count: 0,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
             http.get(`${API_BASE}/api/recipients/1/patterns`, () =>
                 ok({ items: [], total: 0 }),
@@ -516,36 +523,44 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            name: "Alice",
-                            is_active: true,
-                            alias_count: 0,
-                            primary_recipient_id: null,
-                        },
-                        {
-                            id: 2,
-                            name: "Bob",
-                            is_active: true,
-                            alias_count: 0,
-                            primary_recipient_id: null,
-                        },
-                    ],
-                    total: 2,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 1,
+                                name: "Alice",
+                                is_active: true,
+                                alias_count: 0,
+                                primary_recipient_id: null,
+                            }),
+                            recipientRow({
+                                id: 2,
+                                name: "Bob",
+                                is_active: true,
+                                alias_count: 0,
+                                primary_recipient_id: null,
+                            }),
+                        ],
+                        total: 2,
+                    }),
+                ),
             ),
             http.post(`${API_BASE}/api/recipients/:primaryId/merge`, () => {
                 mergeCalled = true;
                 return ok({
-                    primary: {
+                    primary: recipientRow({
                         id: 1,
                         name: "Alice",
                         is_active: true,
                         alias_count: 1,
-                    },
+                    }),
                     merged_ids: [2],
+                    reassigned: {
+                        transactions: 0,
+                        splits: 0,
+                        planned: 0,
+                        bankAccounts: 0,
+                    },
                     aliases: [{ id: 2, name: "Bob" }],
                     patternSuggestion: null,
                 });
@@ -582,10 +597,13 @@ describe("RecipientsPage (integration)", () => {
             http.post(`${API_BASE}/api/recipients`, () => {
                 postCalled = true;
                 return ok({
-                    id: 99,
-                    name: "Bob",
-                    is_active: true,
-                    alias_count: 0,
+                    ...recipientRow({
+                        id: 99,
+                        name: "Bob",
+                        is_active: true,
+                        alias_count: 0,
+                    }),
+                    created: false,
                 });
             }),
         );
@@ -635,17 +653,19 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 9,
-                            name: "Northwind Market",
-                            is_active: true,
-                            alias_count: 0,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 9,
+                                name: "Northwind Market",
+                                is_active: true,
+                                alias_count: 0,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
             http.delete(`${API_BASE}/api/recipients/:id`, ({ params }) => {
                 deletedId = params.id as string;
@@ -708,18 +728,20 @@ describe("RecipientsPage (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 1,
-                            name: "Alice",
-                            primary_bank_account: "BE12345",
-                            is_active: true,
-                            alias_count: 0,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    recipientsBody({
+                        items: [
+                            recipientRow({
+                                id: 1,
+                                name: "Alice",
+                                primary_bank_account: "BE12345",
+                                is_active: true,
+                                alias_count: 0,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
             http.get(`${API_BASE}/api/recipients/1/patterns`, () =>
                 ok({ items: [], total: 0 }),
@@ -776,21 +798,24 @@ describe("RecipientsPage (integration)", () => {
     it("renders without crashing with large paginated recipient list", async () => {
         server.use(
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: Array.from({ length: 50 }, (_, i) => ({
-                        id: i + 1,
-                        name: `Recipient ${i + 1}`,
-                        normalized_name: `recipient ${i + 1}`,
-                        is_active: true,
-                        created_at: "2025-01-01T00:00:00Z",
-                        updated_at: null,
+                ok(
+                    recipientsBody({
+                        items: Array.from({ length: 50 }, (_, i) =>
+                            recipientRow({
+                                id: i + 1,
+                                name: `Recipient ${i + 1}`,
+                                normalized_name: `recipient ${i + 1}`,
+                                is_active: true,
+                                created_at: "2025-01-01T00:00:00Z",
+                                links: [],
+                            }),
+                        ),
+                        total: 250,
+                        limit: 50,
+                        offset: 0,
                         links: [],
-                    })),
-                    total: 250,
-                    limit: 50,
-                    offset: 0,
-                    links: [],
-                }),
+                    }),
+                ),
             ),
         );
         renderWithApp(<RecipientsPage />);
@@ -818,13 +843,15 @@ describe("RecipientsPage (integration)", () => {
             }),
             http.post(`${API_BASE}/api/recipients`, () =>
                 ok({
-                    id: 99,
-                    name: "Test",
-                    normalized_name: "test",
-                    is_active: true,
-                    created_at: "2025-01-01T00:00:00Z",
-                    updated_at: null,
-                    links: [],
+                    ...recipientRow({
+                        id: 99,
+                        name: "Test",
+                        normalized_name: "test",
+                        is_active: true,
+                        created_at: "2025-01-01T00:00:00Z",
+                        links: [],
+                    }),
+                    created: false,
                 }),
             ),
         );

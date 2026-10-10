@@ -5,6 +5,12 @@
  * All routes are admin-gated; the Bearer token is attached by apiRequest.
  */
 
+import {
+    DbCommitResultSchema,
+    DbPreviewResultSchema,
+    TableRowsSchema,
+    TableSchemaSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -97,7 +103,9 @@ const base = (table: string) =>
     `/api/admin/database/tables/${encodeURIComponent(table)}`;
 
 export function getTableSchema(table: string): Promise<TableSchema> {
-    return apiRequest<TableSchema>(`${base(table)}/schema`);
+    return apiRequest<TableSchema>(`${base(table)}/schema`, {
+        schema: TableSchemaSchema,
+    });
 }
 
 export function getTableRows(
@@ -112,7 +120,9 @@ export function getTableRows(
     if (params.filters && params.filters.length)
         q.set("filters", JSON.stringify(params.filters));
     const qs = q.toString();
-    return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ""}`);
+    return apiRequest<TableRows>(`${base(table)}/rows${qs ? `?${qs}` : ""}`, {
+        schema: TableRowsSchema,
+    });
 }
 
 export function previewTableMutation(
@@ -122,6 +132,7 @@ export function previewTableMutation(
     return apiRequest<PreviewResult>(`${base(table)}/mutate`, {
         method: "POST",
         body: JSON.stringify({ changes, dryRun: true }),
+        schema: DbPreviewResultSchema,
     });
 }
 
@@ -132,5 +143,6 @@ export function commitTableMutation(
     return apiRequest<CommitResult>(`${base(table)}/mutate`, {
         method: "POST",
         body: JSON.stringify({ changes }),
+        schema: DbCommitResultSchema,
     });
 }

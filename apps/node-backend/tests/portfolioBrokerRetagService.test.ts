@@ -103,7 +103,7 @@ describe("portfolioBrokerRetagService", () => {
     expect(
       mocks.lockEligibleDestinationAccount.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      mocks.lockPortfolioTransactionWrites.mock.invocationCallOrder[0],
+      mocks.lockPortfolioTransactionWrites.mock.invocationCallOrder[0]!,
     );
     expect(mocks.lockPortfolioTransactionWrites).toHaveBeenCalledOnce();
     expect(mocks.getAuditByIdempotencyKey).toHaveBeenCalledTimes(2);
@@ -134,7 +134,7 @@ describe("portfolioBrokerRetagService", () => {
       changed_count: 2,
     });
     expect(mocks.insertAudit.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.appendAuditEvent.mock.invocationCallOrder[0],
+      mocks.appendAuditEvent.mock.invocationCallOrder[0]!,
     );
     expect(result).toEqual(
       expect.objectContaining({

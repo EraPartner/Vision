@@ -6,9 +6,9 @@ import { partial } from "./helpers/partial.ts";
 type CorsResponse = Parameters<ReturnType<typeof createCorsMiddleware>>[1];
 
 function createResponse() {
-  const headers = new Map<string, unknown>();
+  const headers = new Map<string, string | number>();
   const response = {
-    setHeader: vi.fn((name: string, value: unknown) =>
+    setHeader: vi.fn((name: string, value: string | number) =>
       headers.set(name.toLowerCase(), value),
     ),
     getHeader: (name: string) => headers.get(name.toLowerCase()),

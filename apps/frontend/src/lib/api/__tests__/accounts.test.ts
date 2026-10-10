@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
-import { ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
+import { ACCOUNT_LIST_ITEM_STUB, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { ApiContractError } from "@/lib/api/client";
 
 import {
@@ -20,7 +20,7 @@ import {
 afterEach(() => server.resetHandlers());
 
 describe("accounts API client", () => {
-    it("getAccounts coerces collection and derived NUMERIC balances", async () => {
+    it("getAccounts returns the service's numeric balances", async () => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
                 ok({
@@ -32,15 +32,20 @@ describe("accounts API client", () => {
                             statement_balances: [
                                 {
                                     currency: "EUR",
-                                    balance: "100.50",
+                                    balance: 100.5,
                                     balance_date: "2026-09-13",
                                 },
                             ],
-                            computed_balance: "99.00",
-                            drift: "1.50",
+                            computed_balance: 99,
+                            balance_parts: [{ currency: "EUR", balance: 99 }],
+                            reconcilable_balance: 99,
+                            drift: 1.5,
+                            anchor_date: "2026-09-13",
+                            post_anchor_count: 0,
                         },
                     ],
                     total: 1,
+                    links: [],
                 }),
             ),
         );
@@ -54,7 +59,7 @@ describe("accounts API client", () => {
         expect(typeof a.drift).toBe("number");
     });
 
-    it("getAccounts leaves null balances undefined", async () => {
+    it("getAccounts maps a null drift (no statement reading) to undefined", async () => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
                 ok({
@@ -64,19 +69,40 @@ describe("accounts API client", () => {
                             id: 2,
                             name: "Savings",
                             statement_balances: [],
-                            computed_balance: null,
+                            computed_balance: 0,
                             drift: null,
                         },
                     ],
                     total: 1,
+                    links: [],
                 }),
             ),
         );
 
         const res = await getAccounts();
         expect(res.items[0].statement_balances).toEqual([]);
-        expect(res.items[0].computed_balance).toBeUndefined();
+        expect(res.items[0].computed_balance).toBe(0);
         expect(res.items[0].drift).toBeUndefined();
+    });
+
+    it("getAccounts rejects a NUMERIC string where the service emits a number", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/accounts`, () =>
+                ok({
+                    items: [
+                        {
+                            ...ACCOUNT_LIST_ITEM_STUB,
+                            computed_balance: "99.00",
+                        },
+                    ],
+                    total: 1,
+                    links: [],
+                }),
+            ),
+        );
+        await expect(getAccounts()).rejects.toThrow(
+            "items[0].computed_balance",
+        );
     });
 
     it("getAccounts rejects an unknown account type in strict mode", async () => {
@@ -104,6 +130,7 @@ describe("accounts API client", () => {
                         { ...ACCOUNT_LIST_ITEM_STUB, computed_balance: "n/a" },
                     ],
                     total: 1,
+                    links: [],
                 }),
             ),
         );
@@ -117,7 +144,7 @@ describe("accounts API client", () => {
         server.use(
             http.post(`${API_BASE}/api/accounts`, async ({ request }) => {
                 body = await request.json();
-                return ok({ id: 9, name: "New" });
+                return ok({ ...ACCOUNT_STUB, id: 9, name: "New" });
             }),
         );
         const a = await createAccount({ name: "New" } as never);
@@ -128,7 +155,7 @@ describe("accounts API client", () => {
     it("updateAccount PATCHes by id", async () => {
         server.use(
             http.patch(`${API_BASE}/api/accounts/9`, () =>
-                ok({ id: 9, name: "Edited" }),
+                ok({ ...ACCOUNT_STUB, id: 9, name: "Edited" }),
             ),
         );
         const a = await updateAccount(9, { name: "Edited" } as never);
@@ -155,6 +182,7 @@ describe("accounts API client", () => {
                         eligible_count: 2,
                         transaction_ids: [11, 12],
                         limit: 500,
+                        links: [],
                     }),
             ),
         );
@@ -164,6 +192,7 @@ describe("accounts API client", () => {
             eligible_count: 2,
             transaction_ids: [11, 12],
             limit: 500,
+            links: [],
         });
     });
 
@@ -183,6 +212,8 @@ describe("accounts API client", () => {
                             portfolio: 0,
                             funding: 0,
                         },
+                        stampsInterleaved: false,
+                        links: [],
                     });
                 },
             ),
@@ -205,10 +236,11 @@ describe("accounts API client", () => {
                     return ok({
                         transaction: {
                             id: 88,
-                            balance: 1500,
+                            balance: "1500.0000",
                             transfer_source: "opening",
                         },
                         warning: null,
+                        links: [],
                     });
                 },
             ),

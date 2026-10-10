@@ -519,7 +519,13 @@ async function buildBody<D>({
   separator?: string;
 }): Promise<string> {
   const requested = sections.length > 0 ? sections : defaultSections;
-  const valid = requested.filter(id => id in renderers);
+  // Own keys only: `in` also accepted inherited names such as `constructor`
+  // or `__proto__` and then called them as renderers.
+  const selected = requested.flatMap((id) => {
+    const render = Object.hasOwn(renderers, id) ? renderers[id] : undefined;
+    return render ? [{ id, render }] : [];
+  });
+  const valid = selected.map(({ id }) => id);
 
   if (!valid.length) {
     return `
@@ -531,8 +537,8 @@ async function buildBody<D>({
 
   const data = await fetchData(valid);
 
-  return valid
-    .map(id => renderers[id](data, { currency, period }))
+  return selected
+    .map(({ render }) => render(data, { currency, period }))
     .join(separator);
 }
 

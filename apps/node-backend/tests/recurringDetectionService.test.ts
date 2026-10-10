@@ -23,6 +23,7 @@ const gymRow = (id: number, date: string, amount: string) => ({
   amount,
   currency: "EUR",
   memo: `Gym ${id}`,
+  account_id: 1,
   bank_account: "BE00",
   recipient_id: 42,
   recipient_name: "Gym",
@@ -54,6 +55,7 @@ describe("detectRecurringPatterns", () => {
             amount: "-50.00",
             currency: "EUR",
             memo: "Gym Jan",
+            account_id: 1,
             bank_account: "BE00",
             recipient_id: 42,
             recipient_name: "Gym",
@@ -67,6 +69,7 @@ describe("detectRecurringPatterns", () => {
             amount: "-50.00",
             currency: "EUR",
             memo: "Gym Feb",
+            account_id: 1,
             bank_account: "BE00",
             recipient_id: 42,
             recipient_name: "Gym",
@@ -80,6 +83,7 @@ describe("detectRecurringPatterns", () => {
             amount: "-55.00",
             currency: "EUR",
             memo: "Gym Mar",
+            account_id: 1,
             bank_account: "BE00",
             recipient_id: 42,
             recipient_name: "Gym",
@@ -95,9 +99,9 @@ describe("detectRecurringPatterns", () => {
     const result = await detectRecurringPatterns();
 
     expect(result.total).toBe(1);
-    expect(result.patterns[0].recipientId).toBe(42);
-    expect(result.patterns[0].direction).toBe("expense");
-    expect(Array.isArray(result.patterns[0].amountChanges)).toBe(true);
+    expect(result.patterns[0]!.recipientId).toBe(42);
+    expect(result.patterns[0]!.direction).toBe("expense");
+    expect(Array.isArray(result.patterns[0]!.amountChanges)).toBe(true);
   });
 
   it("compares a price change with the immediately preceding charge", async () => {
@@ -114,7 +118,7 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0].amountChanges.at(-1)).toMatchObject({
+    expect(result.patterns[0]!.amountChanges.at(-1)).toMatchObject({
       previousAmount: 30,
       newAmount: 20,
       percentChange: -33.33,
@@ -131,6 +135,7 @@ describe("detectRecurringPatterns", () => {
       amount,
       currency: "EUR",
       memo: `tx ${id}`,
+      account_id: 1,
       bank_account: "BE00",
       recipient_id: 42,
       recipient_name: "Employer & Landlord",
@@ -199,7 +204,7 @@ describe("detectRecurringPatterns", () => {
 
     await detectRecurringPatterns();
 
-    const sql = mockQuery.mock.calls[0][0];
+    const sql = mockQuery.mock.calls[0]![0];
     expect(sql).toContain(
       "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
     );
@@ -233,8 +238,8 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0].isAlreadyPlanned).toBe(true);
-    const plannedSql = mockQuery.mock.calls[2][0];
+    expect(result.patterns[0]!.isAlreadyPlanned).toBe(true);
+    const plannedSql = mockQuery.mock.calls[2]![0];
     expect(plannedSql).toContain(
       "COALESCE(r.primary_recipient_id, pt.recipient_id)",
     );
@@ -252,6 +257,7 @@ describe("detectRecurringPatterns", () => {
       amount: "-120.00",
       currency: "EUR",
       memo: `Electrabel ${id}`,
+      account_id: 1,
       bank_account: "BE00",
       recipient_id: 99,
       recipient_name: "Electrabel Invoicing",
@@ -272,7 +278,7 @@ describe("detectRecurringPatterns", () => {
 
     const result = await detectRecurringPatterns();
 
-    expect(result.patterns[0].categoryId).toBe(7);
-    expect(result.patterns[0].categoryName).toBe("Bills:Utilities");
+    expect(result.patterns[0]!.categoryId).toBe(7);
+    expect(result.patterns[0]!.categoryName).toBe("Bills:Utilities");
   });
 });

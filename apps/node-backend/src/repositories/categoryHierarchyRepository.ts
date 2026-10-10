@@ -1,20 +1,16 @@
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  categoryActiveRowSchema,
+  categoryMergeNodeRowSchema,
+  categoryNextIdRowSchema,
+  categoryNodeRowSchema,
+  categoryReferenceRowSchema,
+  categoryRowSchema,
+  requireRow,
+} from "../database/rows/catalog.ts";
+import type { CategoryNodeRow } from "../database/rows/catalog.ts";
 import { ConflictError, ValidationError } from "../middleware/errorHandler.ts";
-
-/** A `NODE_SELECT` row: `categories` joined to the `category_paths` view. */
-interface CategoryNodeRow {
-  id: number;
-  name: string;
-  parent_id: number | null;
-  ids: number[];
-  names: string[];
-  path_name: string;
-  depth: number;
-  description: string | null;
-  is_active: boolean;
-  hierarchy_only: boolean;
-  legacy_compatible: boolean;
-}
 
 export interface CategoryNode {
   id: number;
@@ -41,31 +37,6 @@ export interface CategoryNodePatch {
   parentId?: number | null;
   description?: string | null;
   is_active?: boolean;
-}
-
-/** The `categories` columns the update path reads from its `SELECT *`. */
-interface CategoryLockRow {
-  parent_id: number | null;
-  name: string;
-  general: string;
-  description: string | null;
-  is_active: boolean;
-  hierarchy_only: boolean;
-}
-
-interface MergeNodeRow {
-  id: number;
-  is_active: boolean;
-  general: string;
-  detail: string;
-  legacy_compatible: boolean;
-  hierarchy_only: boolean;
-}
-
-interface CategoryReferenceRow {
-  schema_name: string;
-  table_name: string;
-  column_name: string;
 }
 
 /** SQLSTATE of a pg error (`undefined` for anything else). */
@@ -105,19 +76,22 @@ const NODE_SELECT = `SELECT c.id,c.name,c.parent_id,p.ids,p.names,p.path_name,p.
   FROM categories c JOIN category_paths p ON p.id=c.id`;
 
 export async function listCategoryNodes(): Promise<CategoryNode[]> {
-  const result = await query<CategoryNodeRow>(
+  const rows = await queryRows(
+    categoryNodeRowSchema,
     `${NODE_SELECT} ORDER BY p.names,c.id`,
   );
-  return result.rows.map((row) => mapNode(row));
+  return rows.map((row) => mapNode(row));
 }
 
 export async function getCategoryNode(
   id: number,
 ): Promise<CategoryNode | null> {
-  const result = await query<CategoryNodeRow>(`${NODE_SELECT} WHERE c.id=$1`, [
-    id,
-  ]);
-  return mapNode(result.rows[0]);
+  const row = await queryOne(
+    categoryNodeRowSchema,
+    `${NODE_SELECT} WHERE c.id=$1`,
+    [id],
+  );
+  return mapNode(row);
 }
 
 export async function createCategoryNode({
@@ -131,12 +105,12 @@ export async function createCategoryNode({
   return withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
     if (parentId !== null) {
-      const parent = (
-        await client.query(
-          `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
-          [parentId],
-        )
-      ).rows[0];
+      const parent = await queryOne(
+        categoryActiveRowSchema,
+        `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
+        [parentId],
+        client,
+      );
       if (!parent) throw invalid("Parent category does not exist");
       if (!parent.is_active)
         throw invalid("An inactive category cannot be a parent");
@@ -152,11 +126,15 @@ export async function createCategoryNode({
           "This root name is reserved by a legacy category redirect",
         );
     }
-    const id: string = (
-      await client.query(
+    const { id } = requireRow(
+      await queryOne(
+        categoryNextIdRowSchema,
         `SELECT nextval(pg_get_serial_sequence('categories','id')) AS id`,
-      )
-    ).rows[0].id;
+        [],
+        client,
+      ),
+      "category nextval",
+    );
     try {
       await client.query(
         `INSERT INTO categories
@@ -178,9 +156,12 @@ export async function createCategoryNode({
         );
       throw error;
     }
-    const created: CategoryNodeRow | undefined = (
-      await client.query(`${NODE_SELECT} WHERE c.id=$1`, [id])
-    ).rows[0];
+    const created = await queryOne(
+      categoryNodeRowSchema,
+      `${NODE_SELECT} WHERE c.id=$1`,
+      [id],
+      client,
+    );
     return mapNode(created);
   });
 }
@@ -191,11 +172,12 @@ export async function updateCategoryNode(
 ): Promise<CategoryNode | null> {
   return withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
-    const existing: CategoryLockRow | undefined = (
-      await client.query(`SELECT * FROM categories WHERE id=$1 FOR UPDATE`, [
-        id,
-      ])
-    ).rows[0];
+    const existing = await queryOne(
+      categoryRowSchema,
+      `SELECT * FROM categories WHERE id=$1 FOR UPDATE`,
+      [id],
+      client,
+    );
     if (!existing) return null;
     if (name !== undefined && (!name.trim() || name.trim().length > 100))
       throw invalid("Category name must contain 1 to 100 characters");
@@ -203,12 +185,12 @@ export async function updateCategoryNode(
     const nextName =
       name === undefined ? existing.name : name.trim().toUpperCase();
     if (nextParent !== null) {
-      const parent = (
-        await client.query(
-          `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
-          [nextParent],
-        )
-      ).rows[0];
+      const parent = await queryOne(
+        categoryActiveRowSchema,
+        `SELECT id,is_active FROM categories WHERE id=$1 FOR UPDATE`,
+        [nextParent],
+        client,
+      );
       if (!parent) throw invalid("Parent category does not exist");
       if (!parent.is_active)
         throw invalid("An inactive category cannot be a parent");
@@ -275,9 +257,12 @@ export async function updateCategoryNode(
         );
       }
     }
-    const updated: CategoryNodeRow | undefined = (
-      await client.query(`${NODE_SELECT} WHERE c.id=$1`, [id])
-    ).rows[0];
+    const updated = await queryOne(
+      categoryNodeRowSchema,
+      `${NODE_SELECT} WHERE c.id=$1`,
+      [id],
+      client,
+    );
     return mapNode(updated);
   });
 }
@@ -321,13 +306,13 @@ export async function mergeCategoryNodes(
   if (sourceId === targetId) throw invalid("Source and target must differ");
   return withTransaction(async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(1128356178, 1)");
-    const nodes: MergeNodeRow[] = (
-      await client.query(
-        `SELECT id,is_active,general,detail,legacy_compatible,hierarchy_only
+    const nodes = await queryRows(
+      categoryMergeNodeRowSchema,
+      `SELECT id,is_active,general,detail,legacy_compatible,hierarchy_only
          FROM categories WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE`,
-        [[sourceId, targetId]],
-      )
-    ).rows;
+      [[sourceId, targetId]],
+      client,
+    );
     if (nodes.length !== 2) return null;
     if (!nodes.find((node) => node.id === targetId)?.is_active)
       throw invalid("Merge target must be active");
@@ -350,9 +335,9 @@ export async function mergeCategoryNodes(
         `UPDATE categories SET parent_id=$2 WHERE parent_id=$1`,
         [sourceId, targetId],
       );
-      const references: CategoryReferenceRow[] = (
-        await client.query(
-          `SELECT ns.nspname AS schema_name, rel.relname AS table_name,
+      const references = await queryRows(
+        categoryReferenceRowSchema,
+        `SELECT ns.nspname AS schema_name, rel.relname AS table_name,
                   att.attname AS column_name
            FROM pg_constraint con
            JOIN pg_class rel ON rel.oid=con.conrelid
@@ -363,8 +348,9 @@ export async function mergeCategoryNodes(
              AND cardinality(con.conkey)=1
              AND con.conrelid <> 'categories'::regclass
              AND rel.relname NOT IN ('category_merge_aliases','category_root_aliases')`,
-        )
-      ).rows;
+        [],
+        client,
+      );
       for (const ref of references) {
         if (ref.schema_name !== "public")
           throw conflict("Category reference exists outside the public schema");
@@ -416,9 +402,12 @@ export async function mergeCategoryNodes(
         );
       throw error;
     }
-    const merged: CategoryNodeRow | undefined = (
-      await client.query(`${NODE_SELECT} WHERE c.id=$1`, [targetId])
-    ).rows[0];
+    const merged = await queryOne(
+      categoryNodeRowSchema,
+      `${NODE_SELECT} WHERE c.id=$1`,
+      [targetId],
+      client,
+    );
     return mapNode(merged);
   });
 }

@@ -23,7 +23,7 @@ interface ReferenceCase {
   id: string;
   workspace: AnalysisWorkspace;
   question: string;
-  datasets: string[];
+  datasets: [string, ...string[]];
   columns: AnalysisResultColumn[];
   calculations?: AnalysisCalculation[];
   calculationValues?: Record<string, AnalysisScalar>;
@@ -848,7 +848,7 @@ function makeResult(
           : calculation.languageVersion,
       type: calculation.resultType,
       ...(calculation.unit ? { unit: calculation.unit } : {}),
-      value: item.calculationValues![calculation.id],
+      value: item.calculationValues![calculation.id]!,
     })),
     coverage: {
       status: partial ? "partial" : "complete",
@@ -873,7 +873,7 @@ function makeResult(
       rowGrain: {
         id: "fixture-row",
         description: "Acceptance-question result grain",
-        keys: [item.columns[0].id],
+        keys: [item.columns[0]!.id],
       },
       columns: item.columns,
       rows: item.rows,

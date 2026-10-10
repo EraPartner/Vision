@@ -1,40 +1,34 @@
 /** Explicit history reads, compare-and-set adoption, and immutable receipts. */
 import { query } from "../database/connection.ts";
-import type { PortfolioImportStagingRow } from "../types/rows.ts";
+import { checkRows, queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  batchAccountIdRowSchema,
+  batchConfigFields,
+  bigintIdRowSchema,
+  reconciliationAdjustmentRowSchema,
+  reconciliationBatchScopeRowSchema,
+  reconciliationJournalRowSchema,
+  reconciliationSnapshotRowSchema,
+  reconciliationSourceRowSchema,
+  reconciliationTransferRowSchema,
+} from "../database/rows/portfolioImport.ts";
+import type {
+  PortfolioTransactionSnapshot,
+  ReconciliationBatchScopeRow,
+  ReconciliationJournalRow,
+  ReconciliationSourceRow,
+} from "../database/rows/portfolioImport.ts";
 import type { PortfolioAssetAdjustmentRow } from "./portfolioAssetAdjustmentRepository.ts";
 import type { PortfolioAssetTransferRow } from "./portfolioAssetTransferRepository.ts";
 
-type Id = number | string;
-
-/**
- * The receipt shape of a portfolio transaction (see
- * PORTFOLIO_TRANSACTION_SNAPSHOT_SQL): NUMERIC columns as exact text.
- */
-export type PortfolioTransactionSnapshot = {
-  id: number;
-  investment_id: number;
-  type: string;
-  /** 'YYYY-MM-DD' */
-  date: string;
-  amount: string | null;
-  units: string | null;
-  price_per_unit: string | null;
-  fees: string | null;
-  taxes: string | null;
-  currency: string | null;
-  fx_rate_to_eur: string | null;
-  account_id: number | null;
-  note: string | null;
-  dividend_amount_convention: string;
-  is_recurring: boolean;
-  recurrence_interval: string | null;
-  /** 'YYYY-MM-DD' */
-  recurrence_end_date: string | null;
-  import_batch_id: string | null;
-  source_record_hash: string | null;
-  dedup_fingerprint: string | null;
-  dedup_fingerprint_version: number | null;
+export type {
+  PortfolioTransactionSnapshot,
+  ReconciliationBatchScopeRow,
+  ReconciliationJournalRow,
+  ReconciliationSourceRow,
 };
+
+type Id = number | string;
 
 /** Custody events projected onto the transaction-history shape. */
 export type ReconciliationTransferEvent = Omit<
@@ -66,60 +60,6 @@ export type ReconciliationHistoryEvent =
   | ReconciliationTransferEvent
   | ReconciliationAdjustmentEvent;
 
-/*
- * The JSON detail and batch-config columns hold adapter-specific shapes that
- * the import services read dynamically, so they stay untyped here (as
- * PortfolioImportBatchRow.custom_config does).
- */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/** A staged row joined to its investment and batch. */
-export type ReconciliationSourceRow = Omit<
-  PortfolioImportStagingRow,
-  "tx_date" | "route"
-> & {
-  /** 'YYYY-MM-DD' */
-  tx_date: string | null;
-  route: string | null;
-  // `s.*` always selects the identity columns the staging type leaves optional.
-  source_transaction_id: string | null;
-  source_account_identity: string | null;
-  source_record_hash: string | null;
-  dedup_fingerprint: string | null;
-  dedup_fingerprint_version: number | null;
-  asset_transfer_details: any;
-  asset_adjustment_details: any;
-  investment_id: number | null;
-  asset_class: string | null;
-  investment_currency: string | null;
-  account_id: number | null;
-  custom_config: any;
-  adapter_name: string;
-  batch_status: string;
-};
-
-export type ReconciliationBatchScopeRow = {
-  id: string;
-  account_id: number | null;
-  status: string;
-  custom_config: any;
-  adapter_name: string;
-  rows_total: number;
-};
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
-export type ReconciliationJournalRow = {
-  id: string;
-  batch_id: string;
-  staging_row_id: string;
-  transaction_id: number;
-  action: "adopt" | "restore";
-  policy: "exact" | "preserve_existing" | "prefer_source";
-  previous_entry_id: string | null;
-  before_data: PortfolioTransactionSnapshot;
-  after_data: PortfolioTransactionSnapshot;
-  created_at: Date;
-};
-
 // Numeric strings preserve the database's exact stored precision in receipts.
 export const PORTFOLIO_TRANSACTION_SNAPSHOT_SQL = `portfolio_income_transaction_snapshot(pt)`;
 const SNAPSHOT = PORTFOLIO_TRANSACTION_SNAPSHOT_SQL;
@@ -140,7 +80,8 @@ export async function lockReconciliationAccountsAndHistory(
 export async function readReconciliationSources(
   batchIds: readonly Id[],
 ): Promise<ReconciliationSourceRow[]> {
-  const { rows } = await query<ReconciliationSourceRow>(
+  return queryRows(
+    reconciliationSourceRowSchema,
     `SELECT s.*, to_char(s.tx_date, 'YYYY-MM-DD') AS tx_date,
             COALESCE(s.user_override_investment_id, s.resolved_investment_id) AS investment_id,
             i.asset_class, i.currency AS investment_currency,
@@ -153,33 +94,31 @@ export async function readReconciliationSources(
       ORDER BY s.batch_id, s.row_index, s.id`,
     [batchIds],
   );
-  return rows;
 }
 
 export async function readReconciliationHistory(
   investmentIds: readonly number[],
 ): Promise<ReconciliationHistoryEvent[]> {
   if (investmentIds.length === 0) return [];
-  const { rows } = await query<{ snapshot: PortfolioTransactionSnapshot }>(
+  const rows = await queryRows(
+    reconciliationSnapshotRowSchema,
     `SELECT ${SNAPSHOT} AS snapshot
        FROM portfolio_transactions pt
       WHERE pt.investment_id = ANY($1::int[])
       ORDER BY pt.investment_id, pt.date, pt.id`,
     [investmentIds],
   );
-  const transfers = (
-    await query<PortfolioAssetTransferRow>(
-      `SELECT t.*, to_char(t.date, 'YYYY-MM-DD') AS date
+  const transfers = await queryRows(
+    reconciliationTransferRowSchema,
+    `SELECT t.*, to_char(t.date, 'YYYY-MM-DD') AS date
     FROM portfolio_asset_transfers t WHERE t.investment_id = ANY($1::integer[]) ORDER BY t.investment_id, t.date, t.id`,
-      [investmentIds],
-    )
-  ).rows;
-  const adjustments = (
-    await query<PortfolioAssetAdjustmentRow>(
-      "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE investment_id=ANY($1::integer[]) ORDER BY a.investment_id,a.date,a.id",
-      [investmentIds],
-    )
-  ).rows;
+    [investmentIds],
+  );
+  const adjustments = await queryRows(
+    reconciliationAdjustmentRowSchema,
+    "SELECT a.*,to_char(a.date,'YYYY-MM-DD') AS date FROM portfolio_asset_adjustments a WHERE investment_id=ANY($1::integer[]) ORDER BY a.investment_id,a.date,a.id",
+    [investmentIds],
+  );
   return [
     ...rows.map((row) => row.snapshot),
     ...transfers.map((row): ReconciliationTransferEvent => ({
@@ -206,13 +145,13 @@ export async function readReconciliationHistory(
 export async function readReconciliationBatchScope(
   batchIds: readonly Id[],
 ): Promise<ReconciliationBatchScopeRow[]> {
-  const { rows } = await query<ReconciliationBatchScopeRow>(
+  return queryRows(
+    reconciliationBatchScopeRowSchema,
     `SELECT id, account_id, status, custom_config, adapter_name, rows_total
        FROM portfolio_import_batches
       WHERE id = ANY($1::bigint[]) ORDER BY id`,
     [batchIds],
   );
-  return rows;
 }
 
 /** Minimal history shape the Kinesis and Saxo context readers inspect. */
@@ -267,7 +206,8 @@ export async function readKinesisNativeGiftContext(
     .filter((row) => row.type === "gift" && row.dedup_fingerprint)
     .map((row) => Number(row.id));
   if (!ids.length) return { receipts: [], sources: [], batches: [] };
-  const { rows: receipts } = await query<ReconciliationJournalRow>(
+  const receipts = await queryRows(
+    reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
      JOIN portfolio_import_staging_rows s ON s.id=a.staging_row_id
      WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
@@ -351,7 +291,8 @@ export async function readKinesisAdoptionContext(
     .filter((row) => row.dedup_fingerprint && row.import_batch_id == null)
     .map((row) => Number(row.id));
   if (!ids.length) return { receipts: [], sources: [], batches: [] };
-  const { rows: receipts } = await query<ReconciliationJournalRow>(
+  const receipts = await queryRows(
+    reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
      JOIN portfolio_import_batches b ON b.id=a.batch_id
      WHERE a.transaction_id=ANY($1::integer[]) AND a.action='adopt'
@@ -370,8 +311,8 @@ export async function readKinesisAdoptionContext(
       ...batchIds,
       ...batches.flatMap(
         (batch) =>
-          batch.custom_config?.portfolio_performance_reference
-            ?.effectiveBatchIds || [],
+          batchConfigFields(batch.custom_config)
+            ?.portfolio_performance_reference?.effectiveBatchIds || [],
       ),
     ]),
   ]
@@ -392,7 +333,8 @@ export async function readSaxoAdoptionContext(
     .map((row) => Number(row.id));
   if (transactionIds.length === 0)
     return { receipts: [], sources: [], batches: [] };
-  const { rows: receipts } = await query<ReconciliationJournalRow>(
+  const receipts = await queryRows(
+    reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
        JOIN portfolio_import_batches b ON b.id = a.batch_id
       WHERE a.transaction_id = ANY($1::integer[]) AND a.action = 'adopt'
@@ -418,7 +360,8 @@ export async function readReconciledProImportAccounts(
   accountIds: readonly number[],
 ): Promise<number[]> {
   if (accountIds.length === 0) return [];
-  const { rows } = await query<{ account_id: number }>(
+  const rows = await queryRows(
+    batchAccountIdRowSchema,
     `SELECT DISTINCT b.account_id FROM portfolio_import_batches b
     WHERE b.account_id = ANY($1::integer[]) AND b.status = 'complete'
       AND (b.adapter_name = 'nexo_pro_spot_history' OR b.custom_config->>'format' = 'nexo_pro_spot_history')
@@ -436,7 +379,8 @@ export async function compareAndSetReconciledTransaction(
   after: PortfolioTransactionSnapshot,
   expectedUpdatedAt: Date | string | null | undefined = undefined,
 ): Promise<PortfolioTransactionSnapshot | undefined> {
-  const { rows } = await query<{ snapshot: PortfolioTransactionSnapshot }>(
+  const row = await queryOne(
+    reconciliationSnapshotRowSchema,
     `UPDATE portfolio_transactions pt SET
        date = ($2::jsonb->>'date')::date,
        amount = ($2::jsonb->>'amount')::numeric,
@@ -462,7 +406,7 @@ export async function compareAndSetReconciledTransaction(
       expectedUpdatedAt ?? null,
     ],
   );
-  return rows[0]?.snapshot;
+  return row?.snapshot;
 }
 
 export async function insertReconciliationReceipt({
@@ -484,7 +428,7 @@ export async function insertReconciliationReceipt({
   after: PortfolioTransactionSnapshot;
   previousEntryId?: Id | null;
 }): Promise<number> {
-  const { rows } = await query<{ id: string }>(
+  const result = await query(
     `INSERT INTO portfolio_import_reconciliation_journal
        (batch_id, staging_row_id, transaction_id, action, policy, before_data, after_data, previous_entry_id)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8) RETURNING id`,
@@ -499,7 +443,9 @@ export async function insertReconciliationReceipt({
       previousEntryId ?? null,
     ],
   );
-  return Number(rows[0].id);
+  const [inserted] = checkRows(bigintIdRowSchema, result.rows);
+  // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
+  return Number(inserted!.id);
 }
 
 export async function markAdoptedSourceDuplicate(
@@ -538,7 +484,8 @@ export async function markSaxoCompanionSourceDuplicate(
 export async function getActiveAdoptionReceipts(
   batchId: Id,
 ): Promise<ReconciliationJournalRow[]> {
-  const { rows } = await query<ReconciliationJournalRow>(
+  return queryRows(
+    reconciliationJournalRowSchema,
     `SELECT a.* FROM portfolio_import_reconciliation_journal a
       WHERE a.batch_id = $1 AND a.action = 'adopt'
         AND NOT EXISTS (
@@ -547,7 +494,6 @@ export async function getActiveAdoptionReceipts(
         ) ORDER BY a.id`,
     [batchId],
   );
-  return rows;
 }
 
 export async function retainKinesisNativeGiftReceipt(

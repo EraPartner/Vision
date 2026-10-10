@@ -512,7 +512,7 @@ describe.skipIf(!hasTestDatabase())(
       expect(await transferCount()).toBe(0);
       const history = await getUnitEventsForInvestment(position.investment);
       expect(history).toHaveLength(1);
-      expect(Number(history[0].units)).toBe(10);
+      expect(Number(history[0]!.units)).toBe(10);
     });
     it("validates a concurrent sale against the committed custody state", async () => {
       const position = await seed(),

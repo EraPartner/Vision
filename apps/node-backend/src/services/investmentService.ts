@@ -183,14 +183,17 @@ const brokerRetagBodySchema = z.strictObject({
   idempotency_key: z.string().uuid(),
 });
 
+/** A validated investment write body; unknown keys pass through as `unknown`. */
+type InvestmentBody = z.output<typeof investmentBodySchema>;
+
 /**
  * Returns the validated loose body, whose untyped pass-through fields the
  * repository allow-list filters (or a non-object body unchanged).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above
-function parseInvestmentBody(body: unknown): any {
+function parseInvestmentBody(body: unknown): InvestmentBody {
   // Non-object bodies skipped field validation pre-zod; keep that boundary.
-  if (!body || typeof body !== "object") return body;
+  // They are returned as-is, so the handlers fail on them exactly as before.
+  if (!body || typeof body !== "object") return body as InvestmentBody;
   const result = investmentBodySchema.safeParse(body);
   if (!result.success) {
     const msg = result.error.issues
@@ -361,12 +364,16 @@ const portfolioTransactionBodySchema = z.looseObject({
   account_id: z.unknown().optional(),
 });
 
+/** A validated portfolio-transaction write body; unknown keys pass through. */
+type PortfolioTransactionBody = z.output<typeof portfolioTransactionBodySchema>;
+
 /**
  * Returns the validated loose body; the repository applies the type-specific
  * rules to its pass-through fields.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above
-function parsePortfolioTransactionBody(body: unknown): any {
+function parsePortfolioTransactionBody(
+  body: unknown,
+): PortfolioTransactionBody {
   if (
     body &&
     Object.prototype.hasOwnProperty.call(body, "income_recognition_role")

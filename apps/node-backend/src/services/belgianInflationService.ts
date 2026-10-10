@@ -1,9 +1,11 @@
-import { query, withTransaction } from '../database/connection.ts';
+import { withTransaction } from '../database/connection.ts';
+import { queryRows } from '../database/rowContracts.ts';
+import { belgianInflationMonthRowSchema } from '../database/rows/info.ts';
 import { logger } from '../config/logger.ts';
 import { recordSuccess as recordProviderSuccess, recordError as recordProviderError } from './providerHealthService.ts';
 import { roundMoney } from '../lib/money.ts';
 
-import type { BelgianInflationRate, BelgianInflationRateRow } from '../types/rows.ts';
+import type { BelgianInflationRate } from '../types/rows.ts';
 
 export type { BelgianInflationRate };
 
@@ -280,9 +282,11 @@ function normalizeRatesFromPayload(payload: unknown): BelgianInflationRate[] {
 function parseStatbelMonthString(value: unknown): string | undefined {
   if (!value) return undefined;
   const parts = String(value).trim().split(/\s+/);
-  if (parts.length < 2) return undefined;
-  const monthNum = monthNumberForName(parts[0].toLowerCase());
-  const year = parseNumeric(parts[parts.length - 1]);
+  const [monthName] = parts;
+  const yearPart = parts.at(-1);
+  if (parts.length < 2 || monthName === undefined || yearPart === undefined) return undefined;
+  const monthNum = monthNumberForName(monthName.toLowerCase());
+  const year = parseNumeric(yearPart);
   if (!monthNum || year === undefined || !Number.isFinite(year) || year < 1900 || year > 2100) return undefined;
   return `${Math.trunc(year)}-${String(monthNum).padStart(2, '0')}`;
 }
@@ -304,9 +308,9 @@ function normalizeRatesFromStatbelPayload(payload: unknown): BelgianInflationRat
   if (indexed.length < 2) return [];
 
   const rates: BelgianInflationRate[] = [];
-  for (let i = 1; i < indexed.length; i += 1) {
+  for (const [i, curr] of indexed.entries()) {
     const prev = indexed[i - 1];
-    const curr = indexed[i];
+    if (prev === undefined) continue;
     const monthlyRate = (curr.cpi / prev.cpi) - 1;
     if (!Number.isFinite(monthlyRate) || Math.abs(monthlyRate) > 1) continue;
     rates.push({ month: curr.month, monthly_rate: roundMoney(monthlyRate, RATE_DECIMALS) });
@@ -496,7 +500,8 @@ async function loadFromDatabase(
   startMonth?: string,
   endMonth?: string,
 ): Promise<BelgianInflationRate[]> {
-  const result = await query<Pick<BelgianInflationRateRow, 'month_date' | 'monthly_rate'>>(
+  const rows = await queryRows(
+    belgianInflationMonthRowSchema,
     `SELECT month_date, monthly_rate
      FROM belgian_inflation_rates
      WHERE ($1::date IS NULL OR month_date >= $1::date)
@@ -505,7 +510,7 @@ async function loadFromDatabase(
     [startMonth ? `${startMonth}-01` : null, endMonth ? `${endMonth}-01` : null]
   );
 
-  return result.rows
+  return rows
     .map((row) => ({
       month: monthKeyFromDatabaseValue(row.month_date),
       monthly_rate: Number(row.monthly_rate),

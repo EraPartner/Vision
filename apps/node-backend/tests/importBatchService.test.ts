@@ -11,17 +11,51 @@ vi.mock("../src/repositories/importBatchRepository.ts", () => ({
 }));
 
 import { getPreviewRows as rawGetPreviewRows } from "../src/repositories/importBatchRepository.ts";
+import type { ImportPreviewRow } from "../src/repositories/importBatchRepository.ts";
 import { getImportBatchPreview } from "../src/services/importBatchService.ts";
 
 const getPreviewRows = vi.mocked(rawGetPreviewRows);
+
+/** A preview row as pg returns it: BIGINT id as text, REAL similarity as a number. */
+function previewRow(
+  overrides: Partial<ImportPreviewRow> & Pick<ImportPreviewRow, "id">,
+): ImportPreviewRow {
+  return {
+    row_index: 0,
+    recipient_raw: null,
+    amount: null,
+    currency: null,
+    tx_date: null,
+    memo: null,
+    bank_account: null,
+    match_source: null,
+    match_similarity: null,
+    matched_pattern_id: null,
+    resolved_recipient_id: null,
+    user_override_recipient_id: null,
+    override_category_id: null,
+    effective_recipient_id: null,
+    recipient_name: null,
+    recipient_default_category_id: null,
+    recipient_default_category_general: null,
+    recipient_default_category_detail: null,
+    recipient_default_category_path: null,
+    override_category_general: null,
+    override_category_detail: null,
+    override_category_path: null,
+    matched_pattern_text: null,
+    matched_pattern_kind: null,
+    ...overrides,
+  };
+}
 
 describe("getImportBatchPreview", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("preserves recipient grouping, category precedence, projected rows, and totals", async () => {
     getPreviewRows.mockResolvedValue([
-      {
-        id: 1,
+      previewRow({
+        id: "1",
         row_index: 0,
         effective_recipient_id: 7,
         recipient_name: "Shop",
@@ -41,11 +75,11 @@ describe("getImportBatchPreview", () => {
         memo: "one",
         bank_account: "Main",
         match_source: "exact",
-        match_similarity: "1.0",
+        match_similarity: 1,
         user_override_recipient_id: null,
-      },
-      {
-        id: 2,
+      }),
+      previewRow({
+        id: "2",
         row_index: 1,
         effective_recipient_id: 7,
         recipient_name: "Shop",
@@ -56,13 +90,13 @@ describe("getImportBatchPreview", () => {
         memo: "two",
         bank_account: null,
         match_source: "fuzzy",
-        match_similarity: "0.9",
+        match_similarity: 0.9,
         matched_pattern_id: null,
         user_override_recipient_id: 7,
         override_category_id: null,
-      },
-      {
-        id: 3,
+      }),
+      previewRow({
+        id: "3",
         row_index: 2,
         effective_recipient_id: null,
         recipient_name: null,
@@ -72,9 +106,9 @@ describe("getImportBatchPreview", () => {
         tx_date: "2026-08-03",
         memo: "",
         match_source: null,
-      },
-      {
-        id: 4,
+      }),
+      previewRow({
+        id: "4",
         row_index: 3,
         effective_recipient_id: null,
         recipient_name: null,
@@ -84,7 +118,7 @@ describe("getImportBatchPreview", () => {
         tx_date: "2026-08-04",
         memo: "",
         match_source: "new",
-      },
+      }),
     ]);
 
     const result = await getImportBatchPreview(9);
@@ -107,23 +141,23 @@ describe("getImportBatchPreview", () => {
         current_category_label: "Home: Tools",
       }),
     );
-    expect(result.groups[0].rows[0]).toEqual(
+    expect(result.groups[0]!.rows[0]).toEqual(
       expect.objectContaining({
-        id: 1,
+        id: "1",
         amount: "-12.50",
         bank_account: "Main",
-        match_similarity: "1.0",
+        match_similarity: 1,
         override_category_id: 22,
       }),
     );
-    expect(result.groups[0].rows[1].bank_account).toBeNull();
+    expect(result.groups[0]!.rows[1]!.bank_account).toBeNull();
     expect(result.groups[1]).toEqual(
       expect.objectContaining({
         recipient_id: null,
         row_count: 2,
       }),
     );
-    expect(result.groups[1].rows.map((row) => row.id)).toEqual([3, 4]);
+    expect(result.groups[1]!.rows.map((row) => row.id)).toEqual(["3", "4"]);
   });
 
   it("returns the complete zeroed totals shape for an empty preview", async () => {
@@ -136,8 +170,8 @@ describe("getImportBatchPreview", () => {
 
   it("uses canonical paths for deep category labels in previews", async () => {
     getPreviewRows.mockResolvedValue([
-      {
-        id: 1,
+      previewRow({
+        id: "1",
         row_index: 0,
         effective_recipient_id: 7,
         recipient_name: "Shop",
@@ -150,12 +184,12 @@ describe("getImportBatchPreview", () => {
         override_category_detail: "Apples",
         override_category_path: "Living:Food:Fresh:Apples",
         match_source: "exact",
-      },
+      }),
     ]);
     const { groups } = await getImportBatchPreview(9);
-    expect(groups[0].recipient_default_category_label).toBe(
+    expect(groups[0]!.recipient_default_category_label).toBe(
       "Living:Food:Fresh",
     );
-    expect(groups[0].current_category_label).toBe("Living:Food:Fresh:Apples");
+    expect(groups[0]!.current_category_label).toBe("Living:Food:Fresh:Apples");
   });
 });

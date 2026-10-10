@@ -2,7 +2,7 @@
 title: Repository Layer Reference
 type: reference
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 tags: [backend, repositories, reference, data-access, postgresql, phase-0, phase-1, phase-3, phase-3-1, phase-9, phase-q, decimal, money, recipient-groups]
 aliases: [repositories, repository layer, data access, DAL, database access]
@@ -37,10 +37,15 @@ Service Layer (business logic)
 - All SQL uses parameterized queries via `connection.js` or prepared statements (Phase 0+)
 - Repositories return plain JavaScript objects, not domain models
 - Error handling is delegated to the calling service/route
-- Most reads in the transaction, planned-transaction, split and account repositories are checked
-  against zod row schemas through `queryRows`/`queryOne` (`database/rowContracts.ts`, schemas in
-  `database/rowSchemas.ts`). Rows pass through unchanged; a mismatch throws in tests and
-  development and is logged elsewhere. `customParserConfigRepository` re-checks each stored
+- Almost every repository read whose rows are used is checked against a zod row schema through
+  `queryRows`/`queryOne`/`checkRows` (`database/rowContracts.ts`). Shared primitives and the
+  ledger schemas live in `database/rowSchemas.ts`; the other schemas live per area in
+  `database/rows/<area>.ts`. Not checked: rows that are never read, DDL and infrastructure
+  queries, and run-time tables (the admin database editor, analysis custom SQL). Rows pass through
+  unchanged; a mismatch throws `RowContractError` in every environment, because
+  `PRODUCTION_DATA_CONTRACT_MODE` is `"throw"`. `requireRow(row, label)` asserts the single row of
+  an `INSERT … RETURNING` ([[docs/adr/194-runtime-contracts-completion|ADR-194]]).
+  `customParserConfigRepository` re-checks each stored
   `config_json` against the save-path schema of its kind with `checkDataContract`. See
   [[docs/reference/database-query-patterns#Row contracts (ADR-193)|Row contracts]] and
   [[docs/adr/193-zod-runtime-contracts|ADR-193]].

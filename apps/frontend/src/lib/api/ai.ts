@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { AI_CHAT_STREAM_EVENT } from "@vision/types/aiChat";
+import {
+    AiConversationDetailSchema,
+    AiConversationPageSchema,
+    AiConversationSchema,
+    OllamaModelListSchema,
+    OllamaStatusSchema,
+} from "@vision/types/contracts";
 import type {
     ChatCompleteEvent,
     ChatMessage,
@@ -58,13 +65,15 @@ const errorEventSchema = z
     .catch({ detail: "AI chat error", code: undefined });
 
 export function getOllamaStatus(): Promise<OllamaStatus> {
-    return apiRequest("/api/ai/status");
+    return apiRequest("/api/ai/status", { schema: OllamaStatusSchema });
 }
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getOllamaModels(): Promise<OllamaModel[]> {
-    const response = await apiRequest<OllamaModelsResponse>("/api/ai/models");
-    return response.items ?? [];
+    const response = await apiRequest<OllamaModelsResponse>("/api/ai/models", {
+        schema: OllamaModelListSchema,
+    });
+    return response.items;
 }
 
 export interface ConversationPage {
@@ -84,11 +93,14 @@ export async function getConversations({
 } = {}): Promise<ConversationPage> {
     return apiRequest<ConversationPage>(
         `/api/ai/conversations?limit=${limit}&offset=${offset}`,
+        { schema: AiConversationPageSchema },
     );
 }
 
 export function getConversation(id: string): Promise<ConversationDetail> {
-    return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`);
+    return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, {
+        schema: AiConversationDetailSchema,
+    });
 }
 
 export function createConversation(
@@ -97,6 +109,7 @@ export function createConversation(
     return apiRequest("/api/ai/conversations", {
         method: "POST",
         body: JSON.stringify(body),
+        schema: AiConversationDetailSchema,
     });
 }
 
@@ -107,6 +120,7 @@ export function renameConversation(
     return apiRequest(`/api/ai/conversations/${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: JSON.stringify({ title }),
+        schema: AiConversationSchema,
     });
 }
 

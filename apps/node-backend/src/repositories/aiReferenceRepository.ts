@@ -1,18 +1,15 @@
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  aiReferenceEntryRowSchema,
+  aiReferenceScopeRowSchema,
+} from "../database/rows/ai.ts";
+import type {
+  AiReferenceEntry,
+  AiReferenceScopeRow,
+} from "../database/rows/ai.ts";
 
-export type AiReferenceEntry = {
-  token: string;
-  referenceType: string;
-  ciphertext: Buffer;
-  nonce: Buffer;
-  authTag: Buffer;
-};
-
-export type AiReferenceScopeRow = {
-  id: string;
-  jobId: string | null;
-  expiresAt: Date;
-};
+export type { AiReferenceEntry, AiReferenceScopeRow };
 
 export type AiReferenceScope = AiReferenceScopeRow & {
   entries: AiReferenceEntry[];
@@ -52,34 +49,31 @@ export async function createScope({
 }
 
 export async function getScope(id: string): Promise<AiReferenceScope | null> {
-  const scope = (
-    await query<AiReferenceScopeRow>(
-      `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
+  const scope = await queryOne(
+    aiReferenceScopeRowSchema,
+    `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
        FROM ai_reference_scopes WHERE id=$1`,
-      [id],
-    )
-  ).rows[0];
+    [id],
+  );
   if (!scope) return null;
-  const entries = (
-    await query<AiReferenceEntry>(
-      `SELECT token,reference_type AS "referenceType",ciphertext,nonce,auth_tag AS "authTag"
+  const entries = await queryRows(
+    aiReferenceEntryRowSchema,
+    `SELECT token,reference_type AS "referenceType",ciphertext,nonce,auth_tag AS "authTag"
        FROM ai_reference_entries WHERE scope_id=$1 ORDER BY token`,
-      [id],
-    )
-  ).rows;
+    [id],
+  );
   return { ...scope, entries };
 }
 
 export async function getScopeForJob(
   jobId: string,
 ): Promise<AiReferenceScope | null> {
-  const scope = (
-    await query<AiReferenceScopeRow>(
-      `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
+  const scope = await queryOne(
+    aiReferenceScopeRowSchema,
+    `SELECT id,job_id AS "jobId",expires_at AS "expiresAt"
        FROM ai_reference_scopes WHERE job_id=$1`,
-      [jobId],
-    )
-  ).rows[0];
+    [jobId],
+  );
   return scope ? getScope(scope.id) : null;
 }
 

@@ -182,7 +182,7 @@ describe("mergeAccounts (ADR-088)", () => {
     );
     expect(batchRepointIndex).toBeGreaterThan(-1);
     expect(batchRepointIndex).toBeLessThan(deleteSourcesIndex);
-    const batchCall = mockClient.query.mock.calls[batchRepointIndex];
+    const batchCall = mockClient.query.mock.calls[batchRepointIndex]!;
     expect(batchCall[1]).toEqual([2, [1]]);
     expect(
       calls.some((s) => s.includes("UPDATE accounts SET funding_account_id")),

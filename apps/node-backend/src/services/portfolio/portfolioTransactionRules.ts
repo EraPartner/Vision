@@ -13,6 +13,7 @@ import {
   getUnitEventsForInvestment,
 } from "../../repositories/portfolioTxRepo.reads.ts";
 import { hasAssetTransfersForInvestment } from "../../repositories/portfolioAssetTransferRepository.ts";
+import { RowContractError } from "../../database/rowContracts.ts";
 import {
   areLotsFullyAssigned,
   partitionOversellDeficits,
@@ -45,7 +46,8 @@ export interface PortfolioTransactionInput {
   type: string;
   /** 'YYYY-MM-DD' */
   date: string;
-  amount?: number | string;
+  /** `null` reaches here from a JSON body that sends `"amount": null`. */
+  amount?: number | string | null;
   units?: number | string | null;
   price_per_unit?: number | string | null;
   fees?: number | string | null;
@@ -392,7 +394,9 @@ function onOrBefore<R extends { date?: string | null }>(
 async function getAccountLabel(accountId: number): Promise<string> {
   try {
     return await loadAccountLabel(accountId);
-  } catch {
+  } catch (error) {
+    // A contract violation is a data fault, not a lookup miss: surface it.
+    if (error instanceof RowContractError) throw error;
     return `account #${accountId}`;
   }
 }

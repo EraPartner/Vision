@@ -45,9 +45,9 @@ describe("cloud-assistance privacy evaluation", () => {
     });
 
     expect(
-      Buffer.from(exchanges[0].request!.bodyBase64!, "base64").toString(),
+      Buffer.from(exchanges[0]!.request!.bodyBase64!, "base64").toString(),
     ).toBe(body);
-    expect(exchanges[0].request!.byteLength).toBe(Buffer.byteLength(body));
+    expect(exchanges[0]!.request!.byteLength).toBe(Buffer.byteLength(body));
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://api.openai.com/v1/responses",
       expect.objectContaining({ redirect: "error" }),

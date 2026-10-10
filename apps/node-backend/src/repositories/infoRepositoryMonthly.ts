@@ -13,6 +13,11 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  liveMonthlyRowSchema,
+  mvMonthlyRowSchema,
+} from "../database/rows/info.ts";
 import {
   buildExclusionClauses,
   validateInt4Ids,
@@ -45,32 +50,6 @@ interface MonthTotals {
   net_amount: number;
   transaction_count: number;
 }
-
-/** A `mv_monthly_summary` row grouped by month and currency. */
-type MvMonthlyRow = {
-  month_start: Date;
-  month: number;
-  year: number;
-  currency: string;
-  /** SUM(...) — NUMERIC/bigint sums arrive as strings. */
-  transaction_count: string;
-  total_income: string;
-  total_spending: string;
-  net_amount: string;
-};
-
-/** A live month×(date, currency) row; the daily columns are NULL for an empty month. */
-type LiveMonthlyRow = {
-  month: number;
-  year: number;
-  period_start: Date;
-  period_end: Date;
-  date: Date | null;
-  currency: string | null;
-  cnt: string | null;
-  income_amount: string | null;
-  spending_amount: string | null;
-};
 
 export async function getMonthlyFinancialSummary(
   excludedCategoryIds: number[] = [],
@@ -133,7 +112,8 @@ export async function getMonthlyFinancialSummary(
     // Anchored on the bound app date ($1), the same clock as the zero-fill.
     const dateFilterClause = `WHERE month_start >= date_trunc('month', $1::date - interval '5 months')
         AND month_start <= date_trunc('month', $1::date)`;
-    const mvResult = await query<MvMonthlyRow>(
+    const mvRows = await queryRows(
+      mvMonthlyRowSchema,
       `
       SELECT month_start, month, year, currency,
              SUM(transaction_count) AS transaction_count,
@@ -149,7 +129,7 @@ export async function getMonthlyFinancialSummary(
     );
 
     const mergedRows = [];
-    for (const r of mvResult.rows) {
+    for (const r of mvRows) {
       const dateStr =
         r.month_start instanceof Date
           ? formatDateToYmd(r.month_start)
@@ -359,12 +339,12 @@ export async function getMonthlyFinancialSummary(
     paramCount: params.length,
   });
 
-  const result = await query<LiveMonthlyRow>(sql, params);
+  const liveRows = await queryRows(liveMonthlyRowSchema, sql, params);
   logger.debug("Monthly summary query returned", {
-    rowCount: result.rows.length,
+    rowCount: liveRows.length,
   });
 
-  const dailyRows = result.rows.filter((r) => r.date != null);
+  const dailyRows = liveRows.filter((r) => r.date != null);
   // Convert each (date, currency) income/spending aggregate at that date's rate.
   const [incomeConverted, spendingConverted] = await Promise.all([
     convertRowsToEur(
@@ -380,7 +360,7 @@ export async function getMonthlyFinancialSummary(
   ]);
 
   const monthMap: Record<string, MonthTotals> = {};
-  for (const row of result.rows) {
+  for (const row of liveRows) {
     const key = formatYearMonthKey(row.year, row.month);
     if (!monthMap[key]) {
       monthMap[key] = {
@@ -396,23 +376,28 @@ export async function getMonthlyFinancialSummary(
     }
   }
 
-  for (let i = 0; i < dailyRows.length; i += 1) {
-    const row = dailyRows[i];
+  for (const [i, row] of dailyRows.entries()) {
     const key = formatYearMonthKey(row.year, row.month);
-    const incomeEur = incomeConverted[i].amount_eur;
-    const spendingEur = spendingConverted[i].amount_eur;
-    monthMap[key].total_income = toNumber(
-      toDecimal(monthMap[key].total_income).plus(toDecimal(incomeEur)),
+    // Every live row seeded its month above, and convertRowsToEur returns one
+    // converted row per input row, in order.
+    const totals = monthMap[key];
+    const income = incomeConverted[i];
+    const spending = spendingConverted[i];
+    if (!totals || !income || !spending) {
+      throw new Error(
+        "monthly summary: converted rows out of step with daily rows",
+      );
+    }
+    totals.total_income = toNumber(
+      toDecimal(totals.total_income).plus(toDecimal(income.amount_eur)),
     );
-    monthMap[key].total_spending = toNumber(
-      toDecimal(monthMap[key].total_spending).plus(toDecimal(spendingEur)),
+    totals.total_spending = toNumber(
+      toDecimal(totals.total_spending).plus(toDecimal(spending.amount_eur)),
     );
-    monthMap[key].net_amount = toNumber(
-      toDecimal(monthMap[key].total_income).plus(
-        toDecimal(monthMap[key].total_spending),
-      ),
+    totals.net_amount = toNumber(
+      toDecimal(totals.total_income).plus(toDecimal(totals.total_spending)),
     );
-    monthMap[key].transaction_count += Number(row.cnt);
+    totals.transaction_count += Number(row.cnt);
   }
 
   const months = Object.values(monthMap)

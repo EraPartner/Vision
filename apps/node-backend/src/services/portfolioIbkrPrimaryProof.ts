@@ -312,14 +312,16 @@ export function ibkrPrimaryEvidenceIdentifiesLegacy(
         tax.tx_date === row.tx_date,
     );
     if (!paired.length) return zero(current.taxes);
+    const [taxRow] = paired;
     if (
       paired.length !== 1 ||
+      !taxRow ||
       !toDecimal(current.taxes ?? 0).eq(
         toDecimal(current.taxes ?? 0).toDecimalPlaces(2),
       )
     )
       return false;
-    const withholding = getIbkrPrimaryReconciliationEvidence(paired[0]);
+    const withholding = getIbkrPrimaryReconciliationEvidence(taxRow);
     return (
       !!withholding &&
       withholding.type === "tax" &&

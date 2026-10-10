@@ -20,15 +20,29 @@ export function stdev(arr: number[]) {
   return Math.sqrt(s / (arr.length - 1));
 }
 
+/**
+ * `arr[index]` for an index the caller's invariant keeps in range. Throws a
+ * clear internal error instead of letting `undefined` turn a projection into
+ * NaN when that invariant breaks.
+ */
+export function valueAt<T>(arr: readonly T[], index: number): T {
+  const value = arr[index];
+  if (value === undefined)
+    throw new RangeError(
+      `Projection index ${index} is outside 0..${arr.length - 1}`,
+    );
+  return value;
+}
+
 /** Linear-interpolated percentile of an ascending-sorted array. p in [0,100]. */
 export function quantile(sortedAsc: number[], p: number) {
   if (!sortedAsc.length) return 0;
   const idx = (p / 100) * (sortedAsc.length - 1);
   const lo = Math.floor(idx);
   const hi = Math.ceil(idx);
-  if (lo === hi) return sortedAsc[lo];
+  if (lo === hi) return valueAt(sortedAsc, lo);
   const frac = idx - lo;
-  return sortedAsc[lo] * (1 - frac) + sortedAsc[hi] * frac;
+  return valueAt(sortedAsc, lo) * (1 - frac) + valueAt(sortedAsc, hi) * frac;
 }
 
 export function clamp(value: number, min: number, max: number) {

@@ -23,14 +23,24 @@ import type {
   CategoryOutlierFinding,
 } from "../src/services/categoryOutlierService.ts";
 
-/** Expense row as returned by the service's SELECT (pg NUMERIC = string). */
+/**
+ * Expense row as returned by the service's SELECT: pg NUMERIC is a string and
+ * DATE a local-midnight `Date`, so 'YYYY-MM-DD' shorthand is converted.
+ */
 const row = (
   date: string | Date,
   amount: string,
   categoryId = 1,
   categoryName = "FOOD:GROCERIES",
 ) => ({
-  date,
+  date:
+    typeof date === "string"
+      ? new Date(
+          Number(date.slice(0, 4)),
+          Number(date.slice(5, 7)) - 1,
+          Number(date.slice(8, 10)),
+        )
+      : date,
   amount,
   category_id: categoryId,
   category_name: categoryName,
@@ -174,7 +184,7 @@ describe("detectCategoryOutliers", () => {
       baselineMedian: 100,
       direction: "increased",
     });
-    expect(findings[0].deviation).toBeGreaterThan(3.5);
+    expect(findings[0]!.deviation).toBeGreaterThan(3.5);
   });
 
   it("compares like-for-like windows — never a full prior month vs the partial current month", async () => {
@@ -246,7 +256,7 @@ describe("detectCategoryOutliers", () => {
       ],
     });
     expect(aged).toHaveLength(1);
-    expect(aged[0].monthKey).toBe("2026-07");
+    expect(aged[0]!.monthKey).toBe("2026-07");
     // A dismissal of a DIFFERENT category never suppresses.
     const otherCategory = await detectCategoryOutliers({
       dismissRecords: [
@@ -281,7 +291,7 @@ describe("detectCategoryOutliers", () => {
       ],
     });
     expect(realerted).toHaveLength(1);
-    expect(realerted[0].deviation).toBe(40.47);
+    expect(realerted[0]!.deviation).toBe(40.47);
 
     // Within the re-alert margin (40.47 < 40.4 + 0.5) → still suppressed.
     const withinMargin = await detectCategoryOutliers({

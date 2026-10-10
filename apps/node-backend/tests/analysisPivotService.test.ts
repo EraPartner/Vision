@@ -58,11 +58,11 @@ describe("complete-source pivots", () => {
       },
     );
     expect(queries).toHaveLength(1);
-    expect(queries[0].sql).toContain("UNION ALL");
-    expect(queries[0].sql).toContain('NULL::date AS "month"');
-    expect(queries[0].sql).toContain('NULL::text AS "category_general"');
+    expect(queries[0]!.sql).toContain("UNION ALL");
+    expect(queries[0]!.sql).toContain('NULL::date AS "month"');
+    expect(queries[0]!.sql).toContain('NULL::text AS "category_general"');
     expect(() =>
-      __validateAnalysisSql(queries[0].sql, queries[0].datasetIds),
+      __validateAnalysisSql(queries[0]!.sql, queries[0]!.datasetIds),
     ).not.toThrow();
     expect(
       queries.every(
@@ -78,10 +78,10 @@ describe("complete-source pivots", () => {
       ),
     ).toBe(true);
     expect(
-      (result.levels[3].rows[0].__percentages as Record<string, unknown>)
+      (result.levels[3]!.rows[0]!.__percentages as Record<string, unknown>)
         .sum_spending,
     ).toBe("0.25");
-    expect(result.levels[0].rowDepth).toBe(0);
+    expect(result.levels[0]!.rowDepth).toBe(0);
     expect(result.coverage.complete).toBe(true);
   });
   it.each([
@@ -107,8 +107,8 @@ describe("complete-source pivots", () => {
           },
         },
       );
-      expect(result.levels[0].rows[0].sum_value).toBe(closing);
-      expect(result.levels[1].rows.map((row) => row.sum_value)).toEqual([
+      expect(result.levels[0]!.rows[0]!.sum_value).toBe(closing);
+      expect(result.levels[1]!.rows.map((row) => row.sum_value)).toEqual([
         "100",
         closing,
       ]);

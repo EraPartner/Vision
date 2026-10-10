@@ -6,7 +6,8 @@
  * on failure; section renderers handle null gracefully.
  */
 
-import { query } from "../../database/connection.ts";
+import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import { dividendTxRowSchema } from "../../database/rows/info.ts";
 import {
   getSnapshots,
   getBreakdownSummary,
@@ -84,26 +85,15 @@ export type PortfolioReportData = {
   currency: string;
 };
 
-/**
- * One dividend row of {@link fetchDividends}' query. `amount` is NUMERIC, so pg
- * emits it as a string.
- */
-type DividendTxRow = {
-  investment_id: number;
-  investment_name: string;
-  symbol: string | null;
-  asset_class: string;
-  year: number;
-  month: number;
-  amount: string;
-  currency: string;
-  income_recognition_role: string | null;
-  rate_date: string;
-};
 
-/** Unwrap a settled Promise result; log and return null on rejection. */
+/**
+ * Unwrap a settled Promise result; log and return null on rejection. A row
+ * contract mismatch is rethrown instead: the report must not silently render
+ * an empty section over data the code no longer understands (ADR-193).
+ */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
   if (result.status === "fulfilled") return result.value;
+  if (result.reason instanceof RowContractError) throw result.reason;
   logger.warn(
     `[dataFetcherPortfolio] ${label} failed — section will be skipped`,
     { reason: result.reason?.message },
@@ -245,7 +235,8 @@ async function fetchDividends(
   startDate: string,
   endDate: string,
 ): Promise<DividendData> {
-  const result = await query<DividendTxRow>(
+  const dividendRows = await queryRows(
+    dividendTxRowSchema,
     `
     SELECT
       pt.investment_id,
@@ -269,9 +260,10 @@ async function fetchDividends(
 
   // Convert each row and aggregate
   const byMonthMap = new Map<string, number>();
+  const monthParts = new Map<string, { year: number; month: number }>();
   const byInvestmentMap = new Map<number, DividendInvestmentRow>();
   const rates = await loadCurrentRates();
-  const inKind = result.rows.filter(
+  const inKind = dividendRows.filter(
     (row) => row.income_recognition_role === "included_in_units",
   );
   const currencies = [
@@ -285,13 +277,15 @@ async function fetchDividends(
       ? await getHistoricalRateIndex(currencies)
       : new Map();
   let totalInKindIncome = addAll([]);
-  for (const row of result.rows) {
+  for (const row of dividendRows) {
     if (row.income_recognition_role === "included_in_units") {
       const dateRates: Record<string, number> = { EUR: 1 };
-      for (const code of currencies)
-        dateRates[code] =
+      for (const code of currencies) {
+        const rate =
           findRateOnOrBeforeInIndex(historicalIndex, code, row.rate_date) ??
           rates[code];
+        if (rate !== undefined) dateRates[code] = rate;
+      }
       totalInKindIncome = addAll([
         totalInKindIncome,
         convertWithRates(
@@ -315,6 +309,7 @@ async function fetchDividends(
 
     const monthKey = `${row.year}-${String(row.month).padStart(2, "0")}`;
     byMonthMap.set(monthKey, (byMonthMap.get(monthKey) ?? 0) + converted);
+    monthParts.set(monthKey, { year: row.year, month: row.month });
 
     const invKey = row.investment_id;
     let invEntry = byInvestmentMap.get(invKey);
@@ -333,9 +328,9 @@ async function fetchDividends(
 
   const byMonth = [...byMonthMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, amount]) => {
-      const [yr, mo] = key.split("-").map(Number);
-      return { year: yr, month: mo, amount };
+    .flatMap(([key, amount]): DividendMonthRow[] => {
+      const parts = monthParts.get(key);
+      return parts ? [{ ...parts, amount }] : [];
     });
 
   const byInvestment = [...byInvestmentMap.values()].sort(

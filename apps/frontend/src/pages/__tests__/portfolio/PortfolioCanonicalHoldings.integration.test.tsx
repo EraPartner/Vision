@@ -8,7 +8,14 @@ import { useFxAwarePnl } from "@/hooks/portfolio/useFxAwarePnl";
 import { renderWithApp } from "@/test/renderWithApp";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import {
+    err,
+    ok,
+    INVESTMENT_STUB,
+    PORTFOLIO_SUMMARY_ITEM_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import type { PortfolioSummaryItem } from "@/lib/api/info";
 import type { Investment, PortfolioTransaction } from "@/types/api";
 
@@ -63,6 +70,10 @@ const canonical: PortfolioSummaryItem = {
     is_active: true,
     created_at: investment.created_at,
     updated_at: investment.updated_at,
+    cadastral_income: null,
+    municipality_tax_rate: null,
+    maturity_date: null,
+    maturityDate: null,
     currency: "EUR",
     originalCurrency: "USD",
     currentPrice: 800,
@@ -96,17 +107,22 @@ const canonical: PortfolioSummaryItem = {
     byAccount: [],
 };
 const response = (summaries = [canonical]) => ({
+    ...PORTFOLIO_SUMMARY_STUB,
     currency: summaries[0]?.currency ?? "EUR",
     computed_at: "2025-03-01T00:00:00Z",
-    summaries,
+    summaries: summaries.map((summary) => ({
+        ...PORTFOLIO_SUMMARY_ITEM_STUB,
+        price_provider: "manual",
+        price_provider_id: null,
+        ...summary,
+    })),
     byAccount: [],
-    totals: {},
 });
 function serveMetadata() {
     server.use(
         http.get(`${API_BASE}/api/investments`, () =>
             ok({
-                items: [investment],
+                items: [{ ...INVESTMENT_STUB, ...investment }],
                 total: 1,
                 limit: 500,
                 offset: 0,
@@ -114,7 +130,16 @@ function serveMetadata() {
             }),
         ),
         http.get(`${API_BASE}/api/investments/transactions`, () =>
-            ok({ items: transactions, total: 2, limit: 1000, offset: 0 }),
+            ok({
+                items: transactions.map((txn) => ({
+                    ...PORTFOLIO_TRANSACTION_STUB,
+                    ...txn,
+                })),
+                total: 2,
+                limit: 1000,
+                offset: 0,
+                links: [],
+            }),
         ),
     );
 }
@@ -128,13 +153,13 @@ describe("canonical portfolio holdings", () => {
             ),
         );
         renderWithApp(<CryptoPage />);
-        const units = await screen.findByText("0.04987654");
+        const units = await screen.findByText("0,04987654");
         const row = units.closest("tr")!;
         expect(within(row).getByText(investment.name)).toBeInTheDocument();
         expect(
             within(row).queryByRole("status", { name: /oversold broker/i }),
         ).not.toBeInTheDocument();
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
     });
 
     it("does not show ordinary-only quantities while the canonical summary loads", async () => {
@@ -153,12 +178,12 @@ describe("canonical portfolio holdings", () => {
         );
         renderWithApp(<CryptoPage />);
         await waitFor(() => expect(requested).toBe(true));
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
         expect(
             screen.queryByRole("heading", { name: /no crypto assets/i }),
         ).not.toBeInTheDocument();
         release();
-        expect(await screen.findByText("0.04987654")).toBeInTheDocument();
+        expect(await screen.findByText("0,04987654")).toBeInTheDocument();
     });
 
     it("shows the summary failure instead of an ordinary-only holding", async () => {
@@ -172,7 +197,7 @@ describe("canonical portfolio holdings", () => {
         expect(
             await screen.findByText("Canonical custody unavailable"),
         ).toBeInTheDocument();
-        expect(screen.queryByText("0.25000000")).not.toBeInTheDocument();
+        expect(screen.queryByText("0,25")).not.toBeInTheDocument();
     });
 
     it.each(["EUR", "USD"])(

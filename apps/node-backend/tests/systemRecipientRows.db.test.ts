@@ -177,7 +177,7 @@ describe.skipIf(!hasTestDatabase())(
           accountId: id,
         });
 
-        const before = (await listAccounts())[0];
+        const before = (await listAccounts())[0]!;
         expect(before.drift).toBe(20);
 
         const result = await reconcileAccount(id, { mode: "adjustment" });
@@ -197,7 +197,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(row.recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
 
         // The badge the user clicked is actually clear on the next hub read.
-        const after = (await listAccounts())[0];
+        const after = (await listAccounts())[0]!;
         expect(after.drift).toBe(0);
         expect(after.computed_balance).toBe(120);
       });
@@ -230,7 +230,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(Number(row.amount)).toBe(20);
         expect(row.currency).toBe("EUR");
 
-        const after = (await listAccounts())[0];
+        const after = (await listAccounts())[0]!;
         expect(after.drift).toBe(0);
         expect(after.reconcilable_balance).toBe(120);
         // …and the USD partition is untouched: 120 EUR + 100 USD × 0.5.
@@ -259,7 +259,7 @@ describe.skipIf(!hasTestDatabase())(
         const [row] = await systemRows();
         expect(row.currency).toBe("USD");
         expect(Number(row.amount)).toBe(20);
-        const after = (await listAccounts())[0];
+        const after = (await listAccounts())[0]!;
         expect(after.drift).toBe(0);
       });
 
@@ -307,7 +307,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(row.recipient_name).toBe(SYSTEM_RECIPIENT_NAME);
 
         // Anchor + the later −25 row.
-        expect((await listAccounts())[0].computed_balance).toBe(975);
+        expect((await listAccounts())[0]!.computed_balance).toBe(975);
       });
 
       it("re-running updates the one anchor and leaves its recipient alone", async () => {
@@ -348,7 +348,7 @@ describe.skipIf(!hasTestDatabase())(
           rows.every((r) => r.recipient_name === SYSTEM_RECIPIENT_NAME),
         ).toBe(true);
         // 1000 EUR + 400 USD × 0.5
-        expect((await listAccounts())[0].computed_balance).toBe(1200);
+        expect((await listAccounts())[0]!.computed_balance).toBe(1200);
       });
     });
 
@@ -423,7 +423,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(anchors).toHaveLength(2);
         expect(anchors.every((r) => r.account_id === survivor)).toBe(true);
         // 1000 EUR + 400 USD × 0.5
-        expect((await listAccounts())[0].computed_balance).toBe(1200);
+        expect((await listAccounts())[0]!.computed_balance).toBe(1200);
       });
 
       it("does not flag a single account carrying both of the anchors", async () => {

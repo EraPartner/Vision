@@ -2,7 +2,19 @@
  * Portfolio transaction repo — read operations (list, count, getById, summary).
  */
 
-import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  accountLabelRowSchema,
+  assetClassRowSchema,
+  portfolioMathTxRowSchema,
+  portfolioTransactionCountedRowSchema,
+  portfolioTransactionDbRowSchema,
+  portfolioTransactionIdPairRowSchema,
+  portfolioTransactionSummaryDbRowSchema,
+  portfolioUnitEventRowSchema,
+} from "../database/rows/portfolio.ts";
+import type { PortfolioUnitEventDbRow } from "../database/rows/portfolio.ts";
 import { coerceNumericFields } from "../lib/money.ts";
 import { toYmd } from "../lib/dateFormat.ts";
 import { validateId } from "../lib/validation.ts";
@@ -20,39 +32,19 @@ export type { PortfolioTransactionRow, PortfolioTransactionSummaryRow };
 /**
  * One custody-relevant unit event: a portfolio transaction, asset transfer or
  * asset adjustment. The UNION widens ids to BIGINT and the numeric columns to
- * NUMERIC, so pg emits them as strings.
+ * NUMERIC, so pg emits them as strings. Derived from the checked row schema.
  */
-export type PortfolioUnitEventRow = {
-  id: string;
-  type: string;
-  /** 'YYYY-MM-DD' */
-  date: string;
-  units: string;
-  account_id: number | null;
-  amount: string;
-  fees: string;
-  taxes: string;
-  fxMultiplier: string | null;
-  source_account_id: number | null;
-  destination_account_id: number | null;
-  fee_units: string;
-  transfer_id: string | null;
-  currency: string | null;
-  source_record_hash: string | null;
-  adjustment_kind: "yield_reversal" | "asset_fee" | null;
-  basis_policy: "zero_yield_only" | "carried" | null;
-  eligible_source_record_hashes: string[] | null;
-  adjustment_id: string | null;
-};
+export type PortfolioUnitEventRow = PortfolioUnitEventDbRow;
 
 export async function getAssetClassByInvestmentId(
   investmentId: number,
 ): Promise<string | undefined> {
-  const result = await query<{ asset_class: string }>(
+  const row = await queryOne(
+    assetClassRowSchema,
     "SELECT asset_class FROM investments WHERE id = $1",
     [investmentId],
   );
-  return result.rows[0]?.asset_class;
+  return row?.asset_class;
 }
 
 export async function getUnitEventsForInvestment(
@@ -79,14 +71,15 @@ export async function getUnitEventsForInvestment(
     FROM portfolio_asset_adjustments WHERE investment_id=$1
     ORDER BY date ASC, id ASC
   `;
-  return (await query<PortfolioUnitEventRow>(sql, [investmentId])).rows;
+  return queryRows(portfolioUnitEventRowSchema, sql, [investmentId]);
 }
 
 export async function getUnitEventIdsForImportBatch(
   batchId: number | string,
 ): Promise<{ id: number; investment_id: number }[]> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
-  const result = await query<{ id: number; investment_id: number }>(
+  return queryRows(
+    portfolioTransactionIdPairRowSchema,
     `SELECT id, investment_id
      FROM portfolio_transactions
      WHERE import_batch_id = $1
@@ -94,15 +87,14 @@ export async function getUnitEventIdsForImportBatch(
      ORDER BY investment_id ASC, id ASC`,
     [batchId, ["buy", "gift", "sell", "split"]],
   );
-  return result.rows;
 }
 
 export async function getAccountLabel(accountId: number): Promise<string> {
-  const result = await query<{
-    display_name: string | null;
-    name: string | null;
-  }>("SELECT display_name, name FROM accounts WHERE id = $1", [accountId]);
-  const row = result.rows[0];
+  const row = await queryOne(
+    accountLabelRowSchema,
+    "SELECT display_name, name FROM accounts WHERE id = $1",
+    [accountId],
+  );
   return row?.display_name || row?.name || `account #${accountId}`;
 }
 
@@ -168,8 +160,8 @@ export async function getAll({
   sql += ` ORDER BY date DESC, id DESC LIMIT $${idx} OFFSET $${idx + 1}`;
   params.push(limit, offset);
 
-  const result = await query<Record<string, unknown>>(sql, params);
-  return result.rows.map(mapPortfolioTxRow);
+  const rows = await queryRows(portfolioTransactionDbRowSchema, sql, params);
+  return rows.map(mapPortfolioTxRow);
 }
 
 export async function getAllWithCount({
@@ -196,13 +188,14 @@ export async function getAllWithCount({
   `;
 
   const queryParams = [...params, limit, offset];
-  const result = await query<Record<string, unknown> & { total_count: string }>(
+  const countedRows = await queryRows(
+    portfolioTransactionCountedRowSchema,
     sql,
     queryParams,
   );
-  const total =
-    result.rows.length > 0 ? parseInt(result.rows[0].total_count, 10) : 0;
-  const rows = result.rows.map(({ total_count: _total_count, ...row }) =>
+  const [first] = countedRows;
+  const total = first ? parseInt(first.total_count, 10) : 0;
+  const rows = countedRows.map(({ total_count: _total_count, ...row }) =>
     mapPortfolioTxRow(row),
   );
   return { rows, total };
@@ -305,8 +298,8 @@ export async function getAllByInvestmentIds({
   sql += ` OFFSET $${idx}`;
   params.push(safeOffset);
 
-  const result = await query<Record<string, unknown>>(sql, params);
-  return result.rows.map(mapPortfolioTxRow);
+  const rows = await queryRows(portfolioTransactionDbRowSchema, sql, params);
+  return rows.map(mapPortfolioTxRow);
 }
 
 export async function getCount({
@@ -337,18 +330,19 @@ export async function getCount({
     params.push(type);
   }
 
-  const result = await query<{ count: string }>(sql, params);
-  return parseInt(result.rows[0].count, 10);
+  const row = await queryOne(countRowSchema, sql, params);
+  return parseInt(row!.count, 10);
 }
 
 export async function getById(
   id: number,
 ): Promise<PortfolioTransactionRow | null> {
-  const result = await query<Record<string, unknown>>(
+  const row = await queryOne(
+    portfolioTransactionDbRowSchema,
     "SELECT * FROM portfolio_transactions WHERE id = $1",
     [id],
   );
-  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
+  return row ? mapPortfolioTxRow(row) : null;
 }
 
 /**
@@ -404,7 +398,8 @@ export async function getRowsForPortfolioMath({
     ? `ORDER BY events.date, CASE WHEN events.type = 'sell' THEN 1 ELSE 0 END, events.id`
     : "ORDER BY events.date, events.id";
 
-  const result = await query<PortfolioMathTxRow>(
+  return queryRows(
+    portfolioMathTxRowSchema,
     `
     SELECT * FROM (
     SELECT pt.id, pt.investment_id, pt.type::text AS type,
@@ -442,7 +437,6 @@ export async function getRowsForPortfolioMath({
     ) events ${orderBy}`,
     params,
   );
-  return result.rows;
 }
 
 const PORTFOLIO_SUMMARY_NUMERIC_FIELDS = [
@@ -456,7 +450,8 @@ export async function getSummary(
   investmentId: number,
 ): Promise<PortfolioTransactionSummaryRow[]> {
   // SUM(NUMERIC) and COUNT(*) both arrive from pg as strings.
-  const result = await query<Record<string, unknown> & { count: string }>(
+  const rows = await queryRows(
+    portfolioTransactionSummaryDbRowSchema,
     `
     SELECT
       type, income_recognition_role,
@@ -471,11 +466,14 @@ export async function getSummary(
   `,
     [investmentId],
   );
-  return result.rows.map(
+  return rows.map(
     (row) =>
       // coerceNumericFields converts the NUMERIC strings to numbers at runtime.
       ({
-        ...coerceNumericFields(row, PORTFOLIO_SUMMARY_NUMERIC_FIELDS),
+        ...coerceNumericFields<Record<string, unknown>>(
+          row,
+          PORTFOLIO_SUMMARY_NUMERIC_FIELDS,
+        ),
         count: parseInt(row.count, 10),
       }) as PortfolioTransactionSummaryRow,
   );

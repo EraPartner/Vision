@@ -6,7 +6,12 @@ import { http } from "msw";
 import { toast } from "sonner";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok } from "@/test/msw/handlers";
+import {
+    err,
+    ok,
+    settingsWithBaselines,
+    INVESTMENT_STUB,
+} from "@/test/msw/handlers";
 import { EditInvestmentDialog } from "@/features/portfolio/EditInvestmentDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
@@ -53,6 +58,15 @@ const INVESTMENT: InvestmentSummary = {
     totalSellProceeds: 0,
     transactions: [],
 };
+
+/** The PATCH response row: the backend sends unset columns as null. */
+function investmentRow(patch: Record<string, unknown>) {
+    const row: Record<string, unknown> = { ...INVESTMENT_STUB };
+    for (const [key, value] of Object.entries({ ...INVESTMENT, ...patch })) {
+        if (value !== undefined) row[key] = value;
+    }
+    return row;
+}
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -358,10 +372,7 @@ describe("manual price validation", () => {
         const update = vi.fn(async ({ request }: { request: Request }) => {
             const body = await request.json();
             expect(body.current_price).toBe(0);
-            return new Response(
-                JSON.stringify({ data: { ...INVESTMENT, ...body } }),
-                { headers: { "Content-Type": "application/json" } },
-            );
+            return ok(investmentRow(body));
         });
         server.use(http.patch(`${API_BASE}/api/investments/:id`, update));
         const user = userEvent.setup();
@@ -394,13 +405,17 @@ describe("manual price validation", () => {
         let payload: Record<string, unknown> | undefined;
         server.use(
             http.get(`${API_BASE}/api/settings`, () =>
-                ok({ app_settings: { numberFormat: "eu" } }),
+                ok(
+                    settingsWithBaselines({
+                        app_settings: { numberFormat: "eu" },
+                    }),
+                ),
             ),
             http.patch(
                 `${API_BASE}/api/investments/:id`,
                 async ({ request }) => {
                     payload = (await request.json()) as Record<string, unknown>;
-                    return ok({ ...INVESTMENT, ...payload });
+                    return ok(investmentRow(payload));
                 },
             ),
         );
@@ -430,7 +445,7 @@ describe("manual price validation", () => {
                 `${API_BASE}/api/investments/:id`,
                 async ({ request }) => {
                     payload = (await request.json()) as Record<string, unknown>;
-                    return ok({ ...INVESTMENT, ...payload });
+                    return ok(investmentRow(payload));
                 },
             ),
         );

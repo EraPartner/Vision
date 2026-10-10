@@ -71,7 +71,7 @@ describe("AgentCloak cloud disclosure preflight", () => {
       ),
     ).resolves.toEqual({ enabled: true, status: "passed" });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchImpl.mock.calls[0];
+    const [url, init] = fetchImpl.mock.calls[0]!;
     expect(url).toBe(config.url);
     expect(init.redirect).toBe("error");
     expect(init.body).toContain("Pay REFERENCE tomorrow");

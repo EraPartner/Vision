@@ -146,7 +146,7 @@ it("partitioned and archived math keeps the new subtotal and both accounting tra
   expect(result.core.converted.totalInKindIncome.toNumber()).toBe(42.5);
   expect(result.core.totalIncome.toNumber()).toBe(5);
   expect(
-    result.partitions[0].core.totalInKindIncome.eq(
+    result.partitions[0]!.core.totalInKindIncome.eq(
       result.core.totalInKindIncome,
     ),
   ).toBe(true);

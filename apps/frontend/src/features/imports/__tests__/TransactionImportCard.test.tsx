@@ -19,7 +19,11 @@ import userEvent from "@testing-library/user-event";
 import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, importCsvReviewRequiredHandlers } from "@/test/msw/handlers";
+import {
+    IMPORT_CSV_RESULT_STUB,
+    ok,
+    importCsvReviewRequiredHandlers,
+} from "@/test/msw/handlers";
 import { TransactionImportCard } from "@/features/imports/TransactionImportCard";
 import type { SavedParserConfig } from "@/lib/api/imports";
 
@@ -43,6 +47,7 @@ const API_BASE = "http://localhost:3002";
 const SAVED_PARSER: SavedParserConfig = {
     id: 1,
     name: "My Bank",
+    kind: "transaction",
     config: {
         dateColumn: "Date",
         dateFormat: "%Y-%m-%d",
@@ -173,6 +178,7 @@ describe("TransactionImportCard — custom-mapping import", () => {
                         /name="number_format"\r\n\r\n([^\r\n]+)/,
                     )?.[1];
                     return ok({
+                        ...IMPORT_CSV_RESULT_STUB,
                         batch_id: 1,
                         total: 1,
                         imported: 1,

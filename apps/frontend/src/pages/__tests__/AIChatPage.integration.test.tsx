@@ -10,6 +10,19 @@ import AIChatPage from "@/pages/AIChatPage";
 
 const API_BASE = "http://localhost:3002";
 
+/** `GET /api/ai/status` with Ollama reachable: every key `getStatus` sends. */
+const READY_STATUS = {
+    ok: true,
+    baseUrl: "http://localhost:11434",
+    displayUrl: "http://localhost:11434",
+    modelCount: 1,
+    error: null,
+    code: null,
+    hint: null,
+    defaultModel: "llama3",
+    enabled: true,
+};
+
 describe("AIChatPage (integration)", () => {
     it("offers an editable investigation starter without submitting it", async () => {
         const user = userEvent.setup();
@@ -65,7 +78,7 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("restores the investigation mode from its URL and supports keyboard switching", async () => {
-        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)));
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />, {
             initialEntries: ["/ai-chat?mode=investigation"],
@@ -87,14 +100,7 @@ describe("AIChatPage (integration)", () => {
 
     it("preserves an unsent chat draft across investigation mode", async () => {
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({
-                    ok: true,
-                    baseUrl: "http://localhost:11434",
-                    defaultModel: "llama3",
-                    enabled: true,
-                }),
-            ),
+            http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)),
         );
         const user = userEvent.setup();
         renderWithApp(<AIChatPage />);
@@ -180,7 +186,7 @@ describe("AIChatPage (integration)", () => {
     });
 
     it("shows empty state body text when AI is reachable", async () => {
-        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok({ ok: true, enabled: true, defaultModel: "llama3" })));
+        server.use(http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)));
         renderWithApp(<AIChatPage />);
         // aiChat.emptyState = "Start a conversation -- ask about spending, portfolio returns..."
         expect(
@@ -196,14 +202,7 @@ describe("AIChatPage (integration)", () => {
 
     it("enables composer textarea when AI is reachable", async () => {
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({
-                    ok: true,
-                    baseUrl: "http://localhost:11434",
-                    defaultModel: "llama3",
-                    enabled: true,
-                }),
-            ),
+            http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)),
         );
 
         renderWithApp(<AIChatPage />);
@@ -216,14 +215,7 @@ describe("AIChatPage (integration)", () => {
 
     it("shows 'Local AI model ready' status label when AI is reachable", async () => {
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({
-                    ok: true,
-                    baseUrl: "http://localhost:11434",
-                    defaultModel: "llama3",
-                    enabled: true,
-                }),
-            ),
+            http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)),
         );
 
         renderWithApp(<AIChatPage />);
@@ -235,14 +227,7 @@ describe("AIChatPage (integration)", () => {
 
     it("does not show OllamaStatusBanner when AI is reachable", async () => {
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({
-                    ok: true,
-                    baseUrl: "http://localhost:11434",
-                    defaultModel: "llama3",
-                    enabled: true,
-                }),
-            ),
+            http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)),
         );
 
         renderWithApp(<AIChatPage />);
@@ -338,14 +323,7 @@ describe("AIChatPage (integration)", () => {
         let capturedBody: Record<string, unknown> | null = null;
 
         server.use(
-            http.get(`${API_BASE}/api/ai/status`, () =>
-                ok({
-                    ok: true,
-                    baseUrl: "http://localhost:11434",
-                    defaultModel: "llama3",
-                    enabled: true,
-                }),
-            ),
+            http.get(`${API_BASE}/api/ai/status`, () => ok(READY_STATUS)),
             http.post(`${API_BASE}/api/ai/conversations`, () =>
                 ok({ conversation, messages: [] }),
             ),

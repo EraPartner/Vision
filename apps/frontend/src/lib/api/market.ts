@@ -6,6 +6,14 @@ import type {
 } from "@/types/watchlist";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
+import {
+    MarketChartSchema,
+    MarketNewsListSchema,
+    MarketQuoteListSchema,
+    MarketSearchSchema,
+    WatchlistItemSchema,
+    WatchlistListSchema,
+} from "@vision/types/contracts";
 import type { MarketNewsArticle } from "@/types/apiClient";
 import type {
     MarketChartPoint,
@@ -33,7 +41,7 @@ export async function getMarketNews(
     const { items } = await requestWithQuery<{
         items: MarketNewsArticle[];
         total: number;
-    }>("/api/market/news", params);
+    }>("/api/market/news", params, { schema: MarketNewsListSchema });
     return items;
 }
 
@@ -55,6 +63,7 @@ export async function getMarketQuotes<Q = MarketQuote>(
     // Canonical `{items, total}` collection body — callers only need the rows.
     const { items } = await apiRequest<{ items: Q[]; total: number }>(
         `/api/market/quote?symbols=${encodeURIComponent(symbols)}${detail}`,
+        { schema: MarketQuoteListSchema },
     );
     return items;
 }
@@ -74,14 +83,20 @@ export async function getMarketChart<P = MarketChartPoint>(
         currency?: string;
         items: P[];
         total: number;
-    }>("/api/market/chart", { symbol, range, interval });
+    }>(
+        "/api/market/chart",
+        { symbol, range, interval },
+        { schema: MarketChartSchema },
+    );
     return { symbol: rest.symbol, currency: rest.currency, points: items };
 }
 
 export function searchMarket(
     query: string,
 ): Promise<{ items: ResearchSearchItem[] }> {
-    return apiRequest(`/api/market/search?q=${encodeURIComponent(query)}`);
+    return apiRequest(`/api/market/search?q=${encodeURIComponent(query)}`, {
+        schema: MarketSearchSchema,
+    });
 }
 
 export function getWatchlist(params?: {
@@ -95,7 +110,9 @@ export function getWatchlist(params?: {
                   .map(([k, v]) => [k, String(v)]),
           ).toString()}`
         : "";
-    return apiRequest(`/api/watchlist${query}`);
+    return apiRequest(`/api/watchlist${query}`, {
+        schema: WatchlistListSchema,
+    });
 }
 
 export function createWatchlistItem(
@@ -104,6 +121,7 @@ export function createWatchlistItem(
     return apiRequest("/api/watchlist", {
         method: "POST",
         body: JSON.stringify(data),
+        schema: WatchlistItemSchema,
     });
 }
 
@@ -114,6 +132,7 @@ export function updateWatchlistItem(
     return apiRequest(`/api/watchlist/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
+        schema: WatchlistItemSchema,
     });
 }
 

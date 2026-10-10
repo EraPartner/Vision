@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../src/repositories/settingsRepository.ts", () => ({
-  settingsRepository: { get: vi.fn() },
-}));
+vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
+  // Keep the pure value helper; only the repository read is mocked.
+  const actual =
+    await importOriginal<
+      typeof import("../src/repositories/settingsRepository.ts")
+    >();
+  return {
+    settingField: actual.settingField,
+    settingsRepository: { get: vi.fn() },
+  };
+});
 
 vi.mock("../src/services/portfolio/portfolioSummaryService.ts", () => ({
   getPortfolioSummary: vi.fn(),

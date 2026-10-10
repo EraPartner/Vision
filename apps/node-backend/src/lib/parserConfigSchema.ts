@@ -16,7 +16,7 @@ import { VALID_ASSET_CLASSES } from "./assetClasses.ts";
 import {
   normalizeCsvEncoding,
   CSV_NUMBER_FORMATS,
-} from "../services/importPipeline/adapters/_shared.ts";
+} from "./csvFormatOptions.ts";
 
 function normalizeEncodingOrIssue(value: unknown, ctx: z.RefinementCtx) {
   try {

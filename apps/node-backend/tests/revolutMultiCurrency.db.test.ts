@@ -172,7 +172,7 @@ async function hubAccount() {
   const { items: accounts } = await accountService.list({});
   const revolut = accounts.filter((a) => a.name === "REVOLUT CURRENT");
   expect(revolut).toHaveLength(1); // D2: ONE account, not one per currency
-  return revolut[0];
+  return revolut[0]!;
 }
 
 async function wipe() {

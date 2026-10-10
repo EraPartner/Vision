@@ -6,50 +6,36 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  historicalRateRowSchema,
+  portfolioIntIdRowSchema,
+  portfolioRetagAuditInsertedRowSchema,
+  portfolioRetagAuditRowSchema,
+  retagDestinationAccountRowSchema,
+  retagLockedTransactionRowSchema,
+  retagTransactionEventRowSchema,
+} from "../database/rows/portfolio.ts";
+import type {
+  HistoricalRateDbRow,
+  PortfolioRetagAuditDbRow,
+  RetagDestinationAccountRow,
+  RetagLockedTransactionRow,
+  RetagTransactionEventDbRow,
+} from "../database/rows/portfolio.ts";
 import { getUnitEventsForInvestment } from "./portfolioTxRepo.reads.ts";
 import type { PortfolioUnitEventRow } from "./portfolioTxRepo.reads.ts";
 
-/** BIGINT ids arrive from pg as strings. */
-export type PortfolioRetagAuditRow = {
-  id: string;
-  idempotency_key: string;
-  request_fingerprint: string;
-  from_account_id: number | null;
-  to_account_id: number | null;
-  transaction_ids: number[];
-  previous_assignments: Array<{
-    transaction_id: number;
-    account_id: number | null;
-  }>;
-  selected_count: number;
-  changed_count: number;
-  created_at: Date;
-};
+/** BIGINT ids arrive from pg as strings. Derived from the checked row schema. */
+export type PortfolioRetagAuditRow = PortfolioRetagAuditDbRow;
 
 export type PortfolioRetagAuditInsert = Omit<
   PortfolioRetagAuditRow,
   "id" | "created_at"
 >;
 
-/** NUMERIC columns arrive from pg as strings. */
-export type RetagTransactionEventRow = {
-  id: number;
-  investment_id: number;
-  type: string;
-  /** 'YYYY-MM-DD' */
-  date: string;
-  amount: string;
-  units: string;
-  fees: string;
-  taxes: string;
-  currency: string;
-  fx_rate_to_eur: string | null;
-  fx_multiplier_eur: string | null;
-  account_id: number | null;
-  asset_class: string;
-  current_price: string;
-  interest_rate: string;
-};
+/** NUMERIC columns arrive from pg as strings. Derived from the checked row schema. */
+export type RetagTransactionEventRow = RetagTransactionEventDbRow;
 
 /**
  * A custody event (asset transfer or adjustment) carrying the investment-level
@@ -69,7 +55,8 @@ export async function lockPortfolioTransactionWrites(): Promise<void> {
 export async function getAuditByIdempotencyKey(
   idempotencyKey: string,
 ): Promise<PortfolioRetagAuditRow | undefined> {
-  const result = await query<PortfolioRetagAuditRow>(
+  return queryOne(
+    portfolioRetagAuditRowSchema,
     `SELECT id, idempotency_key, request_fingerprint, from_account_id,
             to_account_id, transaction_ids, previous_assignments,
             selected_count, changed_count, created_at
@@ -77,29 +64,14 @@ export async function getAuditByIdempotencyKey(
       WHERE idempotency_key = $1`,
     [idempotencyKey],
   );
-  return result.rows[0];
 }
 
 export async function lockEligibleDestinationAccount(
   accountId: number | null,
-): Promise<
-  | {
-      id: number;
-      name: string;
-      display_name: string | null;
-      type: string;
-      is_active: boolean;
-    }
-  | undefined
-> {
+): Promise<RetagDestinationAccountRow | undefined> {
   if (accountId == null) return undefined;
-  const result = await query<{
-    id: number;
-    name: string;
-    display_name: string | null;
-    type: string;
-    is_active: boolean;
-  }>(
+  return queryOne(
+    retagDestinationAccountRowSchema,
     `SELECT id, name, display_name, type, is_active
        FROM accounts
       WHERE id = $1
@@ -108,17 +80,13 @@ export async function lockEligibleDestinationAccount(
       FOR UPDATE`,
     [accountId, ["brokerage", "crypto_exchange", "wallet"]],
   );
-  return result.rows[0];
 }
 
 export async function lockTransactions(
   transactionIds: number[],
-): Promise<{ id: number; investment_id: number; account_id: number | null }[]> {
-  const result = await query<{
-    id: number;
-    investment_id: number;
-    account_id: number | null;
-  }>(
+): Promise<RetagLockedTransactionRow[]> {
+  return queryRows(
+    retagLockedTransactionRowSchema,
     `SELECT id, investment_id, account_id
        FROM portfolio_transactions
       WHERE id = ANY($1::int[])
@@ -126,13 +94,13 @@ export async function lockTransactions(
       FOR UPDATE`,
     [transactionIds],
   );
-  return result.rows;
 }
 
 export async function getUnitEventsForInvestments(
   investmentIds: number[],
 ): Promise<Array<RetagTransactionEventRow | RetagCustodyEventRow>> {
-  const result = await query<RetagTransactionEventRow>(
+  const transactionRows = await queryRows(
+    retagTransactionEventRowSchema,
     `SELECT pt.id, pt.investment_id, pt.type,
             to_char(pt.date, 'YYYY-MM-DD') AS date,
             COALESCE(pt.amount, 0) AS amount,
@@ -166,7 +134,7 @@ export async function getUnitEventsForInvestments(
   const transfers: RetagCustodyEventRow[] = [];
   for (const investmentId of investmentIds) {
     const events = await getUnitEventsForInvestment(investmentId);
-    const exemplar = result.rows.find(
+    const exemplar = transactionRows.find(
       (row) => Number(row.investment_id) === Number(investmentId),
     );
     for (const event of events.filter((row) =>
@@ -174,24 +142,18 @@ export async function getUnitEventsForInvestments(
     ))
       transfers.push({ ...exemplar, ...event, investment_id: investmentId });
   }
-  return [...result.rows, ...transfers];
+  return [...transactionRows, ...transfers];
 }
 
-export async function getHistoricalRates(): Promise<
-  { currency_code: string; rate_date: string; rate_to_eur: string }[]
-> {
-  const result = await query<{
-    currency_code: string;
-    rate_date: string;
-    rate_to_eur: string;
-  }>(
+export async function getHistoricalRates(): Promise<HistoricalRateDbRow[]> {
+  return queryRows(
+    historicalRateRowSchema,
     `SELECT currency_code,
             to_char(rate_date, 'YYYY-MM-DD') AS rate_date,
             rate_to_eur
        FROM exchange_rates
       ORDER BY currency_code ASC, rate_date ASC`,
   );
-  return result.rows;
 }
 
 export async function compareAndSetAccount(
@@ -199,7 +161,8 @@ export async function compareAndSetAccount(
   fromAccountId: number | null,
   toAccountId: number | null,
 ): Promise<number[]> {
-  const result = await query<{ id: number }>(
+  const rows = await queryRows(
+    portfolioIntIdRowSchema,
     `UPDATE portfolio_transactions
         SET account_id = $3
       WHERE id = ANY($1::int[])
@@ -207,13 +170,14 @@ export async function compareAndSetAccount(
       RETURNING id`,
     [transactionIds, fromAccountId, toAccountId],
   );
-  return result.rows.map((row) => Number(row.id));
+  return rows.map((row) => Number(row.id));
 }
 
 export async function insertAudit(
   receipt: PortfolioRetagAuditInsert,
 ): Promise<PortfolioRetagAuditRow & { occurred_at: string }> {
-  const result = await query<PortfolioRetagAuditRow & { occurred_at: string }>(
+  const row = await queryOne(
+    portfolioRetagAuditInsertedRowSchema,
     `INSERT INTO portfolio_retag_audit
        (idempotency_key, request_fingerprint, from_account_id, to_account_id,
         transaction_ids, previous_assignments, selected_count, changed_count)
@@ -233,7 +197,9 @@ export async function insertAudit(
       receipt.changed_count,
     ],
   );
-  return result.rows[0];
+  // An INSERT ... RETURNING without ON CONFLICT returns its row or throws.
+  if (!row) throw new Error("Re-tag audit insert returned no row");
+  return row;
 }
 
 export default {

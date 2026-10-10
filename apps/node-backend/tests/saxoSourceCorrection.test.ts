@@ -163,8 +163,8 @@ describe("literal Saxo XLSX correction evidence", () => {
   });
   it("accepts retained four-decimal halfway values with PostgreSQL staging precision", () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[0].records[0].Boekingsbedrag = -181.63005;
-    sheets[2].records[1].Boekingsbedrag = -1.00005;
+    sheets[0]!.records[0]!.Boekingsbedrag = -181.63005;
+    sheets[2]!.records[1]!.Boekingsbedrag = -1.00005;
     const raw = syntheticSaxoPrimaryRawData(0, sheets);
     const fixture = correctionFixture();
     fixture.row = {
@@ -174,7 +174,7 @@ describe("literal Saxo XLSX correction evidence", () => {
       fees: "1.0001",
     };
     fixture.current.source_record_hash = fixture.row.source_record_hash;
-    fixture.context.receipts[0].after_data = { ...fixture.current };
+    fixture.context.receipts[0]!.after_data = { ...fixture.current };
     fixture.context.sources[0] = {
       ...fixture.row,
       id: 10,
@@ -188,9 +188,9 @@ describe("literal Saxo XLSX correction evidence", () => {
 describe("literal Saxo CSV companions", () => {
   it("compares typed dates and numeric cells while ignoring source owner labels", () => {
     const sheets = syntheticSaxoWorkbook();
-    sheets[0].records[0].Gebruikersnaam = "Workbook owner";
+    sheets[0]!.records[0]!.Gebruikersnaam = "Workbook owner";
     const workbook = syntheticSaxoPrimaryRawData(0, sheets);
-    sheets[0].records[0].Gebruikersnaam = "CSV owner";
+    sheets[0]!.records[0]!.Gebruikersnaam = "CSV owner";
     const csv = syntheticSaxoCsvRecord(0, sheets);
     expect(
       getSaxoCsvCompanionEvidence(csv.raw, csv.headers, workbook),
@@ -205,8 +205,8 @@ describe("literal Saxo CSV companions", () => {
       const sheets = syntheticSaxoWorkbook();
       const workbook = syntheticSaxoPrimaryRawData(0, sheets);
       if (kind === "amount")
-        (sheets[0].records[0].Boekingsbedrag as number) -= 1;
-      if (kind === "zero") sheets[0].records[0]["Bk Record Id"] = 0;
+        (sheets[0]!.records[0]!.Boekingsbedrag as number) -= 1;
+      if (kind === "zero") sheets[0]!.records[0]!["Bk Record Id"] = 0;
       const csv = syntheticSaxoCsvRecord(0, sheets);
       if (kind === "headers") csv.headers = csv.headers.slice(1);
       if (kind === "extra") csv.raw += `\n${csv.raw}`;
@@ -342,7 +342,7 @@ describe("journal-bound Saxo source correction plan", () => {
       ready: true,
       summary: { adopt: 1, insert: 0, duplicate: 0 },
     });
-    expect(result.adoptions[0].after).toMatchObject({
+    expect(result.adoptions[0]!.after).toMatchObject({
       id: 40,
       note: fixture.current.note,
       type: "buy",
@@ -354,7 +354,7 @@ describe("journal-bound Saxo source correction plan", () => {
       fx_rate_to_eur: null,
       import_batch_id: null,
     });
-    expect(result.adoptions[0].priorSaxoReceipt!.id).toBe(4);
+    expect(result.adoptions[0]!.priorSaxoReceipt!.id).toBe(4);
   });
   it.each([undefined, "preserve_existing"])(
     "keeps %s reimports as duplicates",
@@ -388,11 +388,11 @@ describe("journal-bound Saxo source correction plan", () => {
     if (kind === "snapshot") fixture.current.note = "Later edit";
     if (kind === "missing") fixture.context.receipts = [];
     if (kind === "ambiguous")
-      fixture.context.receipts.push({ ...fixture.context.receipts[0], id: 5 });
-    if (kind === "retained") fixture.context.sources[0].raw_data += " ";
-    if (kind === "account") fixture.context.sources[0].account_id = 8;
-    if (kind === "type") fixture.context.sources[0].type = "sell";
-    if (kind === "investment") fixture.context.sources[0].investment_id = 2;
+      fixture.context.receipts.push({ ...fixture.context.receipts[0]!, id: 5 });
+    if (kind === "retained") fixture.context.sources[0]!.raw_data += " ";
+    if (kind === "account") fixture.context.sources[0]!.account_id = 8;
+    if (kind === "type") fixture.context.sources[0]!.type = "sell";
+    if (kind === "investment") fixture.context.sources[0]!.investment_id = 2;
     const result = build(fixture);
     expect(result.plan.ready).toBe(false);
     expect(result.adoptions).toHaveLength(0);
@@ -400,15 +400,15 @@ describe("journal-bound Saxo source correction plan", () => {
   it("binds prior receipts and retained sources into the plan fingerprint", () => {
     const fixture = correctionFixture();
     const original = build(fixture).plan.planFingerprint;
-    fixture.context.receipts[0].before_data = { note: "Changed context" };
+    fixture.context.receipts[0]!.before_data = { note: "Changed context" };
     expect(build(fixture).plan.planFingerprint).not.toBe(original);
     const changed = build(fixture).plan.planFingerprint;
-    fixture.context.sources[0].note = "Changed retained context";
+    fixture.context.sources[0]!.note = "Changed retained context";
     expect(build(fixture).plan.planFingerprint).not.toBe(changed);
   });
   it("does not add a receipt when corrected fields repeat, and preserves known same-currency FX", () => {
     const fixture = correctionFixture();
-    fixture.current = build(fixture).adoptions[0].after;
+    fixture.current = build(fixture).adoptions[0]!.after;
     fixture.current.fx_rate_to_eur = "1.0000000000";
     const result = build(fixture);
     expect(result.plan).toMatchObject({

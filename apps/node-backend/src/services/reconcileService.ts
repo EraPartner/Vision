@@ -29,6 +29,12 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne } from "../database/rowContracts.ts";
+import {
+  adjustmentRowSchema,
+  reconcileDriftRowSchema,
+  statementBalanceAmountRowSchema,
+} from "../database/rows/ledger.ts";
 import {
   computedBalanceByCurrencyAggLateral,
   statementPartition,
@@ -48,16 +54,6 @@ const VALID_MODES = new Set(["accept", "adjustment"]);
 const DRIFT_EPSILON = 0.005;
 
 type ReconcileMode = "accept" | "adjustment";
-
-type ReconcileDriftRow = {
-  account_currency: string | null;
-  /** Not selected by the drift query; the fallback below never fires. */
-  currency?: string | null;
-  reconcile_currency: string;
-  /** NUMERIC — string; null when the account has no statement figure. */
-  statement_balance: string | null;
-  balance_parts: Array<{ currency: string; balance: string }> | null;
-};
 
 export interface ReconcileResult {
   mode: ReconcileMode;
@@ -114,7 +110,8 @@ export async function reconcileAccount(
     // Statement figure + the live computed balance, per currency partition (the
     // same lateral the hub badge reads). The FOR UPDATE cannot ride on this
     // SELECT — the lateral aggregates, so the lock is taken separately above.
-    const res = await query<ReconcileDriftRow>(
+    const row = await queryOne(
+      reconcileDriftRowSchema,
       `SELECT a.currency AS account_currency,
               COALESCE($3::varchar(3), a.currency) AS reconcile_currency,
               s.balance AS statement_balance,
@@ -127,7 +124,6 @@ export async function reconcileAccount(
         WHERE a.id = $1`,
       [accountId, today, requestedCurrency ?? null],
     );
-    const row = res.rows[0];
     if (!row) throw new NotFoundError(`Account ${accountId} not found`);
 
     if (row.statement_balance == null) {
@@ -148,7 +144,7 @@ export async function reconcileAccount(
     // statement figure to reconcile against.
     const fallbackBase = statementPartition(
       row.balance_parts,
-      row.account_currency ?? row.currency,
+      row.account_currency,
     );
     const reconcileCurrency = String(
       requestedCurrency ?? fallbackBase.currency,
@@ -182,7 +178,8 @@ export async function reconcileAccount(
       // outcome: there is no balance in the statement's currency to adopt.
       // (The dialog shows that 0 as the base, so this is no longer a figure the
       // user never saw.)
-      const upd = await query<{ balance: string }>(
+      const upd = await queryOne(
+        statementBalanceAmountRowSchema,
         `INSERT INTO account_statement_balances
            (account_id, currency, balance, balance_date)
          VALUES ($1, $2, $3, $4)
@@ -191,11 +188,13 @@ export async function reconcileAccount(
          RETURNING balance`,
         [accountId, reconcileCurrency, computed, today],
       );
+      // An upsert ... RETURNING yields exactly one row or throws.
+      if (!upd) throw new Error("statement balance upsert returned no row");
       return {
         mode,
         drift: 0,
         currency: reconcileCurrency,
-        statement_balance: Number(upd.rows[0].balance),
+        statement_balance: Number(upd.balance),
         computed_balance: computed,
         transaction: null,
       };
@@ -213,7 +212,8 @@ export async function reconcileAccount(
     // it is owned by the shared system recipient — resolved inside this
     // transaction, so a rolled-back reconcile leaves no trace of it either.
     const systemRecipientId = await recipientRepository.getOrCreateSystemId();
-    const ins = await query<Record<string, unknown>>(
+    const ins = await queryOne(
+      adjustmentRowSchema,
       `INSERT INTO transactions
          (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, true, 'adjustment', true)
@@ -233,7 +233,7 @@ export async function reconcileAccount(
       currency: reconcileCurrency,
       statement_balance: statement,
       computed_balance: statement, // computed now equals statement after the delta
-      transaction: ins.rows[0] || null,
+      transaction: ins ?? null,
     };
   });
 }

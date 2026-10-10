@@ -75,13 +75,14 @@ export interface RollingBacktestMethodResult {
 }
 
 function addMonths(iso: string, delta: number) {
-  const [y, m] = iso.split("-").map(Number);
+  // A missing part is NaN, as it was when read past the end of the split.
+  const [y = NaN, m = NaN] = iso.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
 function daysInMonth(yyyymm: string) {
-  const [y, m] = yyyymm.split("-").map(Number);
+  const [y = NaN, m = NaN] = yyyymm.split("-").map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
 
@@ -120,9 +121,9 @@ function stats(predictedSeries: ForecastPoint[], actualSeries: DailyNetPoint[]) 
   let cumPred = 0;
   let cumActual = 0;
   const residuals = new Array<number>(n);
-  for (let i = 0; i < n; i++) {
+  for (const [i, actual] of actualSeries.entries()) {
     const pred = predictedSeries[i]?.value ?? 0;
-    const act = actualSeries[i].net;
+    const act = actual.net;
     const err = pred - act;
     residuals[i] = err;
     sumAbs += Math.abs(err);

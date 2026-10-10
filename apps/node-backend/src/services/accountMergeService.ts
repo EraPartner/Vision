@@ -28,7 +28,13 @@
  * collidingAnchorCurrencies.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  accountCurrencyRowSchema,
+  balancePartsRowSchema,
+  bigintCountRowSchema,
+} from "../database/rows/ledger.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import { filterValidatedIdNumbers } from "../lib/validation.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
@@ -74,7 +80,12 @@ export interface AccountMergePreview {
   openingAnchorCollision: boolean;
 }
 
-type CountRow = { n: string };
+/** Run a bare `COUNT(*) AS n` query; it always returns exactly one row. */
+async function countOf(sql: string, params: unknown[]): Promise<number> {
+  const row = await queryOne(bigintCountRowSchema, sql, params);
+  if (!row) throw new Error("account merge count returned no row");
+  return parseInt(row.n, 10);
+}
 
 /**
  * Do the stamped-balance histories of >1 original account overlap in time?
@@ -86,14 +97,11 @@ type CountRow = { n: string };
 function stampRangesOverlap(
   ranges: { account_id: number; min_date: string; max_date: string }[],
 ): boolean {
-  for (let i = 0; i < ranges.length; i++) {
-    for (let j = i + 1; j < ranges.length; j++) {
+  for (const [i, a] of ranges.entries()) {
+    for (const b of ranges.slice(i + 1)) {
       // Two closed ranges [minA,maxA] and [minB,maxB] overlap iff each starts
       // on or before the other ends.
-      if (
-        ranges[i].min_date <= ranges[j].max_date &&
-        ranges[j].min_date <= ranges[i].max_date
-      ) {
+      if (a.min_date <= b.max_date && b.min_date <= a.max_date) {
         return true;
       }
     }
@@ -359,11 +367,12 @@ export async function previewMerge(
     throw new ValidationError("An account cannot be merged into itself");
   }
 
-  const accounts = await query<{ id: number; currency: string }>(
+  const accounts = await queryRows(
+    accountCurrencyRowSchema,
     "SELECT id, currency FROM accounts WHERE id = ANY($1::int[])",
     [[sourceId, targetId]],
   );
-  const byId = new Map(accounts.rows.map((r) => [r.id, r]));
+  const byId = new Map(accounts.map((r) => [r.id, r]));
   const target = byId.get(targetId);
   if (!target) throw new NotFoundError(`Account ${targetId} not found`);
   if (!byId.has(sourceId))
@@ -381,19 +390,18 @@ export async function previewMerge(
     stampRanges,
     anchors,
   ] = await Promise.all([
-    query<CountRow>(
-      "SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1",
-      [sourceId],
-    ),
-    query<CountRow>(
+    countOf("SELECT COUNT(*) AS n FROM transactions WHERE account_id = $1", [
+      sourceId,
+    ]),
+    countOf(
       "SELECT COUNT(*) AS n FROM planned_transactions WHERE account_id = $1",
       [sourceId],
     ),
-    query<CountRow>(
+    countOf(
       "SELECT COUNT(*) AS n FROM portfolio_transactions WHERE account_id = $1",
       [sourceId],
     ),
-    query<CountRow>(
+    countOf(
       "SELECT COUNT(*) AS n FROM accounts WHERE funding_account_id = $1",
       [sourceId],
     ),
@@ -403,9 +411,8 @@ export async function previewMerge(
     // account expression is the LITERAL `ANY($1::int[])` (never user input), so
     // the builder's `t.account_id = ${account}` becomes the union predicate —
     // which is exactly what the merged account's rows will look like.
-    query<{
-      balance_parts: Array<{ currency: string; balance: string }> | null;
-    }>(
+    queryOne(
+      balancePartsRowSchema,
       `SELECT bp.balance_parts
          FROM (SELECT 1) merge_drv
          ${computedBalanceByCurrencyAggLateral({ account: "ANY($1::int[])", asOfDate: "$2::date" })}`,
@@ -419,7 +426,7 @@ export async function previewMerge(
   ]);
 
   const targetCurrency = (target.currency || "EUR").toUpperCase();
-  const partitions = projected.rows[0]?.balance_parts ?? [];
+  const partitions = projected?.balance_parts ?? [];
   let total = toDecimal(0);
   const unconvertedCurrencies: string[] = [];
   for (const part of partitions) {
@@ -444,10 +451,10 @@ export async function previewMerge(
     into: targetId,
     source: sourceId,
     reassigned: {
-      transactions: parseInt(txCount.rows[0].n, 10),
-      planned: parseInt(plannedCount.rows[0].n, 10),
-      portfolio: parseInt(portfolioCount.rows[0].n, 10),
-      funding: parseInt(fundingCount.rows[0].n, 10),
+      transactions: txCount,
+      planned: plannedCount,
+      portfolio: portfolioCount,
+      funding: fundingCount,
     },
     // Partition balances arrive as NUMERIC-backed strings; emit the converted
     // total as a rounded number (banker's, cents), like the hub's computed_balance.

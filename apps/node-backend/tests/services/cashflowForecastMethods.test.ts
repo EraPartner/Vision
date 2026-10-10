@@ -177,8 +177,8 @@ describe("simpleAverage", () => {
       forecastDates: ["2026-04-01", "2026-04-02"],
     });
     expect(out).toHaveLength(2);
-    expect(out[0].value).toBe(3);
-    expect(out[1].value).toBe(10);
+    expect(out[0]!.value).toBe(3);
+    expect(out[1]!.value).toBe(10);
   });
 
   it("falls back to 0 for missing DOM", () => {
@@ -186,7 +186,7 @@ describe("simpleAverage", () => {
       history: [{ date: "2024-01-01", net: 5 }],
       forecastDates: ["2026-04-15"],
     });
-    expect(out[0].value).toBe(0);
+    expect(out[0]!.value).toBe(0);
   });
 });
 
@@ -198,7 +198,7 @@ describe("forecast month helpers", () => {
       { date: "2025-03-19" },
       { date: "2025-01-02" },
     ];
-    expect(monthKey(history[0].date)).toBe("2025-03");
+    expect(monthKey(history[0]!.date)).toBe("2025-03");
     expect(orderedMonthKeys(history)).toEqual([
       "2024-12",
       "2025-01",
@@ -218,7 +218,7 @@ describe("weightedAverage", () => {
       forecastDates: ["2026-04-01"],
     });
     // w: month0=1, month1=2. (1*10 + 2*20) / 3 = 50/3 ≈ 16.67
-    expect(out[0].value).toBeCloseTo(50 / 3, 6);
+    expect(out[0]!.value).toBeCloseTo(50 / 3, 6);
   });
 });
 
@@ -230,9 +230,9 @@ describe("ewma", () => {
       { date: "2024-03-01", net: 30 },
     ];
     const out = ewma.forecast({ history: hist, forecastDates: ["2026-04-01"] });
-    expect(Number.isFinite(out[0].value)).toBe(true);
-    expect(out[0].value).toBeGreaterThan(10);
-    expect(out[0].value).toBeLessThan(30);
+    expect(Number.isFinite(out[0]!.value)).toBe(true);
+    expect(out[0]!.value).toBeGreaterThan(10);
+    expect(out[0]!.value).toBeLessThan(30);
   });
 });
 
@@ -263,7 +263,7 @@ describe("prophetLite", () => {
       history: [{ date: "2024-01-01", net: 1 }],
       forecastDates: ["2026-04-25"],
     });
-    expect(out[0].value).toBe(0);
+    expect(out[0]!.value).toBe(0);
   });
 
   it("produces finite values on adequate history", () => {
@@ -306,17 +306,17 @@ describe("monteCarloParametric", () => {
       seed: "s",
     });
     for (let i = 0; i < dates.length; i++) {
-      expect(out.bands.p10[i].value).toBeLessThanOrEqual(
-        out.bands.p50[i].value,
+      expect(out.bands.p10![i]!.value).toBeLessThanOrEqual(
+        out.bands.p50![i]!.value,
       );
-      expect(out.bands.p50[i].value).toBeLessThanOrEqual(
-        out.bands.p90[i].value,
+      expect(out.bands.p50![i]!.value).toBeLessThanOrEqual(
+        out.bands.p90![i]!.value,
       );
-      expect(out.cumulative_bands.p10[i].value).toBeLessThanOrEqual(
-        out.cumulative_bands.p50[i].value,
+      expect(out.cumulative_bands.p10![i]!.value).toBeLessThanOrEqual(
+        out.cumulative_bands.p50![i]!.value,
       );
-      expect(out.cumulative_bands.p50[i].value).toBeLessThanOrEqual(
-        out.cumulative_bands.p90[i].value,
+      expect(out.cumulative_bands.p50![i]!.value).toBeLessThanOrEqual(
+        out.cumulative_bands.p90![i]!.value,
       );
     }
   });
@@ -361,17 +361,17 @@ describe("monteCarloBlockBootstrap", () => {
       seed: "s",
     });
     for (let i = 0; i < dates.length; i++) {
-      expect(out.bands.p10[i].value).toBeLessThanOrEqual(
-        out.bands.p50[i].value,
+      expect(out.bands.p10![i]!.value).toBeLessThanOrEqual(
+        out.bands.p50![i]!.value,
       );
-      expect(out.bands.p50[i].value).toBeLessThanOrEqual(
-        out.bands.p90[i].value,
+      expect(out.bands.p50![i]!.value).toBeLessThanOrEqual(
+        out.bands.p90![i]!.value,
       );
-      expect(out.cumulative_bands.p10[i].value).toBeLessThanOrEqual(
-        out.cumulative_bands.p50[i].value,
+      expect(out.cumulative_bands.p10![i]!.value).toBeLessThanOrEqual(
+        out.cumulative_bands.p50![i]!.value,
       );
-      expect(out.cumulative_bands.p50[i].value).toBeLessThanOrEqual(
-        out.cumulative_bands.p90[i].value,
+      expect(out.cumulative_bands.p50![i]!.value).toBeLessThanOrEqual(
+        out.cumulative_bands.p90![i]!.value,
       );
     }
   });
@@ -404,10 +404,10 @@ describe("walkForwardBacktest", () => {
       windowMonths: 3,
     });
     expect(result).toHaveLength(1);
-    expect(result[0].aggregate.months).toBeGreaterThan(0);
-    expect(Number.isFinite(result[0].aggregate.mae)).toBe(true);
-    expect(Number.isFinite(result[0].aggregate.rmse)).toBe(true);
-    expect(Number.isFinite(result[0].aggregate.mape)).toBe(true);
+    expect(result[0]!.aggregate.months).toBeGreaterThan(0);
+    expect(Number.isFinite(result[0]!.aggregate.mae)).toBe(true);
+    expect(Number.isFinite(result[0]!.aggregate.rmse)).toBe(true);
+    expect(Number.isFinite(result[0]!.aggregate.mape)).toBe(true);
   });
 
   it("short-circuits methods with no training history", () => {
@@ -424,7 +424,7 @@ describe("walkForwardBacktest", () => {
       asOfMonth: "2025-02",
       windowMonths: 2,
     });
-    expect(result[0].aggregate).toEqual({
+    expect(result[0]!.aggregate).toEqual({
       mae: 0,
       rmse: 0,
       mape: null,
@@ -439,7 +439,7 @@ describe("ensemble", () => {
   const makeOutputs = (ids: string[], values: number[]) =>
     ids.map((id, i) => ({
       id,
-      series: dates.map((date) => ({ date, value: values[i] })),
+      series: dates.map((date) => ({ date, value: values[i]! })),
     }));
 
   it("computeWeights returns empty map when no accuracy rows", () => {
@@ -509,7 +509,7 @@ describe("ensemble", () => {
       weights: new Map(),
     });
     expect(result).toHaveLength(3);
-    expect(result[0].value).toBeCloseTo(15, 5);
+    expect(result[0]!.value).toBeCloseTo(15, 5);
   });
 
   it("forecast applies explicit weights correctly", () => {
@@ -523,7 +523,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights,
     });
-    expect(result[0].value).toBeCloseTo(75, 5);
+    expect(result[0]!.value).toBeCloseTo(75, 5);
   });
 
   it("forecast skips errored methods", () => {
@@ -540,7 +540,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights: new Map(),
     });
-    expect(result[0].value).toBeCloseTo(10, 5);
+    expect(result[0]!.value).toBeCloseTo(10, 5);
   });
 
   it("forecast returns zeros when all methods errored", () => {
@@ -556,7 +556,7 @@ describe("ensemble", () => {
       methodOutputs: outputs,
       weights: new Map(),
     });
-    expect(result[0].value).toBe(0);
+    expect(result[0]!.value).toBe(0);
   });
 
   it("id and label are stable", () => {
@@ -590,7 +590,7 @@ describe("accuracyStore", () => {
     });
     const latest = await getLatestAccuracyByMethod({ userId: "u1" });
     expect(latest).toHaveLength(1);
-    expect(latest[0].asOfMonth).toBe("2026-04");
+    expect(latest[0]!.asOfMonth).toBe("2026-04");
   });
 
   it("returns history sorted newest-first", async () => {
@@ -762,12 +762,12 @@ describe("reconcileCategoryForecasts", () => {
     );
 
     // sum for '2026-04-26' = 5, ref = 10 → scale = 2
-    expect(result[0].series[0].value).toBeCloseTo(4); // 2 * 2
-    expect(result[1].series[0].value).toBeCloseTo(6); // 3 * 2
+    expect(result[0]!.series[0]!.value).toBeCloseTo(4); // 2 * 2
+    expect(result[1]!.series[0]!.value).toBeCloseTo(6); // 3 * 2
 
     // sum for '2026-04-27' = 10, ref = 20 → scale = 2
-    expect(result[0].series[1].value).toBeCloseTo(8); // 4 * 2
-    expect(result[1].series[1].value).toBeCloseTo(12); // 6 * 2
+    expect(result[0]!.series[1]!.value).toBeCloseTo(8); // 4 * 2
+    expect(result[1]!.series[1]!.value).toBeCloseTo(12); // 6 * 2
   });
 
   it("splits the residual equally when all category magnitudes are zero", () => {
@@ -784,7 +784,7 @@ describe("reconcileCategoryForecasts", () => {
       refByDate,
     );
     // totalAbs=0 → split diff (5) equally → the single category absorbs it so Σ===ref.
-    expect(result[0].series[0].value).toBe(5);
+    expect(result[0]!.series[0]!.value).toBe(5);
   });
 
   it("does not explode when mixed-sign categories nearly cancel", () => {
@@ -817,8 +817,8 @@ describe("reconcileCategoryForecasts", () => {
       ["2026-04-26"],
       refByDate,
     );
-    const inc = result[0].series[0].value;
-    const exp = result[1].series[0].value;
+    const inc = result[0]!.series[0]!.value;
+    const exp = result[1]!.series[0]!.value;
 
     expect(inc + exp).toBeCloseTo(200); // Σ === ref
     expect(Math.abs(inc - 3000)).toBeLessThanOrEqual(190); // |adjustment| ≤ |diff|
@@ -843,7 +843,7 @@ describe("reconcileCategoryForecasts", () => {
       ["2026-04-26"],
       refByDate,
     );
-    expect(result[0].cat).toEqual(cat);
+    expect(result[0]!.cat).toEqual(cat);
   });
 });
 
@@ -956,9 +956,9 @@ describe("buildCategoryBreakdown", () => {
       referenceDaily,
     });
     expect(result).toHaveLength(1);
-    expect(result[0].category_id).toBe(7);
-    expect(result[0].path_name).toBe("New:Branch:Name");
-    expect(result[0].actual[0].net).toBe(-5);
+    expect(result[0]!.category_id).toBe(7);
+    expect(result[0]!.path_name).toBe("New:Branch:Name");
+    expect(result[0]!.actual[0]!.net).toBe(-5);
   });
 
   it("actual rows null after todayDay", () => {
@@ -972,10 +972,10 @@ describe("buildCategoryBreakdown", () => {
     });
     for (const item of result) {
       // days 1 and 2 have actuals, day 3 is future
-      expect(item.actual[0].net).not.toBeNull();
-      expect(item.actual[1].net).not.toBeNull();
-      expect(item.actual[2].net).toBeNull();
-      expect(item.actual[2].cumulative).toBeNull();
+      expect(item.actual[0]!.net).not.toBeNull();
+      expect(item.actual[1]!.net).not.toBeNull();
+      expect(item.actual[2]!.net).toBeNull();
+      expect(item.actual[2]!.cumulative).toBeNull();
     }
   });
 
@@ -990,7 +990,7 @@ describe("buildCategoryBreakdown", () => {
     });
     for (const item of result) {
       expect(item.forecast).toHaveLength(1);
-      expect(item.forecast[0].date).toBe("2026-04-03");
+      expect(item.forecast[0]!.date).toBe("2026-04-03");
     }
   });
 
@@ -1021,9 +1021,9 @@ describe("buildCategoryBreakdown", () => {
     });
     const income = result.find((r) => r.general === "Income");
     // actual day1=120, day2=50 → cum after day2=170
-    expect(income!.actual[1].cumulative).toBe(170);
+    expect(income!.actual[1]!.cumulative).toBe(170);
     // cumulative[2] should be > 170 (actual_cum + forecast)
-    expect(income!.cumulative[2].value).toBeGreaterThanOrEqual(170);
+    expect(income!.cumulative[2]!.value).toBeGreaterThanOrEqual(170);
   });
 
   it("adds scheduled category rows on their effective date", () => {
@@ -1054,8 +1054,8 @@ describe("buildCategoryBreakdown", () => {
       referenceDaily,
     }).find((r) => r.general === "Expense");
 
-    expect(expense!.cumulative[2].value).toBe(
-      withoutScheduled!.cumulative[2].value - 40,
+    expect(expense!.cumulative[2]!.value).toBe(
+      withoutScheduled!.cumulative[2]!.value - 40,
     );
   });
 
@@ -1073,7 +1073,7 @@ describe("buildCategoryBreakdown", () => {
     // with no history, raw forecast = 0 before reconciliation
     // after reconciliation with ref=70: sum=0 → scale=1 → stays 0
     for (const item of result) {
-      expect(Number.isFinite(item.forecast[0].value)).toBe(true);
+      expect(Number.isFinite(item.forecast[0]!.value)).toBe(true);
     }
   });
 
@@ -1086,8 +1086,8 @@ describe("buildCategoryBreakdown", () => {
       todayDay,
       referenceDaily,
     });
-    expect(result[0].general).toBe("Expense");
-    expect(result[1].general).toBe("Income");
+    expect(result[0]!.general).toBe("Expense");
+    expect(result[1]!.general).toBe("Income");
   });
 });
 

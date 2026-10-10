@@ -30,8 +30,8 @@ function dbRow(overrides: Record<string, unknown> = {}) {
     name: 'My Bank',
     kind: 'transaction',
     config_json: SAMPLE_CONFIG,
-    created_at: '2026-06-01T00:00:00Z',
-    updated_at: '2026-06-01T00:00:00Z',
+    created_at: new Date('2026-06-01T00:00:00Z'),
+    updated_at: new Date('2026-06-01T00:00:00Z'),
     ...overrides,
   };
 }
@@ -50,7 +50,7 @@ describe('customParserConfigRepository.getAll', () => {
   it('parses config_json when stored as a string', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ config_json: JSON.stringify(SAMPLE_CONFIG) })] }));
     const result = await repo.getAll();
-    expect(result[0].config).toEqual(SAMPLE_CONFIG);
+    expect(result[0]!.config).toEqual(SAMPLE_CONFIG);
   });
 });
 
@@ -76,7 +76,7 @@ describe('customParserConfigRepository.create', () => {
   it('inserts name + serialized config and returns the mapped row', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     const result = await repo.create({ name: 'My Bank', config: SAMPLE_CONFIG });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('INSERT INTO custom_parser_configs');
     expect(params![0]).toBe('My Bank');
     expect(params![1]).toBe('transaction'); // kind
@@ -91,7 +91,7 @@ describe('customParserConfigRepository.update', () => {
   it('only updates provided fields', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow({ name: 'Renamed' })] }));
     await repo.update(1, { name: 'Renamed' });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('name = $1');
     expect(sql).not.toContain('config_json = ');
     expect(params).toEqual(['Renamed', 1]);
@@ -100,7 +100,7 @@ describe('customParserConfigRepository.update', () => {
   it('serializes config when provided', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     await repo.update(1, { config: SAMPLE_CONFIG });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('config_json = $1::jsonb');
     expect(JSON.parse(params![0] as string)).toEqual(SAMPLE_CONFIG);
   });
@@ -109,7 +109,7 @@ describe('customParserConfigRepository.update', () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [dbRow()] }));
     await repo.update(1, {});
     // getById is the only query
-    expect(query.mock.calls[0][0]).toContain('WHERE id = $1');
+    expect(query.mock.calls[0]![0]).toContain('WHERE id = $1');
   });
 });
 

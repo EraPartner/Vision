@@ -3,7 +3,12 @@
  */
 
 import type { Decimal } from "decimal.js";
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  bankBalanceRowSchema,
+  bankHistoryRowSchema,
+} from "../database/rows/info.ts";
+import type { BankBalanceRow } from "../database/rows/info.ts";
 import {
   toDecimal,
   toNumber,
@@ -23,35 +28,8 @@ import { batchConvertGroupsWithHistoricalRateFallback } from "./infoRepositoryHe
 // imported movement history contains ledger rows.
 const HOLDINGS_ONLY_ACCOUNT_TYPES_SQL = "'crypto_exchange', 'wallet'";
 
-interface StatementBalanceReading {
-  currency: string;
-  balance: string;
-  balance_date: string;
-}
-
-type BankBalanceRow = {
-  account_id: number;
-  bank_account: string;
-  display_name: string;
-  currency: string | null;
-  balance: string;
-  statement_balances: StatementBalanceReading[];
-  account_currency: string;
-  anchor_date: string | null;
-  post_anchor_count: string | null;
-  /** `to_char(..., 'YYYY-MM-DD')` — a string. */
-  date: string;
-  transaction_count: string;
-  first_transaction: Date | null;
-  last_transaction: Date | null;
-};
-
-type BankHistoryRow = {
-  bank_account: string;
-  day: string;
-  currency: string;
-  balance: string;
-};
+/** One stored statement reading; `balance` is a JSON number (see the schema). */
+type StatementBalanceReading = BankBalanceRow["statement_balances"][number];
 
 export interface BankAccountBalance {
   account_id: number;
@@ -119,8 +97,9 @@ export const banksRepository = {
 
     // Both queries are independent — run in parallel, then batch-convert
     // with one historical-rate lookup instead of two.
-    const [latestBalanceResult, historyResult] = await Promise.all([
-      query<BankBalanceRow>(
+    const [latestBalanceRows, historyRows] = await Promise.all([
+      queryRows(
+        bankBalanceRowSchema,
         `
         SELECT a.id AS account_id,
                a.name AS bank_account,
@@ -183,7 +162,8 @@ export const banksRepository = {
       `,
         [todayYmd],
       ),
-      query<BankHistoryRow>(
+      queryRows(
+        bankHistoryRowSchema,
         `
         WITH days AS (
           SELECT generate_series(
@@ -241,7 +221,7 @@ export const banksRepository = {
     const [currentBalancesConverted, historyConverted] =
       await batchConvertGroupsWithHistoricalRateFallback(
         [
-          latestBalanceResult.rows.map((r) => ({
+          latestBalanceRows.map((r) => ({
             ...r,
             amount: toNumber(toDecimal(r.balance)),
             currency: r.currency || "EUR",
@@ -250,7 +230,7 @@ export const banksRepository = {
           // `day` (see resolveDateFromRow), which is the right FX anchor for an
           // as-of-that-day balance — and the convention net worth's history
           // already follows.
-          historyResult.rows
+          historyRows
             .filter((r) => r.bank_account)
             .map((r) => ({
               ...r,

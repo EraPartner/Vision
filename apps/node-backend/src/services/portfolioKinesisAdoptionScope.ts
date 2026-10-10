@@ -173,7 +173,9 @@ export function proveKinesisAdoptionSources(
       const occurrences = new Map<string, number>();
       for (const [index, row] of scoped.entries()) {
         const raw = portfolioPrimaryRawData(requiredStagedValue(row.raw_data));
+        // context.events.length === scoped.length (checked above).
         const expected = context.events[index];
+        if (!expected) throw new Error("source event");
         const identity = tuple(
           hash(raw),
           row.source_transaction_id,
@@ -215,15 +217,18 @@ export function proveKinesisAdoptionSources(
             item.sourceAccountIdentity === row.source_account_identity &&
             item.rawData === portfolioPrimaryRawData(row.raw_data),
         );
-        if (matches.length !== 1) throw new Error("literal identity");
-        const item = matches[0];
+        const [item] = matches;
+        if (matches.length !== 1 || !item) throw new Error("literal identity");
+        // context.events.length === scoped.length (checked above).
+        const event = context.events[index];
+        if (!event) throw new Error("source event");
         if (
           parsedDateToYmd(item.date) !== row.tx_date ||
           (item.symbolRaw || null) !== (row.symbol_raw || null)
         )
           throw new Error("literal binding");
         literalProofs.set(Number(row.id), {
-          eventKey: context.events[index].eventKey,
+          eventKey: event.eventKey,
           sourceFileHash: context.source_file_hash,
           parsed: item,
         });
@@ -246,7 +251,7 @@ export function proveKinesisAdoptionSources(
             config.portfolio_performance_reference?.sourceHash &&
           item.typeRaw === "Gift" &&
           !item.currency;
-        const identity = assignImportIdentities(
+        const [identity] = assignImportIdentities(
           [row],
           (source: KinesisSourceRow) =>
             portfolioIdentityBase(
@@ -255,7 +260,9 @@ export function proveKinesisAdoptionSources(
                 : source,
               { accountIdentity: "UNASSIGNED" },
             ),
-        )[0];
+        );
+        // One identity per input row.
+        if (!identity) throw new Error("source identity");
         const eligible =
           ["Buy", "Gift"].includes(item.typeRaw) &&
           row.route === "portfolio" &&
@@ -271,7 +278,7 @@ export function proveKinesisAdoptionSources(
           Number(row.dedup_occurrence) === identity.occurrence;
         if (eligible)
           proofs.set(Number(row.id), {
-            eventKey: context.events[index].eventKey,
+            eventKey: event.eventKey,
             sourceFileHash: context.source_file_hash,
             parsed: item,
           });

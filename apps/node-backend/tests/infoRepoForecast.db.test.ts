@@ -55,8 +55,8 @@ import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 
-const cat: Record<string, number> = {};
-const rec: Record<string, number> = {};
+const cat = {} as Record<"Food" | "Bills", number>;
+const rec = {} as Record<"electrabel" | "electrabelAlias" | "misc", number>;
 
 /** Day N of the month `monthsBack` months before the current one, as 'YYYY-MM-DD'. */
 const monthDay = (monthsBack: number, day: number) =>
@@ -95,7 +95,7 @@ async function seedBase() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
   const addRecipient = async (
     name: string,
@@ -231,7 +231,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
-      for (const bag of [cat, rec])
+      for (const bag of [cat, rec] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
       clearMemoryCache();
       clearMvCache();
@@ -271,11 +271,11 @@ describe.skipIf(!hasTestDatabase())(
         // Divisor is the elapsed months since this ledger's earliest in-window
         // month (2 months back → 2), not the full 24-month span. The 25-months-back
         // row is outside the window, so it does not stretch the span either.
-        expect(byDay[4].average).toBe(0);
-        expect(byDay[5].average).toBe(80); // (100 + 60) / 2
-        expect(byDay[9].average).toBe(80); // cumulative carries forward
-        expect(byDay[10].average).toBe(65); // ((100 − 30) + 60) / 2
-        expect(byDay[r.days_in_month].average).toBe(65);
+        expect(byDay[4]!.average).toBe(0);
+        expect(byDay[5]!.average).toBe(80); // (100 + 60) / 2
+        expect(byDay[9]!.average).toBe(80); // cumulative carries forward
+        expect(byDay[10]!.average).toBe(65); // ((100 − 30) + 60) / 2
+        expect(byDay[r.days_in_month]!.average).toBe(65);
       });
 
       it("keeps future ledger rows out of current and includes them in the projection", async () => {
@@ -295,14 +295,14 @@ describe.skipIf(!hasTestDatabase())(
           r.without_planned.map((d) => [d.day, d]),
         );
 
-        expect(byDay[1].current).not.toBeNull();
+        expect(byDay[1]!.current).not.toBeNull();
         // Cumulative through today covers both current-month rows (they collapse
         // onto one day when the suite runs on the 1st).
-        expect(byDay[r.current_day].current).toBe(40);
+        expect(byDay[r.current_day]!.current).toBe(40);
         if (r.current_day < r.days_in_month) {
-          expect(byDay[r.current_day + 1].current).toBeNull();
-          expect(byDay[r.days_in_month].current).toBeNull();
-          expect(r.with_planned[r.days_in_month - 1].current).toBe(-460);
+          expect(byDay[r.current_day + 1]!.current).toBeNull();
+          expect(byDay[r.days_in_month]!.current).toBeNull();
+          expect(r.with_planned[r.days_in_month - 1]!.current).toBe(-460);
         }
         expect(r.without_planned).toHaveLength(r.days_in_month);
         expect(r.with_planned).toHaveLength(r.days_in_month);
@@ -336,11 +336,11 @@ describe.skipIf(!hasTestDatabase())(
           r.with_planned.map((d) => [d.day, d]),
         );
 
-        expect(planned[r.current_day].current).toBe(
-          plain[r.current_day].current! - 20,
+        expect(planned[r.current_day]!.current).toBe(
+          plain[r.current_day]!.current! - 20,
         );
-        expect(planned[4].average).toBe(plain[4].average);
-        expect(planned[5].average).toBe(plain[5].average - 40);
+        expect(planned[4]!.average).toBe(plain[4]!.average);
+        expect(planned[5]!.average).toBe(plain[5]!.average - 40);
       });
 
       it("applies alias-aware category and recipient exclusions to the live rows", async () => {

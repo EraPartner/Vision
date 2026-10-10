@@ -57,12 +57,12 @@ describe("IBKR Transaction History portfolio adapter", () => {
     });
     expect(rows[3]).toMatchObject({ amount: 4.25, currency: "EUR" });
     expect(rows[4]).toMatchObject({ amount: 1.25, currency: "EUR" });
-    expect(rows[0].rawData).toBe(
+    expect(rows[0]!.rawData).toBe(
       "Transaction History,Data,2026-01-02,U0000000,Example Corp purchase,Buy,EXM,2.0,10.0,USD,-17.0,-0.85,-17.85,0.85,-0.17,-,1",
     );
-    expect(rows[0].rawData).toBe(rows[1].rawData);
-    expect(rows[3].rawData).toContain('\"4,25\"');
-    expect(rows[3].rawData).not.toContain("|");
+    expect(rows[0]!.rawData).toBe(rows[1]!.rawData);
+    expect(rows[3]!.rawData).toContain('\"4,25\"');
+    expect(rows[3]!.rawData).not.toContain("|");
   });
 
   it("treats dash symbols as instrument-less and keeps descriptions only as notes", async () => {
@@ -242,7 +242,7 @@ describe("IBKR Transaction History portfolio adapter", () => {
     expect(rows.ibkrSourceContext!.header_record).toContain(
       "Transaction History,Header,Account,Date,",
     );
-    expect(rows[0].rawData).toContain(
+    expect(rows[0]!.rawData).toContain(
       "Transaction History,Data,U0000000,2026-01-02,",
     );
   });

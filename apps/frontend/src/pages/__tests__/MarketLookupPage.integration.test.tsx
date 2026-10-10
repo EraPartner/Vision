@@ -6,7 +6,13 @@ import { useLocation } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { INVESTMENT_STUB, ok, err } from "@/test/msw/handlers";
+import {
+    INVESTMENT_STUB,
+    PORTFOLIO_SUMMARY_ITEM_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+    ok,
+    err,
+} from "@/test/msw/handlers";
 import MarketLookupPage from "@/pages/research/MarketLookupPage";
 
 function LocationProbe() {
@@ -268,12 +274,13 @@ describe("MarketLookupPage (integration)", () => {
             // which the backend computes for every active investment.
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
-                    totals: {},
-                    byAccount: [],
+                    ...PORTFOLIO_SUMMARY_STUB,
                     summaries: [
                         {
+                            ...PORTFOLIO_SUMMARY_ITEM_STUB,
                             ...providerInvestment,
+                            // The summary reports a missing rate as 0.
+                            interest_rate: 0,
                             assetClass: "crypto",
                             originalCurrency: "EUR",
                             currentPrice: 100,

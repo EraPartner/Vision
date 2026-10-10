@@ -28,6 +28,24 @@ const content: DossierContent = {
     links: { categoryIds: [12], investmentIds: [], savedAnalysisIds: [] },
 };
 
+/** A hydrated dossier as the service answers it. */
+const dossier = (version: number) => ({
+    id: "d-1",
+    version,
+    ...content,
+    linkDetails: [
+        {
+            kind: "category",
+            historicalId: "12",
+            labelSnapshot: "Groceries",
+            liveId: 12,
+            status: "live",
+        },
+    ],
+    createdAt: "2026-09-19T00:00:00.000Z",
+    updatedAt: "2026-09-19T00:00:00.000Z",
+});
+
 describe("research dossier API client", () => {
     it("paginates without losing the total", async () => {
         let url = "";
@@ -48,7 +66,7 @@ describe("research dossier API client", () => {
                 `${API_BASE}/api/research-dossiers/d-1`,
                 async ({ request }) => {
                     body = (await request.json()) as Record<string, unknown>;
-                    return ok({ id: "d-1", version: 3, ...body });
+                    return ok(dossier(3));
                 },
             ),
         );
@@ -67,7 +85,7 @@ describe("research dossier API client", () => {
                 `${API_BASE}/api/research-dossiers/d-1/restore`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ id: "d-1", version: 4 });
+                    return ok(dossier(4));
                 },
             ),
         );
@@ -98,7 +116,7 @@ describe("research dossier API client", () => {
     it("creates only after explicit call", async () => {
         server.use(
             http.post(`${API_BASE}/api/research-dossiers`, () =>
-                ok({ id: "d-1", version: 1, ...content }),
+                ok(dossier(1), { status: 201 }),
             ),
         );
         expect((await createDossier(content)).version).toBe(1);

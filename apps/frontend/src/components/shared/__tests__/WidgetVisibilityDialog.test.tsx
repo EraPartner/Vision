@@ -76,7 +76,8 @@ describe("WidgetVisibilityDialog", () => {
         );
         await user.click(await screen.findByRole("button", { name: /customize/i }));
         await screen.findByRole("dialog");
-        await user.click(screen.getByRole("button", { name: /show all/i }));
+        // widgets.showAll = "View all"
+        await user.click(screen.getByRole("button", { name: /view all/i }));
         expect(setAllVisible).toHaveBeenCalledWith(true);
     });
 

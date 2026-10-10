@@ -19,10 +19,15 @@ import {
   assignImportIdentities,
   portfolioIdentityBase,
 } from "../importIdentity.ts";
+import { queryOne, queryRows } from "../../database/rowContracts.ts";
+import {
+  pendingPortfolioStagingRowSchema,
+  validateBatchRowSchema,
+} from "../../database/rows/portfolioImport.ts";
 import type {
-  PortfolioImportBatchRow,
-  PortfolioImportStagingRow,
-} from "../../types/rows.ts";
+  PendingPortfolioStagingDbRow,
+  ValidateBatchRow,
+} from "../../database/rows/portfolioImport.ts";
 import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
@@ -32,42 +37,13 @@ import type { PortfolioParserConfig } from "./portfolioGenericAdapter.ts";
 /**
  * The projection validate.js reads. `tx_date` is selected RAW here (unlike the
  * transaction pipeline), so it really is a pg local-midnight `Date` —
- * `resolveAndCheck` formats it with LOCAL getters (`toYmd`) on purpose.
+ * `resolveAndCheck` formats it with LOCAL getters (`toYmd`) on purpose. IBKR
+ * funding batches project it as 'YYYY-MM-DD' instead.
  */
-export type PendingPortfolioStagingRow = Pick<
-  PortfolioImportStagingRow,
-  | "id"
-  | "row_index"
-  | "tx_date"
-  | "type_raw"
-  | "symbol_raw"
-  | "name_raw"
-  | "units"
-  | "price_per_unit"
-  | "amount"
-  | "raw_data"
-> & {
-  fees?: string | null;
-  taxes?: string | null;
-  currency?: string | null;
-  note?: string | null;
-  source_transaction_id?: string | null;
-  source_account_identity?: string | null;
-  /** JSONB written by stage from `ParsedPortfolioRow.assetTransfer`. */
-  asset_transfer_details?: { direction?: string } | null;
-  /** JSONB written by stage from `ParsedPortfolioRow.assetAdjustment`. */
-  asset_adjustment_details?: { kind?: string } | null;
-};
-
-/** The batch projection validateBatch reads. */
-type ValidateBatchRow = Pick<
-  PortfolioImportBatchRow,
-  "default_asset_class" | "default_type" | "is_brokerage" | "adapter_name"
-> & {
-  /** JSONB — already parsed by pg, or a JSON string from older writers. */
-  custom_config: PortfolioParserConfig | string | null;
-  account_import_identity: string | null;
-};
+export type PendingPortfolioStagingRow = Omit<
+  PendingPortfolioStagingDbRow,
+  "status"
+>;
 
 /** One row's type/route resolution; exactly one of `type`/`error` is meaningful. */
 type RowResolution = { type?: string; route?: string; error?: string };
@@ -90,7 +66,8 @@ export async function validateBatch({
     [batchId],
   );
 
-  const { rows: batchRows } = await query<ValidateBatchRow>(
+  const batchRow = await queryOne(
+    validateBatchRowSchema,
     `SELECT b.default_asset_class, b.default_type, b.custom_config, b.is_brokerage,
             b.adapter_name, a.import_identity::text AS account_import_identity
        FROM portfolio_import_batches b
@@ -98,7 +75,7 @@ export async function validateBatch({
       WHERE b.id = $1`,
     [batchId],
   );
-  const batch: Partial<ValidateBatchRow> = batchRows[0] || {};
+  const batch: Partial<ValidateBatchRow> = batchRow || {};
   const defaultAssetClass = batch.default_asset_class || undefined;
   const defaultType = batch.default_type || undefined;
   const isBrokerage = batch.is_brokerage === true;
@@ -117,9 +94,8 @@ export async function validateBatch({
       ? "to_char(tx_date, 'YYYY-MM-DD') AS tx_date"
       : "tx_date";
 
-  const { rows: allRows } = await query<
-    PendingPortfolioStagingRow & Pick<PortfolioImportStagingRow, "status">
-  >(
+  const allRows = await queryRows(
+    pendingPortfolioStagingRowSchema,
     `SELECT id, row_index, status, ${dateProjection}, type_raw, symbol_raw, name_raw, units,
             price_per_unit, amount, fees, taxes, currency, note, raw_data,
             source_transaction_id, source_account_identity, asset_transfer_details, asset_adjustment_details

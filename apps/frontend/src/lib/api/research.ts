@@ -9,8 +9,29 @@
  * See docs/api/research.md and docs/features/research.md.
  */
 
-import { API_BASE_URL, apiRequest, parseEnvelopeError, rawFetch } from '@/lib/api/client';
+import type { z } from 'zod';
+import {
+    API_BASE_URL,
+    apiRequest,
+    checkResponseContract,
+    parseEnvelopeError,
+    rawFetch,
+} from '@/lib/api/client';
 import { buildQuery, type QueryParams } from '@/lib/api/helpers';
+import {
+    InstrumentProviderMappingListSchema,
+    MacroSearchSchema,
+    MacroSeriesSchema,
+    MappingAuditSchema,
+    MappingResolveSchema,
+    PortfolioForecastSchema,
+    ResearchAnalystSchema,
+    ResearchChartSchema,
+    ResearchNewsSchema,
+    ResearchProviderKeyListSchema,
+    ResearchScorecardSchema,
+    ResearchSearchSchema,
+} from '@vision/types/contracts';
 import type {
     InstrumentProviderMapping,
     MappingAuditResponse,
@@ -53,8 +74,13 @@ function normalizeMeta(meta: RawEnvelope<unknown>['meta']): ResearchMeta {
  * GET an `/api/research/*` endpoint and return `{ data, meta }`. Keeps the
  * tracked transport (timeout, abort registration, correlation id) and unified
  * envelope error parsing, but preserves `meta` instead of discarding it.
+ * `data` is checked against `schema` (ADR-193) like `apiRequest` does.
  */
-async function researchGet<T>(endpoint: string, params?: QueryParams): Promise<ResearchResult<T>> {
+async function researchGet<T>(
+    endpoint: string,
+    params: QueryParams | undefined,
+    schema: z.ZodType,
+): Promise<ResearchResult<T>> {
     const query = buildQuery(params);
     const url = `${API_BASE_URL}${endpoint}${query ? `?${query}` : ''}`;
     const response = await rawFetch(url);
@@ -62,13 +88,15 @@ async function researchGet<T>(endpoint: string, params?: QueryParams): Promise<R
         throw await parseEnvelopeError(response, 'Research request failed');
     }
     const body = (await response.json()) as RawEnvelope<T>;
-    return { data: body.data as T, meta: normalizeMeta(body.meta) };
+    const data = checkResponseContract(schema, body.data as T, `GET ${endpoint}`);
+    return { data, meta: normalizeMeta(body.meta) };
 }
 
 async function researchSend<T>(
     endpoint: string,
     method: 'POST' | 'DELETE',
-    payload?: unknown,
+    payload: unknown,
+    schema: z.ZodType,
 ): Promise<ResearchResult<T>> {
     const url = `${API_BASE_URL}${endpoint}`;
     const response = await rawFetch(url, {
@@ -80,13 +108,18 @@ async function researchSend<T>(
         throw await parseEnvelopeError(response, 'Research request failed');
     }
     const body = (await response.json()) as RawEnvelope<T>;
-    return { data: body.data as T, meta: normalizeMeta(body.meta) };
+    const data = checkResponseContract(schema, body.data as T, `${method} ${endpoint}`);
+    return { data, meta: normalizeMeta(body.meta) };
 }
 
 // ── Data endpoints ──────────────────────────────────────────────────────────
 
 export function searchResearch(query: string): Promise<ResearchResult<ResearchSearchResponse>> {
-    return researchGet<ResearchSearchResponse>('/api/research/search', { q: query });
+    return researchGet<ResearchSearchResponse>(
+        '/api/research/search',
+        { q: query },
+        ResearchSearchSchema,
+    );
 }
 
 export function getResearchChart(
@@ -96,29 +129,45 @@ export function getResearchChart(
     /** Pin a preferred provider (still falls through if it fails / is unkeyed). */
     provider?: string,
 ): Promise<ResearchResult<ResearchChartResponse>> {
-    return researchGet<ResearchChartResponse>('/api/research/chart', {
-        symbol,
-        range,
-        asset_class: assetClass,
-        provider,
-    });
+    return researchGet<ResearchChartResponse>(
+        '/api/research/chart',
+        {
+            symbol,
+            range,
+            asset_class: assetClass,
+            provider,
+        },
+        ResearchChartSchema,
+    );
 }
 
 export function getResearchAnalyst(
     symbol: string,
 ): Promise<ResearchResult<ResearchAnalyst | null>> {
-    return researchGet<ResearchAnalyst | null>('/api/research/analyst', { symbol });
+    return researchGet<ResearchAnalyst | null>(
+        '/api/research/analyst',
+        { symbol },
+        ResearchAnalystSchema,
+    );
 }
 
 export function getResearchNews(symbol: string): Promise<ResearchResult<ResearchNewsResponse>> {
-    return researchGet<ResearchNewsResponse>('/api/research/news', { symbol });
+    return researchGet<ResearchNewsResponse>(
+        '/api/research/news',
+        { symbol },
+        ResearchNewsSchema,
+    );
 }
 
 // ── Macro economic indicators (ADR-082) ──────────────────────────────────────
 
 /** Search macro series (CPI, rates, unemployment, …) across the macro providers. */
 export function searchMacro(query: string): Promise<ResearchResult<MacroSearchResponse>> {
-    return researchGet<MacroSearchResponse>('/api/research/macro/search', { q: query });
+    return researchGet<MacroSearchResponse>(
+        '/api/research/macro/search',
+        { q: query },
+        MacroSearchSchema,
+    );
 }
 
 /** Observations for one provider-pinned macro series. */
@@ -127,11 +176,15 @@ export function getMacroSeries(
     seriesId: string,
     range: ResearchRange,
 ): Promise<ResearchResult<MacroSeriesResponse>> {
-    return researchGet<MacroSeriesResponse>('/api/research/macro/series', {
-        provider,
-        series_id: seriesId,
-        range,
-    });
+    return researchGet<MacroSeriesResponse>(
+        '/api/research/macro/series',
+        {
+            provider,
+            series_id: seriesId,
+            range,
+        },
+        MacroSeriesSchema,
+    );
 }
 
 // ── Analytics (ADR-081) ───────────────────────────────────────────────────────
@@ -140,27 +193,36 @@ export function getResearchScorecard(
     symbol: string,
     assetClass?: ResearchAssetClass,
 ): Promise<ResearchResult<ResearchScorecardResponse | null>> {
-    return researchGet<ResearchScorecardResponse | null>('/api/research/scorecard', {
-        symbol,
-        asset_class: assetClass,
-    });
+    return researchGet<ResearchScorecardResponse | null>(
+        '/api/research/scorecard',
+        {
+            symbol,
+            asset_class: assetClass,
+        },
+        ResearchScorecardSchema,
+    );
 }
 
 export function getPortfolioForecast(
     input: PortfolioForecastInput,
 ): Promise<ResearchResult<PortfolioForecast>> {
-    return researchSend<PortfolioForecast>('/api/research/portfolio-forecast', 'POST', {
-        horizon_months: input.horizonMonths,
-        monthly_contribution: input.monthlyContribution,
-        monthly_contribution_schedule: input.monthlyContributionSchedule,
-        paths: input.paths,
-        forward_blend: input.forwardBlend,
-        method: input.method,
-        target_value: input.targetValue,
-        goal_month: input.goalMonth,
-        currency: input.currency,
-        seed: input.seed,
-    });
+    return researchSend<PortfolioForecast>(
+        '/api/research/portfolio-forecast',
+        'POST',
+        {
+            horizon_months: input.horizonMonths,
+            monthly_contribution: input.monthlyContribution,
+            monthly_contribution_schedule: input.monthlyContributionSchedule,
+            paths: input.paths,
+            forward_blend: input.forwardBlend,
+            method: input.method,
+            target_value: input.targetValue,
+            goal_month: input.goalMonth,
+            currency: input.currency,
+            seed: input.seed,
+        },
+        PortfolioForecastSchema,
+    );
 }
 
 // ── Symbol-mapping endpoints ────────────────────────────────────────────────
@@ -169,10 +231,14 @@ export function getResearchMappings(
     instrumentKey: string,
     keyType: MappingKeyType = 'isin',
 ): Promise<ResearchResult<MappingsResponse>> {
-    return researchGet<MappingsResponse>('/api/research/mappings', {
-        instrument_key: instrumentKey,
-        key_type: keyType,
-    });
+    return researchGet<MappingsResponse>(
+        '/api/research/mappings',
+        {
+            instrument_key: instrumentKey,
+            key_type: keyType,
+        },
+        InstrumentProviderMappingListSchema,
+    );
 }
 
 export function resolveResearchMappings(input: {
@@ -183,7 +249,12 @@ export function resolveResearchMappings(input: {
     /** When set, the held investment's configured provider is pre-seeded as confirmed. */
     investment_id?: number;
 }): Promise<ResearchResult<MappingResolveResponse>> {
-    return researchSend<MappingResolveResponse>('/api/research/mappings/resolve', 'POST', input);
+    return researchSend<MappingResolveResponse>(
+        '/api/research/mappings/resolve',
+        'POST',
+        input,
+        MappingResolveSchema,
+    );
 }
 
 export function saveResearchMappings(input: {
@@ -191,7 +262,12 @@ export function saveResearchMappings(input: {
     key_type?: MappingKeyType;
     mappings: MappingSaveInput[];
 }): Promise<ResearchResult<MappingsResponse>> {
-    return researchSend<MappingsResponse>('/api/research/mappings', 'POST', input);
+    return researchSend<MappingsResponse>(
+        '/api/research/mappings',
+        'POST',
+        input,
+        InstrumentProviderMappingListSchema,
+    );
 }
 
 /**
@@ -206,20 +282,28 @@ export function auditResearchMappings(input: {
     instrument_key: string;
     key_type?: MappingKeyType;
 }): Promise<ResearchResult<MappingAuditResponse>> {
-    return researchSend<MappingAuditResponse>('/api/research/mappings/audit', 'POST', input);
+    return researchSend<MappingAuditResponse>(
+        '/api/research/mappings/audit',
+        'POST',
+        input,
+        MappingAuditSchema,
+    );
 }
 
 // ── Provider API keys (Settings) ──────────────────────────────────────────────
 // Plain envelopes (no provenance meta); keys are returned masked, never in full.
 
 export function getResearchProviderKeys(): Promise<ProviderKeysResponse> {
-    return apiRequest('/api/research/provider-keys');
+    return apiRequest('/api/research/provider-keys', {
+        schema: ResearchProviderKeyListSchema,
+    });
 }
 
 export function setResearchProviderKey(provider: string, apiKey: string): Promise<ProviderKeysResponse> {
     return apiRequest(`/api/research/provider-keys/${encodeURIComponent(provider)}`, {
         method: 'PUT',
         body: JSON.stringify({ api_key: apiKey }),
+        schema: ResearchProviderKeyListSchema,
     });
 }
 

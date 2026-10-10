@@ -167,8 +167,8 @@ describe("IBKR native funding history workbook", () => {
         amount: 25.4,
         currency: "EUR",
       });
-      expect(rows[1].date).toEqual(new Date("2025-01-07T00:00:00Z"));
-      const envelope = JSON.parse(rows[0].rawData);
+      expect(rows[1]!.date).toEqual(new Date("2025-01-07T00:00:00Z"));
+      const envelope = JSON.parse(rows[0]!.rawData);
       expect(envelope).toMatchObject({
         schema: "ibkr_funding_workbook_row",
         version: 1,
@@ -185,7 +185,7 @@ describe("IBKR native funding history workbook", () => {
       expect(envelope.source_file_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(rows.ibkrFundingSourceContext.record_hashes).toHaveLength(2);
       expect(
-        getIbkrFundingPrimaryEvidence(stagingRow(rows[0], rows)),
+        getIbkrFundingPrimaryEvidence(stagingRow(rows[0]!, rows)),
       ).toMatchObject({
         type: "deposit",
         direction: "in",
@@ -209,7 +209,7 @@ describe("IBKR native funding history workbook", () => {
     ]);
     const rows = await parseIbkrFundingHistory(file);
     expect(
-      getIbkrFundingPrimaryEvidence(stagingRow(rows[0], rows))?.institution,
+      getIbkrFundingPrimaryEvidence(stagingRow(rows[0]!, rows))?.institution,
     ).toBeUndefined();
   });
 
@@ -275,7 +275,7 @@ describe("IBKR native funding history workbook", () => {
       /original Deposit/,
     );
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit.M2 = {
+      workbook.Sheets.Deposit!.M2 = {
         t: "s",
         v: "USD 1,234.56",
         f: '"USD 1,234.56"',
@@ -301,7 +301,7 @@ describe("IBKR native funding history workbook", () => {
 
   it("rejects excessive cell bounds before enumerating rows", async () => {
     await writeWorkbook(undefined, "xlsx", (workbook) => {
-      workbook.Sheets.Deposit["!ref"] = "A1:N50000";
+      workbook.Sheets.Deposit!["!ref"] = "A1:N50000";
     });
     await expect(parseIbkrFundingHistory(file)).rejects.toThrow(/cell limits/);
   });
@@ -309,7 +309,7 @@ describe("IBKR native funding history workbook", () => {
   it("requires full literal context and staging equality for primary evidence", async () => {
     await writeWorkbook();
     const rows = await parseIbkrFundingHistory(file);
-    const base = stagingRow(rows[0], rows);
+    const base = stagingRow(rows[0]!, rows);
     expect(getIbkrFundingPrimaryEvidence(base)).toBeDefined();
     for (const fields of [
       { amount: 1234.55 },
@@ -336,13 +336,13 @@ describe("IBKR native funding history workbook", () => {
         context.record_hashes = [];
       },
       (context: IbkrFundingSourceContext) => {
-        context.sheets[0].records[0].row_number = 3;
+        context.sheets[0]!.records[0]!.row_number = 3;
       },
       (context: IbkrFundingSourceContext) => {
-        context.sheets[0].source_columns[0] = "Changed";
+        context.sheets[0]!.source_columns[0] = "Changed";
       },
       (context: IbkrFundingSourceContext) => {
-        context.sheets[0].records[0].source_id = "OTHER";
+        context.sheets[0]!.records[0]!.source_id = "OTHER";
       },
     ]) {
       const value = structuredClone(base);

@@ -236,8 +236,8 @@ describe("buildChatMessages", () => {
       history: [],
       userInput: "hello",
     });
-    expect(messages[0].role).toBe("system");
-    expect(messages[0].content).toContain("getSpendByCategory");
+    expect(messages[0]!.role).toBe("system");
+    expect(messages[0]!.content).toContain("getSpendByCategory");
   });
 
   it("appends the user input as the final message", () => {
@@ -272,7 +272,7 @@ describe("buildChatMessages", () => {
       }),
     );
     expect(messages).toHaveLength(1);
-    expect(messages[0].role).toBe("system");
+    expect(messages[0]!.role).toBe("system");
   });
 
   it("omits user message when userInput is empty", () => {
@@ -304,7 +304,7 @@ describe("buildChatMessages", () => {
       userInput: "second q",
     });
     expect(messages).toHaveLength(4);
-    expect(messages[0].role).toBe("system");
+    expect(messages[0]!.role).toBe("system");
     expect(messages[1]).toEqual({ role: "user", content: "first q" });
     expect(messages[2]).toEqual({ role: "assistant", content: "first a" });
     expect(messages[3]).toEqual({ role: "user", content: "second q" });
@@ -325,8 +325,8 @@ describe("buildChatMessages", () => {
     });
     const historyMessages = messages.slice(1, -1);
     expect(historyMessages).toHaveLength(5);
-    expect(historyMessages[0].content).toBe("msg-45");
-    expect(historyMessages[4].content).toBe("msg-49");
+    expect(historyMessages[0]!.content).toBe("msg-45");
+    expect(historyMessages[4]!.content).toBe("msg-49");
   });
 
   it("defaults maxHistoryMessages to 30", () => {
@@ -343,8 +343,8 @@ describe("buildChatMessages", () => {
     });
     const historyMessages = messages.slice(1, -1);
     expect(historyMessages).toHaveLength(30);
-    expect(historyMessages[0].content).toBe("msg-10");
-    expect(historyMessages[29].content).toBe("msg-39");
+    expect(historyMessages[0]!.content).toBe("msg-10");
+    expect(historyMessages[29]!.content).toBe("msg-39");
   });
 
   it("walks history newest-first under the context budget", () => {
@@ -375,7 +375,7 @@ describe("buildChatMessages", () => {
       contextBudgetChars: buildSystemPrompt([]).length + 60,
     });
 
-    const historyMessage = messages[1];
+    const historyMessage = messages[1]!;
     expect(historyMessage.role).toBe("assistant");
     expect(historyMessage.content).toMatch(/^…/);
     expect(historyMessage.content.endsWith("z".repeat(10))).toBe(true);
@@ -429,6 +429,6 @@ describe("buildChatMessages", () => {
       partial<BuildChatMessagesArgs>({ toolNames: ["x"] }),
     );
     expect(messages).toHaveLength(1);
-    expect(messages[0].role).toBe("system");
+    expect(messages[0]!.role).toBe("system");
   });
 });

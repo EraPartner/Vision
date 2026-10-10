@@ -18,15 +18,15 @@ describe("sanitizeIsolatedValueSpikes", () => {
   it("smooths an isolated one-day needle to the geometric mean of its neighbors", () => {
     const rows = [{ value: 1000 }, { value: 2000 }, { value: 1010 }];
     const out = sanitizeIsolatedValueSpikes(rows, "value");
-    expect(out[1].value).toBeCloseTo(Math.sqrt(1000 * 1010), 0); // ~1005, not 2000
-    expect(out[0].value).toBe(1000);
-    expect(out[2].value).toBe(1010);
+    expect(out[1]!.value).toBeCloseTo(Math.sqrt(1000 * 1010), 0); // ~1005, not 2000
+    expect(out[0]!.value).toBe(1000);
+    expect(out[2]!.value).toBe(1010);
   });
 
   it("leaves a genuine sustained move untouched", () => {
     const rows = [{ value: 1000 }, { value: 2000 }, { value: 2010 }];
     const out = sanitizeIsolatedValueSpikes(rows, "value");
-    expect(out[1].value).toBe(2000); // next does not revert → not a needle
+    expect(out[1]!.value).toBe(2000); // next does not revert → not a needle
   });
 });
 
@@ -61,12 +61,12 @@ describe("sanitizeIsolatedDailyInvestmentSpikes", () => {
     const out = sanitizeIsolatedDailyInvestmentSpikes(snapshots);
 
     // Corrected investments: geometric mean sqrt(1000 * 1010) ≈ 1004.99.
-    expect(out[1].investments).toBe(1004.99);
-    expect(typeof out[1].investments).toBe("number");
+    expect(out[1]!.investments).toBe(1004.99);
+    expect(typeof out[1]!.investments).toBe("number");
     // Regression pin: netWorth must include the -200 liabilities term.
     // The pre-fix recomputation (liquid + investments only) produced 1504.99.
-    expect(out[1].netWorth).toBe(1304.99);
-    expect(typeof out[1].netWorth).toBe("number");
+    expect(out[1]!.netWorth).toBe(1304.99);
+    expect(typeof out[1]!.netWorth).toBe("number");
 
     // Control: non-spike neighbor days are untouched, liabilities included.
     expect(out[0]).toEqual({
@@ -85,8 +85,8 @@ describe("sanitizeIsolatedDailyInvestmentSpikes", () => {
     });
 
     // Input is not mutated.
-    expect(snapshots[1].investments).toBe(2000);
-    expect(snapshots[1].netWorth).toBe(2300);
+    expect(snapshots[1]!.investments).toBe(2000);
+    expect(snapshots[1]!.netWorth).toBe(2300);
   });
 
   it("leaves a sustained investments move untouched", () => {
@@ -160,7 +160,7 @@ describe("mvAvailable", () => {
   });
 
   it("caches an empty-rows result as a negative entry as well", async () => {
-    query.mockResolvedValue({ rows: [] } as PgQueryResult);
+    query.mockResolvedValue({ rows: [], rowCount: 0 });
 
     expect(await mvAvailable("mv_category_totals")).toBe(false);
     expect(await mvAvailable("mv_category_totals")).toBe(false);
@@ -170,7 +170,7 @@ describe("mvAvailable", () => {
   it("expires the negative cache after the TTL so a freshly created view is picked up", async () => {
     vi.useFakeTimers();
     try {
-      query.mockResolvedValueOnce({ rows: [] } as PgQueryResult);
+      query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       expect(await mvAvailable("mv_monthly_summary")).toBe(false);
       expect(query).toHaveBeenCalledTimes(1);
 

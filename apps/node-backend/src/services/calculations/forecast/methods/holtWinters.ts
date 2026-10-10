@@ -31,6 +31,15 @@ interface HoltWintersFit {
   params?: { alpha: number; beta: number; gamma1: number; gamma2: number };
 }
 
+/** Series value at an index the recurrence guarantees is in range. */
+function at(values: readonly number[], index: number): number {
+  const value = values[index];
+  if (value === undefined) {
+    throw new RangeError(`holt-winters: index ${index} out of range`);
+  }
+  return value;
+}
+
 function fitRecurrence(
   y: number[],
   alpha: number,
@@ -49,32 +58,35 @@ function fitRecurrence(
     let cnt = 0;
     let sum = 0;
     for (let k = i; k < M2; k += M1) {
-      sum += y[k] - initMean;
+      sum += at(y, k) - initMean;
       cnt++;
     }
     // eslint-disable-next-line vision-local-money/no-raw-money-arithmetic
     s1[i] = cnt > 0 ? sum / cnt : 0;
   }
-  for (let i = 0; i < M2; i++) s2[i] = y[i] - initMean - s1[i % M1];
+  for (let i = 0; i < M2; i++) {
+    s2[i] = at(y, i) - initMean - at(s1, i % M1);
+  }
 
   let level = initMean;
-  let trend = (y[M2 - 1] - y[0]) / M2;
+  let trend = (at(y, M2 - 1) - at(y, 0)) / M2;
   let sse = 0;
   const fitted: number[] = new Array(n).fill(0);
 
   for (let t = 0; t < n; t++) {
-    const s1Lag = t >= M1 ? s1[t - M1] : s1[t];
-    const s2Lag = t >= M2 ? s2[t - M2] : s2[t];
+    const s1Lag = at(s1, t >= M1 ? t - M1 : t);
+    const s2Lag = at(s2, t >= M2 ? t - M2 : t);
+    const yt = at(y, t);
     const forecast = level + trend + s1Lag + s2Lag;
     fitted[t] = forecast;
-    const err = y[t] - forecast;
+    const err = yt - forecast;
     sse += err * err;
 
     const newLevel =
-      alpha * (y[t] - s1Lag - s2Lag) + (1 - alpha) * (level + trend);
+      alpha * (yt - s1Lag - s2Lag) + (1 - alpha) * (level + trend);
     const newTrend = beta * (newLevel - level) + (1 - beta) * trend;
-    s1[t] = g1 * (y[t] - newLevel - s2Lag) + (1 - g1) * s1Lag;
-    s2[t] = g2 * (y[t] - newLevel - s1Lag) + (1 - g2) * s2Lag;
+    s1[t] = g1 * (yt - newLevel - s2Lag) + (1 - g1) * s1Lag;
+    s2[t] = g2 * (yt - newLevel - s1Lag) + (1 - g2) * s2Lag;
     level = newLevel;
     trend = newTrend;
   }

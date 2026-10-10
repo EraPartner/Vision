@@ -2,6 +2,11 @@
 
 import pg from "pg";
 import settings from "../config/config.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import {
+  backendPidRowSchema,
+  cancelBackendRowSchema,
+} from "../database/rows/analysis.ts";
 import { APPROVED_ANALYSIS_RELATIONS } from "./analysisCatalog.ts";
 
 const MAX_ROWS = 1000;
@@ -194,13 +199,16 @@ export function __validateAnalysisSql(
   const cteNames = new Set(
     [
       ...trimmed.matchAll(/(?:\bwith\b|,)\s*([a-z_][a-z0-9_]*)\s+as\s*\(/gi),
-    ].map((match) => match[1].toLowerCase()),
+      // Group 1 is mandatory in both patterns, so it is always a string.
+    ].map((match) => (match[1] ?? "").toLowerCase()),
   );
   const relations = [
     ...trimmed.matchAll(
       /\b(?:from|join)\s+((?:"[^"]+"|[a-z_][a-z0-9_]*)(?:\s*\.\s*(?:"[^"]+"|[a-z_][a-z0-9_]*))?)/gi,
     ),
-  ].map((match) => match[1].replace(/"/g, "").replace(/\s/g, "").toLowerCase());
+  ].map((match) =>
+    (match[1] ?? "").replace(/"/g, "").replace(/\s/g, "").toLowerCase(),
+  );
   for (const relation of relations) {
     if (cteNames.has(relation)) continue;
     if (!APPROVED_ANALYSIS_RELATIONS.has(relation)) {
@@ -296,10 +304,10 @@ export async function executeAnalysisSql({
       "SET LOCAL idle_in_transaction_session_timeout = '5000ms'",
     );
     await client.query("SET LOCAL work_mem = '8MB'");
-    const pidResult: { rows: Array<{ pid: number }> } = await client.query(
-      "SELECT pg_backend_pid() AS pid",
-    );
-    const pid = pidResult.rows[0].pid;
+    const pidResult = await client.query("SELECT pg_backend_pid() AS pid");
+    const [pidRow] = checkRows(backendPidRowSchema, pidResult.rows);
+    if (!pidRow) throw new Error("pg_backend_pid() returned no row");
+    const pid = pidRow.pid;
     activeQueries.set(activeId, { pid });
     const wrapped = `SELECT * FROM (${checkedSql}) AS vision_analysis_result LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
     const result: {
@@ -371,11 +379,12 @@ export async function cancelAnalysisQuery(requestId: string) {
   // PostgreSQL permits a role to cancel its own sessions. Use the same
   // restricted pool so cancellation does not require pg_signal_backend on the
   // wider application role.
-  const result: { rows: Array<{ cancelled: boolean }> } =
-    await cancellationPool.query("SELECT pg_cancel_backend($1) AS cancelled", [
-      active.pid,
-    ]);
-  return { cancelled: result.rows[0]?.cancelled === true };
+  const result = await cancellationPool.query(
+    "SELECT pg_cancel_backend($1) AS cancelled",
+    [active.pid],
+  );
+  const [row] = checkRows(cancelBackendRowSchema, result.rows);
+  return { cancelled: row?.cancelled === true };
 }
 
 export async function closeAnalysisPool() {

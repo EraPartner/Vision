@@ -1,4 +1,6 @@
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { customParserConfigRowSchema } from '../database/rows/imports.ts';
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 import { checkDataContract } from '../lib/dataContract.ts';
 import { storedParserConfigSchema } from '../lib/parserConfigSchema.ts';
@@ -34,16 +36,20 @@ function mapRow(r: CustomParserConfigRow): FormattedCustomParserConfig {
 
 const customParserConfigRepository = {
   async getAll(kind = 'transaction'): Promise<FormattedCustomParserConfig[]> {
-    const result = await query<CustomParserConfigRow>(
+    const rows = await queryRows(
+      customParserConfigRowSchema,
       `SELECT ${COLUMNS} FROM custom_parser_configs WHERE kind = $1 ORDER BY name ASC`,
       [kind],
     );
-    return result.rows.map(mapRow);
+    return rows.map(mapRow);
   },
 
   async getById(id: number): Promise<FormattedCustomParserConfig | undefined> {
-    const result = await query<CustomParserConfigRow>(`SELECT ${COLUMNS} FROM custom_parser_configs WHERE id = $1`, [id]);
-    const r = result.rows[0];
+    const r = await queryOne(
+      customParserConfigRowSchema,
+      `SELECT ${COLUMNS} FROM custom_parser_configs WHERE id = $1`,
+      [id],
+    );
     return r ? mapRow(r) : undefined;
   },
 
@@ -51,11 +57,11 @@ const customParserConfigRepository = {
     name: string,
     kind = 'transaction',
   ): Promise<FormattedCustomParserConfig | undefined> {
-    const result = await query<CustomParserConfigRow>(
+    const r = await queryOne(
+      customParserConfigRowSchema,
       `SELECT ${COLUMNS} FROM custom_parser_configs WHERE name = $1 AND kind = $2`,
       [name, kind],
     );
-    const r = result.rows[0];
     return r ? mapRow(r) : undefined;
   },
 
@@ -68,13 +74,16 @@ const customParserConfigRepository = {
     config: unknown;
     kind?: string;
   }): Promise<FormattedCustomParserConfig> {
-    const result = await query<CustomParserConfigRow>(
+    const r = await queryOne(
+      customParserConfigRowSchema,
       `INSERT INTO custom_parser_configs (name, kind, config_json)
        VALUES ($1, $2, $3::jsonb)
        RETURNING ${COLUMNS}`,
       [name, kind, JSON.stringify(config)],
     );
-    return mapRow(result.rows[0]);
+    // INSERT ... RETURNING without ON CONFLICT yields its row or throws.
+    if (!r) throw new Error('custom_parser_configs insert returned no row');
+    return mapRow(r);
   },
 
   async update(
@@ -92,11 +101,12 @@ const customParserConfigRepository = {
     if (castFields.length === 0) return this.getById(id);
 
     values.push(id);
-    const result = await query<CustomParserConfigRow>(
+    const r = await queryOne(
+      customParserConfigRowSchema,
       `UPDATE custom_parser_configs SET ${castFields.join(', ')} WHERE id = $${idx} RETURNING ${COLUMNS}`,
       values,
     );
-    return result.rows[0] ? mapRow(result.rows[0]) : undefined;
+    return r ? mapRow(r) : undefined;
   },
 
   /** @returns true if a row was removed */

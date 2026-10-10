@@ -287,7 +287,7 @@ describe("readRows", () => {
     expect(result.total).toBe(1);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeNull();
-    expect(result.rows[0].__xmin).toBe("500");
+    expect(result.rows[0]!.__xmin).toBe("500");
     const issued = client.query.mock.calls.map((c) => c[0]);
     expect(issued).toContain("SET TRANSACTION READ ONLY");
     expect(issued.some((s) => s.includes("xmin::text AS __xmin"))).toBe(true);
@@ -432,7 +432,7 @@ describe("applyMutations (dryRun)", () => {
       { dryRun: true },
     );
     expect(getClient).not.toHaveBeenCalled();
-    expect(result.statements![0].preview).toBe(
+    expect(result.statements![0]!.preview).toBe(
       'UPDATE "transactions" SET "amount" = \'20\' WHERE "id" = 5 RETURNING *',
     );
   });
@@ -498,7 +498,7 @@ describe("applyMutations (execute)", () => {
       calls.findIndex((call) => call.sql.includes("statement_timeout")),
     );
     expect(rowLockIndex).toBeGreaterThan(graphLockIndex);
-    expect(calls[graphLockIndex].params).toEqual([0x56495349, 1]);
+    expect(calls[graphLockIndex]!.params).toEqual([0x56495349, 1]);
   });
 
   it("locks, checks version, updates, audits, and schedules a view refresh", async () => {

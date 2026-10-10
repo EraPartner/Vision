@@ -7,12 +7,13 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import { BulkSplitDialog } from "@/features/transactions/components/bulk/BulkSplitDialog";
+import { recipientRow } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 const RECIPIENTS = {
     items: [
-        {
+        recipientRow({
             id: 7,
             name: "Partner",
             normalized_name: "partner",
@@ -21,9 +22,8 @@ const RECIPIENTS = {
             notes: null,
             is_active: true,
             created_at: "2025-01-01T00:00:00.000Z",
-            updated_at: null,
             links: [],
-        },
+        }),
     ],
     total: 1,
     limit: 1000,

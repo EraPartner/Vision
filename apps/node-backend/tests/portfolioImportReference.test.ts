@@ -17,6 +17,7 @@ import {
 } from "./fixtures/retainedPortfolioEvidence.ts";
 import type { RetainedEvent } from "./fixtures/retainedPortfolioEvidence.ts";
 import { loose } from "./helpers/partial.ts";
+import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
 
 /** Every staged row in this suite carries its literal record. */
 type SourceRow = ReconciliationSourceRow & { raw_data: string };
@@ -123,12 +124,12 @@ describe("retained literal JSON proof and reviewed reconciliation", () => {
       currency: "USD",
       amount: "200",
     });
-    expect(review(after, legacy()).plan.blockers[0].reason).toBe(
+    expect(review(after, legacy()).plan.blockers[0]!.reason).toBe(
       "source_policy_required",
     );
     const adopted = review(after, legacy(), "prefer_source");
     expect(adopted.plan.ready).toBe(true);
-    expect(adopted.adoptions[0].after).toMatchObject({
+    expect(adopted.adoptions[0]!.after).toMatchObject({
       id: 40,
       currency: "USD",
       amount: "200",
@@ -136,7 +137,7 @@ describe("retained literal JSON proof and reviewed reconciliation", () => {
       note: "Keep this note",
     });
     expect(
-      review(after, legacy({ amount: "201" }), "prefer_source").plan.blockers[0]
+      review(after, legacy({ amount: "201" }), "prefer_source").plan.blockers[0]!
         .reason,
     ).toBe("unproven_currency_conversion");
   });
@@ -217,14 +218,17 @@ describe("retained literal JSON proof and reviewed reconciliation", () => {
     });
     const zero = legacy({ amount: "0", price_per_unit: "0" });
     expect(review(row, zero, "prefer_source").plan.ready).toBe(true);
-    expect(review(row, zero, "prefer_source").adoptions[0].after).toMatchObject(
+    expect(review(row, zero, "prefer_source").adoptions[0]!.after).toMatchObject(
       { currency: "USD", amount: "0", fx_rate_to_eur: null },
     );
     expect(
       review(
         {
           ...row,
-          custom_config: { ...row.custom_config, source_columns: undefined },
+          custom_config: {
+            ...batchConfigFields(row.custom_config),
+            source_columns: undefined,
+          },
         },
         zero,
         "prefer_source",
@@ -261,7 +265,7 @@ describe("retained literal JSON proof and reviewed reconciliation", () => {
     );
     const corrected = review(enriched, old, "prefer_source");
     expect(corrected.plan.ready).toBe(true);
-    expect(corrected.adoptions[0].after).toMatchObject({
+    expect(corrected.adoptions[0]!.after).toMatchObject({
       currency: "USD",
       amount: "100",
       fees: "1",
@@ -371,7 +375,7 @@ describe("retained literal JSON proof and reviewed reconciliation", () => {
       ready: false,
       summary: { insert: 0 },
     });
-    expect(ambiguous.plan.blockers[0].reason).toBe("ambiguous_history");
+    expect(ambiguous.plan.blockers[0]!.reason).toBe("ambiguous_history");
     expect(review(pro, old, "prefer_source").plan).toMatchObject({
       ready: false,
       summary: { insert: 0 },

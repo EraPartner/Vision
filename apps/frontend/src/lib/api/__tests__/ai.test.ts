@@ -21,6 +21,17 @@ function ok<T>(data: T) {
     return HttpResponse.json({ ok: true, data });
 }
 
+/** An `ai_conversations` row as the routes send it. */
+function conversation(id: string, title = "Chat") {
+    return {
+        id,
+        title,
+        model: "llama3",
+        createdAt: "2025-01-01T00:00:00.000Z",
+        updatedAt: "2025-01-01T00:00:00.000Z",
+    };
+}
+
 afterEach(() => {
     server.resetHandlers();
     vi.unstubAllGlobals();
@@ -33,6 +44,11 @@ describe("ai conversation API client", () => {
                 ok({
                     ok: true,
                     baseUrl: "x",
+                    displayUrl: "x",
+                    modelCount: 1,
+                    error: null,
+                    code: null,
+                    hint: null,
                     defaultModel: "m",
                     enabled: true,
                 }),
@@ -44,7 +60,19 @@ describe("ai conversation API client", () => {
     it("getOllamaModels unwraps the rows from { items, total }", async () => {
         server.use(
             http.get(`${API_BASE}/api/ai/models`, () =>
-                ok({ items: [{ name: "llama3" }], total: 1 }),
+                ok({
+                    items: [
+                        {
+                            name: "llama3",
+                            size: 4_000_000_000,
+                            family: "llama",
+                            parameterSize: "8B",
+                            quantization: "Q4_0",
+                            modifiedAt: "2025-01-01T00:00:00Z",
+                        },
+                    ],
+                    total: 1,
+                }),
             ),
         );
         const models = await getOllamaModels();
@@ -52,9 +80,12 @@ describe("ai conversation API client", () => {
         expect(models[0].name).toBe("llama3");
     });
 
-    it("getOllamaModels defaults to [] when items is absent", async () => {
+    it("getOllamaModels rejects a body without the `{ items, total }` collection", async () => {
         server.use(http.get(`${API_BASE}/api/ai/models`, () => ok({})));
-        expect(await getOllamaModels()).toEqual([]);
+        await expect(getOllamaModels()).rejects.toMatchObject({
+            name: "ApiContractError",
+            endpoint: "GET /api/ai/models",
+        });
     });
 
     it("getConversations requests and returns one bounded page", async () => {
@@ -63,7 +94,7 @@ describe("ai conversation API client", () => {
             http.get(`${API_BASE}/api/ai/conversations`, ({ request }) => {
                 requestUrl = request.url;
                 return ok({
-                    items: [{ id: "a" }],
+                    items: [conversation("a")],
                     total: 75,
                     limit: 25,
                     offset: 50,
@@ -81,7 +112,7 @@ describe("ai conversation API client", () => {
         server.use(
             http.get(`${API_BASE}/api/ai/conversations/:id`, ({ request }) => {
                 url = request.url;
-                return ok({ conversation: { id: "a b" }, messages: [] });
+                return ok({ conversation: conversation("a b"), messages: [] });
             }),
         );
         await getConversation("a b");
@@ -95,7 +126,10 @@ describe("ai conversation API client", () => {
                 `${API_BASE}/api/ai/conversations`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ conversation: { id: "new" }, messages: [] });
+                    return ok({
+                        conversation: conversation("new", "Hello"),
+                        messages: [],
+                    });
                 },
             ),
         );
@@ -111,7 +145,7 @@ describe("ai conversation API client", () => {
                 `${API_BASE}/api/ai/conversations/:id`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ id: "x", title: "Renamed" });
+                    return ok(conversation("x", "Renamed"));
                 },
             ),
         );

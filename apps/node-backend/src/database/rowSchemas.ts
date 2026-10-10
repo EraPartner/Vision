@@ -36,6 +36,17 @@ export const countRowSchema = z
   .object({ count: pgBigint })
   .describe("count row");
 
+/** A `SELECT id` / `RETURNING id` row over an INTEGER/SERIAL key. */
+export const idRowSchema = z.object({ id: pgInt }).describe("id row");
+
+/**
+ * `computedBalanceByCurrencyAggLateral`'s jsonb partitions: `balance` is cast
+ * `::text` in SQL, so a string; NULL when the account has no rows.
+ */
+export const balancePartsSchema = z
+  .array(z.object({ currency: z.string(), balance: pgNumeric }))
+  .nullable();
+
 // ---------------------------------------------------------------------------
 // Transactions
 // ---------------------------------------------------------------------------
@@ -328,9 +339,7 @@ export const accountRowSchema = z
 export const accountBalanceQueryRowSchema = accountRowSchema
   .extend({
     /** jsonb partitions; `balance` is cast `::text` in SQL, so a string. */
-    balance_parts: z
-      .array(z.object({ currency: z.string(), balance: pgNumeric }))
-      .nullable(),
+    balance_parts: balancePartsSchema,
     has_transactions: z.boolean(),
     anchor_date: pgDayString.nullable(),
     /** Bare COUNT(*) */

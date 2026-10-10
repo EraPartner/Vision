@@ -2,7 +2,7 @@
 title: Feature - AI Chat
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 last_modified: 2026-10-06
 tags:
@@ -127,6 +127,9 @@ The primary footer groups investigation lifecycle actions. Active grant revocati
 Only one investigation executes at a time. It receives bounded tool results and passages, not the
 complete database. Local work reuses the backend and Ollama. Optional cloud work creates one
 short-lived macOS Seatbelt-sandboxed process and removes its empty temporary directory afterward.
+The backend checks that process's JSON output against a zod schema before it stores the request id
+or prices the token usage; output that is not JSON or breaks the schema fails with
+`BROKER_INVALID_OUTPUT` ([[docs/adr/194-runtime-contracts-completion|ADR-194]]).
 Public web queries and provider symbols are entered separately. The two cloud-planning profiles keep
 evidence and final synthesis local. The distinct selected-evidence profile skips local planning,
 retrieval, and model inference, then asks OpenAI for the final structured answer using only the exact

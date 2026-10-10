@@ -27,7 +27,8 @@ export interface SeasonalityBuckets {
 }
 
 function dayOfWeek(isoDateStr: string) {
-  const [y, m, d] = isoDateStr.split("-").map(Number);
+  // A missing part is NaN, as it was when read past the end of the split.
+  const [y = NaN, m = NaN, d = NaN] = isoDateStr.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 

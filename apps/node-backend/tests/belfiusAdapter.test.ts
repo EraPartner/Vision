@@ -41,7 +41,7 @@ describe("BelfiusAdapter", () => {
   it("extracts balance from header and calculates running balances", async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].balance).toBe(1234.56);
+    expect(txns[0]!.balance).toBe(1234.56);
   });
 
   it('parses a dot-grouped "Laatste saldo" (≥ €1000)', async () => {
@@ -53,7 +53,7 @@ describe("BelfiusAdapter", () => {
     );
     tmpPath = writeTempCSV(csv);
     const txns = await parse(tmpPath);
-    expect(txns[0].balance).toBe(12345.67);
+    expect(txns[0]!.balance).toBe(12345.67);
   });
 
   it("walks running balances by statement/transaction number for a single-day ascending statement", async () => {
@@ -75,17 +75,17 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
 
     expect(txns).toHaveLength(3);
     // Newest (txn 52) carries the "Laatste saldo"; older rows walk backwards.
-    expect(txns[2].balance).toBe(1000);
-    expect(txns[1].balance).toBe(1020);
-    expect(txns[0].balance).toBe(1070);
+    expect(txns[2]!.balance).toBe(1000);
+    expect(txns[1]!.balance).toBe(1020);
+    expect(txns[0]!.balance).toBe(1070);
     // The internal ordering key must not leak into the emitted rows.
-    expect(txns[0]._seq).toBeUndefined();
+    expect(txns[0]!._seq).toBeUndefined();
   });
 
   it("parses transaction fields correctly", async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
-    const txn1 = txns[0];
+    const txn1 = txns[0]!;
     expect(txn1.bankAccount).toBe("BE81063756944024"); // own IBAN (col 0), canonicalized
     expect(txn1.amount).toBe(-67.9);
     expect(txn1.currency).toBe("EUR");
@@ -105,7 +105,7 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
   it("extracts recipient account and address", async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
-    const txn2 = txns[1];
+    const txn2 = txns[1]!;
     expect(txn2.recipientAccount).toBe("BE12 3456 7890 1234");
     expect(txn2.recipientAddress).toContain("Rue de la Paix 123");
     expect(txn2.recipientAddress).toContain("1000 Brussels");
@@ -114,7 +114,7 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
   it("builds structured comment", async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
-    const txn2 = txns[1];
+    const txn2 = txns[1]!;
     expect(txn2.comment).toContain("Statement: 00010");
     expect(txn2.comment).toContain("Transaction: 51");
     expect(txn2.comment).toContain("BIC: GEBABEBB");
@@ -145,9 +145,9 @@ BE81 0637 5694 4024;24/11/2025;00010;52;;SHOP B;;1000 Brussels;BANCONTACT;24/11/
   it("parses amounts with comma decimal separator", async () => {
     tmpPath = writeTempCSV(SAMPLE_BELFIUS_CSV);
     const txns = await parse(tmpPath);
-    expect(txns[0].amount).toBe(-67.9);
-    expect(txns[1].amount).toBe(-150.0);
-    expect(txns[2].amount).toBe(2500.0);
+    expect(txns[0]!.amount).toBe(-67.9);
+    expect(txns[1]!.amount).toBe(-150.0);
+    expect(txns[2]!.amount).toBe(2500.0);
   });
 
   it("skips malformed dates", async () => {

@@ -22,9 +22,17 @@ vi.mock("../src/repositories/recipientRepository.ts", () => ({
     getClusterRootMap: (...a: unknown[]) => mockGetClusterRootMap(...a),
   },
 }));
-vi.mock("../src/repositories/settingsRepository.ts", () => ({
-  default: { get: (...a: unknown[]) => mockSettingsGet(...a) },
-}));
+vi.mock("../src/repositories/settingsRepository.ts", async (importOriginal) => {
+  // Keep the pure value helper; only the repository read is mocked.
+  const actual =
+    await importOriginal<
+      typeof import("../src/repositories/settingsRepository.ts")
+    >();
+  return {
+    settingField: actual.settingField,
+    default: { get: (...a: unknown[]) => mockSettingsGet(...a) },
+  };
+});
 vi.mock("../src/services/plannedExecutionService.ts", () => ({
   executePlanned: (...a: unknown[]) => mockExecutePlanned(...a),
 }));
@@ -251,9 +259,9 @@ describe("getMatchSuggestions", () => {
     ]);
     const res = await getMatchSuggestions();
     expect(res).toHaveLength(1);
-    expect(res[0].planned.id).toBe(1);
-    expect(res[0].candidates).toHaveLength(1);
-    expect(res[0].candidates[0].id).toBe(1000);
+    expect(res[0]!.planned.id).toBe(1);
+    expect(res[0]!.candidates).toHaveLength(1);
+    expect(res[0]!.candidates[0]!.id).toBe(1000);
   });
 
   it("returns empty when no planned payments are active", async () => {

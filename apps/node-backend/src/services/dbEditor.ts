@@ -34,6 +34,8 @@ import {
 import { lockAccountFundingGraph } from "../lib/accountFundingGraphLock.ts";
 import { appendAuditEvent } from "../repositories/auditChainRepository.ts";
 import type { QueryRunner } from "../types/rows.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import { dbEditorAuditRowSchema } from "../database/rows/admin.ts";
 
 export type { QueryRunner };
 
@@ -441,7 +443,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     });
   }
   const reservedAliases = new Set(columnNames);
-  for (let index = 0; index < cursorColumns.length; index += 1) {
+  for (const [index, cursorColumn] of cursorColumns.entries()) {
     const base = `__vision_cursor_value_${index + 1}`;
     let alias = base;
     let suffix = 2;
@@ -449,7 +451,7 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
       alias = `${base}_${suffix}`;
       suffix += 1;
     }
-    cursorColumns[index].valueKey = alias;
+    cursorColumn.valueKey = alias;
     reservedAliases.add(alias);
   }
   const orderSql = `ORDER BY ${cursorColumns
@@ -498,22 +500,24 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     }
     const cursorValues: Array<string | null> = decoded.values;
     const branches: string[] = [];
-    for (let index = 0; index < cursorColumns.length; index += 1) {
+    for (const [index, column] of cursorColumns.entries()) {
       const prefix: string[] = [];
-      for (let prior = 0; prior < index; prior += 1) {
+      for (const [prior, priorColumn] of cursorColumns
+        .slice(0, index)
+        .entries()) {
         params.push(cursorValues[prior]);
         prefix.push(
-          cursorColumns[prior].ctid
-            ? `${cursorColumns[prior].expression} = $${params.length}::tid`
-            : `${cursorColumns[prior].expression} IS NOT DISTINCT FROM $${params.length}`,
+          priorColumn.ctid
+            ? `${priorColumn.expression} = $${params.length}::tid`
+            : `${priorColumn.expression} IS NOT DISTINCT FROM $${params.length}`,
         );
       }
       const value = cursorValues[index];
       if (value === null || value === undefined) continue;
       params.push(value);
-      const comparison = cursorColumns[index].ctid
-        ? `${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length}::tid`
-        : `(${cursorColumns[index].expression} ${dir === "ASC" ? ">" : "<"} $${params.length} OR ${cursorColumns[index].expression} IS NULL)`;
+      const comparison = column.ctid
+        ? `${column.expression} ${dir === "ASC" ? ">" : "<"} $${params.length}::tid`
+        : `(${column.expression} ${dir === "ASC" ? ">" : "<"} $${params.length} OR ${column.expression} IS NULL)`;
       branches.push(`(${[...prefix, comparison].join(" AND ")})`);
     }
     if (branches.length === 0) {
@@ -547,7 +551,8 @@ export async function readRows(table: string, opts: ReadRowsOptions = {}) {
     await client.query(`SET LOCAL statement_timeout = ${READ_TIMEOUT_MS}`);
     const dataRes = await client.query(dataSql, [...params]);
     const hasMore = dataRes.rows.length > limit;
-    const rows = dataRes.rows.slice(0, limit);
+    // A user-chosen table: its columns are dynamic, so rows stay unchecked.
+    const rows = dataRes.rows.slice(0, limit) as Record<string, unknown>[];
     const last = rows.at(-1);
     const nextCursor =
       hasMore && last
@@ -748,7 +753,7 @@ async function applyOne(
   if (change.op === "insert") {
     const { sql, params } = buildMutationSql(table, change, ctx);
     const res = await client.query(sql, params);
-    const after: Record<string, unknown> | undefined = res.rows[0];
+    const after = res.rows[0] as Record<string, unknown> | undefined;
     return {
       op: "insert",
       after,
@@ -787,7 +792,9 @@ async function applyOne(
       },
     );
   }
-  const before: Record<string, unknown> = { ...cur.rows[0] };
+  const before: Record<string, unknown> = {
+    ...(cur.rows[0] as Record<string, unknown>),
+  };
   const currentXmin = before.__xmin;
   delete before.__xmin;
   if (
@@ -818,7 +825,7 @@ async function applyOne(
       },
     };
   }
-  const after: Record<string, unknown> | undefined = res.rows[0];
+  const after = res.rows[0] as Record<string, unknown> | undefined;
   return {
     op: "update",
     after,
@@ -853,7 +860,7 @@ async function writeAuditRows(
         a.statement,
       ],
     );
-    const row = result.rows[0];
+    const [row] = checkRows(dbEditorAuditRowSchema, result.rows);
     if (!row) throw new Error("DB editor audit insert did not return a row");
     const auditDigest = crypto
       .createHash("sha256")
@@ -943,9 +950,9 @@ export async function applyMutations(
       op: string;
       after: Record<string, unknown> | undefined;
     }> = [];
-    for (let index = 0; index < changes.length; index++) {
+    for (const [index, change] of changes.entries()) {
       const ctx = { colMeta, primaryKey, index };
-      const result = await applyOne(client, safeTable, changes[index], ctx);
+      const result = await applyOne(client, safeTable, change, ctx);
       results.push({ op: result.op, after: result.after });
       audit.push(result.audit);
     }

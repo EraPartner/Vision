@@ -8,6 +8,24 @@
  */
 
 import { query, withTransaction } from "../../database/connection.ts";
+import { checkRows, queryOne, queryRows } from "../../database/rowContracts.ts";
+import {
+  firstDataDateRowSchema,
+  fxRateRowSchema,
+  snapshotFxHistoryRowSchema,
+  snapshotInflationRowSchema,
+  snapshotNonUnitInvestmentRowSchema,
+  snapshotPriceHistoryRowSchema,
+  snapshotUnitInvestmentRowSchema,
+} from "../../database/rows/portfolio.ts";
+import type {
+  FxRateDbRow,
+  SnapshotFxHistoryDbRow,
+  SnapshotInflationDbRow,
+  SnapshotNonUnitInvestmentDbRow,
+  SnapshotPriceHistoryDbRow,
+  SnapshotUnitInvestmentDbRow,
+} from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import {
@@ -30,62 +48,23 @@ export type Decimal = import("decimal.js").default;
 
 /**
  * Unit-priced (stock/etf/crypto/metals) `investments` row, as narrowed by the
- * day walk's seed query.
+ * day walk's seed query. Derived from the checked row schema.
  */
-export interface UnitInvestmentRow {
-  id: number;
-  /** `COALESCE(i.currency, 'EUR')`. */
-  currency: string;
-  /** NUMERIC(18,6), `COALESCE(i.current_price, 0)` — pg emits NUMERIC as a string. */
-  current_price: string;
-  asset_class: string;
-}
+export type UnitInvestmentRow = SnapshotUnitInvestmentDbRow;
 
 /**
  * Non-unit (savings/bond/real_estate) `investments` row, as narrowed by the
  * day walk's seed query.
  */
-export interface NonUnitInvestmentRow {
-  id: number;
-  /** `COALESCE(i.currency, 'EUR')`. */
-  currency: string;
-  /** NUMERIC(18,6), `COALESCE(i.current_price, 0)`. */
-  current_price: string;
-  /** NUMERIC(8,4), `COALESCE(i.interest_rate, 0)`. */
-  interest_rate: string;
-  asset_class: string;
-  /** 'YYYY-MM-DD' — `COALESCE(created_at::date, $1::date)::text`. */
-  active_from: string;
-}
+export type NonUnitInvestmentRow = SnapshotNonUnitInvestmentDbRow;
 
-export interface PriceHistoryRow {
-  investment_id: number;
-  /** 'YYYY-MM-DD' — `to_char(price_date, 'YYYY-MM-DD')`. */
-  day: string;
-  /** NUMERIC(18,6). */
-  close_price: string;
-}
+export type PriceHistoryRow = SnapshotPriceHistoryDbRow;
 
-export interface InflationRateRow {
-  /** 'YYYY-MM' — `to_char(month_date, 'YYYY-MM')`. */
-  month: string;
-  /** NUMERIC(10,8). */
-  monthly_rate: string;
-}
+export type InflationRateRow = SnapshotInflationDbRow;
 
-export interface FxLatestRow {
-  currency_code: string;
-  /** NUMERIC(20,10). */
-  rate_to_eur: string;
-}
+export type FxLatestRow = FxRateDbRow;
 
-export interface FxHistoryRow {
-  currency_code: string;
-  /** 'YYYY-MM-DD' — `to_char(rate_date, 'YYYY-MM-DD')`. */
-  day: string;
-  /** NUMERIC(20,10). */
-  rate_to_eur: string;
-}
+export type FxHistoryRow = SnapshotFxHistoryDbRow;
 
 /**
  * `investmentsById` value — a {@link UnitInvestmentRow} with numeric fields
@@ -209,9 +188,40 @@ function addToSleeve(
   accumulator.set(sleeve, accumulator.get(sleeve)!.plus(amount));
 }
 
+/** The part of `value` before the first "T" (`value.split("T")[0]`). */
+function dayPart(value: string): string {
+  const separator = value.indexOf("T");
+  return separator === -1 ? value : value.slice(0, separator);
+}
+
+/**
+ * Binary search of an ascending 'YYYY-MM-DD' list for the latest day on or
+ * before `day`; "" when every day is later (or the list is empty).
+ */
+function latestDayOnOrBefore(days: readonly string[], day: string): string {
+  let lo = 0;
+  let hi = days.length - 1;
+  let bestDay = "";
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const candidate = days[mid];
+    // lo <= mid <= hi stay inside the list; the guard only narrows the type.
+    if (candidate === undefined) break;
+    if (candidate <= day) {
+      bestDay = candidate;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return bestDay;
+}
+
 /** @returns the first data day (a pg DATE, local midnight) or null */
 export async function getFirstDataDate(): Promise<Date | null> {
-  const result = await query<{ first_data_date: Date | null }>(`
+  const row = await queryOne(
+    firstDataDateRowSchema,
+    `
     SELECT MIN(first_date)::date AS first_data_date
     FROM (
       SELECT MIN(date)::date AS first_date
@@ -221,8 +231,9 @@ export async function getFirstDataDate(): Promise<Date | null> {
       FROM investments
       WHERE is_active = true
     ) seed
-  `);
-  return result.rows[0]?.first_data_date ?? null;
+  `,
+  );
+  return row?.first_data_date ?? null;
 }
 
 /**
@@ -246,27 +257,31 @@ export async function computeDailySnapshots(
   const todayYmd = todayAppDateString();
 
   const [
-    unitInvestmentsResult,
+    unitInvestmentRows,
     allTxRows,
-    fixedIncomeResult,
-    priceHistoryResult,
-    inflationResult,
+    fixedIncomeRows,
+    priceHistoryRows,
+    inflationRows,
     fxResult,
     fxHistoryResult,
   ] = await Promise.all([
-    query<UnitInvestmentRow>(`
+    queryRows(
+      snapshotUnitInvestmentRowSchema,
+      `
       SELECT i.id, COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price, i.asset_class
       FROM investments i
       WHERE i.is_active = true
         AND i.asset_class IN ('stock', 'etf', 'crypto', 'metals')
-    `),
+    `,
+    ),
     portfolioTransactionRepository.getRowsForPortfolioMath({
       dateFrom: firstDateYmd,
       dateTo: todayYmd,
       sellsLastWithinDay: true,
     }),
-    query<NonUnitInvestmentRow>(
+    queryRows(
+      snapshotNonUnitInvestmentRowSchema,
       `
       SELECT id, COALESCE(currency, 'EUR') AS currency,
              COALESCE(current_price, 0) AS current_price,
@@ -279,7 +294,8 @@ export async function computeDailySnapshots(
     `,
       [firstDateYmd, NON_UNIT_ASSET_CLASSES],
     ),
-    query<PriceHistoryRow>(
+    queryRows(
+      snapshotPriceHistoryRowSchema,
       `
       SELECT investment_id, to_char(price_date, 'YYYY-MM-DD') AS day, close_price
       FROM asset_price_history
@@ -288,7 +304,8 @@ export async function computeDailySnapshots(
     `,
       [firstDateYmd, todayYmd],
     ),
-    query<InflationRateRow>(
+    queryRows(
+      snapshotInflationRowSchema,
       `
       SELECT to_char(month_date, 'YYYY-MM') AS month, monthly_rate
       FROM belgian_inflation_rates
@@ -297,13 +314,15 @@ export async function computeDailySnapshots(
     `,
       [firstDateYmd],
     ),
-    query<FxLatestRow>(
+    // A failed FX read degrades to "no rates" (the .catch), but a row that
+    // breaks its contract must still surface, so the check runs after it.
+    query(
       `SELECT currency_code, rate_to_eur FROM exchange_rates WHERE is_latest = true`,
-    ).catch(() => ({ rows: [] as FxLatestRow[] })),
+    ).catch(() => ({ rows: [] as unknown[] })),
     // Historical FX so each day of the walk converts at the rate that applied
     // then, not today's. Sparse/empty is fine — convertAmount falls back to the
     // latest (is_latest) rate when no historical row precedes the day.
-    query<FxHistoryRow>(
+    query(
       `
       SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS day, rate_to_eur
       FROM exchange_rates
@@ -311,13 +330,18 @@ export async function computeDailySnapshots(
       ORDER BY currency_code, rate_date
     `,
       [firstDateYmd],
-    ).catch(() => ({ rows: [] as FxHistoryRow[] })),
+    ).catch(() => ({ rows: [] as unknown[] })),
   ]);
+  const fxRows: FxLatestRow[] = checkRows(fxRateRowSchema, fxResult.rows);
+  const fxHistoryRows: FxHistoryRow[] = checkRows(
+    snapshotFxHistoryRowSchema,
+    fxHistoryResult.rows,
+  );
 
   // --- Build lookup maps ---
 
   const investmentsById = new Map(
-    unitInvestmentsResult.rows.map((row): [number, ParsedUnitInvestment] => [
+    unitInvestmentRows.map((row): [number, ParsedUnitInvestment] => [
       Number(row.id),
       {
         id: Number(row.id),
@@ -331,14 +355,14 @@ export async function computeDailySnapshots(
   // Non-unit investments (savings/bond/real_estate). Valued from transactions —
   // current_price is kept as a last-resort fallback only when no buy transactions
   // exist for the asset, mirroring how the live summary handles such cases.
-  const nonUnitInvestments = fixedIncomeResult.rows.map(
+  const nonUnitInvestments = fixedIncomeRows.map(
     (row): ParsedNonUnitInvestment => ({
       id: Number(row.id),
       currency: row.currency,
       currentPrice: Number(row.current_price) || 0,
       interestRate: Number(row.interest_rate) || 0,
       assetClass: row.asset_class,
-      activeFrom: String(row.active_from).split("T")[0],
+      activeFrom: dayPart(String(row.active_from)),
     }),
   );
   const nonUnitInvestmentsById = new Map(
@@ -348,14 +372,18 @@ export async function computeDailySnapshots(
   // { investmentId: { day: price } }  +  sorted day arrays for binary-search forward-fill
   const priceHistoryByInvestment: Record<number, Record<string, number>> = {};
   const priceHistorySortedDays: Record<number, string[]> = {};
-  for (const row of priceHistoryResult.rows) {
+  for (const row of priceHistoryRows) {
     const invId = Number(row.investment_id);
-    if (!priceHistoryByInvestment[invId]) {
-      priceHistoryByInvestment[invId] = {};
-      priceHistorySortedDays[invId] = [];
+    let byDay = priceHistoryByInvestment[invId];
+    let days = priceHistorySortedDays[invId];
+    if (!byDay || !days) {
+      byDay = {};
+      days = [];
+      priceHistoryByInvestment[invId] = byDay;
+      priceHistorySortedDays[invId] = days;
     }
-    priceHistoryByInvestment[invId][row.day] = Number(row.close_price) || 0;
-    priceHistorySortedDays[invId].push(row.day);
+    byDay[row.day] = Number(row.close_price) || 0;
+    days.push(row.day);
   }
   // Rows arrive ORDER BY investment_id, price_date — sorted per investment.
   // Sort defensively so binary-search forward-fill is correct even if query order changes.
@@ -364,14 +392,11 @@ export async function computeDailySnapshots(
   }
 
   const inflationByMonth = new Map(
-    inflationResult.rows.map((row) => [
-      row.month,
-      Number(row.monthly_rate) || 0,
-    ]),
+    inflationRows.map((row) => [row.month, Number(row.monthly_rate) || 0]),
   );
 
   const fxRates: Record<string, number> = { EUR: 1 };
-  for (const row of fxResult.rows) {
+  for (const row of fxRows) {
     fxRates[row.currency_code] = Number(row.rate_to_eur) || 1;
   }
 
@@ -380,17 +405,21 @@ export async function computeDailySnapshots(
   // { CURRENCY: { day: rate } } + { CURRENCY: [day, ...] }
   const fxHistoryByCurrency: Record<string, Record<string, number>> = {};
   const fxHistorySortedDays: Record<string, string[]> = {};
-  for (const row of fxHistoryResult.rows) {
+  for (const row of fxHistoryRows) {
     const cur = row.currency_code;
     if (!cur) continue;
     const rate = Number(row.rate_to_eur) || 0;
     if (rate <= 0) continue;
-    if (!fxHistoryByCurrency[cur]) {
-      fxHistoryByCurrency[cur] = {};
-      fxHistorySortedDays[cur] = [];
+    let byDay = fxHistoryByCurrency[cur];
+    let days = fxHistorySortedDays[cur];
+    if (!byDay || !days) {
+      byDay = {};
+      days = [];
+      fxHistoryByCurrency[cur] = byDay;
+      fxHistorySortedDays[cur] = days;
     }
-    fxHistoryByCurrency[cur][row.day] = rate;
-    fxHistorySortedDays[cur].push(row.day);
+    byDay[row.day] = rate;
+    days.push(row.day);
   }
   for (const days of Object.values(fxHistorySortedDays)) {
     days.sort();
@@ -409,8 +438,7 @@ export async function computeDailySnapshots(
       .map((row) => Number(row.investment_id)),
   );
   for (const row of allTxRows) {
-    if (!txByDay[row.day]) txByDay[row.day] = [];
-    txByDay[row.day].push({
+    (txByDay[row.day] ??= []).push({
       investmentId: Number(row.investment_id),
       id: Number(row.id ?? 0),
       type: row.type,
@@ -504,26 +532,17 @@ export async function computeDailySnapshots(
   function rateToEurOnOrBefore(currency: string, day?: string): number {
     const cur = (currency || "EUR").toUpperCase();
     if (cur === "EUR") return 1;
-    const latest = fxRates[cur] > 0 ? fxRates[cur] : 1;
+    const latestRate = fxRates[cur];
+    const latest = latestRate !== undefined && latestRate > 0 ? latestRate : 1;
     if (!day || day === todayYmd) return latest;
 
     const byDay = fxHistoryByCurrency[cur];
     if (byDay) {
-      if (byDay[day] > 0) return byDay[day];
-      const days = fxHistorySortedDays[cur];
-      let lo = 0;
-      let hi = days.length - 1;
-      let bestDay = "";
-      while (lo <= hi) {
-        const mid = (lo + hi) >>> 1;
-        if (days[mid] <= day) {
-          bestDay = days[mid];
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-      if (bestDay && byDay[bestDay] > 0) return byDay[bestDay];
+      const exactRate = byDay[day];
+      if (exactRate !== undefined && exactRate > 0) return exactRate;
+      const bestDay = latestDayOnOrBefore(fxHistorySortedDays[cur] ?? [], day);
+      const bestRate = bestDay ? byDay[bestDay] : undefined;
+      if (bestRate !== undefined && bestRate > 0) return bestRate;
     }
     return latest;
   }
@@ -588,29 +607,23 @@ export async function computeDailySnapshots(
     lastKnownPrice: Record<number, number>,
   ): number {
     const histPrices = priceHistoryByInvestment[inv.id];
+    const lastKnown = lastKnownPrice[inv.id];
+    const hasLastKnown = lastKnown !== undefined && lastKnown > 0;
     if (!histPrices) {
-      return lastKnownPrice[inv.id] > 0
-        ? lastKnownPrice[inv.id]
-        : inv.currentPrice;
+      return hasLastKnown ? lastKnown : inv.currentPrice;
     }
-    if (histPrices[day]) return histPrices[day];
+    const exactPrice = histPrices[day];
+    if (exactPrice) return exactPrice;
 
-    // Binary search for the latest price day <= `day`
-    const days = priceHistorySortedDays[inv.id];
-    let lo = 0;
-    let hi = days.length - 1;
-    let bestDay = "";
-    while (lo <= hi) {
-      const mid = (lo + hi) >>> 1;
-      if (days[mid] <= day) {
-        bestDay = days[mid];
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    if (bestDay) return histPrices[bestDay];
-    if (lastKnownPrice[inv.id] > 0) return lastKnownPrice[inv.id];
+    // Binary search for the latest price day <= `day`. Every sorted day is a
+    // key of histPrices (both are filled from the same rows).
+    const bestDay = latestDayOnOrBefore(
+      priceHistorySortedDays[inv.id] ?? [],
+      day,
+    );
+    const bestPrice = bestDay ? histPrices[bestDay] : undefined;
+    if (bestPrice !== undefined) return bestPrice;
+    if (hasLastKnown) return lastKnown;
     return inv.currentPrice;
   }
 
@@ -922,8 +935,9 @@ export async function computeDailySnapshots(
       if (price <= 0) continue;
 
       // Forward-fill last known price
-      if ((priceHistoryByInvestment[inv.id] || {})[day] > 0) {
-        lastKnownPrice[inv.id] = priceHistoryByInvestment[inv.id][day];
+      const dayPrice = priceHistoryByInvestment[inv.id]?.[day];
+      if (dayPrice !== undefined && dayPrice > 0) {
+        lastKnownPrice[inv.id] = dayPrice;
       }
 
       // Market value converts at the rate on the day being valued (latest day

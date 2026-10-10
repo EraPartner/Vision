@@ -30,6 +30,7 @@ import {
 } from "../src/services/quoteBackfillService.ts";
 import type { InvestmentHoldingWindows } from "../src/services/quoteBackfillService.ts";
 import { partial } from "./helpers/partial.ts";
+import { RowContractError } from "../src/database/rowContracts.ts";
 import * as connection from "../src/database/connection.ts";
 import {
   fetchHistoricalPrices as rawFetchHistoricalPrices,
@@ -185,12 +186,12 @@ describe("Quote Backfill Service", () => {
       const result = sanitizeIsolatedSpikes(points);
 
       // Geometric mean of 100 and 100 = 100
-      expect(result[2].price).toBeCloseTo(100, 5);
+      expect(result[2]!.price).toBeCloseTo(100, 5);
       // Other points unchanged
-      expect(result[0].price).toBe(100);
-      expect(result[1].price).toBe(100);
-      expect(result[3].price).toBe(100);
-      expect(result[4].price).toBe(100);
+      expect(result[0]!.price).toBe(100);
+      expect(result[1]!.price).toBe(100);
+      expect(result[3]!.price).toBe(100);
+      expect(result[4]!.price).toBe(100);
     });
 
     it("catches a 3x spike", () => {
@@ -204,7 +205,7 @@ describe("Quote Backfill Service", () => {
 
       const result = sanitizeIsolatedSpikes(points);
 
-      expect(result[2].price).toBeCloseTo(100, 5);
+      expect(result[2]!.price).toBeCloseTo(100, 5);
     });
 
     it("does not alter normal price movements below threshold", () => {
@@ -233,7 +234,7 @@ describe("Quote Backfill Service", () => {
       sanitizeIsolatedSpikes(points);
 
       // Original should be untouched
-      expect(points[2].price).toBe(1000);
+      expect(points[2]!.price).toBe(1000);
     });
 
     it("handles trough spike (sudden drop and recovery)", () => {
@@ -247,7 +248,7 @@ describe("Quote Backfill Service", () => {
 
       const result = sanitizeIsolatedSpikes(points);
 
-      expect(result[2].price).toBeCloseTo(100, 5);
+      expect(result[2]!.price).toBeCloseTo(100, 5);
     });
 
     it("catches known May 2022 Kinesis-style pattern", () => {
@@ -266,10 +267,10 @@ describe("Quote Backfill Service", () => {
       const result = sanitizeIsolatedSpikes(points);
 
       // Spike should be corrected
-      expect(result[4].price).toBeLessThan(200);
+      expect(result[4]!.price).toBeLessThan(200);
       // Non-spike prices should be unmodified
-      expect(result[0].price).toBe(50);
-      expect(result[5].price).toBe(50);
+      expect(result[0]!.price).toBe(50);
+      expect(result[5]!.price).toBe(50);
     });
   });
 
@@ -305,7 +306,7 @@ describe("Quote Backfill Service", () => {
             tx_id: 1,
             tx_type: "buy",
             tx_date: "2025-01-01",
-            tx_units: 10,
+            tx_units: "10.00000000",
           },
           {
             id: 10,
@@ -324,7 +325,7 @@ describe("Quote Backfill Service", () => {
             tx_id: 2,
             tx_type: "sell",
             tx_date: "2025-03-01",
-            tx_units: 10,
+            tx_units: "10.00000000",
           },
         ],
       });
@@ -371,7 +372,7 @@ describe("Quote Backfill Service", () => {
             tx_id: 1,
             tx_type: "buy",
             tx_date: "2025-01-01",
-            tx_units: 0.5,
+            tx_units: "0.50000000",
           },
         ],
       });
@@ -406,7 +407,7 @@ describe("Quote Backfill Service", () => {
             tx_id: 1,
             tx_type: "buy",
             tx_date: "2025-01-01",
-            tx_units: 100,
+            tx_units: "100.00000000",
           },
         ],
       });
@@ -425,8 +426,8 @@ describe("Quote Backfill Service", () => {
       await backfillHistoricalAssetQuotes();
 
       // Verify saved points have the spike corrected
-      const savedPoints = saveHistoricalPointsToDatabase.mock.calls[0][1];
-      expect(savedPoints![2].price).toBeCloseTo(50, 5);
+      const savedPoints = saveHistoricalPointsToDatabase.mock.calls[0]![1];
+      expect(savedPoints![2]!.price).toBeCloseTo(50, 5);
     });
   });
 
@@ -469,7 +470,7 @@ describe("Quote Backfill Service", () => {
             tx_id: 1,
             tx_type: "buy",
             tx_date: "2025-06-01",
-            tx_units: 20,
+            tx_units: "20.00000000",
           },
         ],
       });
@@ -533,7 +534,7 @@ describe("Quote Backfill Service", () => {
 
       await cleanupStaleQuotes(investmentWindows);
 
-      const callArgs = query.mock.calls[0][1];
+      const callArgs = query.mock.calls[0]![1];
       expect(callArgs[2]).toEqual(["2025-01-01"]);
       // toDate should be today's date string
       expect(callArgs[3][0]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -564,7 +565,7 @@ describe("Quote Backfill Service", () => {
 
         await cleanupStaleQuotes(investmentWindows);
 
-        const callArgs = query.mock.calls[0][1];
+        const callArgs = query.mock.calls[0]![1];
         expect(callArgs[3]).toEqual(["2025-06-15"]);
       } finally {
         vi.useRealTimers();
@@ -674,6 +675,13 @@ describe("Quote Backfill Service", () => {
               price_provider: "yahoo",
               price_provider_id: "AAPL",
               symbol: "AAPL",
+              price_provider_url: null,
+              price_provider_latest_url: null,
+              price_provider_latest_path: null,
+              price_provider_history_url: null,
+              price_provider_history_path: null,
+              price_provider_history_ts_path: null,
+              price_provider_history_price_path: null,
               tx_id: 1,
               tx_type: "buy",
               tx_date: "2026-01-01",
@@ -704,6 +712,40 @@ describe("Quote Backfill Service", () => {
       );
     });
 
+    it("surfaces a stored-date row that breaks its contract instead of counting a failure", async () => {
+      query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 3,
+              asset_class: "stock",
+              currency: "EUR",
+              price_provider: "yahoo",
+              price_provider_id: "SAP",
+              symbol: "SAP",
+              price_provider_url: null,
+              price_provider_latest_url: null,
+              price_provider_latest_path: null,
+              price_provider_history_url: null,
+              price_provider_history_path: null,
+              price_provider_history_ts_path: null,
+              price_provider_history_price_path: null,
+              tx_id: 1,
+              tx_type: "buy",
+              tx_date: "2026-01-01",
+              tx_units: "5",
+            },
+          ],
+        })
+        // to_char() yields a string; a Date here means the read is wrong.
+        .mockResolvedValueOnce({ rows: [{ d: new Date(2026, 0, 1) }] });
+
+      await expect(backfillHoldingGaps()).rejects.toBeInstanceOf(
+        RowContractError,
+      );
+      expect(fetchHistoricalPrices).not.toHaveBeenCalled();
+    });
+
     it("skips an already-dense investment without refetching", async () => {
       query
         // closed window 2026-01-01 → 2026-01-05
@@ -716,6 +758,13 @@ describe("Quote Backfill Service", () => {
               price_provider: "yahoo",
               price_provider_id: "MSFT",
               symbol: "MSFT",
+              price_provider_url: null,
+              price_provider_latest_url: null,
+              price_provider_latest_path: null,
+              price_provider_history_url: null,
+              price_provider_history_path: null,
+              price_provider_history_ts_path: null,
+              price_provider_history_price_path: null,
               tx_id: 1,
               tx_type: "buy",
               tx_date: "2026-01-01",
@@ -728,6 +777,13 @@ describe("Quote Backfill Service", () => {
               price_provider: "yahoo",
               price_provider_id: "MSFT",
               symbol: "MSFT",
+              price_provider_url: null,
+              price_provider_latest_url: null,
+              price_provider_latest_path: null,
+              price_provider_history_url: null,
+              price_provider_history_path: null,
+              price_provider_history_ts_path: null,
+              price_provider_history_price_path: null,
               tx_id: 2,
               tx_type: "sell",
               tx_date: "2026-01-05",

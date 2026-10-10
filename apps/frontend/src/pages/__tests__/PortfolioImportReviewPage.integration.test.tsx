@@ -89,8 +89,9 @@ const preview = {
             raw_symbol: "VWCE",
             raw_name: "Vanguard FTSE All-World",
             row_count: 3,
+            // node-postgres returns the BIGINT id and NUMERIC columns as strings.
             rows: [10, 11, 12].map((id, index) => ({
-                id,
+                id: String(id),
                 row_index: index,
                 status: "matched",
                 route: "portfolio",
@@ -99,13 +100,13 @@ const preview = {
                 type_raw: "Buy",
                 symbol_raw: "VWCE",
                 name_raw: "Vanguard FTSE All-World",
-                units: 1,
-                price_per_unit: 100,
-                amount: 100,
-                fees: 0,
-                taxes: 0,
+                units: "1",
+                price_per_unit: "100",
+                amount: "100",
+                fees: "0",
+                taxes: "0",
                 currency: "EUR",
-                fx_rate_to_eur: 1,
+                fx_rate_to_eur: "1",
                 note: null,
                 match_source: "unresolved",
                 error_message: null,
@@ -184,7 +185,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
                     row_count: rowIds.length,
                     rows: rowIds.map((id, index) => ({
                         ...preview.groups[0].rows[0],
-                        id,
+                        id: String(id),
                         row_index: index,
                     })),
                 },
@@ -219,7 +220,10 @@ describe("PortfolioImportReviewPage group resolution", () => {
         );
 
         expect(requests).toBe(1);
-        expect(body).toEqual({ row_ids: rowIds, investment_id: 42 });
+        expect(body).toEqual({
+            row_ids: rowIds.map(String),
+            investment_id: 42,
+        });
     });
 
     it("creates one holding for the complete row set with one request", async () => {
@@ -250,7 +254,10 @@ describe("PortfolioImportReviewPage group resolution", () => {
         );
 
         expect(requests).toBe(1);
-        expect(body).toEqual({ row_ids: [10, 11, 12], create_new: true });
+        expect(body).toEqual({
+            row_ids: ["10", "11", "12"],
+            create_new: true,
+        });
     });
 
     it("commits the batch once and navigates to the portfolio", async () => {
@@ -268,6 +275,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
                     body = await request.json();
                     return ok({
                         batch_id: 5,
+                        total: 3,
                         imported: 3,
                         duplicates: 0,
                         errors: 0,
@@ -293,7 +301,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
         let body: unknown = null;
         const cashRow = {
             ...preview.groups[0].rows[0],
-            id: 90,
+            id: "90",
             status: "error",
             route: "cash",
             error_message: "brokerage cash row requires a batch account",
@@ -325,6 +333,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
                     body = await request.json();
                     return ok({
                         batch_id: 5,
+                        total: 1,
                         imported: 1,
                         duplicates: 0,
                         errors: 0,
@@ -369,6 +378,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
                     body = await request.json();
                     return ok({
                         batch_id: 5,
+                        total: 3,
                         imported: 3,
                         duplicates: 0,
                         errors: 0,

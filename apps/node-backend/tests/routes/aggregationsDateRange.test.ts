@@ -52,7 +52,7 @@ describe.each(routes)("GET %s date-range query params", (path, computeSpy) => {
 
   it("accepts and forwards the canonical start_date/end_date pair", async () => {
     await invoke({ start_date: "2025-01-01", end_date: "2025-12-31" });
-    expect(computeSpy.mock.calls[0][0]).toMatchObject({
+    expect(computeSpy.mock.calls[0]![0]).toMatchObject({
       startDate: "2025-01-01",
       endDate: "2025-12-31",
     });
@@ -82,7 +82,7 @@ describe("GET /tag-pivot all query parameter", () => {
   it("forwards the canonical all=true parameter", async () => {
     const response = { ok: vi.fn() };
     await handler({ query: { all: "true" } }, response);
-    expect(tagPivotSpy.mock.calls[0][0]).toMatchObject({ allTags: true });
+    expect(tagPivotSpy.mock.calls[0]![0]).toMatchObject({ allTags: true });
   });
 
   it("rejects the retired all_tags alias before computing", async () => {

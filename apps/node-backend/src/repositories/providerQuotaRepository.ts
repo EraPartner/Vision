@@ -8,10 +8,8 @@
  */
 
 import { query } from "../database/connection.ts";
-
-type QuotaCountRow = {
-  count: number;
-};
+import { queryOne } from "../database/rowContracts.ts";
+import { providerQuotaCountRowSchema } from "../database/rows/portfolio.ts";
 
 /**
  * Current request count for a provider on a given UTC day. 0 if no row yet.
@@ -21,11 +19,12 @@ export async function getDayCount(
   provider: string,
   windowDate: string,
 ): Promise<number> {
-  const result = await query<QuotaCountRow>(
+  const row = await queryOne(
+    providerQuotaCountRowSchema,
     `SELECT count FROM provider_quota WHERE provider = $1 AND window_date = $2`,
     [provider, windowDate],
   );
-  return result.rows[0]?.count ?? 0;
+  return row?.count ?? 0;
 }
 
 /**
@@ -54,7 +53,8 @@ export async function tryReserveDay(
   delta = 1,
 ): Promise<number | null> {
   if (delta < 1 || delta > limit) return null;
-  const result = await query<QuotaCountRow>(
+  const row = await queryOne(
+    providerQuotaCountRowSchema,
     `INSERT INTO provider_quota (provider, window_date, count, updated_at)
           VALUES ($1,$2,$3,NOW())
      ON CONFLICT (provider, window_date) DO UPDATE
@@ -63,7 +63,7 @@ export async function tryReserveDay(
       RETURNING count`,
     [provider, windowDate, delta, limit],
   );
-  return result.rows[0]?.count ?? null;
+  return row?.count ?? null;
 }
 
 /**

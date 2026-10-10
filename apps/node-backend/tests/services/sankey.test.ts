@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mockCurrencyConversion } from "../helpers/mockCurrencyConversion.ts";
+import {
+  mockCurrencyConversion,
+  mockedConvertRowsToEur,
+} from "../helpers/mockCurrencyConversion.ts";
 
 vi.mock("../../src/repositories/infoRepositorySankey.ts", () => ({
   getSankeyAggregates: vi.fn(),
@@ -12,7 +15,7 @@ import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/curr
 import { computeSankeyFlow } from "../../src/services/calculations/aggregation/sankey.ts";
 
 const getSankeyAggregates = vi.mocked(rawGetSankeyAggregates);
-const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 
 beforeEach(() => {
   getSankeyAggregates.mockReset();

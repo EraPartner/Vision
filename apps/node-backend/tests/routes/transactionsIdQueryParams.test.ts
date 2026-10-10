@@ -93,15 +93,15 @@ const exportCsv = (query = "") =>
   api.get(`/api/transactions/export/csv${query ? `?${query}` : ""}`);
 
 /** Filter options the list handler passed to the repository. */
-const listOpts = () => transactionRepository.getAllWithCount.mock.calls[0][0]!;
+const listOpts = () => transactionRepository.getAllWithCount.mock.calls[0]![0]!;
 /** WHERE SQL + params of the export's first (probe) query. */
-const exportQuery = () => dbQuery.mock.calls[0];
+const exportQuery = () => dbQuery.mock.calls[0]!;
 
 /** The export streams: a row-probe query, then the chunked page query. */
 const armExport = () => {
   dbQuery
     .mockResolvedValueOnce({ rows: [{}] } as PgQueryResult)
-    .mockResolvedValueOnce({ rows: [] } as PgQueryResult);
+    .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 };
 
 beforeEach(() => {
@@ -319,12 +319,12 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
   it('treats absent and empty account_ids as "no account filter" (200, no IN clause)', async () => {
     armExport();
     await exportCsv().expect(200);
-    expect(exportQuery()[0]).not.toMatch(/t\.account_id IN/);
+    expect(exportQuery()![0]).not.toMatch(/t\.account_id IN/);
 
     vi.clearAllMocks();
     armExport();
     await exportCsv("account_ids=").expect(200);
-    expect(exportQuery()[0]).not.toMatch(/t\.account_id IN/);
+    expect(exportQuery()![0]).not.toMatch(/t\.account_id IN/);
   });
 
   // Validation runs over the whole list before EXPORT_MAX_LIST_SIZE (50) caps
@@ -340,7 +340,7 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
     vi.clearAllMocks();
     armExport();
     await exportCsv(`account_ids=${overCap.join(",")}`).expect(200);
-    expect(exportQuery()[1]).toHaveLength(50);
+    expect(exportQuery()![1]).toHaveLength(50);
   });
 
   it("applies the same strict parse to the export path's scalar and category filters", async () => {

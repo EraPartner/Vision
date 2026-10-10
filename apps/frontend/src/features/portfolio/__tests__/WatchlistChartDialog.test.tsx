@@ -20,6 +20,7 @@ const ITEM: WatchlistItem = {
     target_price: 200,
     notes: null,
     price_provider_id: "AAPL",
+    added_price: null,
     created_at: "2025-01-01T00:00:00Z",
     updated_at: "2025-01-01T00:00:00Z",
 };
@@ -38,7 +39,15 @@ const CHART_RESPONSE = {
 
 /** Quote data payload — wrapped in the ADR-026 success envelope by `ok()`. */
 const QUOTE_RESPONSE = {
-    items: [{ symbol: "AAPL", price: 195.5, change: 1.2, changePercent: 0.6 }],
+    items: [
+        {
+            symbol: "AAPL",
+            price: 195.5,
+            change: 1.2,
+            changePercent: 0.6,
+            currency: "USD",
+        },
+    ],
     total: 1,
 };
 

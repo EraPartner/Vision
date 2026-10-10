@@ -58,8 +58,8 @@ describe("bounded analysis extensions", () => {
       valueColumns: ["amount"],
     });
     expect(output.rows.map((row) => row.amount)).toEqual(["10", null, "30"]);
-    expect(output.rows[2].amount_previous).toBeNull();
-    expect(output.rows[2].amount_cumulative).toBeNull();
+    expect(output.rows[2]!.amount_previous).toBeNull();
+    expect(output.rows[2]!.amount_cumulative).toBeNull();
     expect(output.coverage.missingPeriods).toBe(1);
     const zero = compareAnalysisTime({
       rows,
@@ -69,8 +69,8 @@ describe("bounded analysis extensions", () => {
       missing: "zero",
       rollingWindow: 2,
     });
-    expect(zero.rows[2].amount_cumulative).toBe("40");
-    expect(zero.rows[2].amount_rolling_average).toBe("15");
+    expect(zero.rows[2]!.amount_cumulative).toBe("40");
+    expect(zero.rows[2]!.amount_rolling_average).toBe("15");
   });
   it("uses ISO Monday weeks and leap-day prior-year clamping", () => {
     const weeks = compareAnalysisTime({
@@ -80,7 +80,7 @@ describe("bounded analysis extensions", () => {
       valueColumns: ["amount"],
       bucket: "week",
     });
-    expect(weeks.rows[0].date).toBe("2024-01-01");
+    expect(weeks.rows[0]!.date).toBe("2024-01-01");
     const years = compareAnalysisTime({
       rows: [
         { date: "2023-02-28", amount: "10", category: "A" },
@@ -149,8 +149,8 @@ describe("bounded analysis extensions", () => {
       steps: [{ type: "lookup", input, keys: ["id"], inputKeys: ["id"] }],
     };
     const output = prepareAnalysisData(request);
-    expect(output.rows[0]["input.name"]).toBe("matched");
-    expect(output.lineage[0].unmatchedRows).toBe(1);
+    expect(output.rows[0]!["input.name"]).toBe("matched");
+    expect(output.lineage[0]!.unmatchedRows).toBe(1);
     input.rows.push({ id: "1", name: "duplicate" });
     expect(() => prepareAnalysisData(request)).toThrow("multiply");
   });
@@ -265,9 +265,9 @@ describe("extension missing coverage and stock semantics", () => {
       valueColumns: ["amount"],
       missing: "zero",
     });
-    expect(output.rows[0].amount).toBeNull();
+    expect(output.rows[0]!.amount).toBeNull();
     expect(output.coverage.complete).toBe(false);
-    expect(output.errors[0].code).toBe("MISSING_CONTRIBUTOR");
+    expect(output.errors[0]!.code).toBe("MISSING_CONTRIBUTOR");
   });
   it("withholds preparation pivots with missing contributors and rejects cross-unit append", () => {
     const output = prepareAnalysisData({
@@ -287,7 +287,7 @@ describe("extension missing coverage and stock semantics", () => {
         },
       ],
     });
-    expect(output.rows[0].pivot_0).toBeNull();
+    expect(output.rows[0]!.pivot_0).toBeNull();
     expect(output.coverage.complete).toBe(false);
     expect(() =>
       prepareAnalysisData({
@@ -323,7 +323,7 @@ describe("extension missing coverage and stock semantics", () => {
     };
     expect(() => compareAnalysisTime(request)).toThrow("last aggregation");
     expect(
-      compareAnalysisTime({ ...request, aggregation: "last" }).rows[0].amount,
+      compareAnalysisTime({ ...request, aggregation: "last" }).rows[0]!.amount,
     ).toBe("110");
   });
 });
@@ -462,5 +462,5 @@ it("binds imported monetary values to imported currency", () => {
   expect(
     output.columns.find((c) => c.id === "input.amount")!.unit!.currencyColumn,
   ).toBe("input.currency");
-  expect(output.rows[0]["input.currency"]).toBe("USD");
+  expect(output.rows[0]!["input.currency"]).toBe("USD");
 });

@@ -206,9 +206,12 @@ export async function detectAgentCloakDesktopSpans(
       throw new Error("AGENTCLOAK_RESPONSE_INVALID");
     const spans: AgentCloakSpan[] = data.spans;
     const ordered = [...spans].sort((a, b) => a.start - b.start);
-    for (let index = 1; index < ordered.length; index += 1)
-      if (ordered[index].start < ordered[index - 1].end)
+    let previous: AgentCloakSpan | undefined;
+    for (const span of ordered) {
+      if (previous && span.start < previous.end)
         throw new Error("AGENTCLOAK_RESPONSE_INVALID");
+      previous = span;
+    }
     for (const span of ordered)
       if (text.slice(span.start, span.end) !== span.text)
         throw new Error("AGENTCLOAK_RESPONSE_INVALID");

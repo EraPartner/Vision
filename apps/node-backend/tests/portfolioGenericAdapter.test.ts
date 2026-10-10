@@ -85,7 +85,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       currency: "USD",
       note: "lot 1",
     });
-    expect(rows[0].date!.toISOString().slice(0, 10)).toBe("2026-01-05");
+    expect(rows[0]!.date!.toISOString().slice(0, 10)).toBe("2026-01-05");
   });
 
   it("stores absolute magnitudes (direction comes from the type)", async () => {
@@ -103,8 +103,8 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       },
     ]);
     const rows = await parseWithConfig("/tmp/x.csv", config());
-    expect(rows[0].units).toBe(4);
-    expect(rows[0].amount).toBe(760.4);
+    expect(rows[0]!.units).toBe(4);
+    expect(rows[0]!.amount).toBe(760.4);
   });
 
   it("parses EU comma decimals via the shared amount parser", async () => {
@@ -120,7 +120,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       },
     ]);
     const rows = await parseWithConfig("/tmp/x.csv", config());
-    expect(rows[0].amount).toBe(1234.56);
+    expect(rows[0]!.amount).toBe(1234.56);
   });
 
   it.each([
@@ -142,7 +142,7 @@ describe("portfolioGenericAdapter.parseWithConfig", () => {
       "/tmp/x.csv",
       config({ date_format: fmt }),
     );
-    expect(rows[0].date!.toISOString().slice(0, 10)).toBe(iso);
+    expect(rows[0]!.date!.toISOString().slice(0, 10)).toBe(iso);
   });
 
   it("skips rows with no parseable date and reports the count", async () => {

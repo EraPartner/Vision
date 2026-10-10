@@ -17,8 +17,8 @@ function parseAuthority(value: unknown): string | undefined {
   const match = value.startsWith("[")
     ? /^\[([^\]]+)\](?::([0-9]+))?$/u.exec(value)
     : /^([^:]+)(?::([0-9]+))?$/u.exec(value);
-  if (!match) return undefined;
-  const [, rawHost, port] = match;
+  const [, rawHost, port] = match ?? [];
+  if (rawHost === undefined) return undefined;
   if (port !== undefined && (Number(port) < 1 || Number(port) > 65535))
     return undefined;
   if (value.startsWith("[") && isIP(rawHost) !== 6) return undefined;
@@ -88,7 +88,7 @@ export function createHostGuard({
     if (req.rawHeaders) {
       let count = 0;
       for (let i = 0; i < req.rawHeaders.length; i += 2)
-        if (req.rawHeaders[i].toLowerCase() === "host") count += 1;
+        if (req.rawHeaders[i]?.toLowerCase() === "host") count += 1;
       if (count !== 1) return next(new ForbiddenError("Invalid request host"));
     }
     const host = parseAuthority(req.headers.host);

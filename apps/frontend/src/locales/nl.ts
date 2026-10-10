@@ -1142,7 +1142,6 @@ const nl: Record<string, string> = {
   'categoriesPage.toast.active': '{name} als actief gemarkeerd',
   'categoriesPage.toast.inactive': '{name} als inactief gemarkeerd',
   'categoriesPage.toggleFailed': 'Kon de status van de categorie niet wijzigen. Probeer het opnieuw.',
-  'categoriesPage.treeTitle': 'Categorieën',
   'categoryPie.desc': 'Laatste 50 transacties, op aantal',
   'categoryPie.noData': 'Geen categoriedata beschikbaar',
   'categoryPie.title': 'Recente activiteit per categorie',

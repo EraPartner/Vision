@@ -178,7 +178,7 @@ async function seedHoldingsOnlyCash(today: string) {
     ["CRYPTO EXCHANGE", "-3000.00", "USD", "-3000.00"],
     ["HARDWARE WALLET", "-4000.00", "EUR", "-4000.00"],
     ["HARDWARE WALLET", "5000.00", "USD", "5000.00"],
-  ]) {
+  ] as const) {
     await insertTxn({
       date: addDaysYmd(today, -400),
       bank,
@@ -332,7 +332,7 @@ describe.skipIf(!hasTestDatabase())(
           ["BROKER", "50.00", "EUR"],
           ["BROKER", "200.00", "USD"],
           ["LIABILITY", "-70.00", "EUR"],
-        ]) {
+        ] as const) {
           await insertTxn({ date: firstCashDate, bank, amount, currency });
         }
 
@@ -344,7 +344,7 @@ describe.skipIf(!hasTestDatabase())(
           netWorth: 180,
         });
         expect(result.snapshots).toHaveLength(4);
-        expect(result.snapshots[0].date).toBe(firstCashDate);
+        expect(result.snapshots[0]!.date).toBe(firstCashDate);
         expect(
           result.snapshots.every(
             (point) =>
@@ -478,7 +478,7 @@ describe.skipIf(!hasTestDatabase())(
         // i.e. exactly the 150 that actually posted today above the d1 point.
         expect(r.current.liquid).toBe(5350);
         expect(r.current.netWorth).toBe(5350);
-        expect(r.snapshots[r.snapshots.length - 1].liquid).toBe(5350);
+        expect(r.snapshots[r.snapshots.length - 1]!.liquid).toBe(5350);
       });
 
       it("falls back to the cumulative transaction flow when nothing is stamped anywhere", async () => {
@@ -516,8 +516,8 @@ describe.skipIf(!hasTestDatabase())(
         });
         expect(r.current.investments).toBe(5123.45);
         expect(r.current.netWorth).toBe(6123.45);
-        expect(r.snapshots[0].investments).toBe(500); // earlier points untouched
-        expect(r.snapshots[r.snapshots.length - 1].investments).toBe(5123.45);
+        expect(r.snapshots[0]!.investments).toBe(500); // earlier points untouched
+        expect(r.snapshots[r.snapshots.length - 1]!.investments).toBe(5123.45);
       });
 
       it("measures monthlyChange against the last point before the current month", async () => {
@@ -671,7 +671,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await infoRepository.getNetWorthFromSnapshots();
-        expect(r.snapshots[0].date).toBe(d3);
+        expect(r.snapshots[0]!.date).toBe(d3);
         expect(r.snapshots).toHaveLength(4); // d3..today inclusive
         expect(r.snapshots.every((s) => s.liquid === 1000)).toBe(true);
       });
@@ -722,7 +722,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(withTracking).toEqual(without);
         // Anchored independently of the day of month, so this stays deterministic:
         // the span starts where the in-net-worth account does, not 400 days early.
-        expect(withTracking.snapshots[0].date).toBe(monthStart);
+        expect(withTracking.snapshots[0]!.date).toBe(monthStart);
         expect(withTracking.current.liquid).toBe(1050);
       });
 
@@ -786,7 +786,7 @@ describe.skipIf(!hasTestDatabase())(
         const without = await build({ withUnattributed: false });
 
         expect(withUnattributed).toEqual(without);
-        expect(withUnattributed.snapshots[0].date).toBe(monthStart);
+        expect(withUnattributed.snapshots[0]!.date).toBe(monthStart);
         expect(withUnattributed.current.liquid).toBe(1050);
         // The 7.00 is nowhere in the answer: the walk cannot value it, and the
         // fallback that would have counted it never runs here.
@@ -819,7 +819,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await infoRepository.getNetWorthFromSnapshots();
-        expect(r.snapshots[0].date).toBe(d12);
+        expect(r.snapshots[0]!.date).toBe(d12);
         expect(r.snapshots).toHaveLength(13); // d12..today inclusive
         // Every historical day is the fallback's running total over the
         // unattributed rows. The unified current-point override is also bounded
@@ -1135,8 +1135,8 @@ describe.skipIf(!hasTestDatabase())(
         });
         // Same-day rows come back in whatever order `ORDER BY pt.planned_date`
         // leaves them (no tiebreaker in the SQL), so assert set-wise.
-        expect(r.daily_data[0].transactions).toHaveLength(2);
-        expect(r.daily_data[0].transactions).toEqual(
+        expect(r.daily_data[0]!.transactions).toHaveLength(2);
+        expect(r.daily_data[0]!.transactions).toEqual(
           expect.arrayContaining([
             expect.objectContaining({
               amount: -20,
@@ -1224,8 +1224,8 @@ describe.skipIf(!hasTestDatabase())(
             86_400_000,
         );
         expect(r.summary.transaction_count).toBe(daysInNextMonth);
-        expect(r.daily_data[0].date).toBe(start);
-        expect(r.daily_data[r.daily_data.length - 1].date).toBe(
+        expect(r.daily_data[0]!.date).toBe(start);
+        expect(r.daily_data[r.daily_data.length - 1]!.date).toBe(
           addDaysYmd(after, -1),
         );
       });
@@ -1471,7 +1471,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await infoRepository.getNetWorthFromSnapshots("EUR");
         expect(r.current.liquid).toBe(900); // 1000 USD × today's 0.9
-        const last = r.snapshots[r.snapshots.length - 1];
+        const last = r.snapshots[r.snapshots.length - 1]!;
         expect(last.liquid).toBe(r.current.liquid);
         // The curve moves the series, so the equality above is not a flat-curve
         // coincidence: the statement day itself is still valued at 0.5.
@@ -1496,7 +1496,7 @@ describe.skipIf(!hasTestDatabase())(
           [today, 180],
         ]);
         expect(r.current.liquid).toBe(180);
-        expect(r.snapshots[r.snapshots.length - 1].liquid).toBe(
+        expect(r.snapshots[r.snapshots.length - 1]!.liquid).toBe(
           r.current.liquid,
         );
       });

@@ -13,6 +13,7 @@ import { computeBankBalances } from '../calculations/aggregation/bankBalances.ts
 import { computeAverageVsCurrent } from '../calculations/aggregation/averageVsCurrent.ts';
 import infoRepository from '../../repositories/infoRepository.ts';
 import { logger } from '../../config/logger.ts';
+import { RowContractError } from '../../database/rowContracts.ts';
 import { toAppTz } from '../../lib/timezone.ts';
 
 export type Period = { kind: 'ytd' }
@@ -128,9 +129,14 @@ export type FinancialReportData = {
   exclusions: { categoryIds: number[]; recipientIds: number[] };
 };
 
-/** Unwrap a settled Promise result; log and return null on rejection. */
+/**
+ * Unwrap a settled Promise result; log and return null on rejection. A row
+ * contract mismatch is rethrown instead: the report must not silently render
+ * an empty section over data the code no longer understands (ADR-193).
+ */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
   if (result.status === 'fulfilled') return result.value;
+  if (result.reason instanceof RowContractError) throw result.reason;
   logger.warn(`[dataFetcher] ${label} failed — section will be skipped`, { reason: result.reason?.message });
   return null;
 }

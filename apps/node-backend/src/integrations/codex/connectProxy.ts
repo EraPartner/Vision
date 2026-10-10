@@ -27,23 +27,22 @@ function parseConnectHeader(
   header: string,
   allowedHosts: ReadonlySet<string>,
 ): string | undefined {
-  const lines = header.split("\r\n");
-  const match = /^CONNECT ([a-z0-9.-]+):443 HTTP\/1\.1$/.exec(lines[0]);
-  if (!match || !HOST.test(match[1]) || !allowedHosts.has(match[1])) {
+  // `split` always yields at least one element.
+  const [requestLine = "", ...headerLines] = header.split("\r\n");
+  const host = /^CONNECT ([a-z0-9.-]+):443 HTTP\/1\.1$/.exec(requestLine)?.[1];
+  if (!host || !HOST.test(host) || !allowedHosts.has(host)) {
     return undefined;
   }
-  const hosts = lines.slice(1).filter((line) => /^host:/i.test(line));
-  if (hosts.length !== 1 || hosts[0].toLowerCase() !== `host: ${match[1]}:443`)
+  const hosts = headerLines.filter((line) => /^host:/i.test(line));
+  if (hosts.length !== 1 || hosts[0]?.toLowerCase() !== `host: ${host}:443`)
     return undefined;
   if (
-    lines
-      .slice(1)
-      .some((line) =>
-        /^(proxy-authorization|transfer-encoding|content-length):/i.test(line),
-      )
+    headerLines.some((line) =>
+      /^(proxy-authorization|transfer-encoding|content-length):/i.test(line),
+    )
   )
     return undefined;
-  return match[1];
+  return host;
 }
 
 /** Start a single-process CONNECT proxy for a Seatbelt-confined Codex child. */

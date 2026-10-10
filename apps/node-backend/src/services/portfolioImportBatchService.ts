@@ -64,6 +64,7 @@ import {
   markBatchAborted,
   resetCommittedRowsToMatched,
 } from "../repositories/portfolioImportBatchRepository.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 
 const KINESIS_METAL_SYMBOLS = new Set(["KAU", "KAG"]);
 
@@ -145,7 +146,13 @@ function buildPortfolioImportBatchPreview(rows: PortfolioImportPreviewRow[]) {
     ...group,
     row_count: group.rows.length,
   }));
-  const totals: Record<string, number> = {
+  const totals: {
+    symbol: number;
+    name_exact: number;
+    unresolved: number;
+    error: number;
+    [source: string]: number;
+  } = {
     symbol: 0,
     name_exact: 0,
     unresolved: 0,
@@ -372,10 +379,16 @@ export async function resolveInvestmentRows({
     // create() returns the row it just inserted; without create_new the route
     // requires investment_id.
     if (createNew) {
-      investment = (await createInvestmentFromRow({
-        batchId,
-        rowId: rowIds[0],
-      }))!;
+      const [rowId] = rowIds;
+      if (rowId === undefined) {
+        // The route requires a non-empty row_ids; an empty set has no row.
+        const err: Error & { code?: string } = new Error(
+          `Row undefined not found in batch ${batchId}`,
+        );
+        err.code = "NOT_FOUND";
+        throw err;
+      }
+      investment = (await createInvestmentFromRow({ batchId, rowId }))!;
       effectiveId = investment.id;
     } else {
       investment = await investmentRepository.getById(effectiveId!);
@@ -593,8 +606,8 @@ export async function rollbackBatch(batchId: number) {
             ]
               .concat(
                 lockedBatch.account_id,
-                lockedBatch.custom_config?.transfer_destination_account_id,
-                lockedBatch.custom_config?.transfer_origin_account_id,
+                batchConfigFields(lockedBatch.custom_config)?.transfer_destination_account_id,
+                batchConfigFields(lockedBatch.custom_config)?.transfer_origin_account_id,
               )
               .filter((id) => id != null),
           ),

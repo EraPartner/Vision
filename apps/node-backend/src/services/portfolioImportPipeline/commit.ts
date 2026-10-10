@@ -15,6 +15,18 @@
 
 import { ConflictError } from "../../middleware/errorHandler.ts";
 import { query, withTransaction } from "../../database/connection.ts";
+import { checkRows, queryOne, queryRows } from "../../database/rowContracts.ts";
+import {
+  batchConfigFields,
+  commitBatchRowSchema,
+  intCountNRowSchema,
+  intIdRowSchema,
+  matchedPortfolioStagingRowSchema,
+} from "../../database/rows/portfolioImport.ts";
+import type {
+  CommitBatchRow,
+  MatchedPortfolioStagingRow,
+} from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import portfolioTransactionService from "../portfolio/portfolioTransactionService.ts";
 import recipientRepository from "../../repositories/recipientRepository.ts";
@@ -38,50 +50,7 @@ import { commitPortfolioAssetAdjustment } from "../portfolio/portfolioAssetAdjus
  * resolved_investment_id)`, and the two `inv.*` columns come from the LEFT JOIN
  * on `investments` (null for cash rows and unresolved instruments).
  */
-export type MatchedPortfolioStagingRow = Pick<
-  PortfolioImportStagingRow,
-  | "id"
-  | "status"
-  | "type"
-  | "route"
-  | "type_raw"
-  | "units"
-  | "price_per_unit"
-  | "amount"
-  | "fees"
-  | "taxes"
-  | "currency"
-  | "fx_rate_to_eur"
-  | "note"
-> &
-  // Optional on the full row type, but always selected by the commit query.
-  Required<
-    Pick<
-      PortfolioImportStagingRow,
-      | "source_record_hash"
-      | "source_transaction_id"
-      | "dedup_fingerprint"
-      | "dedup_fingerprint_version"
-      | "dedup_occurrence"
-    >
-  > & {
-    asset_transfer_details?: object | null;
-    asset_adjustment_details?: object | null;
-    tx_date: string | null;
-    investment_id: number | null;
-    asset_class: string | null;
-    investment_currency: string | null;
-  };
-
-/**
- * The batch projection commit reads: the reconciliation scope columns plus the
- * brokerage flag and the sleeve account's broker label.
- */
-type CommitBatchRow = ReconciliationBatchScopeRow & {
-  is_brokerage: boolean;
-  account_institution: string | null;
-  account_name: string | null;
-};
+export type { MatchedPortfolioStagingRow };
 
 /** Repository-normalized trade values compared for occurrence dedup. */
 type CanonicalTradeValues = {
@@ -108,7 +77,6 @@ type KinesisCashReproof = {
 
 import {
   readReconciliationSources,
-  type ReconciliationBatchScopeRow,
   type ReconciliationSourceRow,
 } from "../../repositories/portfolioImportReconciliationRepository.ts";
 import {
@@ -129,7 +97,6 @@ import {
   readIbkrCashCorrectionContext,
 } from "../portfolioIbkrCashReconciliation.ts";
 import { getIbkrFundingPrimaryEvidence } from "./ibkrFundingHistoryAdapter.ts";
-import type { PortfolioImportStagingRow } from "../../types/rows.ts";
 import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
@@ -189,7 +156,8 @@ export async function commitBatch({
   // In brokerage mode the batch ALSO routes external cash rows into the ledger.
   // The account's institution/name ride along as the broker label for the cash
   // rows' recipient (see cashRecipientId below).
-  const { rows: batchRows } = await query<CommitBatchRow>(
+  const batchRows = await queryRows(
+    commitBatchRowSchema,
     `SELECT b.account_id, b.is_brokerage, b.id, b.rows_total, b.custom_config,
             b.status, b.adapter_name,
             a.institution AS account_institution,
@@ -205,7 +173,8 @@ export async function commitBatch({
   // Exports can list newest trades first. Commit older dates first so a sale
   // sees its funding buys; retain source order within a date because staging
   // does not provide an intraday timestamp. Provenance and identity stay intact.
-  const { rows: relevantRows } = await query<MatchedPortfolioStagingRow>(
+  const relevantRows = await queryRows(
+    matchedPortfolioStagingRowSchema,
     `SELECT isr.id,
             isr.status,
             to_char(isr.tx_date, 'YYYY-MM-DD') AS tx_date,
@@ -245,12 +214,11 @@ export async function commitBatch({
       row.status === "matched" &&
       (selectedRowIds === undefined || selectedRowIds.has(Number(row.id))),
   );
-  const ibkrCashFormat = batchRows[0]?.custom_config?.format;
+  const ibkrCashFormat = batchConfigFields(batchRows[0]?.custom_config)?.format;
   const ibkrCashSources = new Map();
   if (
-    ["ibkr_transaction_history", "ibkr_funding_history"].includes(
-      ibkrCashFormat,
-    ) &&
+    (ibkrCashFormat === "ibkr_transaction_history" ||
+      ibkrCashFormat === "ibkr_funding_history") &&
     matched.some((row) => row.route === "cash")
   ) {
     const sources = await readReconciliationSources([Number(batchId)]);
@@ -259,8 +227,10 @@ export async function commitBatch({
   }
 
   if (
-    batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
-    batchRows[0]?.custom_config?.yield_basis_policy === "zero" &&
+    batchConfigFields(batchRows[0]?.custom_config)?.format ===
+      "kinesis_transaction_history" &&
+    batchConfigFields(batchRows[0]?.custom_config)?.yield_basis_policy ===
+      "zero" &&
     matched.some((row) => row.type === "dividend")
   )
     throw new ConflictError(
@@ -273,11 +243,13 @@ export async function commitBatch({
   let cashReproof: KinesisCashReproof | undefined;
   let cashReproved = false;
   if (
-    batchRows[0]?.custom_config?.format === "kinesis_transaction_history" &&
+    batchConfigFields(batchRows[0]?.custom_config)?.format ===
+      "kinesis_transaction_history" &&
     matched.some((row) => row.route === "cash")
   ) {
     const source = await readReconciliationSources([Number(batchId)]);
-    const batch = batchRows[0];
+    // The format check above read this batch's config, so it exists.
+    const batch = batchRows[0]!;
     const cashContext = await readKinesisCashContext();
     if (
       matched.some(
@@ -520,9 +492,7 @@ export async function commitBatch({
 
       cashReproved = false;
       let ibkrCashAliasContext;
-      for (let j = 0; j < chunk.length; j++) {
-        const row = chunk[j];
-
+      for (const [j, row] of chunk.entries()) {
         if (row.route === "account_internal") {
           // Wallet-to-Pro movement is retained as a source annotation within
           // one account. Pro trade history supplies its actual economic events.
@@ -711,7 +681,7 @@ export async function commitBatch({
               (row.type != null && cashCategoryIds.get(String(row.type))) ||
                 null,
             ];
-            const r = row.dedup_fingerprint
+            const result = row.dedup_fingerprint
               ? await query(
                   `INSERT INTO transactions
                      (date, amount, currency, memo, account_id, recipient_id, category_id,
@@ -731,7 +701,8 @@ export async function commitBatch({
                    VALUES ($1, $2, $3, $4, $5, $6, $7, true) RETURNING id`,
                   baseParams,
                 );
-            if (!r.rows[0]) {
+            const [inserted] = checkRows(intIdRowSchema, result.rows);
+            if (!inserted) {
               await client.query(`RELEASE SAVEPOINT ${sp}`);
               chunkDuplicates++;
               await markRow(row.id, "duplicate");
@@ -739,7 +710,7 @@ export async function commitBatch({
             }
             await query(
               `UPDATE portfolio_import_staging_rows SET status = 'committed', committed_txn_id = $2 WHERE id = $1`,
-              [row.id, r.rows[0]?.id ?? null],
+              [row.id, inserted.id],
             );
             await client.query(`RELEASE SAVEPOINT ${sp}`);
             chunkImported++;
@@ -826,9 +797,10 @@ export async function commitBatch({
           let fxRate =
             row.fx_rate_to_eur != null ? Number(row.fx_rate_to_eur) : undefined;
           const primaryZeroYield =
-            batchRows[0].custom_config?.format ===
+            batchConfigFields(batchRows[0]?.custom_config)?.format ===
               "kinesis_transaction_history" &&
-            batchRows[0].custom_config?.yield_basis_policy === "zero" &&
+            batchConfigFields(batchRows[0]?.custom_config)
+              ?.yield_basis_policy === "zero" &&
             row.type === "gift" &&
             row.source_transaction_id?.endsWith(":units") &&
             [
@@ -854,7 +826,9 @@ export async function commitBatch({
             currency,
             dividend_amount_convention:
               row.type === "dividend" &&
-              GROSS_DIVIDEND_FORMATS.has(batchRows[0]?.custom_config?.format)
+              GROSS_DIVIDEND_FORMATS.has(
+                batchConfigFields(batchRows[0]?.custom_config)?.format ?? "",
+              )
                 ? "gross"
                 : undefined,
             note: row.note || undefined,
@@ -1024,7 +998,8 @@ async function countCashFieldMatches(
   params.push(row.currency || "EUR", memo);
   const currencyParam = `$${params.length - 1}`;
   const memoParam = `$${params.length}`;
-  const r = await query<{ n: number }>(
+  const r = await queryOne(
+    intCountNRowSchema,
     `SELECT COUNT(*)::int AS n FROM transactions
       WHERE account_id = $1 AND date = $2::date
         AND ${amountPredicate}
@@ -1034,7 +1009,7 @@ async function countCashFieldMatches(
         AND is_active = true`,
     params,
   );
-  return Number(r.rows[0]?.n) || 0;
+  return Number(r?.n) || 0;
 }
 
 function tradeIdentityKey(
@@ -1097,7 +1072,8 @@ async function countTradeFieldMatches(
   // a different account (or in a different currency) is a distinct trade, not
   // a re-import of this one. IS NOT DISTINCT FROM keeps NULL==NULL matching
   // for account-less (non-brokerage) batches.
-  const matches = await query<{ n: number }>(
+  const matches = await queryOne(
+    intCountNRowSchema,
     `SELECT COUNT(*)::int AS n
        FROM portfolio_transactions
       WHERE investment_id = $1
@@ -1118,7 +1094,7 @@ async function countTradeFieldMatches(
       row.currency || row.investment_currency || "EUR",
     ],
   );
-  return Number(matches.rows[0]?.n) || 0;
+  return Number(matches?.n) || 0;
 }
 
 async function hasCanonicalFingerprint(

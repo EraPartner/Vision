@@ -165,11 +165,14 @@ const ExchangeRateItemSchema = z.object({
     rate_date: z.string(),
     fetched_at: z.string(),
 });
+// routes/info/rates.ts GET /exchange-rates.
 const ExchangeRatesSchema = z.object({
+    total_rates: z.number().int().nonnegative(),
     rates: z.array(ExchangeRateItemSchema),
     fallback_rates: z.record(z.string(), z.unknown()),
-    base: z.string(),
-    date: z.string(),
+    source: z.enum(["database", "fallback"]),
+    is_stale: z.boolean(),
+    last_fetched_at: z.string().nullable(),
 });
 
 const NewsArticleSchema = z.object({
@@ -350,6 +353,14 @@ describe("Mutation handler contracts (E2)", () => {
     //   services/investmentService.js:389 → 201
     //   routes/plannedTransactions.js:443     → 201
     // Every PATCH in this table is a bare `res.ok(...)` → 200.
+    // POST bodies that add fields to the row: transactions add `auto_linked`
+    // (routes/transactions.ts), recipients add `created` (withCreateOutcome).
+    const createSchemaFor: Record<string, z.ZodTypeAny> = {
+        transactions: TransactionItemSchema.extend({
+            auto_linked: z.number().int().positive().nullable(),
+        }),
+        recipients: RecipientItemSchema.extend({ created: z.boolean() }),
+    };
     describe.each<[string, string, z.ZodTypeAny, number]>([
         ["transactions", "/api/transactions", TransactionItemSchema, 201],
         ["categories", "/api/categories", CategoryItemSchema, 200],
@@ -364,7 +375,7 @@ describe("Mutation handler contracts (E2)", () => {
     ])("%s", (label, path, ItemSchema, createStatus) => {
         it(`POST ${path} answers ${createStatus} and matches item schema`, async () => {
             validate(
-                ItemSchema,
+                createSchemaFor[label] ?? ItemSchema,
                 await mutateEnvelope("POST", path, {}, createStatus),
                 `POST ${label}`,
             );
@@ -558,7 +569,7 @@ describe("Missing GET endpoint contracts (E4)", () => {
             "GET /api/market/search returns expected shape",
             "/api/market/search",
             "GET /api/market/search",
-            z.object({ results: z.array(z.unknown()) }),
+            z.object({ items: z.array(z.unknown()) }),
         ],
         [
             "GET /api/watchlist returns expected shape",
@@ -586,19 +597,29 @@ describe("Missing GET endpoint contracts (E4)", () => {
             "GET /api/ai/conversations returns { items, total }",
             "/api/ai/conversations",
             "GET /api/ai/conversations",
-            collectionSchema(),
+            // routes/ai.ts echoes the page window next to the collection.
+            collectionSchema().extend({
+                limit: z.number().int().positive(),
+                offset: z.number().int().nonnegative(),
+            }),
         ],
         [
             "GET /api/info/portfolio-performance returns expected shape",
             "/api/info/portfolio-performance",
             "GET /api/info/portfolio-performance",
             z.object({
-                snapshots: z.array(z.unknown()),
                 currency: z.string(),
-                start_value: z.number(),
-                end_value: z.number(),
-                absolute_return: z.number(),
-                percentage_return: z.number(),
+                start_date: z.string(),
+                end_date: z.string(),
+                snapshots: z.array(z.unknown()),
+                metrics: z.unknown().nullable(),
+                heatmap: z.object({
+                    years: z.array(z.number()),
+                    data: z.record(z.string(), z.unknown()),
+                    maxAbsPct: z.number(),
+                }),
+                breakdownSummary: z.array(z.unknown()),
+                totals: PortfolioTotalsSchema,
             }),
         ],
         [
@@ -1076,7 +1097,8 @@ describe("Phase F1: extended mutation contracts", () => {
     // `attachmentRepository.formatRow` (attachmentRepository.js:19-29). Note
     // `size_bytes` (number), not `size` — AttachmentPanel.tsx:61 reads it.
     const AttachmentSchema = z.object({
-        id: z.number().int().positive(),
+        // BIGSERIAL: node-postgres returns it as decimal text.
+        id: z.string().regex(/^\d+$/),
         transaction_id: z.number().int().positive(),
         filename: z.string(),
         stored_path: z.string(),
@@ -1182,13 +1204,8 @@ describe("Phase F1: extended mutation contracts", () => {
             "/api/investments/refresh-prices",
             undefined,
             "POST /api/investments/refresh-prices",
-            z.object({
-                message: z.string(),
-                updated_count: z.number(),
-                stale_count: z.number(),
-                cached_count: z.number(),
-                live: z.boolean(),
-            }),
+            // investmentService.refreshPrices with nothing to refresh.
+            z.object({ updated: z.number(), message: z.string() }),
             200, // services/investmentService.js:440 — bare res.ok
         ],
         [
@@ -1289,12 +1306,15 @@ describe("Phase F1: extended mutation contracts", () => {
             201, // routes/recipients.js:201
         ],
         [
-            "POST /api/recipients/:id/patterns/preview returns matches",
+            "POST /api/recipients/:id/patterns/preview returns match counts",
             "POST",
             "/api/recipients/1/patterns/preview",
             {},
             "POST /api/recipients/:id/patterns/preview",
-            z.object({ matches: z.array(z.unknown()) }),
+            z.strictObject({
+                matchCount: z.number().int().nonnegative(),
+                recipientIds: z.array(z.number().int().positive()),
+            }),
             200, // routes/recipients.js:209 — bare res.ok (preview creates nothing)
         ],
         [
@@ -1306,8 +1326,9 @@ describe("Phase F1: extended mutation contracts", () => {
             z.object({
                 id: z.number(),
                 name: z.string(),
-                config: z.unknown(),
+                chart_type: z.string(),
                 created_at: z.string(),
+                updated_at: z.string(),
             }),
             201, // routes/savedCharts.js:175
         ],

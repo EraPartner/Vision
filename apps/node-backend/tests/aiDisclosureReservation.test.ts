@@ -5,6 +5,7 @@ const mocked = vi.hoisted(() => ({ client: { query: vi.fn() } }));
 vi.mock("../src/database/connection.ts", () => mockTxConnection(mocked.client));
 
 import { reserveDisclosure } from "../src/repositories/aiDisclosureRepository.ts";
+import { disclosureGrantRow, disclosureRecordRow } from "./helpers/aiRows.ts";
 
 const preview = {
   payloadSha256: "a".repeat(64),
@@ -15,25 +16,17 @@ const preview = {
 };
 
 function grant(route: string, mode: string) {
-  return {
+  return disclosureGrantRow({
     route,
     mode,
-    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    expires_at: new Date(Date.now() + 60_000),
     preview_payload_sha256: preview.payloadSha256,
     allowed_fields_json: ["question"],
-    used_requests: 0,
-    max_requests: 1,
-    used_input_characters: 0,
-    max_input_characters: 1000,
-    used_output_tokens: 0,
-    max_output_tokens: 1000,
-    used_cost_micros: 0,
-    max_cost_micros: 1000,
-    max_disclosure_units: 10,
-    purpose: "Synthetic test",
-    policy_version: 1,
-  };
+  });
 }
+
+/** The inserted record as `RETURNING *` hands it back. */
+const insertedRecord = disclosureRecordRow({ id: "synthetic-record" });
 
 const reservation = {
   grantId: "synthetic-grant",
@@ -74,13 +67,14 @@ describe("disclosure grant reservation", () => {
         rows: [grant("openai-api", "cloud-plan-public")],
       })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
-      .mockResolvedValueOnce({ rows: [{ id: "synthetic-record" }] })
+      // COALESCE(SUM(bigint), 0) is NUMERIC: a string.
+      .mockResolvedValueOnce({ rows: [{ total: "0" }] })
+      .mockResolvedValueOnce({ rows: [insertedRecord] })
       .mockResolvedValueOnce({ rows: [] });
 
-    await expect(reserveDisclosure(reservation)).resolves.toEqual({
-      id: "synthetic-record",
-    });
+    await expect(reserveDisclosure(reservation)).resolves.toEqual(
+      insertedRecord,
+    );
     expect(
       mocked.client.query.mock.calls.filter(([sql]) => sql.includes("INSERT")),
     ).toHaveLength(1);
@@ -103,12 +97,13 @@ describe("disclosure grant reservation", () => {
         ],
       })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
-      .mockResolvedValueOnce({ rows: [{ id: "synthetic-record" }] })
+      // COALESCE(SUM(bigint), 0) is NUMERIC: a string.
+      .mockResolvedValueOnce({ rows: [{ total: "0" }] })
+      .mockResolvedValueOnce({ rows: [insertedRecord] })
       .mockResolvedValueOnce({ rows: [] });
 
-    await expect(reserveDisclosure(reservation)).resolves.toEqual({
-      id: "synthetic-record",
-    });
+    await expect(reserveDisclosure(reservation)).resolves.toEqual(
+      insertedRecord,
+    );
   });
 });

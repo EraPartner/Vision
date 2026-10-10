@@ -74,8 +74,8 @@ describe("Saxo transaction history portfolio adapter", () => {
       encoding: "utf-8",
     });
 
-    expect(rows[0].rawData).toContain("Koop 10 @ 20.00 USD");
-    expect(rows[3].rawData).toContain('"1.234,56"');
+    expect(rows[0]!.rawData).toContain("Koop 10 @ 20.00 USD");
+    expect(rows[3]!.rawData).toContain('"1.234,56"');
   });
 
   it("rejects a different CSV schema", async () => {
@@ -91,6 +91,6 @@ describe("Saxo transaction history portfolio adapter", () => {
   it("normalizes exporter whitespace in column names", async () => {
     const rows = await parseSaxoTransactionHistory(fixture);
 
-    expect(rows[0].sourceId).toBe("101");
+    expect(rows[0]!.sourceId).toBe("101");
   });
 });

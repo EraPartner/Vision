@@ -11,10 +11,15 @@ import {
     noContent,
     ok,
     ACCOUNT_LIST_ITEM_STUB,
+    PLANNED_TRANSACTION_STUB,
 } from "@/test/msw/handlers";
 import PlannedPaymentsPage from "@/pages/PlannedPaymentsPage";
 import PlannedPaymentForm from "@/features/planned/PlannedPaymentForm";
 import { todayYmd } from "@/lib/timezone";
+import {
+    accountListItem,
+    accountsBody,
+} from "@/test/msw/rowFixtures";
 
 // The table virtualizes rows via @tanstack/react-virtual, which renders nothing
 // in jsdom's zero-height scroll container. Mock the virtualizer to materialise
@@ -43,6 +48,9 @@ vi.mock("@tanstack/react-virtual", () => ({
 
 /** Minimal backend PlannedTransaction fixture (active, recurring) */
 const rentPayment = {
+    ...PLANNED_TRANSACTION_STUB,
+    bank_account: null,
+    recipient_id: null,
     id: 1,
     memo: "Rent",
     recipient_name: "Landlord SA",
@@ -67,17 +75,17 @@ beforeEach(() => {
             ok({ items: [], total: 0 }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>
-            ok({
+            ok(accountsBody({
                 items: [
-                    {
+                    accountListItem({
                         ...ACCOUNT_LIST_ITEM_STUB,
                         name: "Main",
                         display_name: "Main",
-                    },
+                    }),
                 ],
                 total: 1,
                 links: [],
-            }),
+            })),
         ),
     );
 });
@@ -449,6 +457,7 @@ describe("PlannedPaymentsPage (integration)", () => {
             url: null,
             is_recurring: false,
             recurrence_pattern: null,
+            max_occurrences: null,
             reminder_days_before: null,
             is_executed: false,
             last_executed_date: null,
@@ -465,6 +474,7 @@ describe("PlannedPaymentsPage (integration)", () => {
             executed_transaction_id: null,
             execution_count: 0,
             executions: [],
+            tags: [],
             is_active: true,
             created_at: "2025-01-01T00:00:00Z",
             updated_at: null,

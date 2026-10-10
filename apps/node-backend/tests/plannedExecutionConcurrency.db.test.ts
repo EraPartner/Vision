@@ -133,7 +133,7 @@ describe.skipIf(!hasTestDatabase())(
 
     it("advances concurrent replay only once", async () => {
       const { id, ids } = await fixture();
-      const results = await concurrently(id, [ids[0], ids[0]]);
+      const results = await concurrently(id, [ids[0]!, ids[0]!]);
       expect(
         results
           .map(
@@ -185,11 +185,11 @@ describe.skipIf(!hasTestDatabase())(
       const { id, ids } = await fixture({ end: "2026-07-15" });
       await executePlanned({
         id,
-        executedTransactionId: ids[0],
+        executedTransactionId: ids[0]!,
         executionDate: "2026-07-01",
       });
       await expect(
-        executePlanned({ id, executedTransactionId: ids[1] }),
+        executePlanned({ id, executedTransactionId: ids[1]! }),
       ).rejects.toMatchObject({ status: 409 });
       expect(await persisted(id)).toEqual({
         day: "2026-07-01",
@@ -197,7 +197,7 @@ describe.skipIf(!hasTestDatabase())(
         is_executed: true,
       });
       await expect(
-        executePlanned({ id, executedTransactionId: ids[0] }),
+        executePlanned({ id, executedTransactionId: ids[0]! }),
       ).resolves.toMatchObject({ duplicate: true });
     });
   },

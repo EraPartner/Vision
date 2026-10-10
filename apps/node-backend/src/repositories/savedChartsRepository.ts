@@ -1,4 +1,11 @@
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  idRowSchema,
+  requireRow,
+  savedChartRowSchema,
+} from "../database/rows/catalog.ts";
 import { buildSetClauses, buildLimitOffset } from "../lib/sqlClauses.ts";
 
 import type { SavedChartRow } from "../types/rows.ts";
@@ -100,11 +107,11 @@ async function replaceMemberships(
 }
 
 async function readById(id: number): Promise<SavedChartRow | null> {
-  const result = await query<SavedChartRow>(
+  const row = await queryOne(
+    savedChartRowSchema,
     `SELECT ${COLUMNS} FROM saved_charts sc WHERE sc.id = $1`,
     [id],
   );
-  const row = result.rows[0];
   return row ? mapRow(row) : null;
 }
 
@@ -140,18 +147,19 @@ const savedChartsRepository = {
     const sql =
       `SELECT ${COLUMNS} FROM saved_charts sc ORDER BY sc.created_at ASC` +
       buildLimitOffset(params, { limit, offset });
-    const result = await query<SavedChartRow>(sql, params);
-    return result.rows.map(mapRow);
+    const rows = await queryRows(savedChartRowSchema, sql, params);
+    return rows.map(mapRow);
   },
 
   /**
    * Row count — the `total` for a paginated list.
    */
   async getCount(): Promise<number> {
-    const result = await query<{ count: string }>(
+    const row = await queryOne(
+      countRowSchema,
       "SELECT COUNT(*) FROM saved_charts",
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseInt(requireRow(row, "saved chart count").count, 10);
   },
 
   async getById(id: number): Promise<SavedChartRow | null> {
@@ -173,7 +181,8 @@ const savedChartsRepository = {
     dateRangeEnd,
   }: SavedChartInput): Promise<SavedChartRow | null> {
     return withTransaction(async () => {
-      const result = await query<{ id: number }>(
+      const inserted = await queryOne(
+        idRowSchema,
         `INSERT INTO saved_charts (name, chart_type, all_categories, all_recipients, all_tags, chart_variant, time_bucket, date_range_start, date_range_end)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
@@ -189,7 +198,7 @@ const savedChartsRepository = {
           dateRangeEnd ?? null,
         ],
       );
-      const id = Number(result.rows[0].id);
+      const id = requireRow(inserted, "saved chart insert").id;
       await replaceMemberships(id, {
         categoryIds,
         recipientIds: recipientIds ?? [],

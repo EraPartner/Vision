@@ -12,12 +12,15 @@
  */
 
 import { query } from "../../database/connection.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import {
+  aliasInvestmentRowSchema,
+  investmentMatchKeyRowSchema,
+  matchableStagingRowSchema,
+} from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { getKinesisAssetConfig } from "../../config/kinesisConfig.ts";
-import type {
-  InvestmentRow,
-  PortfolioImportStagingRow,
-} from "../../types/rows.ts";
+import type { InvestmentRow } from "../../types/rows.ts";
 import type {
   PortfolioImportBatchId,
   PortfolioImportProgressCallback,
@@ -68,8 +71,6 @@ export type InstrumentMatch = {
 /** Active-investment candidates for one match key. */
 type MatchCandidate = { id: number; count: number };
 
-type MatchKeyRow = { match_key: string; id: number; count: number };
-
 /**
  * Run the match phase: resolve each validated row to an existing investment by
  * unambiguous symbol, then provider alias, then unambiguous exact name. Cash
@@ -100,9 +101,8 @@ export async function matchBatch({
     [batchId],
   );
 
-  const { rows } = await query<
-    Pick<PortfolioImportStagingRow, "id" | "symbol_raw" | "name_raw">
-  >(
+  const rows = await queryRows(
+    matchableStagingRowSchema,
     `SELECT id, symbol_raw, name_raw
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND status = 'validated' AND (route IS NULL OR route NOT IN ('cash','account_internal'))
@@ -171,7 +171,7 @@ export async function matchBatch({
   const ids: string[] = [];
   const investmentIds: (number | null)[] = [];
   const matchSources: (string | null)[] = [];
-  const counts: Record<string, number> = {
+  const counts: { symbol: number; name_exact: number; unresolved: number } = {
     symbol: 0,
     name_exact: 0,
     unresolved: 0,
@@ -235,14 +235,15 @@ async function resolveBySymbolBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (symbols.size === 0) return map;
-  const r = await query<MatchKeyRow>(
+  const keyRows = await queryRows(
+    investmentMatchKeyRowSchema,
     `SELECT LOWER(symbol) AS match_key, MIN(id) AS id, COUNT(*)::int AS count
        FROM investments
       WHERE LOWER(symbol) = ANY($1::text[]) AND is_active = true
       GROUP BY LOWER(symbol)`,
     [[...symbols]],
   );
-  for (const { match_key, id, count } of r.rows) {
+  for (const { match_key, id, count } of keyRows) {
     map.set(String(match_key), { id, count: Number(count) });
   }
   return map;
@@ -268,8 +269,15 @@ export function providerAssetAlias(
     const pair = /^([A-Z0-9]{2,10})-([A-Z]{3})$/.exec(
       quoteSymbol.toUpperCase(),
     );
-    if (pair && FIAT_QUOTE_CURRENCIES.has(pair[2]))
-      return pair[1].toLowerCase();
+    // Both groups are mandatory, so a match carries them.
+    const base = pair?.[1];
+    const quote = pair?.[2];
+    if (
+      base !== undefined &&
+      quote !== undefined &&
+      FIAT_QUOTE_CURRENCIES.has(quote)
+    )
+      return base.toLowerCase();
   }
   if (investment.price_provider === "kinesis") {
     const assetName = String(investment.name || investment.symbol || "")
@@ -280,7 +288,8 @@ export function providerAssetAlias(
     const pair = /^(KAU|KAG|XAU|XAG|XPT|XPD)_(USD|EUR)$/.exec(
       quoteSymbol.toUpperCase(),
     );
-    if (pair) return pair[1].toLowerCase();
+    const base = pair?.[1];
+    if (base !== undefined) return base.toLowerCase();
   }
   return undefined;
 }
@@ -303,17 +312,8 @@ async function resolveByProviderAliasBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (symbols.size === 0) return map;
-  const { rows: investments } = await query<
-    Pick<
-      InvestmentRow,
-      | "id"
-      | "symbol"
-      | "name"
-      | "asset_class"
-      | "price_provider"
-      | "price_provider_id"
-    >
-  >(
+  const investments = await queryRows(
+    aliasInvestmentRowSchema,
     `SELECT id, symbol, name, asset_class, price_provider, price_provider_id
        FROM investments
       WHERE is_active = true
@@ -366,14 +366,15 @@ async function resolveByNameBatch(
   }
   const map = new Map<string, MatchCandidate>();
   if (names.size === 0) return map;
-  const r = await query<MatchKeyRow>(
+  const keyRows = await queryRows(
+    investmentMatchKeyRowSchema,
     `SELECT LOWER(TRIM(name)) AS match_key, MIN(id) AS id, COUNT(*)::int AS count
        FROM investments
       WHERE LOWER(TRIM(name)) = ANY($1::text[]) AND is_active = true
       GROUP BY LOWER(TRIM(name))`,
     [[...names]],
   );
-  for (const { match_key, id, count } of r.rows) {
+  for (const { match_key, id, count } of keyRows) {
     map.set(String(match_key), { id, count: Number(count) });
   }
   return map;

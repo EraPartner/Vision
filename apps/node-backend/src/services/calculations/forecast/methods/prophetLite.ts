@@ -58,50 +58,69 @@ function featureRow(
   return row;
 }
 
+/**
+ * `values[index]` for an index the surrounding loop bounds guarantee. Throws
+ * instead of yielding `undefined` (which would silently turn the fit into NaN)
+ * if that invariant is ever broken.
+ */
+function at<T>(values: readonly T[], index: number): T {
+  const value = values[index];
+  if (value === undefined)
+    throw new RangeError(`prophet-lite: index ${index} out of range`);
+  return value;
+}
+
 function solveRidge(X: number[][], y: number[], lambda: number): number[] {
   const n = X.length;
-  const p = X[0].length;
+  const p = at(X, 0).length;
   const XtX: number[][] = Array.from({ length: p }, () =>
     new Array<number>(p).fill(0),
   );
   const Xty: number[] = new Array(p).fill(0);
   for (let i = 0; i < n; i++) {
+    const xi = at(X, i);
+    const yi = at(y, i);
     for (let a = 0; a < p; a++) {
-      const xia = X[i][a];
-      Xty[a] += xia * y[i];
+      const xia = at(xi, a);
+      Xty[a] = at(Xty, a) + xia * yi;
+      const XtXa = at(XtX, a);
       for (let b = a; b < p; b++) {
-        XtX[a][b] += xia * X[i][b];
+        XtXa[b] = at(XtXa, b) + xia * at(xi, b);
       }
     }
   }
   for (let a = 0; a < p; a++) {
-    for (let b = a + 1; b < p; b++) XtX[b][a] = XtX[a][b];
-    if (a > 0) XtX[a][a] += lambda;
+    const XtXa = at(XtX, a);
+    for (let b = a + 1; b < p; b++) at(XtX, b)[a] = at(XtXa, b);
+    if (a > 0) XtXa[a] = at(XtXa, a) + lambda;
   }
   return gaussianElimination(XtX, Xty);
 }
 
 function gaussianElimination(A: number[][], b: number[]): number[] {
   const n = A.length;
-  const M = A.map((row, i) => [...row, b[i]]);
+  const M = A.map((row, i) => [...row, at(b, i)]);
   for (let i = 0; i < n; i++) {
     let pivot = i;
     for (let k = i + 1; k < n; k++) {
-      if (Math.abs(M[k][i]) > Math.abs(M[pivot][i])) pivot = k;
+      if (Math.abs(at(at(M, k), i)) > Math.abs(at(at(M, pivot), i))) pivot = k;
     }
-    if (pivot !== i) [M[i], M[pivot]] = [M[pivot], M[i]];
-    const piv = M[i][i];
+    if (pivot !== i) [M[i], M[pivot]] = [at(M, pivot), at(M, i)];
+    const Mi = at(M, i);
+    const piv = at(Mi, i);
     if (Math.abs(piv) < 1e-12) continue;
     for (let k = i + 1; k < n; k++) {
-      const f = M[k][i] / piv;
-      for (let j = i; j <= n; j++) M[k][j] -= f * M[i][j];
+      const Mk = at(M, k);
+      const f = at(Mk, i) / piv;
+      for (let j = i; j <= n; j++) Mk[j] = at(Mk, j) - f * at(Mi, j);
     }
   }
   const x: number[] = new Array(n).fill(0);
   for (let i = n - 1; i >= 0; i--) {
-    let s = M[i][n];
-    for (let j = i + 1; j < n; j++) s -= M[i][j] * x[j];
-    x[i] = Math.abs(M[i][i]) < 1e-12 ? 0 : s / M[i][i];
+    const Mi = at(M, i);
+    let s = at(Mi, n);
+    for (let j = i + 1; j < n; j++) s -= at(Mi, j) * at(x, j);
+    x[i] = Math.abs(at(Mi, i)) < 1e-12 ? 0 : s / at(Mi, i);
   }
   return x;
 }
@@ -118,16 +137,16 @@ function forecast({
     return forecastDates.map((date) => ({ date, value: 0 }));
   }
 
-  const t0 = daysSinceEpoch(dense[0].date);
+  const t0 = daysSinceEpoch(at(dense, 0).date);
   const ts = dense.map((r) => daysSinceEpoch(r.date) - t0);
-  const tMax = ts[ts.length - 1];
+  const tMax = at(ts, ts.length - 1);
   const changepoints: number[] = [];
   const cpEnd = tMax * CHANGEPOINT_FRACTION;
   for (let k = 1; k <= NUM_CHANGEPOINTS; k++) {
     changepoints.push((cpEnd * k) / (NUM_CHANGEPOINTS + 1));
   }
 
-  const X = dense.map((r, i) => featureRow(ts[i], r.date, changepoints));
+  const X = dense.map((r, i) => featureRow(at(ts, i), r.date, changepoints));
   const y = dense.map((r) => r.net);
   const beta = solveRidge(X, y, RIDGE_LAMBDA);
 
@@ -135,7 +154,7 @@ function forecast({
     const t = daysSinceEpoch(date) - t0;
     const row = featureRow(t, date, changepoints);
     let value = 0;
-    for (let j = 0; j < row.length; j++) value += row[j] * beta[j];
+    for (const [j, feature] of row.entries()) value += feature * at(beta, j);
     return { date, value };
   });
 }

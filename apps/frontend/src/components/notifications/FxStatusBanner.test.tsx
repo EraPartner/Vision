@@ -18,6 +18,7 @@ describe("FxStatusBanner", () => {
             http.get(`${API_BASE}/api/info/exchange-rates`, () => {
                 statusRequests += 1;
                 return ok({
+                    total_rates: 0,
                     rates: [],
                     fallback_rates: {},
                     base: "EUR",

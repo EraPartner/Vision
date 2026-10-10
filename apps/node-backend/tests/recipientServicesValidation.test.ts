@@ -129,7 +129,8 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     const sqls: string[] = [];
     mockClient.query.mockImplementation(async (sql) => {
       sqls.push(sql);
-      if (sql.includes("FOR UPDATE")) return { rows: [{ id: 1 }] };
+      if (sql.includes("FOR UPDATE"))
+        return { rows: [{ id: 1, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
       if (sql.includes("RETURNING id")) return { rows: [{ id: 3 }] };
       return { rows: [], rowCount: 0 };
@@ -151,7 +152,8 @@ describe("mergeRecipients — flattens nested alias chains", () => {
     const paramsBySql: [string, unknown][] = [];
     mockClient.query.mockImplementation(async (sql, params) => {
       paramsBySql.push([sql, params]);
-      if (sql.includes("FOR UPDATE")) return { rows: [{ id: 1 }] };
+      if (sql.includes("FOR UPDATE"))
+        return { rows: [{ id: 1, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
       if (sql.includes("RETURNING id")) return { rows: [{ id: 3 }] };
       return { rows: [], rowCount: 0 };
@@ -177,7 +179,7 @@ describe("createPattern — validates the kind it stores", () => {
     await expect(
       createPattern({ recipientId: 3, pattern: "ACME (BE" }),
     ).resolves.toEqual({ id: 7 });
-    expect(poolQuery.mock.calls[0][1][2]).toBe("literal_prefix");
+    expect(poolQuery.mock.calls[0]![1][2]).toBe("literal_prefix");
   });
 
   it("still rejects an invalid explicit regex", async () => {

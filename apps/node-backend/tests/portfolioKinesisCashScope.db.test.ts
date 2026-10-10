@@ -75,7 +75,7 @@ async function stage(account: number, investment: number) {
       await pool.query(
         "INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage) VALUES('kinesis_transaction_history',$1,'awaiting_review',$2,$3,true) RETURNING id",
         [
-          JSON.stringify(source.batches[0].custom_config),
+          JSON.stringify(source.batches[0]!.custom_config),
           source.rows.length,
           account,
         ],
@@ -275,11 +275,11 @@ describe.skipIf(!hasTestDatabase())(
       ])
         expect(after[table]).toEqual(before[table]);
       expect(
-        after.portfolio_import_staging_rows.filter(
+        after.portfolio_import_staging_rows!.filter(
           (row) => row.data.route !== "cash",
         ),
       ).toEqual(
-        before.portfolio_import_staging_rows.filter(
+        before.portfolio_import_staging_rows!.filter(
           (row) => row.data.route !== "cash",
         ),
       );

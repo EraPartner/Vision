@@ -106,7 +106,7 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
 
     transactionRepository.update.mockClear();
     await patch({ memo: 'only-this' }).expect(200);
-    const patchArg = transactionRepository.update.mock.calls[0][1];
+    const patchArg = transactionRepository.update.mock.calls[0]![1];
     expect('recipient_id' in patchArg).toBe(false);
     expect('category_id' in patchArg).toBe(false);
   });
@@ -148,8 +148,8 @@ describe('POST / — FK ids reject instead of retargeting', () => {
     expect(transactionRepository.create).toHaveBeenCalledTimes(3);
     // The service always names category_id in the row it builds, so "absent"
     // reaches the repository as undefined, not as a missing key.
-    expect(transactionRepository.create.mock.calls[0][0].category_id).toBeUndefined();
-    expect(transactionRepository.create.mock.calls[1][0].category_id).toBeNull();
-    expect(transactionRepository.create.mock.calls[2][0].category_id).toBe(4);
+    expect(transactionRepository.create.mock.calls[0]![0].category_id).toBeUndefined();
+    expect(transactionRepository.create.mock.calls[1]![0].category_id).toBeNull();
+    expect(transactionRepository.create.mock.calls[2]![0].category_id).toBe(4);
   });
 });

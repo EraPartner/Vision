@@ -112,7 +112,7 @@ describe("logger", () => {
     logger.info("hello world", { requestId: "abc123", status: 200 });
 
     expect(logSpy).toHaveBeenCalledTimes(1);
-    const [formattedMessage] = logSpy.mock.calls[0];
+    const [formattedMessage] = logSpy.mock.calls[0]!;
     expect(formattedMessage).toMatch(
       /^\d{4}-\d{2}-\d{2}T.* \[INFO\] hello world \{"requestId":"abc123","status":200\}$/,
     );
@@ -125,7 +125,7 @@ describe("logger", () => {
     logger.error("plain error");
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    const [formattedMessage] = errorSpy.mock.calls[0];
+    const [formattedMessage] = errorSpy.mock.calls[0]!;
     expect(formattedMessage).toMatch(
       /^\d{4}-\d{2}-\d{2}T.* \[ERROR\] plain error$/,
     );
@@ -142,7 +142,7 @@ describe("logger", () => {
       logger.info("service message", { operation: "load" });
     });
 
-    expect(logSpy.mock.calls[0][0]).toMatch(
+    expect(logSpy.mock.calls[0]![0]).toMatch(
       /\[INFO\] service message \{"requestId":"request-context-123","operation":"load"\}$/,
     );
   });
@@ -186,8 +186,10 @@ describe("logger", () => {
       logger.info("explicit request", { requestId: "explicit-request" });
     });
 
-    expect(logSpy.mock.calls[0][0]).toContain('"requestId":"explicit-request"');
-    expect(logSpy.mock.calls[0][0]).not.toContain("ambient-request");
+    expect(logSpy.mock.calls[0]![0]).toContain(
+      '"requestId":"explicit-request"',
+    );
+    expect(logSpy.mock.calls[0]![0]).not.toContain("ambient-request");
   });
 
   it("uses ambient context when metadata carries requestId: undefined", async () => {
@@ -203,9 +205,9 @@ describe("logger", () => {
       });
     });
 
-    expect(errorSpy.mock.calls[0][0]).toContain(
+    expect(errorSpy.mock.calls[0]![0]).toContain(
       '"requestId":"ambient-fatal-request"',
     );
-    expect(errorSpy.mock.calls[0][0]).toContain('"error":"boom"');
+    expect(errorSpy.mock.calls[0]![0]).toContain('"error":"boom"');
   });
 });

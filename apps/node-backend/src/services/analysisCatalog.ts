@@ -240,7 +240,7 @@ for (const dataset of Object.values(DATASETS)) {
   if (dateField)
     for (const bucket of ["day", "week", "quarter", "year"]) {
       dataset.fields[bucket] = [
-        bucket[0].toUpperCase() + bucket.slice(1),
+        bucket.charAt(0).toUpperCase() + bucket.slice(1),
         "date",
         `date_trunc('${bucket}', ${dateField})::date`,
       ];
@@ -507,7 +507,8 @@ export function compileVisualAnalysis(
   // Native amounts have no common unit until currency is fixed or grouped.
   // All visual filters are joined with AND, so one equality is sufficient.
   const hasMoneyMeasure = measures.some(
-    (id) => dataset.measures[id][3] === "currency",
+    // Every measure was resolved (or rejected) by `own` above.
+    (id) => own(dataset.measures, id)?.[3] === "currency",
   );
   const hasSingleCurrencyFilter = (plan.filters ?? []).some(
     (filter) =>

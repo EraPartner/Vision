@@ -74,7 +74,10 @@ import { query as rawDbQuery } from "../../src/database/connection.ts";
 import type { PgQueryResult } from "../../src/database/connection.ts";
 import { isManualDuplicate as rawIsManualDuplicate } from "../../src/services/deduplication.ts";
 import { convertRowsToEur as rawConvertRowsToEur } from "../../src/services/currency/currencyConversionService.ts";
-import type { ConvertedRow } from "../../src/services/currency/currencyConversionService.ts";
+import type {
+  ConvertedRow,
+  ConvertibleRow,
+} from "../../src/services/currency/currencyConversionService.ts";
 import { attachmentRepository as rawAttachmentRepository } from "../../src/services/attachmentRecordService.ts";
 import { removeAttachmentFile } from "../../src/services/attachmentService.ts";
 
@@ -222,7 +225,7 @@ describe("Transaction Routes", () => {
         rows: [txnRow({ id: 1, date: "2026-01-15", amount: "10", currency: "USD" })],
         total: 1,
       });
-      convertRowsToEur.mockResolvedValue([
+      const converted: ConvertedRow<ConvertibleRow & { id: number }>[] = [
         {
           id: 1,
           date: "2026-01-15",
@@ -230,7 +233,8 @@ describe("Transaction Routes", () => {
           currency: "USD",
           amount_eur: 9,
         },
-      ]);
+      ];
+      convertRowsToEur.mockResolvedValue(converted);
 
       const res = await api
         .get("/api/transactions/?normalize_to_eur=true&target_currency=GBP")
@@ -351,8 +355,11 @@ describe("Transaction Routes", () => {
       dbQuery.mockResolvedValue(pgResult({
         rows: [
           {
-            date: "2026-01-15",
+            id: 1,
+            // pg DATE: a local-midnight Date.
+            date: new Date(2026, 0, 15),
             bank_account: "Main",
+            account_id: 1,
             recipient_name: '=HYPERLINK("http://evil")',
             memo: "+cmd",
             amount: "-100.00",
@@ -360,6 +367,7 @@ describe("Transaction Routes", () => {
             balance: "1000.00",
             category_name: "@danger",
             comment: "-comment",
+            tags: [],
           },
         ],
       }));
@@ -401,7 +409,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_type=expense")
         .expect(200);
 
-      const probeSql = dbQuery.mock.calls[0][0];
+      const probeSql = dbQuery.mock.calls[0]![0];
       expect(probeSql).toContain("t.amount < 0");
     });
 
@@ -414,7 +422,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_type=income")
         .expect(200);
 
-      const probeSql = dbQuery.mock.calls[0][0];
+      const probeSql = dbQuery.mock.calls[0]![0];
       expect(probeSql).toContain("t.amount > 0");
     });
 
@@ -425,7 +433,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?recipient_id=42").expect(200);
 
-      const probeParams = dbQuery.mock.calls[0][1];
+      const probeParams = dbQuery.mock.calls[0]![1];
       expect(probeParams).toContain(42);
     });
 
@@ -436,7 +444,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?search=netflix").expect(200);
 
-      const [probeSql, probeParams] = dbQuery.mock.calls[0];
+      const [probeSql, probeParams] = dbQuery.mock.calls[0]!;
       expect(probeSql).toMatch(/t\.memo ILIKE/);
       expect(probeParams).toContain("%netflix%");
     });
@@ -450,7 +458,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/csv?transaction_id=7")
         .expect(200);
 
-      const [probeSql, probeParams] = dbQuery.mock.calls[0];
+      const [probeSql, probeParams] = dbQuery.mock.calls[0]!;
       expect(probeSql).toMatch(/t\.id = \$/);
       expect(probeParams).toContain(7);
     });
@@ -462,7 +470,7 @@ describe("Transaction Routes", () => {
 
       await api.get("/api/transactions/export/csv?search=foo").expect(200);
 
-      const probeSql = dbQuery.mock.calls[0][0];
+      const probeSql = dbQuery.mock.calls[0]![0];
       expect(probeSql).toContain("LEFT JOIN recipients r");
       expect(probeSql).toContain("LEFT JOIN categories c");
     });
@@ -484,8 +492,10 @@ describe("Transaction Routes", () => {
   describe("GET /export/json", () => {
     const sampleRow = {
       id: 1,
-      date: "2026-01-15",
+      // pg DATE: a local-midnight Date.
+      date: new Date(2026, 0, 15),
       bank_account: "Main",
+      account_id: 1,
       recipient_name: "Netflix",
       memo: "Monthly sub",
       amount: "-12.99",
@@ -493,6 +503,7 @@ describe("Transaction Routes", () => {
       balance: "987.01",
       category_name: "ENTERTAINMENT:STREAMING",
       comment: null,
+      tags: [],
     };
 
     it("should stream NDJSON with correct Content-Type", async () => {
@@ -558,7 +569,7 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/export/json").expect(200);
 
-      const obj = JSON.parse(res.text.trim().split("\n")[0]);
+      const obj = JSON.parse(res.text.trim().split("\n")[0]!);
       expect(Object.keys(obj).sort()).toEqual(
         [
           "amount",

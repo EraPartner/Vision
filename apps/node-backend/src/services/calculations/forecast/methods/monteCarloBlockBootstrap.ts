@@ -60,22 +60,27 @@ function forecast({
   // Stationary bootstrap: block length ~ Geom(1/L), start index ~ Uniform.
   const restartProb = 1 / MEAN_BLOCK_LENGTH;
   const N = residuals.length;
-  const samples: number[][] = Array.from(
-    { length: H },
-    () => new Array<number>(paths),
-  );
+  const rows = forecastDates.map((date) => ({
+    date,
+    values: new Array<number>(paths),
+  }));
 
   for (let p = 0; p < paths; p++) {
     let idx = Math.floor(rng() * N);
-    for (let h = 0; h < H; h++) {
+    for (const row of rows) {
       if (rng() < restartProb) idx = Math.floor(rng() * N);
       const resid = residuals[idx];
-      const bucket = lookupBucket(buckets, forecastDates[h]);
-      samples[h][p] = bucket.mean + resid;
+      // idx stays in [0, N) because rng() is in [0, 1).
+      if (resid === undefined) {
+        throw new RangeError(`block bootstrap: residual ${idx} out of range`);
+      }
+      const bucket = lookupBucket(buckets, row.date);
+      row.values[p] = bucket.mean + resid;
       idx = (idx + 1) % N;
     }
   }
 
+  const samples = rows.map((row) => row.values);
   return summarizeSimulationPaths(samples, forecastDates, percentiles);
 }
 

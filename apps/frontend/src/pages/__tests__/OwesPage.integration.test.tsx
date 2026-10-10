@@ -8,6 +8,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import OwesPage from "@/pages/OwesPage";
+import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
 
 vi.mock("@tanstack/react-virtual", () => ({
     useVirtualizer: ({
@@ -46,6 +47,7 @@ function owedSummaryWithRecipient() {
                 split_count: 1,
             },
         ],
+        total: 1,
     });
 }
 
@@ -69,9 +71,11 @@ function splitDetailForRecipient() {
                 transaction_amount: 50,
                 transaction_currency: "EUR",
                 bank_account: "Main",
+                transaction_recipient_name: null,
                 remaining: 40,
             },
         ],
+        total: 1,
     });
 }
 
@@ -178,23 +182,25 @@ describe("OwesPage (integration)", () => {
                 splitDetailForRecipient(),
             ),
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 321,
-                            transaction_date: "2025-03-02",
-                            memo: "Recent coffee",
-                            category_name: "FOOD:COFFEE",
-                            amount: -4,
-                            currency: "EUR",
-                            bank_account: "Main",
-                        },
-                    ],
-                    total: 1,
-                    limit: 10,
-                    offset: 0,
-                    links: [],
-                }),
+                ok(
+                    transactionsBody({
+                        items: [
+                            transactionRow({
+                                id: 321,
+                                transaction_date: "2025-03-02",
+                                memo: "Recent coffee",
+                                category_name: "FOOD:COFFEE",
+                                amount: -4,
+                                currency: "EUR",
+                                bank_account: "Main",
+                            }),
+                        ],
+                        total: 1,
+                        limit: 10,
+                        offset: 0,
+                        links: [],
+                    }),
+                ),
             ),
         );
 

@@ -39,6 +39,7 @@ import {
   mapPortfolioTxRow,
 } from "../src/repositories/portfolioTxRepo.reads.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
+import { asPartitionedTxns } from "../src/services/portfolio/portfolioTransactionRules.ts";
 import { commitBatch as commit } from "../src/services/portfolioImportPipeline/commit.ts";
 const historicalWarm = vi.hoisted(() => ({ available: true }));
 import { clearHistoricalCache } from "../src/services/currency/rateFetcher.ts";
@@ -56,7 +57,7 @@ async function stage(account: number, investment: number) {
       await pool.query(
         "INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,rows_error,account_id,is_brokerage) VALUES('kinesis_transaction_history',$1,'awaiting_review',$2,$3,$4,true) RETURNING id",
         [
-          JSON.stringify(source.batches[0].custom_config),
+          JSON.stringify(source.batches[0]!.custom_config),
           source.rows.length,
           source.rows.filter((r) => r.status === "error").length,
           account,
@@ -323,7 +324,7 @@ describeDb("durable paired income scoped writer", () => {
     const scoped = math.filter((row) => row.investment_id === fx.investment);
     const summary = buildInvestmentSummaryCorePartitioned(
       { asset_class: "metals", current_price: 100 },
-      scoped,
+      asPartitionedTxns(scoped),
       { costBasisMethod: "fifo", todayYmd: "2026-01-20", fxMultiplierNow: 1 },
     ).core;
     expect(summary.totalIncome.eq(0)).toBe(true);

@@ -5,7 +5,8 @@
  * vision-local/no-repo-direct-from-route); they go through this service, which
  * is where category name→id resolution and bulk operations belong.
  */
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { idRowSchema } from "../database/rows/catalog.ts";
 import { ValidationError } from "../middleware/errorHandler.ts";
 
 export { default } from "../repositories/categoryRepository.ts";
@@ -33,17 +34,19 @@ export {
  */
 export async function resolveCategoryIdByName(name: string): Promise<number> {
   const normalized = String(name).toUpperCase().trim();
-  const result = await query<{ id: number }>(
+  const byPath = await queryRows(
+    idRowSchema,
     `SELECT id FROM categories
      WHERE path_name = $1 AND is_active = true
      ORDER BY id LIMIT 2`,
     [normalized],
   );
-  if (result.rows.length > 1)
+  if (byPath.length > 1)
     throw new ValidationError(
       `Category path '${normalized}' is ambiguous. Select the category by id.`,
     );
-  if (result.rows.length === 1) return result.rows[0].id;
+  const [pathMatch] = byPath;
+  if (pathMatch) return pathMatch.id;
 
   const delimiter = normalized.indexOf(":");
   if (delimiter < 1) {
@@ -53,7 +56,8 @@ export async function resolveCategoryIdByName(name: string): Promise<number> {
   }
   const general = normalized.slice(0, delimiter).trim();
   const detail = normalized.slice(delimiter + 1).trim();
-  const legacy = await query<{ id: number }>(
+  const legacy = await queryRows(
+    idRowSchema,
     `SELECT id FROM categories
      WHERE general = $1 AND detail = $2 AND is_active = true
      UNION
@@ -63,10 +67,11 @@ export async function resolveCategoryIdByName(name: string): Promise<number> {
      ORDER BY id LIMIT 2`,
     [general, detail],
   );
-  if (legacy.rows.length !== 1) {
+  const [legacyMatch] = legacy;
+  if (legacy.length !== 1 || !legacyMatch) {
     throw new ValidationError(
       `Category '${normalized}' does not exist. Please create it first or use an existing category.`,
     );
   }
-  return legacy.rows[0].id;
+  return legacyMatch.id;
 }

@@ -42,6 +42,16 @@ const active = new Map<
 >();
 let executionTail: Promise<unknown> = Promise.resolve();
 
+/**
+ * `value?.[key]` for a stored JSON value of unknown shape: `undefined` for
+ * null/undefined, otherwise the property as JavaScript reads it (primitives
+ * are boxed, exactly like optional chaining does).
+ */
+function field(value: unknown, key: string): unknown {
+  if (value === null || value === undefined) return undefined;
+  return (Object(value) as Record<string, unknown>)[key];
+}
+
 /** Reads `error?.[key]` from a caught value without assuming its shape. */
 function errorProperty(error: unknown, key: "code" | "message"): unknown {
   return typeof error === "object" && error !== null
@@ -177,7 +187,7 @@ function planInvestigation(
           "Retrieve bounded public fundamentals",
         ],
         ["news", "getResearchNews", "Retrieve bounded public market news"],
-      ])
+      ] as const)
         steps.push({
           id: `${suffix}-${symbol.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
           tool,
@@ -442,7 +452,13 @@ async function executeSteps({
         );
         args = {
           // String() is the property key JS derives from the index anyway.
-          url: dependency?.result?.data?.[String(step.args.resultIndex)]?.url,
+          url: field(
+            field(
+              field(dependency?.result, "data"),
+              String(step.args.resultIndex),
+            ),
+            "url",
+          ),
         };
       }
       const dispatched = await dispatchTool(step.tool, args, {
@@ -477,7 +493,8 @@ function evidenceFromSteps(
   return steps.flatMap((step): AiEvidenceReference[] => {
     if (step.state !== "completed") return [];
     const result = step.result;
-    if (step.stepId === "selected-evidence" && result?.data?.text)
+    const data = field(result, "data");
+    if (step.stepId === "selected-evidence" && field(data, "text"))
       return [
         {
           id: "selected-evidence",
@@ -485,12 +502,13 @@ function evidenceFromSteps(
           label: "Explicitly selected cloud evidence",
           sourceDate: null,
           locator: "cloud-disclosure:selected-evidence",
-          excerpt: String(result.data.text).slice(0, 2000),
+          excerpt: String(field(data, "text")).slice(0, 2000),
           available: true,
         },
       ];
-    if (step.stepId === "documents" && Array.isArray(result?.data))
-      return result.data.map((passage: ResearchDocumentCitation) => ({
+    // The documents and web steps store the tool's own result arrays.
+    if (step.stepId === "documents" && Array.isArray(data))
+      return (data as ResearchDocumentCitation[]).map((passage) => ({
         id: passage.id,
         kind: "document",
         label: `${passage.title} (version ${passage.documentVersion})`.slice(
@@ -510,52 +528,51 @@ function evidenceFromSteps(
         excerpt: passage.text,
         available: true,
       }));
-    if (step.stepId === "web" && Array.isArray(result?.data))
-      return result.data.map((item: PublicWebSearchResult, index: number) => ({
+    if (step.stepId === "web" && Array.isArray(data))
+      return (data as PublicWebSearchResult[]).map((item, index) => ({
         id: `web:${index}:${item.url}`.slice(0, 160),
         kind: "web",
         label: String(item.title).slice(0, 300),
         sourceDate:
-          String(item.publishedAt || result.meta?.fetchedAt || "").slice(
-            0,
-            40,
-          ) || null,
+          String(
+            item.publishedAt || field(field(result, "meta"), "fetchedAt") || "",
+          ).slice(0, 40) || null,
         locator: String(item.url).slice(0, 1000),
         excerpt: item.snippet,
         available: true,
       }));
-    if (step.stepId.startsWith("web-page-") && result?.data)
+    if (step.stepId.startsWith("web-page-") && data)
       return [
         {
-          id: `page:${result.data.url}`.slice(0, 160),
+          id: `page:${field(data, "url")}`.slice(0, 160),
           kind: "web",
-          label: String(result.data.title).slice(0, 300),
-          sourceDate: String(result.data.fetchedAt || "").slice(0, 40) || null,
-          locator: String(result.data.url).slice(0, 1000),
-          excerpt: String(result.data.text || "").slice(0, 2000),
+          label: String(field(data, "title")).slice(0, 300),
+          sourceDate:
+            String(field(data, "fetchedAt") || "").slice(0, 40) || null,
+          locator: String(field(data, "url")).slice(0, 1000),
+          excerpt: String(field(data, "text") || "").slice(0, 2000),
           available: true,
         },
       ];
-    if (step.stepId === "saved-analysis" && result?.data)
+    if (step.stepId === "saved-analysis" && data)
       return [
         {
-          id: `analysis:${result.data.id}:v${result.data.version}`,
+          id: `analysis:${field(data, "id")}:v${field(data, "version")}`,
           kind: "analysis",
-          label: `${result.data.name} (version ${result.data.version})`,
+          label: `${field(data, "name")} (version ${field(data, "version")})`,
           sourceDate: null,
-          locator: `/analysis?savedAnalysis=${result.data.id}`,
-          excerpt: JSON.stringify(result.data.definition).slice(0, 2000),
+          locator: `/analysis?savedAnalysis=${field(data, "id")}`,
+          excerpt: JSON.stringify(field(data, "definition")).slice(0, 2000),
           available: true,
         },
       ];
+    const fetchedAt = field(field(result, "meta"), "fetchedAt");
     return [
       {
         id: `tool:${step.stepId}`,
         kind: "research-service",
         label: step.stepId,
-        sourceDate: result?.meta?.fetchedAt
-          ? String(result.meta.fetchedAt).slice(0, 40)
-          : null,
+        sourceDate: fetchedAt ? String(fetchedAt).slice(0, 40) : null,
         locator: `investigation-step:${step.stepId}`,
         excerpt: JSON.stringify(result).slice(0, 2000),
         available: true,
@@ -567,10 +584,20 @@ function evidenceFromSteps(
 function analysisReferenceFromSteps(
   steps: AiInvestigationStepRow[],
 ): { id: string; version: number } | null {
-  const data = steps.find(
-    (step) => step.stepId === "saved-analysis" && step.state === "completed",
-  )?.result?.data;
-  return data ? { id: data.id, version: Number(data.version) } : null;
+  const data = field(
+    steps.find(
+      (step) => step.stepId === "saved-analysis" && step.state === "completed",
+    )?.result,
+    "data",
+  );
+  // The saved-analysis tool stores `{ id, version, ... }`; aiAnswerSchema
+  // re-validates the reference when the answer is parsed.
+  return data
+    ? {
+        id: field(data, "id") as string,
+        version: Number(field(data, "version")),
+      }
+    : null;
 }
 
 function fallbackAnswer(
@@ -625,12 +652,13 @@ function parseModelAnswer(
   }
 }
 
+function errorCodeStartsWith(error: unknown, prefix: string) {
+  const code = field(error, "code");
+  return typeof code === "string" && code.startsWith(prefix);
+}
+
 function shouldPreserveProviderCheckpoint(job: AiInvestigationJobRow) {
-  return (
-    job.state === "failed" &&
-    typeof job.error?.code === "string" &&
-    job.error.code.startsWith("REFERENCE_")
-  );
+  return job.state === "failed" && errorCodeStartsWith(job.error, "REFERENCE_");
 }
 
 async function resolveProviderAnswer({
@@ -681,8 +709,9 @@ export async function runInvestigationJob(
       let job = await jobs.getJob(id);
       if (!job) throw new Error("Investigation job not found");
       if (job.state === "completed" || job.state === "cancelled") return job;
-      const stored = job.scope?.scope
-        ? job.scope
+      const envelope = job.scope;
+      const stored: Record<string, unknown> = field(envelope, "scope")
+        ? (envelope as Record<string, unknown>)
         : {
             scope: job.scope,
             researchMode: "local-only",
@@ -715,8 +744,9 @@ export async function runInvestigationJob(
         referenceScopeId: stored.referenceScopeId ?? null,
         savedAnalysisId: stored.savedAnalysisId ?? null,
       });
-      let plan: AiInvestigationPlan = job.plan;
-      if (!plan) {
+      let plan: AiInvestigationPlan;
+      if (job.plan) plan = job.plan;
+      else {
         const baseline = planInvestigation(request);
         if (baseline.ambiguity.material) {
           return jobs.setWaiting(id, baseline);
@@ -983,7 +1013,7 @@ export async function resumeInvestigation(
         code: "CLARIFICATION_REQUIRED",
       });
     const resolvedScope = aiInvestigationScopeSchema.parse(
-      scope ?? job.scope?.scope,
+      scope ?? field(job.scope, "scope"),
     );
     if (!resolvedScope.dateFrom || !resolvedScope.dateTo)
       throw Object.assign(
@@ -996,7 +1026,9 @@ export async function resumeInvestigation(
     if (!job) throw new Error("Investigation job is no longer waiting");
   } else if (scope) {
     const suppliedScope = aiInvestigationScopeSchema.parse(scope);
-    const storedScope = aiInvestigationScopeSchema.parse(job.scope?.scope);
+    const storedScope = aiInvestigationScopeSchema.parse(
+      field(job.scope, "scope"),
+    );
     if (JSON.stringify(suppliedScope) !== JSON.stringify(storedScope))
       throw Object.assign(
         new Error("Changed scope requires a new investigation job"),
@@ -1010,8 +1042,8 @@ export async function resumeInvestigation(
   if (["partial", "failed"].includes(job.state) && job.plan) {
     if (!shouldPreserveProviderCheckpoint(job)) {
       const refreshIds = job.plan.steps
-        .filter((step: AiPlanStep) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
-        .map((step: AiPlanStep) => step.id);
+        .filter((step) => LOCALLY_RETRYABLE_TOOLS.has(step.tool))
+        .map((step) => step.id);
       await jobs.resetSteps(id, refreshIds);
       await jobs.clearProviderResult(id);
     }

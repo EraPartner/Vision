@@ -5,7 +5,16 @@
  * exposes DB read helpers, and re-exports math utilities consumed by info routes.
  */
 
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  accountDisplayNameRowSchema,
+  brokerSnapshotRowSchema,
+  currentDateRowSchema,
+  portfolioPerformanceSnapshotRowSchema,
+  regclassRowSchema,
+} from "../database/rows/portfolio.ts";
+import { toYmd } from "../lib/dateFormat.ts";
 import {
   computeMetrics,
   computeHeatmap,
@@ -39,17 +48,6 @@ export type PortfolioPerformanceSnapshot = {
   currency: string;
   value_fx_neutral: string | undefined;
 };
-interface BrokerSnapshotRow {
-  snapshot_date: string | Date;
-  currency: string;
-  account_key: string;
-  account_id: number | null;
-  account_name: string;
-  value: string;
-  invested: string;
-  gain_loss: string;
-  computed_at: Date;
-}
 interface BrokerSnapshotPartition {
   accountKey: string;
   accountId: number | null;
@@ -67,10 +65,11 @@ export { getPortfolioSummary, getBreakdownSummary };
 const BROKER_HISTORY_PARITY_TOLERANCE = 0.011;
 
 async function hasBrokerSnapshotTable() {
-  const result = await query<{ relation: string | null }>(
+  const row = await queryOne(
+    regclassRowSchema,
     "SELECT to_regclass('public.portfolio_broker_snapshots') AS relation",
   );
-  return Boolean(result.rows[0]?.relation);
+  return Boolean(row?.relation);
 }
 
 /**
@@ -91,18 +90,17 @@ export async function __storeCurrentBrokerSnapshot(
     ),
   ];
   return withTransaction(async (client) => {
-    const namesResult = accountIds.length
-      ? await client.query(
+    const nameRows = accountIds.length
+      ? await queryRows(
+          accountDisplayNameRowSchema,
           `SELECT id, COALESCE(NULLIF(display_name, ''), name) AS display_name
            FROM accounts WHERE id = ANY($1::int[])`,
           [accountIds],
+          client,
         )
-      : { rows: [] };
+      : [];
     const names = new Map<number, string>(
-      namesResult.rows.map((row: { id: number; display_name: string }) => [
-        Number(row.id),
-        row.display_name,
-      ]),
+      nameRows.map((row) => [Number(row.id), row.display_name]),
     );
 
     const byKey = new Map<string, BrokerSnapshotPartition>();
@@ -146,8 +144,13 @@ export async function __storeCurrentBrokerSnapshot(
     }
 
     const snapshotDate: string | undefined = (
-      await client.query("SELECT CURRENT_DATE::text AS today")
-    ).rows[0]?.today;
+      await queryOne(
+        currentDateRowSchema,
+        "SELECT CURRENT_DATE::text AS today",
+        [],
+        client,
+      )
+    )?.today;
     await client.query(
       "DELETE FROM portfolio_broker_snapshots WHERE snapshot_date = $1 AND currency = $2",
       [snapshotDate, currency],
@@ -198,7 +201,8 @@ export async function getSnapshots(
 ): Promise<PortfolioPerformanceSnapshot[]> {
   // SELECT * + shape in JS: value_fx_neutral only exists once migration 0039
   // is applied, and enumerating it in SQL would break un-migrated databases.
-  const result = await query<PortfolioPerformanceSnapshotRow>(
+  const rows = await queryRows(
+    portfolioPerformanceSnapshotRowSchema,
     `
     SELECT * FROM portfolio_performance_snapshots
     WHERE currency = $1
@@ -209,7 +213,7 @@ export async function getSnapshots(
     [currency, startDate, endDate],
   );
 
-  return result.rows.map((row) => ({
+  return rows.map((row) => ({
     snapshot_date: row.snapshot_date,
     invested: row.invested,
     value: row.value,
@@ -236,7 +240,8 @@ export async function getBrokerSnapshots(
   currency = "EUR",
 ) {
   if (!(await hasBrokerSnapshotTable())) return [];
-  const result = await query<BrokerSnapshotRow>(
+  const rows = await queryRows(
+    brokerSnapshotRowSchema,
     `SELECT snapshot_date, currency, account_key, account_id, account_name,
             value, invested, gain_loss, computed_at
        FROM portfolio_broker_snapshots
@@ -244,11 +249,10 @@ export async function getBrokerSnapshots(
       ORDER BY snapshot_date ASC, account_key ASC`,
     [currency, startDate, endDate],
   );
-  return result.rows.map((row) => ({
-    date:
-      typeof row.snapshot_date === "string"
-        ? row.snapshot_date.slice(0, 10)
-        : row.snapshot_date.toISOString().slice(0, 10),
+  return rows.map((row) => ({
+    // A pg DATE is a local-midnight Date: format its local calendar day, not
+    // its UTC instant (which is the previous day east of UTC).
+    date: toYmd(row.snapshot_date),
     currency: row.currency,
     accountKey: row.account_key,
     accountId: row.account_id == null ? null : Number(row.account_id),
@@ -262,7 +266,8 @@ export async function getBrokerSnapshots(
 }
 
 async function getLatestSnapshot(currency = "EUR") {
-  const result = await query<PortfolioPerformanceSnapshotRow>(
+  const row = await queryOne(
+    portfolioPerformanceSnapshotRowSchema,
     `
     SELECT * FROM portfolio_performance_snapshots
     WHERE currency = $1
@@ -272,7 +277,7 @@ async function getLatestSnapshot(currency = "EUR") {
     [currency],
   );
 
-  return result.rows[0] ?? null;
+  return row ?? null;
 }
 
 export { getLatestSnapshot as __getLatestSnapshot };

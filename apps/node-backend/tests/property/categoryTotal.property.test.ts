@@ -30,7 +30,7 @@ describe("property: production category totals", () => {
       const entries = Array.from(
         { length: 50 + Math.floor(rng() * 500) },
         () => {
-          const id = categories[Math.floor(rng() * categories.length)];
+          const id = categories[Math.floor(rng() * categories.length)]!;
           return {
             id,
             cents: Math.floor(rng() * 500001) - 250000,

@@ -28,7 +28,10 @@ describe("ImportPage (integration)", () => {
     it("renders page heading", async () => {
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: "Import", level: 1 }),
+            await screen.findByRole("heading", {
+                name: "Import & export",
+                level: 1,
+            }),
         ).toBeInTheDocument();
     });
 
@@ -256,9 +259,9 @@ describe("ImportPage (integration)", () => {
 
     it("renders page subtitle text", async () => {
         renderWithApp(<ImportPage />);
-        // importPage.subtitle = "Import transactions from your bank or export your data as CSV"
+        // importPage.subtitle = "Import bank statements, or export your data as CSV or JSON."
         expect(
-            await screen.findByText(/import transactions from your bank/i),
+            await screen.findByText(/import bank statements, or export your data/i),
         ).toBeInTheDocument();
     });
 
@@ -542,7 +545,10 @@ describe("ImportPage (integration)", () => {
         );
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: "Import", level: 1 }),
+            await screen.findByRole("heading", {
+                name: "Import & export",
+                level: 1,
+            }),
         ).toBeInTheDocument();
         // apiRequest retries on 500 (MAX_RETRIES=2, ~1.5 s backoff) — needs extended timeout
         expect(
@@ -562,7 +568,10 @@ describe("ImportPage (integration)", () => {
         );
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: "Import", level: 1 }),
+            await screen.findByRole("heading", {
+                name: "Import & export",
+                level: 1,
+            }),
         ).toBeInTheDocument();
         expect(await screen.findByText(/no imports yet/i)).toBeInTheDocument();
         consoleSpy.mockRestore();

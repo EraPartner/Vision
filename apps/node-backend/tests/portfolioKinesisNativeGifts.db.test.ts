@@ -56,8 +56,8 @@ async function stage(
       await pool.query(
         "INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,rows_error,account_id,is_brokerage) VALUES($1,$2,'awaiting_review',$3,0,$4,true) RETURNING id",
         [
-          source.batches[0].adapter_name,
-          JSON.stringify(source.batches[0].custom_config),
+          source.batches[0]!.adapter_name,
+          JSON.stringify(source.batches[0]!.custom_config),
           source.rows.length,
           account,
         ],

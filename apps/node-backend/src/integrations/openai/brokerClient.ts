@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, spawn } from "node:child_process";
+import { z } from "zod";
 
 const helperPath = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -18,11 +19,49 @@ export type OpenAiBrokerResponse =
   | {
       ok: true;
       code?: undefined;
-      requestId: string | null;
+      requestId?: string | null;
       outputText: string;
-      usage: { input_tokens?: number; output_tokens?: number } | null;
+      usage?: { input_tokens?: number; output_tokens?: number } | null;
     }
   | { ok: false; code: string; requestId?: string | null };
+
+/**
+ * Runtime contract for the helper's stdout (ADR-193). The helper relays
+ * `requestId` and `usage` from the upstream payload, so they are checked here
+ * before the caller stores them or prices tokens with them. Extra keys pass.
+ */
+const brokerResponseSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    requestId: z.string().nullable().optional(),
+    outputText: z.string(),
+    usage: z
+      .object({
+        input_tokens: z.number().optional(),
+        output_tokens: z.number().optional(),
+      })
+      .nullable()
+      .optional(),
+  }),
+  z.object({
+    ok: z.literal(false),
+    code: z.string(),
+    requestId: z.string().nullable().optional(),
+  }),
+]);
+
+/** Parses helper stdout; throws when it is not JSON or breaks the contract. */
+function parseBrokerOutput(output: string): OpenAiBrokerResponse {
+  const parsed: unknown = JSON.parse(output);
+  const result = brokerResponseSchema.safeParse(parsed);
+  if (!result.success)
+    throw new Error(
+      `Broker output contract violated: ${result.error.issues
+        .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.code}`)
+        .join("; ")}`,
+    );
+  return parsed as OpenAiBrokerResponse;
+}
 
 export interface OpenAiBrokerOptions {
   spawnImpl?: typeof spawn;
@@ -50,7 +89,8 @@ function homebrewDependencyRoots(runtimePath: string): string[] {
       maxBuffer: 1024 * 1024,
     });
     for (const line of linked.split("\n")) {
-      const reference = line.trim().split(/\s+/)[0];
+      // `split` always yields at least one element.
+      const [reference = ""] = line.trim().split(/\s+/);
       if (reference.endsWith(":")) continue;
       if (
         !reference.startsWith("/opt/homebrew/opt/") &&
@@ -197,9 +237,9 @@ export async function callOpenAiBroker(
         const output = Buffer.concat(stdout).toString("utf8");
         if (exitCode === 2 && !exitSignal) {
           try {
-            const response = JSON.parse(output) as OpenAiBrokerResponse | null;
+            const response = parseBrokerOutput(output);
             if (
-              response?.ok === false &&
+              !response.ok &&
               ["BROKER_INPUT_TOO_LARGE", "INVALID_BROKER_INPUT"].includes(
                 response.code,
               )
@@ -225,7 +265,7 @@ export async function callOpenAiBroker(
           return;
         }
         try {
-          resolve(JSON.parse(output) as OpenAiBrokerResponse);
+          resolve(parseBrokerOutput(output));
         } catch (error) {
           reject(
             Object.assign(

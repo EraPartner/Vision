@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
 import { query } from "../database/connection.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import {
+  alembicVersionRowSchema,
+  auditUnlinkedCountsRowSchema,
+  dbEditorAuditRowSchema,
+  portfolioRetagAuditRowSchema,
+  splitAuditRowSchema,
+} from "../database/rows/audit.ts";
 import {
   readAuditHead,
   readAuditSegment,
@@ -77,47 +85,6 @@ export interface VerifyAuditHistoryOptions {
   runQuery?: typeof query;
 }
 
-type DbEditorAuditRow = {
-  table_name: string;
-  op: string;
-  pk_text: string | null;
-  before_text: string | null;
-  after_text: string | null;
-  statement: string | null;
-  occurred_at: string;
-};
-
-type SplitAuditRow = {
-  split_id_text: string;
-  action: string;
-  actor: string | null;
-  payload_text: string | null;
-  occurred_at: string;
-};
-
-type PortfolioRetagAuditRow = {
-  id: string;
-  occurred_at: string;
-  idempotency_key: string;
-  request_fingerprint: string;
-  from_account_id: number;
-  to_account_id: number;
-  transaction_ids: unknown;
-  previous_assignments: unknown;
-  selected_count: number;
-  changed_count: number;
-};
-
-/** count(*) is BIGINT, which pg returns as a string. */
-type UnlinkedCountsRow = {
-  db_editor_legacy: string;
-  db_editor_missing: string;
-  split_legacy: string;
-  split_missing: string;
-  portfolio_retag_legacy: string;
-  portfolio_retag_missing: string;
-};
-
 const HASH = /^[0-9a-f]{64}$/;
 const digest = (values: unknown[]) =>
   createHash("sha256").update(JSON.stringify(values)).digest("hex");
@@ -146,7 +113,7 @@ async function verifyDomainRow(
   if (typeof id !== "string" || !/^[1-9]\d*$/.test(id))
     return "invalid_reference";
   if (payload.stream === "db_editor") {
-    const result = await runQuery<DbEditorAuditRow>(
+    const result = await runQuery(
       `SELECT table_name, op, pk_json::text AS pk_text,
               before_json::text AS before_text, after_json::text AS after_text,
               statement,
@@ -154,8 +121,9 @@ async function verifyDomainRow(
          FROM db_editor_audit WHERE id = $1`,
       [id],
     );
-    if (result.rows.length !== 1) return "missing_domain_row";
-    const row = result.rows[0];
+    const rows = checkRows(dbEditorAuditRowSchema, result.rows);
+    const row = rows[0];
+    if (!row || rows.length !== 1) return "missing_domain_row";
     if (
       payload.table !== row.table_name ||
       payload.event !== row.op ||
@@ -174,15 +142,16 @@ async function verifyDomainRow(
     return expected === payload.auditDigest ? null : "domain_digest";
   }
   if (payload.stream === "split") {
-    const result = await runQuery<SplitAuditRow>(
+    const result = await runQuery(
       `SELECT split_id::text AS split_id_text, action, actor,
               payload::text AS payload_text,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at
          FROM split_audit WHERE id = $1`,
       [id],
     );
-    if (result.rows.length !== 1) return "missing_domain_row";
-    const row = result.rows[0];
+    const rows = checkRows(splitAuditRowSchema, result.rows);
+    const row = rows[0];
+    if (!row || rows.length !== 1) return "missing_domain_row";
     if (
       payload.splitId !== row.split_id_text ||
       payload.event !== row.action ||
@@ -200,7 +169,7 @@ async function verifyDomainRow(
     return expected === payload.auditDigest ? null : "domain_digest";
   }
   if (payload.stream === "portfolio_retag") {
-    const result = await runQuery<PortfolioRetagAuditRow>(
+    const result = await runQuery(
       `SELECT id,
               to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS occurred_at,
               idempotency_key, request_fingerprint,
@@ -209,8 +178,9 @@ async function verifyDomainRow(
          FROM portfolio_retag_audit WHERE id = $1`,
       [id],
     );
-    if (result.rows.length !== 1) return "missing_domain_row";
-    const row = result.rows[0];
+    const rows = checkRows(portfolioRetagAuditRowSchema, result.rows);
+    const row = rows[0];
+    if (!row || rows.length !== 1) return "missing_domain_row";
     const expected = {
       stream: "portfolio_retag",
       event: "receipt_created",
@@ -287,13 +257,13 @@ export async function verifyAuditHistory({
   ) {
     throw new TypeError("Invalid trusted audit retention boundary");
   }
-  const earliest = await readSegment({ afterSequence: 0, limit: 1 });
-  const firstSequence = earliest[0]?.sequence;
+  const [earliestEntry] = await readSegment({ afterSequence: 0, limit: 1 });
+  const firstSequence = earliestEntry?.sequence;
   if (firstSequence !== undefined && firstSequence !== 1) {
     if (
       !retention ||
       firstSequence !== retention.through + 1 ||
-      earliest[0].previousHash !== retention.hash
+      earliestEntry?.previousHash !== retention.hash
     ) {
       return fail("retention_boundary", firstSequence);
     }
@@ -404,10 +374,13 @@ export async function verifyAuditHistory({
     return fail("concurrent_change_or_head_mismatch", sequence);
 
   if (migrationHeads) {
-    const currentRevisions = await runQuery<{ version_num: string }>(
+    const currentRevisions = await runQuery(
       "SELECT version_num FROM alembic_version ORDER BY version_num",
     );
-    const actualHeads = currentRevisions.rows.map((row) => row.version_num);
+    const actualHeads = checkRows(
+      alembicVersionRowSchema,
+      currentRevisions.rows,
+    ).map((row) => row.version_num);
     if (JSON.stringify(actualHeads) !== JSON.stringify(migrationHeads)) {
       return fail("migration_version_mismatch", sequence);
     }
@@ -431,7 +404,7 @@ export async function verifyAuditHistory({
     split: Math.max(cutover.splitMaxId, retention?.domainMax.split ?? 0),
     retag: Math.max(cutover.retagMaxId, retention?.domainMax.retag ?? 0),
   };
-  const unlinked = await runQuery<UnlinkedCountsRow>(
+  const unlinked = await runQuery(
     `SELECT
        (SELECT count(*) FROM db_editor_audit d WHERE d.id <= $1::bigint AND NOT EXISTS
           (SELECT 1 FROM audit_chain_entries e WHERE e.payload->>'stream' = 'db_editor'
@@ -460,7 +433,7 @@ export async function verifyAuditHistory({
       coverageMax.retag,
     ],
   );
-  const counts = unlinked.rows[0];
+  const [counts] = checkRows(auditUnlinkedCountsRowSchema, unlinked.rows);
   if (!counts) return fail("coverage_unavailable", sequence);
   const legacyUnverified = {
     dbEditor: String(counts.db_editor_legacy),

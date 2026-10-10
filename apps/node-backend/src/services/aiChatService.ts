@@ -440,14 +440,9 @@ async function runChatTurnLocked({
   let userMessage: AiMessageRow;
 
   if (retryLastTurn) {
-    let lastUserIndex = -1;
-    for (let index = history.length - 1; index >= 0; index -= 1) {
-      if (history[index].role === "user") {
-        lastUserIndex = index;
-        break;
-      }
-    }
-    if (lastUserIndex < 0) {
+    const lastUserIndex = history.findLastIndex((row) => row.role === "user");
+    const lastUser = history[lastUserIndex];
+    if (!lastUser) {
       throw new AiChatServiceError("No user turn is available to retry", {
         code: "TURN_NOT_RETRYABLE",
         status: 409,
@@ -461,7 +456,7 @@ async function runChatTurnLocked({
         status: 409,
       });
     }
-    userMessage = history[lastUserIndex];
+    userMessage = lastUser;
     // buildChatMessages treats a null and an empty user input alike.
     effectiveMessage = userMessage.content ?? "";
     // Tool rows from an interrupted attempt may trail the user row. Regenerate

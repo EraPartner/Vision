@@ -10,13 +10,24 @@
  * target currency to eliminate frontend FX drift across pages.
  */
 
-import { query } from "../../database/connection.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import {
+  archivedIncomeDbRowSchema,
+  brokerageCashFeeRowSchema,
+  historicalRateRowSchema,
+  summaryInvestmentDbRowSchema,
+} from "../../database/rows/portfolio.ts";
+import type {
+  ArchivedIncomeDbRow,
+  SummaryInvestmentDbRow,
+} from "../../database/rows/portfolio.ts";
 import { convertToCurrency } from "../currency/currencyConversionService.ts";
 import {
   buildHistoricalRateIndex,
   findRateOnOrBeforeInIndex,
 } from "../currency/rateFetcher.ts";
 import { buildInvestmentSummaryCorePartitioned } from "@vision/shared-utils/portfolio";
+import { asPartitionedTxns } from "./portfolioTransactionRules.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
 import { portfolioTransactionRepository } from "../../repositories/portfolioTransactionRepository.ts";
 import { todayAppDateString } from "../../lib/timezone.ts";
@@ -29,9 +40,7 @@ import {
   roundMoney,
 } from "../../lib/money.ts";
 import type {
-  ExchangeRateRow,
   HistoricalRateIndex,
-  InvestmentRow,
   PortfolioMathTxRow,
 } from "../../types/rows.ts";
 
@@ -53,20 +62,7 @@ export type CostBasisMethod =
  * parsed downstream with `Number()`; the other NUMERIC columns stay strings and
  * `maturity_date` stays a pg local-midnight `Date`.
  */
-export type RawInvestmentRow = Omit<
-  InvestmentRow,
-  | "current_price"
-  | "interest_rate"
-  | "cadastral_income"
-  | "municipality_tax_rate"
-  | "maturity_date"
-> & {
-  current_price: string;
-  interest_rate: string;
-  cadastral_income: string | null;
-  municipality_tax_rate: string | null;
-  maturity_date: Date | null;
-};
+export type RawInvestmentRow = SummaryInvestmentDbRow;
 
 /** The per-transaction FX annotation `annotateTransactionFxMultipliers` adds. */
 type FxAnnotation = {
@@ -94,14 +90,7 @@ type FxAnnotatableRow = Pick<
 export type AnnotatedTxRow = PortfolioMathTxRow & FxAnnotation;
 
 /** An archived in-kind income row (`income_recognition_role = 'included_in_units'`). */
-type ArchivedIncomeRow = Pick<
-  PortfolioMathTxRow,
-  "investment_id" | "date" | "fx_rate_to_eur"
-> & {
-  /** NUMERIC — pg string; NULL when the row carries no amount. */
-  amount: string | null;
-  currency: string | null;
-} & FxAnnotation;
+type ArchivedIncomeRow = ArchivedIncomeDbRow & FxAnnotation;
 
 export interface PortfolioSummaryOptions {
   /** 'YYYY-MM-DD' — only transactions on or before this day are replayed. */
@@ -118,7 +107,9 @@ export interface PortfolioSummaryOptions {
 async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   try {
     const value = await settingsRepository.get("cost_basis_method");
-    return COST_BASIS_METHODS.has(value) ? value : "weighted_avg";
+    return typeof value === "string" && COST_BASIS_METHODS.has(value)
+      ? (value as CostBasisMethod)
+      : "weighted_avg";
   } catch {
     return "weighted_avg";
   }
@@ -150,11 +141,11 @@ export async function getPortfolioSummary(
   const costBasisMethod = await resolveCostBasisMethod();
   const todayYmd = todayAppDateString();
 
-  const [investmentsResult, txnRows]: [
-    { rows: RawInvestmentRow[] },
-    AnnotatedTxRow[],
-  ] = await Promise.all([
-    query<RawInvestmentRow>(`
+  const [investmentRows, txnRows]: [RawInvestmentRow[], AnnotatedTxRow[]] =
+    await Promise.all([
+      queryRows(
+        summaryInvestmentDbRowSchema,
+        `
       SELECT i.*,
              COALESCE(i.currency, 'EUR') AS currency,
              COALESCE(i.current_price, 0) AS current_price,
@@ -162,11 +153,12 @@ export async function getPortfolioSummary(
       FROM investments i
       ${activeInvestmentsOnly ? "WHERE i.is_active = true" : ""}
       ORDER BY i.name
-    `),
-    portfolioTransactionRepository.getRowsForPortfolioMath({
-      activeInvestmentsOnly,
-    }),
-  ]);
+    `,
+      ),
+      portfolioTransactionRepository.getRowsForPortfolioMath({
+        activeInvestmentsOnly,
+      }),
+    ]);
 
   const includedTxnRows = throughDate
     ? txnRows.filter((txn) => toYmd(txn.date) <= throughDate)
@@ -186,9 +178,7 @@ export async function getPortfolioSummary(
   // currencies (per-txn fallback) are needed.
   const distinctCurrencies = [
     ...new Set([
-      ...investmentsResult.rows.map((inv) =>
-        (inv.currency || "EUR").toUpperCase(),
-      ),
+      ...investmentRows.map((inv) => (inv.currency || "EUR").toUpperCase()),
       ...includedTxnRows.map((txn) => (txn.currency || "EUR").toUpperCase()),
     ]),
   ];
@@ -215,14 +205,14 @@ export async function getPortfolioSummary(
     historicalIndex,
     multiplierByCurrency,
     new Map(
-      investmentsResult.rows.map((inv) => [
+      investmentRows.map((inv) => [
         Number(inv.id),
         (inv.currency || "EUR").toUpperCase(),
       ]),
     ),
   );
 
-  const perInvestment = investmentsResult.rows.map((inv) =>
+  const perInvestment = investmentRows.map((inv) =>
     buildInvestmentSummary(
       inv,
       txnsByInvestment.get(Number(inv.id)) ?? [],
@@ -245,9 +235,9 @@ export async function getPortfolioSummary(
   // The active holding totals keep their existing scope and replay behavior.
   let archivedInKindIncome: { id: number; totalInKindIncome: number }[];
   if (activeInvestmentsOnly) {
-    const archivedRows = (
-      await query<ArchivedIncomeRow>(
-        `
+    const archivedRows: ArchivedIncomeRow[] = await queryRows(
+      archivedIncomeDbRowSchema,
+      `
         SELECT pt.investment_id, pt.amount, pt.currency,
                to_char(pt.date, 'YYYY-MM-DD') AS date, pt.fx_rate_to_eur
         FROM portfolio_transactions pt
@@ -257,9 +247,8 @@ export async function getPortfolioSummary(
           ${throughDate ? "AND pt.date <= $1::date" : ""}
         ORDER BY pt.investment_id, pt.date, pt.id
       `,
-        throughDate ? [throughDate] : [],
-      )
-    ).rows;
+      throughDate ? [throughDate] : [],
+    );
     const archiveCurrencies = [
       ...new Set(archivedRows.map((row) => row.currency || "EUR")),
     ];
@@ -292,7 +281,7 @@ export async function getPortfolioSummary(
     }));
   } else {
     const archivedIds = new Set(
-      investmentsResult.rows
+      investmentRows
         .filter((row) => !row.is_active)
         .map((row) => Number(row.id)),
     );
@@ -347,13 +336,8 @@ async function getBrokerageCashFees(
   throughDate: string,
   investmentGain: Parameters<typeof toDecimal>[0],
 ) {
-  const { rows } = await query<{
-    id: number;
-    account_id: number;
-    date: string;
-    currency: string;
-    amount: string;
-  }>(
+  const rows = await queryRows(
+    brokerageCashFeeRowSchema,
     `WITH owned_fee_ids AS (
         SELECT t.id
         FROM transactions t
@@ -582,18 +566,15 @@ async function loadHistoricalRateIndex(
     (c) => c && c !== "EUR",
   );
   if (relevant.length === 0) return new Map();
-  const result = await query<
-    Pick<ExchangeRateRow, "currency_code" | "rate_to_eur"> & {
-      rate_date: string;
-    }
-  >(
+  const rows = await queryRows(
+    historicalRateRowSchema,
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])
      ORDER BY currency_code ASC, rate_date ASC`,
     [relevant],
   );
-  return buildHistoricalRateIndex(result.rows || []);
+  return buildHistoricalRateIndex(rows);
 }
 
 /**
@@ -699,7 +680,7 @@ function buildInvestmentSummary(
   const multiplier = multiplierByCurrency.get(invCurrency) ?? 1;
 
   const { core, partitions, fullyAssigned } =
-    buildInvestmentSummaryCorePartitioned(inv, txns, {
+    buildInvestmentSummaryCorePartitioned(inv, asPartitionedTxns(txns), {
       ...opts,
       fxMultiplierNow: multiplier,
     });

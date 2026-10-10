@@ -20,10 +20,11 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-type MigrationQuery = (
+/** `R` is the caller's unchecked claim about the row shape (infra queries). */
+type MigrationQuery = <R = unknown>(
   text: string,
   params?: unknown[],
-) => Promise<PgQueryResult>;
+) => Promise<PgQueryResult<R>>;
 
 interface HeadCache {
   head?: string;
@@ -124,7 +125,10 @@ async function withMigrationQuery<T>(
   });
   await client.connect();
   try {
-    return await fn((text, params) => client.query(text, params));
+    return await fn(async <R>(text: string, params?: unknown[]) => {
+      const result = await client.query(text, params);
+      return { rows: result.rows as R[], rowCount: result.rowCount };
+    });
   } finally {
     await client.end().catch((error: Error) => {
       logger.warn(
@@ -155,7 +159,9 @@ async function isAtHeadCached() {
     if (!cached?.head || !cached?.fingerprint) return false;
     const fp = fingerprintVersionsDir();
     if (!fp || fp !== cached.fingerprint) return false;
-    const res = await query("SELECT version_num FROM alembic_version LIMIT 1");
+    const res = await query<{ version_num: string }>(
+      "SELECT version_num FROM alembic_version LIMIT 1",
+    );
     const dbRev = res.rows[0]?.version_num;
     return dbRev === cached.head;
   } catch (err) {
@@ -170,7 +176,9 @@ async function isAtHeadCached() {
 async function writeHeadCache() {
   try {
     mkdirSync(HEAD_CACHE_DIR, { recursive: true });
-    const res = await query("SELECT version_num FROM alembic_version LIMIT 1");
+    const res = await query<{ version_num: string }>(
+      "SELECT version_num FROM alembic_version LIMIT 1",
+    );
     const head = res.rows[0]?.version_num;
     if (!head) return;
     const payload = {
@@ -255,7 +263,7 @@ const LEGACY_0001_SCHEMA_FINGERPRINT =
  */
 async function stampBaselineWithQuery(migrationQuery: MigrationQuery) {
   try {
-    const tableExists = await migrationQuery(
+    const tableExists = await migrationQuery<{ present: boolean }>(
       `SELECT EXISTS (
          SELECT 1 FROM information_schema.tables
          WHERE table_schema = 'public' AND table_name = 'alembic_version'
@@ -275,7 +283,7 @@ async function stampBaselineWithQuery(migrationQuery: MigrationQuery) {
       };
     }
 
-    const versionRes = await migrationQuery(
+    const versionRes = await migrationQuery<{ version_num: string }>(
       "SELECT version_num FROM alembic_version LIMIT 2",
     );
     if (versionRes.rows.length > 1) {
@@ -312,7 +320,9 @@ async function stampBaselineWithQuery(migrationQuery: MigrationQuery) {
         path.join(REPO_ROOT, "alembic", "baseline", "schema_fingerprint.sql"),
         "utf8",
       );
-      const fingerprint = await migrationQuery(fingerprintSql);
+      const fingerprint = await migrationQuery<{
+        schema_fingerprint: string | null;
+      }>(fingerprintSql);
       if (
         fingerprint.rows[0]?.schema_fingerprint !==
         LEGACY_0001_SCHEMA_FINGERPRINT
@@ -324,7 +334,7 @@ async function stampBaselineWithQuery(migrationQuery: MigrationQuery) {
     }
 
     // Only recognized, approved revision paths may alter the version column.
-    const colRes = await migrationQuery(
+    const colRes = await migrationQuery<{ len: number | null }>(
       `SELECT character_maximum_length AS len
        FROM information_schema.columns
        WHERE table_name = 'alembic_version' AND column_name = 'version_num'`,
@@ -369,13 +379,13 @@ async function stampBaselineIfLegacy() {
 
 async function readCurrentRevision() {
   return withMigrationQuery(async (migrationQuery) => {
-    const result = await migrationQuery(
+    const result = await migrationQuery<{ version_num: string }>(
       "SELECT version_num FROM alembic_version LIMIT 2",
     );
     if (result.rows.length !== 1) {
       throw new Error("Database must have exactly one Alembic revision");
     }
-    return result.rows[0].version_num;
+    return result.rows[0]!.version_num;
   });
 }
 
@@ -518,13 +528,13 @@ export async function runMigrations(options: RunMigrationsOptions = {}) {
     target === "head" &&
     !installed &&
     !bridgeApproved &&
-    MAINTAINED_ADDITIVE_REVISIONS.has(currentRevision);
+    MAINTAINED_ADDITIVE_REVISIONS.has(currentRevision ?? "");
   if (
     target === "head" &&
     !installed &&
     !bridgeApproved &&
     (baselineState.reason?.startsWith("unknown revision") ||
-      (Number.parseInt(currentRevision, 10) >= 119 &&
+      (Number.parseInt(currentRevision ?? "", 10) >= 119 &&
         currentRevision !== FRESH_BASELINE_REVISION &&
         !additive))
   ) {

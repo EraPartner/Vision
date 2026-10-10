@@ -13,6 +13,7 @@ import {
   rawDataForCsvRecord,
   parseAmountField,
   parseDateFlexibleUtc,
+  normalizeIsoCurrency,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -103,10 +104,15 @@ function rowToTransaction(
   const amount = resolveAmount(amountStr, direction);
   if (amount === null) return null;
 
-  const currency =
+  // A booked-side cell that is not an ISO-4217-shaped code would break the
+  // adapter output contract (and the transactions.currency CHECK) and fail the
+  // whole import; skip the row like any other unparseable one instead.
+  const currency = normalizeIsoCurrency(
     (preferSource
       ? sourceCurrency || targetCurrency
-      : targetCurrency || sourceCurrency) || "USD";
+      : targetCurrency || sourceCurrency) || "USD",
+  );
+  if (currency === null) return null;
 
   const targetName = (row["Target name"] || "").trim();
   const sourceName = (row["Source name"] || "").trim();

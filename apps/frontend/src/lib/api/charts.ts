@@ -1,20 +1,31 @@
 import { apiRequest } from '@/lib/api/client';
 import type { SavedChart, SavedChartCreate } from "@/types/apiClient";
+import { SavedChartListSchema, SavedChartSchema } from "@vision/types/contracts";
 
 export type { SavedChart, SavedChartCreate };
 
 /** Canonical `{items, total}` collection body — callers only need the rows. */
 export async function getSavedCharts(): Promise<SavedChart[]> {
-    const { items } = await apiRequest<{ items: SavedChart[]; total: number }>('/api/saved-charts');
+    const { items } = await apiRequest<{ items: SavedChart[]; total: number }>('/api/saved-charts', {
+        schema: SavedChartListSchema,
+    });
     return items;
 }
 
 export function createSavedChart(payload: SavedChartCreate): Promise<SavedChart> {
-    return apiRequest('/api/saved-charts', { method: 'POST', body: JSON.stringify(payload) });
+    return apiRequest('/api/saved-charts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        schema: SavedChartSchema,
+    });
 }
 
 export function updateSavedChart(id: number, payload: Partial<SavedChartCreate>): Promise<SavedChart> {
-    return apiRequest(`/api/saved-charts/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return apiRequest(`/api/saved-charts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+        schema: SavedChartSchema,
+    });
 }
 
 export async function deleteSavedChart(id: number): Promise<void> {

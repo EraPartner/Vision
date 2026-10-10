@@ -8,6 +8,7 @@ import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
 import type { Account } from "@/types/api";
 import { CloseAccountDialog } from "../CloseAccountDialog";
+import { accountsBody, accountListItem } from "@/test/msw/rowFixtures";
 
 const toastMocks = vi.hoisted(() => ({
     success: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock("sonner", () => ({
 }));
 
 const API_BASE = "http://localhost:3002";
-const sourceAccount = {
+const sourceAccount = accountListItem({
     id: 7,
     name: "Old Broker",
     display_name: "Old Broker",
@@ -28,7 +29,7 @@ const sourceAccount = {
     is_active: true,
     in_net_worth: true,
     computed_balance: 0,
-} as Account;
+}) as unknown as Account;
 
 function installPreview(count = 2, transactionIds = [11, 12]) {
     server.use(
@@ -42,21 +43,42 @@ function installPreview(count = 2, transactionIds = [11, 12]) {
             }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>
-            ok({
-                items: [
-                    sourceAccount,
-                    {
-                        ...sourceAccount,
-                        id: 8,
-                        name: "New Broker",
-                        display_name: "New Broker",
-                    },
-                ],
-                total: 2,
-                links: [],
-            }),
+            ok(
+                accountsBody({
+                    items: [
+                        sourceAccount,
+                        accountListItem({
+                            ...sourceAccount,
+                            id: 8,
+                            name: "New Broker",
+                            display_name: "New Broker",
+                        }),
+                    ],
+                    total: 2,
+                    links: [],
+                }),
+            ),
         ),
     );
+}
+
+/** portfolioBrokerRetagService's receipt for moving lots 11 and 12 off account 7. */
+function retagReceipt(toAccountId: number | null) {
+    return {
+        receipt_id: 1,
+        idempotency_key: "receipt-key",
+        from_account_id: 7,
+        to_account_id: toAccountId,
+        transaction_ids: [11, 12],
+        previous_assignments: [
+            { transaction_id: 11, account_id: 7 },
+            { transaction_id: 12, account_id: 7 },
+        ],
+        selected_count: 2,
+        changed_count: 2,
+        created_at: "2025-01-01T00:00:00.000Z",
+        replayed: false,
+    };
 }
 
 describe("CloseAccountDialog portfolio lots", () => {
@@ -78,7 +100,7 @@ describe("CloseAccountDialog portfolio lots", () => {
                 async ({ request }) => {
                     calls.push("retag");
                     retagBody = await request.json();
-                    return ok({ changed_count: 2 });
+                    return ok(retagReceipt(null));
                 },
             ),
             http.post(`${API_BASE}/api/accounts/7/close`, () => {
@@ -211,7 +233,7 @@ describe("CloseAccountDialog portfolio lots", () => {
         installPreview();
         server.use(
             http.put(`${API_BASE}/api/investments/transactions/broker`, () =>
-                ok({ changed_count: 2 }),
+                ok(retagReceipt(8)),
             ),
             http.post(`${API_BASE}/api/accounts/7/close`, () =>
                 HttpResponse.json({ message: "down" }, { status: 500 }),

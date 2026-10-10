@@ -18,6 +18,33 @@ function ok<T>(data: T) {
 
 afterEach(() => server.resetHandlers());
 
+/** `getTableMeta` for a one-column table. */
+const TABLE_META = {
+    table: "transactions",
+    columns: [
+        {
+            name: "id",
+            dataType: "integer",
+            udtName: "int4",
+            nullable: false,
+            hasDefault: true,
+            generated: false,
+            writable: true,
+        },
+    ],
+    primaryKey: ["id"],
+};
+
+/** A last `readRows` page: `total` is only set on an unpaged first page. */
+const ROWS_PAGE = {
+    ...TABLE_META,
+    rows: [],
+    total: 0,
+    limit: 100,
+    hasMore: false,
+    nextCursor: null,
+};
+
 describe("dbEditor API client", () => {
     it("getTableSchema fetches the schema for a (URL-encoded) table name", async () => {
         let url = "";
@@ -26,7 +53,7 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/schema`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ columns: [] });
+                    return ok(TABLE_META);
                 },
             ),
         );
@@ -41,7 +68,7 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/rows`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ rows: [], hasMore: false, nextCursor: null });
+                    return ok({ ...ROWS_PAGE, total: undefined, limit: 50 });
                 },
             ),
         );
@@ -71,7 +98,7 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/rows`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ rows: [], total: 0 });
+                    return ok(ROWS_PAGE);
                 },
             ),
         );
@@ -86,7 +113,7 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/rows`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ rows: [], total: 0 });
+                    return ok(ROWS_PAGE);
                 },
             ),
         );
@@ -101,7 +128,7 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/mutate`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ valid: true });
+                    return ok({ dryRun: true, count: 1, statements: [] });
                 },
             ),
         );
@@ -121,7 +148,12 @@ describe("dbEditor API client", () => {
                 `${API_BASE}/api/admin/database/tables/:table/mutate`,
                 async ({ request }) => {
                     body = (await request.json()) as Record<string, unknown>;
-                    return ok({ applied: 1 });
+                    return ok({
+                        dryRun: false,
+                        applied: 1,
+                        results: [{ op: "delete" }],
+                        refreshScheduled: false,
+                    });
                 },
             ),
         );
@@ -130,5 +162,17 @@ describe("dbEditor API client", () => {
         ] as never);
         expect(body.changes).toEqual([{ kind: "delete" }]);
         expect("dryRun" in body).toBe(false);
+    });
+
+    it("getTableRows rejects a page without its cursor fields", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/admin/database/tables/:table/rows`, () =>
+                ok({ ...TABLE_META, rows: [], limit: 100 }),
+            ),
+        );
+        await expect(getTableRows("transactions")).rejects.toMatchObject({
+            name: "ApiContractError",
+            endpoint: "GET /api/admin/database/tables/transactions/rows",
+        });
     });
 });

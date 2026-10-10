@@ -1,5 +1,5 @@
 {
-  "//": "Strict check for all backend source (src/**/*.ts). Backend tests are still JavaScript and are not type-checked until they convert (ADR-191).",
+  "//": "Strict check for all backend source (src/**/*.ts, plus the sandboxed egress-helper.mjs through its JSDoc types). Backend tests are checked by tsconfig.tests.json (ADR-192), which inherits these options, including noUncheckedIndexedAccess (ADR-194).",
   "compilerOptions": {
     "target": "es2022",
     "lib": [
@@ -17,6 +17,7 @@
     "strict": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
@@ -25,6 +26,7 @@
     "isolatedModules": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/integrations/openai/egress-helper.mjs"
   ]
 }

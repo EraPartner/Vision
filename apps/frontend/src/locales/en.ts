@@ -1142,7 +1142,6 @@ const en: Record<string, string> = {
   'categoriesPage.toast.active': '{name} marked active',
   'categoriesPage.toast.inactive': '{name} marked inactive',
   'categoriesPage.toggleFailed': 'Couldn\'t change the category status. Try again.',
-  'categoriesPage.treeTitle': 'Categories',
   'categoryPie.desc': 'Last 50 transactions, by count',
   'categoryPie.noData': 'No category data available',
   'categoryPie.title': 'Recent activity by category',

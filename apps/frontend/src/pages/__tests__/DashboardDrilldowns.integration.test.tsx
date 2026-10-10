@@ -6,6 +6,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
+import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
 
 vi.mock("@/components/charts", async (importOriginal) => {
     const original =
@@ -36,26 +37,28 @@ describe("Dashboard category drill-down composition", () => {
     it("maps named, uncategorized, and Other slices to exact filters", async () => {
         server.use(
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({
-                    items: [
-                        ...Array.from({ length: 6 }, (_, index) => ({
-                            ...TRANSACTION_STUB,
-                            id: index + 1,
-                            category_id: index + 1,
-                            category_name: `GROUP:CATEGORY ${index + 1}`,
-                        })),
-                        {
-                            ...TRANSACTION_STUB,
-                            id: 7,
-                            category_id: null,
-                            category_name: null,
-                        },
-                    ],
-                    total: 7,
-                    limit: 50,
-                    offset: 0,
-                    links: [],
-                }),
+                ok(
+                    transactionsBody({
+                        items: [
+                            ...Array.from({ length: 6 }, (_, index) => ({
+                                ...TRANSACTION_STUB,
+                                id: index + 1,
+                                category_id: index + 1,
+                                category_name: `GROUP:CATEGORY ${index + 1}`,
+                            })),
+                            transactionRow({
+                                ...TRANSACTION_STUB,
+                                id: 7,
+                                category_id: null,
+                                category_name: null,
+                            }),
+                        ],
+                        total: 7,
+                        limit: 50,
+                        offset: 0,
+                        links: [],
+                    }),
+                ),
             ),
         );
 

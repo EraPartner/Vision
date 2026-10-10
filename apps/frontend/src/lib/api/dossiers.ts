@@ -1,5 +1,11 @@
 import { apiRequest } from "@/lib/api/client";
 import type { AnalysisWorkspace } from "@/lib/api/analysis";
+import {
+    DossierExportSchema,
+    DossierListSchema,
+    DossierSchema,
+    DossierVersionListSchema,
+} from "@vision/types/contracts";
 
 export type EvidenceStance = "support" | "oppose" | "context";
 export type EvidenceOrigin = "user" | "ai-draft";
@@ -78,14 +84,17 @@ export async function listDossiers(
 ): Promise<{ items: DossierListItem[]; total: number }> {
     return apiRequest<{ items: DossierListItem[]; total: number }>(
         `${base}?limit=500&offset=${offset}`,
+        { schema: DossierListSchema },
     );
 }
 
-export const getDossier = (id: string) => apiRequest<Dossier>(path(id));
+export const getDossier = (id: string) =>
+    apiRequest<Dossier>(path(id), { schema: DossierSchema });
 export const createDossier = (content: DossierContent) =>
     apiRequest<Dossier>(base, {
         method: "POST",
         body: JSON.stringify(content),
+        schema: DossierSchema,
     });
 export const updateDossier = (
     id: string,
@@ -95,6 +104,7 @@ export const updateDossier = (
     apiRequest<Dossier>(path(id), {
         method: "PUT",
         body: JSON.stringify({ ...content, expectedVersion }),
+        schema: DossierSchema,
     });
 export const deleteDossier = (id: string) =>
     apiRequest<void>(path(id), { method: "DELETE" });
@@ -102,7 +112,9 @@ export async function listDossierVersions(
     id: string,
 ): Promise<DossierVersion[]> {
     return (
-        await apiRequest<{ items: DossierVersion[] }>(`${path(id)}/versions`)
+        await apiRequest<{ items: DossierVersion[] }>(`${path(id)}/versions`, {
+            schema: DossierVersionListSchema,
+        })
     ).items;
 }
 export const restoreDossierVersion = (
@@ -113,7 +125,13 @@ export const restoreDossierVersion = (
     apiRequest<Dossier>(`${path(id)}/restore`, {
         method: "POST",
         body: JSON.stringify({ version, expectedVersion }),
+        schema: DossierSchema,
     });
-export const exportDossiers = () => apiRequest<DossierExport>(`${base}/export`);
+export const exportDossiers = () =>
+    apiRequest<DossierExport>(`${base}/export`, {
+        schema: DossierExportSchema,
+    });
 export const exportDossier = (id: string) =>
-    apiRequest<DossierExport>(`${path(id)}/export`);
+    apiRequest<DossierExport>(`${path(id)}/export`, {
+        schema: DossierExportSchema,
+    });

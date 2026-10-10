@@ -5,14 +5,25 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err, INVESTMENT_STUB } from "@/test/msw/handlers";
+import {
+    ok,
+    err,
+    INVESTMENT_STUB,
+    PORTFOLIO_SUMMARY_ITEM_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+} from "@/test/msw/handlers";
 import PortfolioPage from "@/pages/portfolio/PortfolioPage";
 import type { PortfolioSummaryResponse } from "@/lib/api/info";
+import {
+    accountListItem,
+    accountsBody,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 const CANONICAL_INVESTMENT = {
     ...INVESTMENT_STUB,
+    ...PORTFOLIO_SUMMARY_ITEM_STUB,
     assetClass: "etf",
     originalCurrency: "EUR",
     totalUnits: 0,
@@ -51,6 +62,8 @@ const TOTALS = {
     totalRealizedGain: 0,
     totalUnrealizedGain: 120,
     totalIncome: 0,
+    totalDividends: 0,
+    totalInKindIncome: 0,
     totalFees: 0,
     totalTaxes: 0,
     totalAssetGain: 120,
@@ -111,6 +124,10 @@ const PERFORMANCE = {
             totalInvested: 1080,
             gainLoss: 120,
             gainLossPercent: 11.11,
+            assetGain: 120,
+            fxGain: 0,
+            nativeCurrentValue: 1200,
+            usedFallbackRate: false,
         },
     ],
     totals: TOTALS,
@@ -141,14 +158,14 @@ function useTwoHoldings(options: {
             ok({ items: [], total: 0, limit: 1000, offset: 0, links: [] }),
         ),
         http.get(`${API_BASE}/api/accounts`, () =>
-            ok({
+            ok(accountsBody({
                 items: [
-                    { id: 10, name: "Broker A", display_name: "Broker A" },
-                    { id: 20, name: "Broker B", display_name: "Broker B" },
+                    accountListItem({ id: 10, name: "Broker A", display_name: "Broker A" }),
+                    accountListItem({ id: 20, name: "Broker B", display_name: "Broker B" }),
                 ],
                 total: 2,
                 links: [],
-            }),
+            })),
         ),
         http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
             ok(options.performance ?? PERFORMANCE),
@@ -165,10 +182,11 @@ function useTwoHoldings(options: {
         ),
         http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
             ok({
-                currency: "EUR",
+                ...PORTFOLIO_SUMMARY_STUB,
                 computed_at: "2026-09-08T00:00:00Z",
                 totals: TOTALS,
-                brokerageCashFees: options.cashFees,
+                brokerageCashFees:
+                    options.cashFees ?? PORTFOLIO_SUMMARY_STUB.brokerageCashFees,
                 summaries: [
                     {
                         ...CANONICAL_INVESTMENT,
@@ -445,9 +463,8 @@ describe("PortfolioPage (integration)", () => {
             ),
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2025-01-15T10:00:00Z",
-                    totals: {},
                     byAccount: [],
                     summaries: [CANONICAL_INVESTMENT],
                 }),

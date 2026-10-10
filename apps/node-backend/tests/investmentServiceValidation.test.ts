@@ -247,7 +247,7 @@ describe("createInvestment — string width and currency pins", () => {
       createInvestment(createReq({ currency: null }), mockRes()),
     ).rejects.toBeInstanceOf(ValidationError);
     await createInvestment(createReq({}), mockRes());
-    expect("currency" in investmentRepository.create.mock.calls[0][0]).toBe(
+    expect("currency" in investmentRepository.create.mock.calls[0]![0]).toBe(
       false,
     );
   });

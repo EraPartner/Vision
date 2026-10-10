@@ -214,7 +214,8 @@ export interface InstrumentProviderMapping {
     instrument_key: string;
     key_type: MappingKeyType;
     provider: string;
-    provider_symbol: string;
+    /** NULL for a provider that could not resolve the instrument. */
+    provider_symbol: string | null;
     resolved_name: string | null;
     exchange: string | null;
     currency: string | null;

@@ -1154,7 +1154,7 @@ describe("Info Routes", () => {
           .query({ currency: "USD", from: "", to: "" })
           .expect(200);
         const [startDate, endDate, currency] =
-          mockGetBrokerSnapshots.mock.calls[0];
+          mockGetBrokerSnapshots.mock.calls[0]!;
         expect(startDate).toBe("2000-01-01");
         expect(endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(currency).toBe("USD");

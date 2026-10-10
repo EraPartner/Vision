@@ -141,7 +141,7 @@ describe.skipIf(!hasTestDatabase())("IBKR funding correction through reviewed im
     await expect(commitReviewedPortfolioImports({ batchIds: [f.nativeBatch], adoptPolicy: "prefer_source", reconciliationScope: "correct_existing_only", expectedPlanFingerprint: review.planFingerprint }))
       .rejects.toThrow("Portfolio history or source selection changed");
     expect(await journalCount(f)).toBe(0);
-    expect((await readReconciliationSources([f.nativeBatch]))[0].status).toBe("matched");
+    expect((await readReconciliationSources([f.nativeBatch]))[0]!.status).toBe("matched");
     expect(await image(f.transactionId)).toMatchObject({ amount: "81.0000", currency: "EUR" });
   });
   it("rolls back the whole correction set when a later cash update fails", async () => {
@@ -157,7 +157,7 @@ describe.skipIf(!hasTestDatabase())("IBKR funding correction through reviewed im
     for (const f of [first, second]) {
       expect(await image(f.transactionId)).toMatchObject({ amount: "80.0000", currency: "EUR" });
       expect(await journalCount(f)).toBe(0);
-      expect((await readReconciliationSources([f.nativeBatch]))[0].status).toBe("matched");
+      expect((await readReconciliationSources([f.nativeBatch]))[0]!.status).toBe("matched");
       expect((await pool.query("SELECT rows_duplicate FROM portfolio_import_batches WHERE id=$1", [f.nativeBatch])).rows[0].rows_duplicate).toBe(0);
     }
   });
@@ -180,7 +180,7 @@ describe.skipIf(!hasTestDatabase())("IBKR funding correction through reviewed im
     await sourceRow({ ...f.source.original, status: "duplicate" }, referenceBatch);
     await pool.query("UPDATE portfolio_import_batches SET custom_config=custom_config-'ibkr_source_context' WHERE id=$1", [f.originalBatch]);
     const owner = (await readReconciliationSources([f.originalBatch]))[0];
-    const reference = (await readReconciliationSources([referenceBatch]))[0];
+    const reference = (await readReconciliationSources([referenceBatch]))[0]!;
     expect(await commit([f.nativeBatch])).toMatchObject({ adopted: 1, imported: 0 });
     const journal = (await pool.query("SELECT * FROM portfolio_import_reconciliation_journal WHERE batch_id=$1", [f.nativeBatch])).rows[0];
     expect(journal.after_data.proof).toMatchObject({ original: { batchId: f.originalBatch, sourceFileHash: null, contextOrigin: "retained_repeat_source" },

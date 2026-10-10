@@ -42,7 +42,7 @@ async function seedAccount(name: string, displayName: string) {
     `INSERT INTO accounts (name, display_name) VALUES ($1, $2) RETURNING id`,
     [name, displayName],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function seedInvestment(name: string) {
@@ -51,7 +51,7 @@ async function seedInvestment(name: string) {
      VALUES ($1, $1, 'stock', 'EUR', 10) RETURNING id`,
     [name],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 const trade = (

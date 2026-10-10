@@ -9,16 +9,24 @@ import { server } from "@/test/msw/server";
 import { ok, err, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import { AddTransactionButton } from "@/features/transactions/components/AddTransactionSheet";
 import { todayYmd } from "@/lib/timezone";
+import {
+    accountListItem,
+    accountsBody,
+    categoryTreeBody,
+    recipientCreated,
+    recipientRow,
+    transactionCreated,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
-const testRecipient = {
+const testRecipient = recipientRow({
     id: 7,
     name: "Test Supermarket",
     is_active: true,
     created_at: "2025-01-01T00:00:00Z",
     links: [],
-};
+});
 
 const testRecipientsList = {
     items: [testRecipient],
@@ -50,17 +58,17 @@ describe("AddTransactionSheet (integration)", () => {
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        {
+                        accountListItem({
                             ...ACCOUNT_LIST_ITEM_STUB,
                             name: "Main",
                             display_name: "Main",
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/recipients/7`, () => ok(testRecipient)),
         );
@@ -115,14 +123,14 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedBody = await request.json();
-                return ok({
+                return ok(transactionCreated({
                     id: 42,
                     transaction_date: "2026-04-29",
                     bank_account: "Main",
                     amount: 12.5,
                     currency: "EUR",
                     recipient_id: 7,
-                });
+                }));
             }),
         );
 
@@ -206,9 +214,9 @@ describe("AddTransactionSheet (integration)", () => {
         // the dialog's default date (today) is always on/before the anchor.
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        {
+                        accountListItem({
                             id: 3,
                             name: "Main",
                             currency: "EUR",
@@ -226,11 +234,11 @@ describe("AddTransactionSheet (integration)", () => {
                             computed_balance: 100,
                             anchor_date: "2099-12-31",
                             post_anchor_count: 0,
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
         );
 
@@ -269,7 +277,7 @@ describe("AddTransactionSheet (integration)", () => {
                 if (posted.length === 1) {
                     return err(409, "Duplicate transaction detected");
                 }
-                return ok({ id: 99, ...posted[1], links: [] });
+                return ok(transactionCreated({ id: 99, ...posted[1], links: [] }));
             }),
         );
 
@@ -404,7 +412,7 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
-                return ok({});
+                return ok(transactionCreated({}));
             }),
         );
 
@@ -446,7 +454,7 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
-                return ok({});
+                return ok(transactionCreated({}));
             }),
         );
 
@@ -546,7 +554,7 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
-                return ok({});
+                return ok(transactionCreated({}));
             }),
         );
 
@@ -592,14 +600,14 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 rawBody = await request.text();
-                return ok({
+                return ok(transactionCreated({
                     id: 42,
                     transaction_date: todayYmd(),
                     bank_account: "Main",
                     amount: 12.5,
                     currency: "EUR",
                     recipient_id: 7,
-                });
+                }));
             }),
         );
 
@@ -655,7 +663,7 @@ describe("AddTransactionSheet (integration)", () => {
                 capturedRecipientId = (
                     (await request.json()) as Record<string, unknown>
                 ).recipient_id;
-                return ok({ id: 42 });
+                return ok(transactionCreated({ id: 42 }));
             }),
         );
 
@@ -712,13 +720,13 @@ describe("AddTransactionSheet (integration)", () => {
                 ok(testRecipientsList),
             ),
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({ items: categories, total: categories.length, links: [] }),
+                ok(categoryTreeBody({ items: categories, total: categories.length, links: [] })),
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedCategoryId = (
                     (await request.json()) as Record<string, unknown>
                 ).category_id;
-                return ok({ id: 42 });
+                return ok(transactionCreated({ id: 42 }));
             }),
         );
 
@@ -757,7 +765,7 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedBody = (await request.json()) as Record<string, unknown>;
-                return ok({ id: 43, ...capturedBody });
+                return ok(transactionCreated({ id: 43, ...capturedBody }));
             }),
         );
 
@@ -791,25 +799,25 @@ describe("AddTransactionSheet (integration)", () => {
 
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        { ...ACCOUNT_LIST_ITEM_STUB, id: 1, name: "Main", display_name: "Main" },
-                        { ...ACCOUNT_LIST_ITEM_STUB, id: 2, name: "Savings", display_name: "Savings" },
+                        accountListItem({ ...ACCOUNT_LIST_ITEM_STUB, id: 1, name: "Main", display_name: "Main" }),
+                        accountListItem({ ...ACCOUNT_LIST_ITEM_STUB, id: 2, name: "Savings", display_name: "Savings" }),
                     ],
                     total: 2,
                     links: [],
-                }),
+                })),
             ),
             http.post(`${API_BASE}/api/recipients`, async ({ request }) => {
                 const body = (await request.json()) as { name: string };
                 recipientsCreated.push(body.name);
                 const id = body.name === "Savings" ? 21 : 22;
-                return ok({ ...testRecipient, id, name: body.name });
+                return ok(recipientCreated({ id, name: body.name }));
             }),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 const body = (await request.json()) as Record<string, unknown>;
                 posted.push(body);
-                return ok({ id: 100 + posted.length, ...body });
+                return ok(transactionCreated({ id: 100 + posted.length, ...body }));
             }),
             http.post(`${API_BASE}/api/transactions/transfers`, async ({ request }) => {
                 linked = (await request.json()) as Record<string, unknown>;
@@ -850,7 +858,7 @@ describe("AddTransactionSheet (integration)", () => {
         server.use(
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
-                return ok({ id: 1 });
+                return ok(transactionCreated({ id: 1 }));
             }),
         );
 
@@ -887,7 +895,7 @@ describe("AddTransactionSheet (integration)", () => {
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedBody = (await request.json()) as Record<string, unknown>;
-                return ok({ id: 44, ...capturedBody });
+                return ok(transactionCreated({ id: 44, ...capturedBody }));
             }),
         );
 
@@ -922,14 +930,14 @@ describe("AddTransactionSheet (integration)", () => {
                 ok(testRecipientsList),
             ),
             http.get(`${API_BASE}/api/recipients/7`, () =>
-                ok({ ...testRecipient, default_category_id: 5, default_category_name: "Groceries" }),
+                ok(recipientRow({ ...testRecipient, default_category_id: 5, default_category_name: "Groceries" })),
             ),
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({ items: categories, total: categories.length, links: [] }),
+                ok(categoryTreeBody({ items: categories, total: categories.length, links: [] })),
             ),
             http.post(`${API_BASE}/api/transactions`, async ({ request }) => {
                 capturedBody = (await request.json()) as Record<string, unknown>;
-                return ok({ id: 45, ...capturedBody });
+                return ok(transactionCreated({ id: 45, ...capturedBody }));
             }),
         );
 

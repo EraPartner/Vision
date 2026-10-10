@@ -11,6 +11,19 @@
  */
 
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  enrichedRecipientRowSchema,
+  idRowSchema,
+  recipientAliasRowSchema,
+  recipientClusterRootRowSchema,
+  recipientMergeLockRowSchema,
+  recipientRowSchema,
+  recipientUpsertRowSchema,
+  requireRow,
+} from "../database/rows/catalog.ts";
+import type { RecipientAliasRow } from "../database/rows/catalog.ts";
 import { normalizeForMatching } from "../lib/textNormalization.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { makeValidationError } from "../lib/repositoryErrors.ts";
@@ -166,12 +179,11 @@ export const recipientRepository = {
       ORDER BY ${orderBy} LIMIT $${p} OFFSET $${p + 1}
     `;
 
-    const result = await query<EnrichedRecipientRow>(sql, [
+    return queryRows(enrichedRecipientRowSchema, sql, [
       ...params,
       limit,
       offset,
     ]);
-    return result.rows;
   },
 
   async getCount({
@@ -194,8 +206,8 @@ export const recipientRepository = {
       LEFT JOIN categories c ON r.default_category_id = c.id
       ${where}
     `;
-    const result = await query<{ count: string }>(sql, params);
-    return parseInt(result.rows[0].count, 10);
+    const row = await queryOne(countRowSchema, sql, params);
+    return parseInt(requireRow(row, "recipient count").count, 10);
   },
 
   async getById(id: number): Promise<EnrichedRecipientRow | null> {
@@ -223,8 +235,8 @@ export const recipientRepository = {
       ) ac ON ac.primary_recipient_id = r.id
       WHERE r.id = $1
     `;
-    const result = await query<EnrichedRecipientRow>(sql, [id]);
-    return result.rows[0] || null;
+    const row = await queryOne(enrichedRecipientRowSchema, sql, [id]);
+    return row || null;
   },
 
   /**
@@ -258,30 +270,33 @@ export const recipientRepository = {
    */
   async getOrCreateSystemId(): Promise<number> {
     const normalized = normalizeForMatching(SYSTEM_RECIPIENT_NAME);
-    const existing = await query<{ id: number }>(
+    const existing = await queryOne(
+      idRowSchema,
       `SELECT id FROM recipients WHERE normalized_name = $1`,
       [normalized],
     );
-    if (existing.rows[0]) return existing.rows[0].id;
+    if (existing) return existing.id;
 
-    const result = await query<{ id: number }>(
+    const inserted = await queryOne(
+      idRowSchema,
       `INSERT INTO recipients (name, normalized_name, is_active)
        VALUES ($1, $2, false)
        ON CONFLICT (normalized_name) DO UPDATE SET normalized_name = EXCLUDED.normalized_name
        RETURNING id`,
       [SYSTEM_RECIPIENT_NAME, normalized],
     );
-    return result.rows[0].id;
+    return requireRow(inserted, "system recipient upsert").id;
   },
 
   /** @param name Raw display name; normalized before the lookup. */
   async getByName(name: string): Promise<RecipientRow | null> {
     const normalized = normalizeForMatching(name);
-    const result = await query<RecipientRow>(
+    const row = await queryOne(
+      recipientRowSchema,
       `SELECT * FROM recipients WHERE normalized_name = $1`,
       [normalized],
     );
-    return result.rows[0] || null;
+    return row || null;
   },
 
   /**
@@ -306,24 +321,29 @@ export const recipientRepository = {
       );
     }
 
-    const existingResult = await query<{ id: number }>(
+    const existing = await queryOne(
+      idRowSchema,
       `SELECT id FROM recipients WHERE normalized_name = $1`,
       [normalizedName],
     );
 
-    let recipientId = existingResult.rows[0]?.id;
+    let recipientId = existing?.id;
     let created = false;
     if (recipientId == null) {
-      const insertResult = await query<{ id: number; created: boolean }>(
-        `INSERT INTO recipients (name, normalized_name, is_active)
+      const inserted = requireRow(
+        await queryOne(
+          recipientUpsertRowSchema,
+          `INSERT INTO recipients (name, normalized_name, is_active)
        VALUES ($1, $2, true)
        ON CONFLICT (normalized_name) DO UPDATE
          SET normalized_name = EXCLUDED.normalized_name
        RETURNING id, (xmax = 0) AS created`,
-        [upperName, normalizedName],
+          [upperName, normalizedName],
+        ),
+        "recipient upsert",
       );
-      recipientId = insertResult.rows[0].id;
-      created = Boolean(insertResult.rows[0].created);
+      recipientId = inserted.id;
+      created = inserted.created;
     }
 
     const full = await this.getById(recipientId);
@@ -401,8 +421,8 @@ export const recipientRepository = {
         GROUP BY primary_recipient_id
       ) ac ON ac.primary_recipient_id = u.id
     `;
-    const result = await query<EnrichedRecipientRow>(sql, params);
-    return result.rows[0] || null;
+    const row = await queryOne(enrichedRecipientRowSchema, sql, params);
+    return row || null;
   },
 
   async hardDelete(id: number): Promise<boolean> {
@@ -417,15 +437,12 @@ export const recipientRepository = {
   async lockByIdsForMerge(
     ids: number[],
   ): Promise<Array<{ id: number; primary_recipient_id: number | null }>> {
-    const result = await query<{
-      id: number;
-      primary_recipient_id: number | null;
-    }>(
+    return queryRows(
+      recipientMergeLockRowSchema,
       `SELECT id, primary_recipient_id FROM recipients
        WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`,
       [ids],
     );
-    return result.rows;
   },
 
   /**
@@ -438,7 +455,8 @@ export const recipientRepository = {
     primaryId: number,
     aliasIds: number[],
   ): Promise<number[]> {
-    const result = await query<{ id: number }>(
+    const rows = await queryRows(
+      idRowSchema,
       `UPDATE recipients
           SET primary_recipient_id = $1,
               updated_at = NOW()
@@ -447,7 +465,7 @@ export const recipientRepository = {
         RETURNING id`,
       [primaryId, aliasIds],
     );
-    return result.rows.map((r) => r.id);
+    return rows.map((r) => r.id);
   },
 
   /**
@@ -485,9 +503,7 @@ export const recipientRepository = {
   /**
    * Get all aliases for a primary recipient.
    */
-  async getAliases(
-    primaryId: number,
-  ): Promise<(RecipientRow & { default_category_name: string | null })[]> {
+  async getAliases(primaryId: number): Promise<RecipientAliasRow[]> {
     const sql = `
       SELECT r.*,
              CASE WHEN c.id IS NOT NULL THEN c.path_name ELSE NULL END AS default_category_name
@@ -496,10 +512,7 @@ export const recipientRepository = {
       WHERE r.primary_recipient_id = $1
       ORDER BY r.name
     `;
-    const result = await query<
-      RecipientRow & { default_category_name: string | null }
-    >(sql, [primaryId]);
-    return result.rows;
+    return queryRows(recipientAliasRowSchema, sql, [primaryId]);
   },
 
   /**
@@ -513,14 +526,15 @@ export const recipientRepository = {
       ...new Set((recipientIds || []).filter((id): id is number => id != null)),
     ];
     if (ids.length === 0) return new Map();
-    const result = await query<{ id: number; cluster_root: number }>(
+    const rows = await queryRows(
+      recipientClusterRootRowSchema,
       `SELECT id, COALESCE(primary_recipient_id, id) AS cluster_root
          FROM recipients
         WHERE id = ANY($1::int[])`,
       [ids],
     );
     const map = new Map<number, number>();
-    for (const row of result.rows) map.set(row.id, row.cluster_root);
+    for (const row of rows) map.set(row.id, row.cluster_root);
     return map;
   },
 };

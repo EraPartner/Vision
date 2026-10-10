@@ -9,6 +9,53 @@ import { err, ok } from "@/test/msw/handlers";
 import AnalysisMonitorsPage from "@/pages/AnalysisMonitorsPage";
 
 const api = "http://localhost:3002/api";
+const stamp = "2026-09-19T00:00:00Z";
+
+/** A `mapSaved` body (services/savedAnalysisService.ts). */
+const savedAnalysis = (overrides: Record<string, unknown>) => ({
+    id: "a-1",
+    definitionId: "def-1",
+    name: "Analysis",
+    workspace: "budgeting",
+    version: 1,
+    refreshMode: "live",
+    parameters: {},
+    charts: [],
+    sourceReferences: [],
+    refreshStatus: "never-run",
+    lastSuccessfulRunId: null,
+    lastError: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+    definition: {},
+    lastResult: null,
+    ...overrides,
+});
+
+/** A `mapMonitor` body (services/analysisMonitorService.ts). */
+const monitorBody = (overrides: Record<string, unknown>) => ({
+    id: "m-1",
+    kind: "dossier-evidence",
+    title: "Monitor",
+    enabled: true,
+    savedAnalysisId: null,
+    dossierId: "d-1",
+    historicalTargetId: "d-1",
+    targetLabel: "Research",
+    targetAvailable: true,
+    fieldId: null,
+    operator: null,
+    threshold: null,
+    intervalMinutes: 1440,
+    cooldownMinutes: 1440,
+    nextDueAt: stamp,
+    lastCheckedAt: null,
+    lastStatus: null,
+    lastObservation: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+    ...overrides,
+});
 
 describe("AnalysisMonitorsPage", () => {
     beforeEach(() => {
@@ -108,16 +155,17 @@ describe("AnalysisMonitorsPage", () => {
             http.get(`${api}/analysis/saved`, () =>
                 ok({
                     items: [
-                        {
-                            id: "a-1",
+                        savedAnalysis({
                             name: "Cash flow",
-                            refreshMode: "live",
+                            refreshStatus: "succeeded",
+                            lastSuccessfulRunId: "r-1",
                             lastResult: {
                                 rows: [{ amount: "100.00" }],
                                 columns: [{ id: "amount", type: "decimal" }],
                             },
-                        },
+                        }),
                     ],
+                    total: 1,
                 }),
             ),
             http.get(`${api}/research-dossiers`, () =>
@@ -125,7 +173,19 @@ describe("AnalysisMonitorsPage", () => {
             ),
             http.post(`${api}/analysis/monitors`, async ({ request }) => {
                 posted = await request.json();
-                return ok({ id: "m-1" });
+                return ok(
+                    monitorBody({
+                        kind: "analysis-threshold",
+                        title: "Cash threshold",
+                        savedAnalysisId: "a-1",
+                        dossierId: null,
+                        historicalTargetId: "a-1",
+                        targetLabel: "Cash flow",
+                        fieldId: "amount",
+                        operator: "above",
+                        threshold: "100.00000001",
+                    }),
+                );
             }),
         );
         const user = userEvent.setup();
@@ -164,7 +224,9 @@ describe("AnalysisMonitorsPage", () => {
 
     it("guides users to create a target and keeps unavailable condition inputs hidden", async () => {
         server.use(
-            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/analysis/saved`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.get(`${api}/research-dossiers`, () =>
                 ok({ items: [], total: 0, limit: 500, offset: 0 }),
             ),
@@ -193,10 +255,23 @@ describe("AnalysisMonitorsPage", () => {
     it("retains a custom schedule when the evidence form disclosure is closed", async () => {
         let posted: unknown;
         server.use(
-            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/analysis/saved`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.get(`${api}/research-dossiers`, () =>
                 ok({
-                    items: [{ id: "d-1", title: "Research" }],
+                    items: [
+                        {
+                            id: "d-1",
+                            version: 1,
+                            workspace: "research",
+                            title: "Research",
+                            question: "",
+                            reviewDate: null,
+                            createdAt: "2026-01-01T00:00:00.000Z",
+                            updatedAt: "2026-01-01T00:00:00.000Z",
+                        },
+                    ],
                     total: 1,
                     limit: 500,
                     offset: 0,
@@ -204,7 +279,7 @@ describe("AnalysisMonitorsPage", () => {
             ),
             http.post(`${api}/analysis/monitors`, async ({ request }) => {
                 posted = await request.json();
-                return ok({ id: "m-1" });
+                return ok(monitorBody({ title: "Evidence changes" }));
             }),
         );
         const user = userEvent.setup();
@@ -267,13 +342,15 @@ describe("AnalysisMonitorsPage", () => {
             enabled: true,
             savedAnalysisId: "a-1",
             dossierId: null,
+            historicalTargetId: "a-1",
             targetLabel: "Cash flow",
+            targetAvailable: true,
             fieldId: "amount",
             operator: "above",
             threshold: "100",
             intervalMinutes: 1440,
             cooldownMinutes: 1440,
-            nextDueAt: null,
+            nextDueAt: "2026-09-20T00:00:00Z",
             lastCheckedAt: null,
             lastStatus: "failed",
             lastObservation: null,
@@ -320,8 +397,11 @@ describe("AnalysisMonitorsPage", () => {
                             currentValue: null,
                             previousEvidenceVersion: null,
                             currentEvidenceVersion: null,
+                            analysisDefinitionVersion: 1,
                             analysisRunId: null,
                             historicalAnalysisRunId: null,
+                            analysisRunStatus: null,
+                            analysisWindow: null,
                             coverage: {
                                 status: "unknown",
                                 reason: "English coverage detail",
@@ -334,7 +414,9 @@ describe("AnalysisMonitorsPage", () => {
                     offset: 0,
                 }),
             ),
-            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/analysis/saved`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.get(`${api}/research-dossiers`, () =>
                 ok({ items: [], total: 0, limit: 500, offset: 0 }),
             ),
@@ -377,13 +459,15 @@ describe("AnalysisMonitorsPage", () => {
             enabled: true,
             savedAnalysisId: null,
             dossierId: "d-1",
+            historicalTargetId: "d-1",
             targetLabel: "Research",
+            targetAvailable: true,
             fieldId: null,
             operator: null,
             threshold: null,
             intervalMinutes: 1440,
             cooldownMinutes: 1440,
-            nextDueAt: null,
+            nextDueAt: "2026-09-20T00:00:00Z",
             lastCheckedAt: null,
             lastStatus: null,
             lastObservation: null,
@@ -394,7 +478,9 @@ describe("AnalysisMonitorsPage", () => {
             http.get(`${api}/analysis/monitors`, () =>
                 ok({ items: [monitor], total: 1, limit: 200, offset: 0 }),
             ),
-            http.get(`${api}/analysis/saved`, () => ok({ items: [] })),
+            http.get(`${api}/analysis/saved`, () =>
+                ok({ items: [], total: 0 }),
+            ),
             http.get(`${api}/research-dossiers`, () =>
                 ok({ items: [], total: 0, limit: 500, offset: 0 }),
             ),

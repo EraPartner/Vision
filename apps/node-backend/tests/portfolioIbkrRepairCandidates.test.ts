@@ -5,6 +5,7 @@ import type {
   RepairItem,
 } from "../src/services/portfolioIbkrRepairCandidates.ts";
 import { partial } from "./helpers/partial.ts";
+import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
 
 type Item = Omit<RepairItem, "row" | "candidates"> & {
   row: RepairItem["row"] & { id: number };
@@ -70,7 +71,7 @@ describe("contested imported IBKR repair identities", () => {
     const result = narrowImportedIbkrRepairCandidates([first, second]);
     expect(result.prepared).toEqual([first]);
     expect(result.settledDuplicates).toEqual([{ ...second, candidates: [] }]);
-    expect(result.settledDuplicates[0].imported!.id).toBe(102);
+    expect(result.settledDuplicates[0]!.imported!.id).toBe(102);
     expect(second.candidates).toHaveLength(1);
   });
   it("keeps two legitimate identical fills ambiguous", () => {
@@ -115,7 +116,8 @@ describe("contested imported IBKR repair identities", () => {
       const second = item(2, "120");
       if (kind === "unimported") second.imported = undefined;
       if (kind === "other provider")
-        second.row.custom_config.format = "saxo_transaction_history";
+        batchConfigFields(second.row.custom_config)!.format =
+          "saxo_transaction_history";
       if (kind === "changed source identity")
         second.imported!.dedup_fingerprint = "c".repeat(64);
       expect(
@@ -130,7 +132,7 @@ describe("contested imported IBKR repair identities", () => {
       legacy({ id: 41, amount: "600", price_per_unit: "120" }),
     );
     const result = narrowImportedIbkrRepairCandidates([first, second]);
-    expect(result.prepared[1].candidates.map((r) => r.id)).toEqual([41]);
+    expect(result.prepared[1]!.candidates.map((r) => r.id)).toEqual([41]);
     expect(result.settledDuplicates).toEqual([]);
   });
   it("compares financial fields at stored precision", () => {

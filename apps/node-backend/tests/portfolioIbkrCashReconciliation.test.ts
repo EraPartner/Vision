@@ -34,8 +34,8 @@ describe("IBKR native funding correction proof", () => {
       after: { ledgerKind: "cash", snapshot: { id: 40, amount: "100.0000", currency: "USD", memo: source.original.note,
         comment: "Keep user comment", account_id: 7, import_batch_id: null, source_record_hash: source.original.source_record_hash,
         dedup_fingerprint: source.native.dedup_fingerprint } } });
-    expect(result.actions[0].after.snapshot).not.toHaveProperty("category_id");
-    expect(result.actions[0].after.snapshot).not.toHaveProperty("transfer_peer_id");
+    expect(result.actions[0]!.after.snapshot).not.toHaveProperty("category_id");
+    expect(result.actions[0]!.after.snapshot).not.toHaveProperty("transfer_peer_id");
     expect(result.originalBatchIds).toEqual([1]);
   });
   it("uses exactly four-decimal base rounding, not a loose amount tolerance", () => {
@@ -57,9 +57,9 @@ describe("IBKR native funding correction proof", () => {
     source.context.batches.push({ id: 3, account_id: 7, status: "complete", custom_config: config }, { id: 4, account_id: 7, status: "complete", custom_config: config });
     const result = plan(source);
     expect(result.blockers).toEqual([]);
-    expect(result.actions[0].proof).toMatchObject({ original: { batchId: 1, stagingRowId: 10, sourceFileHash: null, contextOrigin: "retained_repeat_source" },
+    expect(result.actions[0]!.proof).toMatchObject({ original: { batchId: 1, stagingRowId: 10, sourceFileHash: null, contextOrigin: "retained_repeat_source" },
       primaryReference: { batchId: 3, stagingRowId: 30, sourceFileHash: config.ibkr_source_context.source_file_hash } });
-    expect(result.actions[0].sourceBindings).toHaveLength(3);
+    expect(result.actions[0]!.sourceBindings).toHaveLength(3);
     expect(result.originalBatchIds).toEqual([1, 3]);
     expect(source.original.custom_config).not.toHaveProperty("ibkr_source_context");
   });
@@ -90,8 +90,8 @@ describe("IBKR native funding correction proof", () => {
   it("preserves a legacy opaque fingerprint and recognizes its intact source repeat", () => {
     const source = fixture();
     source.original.dedup_fingerprint = "a".repeat(64);
-    source.context.ledger[0].dedup_fingerprint = source.original.dedup_fingerprint;
-    const adopted = plan(source).actions[0];
+    source.context.ledger[0]!.dedup_fingerprint = source.original.dedup_fingerprint;
+    const adopted = plan(source).actions[0]!;
     expect(adopted.before.snapshot.dedup_fingerprint).toBe("a".repeat(64));
     source.context.ledger[0] = adopted.after.snapshot;
     source.context.receipts.push({ id: 90, transaction_id: 40, before_data: adopted.before, after_data: adopted.after });
@@ -114,9 +114,9 @@ describe("IBKR native funding correction proof", () => {
   });
   it.each(["amount", "currency", "date", "memo", "is_active", "source_record_hash", "dedup_fingerprint", "account_id"])("rejects changed cash %s", (key) => {
     const source = fixture();
-    source.context.ledger[0][key] = key === "is_active" ? false : key === "amount" ? "81.0000" : key === "account_id" ? 8 : "changed";
+    source.context.ledger[0]![key] = key === "is_active" ? false : key === "amount" ? "81.0000" : key === "account_id" ? 8 : "changed";
     expect(plan(source).actions).toHaveLength(0);
-    expect(plan(source).blockers[0].reason).toBe("ibkr_native_funding_ledger_changed");
+    expect(plan(source).blockers[0]!.reason).toBe("ibkr_native_funding_ledger_changed");
   });
   it("does not adopt a competing source or duplicate reference", () => {
     const source = fixture();
@@ -130,11 +130,11 @@ describe("IBKR native funding correction proof", () => {
   it("blocks an unrelated record holding the native fingerprint", () => {
     const source = fixture();
     source.context.ledger.push({ ...source.context.ledger[0], id: 41, dedup_fingerprint: source.native.dedup_fingerprint });
-    expect(plan(source).blockers[0].reason).toBe("ibkr_native_funding_duplicate_identity");
+    expect(plan(source).blockers[0]!.reason).toBe("ibkr_native_funding_duplicate_identity");
   });
   it("settles a repeat through its intact receipt, allowing new categories and transfer pairs", () => {
     const source = fixture();
-    const adopted = plan(source).actions[0];
+    const adopted = plan(source).actions[0]!;
     source.context.ledger[0] = { ...adopted.after.snapshot, category_id: 20, is_transfer: true, transfer_peer_id: 50, transfer_source: "auto" };
     source.context.receipts.push({ id: 90, transaction_id: 40, action: "adopt", policy: "prefer_source", before_data: adopted.before, after_data: adopted.after });
     const result = plan(source);
@@ -148,7 +148,7 @@ describe("IBKR native funding correction proof", () => {
   });
   it("does not use the old-fingerprint alias for an unrelated account or source", () => {
     const source = fixture();
-    const adopted = plan(source).actions[0];
+    const adopted = plan(source).actions[0]!;
     source.context.ledger[0] = adopted.after.snapshot;
     source.context.receipts.push({ id: 90, transaction_id: 40, before_data: adopted.before, after_data: adopted.after });
     expect(originalCashFingerprintAlreadyCorrected({ ...source.original, account_id: 8 }, loose<IbkrCashCorrectionContext>(source.context))).toBeUndefined();

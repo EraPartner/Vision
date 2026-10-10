@@ -202,8 +202,46 @@ beforeEach(() => {
         http.get(`${api}/batches/:id/preview`, ({ params }) =>
             ok({
                 batch_id: Number(params.id),
-                groups: [{ rows: [{ id: 1 }] }],
-                totals: { error: 0, unresolved: 0 },
+                account_id: 1,
+                account_name: "Nexo",
+                account_valid: true,
+                groups: [
+                    {
+                        is_cash: false,
+                        investment_id: 1,
+                        investment_name: "Synthetic asset",
+                        investment_symbol: "SYNTH",
+                        investment_asset_class: "crypto",
+                        raw_symbol: "SYNTH",
+                        raw_name: null,
+                        row_count: 1,
+                        rows: [
+                            {
+                                id: "1",
+                                row_index: 0,
+                                status: "matched",
+                                route: "portfolio",
+                                tx_date: "2025-01-01",
+                                type: "buy",
+                                type_raw: "Buy",
+                                symbol_raw: "SYNTH",
+                                name_raw: null,
+                                units: "1",
+                                price_per_unit: "2",
+                                amount: "2",
+                                fees: "0",
+                                taxes: "0",
+                                currency: "EUR",
+                                fx_rate_to_eur: "1",
+                                note: null,
+                                match_source: "symbol",
+                                error_message: null,
+                                user_override_investment_id: null,
+                            },
+                        ],
+                    },
+                ],
+                totals: { symbol: 1, name_exact: 0, unresolved: 0, error: 0 },
             }),
         ),
         http.get(`${api}/batches`, ({ request }) => {
@@ -315,10 +353,12 @@ async function selectAndStage(
     await user.upload(await screen.findByLabelText(/Statements \(CSV/), files);
     await waitFor(() =>
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeEnabled(),
     );
-    await user.click(screen.getByRole("button", { name: "Stage statements" }));
+    await user.click(
+        screen.getByRole("button", { name: "Prepare for review" }),
+    );
     await waitFor(() =>
         expect(
             screen.getByRole("button", { name: "Review reconciliation" }),
@@ -332,7 +372,7 @@ const scopeLabels: Record<PortfolioReconciliationMode, string> = {
     record_cash_only: "Record proven cash history",
     record_in_kind_income_only: "Record proven in-kind income",
     correct_existing_only: "Correct proven existing records",
-    adopt_existing_only: "Attach proven source records",
+    adopt_existing_only: "Link matching existing records",
 };
 /** Option labels of the session policy Select, by model value. */
 const policyLabels = {
@@ -616,7 +656,7 @@ describe("reviewed portfolio import sessions", () => {
         await chooseScope(user, "correct_existing_only");
         expect(policyField()).toHaveTextContent(policyLabels.prefer_source);
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -774,7 +814,7 @@ describe("reviewed portfolio import sessions", () => {
             await user.click(confirmation);
             if (!retained) {
                 await user.click(
-                    screen.getByRole("button", { name: "Stage statements" }),
+                    screen.getByRole("button", { name: "Prepare for review" }),
                 );
                 await waitFor(() =>
                     expect(
@@ -897,11 +937,11 @@ describe("reviewed portfolio import sessions", () => {
         );
         await waitFor(() =>
             expect(
-                screen.getByRole("button", { name: "Stage statements" }),
+                screen.getByRole("button", { name: "Prepare for review" }),
             ).toBeEnabled(),
         );
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -948,7 +988,7 @@ describe("reviewed portfolio import sessions", () => {
             }),
         );
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -968,7 +1008,7 @@ describe("reviewed portfolio import sessions", () => {
             }),
         ).not.toBeChecked();
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         first.unmount();
         sessionStorage.setItem(
@@ -1118,7 +1158,7 @@ describe("reviewed portfolio import sessions", () => {
             ).toBeVisible();
             if (!retained) {
                 await user.click(
-                    screen.getByRole("button", { name: "Stage statements" }),
+                    screen.getByRole("button", { name: "Prepare for review" }),
                 );
                 await waitFor(() =>
                     expect(
@@ -1264,7 +1304,7 @@ describe("reviewed portfolio import sessions", () => {
         await waitForScopeOption(user, "Record proven in-kind income");
         await chooseScope(user, "record_in_kind_income_only");
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -1347,7 +1387,7 @@ describe("reviewed portfolio import sessions", () => {
             scopeLabels.record_in_kind_income_only,
         );
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         expect(
             screen.getByRole("button", { name: "Review reconciliation" }),
@@ -1391,7 +1431,7 @@ describe("reviewed portfolio import sessions", () => {
             scopeLabels.correct_existing_only,
         );
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         expect(
             screen.getByRole("button", { name: "Review reconciliation" }),
@@ -1483,7 +1523,7 @@ describe("reviewed portfolio import sessions", () => {
                 await screen.findByLabelText(/Statements \(CSV/),
                 kinesisStatement(),
             );
-            await waitForScopeOption(user, "Attach proven source records");
+            await waitForScopeOption(user, "Link matching existing records");
             expect(
                 screen.getByLabelText("Reconciliation scope"),
             ).toHaveTextContent(scopeLabels.full);
@@ -1500,7 +1540,7 @@ describe("reviewed portfolio import sessions", () => {
                 ),
             ).toBeVisible();
             await user.click(
-                screen.getByRole("button", { name: "Stage statements" }),
+                screen.getByRole("button", { name: "Prepare for review" }),
             );
             await waitFor(() =>
                 expect(
@@ -1612,7 +1652,7 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByLabelText("Statements (CSV or XLSX)"),
             [kinesisStatement(), kinesisStatement("older.csv")],
         );
-        await waitForScopeOption(user, "Attach proven source records");
+        await waitForScopeOption(user, "Link matching existing records");
         await chooseScope(user, "adopt_existing_only");
         expect(
             screen.getByLabelText("Existing transaction facts"),
@@ -1621,7 +1661,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByLabelText("Existing transaction facts"),
         ).toBeDisabled();
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -1730,7 +1770,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByRole("button", { name: "Review reconciliation" }),
         ).toBeDisabled();
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         expect(commits).toHaveLength(0);
     });
@@ -1746,7 +1786,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByLabelText(/Statements \(CSV/),
             kinesisStatement(),
         );
-        const option = "Attach proven source records";
+        const option = "Link matching existing records";
         await waitForScopeOption(user, option);
         const assetFilter = screen.getByLabelText("Assets to include");
         await user.type(assetFilter, "KAG");
@@ -2218,7 +2258,7 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByText(/broker account is ambiguous/),
         ).toBeVisible();
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         await user.upload(
             screen.getByLabelText(/Statements \(CSV/),
@@ -2457,7 +2497,7 @@ describe("reviewed portfolio import sessions", () => {
             "Saxo",
         );
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -2555,7 +2595,7 @@ describe("reviewed portfolio import sessions", () => {
             await screen.findByText(/broker account is ambiguous/),
         ).toBeVisible();
         expect(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         ).toBeDisabled();
         await user.upload(
             await screen.findByLabelText(/Statements \(CSV/),
@@ -2586,11 +2626,11 @@ describe("reviewed portfolio import sessions", () => {
         );
         await waitFor(() =>
             expect(
-                screen.getByRole("button", { name: "Stage statements" }),
+                screen.getByRole("button", { name: "Prepare for review" }),
             ).toBeEnabled(),
         );
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         expect(
             await screen.findByText(/staging result could not be verified/),
@@ -2786,7 +2826,7 @@ describe("reviewed portfolio import sessions", () => {
             screen.getByText(/earlier version has a separate pending batch/),
         ).toBeVisible();
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() =>
             expect(
@@ -2870,11 +2910,11 @@ describe("reviewed portfolio import sessions", () => {
         ]);
         await waitFor(() =>
             expect(
-                screen.getByRole("button", { name: "Stage statements" }),
+                screen.getByRole("button", { name: "Prepare for review" }),
             ).toBeEnabled(),
         );
         await user.click(
-            screen.getByRole("button", { name: "Stage statements" }),
+            screen.getByRole("button", { name: "Prepare for review" }),
         );
         await waitFor(() => expect(uploads).toHaveLength(1));
         await user.click(

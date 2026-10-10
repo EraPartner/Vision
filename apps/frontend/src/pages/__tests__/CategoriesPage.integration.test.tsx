@@ -8,6 +8,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, noContent, ok, ok201 } from "@/test/msw/handlers";
 import CategoriesPage from "@/pages/CategoriesPage";
+import { categoryNode, categoryTreeBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -40,6 +41,7 @@ const nodes = [
         path: ["FOOD"],
         category_name: "FOOD",
         depth: 1,
+        description: null,
         is_active: true,
         hierarchyOnly: true,
         legacyCompatible: true,
@@ -52,6 +54,7 @@ const nodes = [
         path: ["FOOD", "GROCERIES"],
         category_name: "FOOD:GROCERIES",
         depth: 2,
+        description: null,
         is_active: true,
         hierarchyOnly: false,
         legacyCompatible: true,
@@ -64,6 +67,7 @@ const nodes = [
         path: ["FOOD", "GROCERIES", "ORGANIC"],
         category_name: "FOOD:GROCERIES:ORGANIC",
         depth: 3,
+        description: null,
         is_active: true,
         hierarchyOnly: false,
         legacyCompatible: false,
@@ -76,6 +80,7 @@ const nodes = [
         path: ["FOOD", "GROCERIES", "ORGANIC", "FRUIT"],
         category_name: "FOOD:GROCERIES:ORGANIC:FRUIT",
         depth: 4,
+        description: null,
         is_active: true,
         hierarchyOnly: false,
         legacyCompatible: false,
@@ -86,10 +91,15 @@ describe("CategoriesPage hierarchy", () => {
     it("marks inactive categories and offers the opposite status in the row menu", async () => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
-                    items: [{ ...nodes[0], is_active: false }, nodes[1]],
-                    total: 2,
-                }),
+                ok(
+                    categoryTreeBody({
+                        items: [
+                            categoryNode({ ...nodes[0], is_active: false }),
+                            nodes[1],
+                        ],
+                        total: 2,
+                    }),
+                ),
             ),
         );
         const user = userEvent.setup();
@@ -348,10 +358,15 @@ describe("CategoriesPage hierarchy", () => {
     it("keeps an inactive ancestor as context for an active descendant", async () => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
-                    items: [{ ...nodes[0], is_active: false }, nodes[1]],
-                    total: 2,
-                }),
+                ok(
+                    categoryTreeBody({
+                        items: [
+                            categoryNode({ ...nodes[0], is_active: false }),
+                            nodes[1],
+                        ],
+                        total: 2,
+                    }),
+                ),
             ),
         );
         renderWithApp(<CategoriesPage />);

@@ -39,6 +39,7 @@ const TARGET_CHARS = 1800;
 const EMBEDDING_BATCH_SIZE = 16;
 let embeddingTail: Promise<unknown> = Promise.resolve([]);
 
+// `&amp;` is decoded last, so an escaped entity such as `&amp;lt;` stays the literal `&lt;`.
 function cleanHtml(value: string) {
   return value
     .replace(/<(script|style|noscript|iframe)[^>]*>[\s\S]*?<\/\1>/gi, " ")
@@ -46,9 +47,9 @@ function cleanHtml(value: string) {
     .replace(/<\/p>|<\/div>|<\/h[1-6]>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">");
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&");
 }
 
 function decodeUtf8(buffer: Buffer) {
@@ -95,10 +96,10 @@ function extractDocument(buffer: Buffer, mediaType: string): ExtractedDocument {
     pending = "";
   };
   for (const raw of lines) {
-    const heading = raw.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*$/);
-    if (heading) {
+    const heading = raw.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*$/)?.[1];
+    if (heading !== undefined) {
       flush();
-      section = heading[1].trim().slice(0, 500);
+      section = heading.trim().slice(0, 500);
       continue;
     }
     const line = raw.trim();
@@ -142,13 +143,12 @@ async function addEmbeddings(
           input: batch.map((item) => item.content),
         });
         embedded.push(
-          ...batch.map((passage, offset) => ({
-            ...passage,
-            embedding: {
-              model: result.model,
-              vector: result.embeddings[offset],
-            },
-          })),
+          ...batch.map((passage, offset) => {
+            // embed() rejects a response without one vector per input.
+            const vector = result.embeddings[offset];
+            if (!vector) throw new Error("Ollama returned too few embeddings");
+            return { ...passage, embedding: { model: result.model, vector } };
+          }),
         );
       }
       return embedded;
@@ -214,9 +214,12 @@ function cosine(a: number[] | undefined, b: number[] | undefined) {
   let aa = 0;
   let bb = 0;
   for (let index = 0; index < a.length; index += 1) {
-    dot += a[index] * b[index];
-    aa += a[index] * a[index];
-    bb += b[index] * b[index];
+    // Both vectors have the same length (checked above).
+    const x = a[index]!;
+    const y = b[index]!;
+    dot += x * y;
+    aa += x * x;
+    bb += y * y;
   }
   return aa && bb ? dot / Math.sqrt(aa * bb) : -1;
 }

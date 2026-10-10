@@ -232,15 +232,15 @@ describe("getPortfolioImportBatchPreview", () => {
     expect(result.groups[0]).toEqual(
       expect.objectContaining({ investment_id: 9, row_count: 1 }),
     );
-    expect(result.groups[0].rows[0]).toEqual(
+    expect(result.groups[0]!.rows[0]).toEqual(
       expect.objectContaining({
         id: 1,
         amount: "100.50",
         units: "2.5",
       }),
     );
-    expect(result.groups[1].row_count).toBe(2);
-    expect(result.groups[1].rows.map((row) => row.id)).toEqual([2, 3]);
+    expect(result.groups[1]!.row_count).toBe(2);
+    expect(result.groups[1]!.rows.map((row) => row.id)).toEqual([2, 3]);
     expect(result.groups[2]).toEqual(
       expect.objectContaining({
         is_cash: true,
@@ -248,7 +248,7 @@ describe("getPortfolioImportBatchPreview", () => {
         raw_name: null,
       }),
     );
-    expect(result.groups[3].rows[0].error_message).toBe("bad row");
+    expect(result.groups[3]!.rows[0]!.error_message).toBe("bad row");
   });
 
   it("returns the complete zeroed totals shape for an empty preview", async () => {
@@ -345,11 +345,11 @@ describe("rollbackBatch — route-aware deletion (ADR-095)", () => {
         .invocationCallOrder[0],
     ).toBeLessThan(
       portfolioTransactionRepository.hardDeleteByImportBatch.mock
-        .invocationCallOrder[0],
+        .invocationCallOrder[0]!,
     );
     expect(
       resetCommittedRowsToMatched.mock.invocationCallOrder[0],
-    ).toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]);
+    ).toBeLessThan(markBatchAborted.mock.invocationCallOrder[0]!);
   });
 
   it("locks and rejects a pending batch before reading or deleting committed rows", async () => {

@@ -9,6 +9,7 @@ import {
   setBatchAccount,
   finalizeAdoptionOnlyBatch,
 } from "../repositories/portfolioImportBatchRepository.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 import { commitPortfolioImport } from "./portfolioImportPipeline/index.ts";
 import { assertPortfolioImportAccount } from "./portfolioImportAccountService.ts";
 import {
@@ -92,8 +93,9 @@ async function commitLockedScope(
         ]),
         ...batches.flatMap((batch) => [
           batch.account_id,
-          batch.custom_config?.transfer_destination_account_id,
-          batch.custom_config?.transfer_origin_account_id,
+          batchConfigFields(batch.custom_config)
+            ?.transfer_destination_account_id,
+          batchConfigFields(batch.custom_config)?.transfer_origin_account_id,
         ]),
       ].filter((id) => id != null),
     ),
@@ -104,13 +106,16 @@ async function commitLockedScope(
   await lockReconciliationAccountsAndHistory(accountIds);
   if (
     batches.some(
-      (batch) => batch.custom_config?.format === "ibkr_funding_history",
+      (batch) =>
+        batchConfigFields(batch.custom_config)?.format ===
+        "ibkr_funding_history",
     ) ||
     reconciliationScope === "record_cash_only" ||
     (reconciliationScope === "full" &&
       batches.some(
         (batch) =>
-          batch.custom_config?.format === "kinesis_transaction_history",
+          batchConfigFields(batch.custom_config)?.format ===
+          "kinesis_transaction_history",
       ))
   )
     await lockKinesisCashLedger(accountIds);
@@ -481,7 +486,8 @@ export async function commitReviewedPortfolioImport({
         adoptPolicy,
         expectedPlanFingerprint,
       );
-      const { imported, duplicates, errors } = result.batches[0];
+      // commitLockedScope reports one result per locked batch; one was passed.
+      const { imported, duplicates, errors } = result.batches[0]!;
       return { imported, duplicates, errors };
     }
 
