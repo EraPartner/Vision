@@ -255,6 +255,11 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 every TypeScript project, widens optional properties that accept `undefined` to `T | undefined`,
 removes the last explicit `any` and makes the backend `no-explicit-any` lint rule an error.
 
+[[docs/adr/199-belgian-tax-source-verification|ADR-199]] requires every Belgian tax rule and
+amount to be traced to a primary source in a rule coverage matrix, and records the corrections
+that audit produced (self-employed forfait, art. 88 marital-quotient cap, CSSS scale and
+household base, frozen IY 2025 amounts, post-reform IY 2026 table).
+
 ### 2026-10-11: The frontend compiles with the backend's stricter TypeScript flags
 
 [[docs/adr/197-stricter-frontend-compiler-flags|ADR-197]] turns on `noUncheckedIndexedAccess`,

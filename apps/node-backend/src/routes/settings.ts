@@ -84,6 +84,7 @@ const belgianTaxProfileSchema = z.looseObject({
   taxYear: yearNum,
   mortgageStartYear: yearNum,
   cadastralCentimesOverride: centimes,
+  selfEmployedIncomeKind: z.enum(["profits", "fees"]).nullish(),
   additionalResidences: z
     .array(
       z.looseObject({

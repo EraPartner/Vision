@@ -16,6 +16,17 @@ export type EmploymentType =
     | "retired"
     | "other";
 
+/**
+ * Kind of self-employed professional income (WIB 92 art. 23 §1 and art. 51).
+ *  - `profits` ("winsten" / "bénéfices"): trading, craft and farming income. The lump-sum
+ *    professional-expense forfait is the employee one (30%, same cap) per art. 51 al. 2, 1°
+ *    and al. 3 ("rémunérations des travailleurs et bénéfices").
+ *  - `fees` ("baten" / "profits" in French): liberal professions. The forfait is the
+ *    degressive 28.7% / 10% / 5% / 3% scale of art. 51 al. 2, 4° with its own cap.
+ * Source: FPS Finance indexation notice per assessment year, table I, art. 51.
+ */
+export type SelfEmployedIncomeKind = "profits" | "fees";
+
 export type BelgianRegion = "flanders" | "wallonia" | "brussels";
 export type ProfessionalExpenseMethod = "lump_sum" | "actual";
 export type PensionScheme = "1050" | "1350";
@@ -44,6 +55,11 @@ export type MortgageCreditRegime =
 export interface BelgianTaxProfile {
     profileConfigured: boolean;
     employmentType: EmploymentType;
+    /**
+     * Only read when `employmentType === "self_employed"` and the lump-sum expense method is
+     * used. Defaults to `profits` when omitted (see `SelfEmployedIncomeKind`).
+     */
+    selfEmployedIncomeKind?: SelfEmployedIncomeKind;
     grossAnnualIncome: number;
     professionalExpenseMethod: ProfessionalExpenseMethod;
     actualProfessionalExpenses: number;
@@ -224,7 +240,16 @@ export interface BracketTax {
 }
 
 export interface BelgianTaxCalculation {
+    /** The taxpayer's own gross income (salary + other taxable income). */
     grossIncome: number;
+    /**
+     * Spouse's professional income counted under a joint assessment (0 otherwise).
+     * `totalPIT` and the special social security contribution cover both spouses, so
+     * `householdGrossIncome`, `netTakeHome` and `effectiveRate` include it.
+     */
+    spouseProfessionalIncome: number;
+    /** `grossIncome + spouseProfessionalIncome`; the base of `netTakeHome` and `effectiveRate`. */
+    householdGrossIncome: number;
     employeeSocialSecurity: number;
     specialSocialSecurityContribution: number;
     personalExemptionAmount: number;

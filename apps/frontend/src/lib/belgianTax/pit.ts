@@ -101,6 +101,7 @@ function computeExemptionBenefit(
 function computeProfessionalExpenses(
     profile: BelgianTaxProfile,
     table: BelgianTaxYearTable,
+    employeeSocialSecurity: number,
 ): number {
     if (profile.professionalExpenseMethod === "actual") {
         // Union dues are professional expenses (CIR-92 art. 49) — deductible only
@@ -112,23 +113,44 @@ function computeProfessionalExpenses(
             Math.max(profile.unionDues || 0, 0)
         );
     }
-    // PwC: only employees and civil servants get the 30% / EUR-cap forfait.
-    // Directors get 3% / lower cap. Self-employed (zelfstandigen / indépendants) only deduct
-    // actual professional expenses — no statutory forfait.
+    // WIB 92 art. 51 (amounts: FPS indexation notice per assessment year, table I):
+    //  - al. 2, 1° + al. 3: employees, civil servants and self-employed trading profits
+    //    (winsten) get 30% with the "rémunérations des travailleurs et bénéfices" cap;
+    //  - al. 2, 2°: company directors get 3% with their own cap;
+    //  - al. 2, 4°: liberal-profession fees (baten) get the degressive 28.7/10/5/3% scale
+    //    with the "conjoints aidants et profits" cap.
+    // Pensions and other replacement income carry no forfait.
+    // Art. 51 al. 1: the percentages apply to the gross income "vooraf verminderd met"
+    // the art. 52, 7° social contributions (FPS Finance, Beroepsinkomen: "brutoberoepsinkomen
+    // (verminderd met bijdragen)"), so the employee contribution comes off first.
+    const gross = Math.max(
+        Math.max(profile.grossAnnualIncome || 0, 0) - Math.max(employeeSocialSecurity, 0),
+        0,
+    );
     if (profile.employmentType === "director") {
         return Math.min(
-            profile.grossAnnualIncome * table.directorProfessionalExpenseRate,
+            gross * table.directorProfessionalExpenseRate,
             table.directorProfessionalExpenseCap,
         );
     }
     if (
         profile.employmentType === "employee" ||
-        profile.employmentType === "civil_servant"
+        profile.employmentType === "civil_servant" ||
+        (profile.employmentType === "self_employed" &&
+            (profile.selfEmployedIncomeKind ?? "profits") === "profits")
     ) {
         return Math.min(
-            profile.grossAnnualIncome * table.employeeProfessionalExpenseRate,
+            gross * table.employeeProfessionalExpenseRate,
             table.employeeProfessionalExpenseCap,
         );
+    }
+    if (profile.employmentType === "self_employed") {
+        let forfait = 0;
+        for (const b of table.selfEmployedFeesExpenseBrackets) {
+            if (gross <= b.from) break;
+            forfait += (Math.min(gross, b.to) - b.from) * b.rate;
+        }
+        return Math.min(forfait, table.selfEmployedFeesExpenseCap);
     }
     return 0;
 }
@@ -314,31 +336,49 @@ function applyMaritalQuotient(
     singlePitAfterExemption: number,
     personalExemptionTotal: number,
 ): MaritalQuotientOutcome {
-    const baseline: MaritalQuotientOutcome = {
+    const single: MaritalQuotientOutcome = {
         transfer: 0,
         earnerTaxable: earnerTaxableIn,
-        spouseTaxable: Math.max(profile.spouseProfessionalIncome || 0, 0),
+        spouseTaxable: 0,
         bracketTax: singleBracketTax,
         exemptionBenefit: singleExemptionBenefit,
         pitAfterExemption: singlePitAfterExemption,
         benefit: 0,
     };
-    if (profile.filingStatus !== "married_joint") return baseline;
+    if (profile.filingStatus !== "married_joint") return single;
 
+    // Art. 126 §1 / art. 130: under joint assessment each spouse's income is taxed in their own
+    // name (décumul), so the spouse's own professional income carries its own progressive tax
+    // and basic exemption even when no quotient is transferred. The no-quotient baseline is
+    // therefore the sum of both spouses' taxes, not the earner's tax alone.
     const spouseTaxableIn = Math.max(profile.spouseProfessionalIncome || 0, 0);
+    const spouseOwnBracket = computeProgressiveTax(spouseTaxableIn, table.brackets);
+    const spouseOwnExBenefit = computeExemptionBenefit(
+        Math.min(table.basicPersonalExemption, spouseTaxableIn),
+        table.exemptionBrackets,
+    );
+    const spouseOwnPitAfter = clampAtZero(spouseOwnBracket.total - spouseOwnExBenefit);
+    const baseline: MaritalQuotientOutcome = {
+        ...single,
+        spouseTaxable: spouseTaxableIn,
+        bracketTax: addBracketTax(singleBracketTax, spouseOwnBracket),
+        exemptionBenefit: singleExemptionBenefit + spouseOwnExBenefit,
+        pitAfterExemption: singlePitAfterExemption + spouseOwnPitAfter,
+    };
+
     const household = earnerTaxableIn + spouseTaxableIn;
     if (household <= 0) return baseline;
 
-    // Target spouse income = min(30% of household, spouse + cap). Transfer brings spouse up to target.
+    // WIB 92 art. 87 (spouse without professional income): 30% of the earner's income, capped.
+    // Art. 88 (spouse below 30%): the transfer tops the spouse up so that own income PLUS the
+    // transferred part reaches 30% of the household total, "doch niet hoger dan" the cap —
+    // the cap bounds the SUM, not the transfer. Both articles share one indexed cap
+    // (arts 87 al. 2 and 88 al. 1 in the FPS indexation notices).
     const target = Math.min(
         household * table.maritalQuotientRate,
-        spouseTaxableIn + table.maritalQuotientCap,
+        table.maritalQuotientCap,
     );
-    const transferRaw = target - spouseTaxableIn;
-    const transfer = Math.max(
-        0,
-        Math.min(transferRaw, table.maritalQuotientCap),
-    );
+    const transfer = Math.max(0, target - spouseTaxableIn);
     if (transfer <= 0) return baseline;
 
     const earnerTaxable = clampAtZero(earnerTaxableIn - transfer);
@@ -361,8 +401,9 @@ function applyMaritalQuotient(
     const spousePitAfter = clampAtZero(spouseBracket.total - spouseExBenefit);
 
     const combinedPitAfter = earnerPitAfter + spousePitAfter;
-    // Marital quotient is automatic — applied only when it lowers total tax.
-    if (combinedPitAfter >= singlePitAfterExemption) return baseline;
+    // Marital quotient is automatic — applied only when it lowers the household's total tax
+    // compared with taxing each spouse's own income (art. 88 al. 2).
+    if (combinedPitAfter >= baseline.pitAfterExemption) return baseline;
 
     return {
         transfer,
@@ -371,7 +412,7 @@ function applyMaritalQuotient(
         bracketTax: addBracketTax(earnerBracket, spouseBracket),
         exemptionBenefit: earnerExBenefit + spouseExBenefit,
         pitAfterExemption: combinedPitAfter,
-        benefit: singlePitAfterExemption - combinedPitAfter,
+        benefit: baseline.pitAfterExemption - combinedPitAfter,
     };
 }
 
@@ -420,9 +461,10 @@ export function computeBelgianPIT(
     const netAfterSS = gross - employeeSS;
 
     // 3. Professional expense deduction
-    const profExpenses = computeProfessionalExpenses(profile, table);
+    const profExpenses = computeProfessionalExpenses(profile, table, employeeSS);
 
-    // 4. True deductions from taxable basis: alimony (80%, CIR-92 art. 104).
+    // 4. True deductions from taxable basis: alimony (CIR-92 art. 104; 80% up to 2024,
+    //    70% in 2025, 60% in 2026 — `table.alimonyDeductibleFraction`).
     //    Pension, life insurance, donations, childcare, domestic help, group insurance =
     //    tax credits, applied below — NOT subtracted from taxable basis.
     //    Union dues deduct only inside ACTUAL professional expenses (handled in
@@ -573,11 +615,19 @@ export function computeBelgianPIT(
     const communalSurcharge =
         federalPITAfterReductions * (profile.communalSurchargePercent / 100);
 
-    // 10. Special social security contribution (function of net taxable PROFESSIONAL income).
-    //     Non-professional income (rental, dividends) is statutorily excluded from this base.
+    // 10. Special social security contribution. Law of 30 March 1994 art. 107, 2°: under a
+    //     joint assessment the base is the HOUSEHOLD income (sum of both spouses' net income,
+    //     before the marital quotient). Non-professional income (rental, dividends) is excluded
+    //     from this base in the current single-profile model; the spouse's professional income
+    //     is the only spouse figure the profile carries.
+    const csssBase =
+        profile.filingStatus === "married_joint"
+            ? netTaxableProfessional +
+              Math.max(profile.spouseProfessionalIncome || 0, 0)
+            : netTaxableProfessional;
     const specialSS = computeSpecialSocialSecurityContribution(
         profile,
-        netTaxableProfessional,
+        csssBase,
         table,
     );
 
@@ -596,23 +646,35 @@ export function computeBelgianPIT(
         table.savingsInterestExcessRate;
 
     // 13. Aggregate totals — distinct meanings, no double-counting.
+    //     Under a joint assessment `totalPIT` and the CSSS cover both spouses, so the
+    //     household aggregates (gross, net take-home, effective rate) include the spouse's
+    //     professional income as well; the per-step rows above stay the earner's.
+    const spouseIncome =
+        profile.filingStatus === "married_joint"
+            ? Math.max(profile.spouseProfessionalIncome || 0, 0)
+            : 0;
+    const householdGross = gross + spouseIncome;
     const totalPIT = federalPITAfterReductions + communalSurcharge;
     const totalTaxBurden =
         totalPIT + employeeSS + specialSS + propertyTaxEstimate;
-    const effectiveRate = gross > 0 ? (totalTaxBurden / gross) * 100 : 0;
+    const effectiveRate =
+        householdGross > 0 ? (totalTaxBurden / householdGross) * 100 : 0;
 
     let marginalRate = table.brackets[0].rate * 100;
     for (const b of table.brackets) {
         if (taxableIncome > b.from) marginalRate = b.rate * 100;
     }
 
-    const netTakeHome = gross - totalTaxBurden;
+    const netTakeHome = householdGross - totalTaxBurden;
     const monthlyTaxReserve = totalPIT / 12;
 
     const federalPITBeforeExemption = pitBeforeExemption.total;
 
     const breakdown = [
         { label: "Gross Income", amount: gross },
+        ...(spouseIncome > 0
+            ? [{ label: "Spouse professional income", amount: spouseIncome }]
+            : []),
         {
             label: "Employee Social Security",
             amount: -employeeSS,
@@ -623,7 +685,7 @@ export function computeBelgianPIT(
         ...(profile.alimonyPaid
             ? [
                   {
-                      label: "Alimony paid (80% deductible)",
+                      label: `Alimony paid (${Math.round(table.alimonyDeductibleFraction * 100)}% deductible)`,
                       amount: -cappedAlimony,
                   },
               ]
@@ -741,6 +803,8 @@ export function computeBelgianPIT(
 
     return {
         grossIncome: gross,
+        spouseProfessionalIncome: spouseIncome,
+        householdGrossIncome: householdGross,
         employeeSocialSecurity: employeeSS,
         specialSocialSecurityContribution: specialSS,
         personalExemptionAmount: personalExemptionTotal,

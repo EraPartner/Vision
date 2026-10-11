@@ -2,8 +2,8 @@
 title: Feature - Belgian Tax
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags: [feature, tax, belgian, cadastral-income, deductions, phase-8, pdf-export, regional-own-home-credit, exemption-brackets, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, portfolio-tax-pure-module, decimal-migration, point-in-time-fx, url-state, filing-masthead, computation-flow, adr-105]
 description: "Belgian tax profile management with PIT calculator using exemption-bracket method (CIR-92 art. 134 §3), regional own-home credits (Flemish woonbonus, Walloon chèque habitat), taxable income source filtering, cadastral income tracking, deduction management, PDF tax report export, and May 2026 PwC audit fixes (disabled-dependent doubling, child-under-3 forfeiture, regional autonomy factor, property-tax centimes calibration). May 2026: Portfolio-tax estimators extracted to a pure, tested module with Decimal.js accumulation."
 aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
@@ -59,7 +59,7 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | Module                | Responsibility                                                              |
 | --------------------- | --------------------------------------------------------------------------- |
 | `types.ts`            | `BelgianTaxProfile`, `BelgianTaxCalculation`, region & employment unions    |
-| `constants.ts`        | Year-keyed `BelgianTaxYearTable` (IY 2024, IY 2025) — brackets, caps, rates |
+| `constants.ts`        | Year-keyed `BelgianTaxYearTable` (IY 2024, 2025, 2026) — brackets, caps, rates |
 | `pit.ts`              | `computeBelgianPIT(profile)` — composes deductions, credits, surcharge      |
 | `socialSecurity.ts`   | Employee SS + step-function special social security contribution (CSSS)     |
 | `propertyTax.ts`      | Indexed cadastral × regional rate × centimes additionnels                   |
@@ -102,12 +102,16 @@ Consumers use narrow selectors, and pure tax symbols come directly from `lib/bel
 
 ## Sources of truth
 
-The reference tables (`getTaxTable(year)`) are populated from:
+Every rule and amount in the reference tables (`getTaxTable(year)`) is traced to a primary source
+in [[docs/reference/belgian-tax-rule-matrix]] (one row per rule, per income year 2024-2026), as
+decided in [[docs/adr/199-belgian-tax-source-verification|ADR-199]]. The primary sources are:
 
-- PwC _Worldwide Tax Summaries — Belgium — Individual_ (cross-checked Feb 2026; AY 2026 audit completed May 2026).
-- FOD Financiën / SPF Finances published indexed amounts (Moniteur belge / Belgisch Staatsblad).
-- Federal personenbelasting / impôt des personnes physiques indexation tables.
-- Internal sample calculations validating exemption-bracket valuation, regional autonomy factors, and property-tax centimes.
+- FPS Finance _Avis relatif à l'indexation automatique_ for assessment years 2025, 2026 and 2027 (Fisconetplus) — every indexed amount.
+- FPS Finance consumer pages on fin.belgium.be (tax rates, marriage and cohabitation, dependents, professional income, dividends, savings, reductions, previous-years amounts).
+- The law of 18 December 2025 (indexation freeze, donations 30%, alimony 70/60/50%, domestic-help reduction abolished), the law of 15 July 2026 (PIT reform from AY 2027) and the law of 30 March 1994 (special social security contribution).
+- PwC _Worldwide Tax Summaries — Belgium — Individual_ remains a secondary cross-check only; its IY 2025 dividend, savings and life-insurance figures ignore the freeze and are not used.
+
+Rows the matrix marks `unverified` (civil-servant contribution rate, regional property tax and own-home credits) keep their earlier values until their primary page is reached.
 
 `SUPPORTED_TAX_YEARS` (sorted numerically) lists the years with a complete table; `LATEST_TAX_YEAR` is the default.
 
@@ -151,7 +155,7 @@ New years are added by appending a `BelgianTaxYearTable` entry — no calculator
 
 ### Employment type → professional expense forfait
 
-Per PwC, only employees / civil servants get the 30% forfait (cap €5,930 IY 2025). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed / freelancers get **no** statutory forfait — only actual professional expenses are deductible. This is enforced in `computeProfessionalExpenses` in [pit.ts](apps/frontend/src/lib/belgianTax/pit.ts).
+WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.07% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](apps/frontend/src/lib/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
 
 ### Taxable Income Sources
 
@@ -185,9 +189,10 @@ Investments of type `real_estate` include Belgian-specific fields:
 
 1. Gross = salary + other taxable income.
 2. Employee social security: 13.07% (employee) / 11.07% (civil servant), salary only.
-3. Professional expenses: lump-sum forfait (employee/director) or actual.
-4. Deductions from taxable basis: alimony 80%. (2026-06-11 correction: union dues now deduct only inside the _actual_ professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
+3. Professional expenses: lump-sum forfait (employee / director / self-employed profits or fees, see above) or actual.
+4. Deductions from taxable basis: alimony at the art. 104 share for the income year (80% up to 2024, 70% in 2025, 60% in 2026 — law of 18 December 2025). (2026-06-11 correction: union dues now deduct only inside the _actual_ professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
 5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
+5b. Marital quotient under `married_joint` (arts 87-88): the spouse's own professional income is taxed in their own name with the basic exemption (art. 126 §1 al. 2, décumul); up to 30% of the household professional income is transferred to the spouse so that own income plus transfer reaches the indexed cap (art. 88), and the transfer is kept only when the two spouses' combined tax is lower than without it (art. 88 al. 2). Until 2026-10-11 the no-quotient baseline omitted the spouse's own tax.
 6. Regional own-home credit (optional): Applies to mortgages on the taxpayer's primary residence.
    - **Flemish woonbonus (pre-2020 loans)** — two sub-regimes by origination year:
      - _Pre-2016 "ordinary" woonbonus_: base cap €2,280 (IY 2025).
@@ -196,14 +201,14 @@ Investments of type `real_estate` include Belgian-specific fields:
      - Credit = min(interest + capital repaid, base cap + supplements) × 40%.
    - **Walloon `chèque habitat` (post-2016 loans, first 10 years)**: Credit = base annual amount + (dependent children × €125/child). [Note: Actual scheme has income-based phaseouts and years 11–20 tail; simplified here.]
    - **Brussels & post-2020 Flanders**: Not modeled (regime = 'none', credit = 0).
-7. Tax credits ("réductions d'impôt"): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,530 @30%), employee group insurance (30%), donations (45%, ≥€40), childcare (45%, €16.90/day cap), domestic help (30%, €8,290 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
+7. Tax credits ("réductions d'impôt", IY 2025 amounts): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,450 @30%, frozen by the law of 18 December 2025), employee group insurance (30%), donations (30% since 2025, 45% in 2024, ≥€40, capped at 10% of net income and €408,130), childcare (45%, €16.90/day cap). The domestic-personnel reduction (art. 145/34) was abolished from income year 2025; the IY 2024 table keeps it (30%, €8,160 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
 8. **Regional autonomy factor** (May 2026 audit): Multiply federal PIT after credits by region-specific factor (Flanders: 0.9951, Wallonia: 0.9951, Brussels: 0.9945) to reflect region's own tax adjustments before communal surcharge.
 9. Communal surcharge applied to federal PIT after regional autonomy factor.
-10. Special social security contribution: CSSS is a step function of net taxable income (€0 below €18,592 → flat tiers → cap €731.28).
+10. Special social security contribution (law of 30 March 1994 arts 106-109): a step function of the household income (€0 up to €18,592.02, then the single or joint scale, cap €731.28). Under a joint assessment the base is the earner's net professional income plus the spouse's professional income (art. 107, 2°), and the joint scale applies.
 11. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences. **May 2026 audit:** centimes reductions calibrated to Belgium-wide commune medians (Flanders 1450→1100, Wallonia 4000→3300, Brussels 4500→4200) to align estimates with typical 20–50%-of-indexed-CI range.
 12. Investment side calc:
-    - `dividendWhtReclaim = min(recordedWHT, min(grossDividendBase, exemption) × WHT_rate)` — Belgian dividend withholding is taken at source; reclaim is capped by both the recorded WHT and the exemption. Gross base = dividend amount + recorded WHT, which handles both net and gross recording conventions. The €859 (IY 2025) exemption applies to the gross base and is reclaimed via the tax return.
-    - `savingsInterestTax = max(savingsInterest − €1,050, 0) × 15%` — Reynders / savings deposit excess.
+    - `dividendWhtReclaim = min(recordedWHT, min(grossDividendBase, exemption) × WHT_rate)` — Belgian dividend withholding is taken at source; reclaim is capped by both the recorded WHT and the exemption. Gross base = dividend amount + recorded WHT, which handles both net and gross recording conventions. The €833 exemption (IY 2024-2026, frozen by the law of 18 December 2025) applies to the gross base and is reclaimed via the tax return.
+    - `savingsInterestTax = max(savingsInterest − €1,020, 0) × 15%` — savings deposit excess (art. 21, 5°; €1,020 for IY 2024-2026).
 
 ### Calculation output fields
 
@@ -239,7 +244,7 @@ Shows four explicit values for dividend taxation:
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `Dividend income tracked` | Sum of all `dividend` transaction amounts for the tax year                                                                         |
 | `WHT paid (gross)`        | Sum of all recorded WHT from `dividend` transactions — actual withheld amount, not estimated                                       |
-| `WHT reclaimable`         | `min(recordedWHT, min(grossDividendBase, €859) × 30%)` — available only when every included dividend has a known amount convention |
+| `WHT reclaimable`         | `min(recordedWHT, min(grossDividendBase, €833) × 30%)` — available only when every included dividend has a known amount convention |
 | `Net WHT cost`            | `max(recordedWHT − reclaimable, 0)` — the unrecoverable portion                                                                    |
 
 Each dividend row explicitly records whether its amount is `gross`, `net`, or `unknown` (ADR-126).
@@ -474,6 +479,8 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/057-belgian-tax-audit-followup-pwc-may-2026|ADR-057]] — Follow-up audit (TOB shares cap €4,000 → €1,600, CGT effective date 1 Jan 2026, direct-bond CGT routing, Reynders interest-portion split, year-aware `SuggestedDeductionsCard`, per-residence centimes override) (May 2026)
 - [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer with frozen per-year profile snapshots, shared switcher across `/tax` and `/portfolio/tax`, soft-lock past-edit mode (May 2026)
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — As-filed frozen calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, single-year CSV export (May 2026)
+- [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
+- [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion
