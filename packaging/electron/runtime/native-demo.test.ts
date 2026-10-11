@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -258,6 +259,31 @@ test("reset requests are isolated and retained until successful finalization", a
   await assert.rejects(
     fs.promises.access(path.join(userDataDir, "demo-reset-request.json")),
     hasCode("ENOENT"),
+  );
+});
+
+test("rejects a reset request that is a symbolic link, directory or FIFO", async (t) => {
+  const { seedRoot, userDataDir } = await fixture(t);
+  const requestPath = path.join(userDataDir, "demo-reset-request.json");
+  await fs.promises.mkdir(userDataDir, { recursive: true });
+  const target = path.join(userDataDir, "elsewhere.json");
+  await fs.promises.writeFile(target, JSON.stringify({ version: 1 }));
+  await fs.promises.symlink(target, requestPath);
+  await assert.rejects(
+    prepareNativeDemo(runtimeMock(userDataDir), { seedRoot }),
+    hasCode("DEMO_RESET_UNSAFE"),
+  );
+  await fs.promises.unlink(requestPath);
+  await fs.promises.mkdir(requestPath);
+  await assert.rejects(
+    prepareNativeDemo(runtimeMock(userDataDir), { seedRoot }),
+    hasCode("DEMO_RESET_UNSAFE"),
+  );
+  await fs.promises.rmdir(requestPath);
+  execFileSync("mkfifo", [requestPath]);
+  await assert.rejects(
+    prepareNativeDemo(runtimeMock(userDataDir), { seedRoot }),
+    hasCode("DEMO_RESET_UNSAFE"),
   );
 });
 
