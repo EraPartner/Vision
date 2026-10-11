@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
@@ -272,13 +272,10 @@ describe("TaxProfileDialog household editing", () => {
         await user.clear(field);
         expect(storedHousehold()?.home).not.toHaveProperty("firstQualifyingYear");
 
-        // A Flemish loan has no such field.
-        const regionSelect = screen.getByRole("combobox", { name: /region/i });
-        await user.click(regionSelect);
-        await user.click(
-            within(await screen.findByRole("listbox")).getByRole("option", { name: /flanders/i }),
-        );
-        expect(screen.queryByLabelText(/first year the chèque habitat/i)).not.toBeInTheDocument();
+        // The household region decides the regime (ADR-202): there is no mortgage-region select.
+        expect(
+            screen.queryByRole("combobox", { name: /region at mortgage signing/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("asks for the woonbonus children at the loan start only for a Flemish loan before 2020", async () => {

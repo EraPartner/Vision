@@ -17,7 +17,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 > figures worked out by hand from the cited WIB 92 article and the indexed amounts recorded in
 > [[docs/reference/belgian-tax-rule-matrix|the rule matrix]]. The arithmetic is written next to
 > every scenario in the test file; no expected figure is copied from the engine.
-> 78 scenarios: 70 verified, 8 needs_source.
+> 92 scenarios: 82 verified, 10 needs_source.
 
 ## How to read it
 
@@ -323,5 +323,6 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 - [[docs/reference/belgian-tax-rule-matrix|Belgian Tax Rule Coverage Matrix]]
 - [[docs/features/belgian-tax]]
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]]
+- [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]]
 - [[docs/reference/index|Reference index]]

@@ -332,4 +332,5 @@ severity; each one is listed in [[#Open items]]. Amounts are those of the tables
 - [[docs/reference/belgian-tax-scenario-matrix|Belgian Tax Scenario Matrix]]
 - [[docs/features/belgian-tax]]
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]]
+- [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]
 - [[docs/reference/index|Reference index]]

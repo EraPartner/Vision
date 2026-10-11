@@ -76,6 +76,8 @@ const HOME_KEYS = [
     "mortgageInterestPaid",
     "mortgageCapitalRepaid",
     "mortgageStartYear",
+    // Deprecated (ADR-202): copied unchanged so the upgrade stays lossless and idempotent, but
+    // the engines read the household region instead (special finance law art. 5/1 §2).
     "mortgageRegion",
     "mortgageIsPrimaryResidence",
 ] as const satisfies readonly ProfileKey[];

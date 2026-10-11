@@ -233,23 +233,6 @@ export function HomeStep({
                                     )}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="mortgage-region">
-                                    {t("tax.profile.field.mortgageRegion")}
-                                </Label>
-                                <BelgianRegionSelect
-                                    id="mortgage-region"
-                                    value={
-                                        profile.mortgageRegion ?? profile.region
-                                    }
-                                    onValueChange={(v) =>
-                                        updateProfile({
-                                            mortgageRegion: v,
-                                        })
-                                    }
-                                    className="w-full"
-                                />
-                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -289,7 +272,7 @@ export function HomeStep({
                             />
                         </div>
 
-                        {(profile.mortgageRegion ?? profile.region) ===
+                        {profile.region ===
                             "wallonia" && (
                             <ProfileNumberField
                                 id="cheque-habitat-first-year"
@@ -338,7 +321,7 @@ export function HomeStep({
                             />
                         )}
 
-                        {(profile.mortgageRegion ?? profile.region) ===
+                        {profile.region ===
                             "flanders" &&
                             profile.mortgageStartYear !== undefined &&
                             profile.mortgageStartYear < 2020 && (

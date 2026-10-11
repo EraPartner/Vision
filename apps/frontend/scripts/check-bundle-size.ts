@@ -78,7 +78,10 @@ const BUDGETS_KB = {
     // Raised from 468 for the Belgian-tax household store wiring (ADR-200,
     // phase B2): 467.53 -> 469.33 measured. The household engine itself loads
     // lazily (householdRuntime); only the store and provider glue are boot code.
-    preload: 470,
+    // Raised from 470 for the reduction for pensions (arts 147-153) and the gift
+    // ceiling in the shared personPit chunk that computeBelgianPIT keeps in the
+    // boot graph: 470.52 measured.
+    preload: 471,
     // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
     // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
@@ -93,7 +96,9 @@ const BUDGETS_KB = {
     // export rows and the readable household history with their EN/NL strings (ADR-201,
     // phase C2, tax and export route chunks; boot preload unchanged): 1357.48 -> 1360.47
     // measured.
-    total: 1362,
+    // Raised from 1362 for the reduction for pensions, joint gifts, the per-borrower
+    // own-home baskets and their EN/NL strings: 1364.10 measured.
+    total: 1365,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

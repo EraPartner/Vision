@@ -530,14 +530,20 @@ export interface OwnHomeCreditTaxpayer {
 /**
  * Resolve the regional own-home credit regime applicable to the user's mortgage.
  * Returns 'none' when the mortgage doesn't fit a modeled regime.
+ *
+ * The regime is that of the taxpayer's region (`inputs.region`): the special finance law of
+ * 16 January 1989 art. 5/1 §2 localises the personal income tax "op de plaats waar de
+ * belastingplichtige zijn fiscale woonplaats heeft gevestigd op 1 januari van het aanslagjaar",
+ * and art. 5/5 §4 makes the regions exclusively competent for the own-home reductions without
+ * reference to where the home lies. The deprecated `mortgageRegion` is ignored.
  */
 export function resolveMortgageRegime(
-    inputs: OwnHomeCreditInputs,
+    inputs: Omit<OwnHomeCreditInputs, "mortgageRegion">,
 ): MortgageCreditRegime {
     if (!inputs.mortgageIsPrimaryResidence) return "none";
     if (!inputs.mortgageInterestPaid && !inputs.mortgageCapitalRepaid)
         return "none";
-    const region = inputs.mortgageRegion ?? inputs.region;
+    const region = inputs.region;
     const startYear = inputs.mortgageStartYear ?? 0;
     if (region === "flanders" && startYear > 0 && startYear < 2020)
         return "flemish_woonbonus";

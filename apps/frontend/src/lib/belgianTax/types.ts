@@ -116,7 +116,15 @@ export interface BelgianTaxProfile {
     mortgageCapitalRepaid?: number;
     /** Year the mortgage contract was signed. Determines applicable regime. */
     mortgageStartYear?: number | undefined;
-    /** Region where the mortgage was signed. Defaults to profile region when not set. */
+    /**
+     * Region where the mortgaged home lies.
+     *
+     * @deprecated Not used since 2026-10-11 (ADR-202). The own-home credit regime follows the
+     * taxpayer's region (`region`, the fiscal domicile on 1 January of the assessment year),
+     * because the special finance law of 16 January 1989 art. 5/1 §2 localises the personal
+     * income tax at that domicile and art. 5/5 §4 gives the own-home reductions to the regions
+     * without reference to the home's location. Stored values are kept and migrated unchanged.
+     */
     mortgageRegion?: BelgianRegion | undefined;
     /** True if the financed property is the taxpayer's primary residence. */
     mortgageIsPrimaryResidence?: boolean;

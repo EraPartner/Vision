@@ -52,7 +52,6 @@ import {
     qualifyingDonations,
     type TaxReductionBreakdown,
     isChildcareDeducted,
-    resolveMortgageRegime,
     type ForfaitCategory,
 } from "./personPit";
 import { allocateOwnHomeCredit } from "./householdOwnHome";
