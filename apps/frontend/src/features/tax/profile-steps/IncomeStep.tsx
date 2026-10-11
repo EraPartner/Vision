@@ -353,12 +353,17 @@ export function IncomeStep({
                                 category={category}
                                 showCategory={categories.length > 1}
                                 onChange={(method, actualAmount) =>
-                                    editPartner({
-                                        professionalExpenses: {
-                                            ...partner.professionalExpenses,
-                                            [category]: { method, actualAmount },
-                                        },
-                                    })
+                                    // Merge into the updater's partner, not the render-time one,
+                                    // so queued changes in other categories are kept.
+                                    updateHousehold((h) =>
+                                        updatePartner(h, pid, (p) => ({
+                                            ...p,
+                                            professionalExpenses: {
+                                                ...p.professionalExpenses,
+                                                [category]: { method, actualAmount },
+                                            },
+                                        })),
+                                    )
                                 }
                             />
                         ))}
