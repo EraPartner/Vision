@@ -58,6 +58,38 @@ export type PrecomputedPIT = {
 };
 
 /**
+ * Household result the frontend may attach to a tax-report request
+ * (routes/reports.ts `precomputedHouseholdSchema`, ADR-200/201).
+ */
+export type PrecomputedHousehold = {
+  assessmentMode: "single" | "separate" | "joint";
+  legalBasis?: string | undefined;
+  quotient?:
+    | {
+        applied: boolean;
+        transfer: number;
+        fromPartnerId?: "A" | "B" | undefined;
+        toPartnerId?: "A" | "B" | undefined;
+        benefit: number;
+      }
+    | undefined;
+  partners: Array<{
+    partnerId: "A" | "B";
+    grossIncome: number;
+    taxableIncome: number;
+    totalPIT: number;
+  }>;
+};
+
+/**
+ * The year's household as sent by the frontend, validated by
+ * `belgianTaxHouseholdV2Schema`. Only partner display names are read here.
+ */
+export type ReportHousehold = {
+  partners: Array<{ id: string; displayName?: string | undefined }>;
+};
+
+/**
  * `portfolio_transactions` JOINed to `investments`, as selected by
  * `fetchTaxTransactions` below. `amount`/`taxes`/`fees` are NUMERIC columns
  * COALESCE-defaulted to 0 — pg still emits NUMERIC as a string even through
@@ -126,6 +158,8 @@ export type TaxReportData = {
   taxTables: ResolvedTaxYearTable;
   taxProfile: TaxProfile | undefined;
   precomputedPIT: PrecomputedPIT | undefined;
+  household: ReportHousehold | undefined;
+  precomputedHousehold: PrecomputedHousehold | undefined;
   tobTotal: number;
   dividendWHTTotal: number;
   sellTaxTotal: number;
@@ -509,9 +543,13 @@ export async function fetchTaxData(
   {
     taxProfile,
     precomputedPIT,
+    household,
+    precomputedHousehold,
   }: {
     taxProfile?: TaxProfile | undefined;
     precomputedPIT?: PrecomputedPIT | undefined;
+    household?: ReportHousehold | undefined;
+    precomputedHousehold?: PrecomputedHousehold | undefined;
   } = {},
 ): Promise<TaxReportData> {
   const { taxYear, startDate, endDate, periodNote } =
@@ -534,6 +572,8 @@ export async function fetchTaxData(
     taxTables,
     taxProfile: taxProfile ?? undefined,
     precomputedPIT: precomputedPIT ?? undefined,
+    household: household ?? undefined,
+    precomputedHousehold: precomputedHousehold ?? undefined,
     tobTotal: txns?.tobTotal ?? 0,
     dividendWHTTotal: txns?.dividendWHTTotal ?? 0,
     sellTaxTotal: txns?.sellTaxTotal ?? 0,

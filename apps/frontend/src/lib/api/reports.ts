@@ -9,6 +9,7 @@
 import { resolveActiveThemeTokens, type ReportThemeTokens } from '@/lib/themeTokens';
 import { downloadBlob } from '@/lib/downloadBlob';
 import { todayYmd } from '@/lib/timezone';
+import type { BelgianTaxHouseholdV2, PartnerId } from '@/lib/belgianTax/householdTypes';
 
 export type PeriodKind = 'ytd' | 'rolling' | 'custom' | 'year';
 
@@ -37,6 +38,25 @@ export interface TaxReportPIT {
   brackets?: TaxReportPITBracket[];
 }
 
+/** Per-partner household result for the tax report (ADR-200/201); amounts only. */
+export interface TaxReportHousehold {
+  assessmentMode: 'single' | 'separate' | 'joint';
+  legalBasis?: string;
+  quotient?: {
+    applied: boolean;
+    transfer: number;
+    fromPartnerId?: PartnerId;
+    toPartnerId?: PartnerId;
+    benefit: number;
+  };
+  partners: Array<{
+    partnerId: PartnerId;
+    grossIncome: number;
+    taxableIncome: number;
+    totalPIT: number;
+  }>;
+}
+
 export interface ReportOptions {
   currency?: string;
   period?: ReportPeriod;
@@ -46,6 +66,9 @@ export interface ReportOptions {
   excludedRecipientIds?: number[];
   taxProfile?: TaxReportProfile | undefined;
   precomputedPIT?: TaxReportPIT | undefined;
+  /** The year's household, validated by the backend's household settings schema. */
+  household?: BelgianTaxHouseholdV2 | undefined;
+  precomputedHousehold?: TaxReportHousehold | undefined;
 }
 
 async function postReportDownload(
@@ -64,6 +87,10 @@ async function postReportDownload(
     excludedRecipientIds: options.excludedRecipientIds ?? [],
     ...(options.taxProfile     && { taxProfile:     options.taxProfile     }),
     ...(options.precomputedPIT && { precomputedPIT: options.precomputedPIT }),
+    ...(options.household && { household: options.household }),
+    ...(options.precomputedHousehold && {
+      precomputedHousehold: options.precomputedHousehold,
+    }),
   };
 
   const response = await fetch(path, {

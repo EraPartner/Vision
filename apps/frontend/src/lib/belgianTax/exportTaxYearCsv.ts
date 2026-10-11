@@ -1,4 +1,10 @@
 import type { BelgianTaxProfile, BelgianTaxCalculation } from "./types";
+import type {
+    BelgianTaxHouseholdV2,
+    HouseholdPartner,
+    HouseholdTaxResult,
+    PartnerTaxResult,
+} from "./householdTypes";
 import { downloadBlob } from "@/lib/downloadBlob";
 import { escapeCsvValue } from "@/lib/csv";
 
@@ -10,6 +16,121 @@ interface ExportTaxYearCsvOptions {
     isFiled: boolean;
     hasFrozenCalculation: boolean;
     generatedAt: string;
+    /** The year's household; with its result, adds per-partner sections for two partners. */
+    household?: BelgianTaxHouseholdV2 | null | undefined;
+    /** The year's household result (the frozen one for a frozen year). */
+    householdResult?: HouseholdTaxResult | null | undefined;
+}
+
+const PARTNER_COLUMNS = { A: "You", B: "Partner" } as const;
+
+const money = (value: number) =>
+    Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
+
+function partnerInputRows(
+    partner: HouseholdPartner | undefined,
+): Array<[string, number]> {
+    const r = partner?.reductions;
+    return [
+        [
+            "Gross activity income",
+            (partner?.activities ?? []).reduce(
+                (sum, a) =>
+                    sum +
+                    (a.kind === "net_professional_amount"
+                        ? (a.netProfessionalIncome ?? 0)
+                        : a.grossIncome),
+                0,
+            ),
+        ],
+        ["Income activities", partner?.activities.length ?? 0],
+        ["Other taxable income", partner?.otherTaxableIncome ?? 0],
+        ["Alimony paid", partner?.alimonyPaid ?? 0],
+        ["Union dues", partner?.unionDues ?? 0],
+        ["Personal pension contributions", r?.personalPensionContributions ?? 0],
+        ["Life insurance premiums", r?.lifeInsurancePremiums ?? 0],
+        ["Employee group insurance", r?.employeeGroupInsuranceContributions ?? 0],
+        ["Charitable donations", r?.charitableDonations ?? 0],
+        ["Childcare costs", r?.childcareCosts ?? 0],
+        ["Domestic help costs", r?.domesticHelpCosts ?? 0],
+    ];
+}
+
+const PARTNER_RESULT_ROWS: Array<[string, (p: PartnerTaxResult) => number]> = [
+    ["Gross income", (p) => p.grossIncome],
+    ["Employee social security", (p) => p.employeeSocialSecurity],
+    ["Professional expenses", (p) => p.professionalExpenses],
+    ["Net professional income", (p) => p.netProfessionalIncome],
+    ["Marital quotient adjustment", (p) => p.quotientAdjustment],
+    ["Taxable income", (p) => p.taxableIncome],
+    ["Tax-free sum charged", (p) => p.exemption.applied],
+    ["Tax after the tax-free sum", (p) => p.pitAfterExemption],
+    ["Tax reductions applied", (p) => p.reductionsApplied],
+    ["Communal surcharge", (p) => p.communalSurcharge],
+    ["Total PIT", (p) => p.totalPIT],
+    ["Special social security contribution", (p) => p.specialSocialSecurityContribution],
+];
+
+/**
+ * Per-partner sections (ADR-200/201): inputs and results with a column per partner and the
+ * household total, then the assessment and the marital quotient. Empty unless two partners are
+ * assessed, so a one-partner export keeps exactly its previous lines.
+ */
+function householdLines(
+    household: BelgianTaxHouseholdV2 | null | undefined,
+    result: HouseholdTaxResult | null | undefined,
+    currency: string,
+): string[] {
+    if (!household || !result || result.partners.length < 2) return [];
+    const ids = result.partners.map((p) => p.partnerId);
+    const header = row([
+        "Field",
+        ...ids.map((id) => PARTNER_COLUMNS[id]),
+        "Household",
+    ]);
+    const lines: string[] = ["", row(["# Per-partner inputs"]), header];
+    const inputs = ids.map((id) =>
+        partnerInputRows(household.partners.find((p) => p.id === id)),
+    );
+    inputs[0]?.forEach(([label], index) => {
+        const values = inputs.map((rows) => rows[index]?.[1] ?? 0);
+        lines.push(
+            row([label, ...values.map(money), money(values.reduce((a, b) => a + b, 0))]),
+        );
+    });
+    lines.push("", row(["# Per-partner calculation"]));
+    lines.push(
+        row([
+            "Component",
+            ...ids.map((id) => `${PARTNER_COLUMNS[id]} (${currency})`),
+            `Household (${currency})`,
+        ]),
+    );
+    for (const [label, pick] of PARTNER_RESULT_ROWS) {
+        const values = result.partners.map(pick);
+        lines.push(
+            row([label, ...values.map(money), money(values.reduce((a, b) => a + b, 0))]),
+        );
+    }
+    const { assessment, quotient } = result;
+    lines.push("", row(["# Assessment"]));
+    lines.push(row(["Assessment mode", assessment.mode]));
+    lines.push(row(["Legal basis", assessment.legalBasis]));
+    if (assessment.mode === "joint") {
+        lines.push(row(["Marital quotient applied", quotient.applied]));
+        if (quotient.applied && quotient.fromPartnerId && quotient.toPartnerId) {
+            lines.push(
+                row([
+                    "Marital quotient transfer",
+                    money(quotient.transfer),
+                    PARTNER_COLUMNS[quotient.fromPartnerId],
+                    PARTNER_COLUMNS[quotient.toPartnerId],
+                ]),
+            );
+            lines.push(row(["Marital quotient benefit", money(quotient.benefit)]));
+        }
+    }
+    return lines;
 }
 
 function row(
@@ -117,6 +238,8 @@ export function buildTaxYearCsv(opts: ExportTaxYearCsvOptions): string {
         isFiled,
         hasFrozenCalculation,
         generatedAt,
+        household,
+        householdResult,
     } = opts;
     const lines: string[] = [];
     lines.push(row(["# Vision tax year export"]));
@@ -142,6 +265,7 @@ export function buildTaxYearCsv(opts: ExportTaxYearCsvOptions): string {
             row([key, Number.isFinite(value) ? Number(value.toFixed(2)) : 0]),
         );
     }
+    lines.push(...householdLines(household, householdResult, currency));
     return lines.join("\n");
 }
 

@@ -11288,6 +11288,65 @@ paths:
                   type: integer
                 currency:
                   type: string
+                taxProfile:
+                  type: object
+                  description: Belgian filing context echoed into the Belgian rules section.
+                  properties:
+                    filingStatus: { type: string }
+                    region: { type: string }
+                    taxYear: { type: integer }
+                precomputedPIT:
+                  type: object
+                  description: PIT figures from the frontend engine; bracket `rate` is in percent units.
+                  properties:
+                    taxableIncome: { type: number }
+                    totalTax: { type: number }
+                    brackets:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          label: { type: string }
+                          rate: { type: number }
+                          taxableIncome: { type: number }
+                          taxAmount: { type: number }
+                household:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Additive (ADR-201). The year's Belgian tax household, validated like the
+                    `belgian_tax_household_v2` setting; only partner display names are rendered.
+                precomputedHousehold:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Per-partner result from the frontend household engine.
+                    With two partners the Belgian rules section adds a row per partner, the
+                    household total, the assessment mode and the marital quotient.
+                  required: [assessmentMode, partners]
+                  properties:
+                    assessmentMode: { type: string, enum: [single, separate, joint] }
+                    legalBasis: { type: string, maxLength: 200 }
+                    quotient:
+                      type: object
+                      required: [applied, transfer, benefit]
+                      properties:
+                        applied: { type: boolean }
+                        transfer: { type: number }
+                        fromPartnerId: { type: string, enum: [A, B] }
+                        toPartnerId: { type: string, enum: [A, B] }
+                        benefit: { type: number }
+                    partners:
+                      type: array
+                      minItems: 1
+                      maxItems: 2
+                      items:
+                        type: object
+                        required: [partnerId, grossIncome, taxableIncome, totalPIT]
+                        properties:
+                          partnerId: { type: string, enum: [A, B] }
+                          grossIncome: { type: number }
+                          taxableIncome: { type: number }
+                          totalPIT: { type: number }
                 excludedCategoryIds:
                   type: array
                   items:

@@ -42,6 +42,12 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useSettings } from "@/stores/hydration/SettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import {
+    resolveBelgianTaxCalculation,
+    resolveBelgianTaxHousehold,
+    resolveBelgianTaxHouseholdResult,
+} from "@/stores/belgianTaxStore";
+import { toTaxReportHousehold } from "./taxReportHousehold";
 import { SUPPORTED_CURRENCIES } from "@/utils/currency";
 import {
     downloadFinancialReport,
@@ -131,9 +137,15 @@ export function ExportDialog({
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const { settings: dashSettings } = useSettings();
-    const { profile: taxProfile, calculation: pitCalc } = useBelgianTaxProfile(
-        (state) => ({ profile: state.profile, calculation: state.calculation }),
-    );
+    const taxState = useBelgianTaxProfile((state) => ({
+        profile: state.profile,
+        snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
+        householdResult: state.householdResult,
+        snapshotMetas: state.snapshotMetas,
+    }));
+    const taxProfile = taxState.profile;
     const defaultCurrency = appSettings.defaultCurrency || "EUR";
     const currentYear = new Date().getFullYear();
 
@@ -235,6 +247,19 @@ export function ExportDialog({
             } else if (reportType === "portfolio") {
                 await downloadPortfolioReport(baseOpts);
             } else {
+                // The live year's figures; a frozen (or filed) year exports its frozen
+                // calculation and household result, never a live recompute (ADR-059).
+                const taxYear = taxProfile.taxYear;
+                const pitCalc = resolveBelgianTaxCalculation(taxState, taxYear);
+                const meta = taxState.snapshotMetas[taxYear];
+                const householdResult =
+                    meta?.frozenCalculation && !meta.frozenHouseholdResult
+                        ? null
+                        : resolveBelgianTaxHouseholdResult(taxState, taxYear);
+                const yearHousehold = resolveBelgianTaxHousehold(
+                    taxState,
+                    taxYear,
+                );
                 const resolvedTaxProfile = taxProfile.profileConfigured
                     ? {
                           filingStatus: taxProfile.employmentType,
@@ -269,6 +294,13 @@ export function ExportDialog({
                     ...baseOpts,
                     taxProfile: resolvedTaxProfile,
                     precomputedPIT: resolvedPIT,
+                    ...(taxProfile.profileConfigured && yearHousehold
+                        ? {
+                              household: yearHousehold,
+                              precomputedHousehold:
+                                  toTaxReportHousehold(householdResult),
+                          }
+                        : {}),
                 });
             }
             toast.success(t("statsPage.report.downloadSuccess"));

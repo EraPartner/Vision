@@ -13939,6 +13939,49 @@ export interface operations {
                 "application/json": {
                     year?: number;
                     currency?: string;
+                    /** @description Belgian filing context echoed into the Belgian rules section. */
+                    taxProfile?: {
+                        filingStatus?: string;
+                        region?: string;
+                        taxYear?: number;
+                    };
+                    /** @description PIT figures from the frontend engine; bracket `rate` is in percent units. */
+                    precomputedPIT?: {
+                        taxableIncome?: number;
+                        totalTax?: number;
+                        brackets?: {
+                            label?: string;
+                            rate?: number;
+                            taxableIncome?: number;
+                            taxAmount?: number;
+                        }[];
+                    };
+                    /** @description Additive (ADR-201). The year's Belgian tax household, validated like the `belgian_tax_household_v2` setting; only partner display names are rendered. */
+                    household?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description Additive (ADR-201). Per-partner result from the frontend household engine. With two partners the Belgian rules section adds a row per partner, the household total, the assessment mode and the marital quotient. */
+                    precomputedHousehold?: {
+                        /** @enum {string} */
+                        assessmentMode: "single" | "separate" | "joint";
+                        legalBasis?: string;
+                        quotient?: {
+                            applied: boolean;
+                            transfer: number;
+                            /** @enum {string} */
+                            fromPartnerId?: "A" | "B";
+                            /** @enum {string} */
+                            toPartnerId?: "A" | "B";
+                            benefit: number;
+                        };
+                        partners: {
+                            /** @enum {string} */
+                            partnerId: "A" | "B";
+                            grossIncome: number;
+                            taxableIncome: number;
+                            totalPIT: number;
+                        }[];
+                    };
                     excludedCategoryIds?: number[];
                     excludedRecipientIds?: number[];
                 };

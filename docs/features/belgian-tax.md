@@ -26,6 +26,9 @@ related_code:
   - apps/frontend/src/lib/belgianTax/portfolioTax.ts
   - apps/frontend/src/lib/belgianTax/costBreakdown.ts
   - apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts
+  - apps/frontend/src/lib/belgianTax/partnerAttribution.ts
+  - apps/frontend/src/features/tax/historySummary.ts
+  - apps/frontend/src/features/reports/taxReportHousehold.ts
   - apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts
   - apps/node-backend/src/services/belgianInflationService.ts
 ---
@@ -495,6 +498,35 @@ tax-free sum − reductions)) and final tax for each partner and the household, 
 adds up; then the assessment mode and, under a joint assessment, the marital
 quotient transfer and saving. A one-partner household shows no card.
 
+### Partner attribution
+
+Figures derived from transactions are attributed to partners by account owner
+([[docs/adr/201-belgian-tax-partner-account-mapping|ADR-201]], superseding ADR-200 §7 for the
+mapping): `me` is partner A, `partner` is partner B and `joint` accounts are split 50/50. A
+transaction without an account counts as `me`. The mapping is fixed in
+`lib/belgianTax/partnerAttribution.ts`; the backend reports amounts per owner
+(`incomeByOwner` on category-pivot cells, `byOwner` on deduction candidates). Partner B's share
+is rounded to cents and partner A receives the rest, so the shares add up to the total.
+
+With partner B in the year's household:
+
+- **Recorded income.** The yearly chart and the monthly reserve tax each partner on their share
+  of the income recorded in the selected income categories: A's share goes on A's primary
+  activity, B's share replaces the gross of B's first activity that carries a gross figure. When
+  B has no such activity (for example a migrated spouse with only a net amount), the whole
+  recorded income stays on A, as before.
+- **Recorded vs entered.** The per-partner breakdown card adds a table with each partner's
+  entered gross income and the income recorded in transactions. Bank credits are usually net
+  pay, so there is no action that copies recorded income into an activity.
+- **Deduction candidates.** Each group shows every partner's share and current value. Confirm
+  sets each partner with a positive share to that share (SET semantics) and sets the
+  eligibility flag; a partner whose share is 0 keeps their value. Partner fields (alimony, union
+  dues) are written on the partner, reductions in `reductions`, and the home's mortgage interest
+  receives the whole total.
+
+A one-partner household attributes everything to partner A, so its recorded figures, actions and
+exports are unchanged. Changing an account's owner clears the statistics cache.
+
 ## Limitations / not modeled
 
 - Brussels stamp-duty rebate (one-time, not annual).
@@ -611,7 +643,8 @@ type BelgianTaxProfileSnapshotMeta = {
 - **`YearComparisonCard`** — side-by-side delta table comparing the viewed year against another year (picker; defaults to the immediately preceding tracked year). Surfaces gross income, total PIT, effective rate, net take-home.
 - **`YearActionsMenu`** — the ••• "More actions" menu next to `TaxYearSwitcher` with freeze/unfreeze, mark/unmark filed, view history, export year as CSV. Pages pass their own items through `pageItems`: `/tax` adds Export PDF… and Customize…; `/portfolio/tax` adds Set up / Edit tax profile… and Customize…. On `/tax` the primary header button is _Set up tax profile_ or _Edit tax profile_; if the overview query errors, the header renders without these actions ([[docs/adr/187-completeness-sweep|ADR-187]]).
 - **`MarkAsFiledDialog`** — collects an optional free-text filing reference (Tax-on-Web id, paper return code) before marking a year as filed.
-- **`SnapshotHistoryDialog`** — read-only chronological list of audit entries with kind badge, timestamp, one-line patch summary, and the filing reference where applicable.
+- **`SnapshotHistoryDialog`** — read-only chronological list of audit entries with kind badge, timestamp, one-line patch summary, and the filing reference where applicable. An entry with `householdChanges` shows one translated line per changed section (partners with their activity count and gross income, relationship events, dependants, home, region, communal surcharge, income categories); `features/tax/historySummary.ts` builds the lines.
+- **`MarkAsFiledDialog`** also records the household: a past year without its own household snapshot is computed from the live household, so the dialog pins that household as the year's snapshot (a `'created'` entry) before filing. Filing stores `frozenHouseholdResult` next to `frozenCalculation` unless the year was already frozen.
 - **`HistoricalYearBanner`** extended with `filed` and `frozen` modes; priority order centralized in `resolveHistoricalBannerMode` and shared between `/tax` and `/portfolio/tax`.
 - **`TaxProfileDialog`** upgrades the amber warning to an explicit "Amend this filed year" confirmation when editing a filed year; updates are blocked until the user opts in.
 
@@ -619,12 +652,15 @@ type BelgianTaxProfileSnapshotMeta = {
 
 `exportTaxYearCsv` (in `apps/frontend/src/lib/belgianTax/exportTaxYearCsv.ts`) is a pure module that serialises a year's profile + calculation into a three-section CSV (metadata header, profile inputs, calculation breakdown). Values flow through `displayCalculationForYear` so filed/frozen years export their frozen numbers verbatim. Triggered from `YearActionsMenu` via the shared `downloadBlob` helper — no backend involvement.
 
+When two partners are assessed, the CSV adds a per-partner inputs section and a per-partner calculation section (columns You, Partner and Household), then the assessment mode, its legal basis and, under a joint assessment, the marital quotient. A frozen year uses its `frozenHouseholdResult`; a year frozen before that result was stored gets no per-partner sections. A one-partner household exports exactly the previous lines.
+
 ### Behavioral rules
 
 - **Filing implies freezing.** Marking a year filed captures the calculation if it isn't already frozen.
 - **Pre-existing freezes win.** If a user deliberately froze a calc and _then_ filed, the deliberate freeze point is preserved.
 - **Unfiling does _not_ unfreeze.** Unfiling is a clerical correction; the frozen calc is kept for the user's reference.
 - **Banner priority.** `filed > frozen > snapshot > estimate`.
+- **Frozen household result.** The per-partner breakdown card and the exports show a frozen year's `frozenHouseholdResult`. A year frozen before that result was stored (only `frozenCalculation`) shows no per-partner breakdown rather than a live recompute that could disagree with the frozen figures.
 - **PIT-for-gross scaling.** The yearly chart's `pitForGross(gross, year)` helper scales the frozen PIT proportionally to the bar's gross income when a frozen calc exists, so historical filed bars stay aligned with the as-filed total.
 
 ## PDF Report Export
@@ -638,6 +674,14 @@ Tax data including Belgian tax profile and Personal Income Tax calculations can 
 - **Top Investments by Cost** — Ranked investments by total taxes and fees paid
 - **Fee Breakdown** — Fee aggregation by asset class
 - **Belgian Tax Rules Summary** — Static bracket/exemption tables + PIT summary when Belgian tax profile is active
+
+The export sends the live year's figures through the frozen-aware resolvers, so a frozen or
+filed year exports its frozen calculation. It also sends that year's `household` (validated by
+the backend's household settings schema) and `precomputedHousehold` (assessment, quotient and
+each partner's gross income, taxable income and tax). When two partners are assessed, the
+Belgian rules section adds a **Per Partner** table (You, Partner, Household total), the
+assessment mode with its legal basis and, under a joint assessment, the marital quotient line. A
+one-partner household renders exactly the previous rows.
 
 See [[docs/api/reports#post-apireportstax|Reports API: Tax Endpoint]] for request/response details.
 
