@@ -1000,7 +1000,7 @@
       "classification": "historical-record-only",
       "disposition": "Removed after createBundle and malformed-bundle fixtures adopted the lazy Archiver 8 ZipArchive constructor.",
       "paths": [
-        "packaging/electron/backup/bundle.js",
+        "packaging/electron/backup/bundle.ts",
         "packaging/electron/package.json"
       ],
       "readers": "createBundle calls the compatibility wrapper for zip only.",
@@ -1061,8 +1061,8 @@
       "classification": "retain-with-reason",
       "disposition": "Old user-created backups are durable recovery artifacts; current restore flows intentionally accept them.",
       "paths": [
-        "packaging/electron/main.js",
-        "packaging/electron/backup/restore.js",
+        "packaging/electron/main.ts",
+        "packaging/electron/backup/restore.ts",
         "docs/features/settings.md"
       ],
       "readers": "Backup picker and restore controller.",
@@ -1081,8 +1081,8 @@
       "classification": "retain-with-reason",
       "disposition": "ADR-040 promises old encrypted backups remain readable; current code auto-detects VISIONBAK1 and VISIONBAK2.",
       "paths": [
-        "packaging/electron/backup/bundle.js",
-        "packaging/electron/backup/encrypted-file.js",
+        "packaging/electron/backup/bundle.ts",
+        "packaging/electron/backup/encrypted-file.ts",
         "docs/adr/040-backup-format-v2-aead-encryption.md"
       ],
       "readers": "Encrypted backup restore path.",

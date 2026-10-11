@@ -319,7 +319,8 @@ jobs:
           # 4a671a3 and bun.lock is the only committed lockfile, so `npm ci` here
           # had no lockfile left to install from.
           bun install --frozen-lockfile --ignore-scripts
-          node scripts/build-native-package.js
+          bun build.ts
+          node out/scripts/build-native-package.js
           hdiutil detach "$PG_MOUNT"
           trap - EXIT
 
@@ -347,15 +348,15 @@ jobs:
             > "$OUT/README.md"
 
       # The in-app shell updater (repo/source mode) installs from this ZIP.
-      # Its layout is dictated by packaging/electron/updater.js, NOT by taste:
+      # Its layout is dictated by packaging/electron/updater.ts, NOT by taste:
       #   - the asset name must match /vision-source-launcher-.*-arm64\.zip$/i
-      #     (pickSourceLauncherZip, updater.js:214-217)
+      #     (pickSourceLauncherZip, updater.ts)
       #   - after `ditto -x -k` the extracted tree must contain
       #     `unsigned/Vision/package.json` — that directory is rsynced over the
-      #     user's clone as the new source root (updater.js:319-324)
+      #     user's clone as the new source root (updater.ts)
       #   - `unsigned/launch.command`, when present, is copied to the install
-      #     root as the double-clickable launcher (updater.js:320,331)
-      #   - every entry must be a relative, non-traversing path (updater.js:305-315)
+      #     root as the double-clickable launcher (updater.ts)
+      #   - every entry must be a relative, non-traversing path (updater.ts)
       # `git archive HEAD` gives exactly the tagged source tree — no node_modules,
       # no packaging/electron/dist, none of the electron-builder output produced
       # by the steps above. Generated locales are deliberately absent: the

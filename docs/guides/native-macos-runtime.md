@@ -2,13 +2,13 @@
 title: Native macOS Runtime Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-11
 tags:
   [guide, native-runtime, macos, electron, postgresql-18, backup, restore, demo]
 description: Build, operate, diagnose, back up, and restore Vision's bundled native macOS runtime.
 aliases: [native Vision, macOS runtime]
 related_code:
-  ["packaging/electron/runtime/native.js", "packaging/electron/main.js"]
+  ["packaging/electron/runtime/native.ts", "packaging/electron/main.ts"]
 ---
 
 # Native macOS Runtime Guide
@@ -144,7 +144,7 @@ and packaged-frontend restoration without reading or writing the user's Vision i
 focused bundle suite retains an immutable sanitized encrypted bundle written by Vision 1.0.2
 alongside the current AES-256-GCM path and the fixed legacy AES-256-CBC decoder vectors.
 
-Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.js`. Restore accepts
+Encrypted backup primitives live in `packaging/electron/backup/encrypted-file.ts`. Restore accepts
 legacy AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) and current AES-256-GCM files (`VISIONENC2`
 and `VISIONBAK2`); new encrypted files use v2. The macOS Keychain-backed `safeStorage` protects the
 passphrase at rest, while the backup key itself is derived with scrypt.

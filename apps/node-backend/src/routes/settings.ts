@@ -369,7 +369,7 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
     backupDir: "",
     backupOnQuit: false,
   },
-  // Opt-in "keep services running on quit" toggle (packaging/electron/main.js
+  // Opt-in "keep services running on quit" toggle (packaging/electron/main.ts
   // will-quit handler) — leaving containers up puts the next launch on the
   // hot-boot path instead of a warm restart.
   services_settings: {
@@ -392,7 +392,7 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
 
 /* ── Unknown-key policy ──────────────────────────────────────────────────────
  * Every settings writer in the repo uses a fixed key (grep: frontend
- * `saveSetting(` call sites, packaging/electron/main.js backup_settings, and
+ * `saveSetting(` call sites, packaging/electron/main.ts backup_settings, and
  * the repository-side fx flag) — there is NO dynamic-key writer. So writes to
  * a key outside the known set are typos/garbage and are rejected with a 400
  * naming the known keys, instead of storing arbitrary JSON forever. Reads and

@@ -2,13 +2,13 @@
 title: Backup Coverage Audit
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-06
+date: 2026-10-11
+updated: 2026-10-11
 last_modified: 2026-10-06
 tags: [feature, backup, restore, database, filesystem, localStorage, bundle, encryption, schema-migration, phase-1, phase-2, phase-7, passphrase-modal, ux, aead, aes-256-gcm, rolling-cache, concurrent-backup-guard, pre-restore-confirmation, watchdog-pause, safe-storage, keychain, lazy-safeStorage, settings-dialog-fix, backup-path-revert-fix]
 description: "Authoritative audit of every persistence surface in Vision and its backup/restore coverage status. Phase 1+2 implements .visionbak bundle format with optional AES-256-CBC encryption (v1) or AES-256-GCM (v2, 2026-04-28), schema-safe restore, and localStorage hydration. Phase 7 (May 2026) hardens restore with user confirmation, concurrent-backup guard, and health watchdog pause. safeStorage is now accessed lazily to avoid macOS Keychain prompts for users without a stored passphrase. 2026-06-11: fixes \"backup path keeps reverting to default\" — settings dialog now loads backup settings on open; Electron IPC handlers correctly unwrap the response envelope."
 aliases: [backup audit, coverage audit, backup coverage, visionbak, bundle format]
-related_code: ["packaging/electron/backup/bundle.js", "packaging/electron/main.js", "apps/node-backend/src/backup/coverage.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
+related_code: ["packaging/electron/backup/bundle.ts", "packaging/electron/main.ts", "apps/node-backend/src/backup/coverage.ts", "apps/frontend/src/lib/api/electron.ts", "apps/frontend/src/lib/localStorage-keys.ts", "apps/frontend/src/features/settings/sections/BackupSection.tsx", "apps/frontend/src/features/settings/DashboardSettingsDialog.tsx"]
 ---
 
 # Backup Coverage Audit
@@ -324,12 +324,12 @@ vision_backup_{deviceId}_{timestamp}.visionbak.enc ← Encrypted archive (v1 or 
 
 **Backward Compatibility:** Auto-detection via magic header; v1 backups decrypt correctly; old passphrases work unchanged. No user action required. Restore process transparently dispatches to correct decoder.
 
-**Modules:** `packaging/electron/backup/encrypted-file.js` owns the parameterized v1/v2 byte
+**Modules:** `packaging/electron/backup/encrypted-file.ts` owns the parameterized v1/v2 byte
 formats, key derivation, stream cleanup, and authentication-error handling. The adapters preserve
 their public interfaces and supply format-specific magic values and messages:
 
-- `packaging/electron/backup/crypto.js` — raw SQL backup adapter
-- `packaging/electron/backup/bundle.js` — `.visionbak` bundle adapter, which provides:
+- `packaging/electron/backup/crypto.ts` — raw SQL backup adapter
+- `packaging/electron/backup/bundle.ts` — `.visionbak` bundle adapter, which provides:
 
 - `createBundle()` — Create zip from db.sql, attachments/, frontend-state.json, metadata.json
 - `encryptBundle(bundlePath, passphrase)` — Wrap bundle in AES-256-GCM (v2); takes plaintext passphrase, not pre-derived key
@@ -341,7 +341,7 @@ their public interfaces and supply format-specific magic values and messages:
 
 ## Restore Process (Phase 1+2)
 
-**IPC Handlers** (in `packaging/electron/main.js`):
+**IPC Handlers** (in `packaging/electron/main.ts`):
 
 | Handler               | Signature                       | Purpose                                                               |
 | --------------------- | ------------------------------- | --------------------------------------------------------------------- |
@@ -413,7 +413,7 @@ their public interfaces and supply format-specific magic values and messages:
 
 **Related Code:**
 
-- `runBundleRestore()` in `packaging/electron/main.js` — Main restore orchestrator
+- `runBundleRestore()` in `packaging/electron/backup/restore.ts`, called from `packaging/electron/main.ts` — Main restore orchestrator
 - `FrontendStateSnapshot` and all backup bridge result types in `packaging/electron/electron-api.d.ts`, re-exported by `@vision/types/electron`
 - Error handling in `BackupTab.tsx` — checks for BUNDLE_SCHEMA_NEWER prefix on error string
 
@@ -440,7 +440,10 @@ payload, API readiness, and packaged frontend assets. The entire temporary insta
 after success; it cannot address the user's real Vision data.
 
 `apps/node-backend/tests/backup-release-compat.test.ts` also opens the immutable, sanitized
-`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc` artifact. The artifact was
+`packaging/electron/backup/fixtures/vision-1.0.2-sanitized.visionbak.enc` artifact through the
+compiled `packaging/electron/out/backup/bundle.js`; the backend Vitest global setup
+(`apps/node-backend/tests/setup/electronBuild.ts`) rebuilds `out/` when an Electron source is newer
+than the last build ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The artifact was
 written and encrypted by the bundle implementation from Git tag `v1.0.2` and includes synthetic
 SQL, an attachment, metadata, and frontend state. This checks the current reader against encrypted
 bytes from the older producer rather than a bundle created by the current writer. Vision 1.0.2
@@ -467,7 +470,7 @@ rollback remain covered by the focused Electron backup tests.
 - `packaging/electron/main.js` IPC handlers unwrap `response.data.value` correctly (matching the `{ ok, data: { key, value } }` envelope shape).
 - `settings.json` (Electron-local) mirrors the raw stored values rather than the unwrapped result, so the file accurately reflects what the backend returned.
 
-**Sources:** [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/BackupSection.tsx]], [[packaging/electron/main.js]]
+**Sources:** [[apps/frontend/src/features/settings/DashboardSettingsDialog.tsx]], [[apps/frontend/src/features/settings/sections/BackupSection.tsx]], [[packaging/electron/main.ts]]
 
 ---
 

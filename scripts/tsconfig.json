@@ -1,9 +1,9 @@
 {
-  "//": "Strict check for repository scripts and their tests (ADR-195). Same options as the backend; scripts run on Bun.",
+  "//": "Strict check for repository scripts and their tests (ADR-195). Same options as the backend; scripts run on Bun. Also checks packaging/electron/build.ts, the Bun build script of the Electron shell (ADR-196).",
   "extends": "../apps/node-backend/tsconfig.json",
   "compilerOptions": {
     "allowJs": false,
     "types": ["node"]
   },
-  "include": ["**/*.ts"]
+  "include": ["**/*.ts", "../packaging/electron/build.ts"]
 }

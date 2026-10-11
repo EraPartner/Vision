@@ -1,0 +1,140 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import { appRoot } from "./paths";
+
+// Compiled into out/: sources and packaging files are read from the package root.
+const root = path.resolve(appRoot, "..", "..");
+const read = (file: string) =>
+  fs.readFileSync(path.join(appRoot, file), "utf8");
+const main = read("main.ts");
+
+interface ExtraResource {
+  from: string;
+  to: string;
+}
+
+test("desktop boot and recovery shells inherit the Vision palette", () => {
+  assert.match(main, /const DEFAULT_BRAND_PRIMARY = ["']158 64% 52%["']/);
+  assert.match(
+    main,
+    /deriveSplashPalette\(\s*theme\?\.background \|\| DEFAULT_BRAND_PRIMARY,\s*theme,?\s*\)/,
+  );
+  assert.match(main, /theme\?\.mode === "light"/);
+  assert.match(main, /base: theme\.surface/);
+  assert.match(main, /paletteBase: palette\.base/);
+  assert.match(main, /paletteGlow: palette\.glow/);
+  assert.match(main, /paletteForeground: palette\.foreground/);
+  assert.match(main, /<svg class="mark"/);
+
+  const css = read("assets/error.css");
+  const html = read("assets/error.html");
+  const script = read("assets/error.js");
+  assert.doesNotMatch(css, /#5b8cff|#2c5cff|#0f172a|#94a3b8|#e2e8f0|#f8fafc/i);
+  assert.match(css, /--champagne: 43 71% 66%/);
+  assert.match(html, /<svg class="mark"/);
+  assert.match(script, /hslComponents/);
+  assert.match(script, /--theme-(?:base|glow|foreground)/);
+});
+
+test("package versions and native identity links remain aligned", () => {
+  const versions: unknown[] = [
+    JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"))
+      .version,
+    JSON.parse(
+      fs.readFileSync(path.join(root, "apps/frontend/package.json"), "utf8"),
+    ).version,
+    JSON.parse(read("package.json")).version,
+  ];
+  assert.equal(new Set(versions).size, 1);
+  assert.match(main, /app\.setAboutPanelOptions\(/);
+  assert.match(main, /label: t\(["']menu\.sourceCode["']\)/);
+  assert.match(main, /label: t\(["']menu\.documentation["']\)/);
+  assert.match(
+    main,
+    /const TRUSTED_EXTERNAL_URLS = new Set\(\[REPOSITORY_URL, DOCUMENTATION_URL\]\)/,
+  );
+  assert.match(main, /if \(!TRUSTED_EXTERNAL_URLS\.has\(url\)\) return false/);
+  assert.match(
+    main,
+    /setWindowOpenHandler\(\(\{ url \}\) => \{\s*openTrustedExternalUrl\(url\);\s*return \{ action: ["']deny["'] \}/,
+  );
+  assert.match(main, /openTrustedExternalUrl\(REPOSITORY_URL\)/);
+  assert.match(main, /openTrustedExternalUrl\(DOCUMENTATION_URL\)/);
+});
+
+test("Vision Demo uses a valid, distinct badged macOS icon", () => {
+  const config: { mac: { icon: string } } = JSON.parse(
+    read("electron-builder-demo.json"),
+  );
+  assert.equal(config.mac.icon, "resources-demo/icon-demo.icns");
+  assert.notEqual(config.mac.icon, "build/icon.icns");
+  const svg = read("resources-demo/icon-demo.svg");
+  assert.match(svg, />DEMO<\/text>/);
+
+  const icon = fs.readFileSync(
+    path.join(appRoot, "resources-demo/icon-demo.icns"),
+  );
+  const productionIcon = fs.readFileSync(path.join(appRoot, "build/icon.icns"));
+  assert.notDeepEqual(icon, productionIcon);
+  assert.equal(icon.subarray(0, 4).toString("ascii"), "icns");
+  assert.equal(icon.readUInt32BE(4), icon.length);
+  const chunkTypes: string[] = [];
+  for (let offset = 8; offset + 8 <= icon.length;) {
+    const size = icon.readUInt32BE(offset + 4);
+    assert.ok(size >= 8);
+    chunkTypes.push(icon.subarray(offset, offset + 4).toString("ascii"));
+    offset += size;
+  }
+  assert.deepEqual(chunkTypes, [
+    "ic11",
+    "ic12",
+    "ic07",
+    "ic13",
+    "ic08",
+    "ic14",
+    "ic09",
+    "ic10",
+  ]);
+});
+
+test("Vision Demo packages its native runtime without an external service dependency", () => {
+  const installer = fs.readFileSync(path.join(root, "install-demo.sh"), "utf8");
+  const config: { extraResources: ExtraResource[]; afterPack: string } =
+    JSON.parse(read("electron-builder-demo.json"));
+  assert.doesNotMatch(installer, /command -v (?:podman|colima)\b/im);
+  assert.match(installer, /build-native-package\.js --demo/);
+  assert.deepEqual(
+    config.extraResources.map((entry) => entry.to),
+    ["resources/DEMO"],
+  );
+  assert.deepEqual(
+    config.extraResources.map((entry) => entry.from),
+    ["resources-demo/DEMO"],
+  );
+  assert.equal(config.afterPack, "./out/scripts/finalize-native-package.js");
+});
+
+test("native macOS installers stage frontend output outside the shared dist directory", () => {
+  const helper = fs.readFileSync(
+    path.join(root, "scripts/lib/native-mac-build.sh"),
+    "utf8",
+  );
+  const productionInstaller = fs.readFileSync(
+    path.join(root, "install.sh"),
+    "utf8",
+  );
+  const demoInstaller = fs.readFileSync(
+    path.join(root, "install-demo.sh"),
+    "utf8",
+  );
+
+  assert.match(helper, /mktemp -d .*vision-native-build-/);
+  assert.match(helper, /VISION_FRONTEND_DIST=.*frontend-dist/);
+  assert.match(helper, /vite" build/);
+  assert.match(helper, /--outDir "\$VISION_FRONTEND_DIST"/);
+  assert.doesNotMatch(helper, /bun run build/);
+  assert.match(productionInstaller, /trap cleanup_native_macos_build EXIT/);
+  assert.match(demoInstaller, /trap cleanup_native_macos_build EXIT/);
+});

@@ -10,5 +10,5 @@
     "target": [{ "target": "dir", "arch": ["arm64"] }]
   },
   "extraResources": [{ "from": "resources-demo/DEMO", "to": "resources/DEMO" }],
-  "afterPack": "./scripts/finalize-native-package.js"
+  "afterPack": "./out/scripts/finalize-native-package.js"
 }

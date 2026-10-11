@@ -66,7 +66,7 @@ describe("migration role preflight", () => {
     const release = read(".github/workflows/release.yml");
     const testDb = read("scripts/with-test-db.sh");
     const nativeStack = read(".github/scripts/with-native-stack.sh");
-    const demo = read("packaging/electron/runtime/native.js");
+    const demo = read("packaging/electron/runtime/native.ts");
 
     expect(ci).toContain("scripts/with-test-db.sh --coverage");
     expect(ci).toContain(".github/scripts/with-native-stack.sh");

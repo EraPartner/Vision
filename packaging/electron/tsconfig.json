@@ -1,0 +1,19 @@
+{
+  "//": "Electron main process, runtime, backup, scripts and their tests. The sandboxed preload has its own project (tsconfig.preload.json) because it runs with DOM globals.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023"]
+  },
+  "include": ["**/*.ts", "**/*.mts"],
+  "exclude": [
+    "node_modules",
+    "out",
+    "out-*",
+    "dist",
+    "dist-demo",
+    "native-runtime",
+    "assets",
+    "preload.ts",
+    "build.ts"
+  ]
+}

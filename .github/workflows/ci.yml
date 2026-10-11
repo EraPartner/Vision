@@ -326,6 +326,12 @@ jobs:
           apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.scripts.json
           apps/node-backend/node_modules/.bin/tsc -p scripts/tsconfig.json
 
+      - name: Install electron workspace dependencies
+        run: bun install --frozen-lockfile --ignore-scripts --cwd packaging/electron
+
+      - name: Type-check the Electron shell (strict TypeScript, ADR-196)
+        run: bun run typecheck:electron
+
   # ─────────────────────────────────────────────────────────────────────────────
   # Python type check — mypy --strict over Alembic env and migrations, repo
   # scripts and their tests (config/mypy.ini). Dependencies come from the

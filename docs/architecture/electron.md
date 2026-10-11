@@ -3,7 +3,7 @@ title: Electron Desktop Architecture
 type: architecture-doc
 status: active
 date: 2026-10-11
-updated: 2026-10-08
+updated: 2026-10-11
 tags:
   [
     architecture,
@@ -62,6 +62,7 @@ tags:
     before-input-event,
     did-start-navigation,
     june-2026,
+    typescript,
   ]
 description: >-
   Electron desktop application architecture, IPC communication, sandbox hardening, health monitoring,
@@ -98,13 +99,16 @@ aliases:
 related_code:
   [
     "packaging/electron/",
-    "packaging/electron/backup/bundle.js",
-    "packaging/electron/backup/native-transport.js",
-    "packaging/electron/main.js",
-    "packaging/electron/preload.js",
-    "packaging/electron/runtime/index.js",
-    "packaging/electron/runtime/renderer-security.js",
-    "packaging/electron/runtime/native.js",
+    "packaging/electron/backup/bundle.ts",
+    "packaging/electron/backup/native-transport.ts",
+    "packaging/electron/main.ts",
+    "packaging/electron/preload.ts",
+    "packaging/electron/paths.ts",
+    "packaging/electron/build.ts",
+    "packaging/electron/tsconfig.base.json",
+    "packaging/electron/runtime/index.ts",
+    "packaging/electron/runtime/renderer-security.ts",
+    "packaging/electron/runtime/native.ts",
     "apps/frontend/src/lib/api/electron.ts",
     "apps/frontend/src/components/layout/ElectronBridge.tsx",
     "apps/frontend/src/lib/importHandoff.ts",
@@ -200,6 +204,33 @@ old installs. Vision Demo always uses a separate `vision_demo` runtime and deter
 
 Electron configuration is in `packaging/electron/`.
 
+### TypeScript Build (ADR-196)
+
+The shell is strict TypeScript. `packaging/electron/build.ts` (run with Bun) deletes
+`packaging/electron/out/` and compiles two projects with `tsc`, both extending
+`tsconfig.base.json` (`strict`, `noUncheckedIndexedAccess`, `erasableSyntaxOnly`, `nodenext`,
+`noEmitOnError`):
+
+- `tsconfig.json` covers the main process, runtime, backup, updater, packaging scripts and tests.
+- `tsconfig.preload.json` covers only `preload.ts` with DOM types. The compiled preload may only
+  require `electron`; `preload-sandbox.contract.test.ts` asserts this.
+
+`tsc` emits CommonJS that mirrors the source layout (`out/main.js`, `out/runtime/native.js`,
+`out/scripts/...`) and writes the `out/.built` stamp. `out/` is git-ignored, and
+`package.json` `main` is `out/main.js`. Every launch, test and packaging path builds first: the
+Electron package scripts (`start`, `prepare:*`, `dist*`), the root `dev`, `electron:dev`,
+`electron:prod`, `native:*`, `demo:reset-native` and `test:electron` scripts, `install.sh`,
+`install-demo.sh` and the release job. `bun run typecheck:electron` checks both projects without
+emitting. `assets/error.js` is a renderer script loaded by `error.html` and stays JavaScript;
+`archiver` and `yauzl` use the local declarations in `packaging/electron/types/`.
+
+Compiled code runs one level below the package root, so `paths.ts` exports `appRoot`
+(`packaging/electron` in a checkout, the `app.asar` root when packaged). Resources that are not
+compiled (`package.json`, `assets/`, `i18n/`, `native-runtime/`, `resources/` and the repository
+root) are located from `appRoot`. Compiled siblings (the preload, the update installer and spawned
+scripts) stay relative to `__dirname`. See
+[[docs/adr/196-electron-shell-typescript|ADR-196]].
+
 ### Key Settings
 
 | Setting            | Value | Description                             |
@@ -214,7 +245,7 @@ Electron configuration is in `packaging/electron/`.
 
 ### App Identity & userData Directory
 
-**⚠️ Critical:** `app.setName('Vision')` is called at the very top of main.js, before any `app.getPath('userData')` calls.
+**⚠️ Critical:** `app.setName('Vision')` is called at the very top of `main.ts`, before any `app.getPath('userData')` calls.
 
 - **Why:** `package.json` `name` field is `"vision-desktop"`, but the macOS bundle name (CFBundleName) is `"Vision"` (appId: `com.vaultvoyager.vision`)
 - **Without this:** Electron's `app.getName()` returns `"vision-desktop"`, causing `app.getPath('userData')` to resolve to `~/Library/Application Support/vision-desktop/` instead of the canonical `Vision/`
@@ -305,7 +336,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
 
 Before first app navigation, the Electron main process uses a private loopback
 bridge to verify the native audit chain against an HMAC-signed local receipt.
-`packaging/electron/audit-anchor.js` keeps the receipt and its
+`packaging/electron/audit-anchor.ts` keeps the receipt and its
 `safeStorage`-encrypted key under the application's `audit-anchor/` directory,
 outside PostgreSQL and backup bundles. Version 3 also requires a matching latest-checkpoint record in the macOS Keychain, read through the packaged `audit-keychain` helper. Missing or mismatched records fail verification; older version 2 receipts remain unverified. Unsigned builds may ask for the user's Keychain password. Each launch creates a random bridge token
 and passes it only to the backend child as `VISION_AUDIT_BRIDGE_TOKEN`; the
@@ -419,7 +450,9 @@ Vision packages into native macOS formats via `electron-builder`:
 
 #### Configuration
 
-Electron-builder configuration in `packaging/electron/package.json`:
+Electron-builder configuration starts in the `build` key of `packaging/electron/package.json`,
+which extends `packaging/electron/electron-builder-base.json` (shared `files` list and macOS
+settings). Simplified merged view:
 
 ```json
 {
@@ -430,13 +463,12 @@ Electron-builder configuration in `packaging/electron/package.json`:
       "buildResources": "build"
     },
     "files": [
-      "main.js",
-      "badge-image.js",
-      "runtime/**/*",
-      "updater.js",
-      "preload.js",
-      "backup/**/*",
-      "assets/**/*"
+      "out/**/*",
+      "assets/**/*",
+      "!out/**/*.test.js",
+      "!out/scripts/**/*",
+      "!out/demo-db/**/*",
+      "!out/.built"
     ],
     "extraResources": [
       { "from": "i18n", "to": "i18n" },
@@ -453,9 +485,13 @@ Electron-builder configuration in `packaging/electron/package.json`:
 
 **Key Configuration Details:**
 
-- **`files`** — Packed inside `app.asar`. Must include `runtime/**/*`, `backup/**/*`,
-  `audit-anchor.js`, `audit-keychain.js`, `audit-viewer.js`, and `assets/**/*`. Missing a required main-process module
-  makes startup fail before data access. The Demo package uses this same file list.
+- **`files`** — Packed inside `app.asar`. The compiled shell under `out/` (main process,
+  preload, runtime, backup, updater, update installer and audit modules) and `assets/**/*` are
+  included; compiled tests, packaging scripts, the Demo SQL generator and the `out/.built` stamp
+  are excluded. `out/` must be built (`bun build.ts`) before packaging; the `dist*` scripts and
+  `build-native-package` callers do this first. Missing a required main-process module makes
+  startup fail before data access. The Demo package uses this same file list. See
+  [[docs/adr/196-electron-shell-typescript|ADR-196]].
 
 - **`extraResources`** — Kept outside asar at `Contents/Resources/`. They include `i18n/` and the
   executable `native-runtime/` payload and the compiled `audit-keychain` helper.
@@ -522,7 +558,7 @@ The package declares its runtime dependencies directly (`archiver` and `yauzl`),
 > [!info] Added in ADR-072
 > This section documents the `window.electronAPI` contextBridge surface, native menu bar / dock, window chrome, CSV import handoff, and system accent color. See [[docs/adr/072-electron-native-desktop-integration|ADR-072]] for the full decision record. All five bridge surfaces (`electronUpdater`, `electronBackup`, `electronServices`, `electronAPI`, and `electronRecovery`) share their TypeScript contract through `@vision/types/electron`.
 
-#### `window.electronAPI` contextBridge Surface (preload.js)
+#### `window.electronAPI` contextBridge Surface (preload.ts)
 
 The new surface sits alongside the existing `window.electronUpdater` and `window.electronBackup`. All subscriptions return an unsubscribe function for clean teardown.
 
@@ -538,9 +574,9 @@ The new surface sits alongside the existing `window.electronUpdater` and `window
 | `onCsvOpen(cb)`            | Subscribe to `app:csv-opened` — receives `{name, content}` (no path)     |
 | `onFullScreenChange(cb)`   | Subscribe to `window:fullscreen` with a boolean fullscreen state         |
 
-Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while preload JSDoc imports the canonical source directly. `ipc-contract.test.js` checks the 29 main handlers, 29 preload invokes, and 6 renderer events against it, and checks that every invoke channel has an argument contract in `runtime/ipc-schemas.js`.
+Frontend helpers in `lib/api/electron.ts`: `getElectronAPI()`, `isElectronMac()`, `setDockBadge()`, `setNativeLanguage()`, `getSystemAccentColor()`. The optional language bridge preserves compatibility when a newer renderer is served by an older shell. `packaging/electron/electron-api.d.ts` owns bridge, invoke-channel, event-channel, argument, and result types; `@vision/types/electron` is a thin re-export consumed by the renderer, while `preload.ts` imports the canonical types directly with type-only imports. `ipc-contract.test.ts` checks the 29 main handlers, 29 preload invokes, and 6 renderer events against it, and checks that every invoke channel has an argument contract in `runtime/ipc-schemas.ts`. `bun run typecheck:electron` type-checks the main process and preload against these types.
 
-**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. Handlers are registered only through `registerHandler` in `main.js`, which throws at startup when a channel has no argument contract in `packaging/electron/runtime/ipc-schemas.js`. After the sender check, the channel's `validate` function checks the raw renderer arguments (arity, types, ranges, backup paths) and the handler receives only the normalized result. Invalid arguments get the failure shape that channel's renderer caller already handles, or a rejected invoke for the channels marked `REJECT_INVALID`. The log line names the channel and a fixed reason, never the renderer values. The validators are plain functions because the Electron package ships without zod ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
+**IPC hygiene**: every `ipcMain.handle` that renderer can invoke validates `event.sender === mainWindow.webContents`. Handlers are registered only through `registerHandler` in `main.ts`, which throws at startup when a channel has no argument contract in `packaging/electron/runtime/ipc-schemas.ts`. After the sender check, the channel's `validate` function checks the raw renderer arguments (arity, types, ranges, backup paths) and the handler receives only the normalized result. Invalid arguments get the failure shape that channel's renderer caller already handles, or a rejected invoke for the channels marked `REJECT_INVALID`. The log line names the channel and a fixed reason, never the renderer values. The validators are plain functions because the Electron package ships without zod ([[docs/adr/193-zod-runtime-contracts|ADR-193]]). `app:set-badge` clamps the count to an integer 0–999. Backup handlers accept renderer-supplied paths only for guarded, local filesystem operations; OS-opened CSV paths stay in main and only `{name, content}` crosses into the renderer.
 
 #### Renderer-Ready Queue Protocol
 
@@ -576,7 +612,7 @@ The accelerators declared in `setupApplicationMenu()` (⌘1–⌘9, ⌘N, ⇧⌘
 - Role items (Reload, Zoom, Copy, Paste, …) are unchanged — they use Electron/AppKit's native path.
 
 > [!warning] Manual sync point — accelerators and routes
-> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.js` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging the dependency.
+> `handleMenuAccelerator` must mirror the accelerators declared in `setupApplicationMenu()`. `GO_MENU_ROUTES` in `packaging/electron/main.ts` must stay in sync with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging the dependency.
 
 > [!info] AZERTY/non-QWERTY confirmation pending
 > End-to-end tests on the real stack confirmed ⌘7 → /portfolio and ⌘1 → / after a client-side navigation. Real-keyboard validation on a built `.app` (including AZERTY layout) is still pending (logged in TODO.md).
@@ -620,7 +656,7 @@ The repository and documentation Help items use fixed HTTPS destinations from
 the packaged main process; no renderer-supplied URL reaches `shell.openExternal`.
 
 > [!warning] Manual sync point
-> `GO_MENU_ROUTES` in `packaging/electron/main.js` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.
+> `GO_MENU_ROUTES` in `packaging/electron/main.ts` must be kept in sync by hand with `GO_TO_ROUTES` in `apps/frontend/src/lib/navigation.ts`. Both files carry a comment flagging this dependency.
 
 Menu and dock items dispatch `{action, payload}` over `menu:action`. `ElectronBridge` maps actions to: `navigate` (React Router push), `open-settings`, `open-shortcuts` (ShortcutsOverlay), `new-transaction` (navigate to `/transactions?new=1`), `toggle-sidebar`, and `set-theme` (View › Appearance; the payload is a theme mode, `light`, `dark`, `system` or `schedule`, applied through the renderer's theme store; any other payload is ignored). The `set-theme` action was added by [[docs/adr/180-sidebar-sections-replace-workspaces|ADR-180]] when the topbar theme dropdown was removed.
 
@@ -692,7 +728,7 @@ Mounted once in `AppLayout`, inside `SidebarProvider`. Responsibilities:
 | `backup:get-encryption-status` | `()` → Promise                            | Return `{ hasStoredPassphrase }`                                                                                                                                | ✅ Phase 1+2          |
 | `backup:set-passphrase`        | `(passphrase)` → Promise                  | Set or update backup encryption passphrase (stored encrypted in `settings.json`)                                                                                | ✅ Phase 1+2          |
 
-`packaging/electron/backup/restore.js` resolves the native transport and privileged database
+`packaging/electron/backup/restore.ts` resolves the native transport and privileged database
 identity through one shared environment resolver for bundle backup, bundle restore, and legacy SQL
 restore. It prefers `DATABASE_URL_MIGRATIONS`; credential values are never logged.
 Native bundle and legacy SQL restores first require an exact audit match against
@@ -729,8 +765,8 @@ Vision is ad-hoc unsigned (no Developer ID certificate), so macOS treats the cod
 > Note: `safeStorage` only _stores/retrieves the passphrase_. The backup encryption key itself is always scrypt-derived from the passphrase and never touches the keychain.
 
 The byte-level encryption and decryption scheme lives in
-`packaging/electron/backup/encrypted-file.js`. Both the raw SQL backup adapter in `crypto.js` and
-the bundle adapter in `bundle.js` supply their own magic headers and error messages to that shared
+`packaging/electron/backup/encrypted-file.ts`. Both the raw SQL backup adapter in `crypto.ts` and
+the bundle adapter in `bundle.ts` supply their own magic headers and error messages to that shared
 implementation. Restore accepts legacy AES-256-CBC files (`VISIONENC1` and `VISIONBAK1`) and
 current AES-256-GCM files (`VISIONENC2` and `VISIONBAK2`); new encrypted files use v2.
 
@@ -913,7 +949,8 @@ Detailed workflow definitions in [[docs/features/application-updates|Application
 
 Vision uses a three-layer isolation model:
 
-```javascript
+```typescript
+// main.ts; at runtime __dirname is out/, so the compiled sibling out/preload.js is loaded
 const mainWindow = new BrowserWindow({
   webPreferences: {
     sandbox: true, // Layer 1: Renderer sandbox (OS-level)
@@ -928,22 +965,30 @@ const mainWindow = new BrowserWindow({
 
 ### Context Isolation & Preload
 
-```javascript
-// preload.js - the only Node-accessible code
-const { contextBridge, ipcRenderer } = require("electron");
+```typescript
+// preload.ts - the only Node-accessible code; compiled by tsconfig.preload.json
+import { contextBridge, ipcRenderer } from "electron";
+import type { ElectronRecoveryBridge } from "./electron-api"; // type-only, erased
 
-contextBridge.exposeInMainWorld("electronRecovery", {
+const electronRecovery: ElectronRecoveryBridge = {
   retry: () => ipcRenderer.invoke("recovery:retry"),
   openLogs: () => ipcRenderer.invoke("recovery:open-logs"),
-  onBackendLost: (cb) => ipcRenderer.on("backend:lost", cb),
-  onBackendRestored: (cb) => ipcRenderer.on("backend:restored", cb),
-});
+  onBackendLost: (cb) => {
+    /* subscribe to "backend:lost"; returns an unsubscribe function */
+  },
+  onBackendRestored: (cb) => {
+    /* subscribe to "backend:restored"; returns an unsubscribe function */
+  },
+};
+contextBridge.exposeInMainWorld("electronRecovery", electronRecovery);
 ```
 
 - Preload is the **only** way renderer can access Node.js or IPC
 - All functions are validated and scoped: each invoke channel's arguments are checked in the main
-  process by its contract in `runtime/ipc-schemas.js` before the handler runs
+  process by its contract in `runtime/ipc-schemas.ts` before the handler runs
 - Sandbox prevents renderer from directly calling Node APIs
+- The compiled preload may only `require("electron")`; every other import is type-only.
+  `preload-sandbox.contract.test.ts` asserts this against `out/preload.js`
 - Every privileged invoke must come from the current main frame at the selected
   backend origin or the exact packaged recovery page. A localhost page at a
   different port, a subframe, and an arbitrary local file cannot use the bridge.
@@ -1006,6 +1051,10 @@ delivery, and release-DMG behavior were not exercised in this audit.
 ### Running Electron
 
 The root `bun install` prepares the separate Electron package outside CI. If its local binary is missing, repair it explicitly with `bun run install:electron` before launching a wrapper.
+
+Both wrappers run `bun packaging/electron/build.ts` first and then start Electron on the package
+directory, which loads `out/main.js`. Launching from a checkout therefore needs Bun and the root
+dependencies (TypeScript). See [[#TypeScript Build (ADR-196)]].
 
 ```bash
 # Native development mode
@@ -1154,7 +1203,8 @@ The Demo builder overrides the production icon with
 `resources-demo/icon-demo.icns`, derived from the canonical mark and carrying a
 high-contrast champagne `DEMO` badge. The production and Demo apps therefore
 remain distinguishable in Applications, the Dock, and system dialogs. The
-committed SVG is the editable source; `scripts/pack-iconset.cjs` packs validated
+committed SVG is the editable source; `scripts/pack-iconset.ts` (run as
+`node out/scripts/pack-iconset.js` after `bun build.ts`) packs validated
 PNG representations into the ICNS container without changing the production
 icon.
 
@@ -1257,23 +1307,23 @@ synthetic native database must migrate to the current head.
 
 ### Cannot find module './backup/bundle'
 
-**Cause:** `backup/` directory is absent from the electron-builder base `files` array.
+**Cause:** The compiled shell is missing or incomplete inside `app.asar`: `out/` was not built
+before packaging, or `out/**/*` is absent from the electron-builder base `files` array.
 
-**Fix:** Ensure `packaging/electron/electron-builder-base.json` includes `backup/**/*` and
-`runtime/**/*`.
+**Fix:** Build with `bun build.ts` from `packaging/electron/` (the `dist*` scripts do this first)
+and ensure `packaging/electron/electron-builder-base.json` includes `out/**/*` and `assets/**/*`.
+See [[docs/adr/196-electron-shell-typescript|ADR-196]].
 
 ```json
 {
-  "build": {
-    "files": [
-      "main.js",
-      "badge-image.js",
-      "updater.js",
-      "preload.js",
-      "backup/**/*",
-      "assets/**/*"
-    ]
-  }
+  "files": [
+    "out/**/*",
+    "assets/**/*",
+    "!out/**/*.test.js",
+    "!out/scripts/**/*",
+    "!out/demo-db/**/*",
+    "!out/.built"
+  ]
 }
 ```
 
@@ -1317,7 +1367,8 @@ file dist/mac-arm64/Vision.app/Contents/Resources/app.asar
 payload must contain the compiled backend, frontend, migrations, and migration runner.
 
 ```bash
-node packaging/electron/scripts/prepare-native-runtime.js
+bun packaging/electron/build.ts
+node packaging/electron/out/scripts/prepare-native-runtime.js
 ```
 
 ### Retired error: registry authorization on first launch
@@ -1377,4 +1428,5 @@ that writer saves again. See [[docs/adr/173-conditional-settings-replacement|ADR
 - [[docs/features/import|Import Feature]] — CSV drag-and-drop + Finder handoff
 - [[docs/guides/deployment]] — Deployment guide
 - [[docs/reference/scripts]] — Build scripts
+- [[docs/adr/196-electron-shell-typescript|ADR-196: Electron Shell TypeScript]] — strict TypeScript compiled into `out/`
 - [[docs/security/index]] — Security documentation

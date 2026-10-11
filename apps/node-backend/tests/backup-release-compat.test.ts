@@ -9,7 +9,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../..");
 const require = createRequire(import.meta.url);
 const { openBundle } = require(
-  join(repoRoot, "packaging/electron/backup/bundle.js"),
+  join(repoRoot, "packaging/electron/out/backup/bundle.js"),
 );
 
 describe("backup release compatibility", () => {

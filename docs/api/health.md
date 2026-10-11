@@ -2,8 +2,8 @@
 title: Health API
 type: api
 status: active
-date: 2026-10-07
-updated: 2026-08-02
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     api,
@@ -137,7 +137,7 @@ Each warmup task:
 
 ### Electron Initial Navigation Gate
 
-The Electron shell (`packaging/electron/main.js`) uses `GET /health/detailed` via `pollReady()` to gate the first page load:
+The Electron shell (`packaging/electron/main.ts`) uses `GET /health/detailed` via `pollReady()` to gate the first page load:
 
 - **Navigate when:** `status === 'ready'` OR `caches.materializedViews === true`
 - **materializedViews flag** — DB-only and fast; used as the gating condition so network-bound tasks (exchange rates, portfolio snapshots) cannot stall startup if they're slow

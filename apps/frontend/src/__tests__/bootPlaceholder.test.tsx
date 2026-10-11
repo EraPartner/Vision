@@ -10,7 +10,7 @@
  * `index.html` now ships a static mirror of the splash inside `#root`. These
  * tests pin the two things that make it work — it is inert (no JS, nothing that
  * could grow the boot graph), and React clears it on its first commit — plus its
- * fidelity to `splashDataUrl()` in packaging/electron/main.js, which is read
+ * fidelity to `splashDataUrl()` in packaging/electron/main.ts, which is read
  * here so that changing the splash's look without following it fails loudly.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -29,7 +29,7 @@ const REPO_ROOT = path.resolve(FRONTEND_ROOT, "../..");
 
 const INDEX_HTML = readFileSync(path.join(FRONTEND_ROOT, "index.html"), "utf8");
 const ELECTRON_MAIN = readFileSync(
-    path.join(REPO_ROOT, "packaging/electron/main.js"),
+    path.join(REPO_ROOT, "packaging/electron/main.ts"),
     "utf8",
 );
 
@@ -80,7 +80,7 @@ describe("boot placeholder markup", () => {
 
 describe("boot placeholder fidelity to the Electron splash", () => {
     // Every value below is lifted from splashDataUrl() in
-    // packaging/electron/main.js. Reading both files keeps the two in lockstep:
+    // packaging/electron/main.ts. Reading both files keeps the two in lockstep:
     // restyle the splash and this test points at the placeholder to match.
     const splashCss = (() => {
         const start = ELECTRON_MAIN.indexOf("function splashDataUrl()");

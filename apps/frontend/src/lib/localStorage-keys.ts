@@ -6,7 +6,7 @@
  *   - features/settings/sections/BackupSection.tsx  (passphrase reminder)
  *   - components/notifications/UpcomingPaymentsNotification.tsx
  *   - features/planned/RecurringDetectionPanel.tsx
- *   - packaging/electron/backup/bundle.js  (snapshot on export)
+ *   - packaging/electron/backup/bundle.ts  (snapshot on export)
  *
  * ADDING A KEY? Add it here first, then update BackupSection's snapshot logic.
  * The backup-coverage test will fail in CI until both are done.

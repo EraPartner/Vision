@@ -18,7 +18,7 @@ const repoRoot = path.resolve(
 );
 const require = createRequire(import.meta.url);
 const { createBundle, encryptBundle, openBundle } = require(
-  path.join(repoRoot, "packaging/electron/backup/bundle.js"),
+  path.join(repoRoot, "packaging/electron/out/backup/bundle.js"),
 );
 const tableNames = [
   "transactions",

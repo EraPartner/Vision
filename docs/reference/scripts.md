@@ -40,6 +40,13 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 | `electron:dev`     | Launch Electron with the isolated native development profile |
 | `electron:prod`    | Launch the Electron package entry point                      |
 
+The Electron shell in `packaging/electron/` is strict TypeScript compiled into
+`packaging/electron/out/` ([[docs/adr/196-electron-shell-typescript|ADR-196]]). The `dev`,
+`electron:dev`, `electron:prod`, `native:*`, `demo:reset-native` and `test:electron` scripts run
+`bun packaging/electron/build.ts` first and then run the compiled JavaScript, for example
+`node packaging/electron/out/scripts/native-development.js`. The Electron package's own `start`,
+`prepare:*` and `dist*` scripts run `bun build.ts` first in the same way.
+
 ## Build and release inputs
 
 | Script           | Purpose                                                                   |
@@ -59,6 +66,7 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 | `typecheck`               | Type-check the frontend                            |
 | `typecheck:backend`       | Type-check backend source, tests and scripts       |
 | `typecheck:scripts`       | Type-check repository scripts and their tests      |
+| `typecheck:electron`      | Type-check the Electron shell and its preload      |
 | `typecheck:packages`      | Type-check the shared packages (strict)            |
 | `typecheck:python`        | Run `mypy --strict` over Alembic and scripts       |
 | `validate-locales`        | Validate source/generated locale parity            |
@@ -80,7 +88,7 @@ Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with 
 | `test`                          | Backend Vitest suite                                                                                                           |
 | `test:frontend`                 | Build and run the full frontend Vitest suite against a disposable PostgreSQL 18 backend, including live API contracts          |
 | `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
-| `test:electron`                 | Electron, backup, runtime, and packaging Node tests                                                                            |
+| `test:electron`                 | Build the Electron shell, then run its compiled `node:test` suites (`node --test 'packaging/electron/out/**/*.test.js'`)       |
 | `test:scripts`                  | Repository script tests (`bun test scripts/tests`)                                                                             |
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
@@ -165,6 +173,7 @@ bun run dev
 bun run lint
 bun run lint:backend
 bun run typecheck
+bun run typecheck:electron
 bun run test
 bun run test:frontend
 bun run test:electron

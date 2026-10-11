@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 const { createSettingsWriter } = createRequire(import.meta.url)(
-  "../../../packaging/electron/settings-conflicts.js",
+  "../../../packaging/electron/out/settings-conflicts.js",
 );
 describe("Electron conditional settings writer", () => {
   it("refuses saves based on the offline mirror", async () => {
