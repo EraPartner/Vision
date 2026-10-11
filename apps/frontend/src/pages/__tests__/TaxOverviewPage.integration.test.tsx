@@ -42,17 +42,16 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows Employment step radio options when the wizard opens", async () => {
+    it("opens the wizard on the household step", async () => {
         const user = userEvent.setup();
         renderWithApp(<TaxOverviewPage />);
 
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
         await user.click(setupBtn!);
 
-        // The first step is Employment; it renders radio items for each employment type.
-        // Use role-based selectors anchored to start — civil_servant desc also contains "employee".
-        expect(await screen.findByRole("radio", { name: /^employee/i })).toBeInTheDocument();
-        expect(screen.getByRole("radio", { name: /^self-employed/i })).toBeInTheDocument();
+        // The first step is the household: the derived assessment and the partner switch.
+        expect(await screen.findByText("Your household")).toBeInTheDocument();
+        expect(screen.getByRole("switch", { name: /i have a partner/i })).toBeInTheDocument();
     });
 
     it("closes tax profile sheet when Escape is pressed", async () => {
@@ -65,8 +64,8 @@ describe("TaxOverviewPage (integration)", () => {
         await screen.findByText(/^tax profile$/i);
         await user.keyboard("{Escape}");
 
-        // Sheet dismisses — employment radios no longer in DOM
-        expect(screen.queryByRole("radio", { name: /^employee/i })).not.toBeInTheDocument();
+        // Sheet dismisses — the household step is no longer in the DOM
+        expect(screen.queryByText("Your household")).not.toBeInTheDocument();
     });
 
     it("offers Customize… from the ••• menu in the page header", async () => {

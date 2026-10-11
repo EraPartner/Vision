@@ -23,8 +23,16 @@ const FIELD_GRID_CONTRACTS: FieldGridContract[] = [
         responsiveCount: 4,
     },
     {
-        file: "src/features/tax/profile-steps/IncomeStep.tsx",
+        file: "src/features/tax/profile-steps/HomeStep.tsx",
         responsiveCount: 3,
+    },
+    {
+        file: "src/features/tax/profile-steps/IncomeStep.tsx",
+        responsiveCount: 1,
+    },
+    {
+        file: "src/features/tax/profile-steps/HouseholdStep.tsx",
+        responsiveCount: 2,
     },
     { file: "src/features/accounts/AddAccountDialog.tsx", responsiveCount: 3 },
     {

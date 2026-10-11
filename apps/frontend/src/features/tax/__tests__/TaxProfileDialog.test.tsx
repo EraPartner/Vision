@@ -47,7 +47,7 @@ describe("TaxProfileDialog", () => {
         expect(await screen.findByRole("heading", { name: "Tax profile" })).toBeInTheDocument();
     });
 
-    it("shows employment step by default (radio options visible)", async () => {
+    it("shows the household step by default (assessment and partner toggle)", async () => {
         // Arrange
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog />);
@@ -55,10 +55,10 @@ describe("TaxProfileDialog", () => {
         // Act
         await openSheet(user);
 
-        // Assert — employment type section heading and at least one radio option
-        // Note: accessible name includes the full label (name + description text concatenated)
-        expect(await screen.findByText("Employment type")).toBeInTheDocument();
-        expect(await screen.findByRole("radio", { name: /^Employee/ })).toBeInTheDocument();
+        // Assert — household heading, the derived assessment and the partner switch
+        expect(await screen.findByText("Your household")).toBeInTheDocument();
+        expect(screen.getByText("Single")).toBeInTheDocument();
+        expect(screen.getByRole("switch", { name: /I have a partner/ })).not.toBeChecked();
     });
 
     it("'Back' button is disabled on the first step", async () => {
@@ -68,7 +68,7 @@ describe("TaxProfileDialog", () => {
 
         // Act
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
 
         // Assert
         const backBtn = screen.getByRole("button", { name: /back/i });
@@ -82,7 +82,7 @@ describe("TaxProfileDialog", () => {
 
         // Act
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("button", { name: /next/i }));
 
         // Assert — income step heading visible
@@ -115,14 +115,14 @@ describe("TaxProfileDialog", () => {
         expect(income).toHaveValue("12");
     });
 
-    it("can navigate through all 4 steps using Next", async () => {
+    it("can navigate through all 6 steps using Next", async () => {
         // Arrange
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog />);
 
         // Act
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
 
         // Step 1 → 2
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -131,15 +131,19 @@ describe("TaxProfileDialog", () => {
         // Income step now requires a gross annual income before advancing.
         await fillGrossIncome(user);
 
-        // Step 2 → 3 (income sources)
+        // Step 2 → 3 (home)
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        expect(await screen.findByText("Home & property")).toBeInTheDocument();
+
+        // Step 3 → 4 (income sources)
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Taxable income sources")).toBeInTheDocument();
 
-        // Step 3 → 4
+        // Step 4 → 5
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Exemptions & dependents")).toBeInTheDocument();
 
-        // Step 4 → 5
+        // Step 5 → 6
         await user.click(screen.getByRole("button", { name: /next/i }));
         expect(await screen.findByText("Region & communal surcharge")).toBeInTheDocument();
     });
@@ -151,10 +155,12 @@ describe("TaxProfileDialog", () => {
 
         // Act — advance to last step
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
         await fillGrossIncome(user);
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Home & property");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -174,10 +180,12 @@ describe("TaxProfileDialog", () => {
 
         // Act — navigate to last step
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
         await fillGrossIncome(user);
+        await user.click(screen.getByRole("button", { name: /next/i }));
+        await screen.findByText("Home & property");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Taxable income sources");
         await user.click(screen.getByRole("button", { name: /next/i }));
@@ -202,7 +210,7 @@ describe("TaxProfileDialog", () => {
         // Act — open sheet, advance to income and satisfy its required field so a
         // forward jump is permitted (jumping past an incomplete step is blocked).
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
         await fillGrossIncome(user);
@@ -224,7 +232,7 @@ describe("TaxProfileDialog", () => {
         // Income has no gross-income yet, so the forward jump is refused and the
         // dialog lands the user on the incomplete income step instead.
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("radio", { name: "Region" }));
 
         // Assert — redirected to income, not region
@@ -239,21 +247,21 @@ describe("TaxProfileDialog", () => {
 
         // Act — reach the income step and try to advance with no income
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         await user.click(screen.getByRole("button", { name: /next/i }));
         await screen.findByText("Income details");
         await user.click(screen.getByRole("button", { name: /next/i }));
 
         // Assert — still on income (advancement blocked)
         expect(screen.getByText("Income details")).toBeInTheDocument();
-        expect(screen.queryByText("Taxable income sources")).not.toBeInTheDocument();
+        expect(screen.queryByText("Home & property")).not.toBeInTheDocument();
 
         // Act — provide income, then advancing works
         await fillGrossIncome(user);
         await user.click(screen.getByRole("button", { name: /next/i }));
 
         // Assert
-        expect(await screen.findByText("Taxable income sources")).toBeInTheDocument();
+        expect(await screen.findByText("Home & property")).toBeInTheDocument();
     });
 
     it("initialStep prop opens directly to the specified step", async () => {
@@ -266,7 +274,7 @@ describe("TaxProfileDialog", () => {
 
         // Assert — income step shown without navigating through employment
         expect(await screen.findByText("Income details")).toBeInTheDocument();
-        expect(screen.queryByText("Employment type")).not.toBeInTheDocument();
+        expect(screen.queryByText("Your household")).not.toBeInTheDocument();
     });
 
     // ─── Edge cases ────────────────────────────────────────────────────────
@@ -292,7 +300,7 @@ describe("TaxProfileDialog", () => {
         const user = userEvent.setup();
         renderWithApp(<TaxProfileDialog />);
         await openSheet(user);
-        await screen.findByText("Employment type");
+        await screen.findByText("Your household");
         const radios = screen.getAllByRole("radio");
         expect(radios.length).toBeGreaterThan(0);
     });

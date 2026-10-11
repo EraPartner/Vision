@@ -281,6 +281,22 @@ export function resolveBelgianTaxCalculation(
     );
 }
 
+/**
+ * Household engine result shown for `year`, alongside `resolveBelgianTaxCalculation`: the
+ * frozen one when the year is frozen, else the live result or a fresh computation. `null`
+ * until the provider has loaded the engine.
+ */
+export function resolveBelgianTaxHouseholdResult(
+    state: YearState & Pick<BelgianTaxSlice, "snapshotMetas" | "householdResult">,
+    year: number,
+): HouseholdTaxResult | null {
+    const frozen = state.snapshotMetas[year]?.frozenHouseholdResult;
+    if (frozen) return frozen;
+    if (state.household && year === state.household.taxYear)
+        return state.householdResult;
+    return computeYearResults(state, year).frozenHouseholdResult ?? null;
+}
+
 export const createBelgianTaxSlice: StateCreator<
     SettingsStore,
     [],

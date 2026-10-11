@@ -3,6 +3,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     resolveBelgianTaxCalculation,
+    resolveBelgianTaxHouseholdResult,
     resolveBelgianTaxProfile,
 } from "@/stores/belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
@@ -307,6 +308,24 @@ describe("Belgian tax settings slice", () => {
             .updateHouseholdSnapshot(1999, { region: "brussels" });
         expect(useSettingsStore.getState().householdSnapshots).toBe(
             before.householdSnapshots,
+        );
+    });
+
+    it("resolves the household result shown for a year: live, frozen or computed", () => {
+        const liveYear = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        const year = liveYear - 1;
+        useSettingsStore.getState().createSnapshotFromLive(year);
+        let state = useSettingsStore.getState();
+        expect(resolveBelgianTaxHouseholdResult(state, liveYear)).toBe(
+            state.householdResult,
+        );
+        expect(resolveBelgianTaxHouseholdResult(state, year)).toEqual(
+            runtime.computeHouseholdTax(state.householdSnapshots[year]!),
+        );
+        useSettingsStore.getState().freezeCalculation(year);
+        state = useSettingsStore.getState();
+        expect(resolveBelgianTaxHouseholdResult(state, year)).toBe(
+            state.snapshotMetas[year]!.frozenHouseholdResult,
         );
     });
 });

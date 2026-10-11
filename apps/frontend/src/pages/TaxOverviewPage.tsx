@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
+import { HouseholdBreakdownCard } from "@/features/tax/HouseholdBreakdownCard";
 import SuggestedDeductionsCard from "@/features/tax/SuggestedDeductionsCard";
 import DeductionCandidatesCard from "@/features/tax/DeductionCandidatesCard";
 import { WidgetVisibilityDialog } from "@/components/shared/WidgetVisibilityDialog";
@@ -62,6 +63,11 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
         {
             id: "pitBreakdown",
             label: t("tax.widget.pitBreakdown"),
+            defaultVisible: true,
+        },
+        {
+            id: "householdBreakdown",
+            label: t("tax.widget.householdBreakdown"),
             defaultVisible: true,
         },
         {
@@ -281,6 +287,10 @@ export default function TaxOverviewPage() {
 
                             {isVisible("taxRules") && <TaxRulesCard />}
                         </div>
+
+                        {isVisible("householdBreakdown") && (
+                            <HouseholdBreakdownCard viewedYear={viewedYear} />
+                        )}
 
                         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                             {isVisible("incomeBreakdown") && (
