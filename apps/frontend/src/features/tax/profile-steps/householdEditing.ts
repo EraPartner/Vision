@@ -184,6 +184,7 @@ export function removePartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHous
     if (dependents.claimantPartnerId === "B") dependents.claimantPartnerId = "A";
     const home = { ...household.home };
     if (home.mortgageCreditPartnerId === "B") home.mortgageCreditPartnerId = "A";
+    delete home.mortgageSharePartnerB;
     const next: BelgianTaxHouseholdV2 = {
         ...household,
         partners: household.partners.filter((p) => p.id !== "B"),
@@ -290,4 +291,11 @@ export function resolvePartnerId(
     selected: PartnerId,
 ): PartnerId {
     return household.partners.some((p) => p.id === selected) ? selected : "A";
+}
+
+/** The household without the deprecated `home.mortgageRegion` (ADR-202). */
+export function withoutMortgageRegion(household: BelgianTaxHouseholdV2): BelgianTaxHouseholdV2 {
+    if (household.home.mortgageRegion === undefined) return household;
+    const { mortgageRegion: _dropped, ...home } = household.home;
+    return { ...household, home };
 }

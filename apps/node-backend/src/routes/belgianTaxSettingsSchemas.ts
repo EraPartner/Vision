@@ -138,6 +138,7 @@ const homeSchema = z.looseObject({
   mortgageRegion: region.optional(),
   mortgageIsPrimaryResidence: z.boolean().optional(),
   mortgageCreditPartnerId: partnerId.optional(),
+  mortgageSharePartnerB: z.number().min(0).max(100).optional(),
   firstQualifyingYear: year.optional(),
   woonbonusChildrenAtLoanStart: count.optional(),
 });

@@ -4,7 +4,7 @@
 // 12,844.25; see part 1).
 
 import { expect } from "vitest";
-import { activity, household, partner } from "./testHousehold";
+import { activity, event, household, partner } from "./testHousehold";
 import { eur, type Scenario } from "./scenarioMatrix";
 import type { BelgianRegion } from "../types";
 import type { BelgianTaxHouseholdV2, HouseholdHomeInputs, PartnerReductionInputs } from "../householdTypes";
@@ -356,6 +356,161 @@ export const REGION_SCENARIOS: readonly Scenario[] = [
         verify: (r) => {
             // 10,275.25 − 555 = 9,720.25 × 1.0000 × 1.075 = 10,449.26875
             eur(r.totals.totalPIT, 10_449.26875);
+        },
+    },
+    {
+        id: "RG-16",
+        description: "joint assessment, both spouses borrowers (B pays 25%): woonbonus basket per spouse, payments divided freely",
+        rows: ["hh-own-home-borrowers", "woonbonus-integrated", "woonbonus-extra"],
+        articles: "WIB 92 Flemish art. 145/38/2 §2 (\"per belastingplichtige\"), §3 (\"vrij verdelen binnen de begrenzingen\"); C63",
+        status: "verified",
+        household: {
+            ...household(
+                [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 30_000)])],
+                {
+                    relationship: { events: [event("marriage", "2015-05-02")] },
+                    home: home({
+                        mortgageInterestPaid: 3_000,
+                        mortgageCapitalRepaid: 3_000,
+                        mortgageStartYear: 2018,
+                        woonbonusChildrenAtLoanStart: 0,
+                        mortgageSharePartnerB: 25,
+                    }),
+                },
+            ),
+        },
+        verify: (r) => {
+            // basket per spouse, eighth period: 1,520 + 760 = 2,280 at 40%
+            // A paid 4,500: keeps 2,280; B paid 1,500 and has 780 unused → takes 780 of A's rest
+            // A 2,280 × 40% = 912; B 2,280 × 40% = 912 (one borrower alone: 912 in total)
+            // A 10,275.25 − 912 = 9,363.25; B (net 20,149) 2,884.10 − 912 = 1,972.10
+            // 11,335.35 × 1.07 = 12,128.8245
+            expect(r.assessment.mode).toBe("joint");
+            eur(r.partners[0]?.ownHomeCredit, 912);
+            eur(r.partners[1]?.ownHomeCredit, 912);
+            expect(r.partners[1]?.ownHomeCreditRegime).toBe("flemish_woonbonus");
+            eur(r.totals.totalPIT, 12_128.8245);
+        },
+    },
+    {
+        id: "RG-17",
+        description: "separate assessment, both partners borrowers (B pays 25%): each claims their own payments",
+        rows: ["hh-own-home-borrowers", "woonbonus-integrated", "woonbonus-extra"],
+        articles: "WIB 92 Flemish art. 145/38/2 §§2-3; art. 126 §1",
+        status: "verified",
+        household: household(
+            [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 30_000)])],
+            {
+                home: home({
+                    mortgageInterestPaid: 3_000,
+                    mortgageCapitalRepaid: 3_000,
+                    mortgageStartYear: 2018,
+                    woonbonusChildrenAtLoanStart: 0,
+                    mortgageSharePartnerB: 25,
+                }),
+            },
+        ),
+        verify: (r) => {
+            // no marriage or legal cohabitation → separate; the free division needs a joint
+            // assessment, so A min(4,500, 2,280) × 40% = 912 and B min(1,500, 2,280) × 40% = 600
+            // (10,275.25 − 912 + 2,884.10 − 600) × 1.07 = 12,462.6645
+            expect(r.assessment.mode).toBe("separate");
+            eur(r.partners[0]?.ownHomeCredit, 912);
+            eur(r.partners[1]?.ownHomeCredit, 600);
+            eur(r.totals.totalPIT, 12_462.6645);
+        },
+    },
+    {
+        id: "RG-18",
+        description: "joint assessment, chèque habitat for two owners (50% each): own income per borrower, child increase where it fits",
+        rows: ["hh-own-home-borrowers", "cheque-habitat-formula", "cheque-habitat-periods"],
+        articles: "WIB 92 Walloon art. 145/46ter §§2-4 (\"forfaitaire et individuelle\", \"au prorata de la part de propriété\"); C18",
+        status: "verified",
+        household: household(
+            [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 30_000)])],
+            {
+                region: "wallonia",
+                communalSurchargePercent: 7.5,
+                relationship: { events: [event("marriage", "2015-05-02")] },
+                dependents: { children: 1, otherPersons: 0 },
+                home: home({
+                    mortgageInterestPaid: 2_000,
+                    mortgageCapitalRepaid: 2_000,
+                    mortgageStartYear: 2018,
+                    firstQualifyingYear: 2018,
+                    mortgageSharePartnerB: 50,
+                }),
+            },
+        ),
+        verify: (r) => {
+            // eighth period, factor 1; each owner paid 2,000 (art. 145/46ter §4 cap)
+            // A (37,535): 1,520 − (37,535 − 27,353) × 1.275% = 1,390.1795, room 609.8205
+            // B (20,149 ≤ 27,353): 1,520, room 480
+            // one child: 125 to A (the larger room) → A 1,515.1795; B 1,520
+            eur(r.partners[0]?.ownHomeCredit, 1_515.1795);
+            eur(r.partners[1]?.ownHomeCredit, 1_520);
+            expect(r.partners[1]?.ownHomeCreditRegime).toBe("walloon_cheque_habitat");
+        },
+    },
+    {
+        id: "RG-20",
+        description: "joint assessment, both spouses borrowers (50% each), B's tax smaller than B's woonbonus: payments go where the tax can absorb the credit",
+        rows: ["hh-own-home-borrowers", "woonbonus-integrated", "woonbonus-extra", "hh-quotient"],
+        articles: "WIB 92 Flemish art. 145/38/2 §2 (\"per belastingplichtige\"), §3 (\"vrij verdelen binnen de begrenzingen\"); arts 87-88; C63",
+        status: "verified",
+        household: household(
+            [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 8_000)])],
+            {
+                relationship: { events: [event("marriage", "2015-05-02")] },
+                home: home({
+                    mortgageInterestPaid: 1_500,
+                    mortgageCapitalRepaid: 1_500,
+                    mortgageStartYear: 2018,
+                    woonbonusChildrenAtLoanStart: 0,
+                    mortgageSharePartnerB: 50,
+                }),
+            },
+        ),
+        verify: (r) => {
+            // A net 37,535 (SC-01); B: SS 1,045.60, forfait 30% × 6,954.40 = 2,086.32 → 4,868.08
+            // art. 88: 30% × 42,403.08 = 12,720.924 ≤ 13,460 → transfer 7,852.844 to B
+            // A 29,682.156: 9,072 + 882.156 × 45% (396.9702) = 9,468.9702 − 2,727.50 = 6,741.4702
+            // B 12,720.924: 3,180.231 − 2,727.50 = 452.731
+            // basket per spouse 2,280 at 40%; each paid 1,500. B's tax absorbs 452.731 / 40% =
+            // 1,131.8275 of payments; the other 368.1725 of B's payments go to A (1,868.1725).
+            // A 1,868.1725 × 40% = 747.269; B 452.731 → 1,200 granted, nothing lost
+            // (each keeping 1,500 would give B 600 and lose 147.269)
+            // Without the quotient A owes more (8,426.982 − 912), so the quotient applies.
+            // total (6,741.4702 − 747.269) × 1.07 = 6,413.795284
+            expect(r.quotient.applied).toBe(true);
+            eur(r.quotient.transfer, 7_852.844);
+            eur(r.partners[1]?.pitAfterExemption, 452.731);
+            eur(r.partners[0]?.ownHomeCredit, 747.269);
+            eur(r.partners[1]?.ownHomeCredit, 452.731);
+            eur(r.totals.totalPIT, 6_413.795284);
+            expect(r.issues.map((i) => i.code)).not.toContain("joint_reduction_allocation_unverified");
+        },
+    },
+    {
+        id: "RG-19",
+        description: "the household region decides the own-home regime: a Flemish resident's home recorded as Walloon",
+        rows: ["region-competence", "woonbonus-integrated"],
+        articles: "Special finance law of 16 January 1989 arts 5/1 §2 (fiscal domicile on 1 January of the assessment year), 5/5 §4",
+        status: "verified",
+        household: employee(50_000, {
+            home: home({
+                mortgageInterestPaid: 3_000,
+                mortgageCapitalRepaid: 3_000,
+                mortgageStartYear: 2018,
+                woonbonusChildrenAtLoanStart: 0,
+                mortgageRegion: "wallonia",
+            }),
+        }),
+        verify: (r) => {
+            // region flanders → woonbonus: min(6,000, 2,280) × 40% = 912; mortgageRegion ignored
+            expect(r.partners[0]?.ownHomeCreditRegime).toBe("flemish_woonbonus");
+            eur(r.partners[0]?.ownHomeCredit, 912);
+            expect(r.issues).toContainEqual({ code: "mortgage_region_not_used", severity: "info" });
         },
     },
 ];

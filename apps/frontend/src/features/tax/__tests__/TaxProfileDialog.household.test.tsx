@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
@@ -237,6 +237,21 @@ describe("TaxProfileDialog household editing", () => {
         expect(storedHousehold()?.home.mortgageCreditPartnerId).toBe("B");
     });
 
+    it("disables the own-home claimant once partner B's share is entered", async () => {
+        serveHousehold(coupleHousehold());
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+        await openSheet(user);
+
+        const picker = await screen.findByRole("combobox", { name: "Home credit" });
+        expect(picker).toBeEnabled();
+        await user.type(screen.getByLabelText(/partner B's share of the home loan/i), "100");
+        expect(storedHousehold()?.home.mortgageSharePartnerB).toBe(100);
+        expect(picker).toBeDisabled();
+        expect(picker).toHaveTextContent("Partner");
+        expect(picker).toHaveAccessibleDescription(/set by partner B's share/i);
+    });
+
     it("edits service-voucher spending per partner", async () => {
         serveHousehold(coupleHousehold());
         const user = userEvent.setup();
@@ -251,6 +266,26 @@ describe("TaxProfileDialog household editing", () => {
         expect(b?.reductions.serviceVoucherSpend).toBe(900);
         expect(b?.reductions.serviceVoucherEligible).toBe(true);
         expect(storedHousehold()?.partners[0]?.reductions.serviceVoucherSpend).toBeUndefined();
+    });
+
+    it("drops a stored mortgage region after one edit of the home step", async () => {
+        serveHousehold(
+            singleHousehold({
+                region: "wallonia",
+                mortgageRegion: "flanders",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2017,
+                mortgageInterestPaid: 3_000,
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog initialStep="home" />);
+        await openSheet(user);
+        await waitFor(() => expect(storedHousehold()?.home.mortgageRegion).toBe("flanders"));
+
+        await user.type(await screen.findByLabelText(/first year the chèque habitat/i), "2019");
+        expect(storedHousehold()?.home.firstQualifyingYear).toBe(2019);
+        expect(storedHousehold()?.home).not.toHaveProperty("mortgageRegion");
     });
 
     it("asks for the chèque habitat first qualifying year only for a Walloon home", async () => {
@@ -272,13 +307,10 @@ describe("TaxProfileDialog household editing", () => {
         await user.clear(field);
         expect(storedHousehold()?.home).not.toHaveProperty("firstQualifyingYear");
 
-        // A Flemish loan has no such field.
-        const regionSelect = screen.getByRole("combobox", { name: /region/i });
-        await user.click(regionSelect);
-        await user.click(
-            within(await screen.findByRole("listbox")).getByRole("option", { name: /flanders/i }),
-        );
-        expect(screen.queryByLabelText(/first year the chèque habitat/i)).not.toBeInTheDocument();
+        // The household region decides the regime (ADR-202): there is no mortgage-region select.
+        expect(
+            screen.queryByRole("combobox", { name: /region at mortgage signing/i }),
+        ).not.toBeInTheDocument();
     });
 
     it("asks for the woonbonus children at the loan start only for a Flemish loan before 2020", async () => {

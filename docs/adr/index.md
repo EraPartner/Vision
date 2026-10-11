@@ -249,6 +249,14 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-11: The household region decides the own-home regime
+
+[[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] supersedes ADR-054 for the
+mortgage region only: the Flemish or Walloon own-home regime follows the household's region (the
+fiscal domicile on 1 January of the assessment year, special finance law art. 5/1 §2), and
+`mortgageRegion` is deprecated but kept. The optional `home.mortgageSharePartnerB` gives each of
+two borrowers their own woonbonus or chèque habitat basket.
+
 ### 2026-10-11: Tax partners map to account owners by a fixed rule
 
 [[docs/adr/201-belgian-tax-partner-account-mapping|ADR-201]] supersedes ADR-200 §7 for the

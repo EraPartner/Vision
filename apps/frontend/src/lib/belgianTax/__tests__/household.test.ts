@@ -246,6 +246,50 @@ describe("household assembly", () => {
         );
     });
 
+    test("the quotient is pension income pro rata for the receiving spouse (Com.IB 87/23, AAFisc 40/2011)", () => {
+        // A: pension 20,000 + net 20,000 → 40,000; B none. Transfer 30% = 12,000, of which
+        // 12,000 × 20,000 / 40,000 = 6,000 is pension. A: 14,000 of 28,000; B: 6,000 of 12,000.
+        // A tax 6,024.50; share ½: base 2,219.27 × ½ = 1,109.635 (28,000 ≤ 28,780);
+        //   additional 457.23 × 780 / 9,150 × ½ = 19.488491803…; below the 3,012.25 limit
+        // B tax 272.50; 2,676.50 × ½ = 1,338.25, limited to 272.50 × ½ = 136.25 (art. 153)
+        const r = computeHouseholdTax(
+            married(
+                [activity("pension", 20_000), activity("net_professional_amount", 20_000)],
+                [],
+            ),
+        );
+        expect(r.quotient).toMatchObject({ applied: true, fromPartnerId: "A", transfer: 12_000 });
+        expect(r.partners[0]!.pensionReduction).toBeCloseTo(1_109.635 + 19.488491803279, 9);
+        expect(r.partners[1]!.pensionReduction).toBeCloseTo(136.25, 9);
+        expect(r.issues).toContainEqual({
+            code: "pension_reduction_activity_income_not_excluded",
+            severity: "warning",
+            partnerId: "B",
+        });
+    });
+
+    test("joint woonbonus credit beyond both spouses' room raises the allocation issue", () => {
+        // RG-20 with 6,000 of payments: A fills the 2,280 cap (912), B's tax 452.731 absorbs
+        // 1,131.8275; the rest of B's 3,000 fills B's cap (2,280 → 912), so 459.269 is lost.
+        const r = computeHouseholdTax(
+            married([activity("employee", 50_000)], [activity("employee", 8_000)], {
+                home: {
+                    cadastralIncome: 0,
+                    mortgageInterestPaid: 3_000,
+                    mortgageCapitalRepaid: 3_000,
+                    mortgageStartYear: 2018,
+                    mortgageIsPrimaryResidence: true,
+                    woonbonusChildrenAtLoanStart: 0,
+                    mortgageSharePartnerB: 50,
+                },
+            }),
+        );
+        expect(r.partners[0]!.ownHomeCredit).toBeCloseTo(912, 9);
+        expect(r.partners[1]!.ownHomeCredit).toBeCloseTo(912, 9);
+        expect(r.partners[1]!.reductionsApplied).toBeCloseTo(452.731, 6);
+        expect(r.issues).toContainEqual({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
+    });
+
     test("marginal rate follows the post-quotient taxable income", () => {
         const r = computeHouseholdTax(married([activity("employee", 40_000)], [activity("employee", 0)]));
         expect(r.quotient.applied).toBe(true);

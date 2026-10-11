@@ -405,4 +405,132 @@ export const JOINT_SCENARIOS: readonly Scenario[] = [
             expect(r.issues).toContainEqual({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
         },
     },
+    {
+        id: "JP-01",
+        description: "two pensioners 30,000 + 15,000: the reduction for pensions per spouse, each with its own limits",
+        rows: ["hh-pension-per-spouse", "pension-reduction", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 arts 147 al. 1, 1°, 150, 151/1, 152, 153; arts 87-88",
+        status: "verified",
+        household: married([activity("pension", 30_000)], [activity("pension", 15_000)]),
+        verify: (r) => {
+            // art. 87: 30% × 45,000 = 13,500 ≤ B's own 15,000 → no quotient
+            // A 30,000: 4,080 + 4,992 + 1,200 × 45% (540) = 9,612 − 2,727.50 = 6,884.50
+            //   art. 152: 1/3 + 2/3 × (57,560 − 30,000) / 28,780 = 4,195 / 4,317;
+            //   2,219.27 × 4,195 / 4,317 = 2,156.552617558…; no additional (≥ 28,780)
+            // B 15,000: 3,750 − 2,727.50 = 1,022.50; 2,219.27 + 457.23 (≤ 19,630) = 2,676.50
+            //   art. 153: limited to B's own tax 1,022.50 → B owes 0
+            // art. 150: per spouse, so B's unused part does not reduce A's tax
+            // (6,884.50 − 2,156.552617558) × 1.07 = 5,058.903699212…
+            expect(r.quotient.applied).toBe(false);
+            eur(r.partners[0]?.pensionReduction, 2_156.552617558);
+            eur(r.partners[1]?.pensionReduction, 1_022.5);
+            eur(r.partners[1]?.totalPIT, 0);
+            eur(r.totals.totalPIT, 5_058.903699212);
+            expect(r.issues.map((i) => i.code)).not.toContain("joint_reduction_allocation_unverified");
+        },
+    },
+    {
+        id: "JP-02",
+        description: "pensioner 40,000 with a quotient towards a spouse without income: the transferred part stays pension income and the limits read the income after the transfer",
+        rows: ["hh-pension-quotient", "hh-quotient", "hh-pension-per-spouse", "pension-reduction", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 arts 87-88, 147 al. 1, 1°, 150, 151/1, 152, 153; Com.IB 87/22-23; FPS circular AAFisc 40/2011 nos 19, 27, example 4",
+        status: "verified",
+        household: {
+            ...married([activity("pension", 40_000)], []),
+            partners: [partner("A", [activity("pension", 40_000)]), partner("B", [])],
+        },
+        verify: (r) => {
+            // art. 87: 30% × 40,000 = 12,000 (below the 13,460 cap) → A 28,000, B 12,000
+            // The quotient keeps the nature of A's income (Com.IB 87/23): B's 12,000 is pension.
+            // A 28,000: 4,080 + 11,680 × 40% (4,672) = 8,752 − 2,727.50 = 6,024.50
+            //   only pensions → full amounts; art. 152: 28,000 ≤ 28,780 → base 2,219.27
+            //   art. 151/1: 457.23 × (28,780 − 28,000) / 9,150 = 38.976983606557…
+            //   2,258.246983606557 < art. 153 limit 6,024.50 → A owes 3,766.253016393443
+            // B 12,000: 3,000 − 2,727.50 = 272.50; 2,219.27 + 457.23 (≤ 19,630) = 2,676.50
+            //   art. 153: limited to 272.50 → B owes 0
+            // Without the quotient: A 40,000, exemption 21,820 with B's balance (art. 134):
+            //   4,080 + 4,992 + 11,200 × 45% (5,040) = 14,112 − 6,523 = 7,589; art. 152:
+            //   2,219.27 × (1/3 + 2/3 × 17,560 / 28,780) = 1,642.475712300…; no additional
+            //   → 5,946.524287700 > 3,766.253016393 → the quotient applies
+            // total 3,766.253016393443 × 1.07 = 4,029.890727540984
+            expect(r.quotient.applied).toBe(true);
+            eur(r.quotient.transfer, 12_000);
+            eur(r.partners[0]?.pitAfterExemption, 6_024.5);
+            eur(r.partners[0]?.pensionReduction, 2_258.246983606557);
+            eur(r.partners[1]?.pitAfterExemption, 272.5);
+            eur(r.partners[1]?.pensionReduction, 272.5);
+            eur(r.partners[1]?.totalPIT, 0);
+            eur(r.totals.totalPIT, 4_029.890727540984);
+        },
+    },
+    {
+        id: "JG-01",
+        description: "gifts 1,000 paid by A under a joint assessment: the reduction is apportioned on each spouse's taxed income",
+        rows: ["hh-donations-joint", "donations", "donations-cap"],
+        articles: "WIB 92 art. 145/33 §1 al. 3-5 (\"evenredig omgedeeld in functie van het overeenkomstig artikel 130 belaste inkomen\")",
+        status: "verified",
+        household: {
+            ...married([activity("employee", 50_000)], [activity("employee", 30_000)]),
+            partners: [
+                partner("A", [activity("employee", 50_000)], {
+                    reductions: {
+                        personalPensionContributions: 0,
+                        lifeInsurancePremiums: 0,
+                        charitableDonations: 1_000,
+                        charitableDonationsEligible: true,
+                        childcareCosts: 0,
+                        medicalExpenses: 0,
+                    },
+                }),
+                partner("B", [activity("employee", 30_000)]),
+            ],
+        },
+        verify: (r) => {
+            // A net 37,535 (SC-01); B: SS 3,921, base 26,079 × 30% → cap 5,930, net 20,149
+            // art. 87: 30% × 57,684 = 17,305.20 ≤ 20,149 → no quotient
+            // 1,000 ≤ 10% of either spouse's net income → 1,000 × 30% = 300
+            // A 300 × 37,535 / 57,684 = 195.210110256…; B 300 × 20,149 / 57,684 = 104.789889744…
+            // A 13,002.75 − 2,727.50 = 10,275.25; B 4,080 + 3,829 × 40% (1,531.60) = 5,611.60
+            //   − 2,727.50 = 2,884.10; (13,159.35 − 300) × 1.07 = 13,759.5045
+            eur(r.partners[0]?.reductions.donations, 195.210110256);
+            eur(r.partners[1]?.reductions.donations, 104.789889744);
+            eur(r.totals.totalPIT, 13_759.5045);
+            const codes = r.issues.map((i) => i.code);
+            expect(codes).not.toContain("donation_joint_ceiling_unverified");
+            expect(codes).not.toContain("joint_reduction_allocation_unverified");
+        },
+    },
+    {
+        id: "JG-02",
+        description: "gifts 5,000 paid by A under a joint assessment: the 10% ceiling on whose net income",
+        rows: ["hh-donations-joint-ceiling", "hh-donations-joint"],
+        articles: "WIB 92 art. 145/33 §1 al. 4-5",
+        status: "needs_source",
+        missing:
+            "Whether the 10% ceiling of art. 145/33 §1 al. 4 is taken on the spouses' combined net income or per spouse under a joint assessment (donation_joint_ceiling_unverified); the engine pools the gifts and caps them once on the combined income",
+        household: {
+            ...married([activity("employee", 50_000)], [activity("employee", 30_000)]),
+            partners: [
+                partner("A", [activity("employee", 50_000)], {
+                    reductions: {
+                        personalPensionContributions: 0,
+                        lifeInsurancePremiums: 0,
+                        charitableDonations: 5_000,
+                        charitableDonationsEligible: true,
+                        childcareCosts: 0,
+                        medicalExpenses: 0,
+                    },
+                }),
+                partner("B", [activity("employee", 30_000)]),
+            ],
+        },
+        verify: (r) => {
+            // A's own ceiling 3,753.50 → 1,126.05; the combined ceiling 5,768.40 → 1,500.
+            // Sourced part: the apportionment of whatever reduction is granted (JG-01) and the issue.
+            const a = r.partners[0]?.reductions.donations ?? 0;
+            const b = r.partners[1]?.reductions.donations ?? 0;
+            eur(a / (a + b), 37_535 / 57_684);
+            expect(r.issues).toContainEqual({ code: "donation_joint_ceiling_unverified", severity: "needs_source" });
+        },
+    },
 ];

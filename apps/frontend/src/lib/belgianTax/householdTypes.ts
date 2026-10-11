@@ -202,6 +202,14 @@ export type HouseholdHomeInputs = Pick<
     /** Partner who claims the own-home credit; defaults to A. */
     mortgageCreditPartnerId?: PartnerId;
     /**
+     * Both partners borrowed for the own home: partner B's share (0-100 %) of the payments, in
+     * Wallonia partner B's share of the ownership (art. 145/46ter: interest and capital "au
+     * prorata de la part de propriété"). Each borrower then has an own-home basket of their own
+     * ("per belastingplichtige", arts 145/37 §2 and 145/38/2 §2). Undefined, 0 or 100 keeps the
+     * one-borrower path of `mortgageCreditPartnerId` (0 and 100 name the single borrower).
+     */
+    mortgageSharePartnerB?: number;
+    /**
      * Walloon chèque habitat: income year of the first taxable period in which the credit was
      * claimed (art. 145/46quinquies). The twenty-period window and the halving from the eleventh
      * period count from it; when absent, the loan year (`mortgageStartYear`) is the proxy. No v1
@@ -347,7 +355,12 @@ export interface PartnerTaxResult {
     reductions: TaxReductionBreakdown;
     ownHomeCreditRegime: MortgageCreditRegime;
     ownHomeCredit: number;
-    /** Reductions charged on this partner's tax: min(reductions + own-home credit, tax). */
+    /** Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150). */
+    pensionReduction: number;
+    /**
+     * Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+     * credit, tax).
+     */
     reductionsApplied: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;
@@ -414,7 +427,10 @@ export type HouseholdTaxIssueCode =
     | "refundable_child_credit_not_modelled"
     | "isolated_parent_supplement_not_granted"
     | "senior_quotient_cap_birth_years_missing"
-    | "woonbonus_children_at_loan_start_missing";
+    | "woonbonus_children_at_loan_start_missing"
+    | "pension_reduction_activity_income_not_excluded"
+    | "donation_joint_ceiling_unverified"
+    | "mortgage_region_not_used";
 
 export type HouseholdTaxIssueSeverity = "info" | "warning" | "needs_source";
 

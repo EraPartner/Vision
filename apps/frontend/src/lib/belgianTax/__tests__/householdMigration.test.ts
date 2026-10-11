@@ -204,6 +204,21 @@ describe("parseHouseholdV2", () => {
         ).toBe(2019);
     });
 
+    test("a v1 home edit drops the deprecated mortgageRegion and never writes it (ADR-202)", () => {
+        const h = upgradeProfileV1ToHousehold({ ...employee, mortgageRegion: "wallonia" });
+        expect(h.home.mortgageRegion).toBe("wallonia");
+        expect(applyProfileV1PatchToHousehold(h, { dependentChildren: 1 }).home.mortgageRegion).toBe(
+            "wallonia",
+        );
+        const edited = applyProfileV1PatchToHousehold(h, { mortgageInterestPaid: 2_500 });
+        expect(edited.home).not.toHaveProperty("mortgageRegion");
+        expect(edited.home.mortgageInterestPaid).toBe(2_500);
+        const plain = upgradeProfileV1ToHousehold(employee);
+        expect(
+            applyProfileV1PatchToHousehold(plain, { mortgageRegion: "brussels" }).home,
+        ).not.toHaveProperty("mortgageRegion");
+    });
+
     test("accepts home.woonbonusChildrenAtLoanStart, which the upgrade leaves undefined and v1 patches keep", () => {
         const h = upgradeProfileV1ToHousehold(employee);
         expect(h.home.woonbonusChildrenAtLoanStart).toBeUndefined();

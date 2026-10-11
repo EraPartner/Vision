@@ -13,7 +13,11 @@ import type {
     MortgageCreditRegime,
     ProfessionalExpenseMethod,
 } from "./types";
-import type { BelgianTaxYearTable, ExemptionBracket } from "./constants";
+import type {
+    BelgianTaxYearTable,
+    ExemptionBracket,
+    PensionReductionParams,
+} from "./constants";
 
 /**
  * Professional-expense forfait category of WIB 92 art. 51 al. 2. The cap of art. 51 al. 3
@@ -255,9 +259,40 @@ export interface TaxReductionBreakdown {
 }
 
 /**
+ * Gifts that qualify for the art. 145/33 reduction: the entered amount when the eligibility flag
+ * is set and the gifts reach the minimum ("ten minste 40 euro"), else 0.
+ */
+export function qualifyingDonations(
+    inputs: Pick<ReductionInputs, "charitableDonations" | "charitableDonationsEligible">,
+    table: BelgianTaxYearTable,
+): number {
+    const amount = Math.max(inputs.charitableDonations || 0, 0);
+    return inputs.charitableDonationsEligible && amount >= table.charitableDonationMin ? amount : 0;
+}
+
+/**
+ * Art. 145/33 §1 al. 3-4: rate × the gifts, the gifts limited to 10% of the "totale netto-inkomen"
+ * (without separately taxed income; before the deductible spending of arts 104-116) and to the
+ * absolute cap. `netIncome` is that total net income of the assessment.
+ */
+export function computeDonationReduction(
+    gifts: number,
+    netIncome: number,
+    table: BelgianTaxYearTable,
+): number {
+    const eligible = Math.min(
+        Math.max(gifts, 0),
+        Math.max(netIncome * 0.1, 0),
+        table.charitableDonationAbsoluteCap,
+    );
+    return eligible * table.charitableDonationRate;
+}
+
+/**
  * Federal tax reductions (réductions d'impôt) and the regional service-voucher reduction of one
- * taxpayer. `donationBaseIncome` is the taxable income the 10% donation ceiling refers to
- * (art. 145/33 §1 al. 4).
+ * taxpayer. `donationBaseIncome` is the total net income the 10% donation ceiling refers to
+ * (art. 145/33 §1 al. 4: "10 % van het totale netto-inkomen"), before the deductible spending
+ * (alimony) of arts 104-116.
  */
 export function computeTaxReductions(
     inputs: ReductionInputs,
@@ -288,20 +323,11 @@ export function computeTaxReductions(
           table.groupInsuranceRate
         : 0;
 
-    // Charitable donations: eligible donation = min(gift, 10% × net taxable income, absolute cap).
-    // The €40 minimum applies to the gift itself, not to the eligible (capped) portion.
-    const donationAmount = Math.max(inputs.charitableDonations || 0, 0);
-    const donationNetIncomeCap = Math.max(donationBaseIncome * 0.1, 0);
-    const eligibleDonation = Math.min(
-        donationAmount,
-        donationNetIncomeCap,
-        table.charitableDonationAbsoluteCap,
+    const donations = computeDonationReduction(
+        qualifyingDonations(inputs, table),
+        donationBaseIncome,
+        table,
     );
-    const donations =
-        inputs.charitableDonationsEligible &&
-        donationAmount >= table.charitableDonationMin
-            ? eligibleDonation * table.charitableDonationRate
-            : 0;
 
     const childcareDayCap =
         Math.max(inputs.childcareEligibleDays || 0, 0) *
@@ -348,6 +374,95 @@ export function isChildcareDeducted(
         (inputs.childcareCosts || 0) > 0 &&
         (inputs.childcareEligibleDays || 0) > 0
     );
+}
+
+/** Figures of one taxpayer for the reduction for pensions (WIB 92 arts 147-153). */
+export interface PensionReductionInput {
+    /** Net pensions (art. 146, 1°: the art. 34 income) of the taxpayer. */
+    pensionIncome: number;
+    /**
+     * Total net income of the taxpayer, before the deductible spending of arts 104-116 (FPS
+     * commentary Com.IB 146/15): the denominator of the art. 147 al. 1, 2° proportion and of the
+     * art. 153 tax share.
+     */
+    netIncome: number;
+    /** Taxable income (art. 130 base) that arts 151/1, 151/2 and 152 compare with their limits. */
+    taxableIncome: number;
+    /** Tax after the tax-free sum ("om te slane belasting", Com.IB 146/20). */
+    taxAfterExemption: number;
+}
+
+export interface PensionReductionResult {
+    /** Art. 147 al. 1, 1°-2° base reduction after art. 152 / art. 151/2. */
+    base: number;
+    /** Art. 147 al. 1, 1°-2° additional reduction after art. 151/1. */
+    additional: number;
+    /** Art. 153: the part of the tax on the pensions (tax × pensions / total net income). */
+    taxShareLimit: number;
+    /** min(base + additional, taxShareLimit). */
+    total: number;
+}
+
+export const NO_PENSION_REDUCTION: PensionReductionResult = {
+    base: 0,
+    additional: 0,
+    taxShareLimit: 0,
+    total: 0,
+};
+
+/**
+ * Share of the art. 147 base reduction granted at taxable income `t`: art. 152 (to AY 2026: in
+ * full up to the lower limit, one third from the upper limit, linear in between) or, from
+ * AY 2027, art. 151/2 (the same taper to one third, then from `baseZeroLimits.from` a taper to
+ * nothing above `baseZeroLimits.to`).
+ */
+export function pensionBaseReductionFactor(t: number, p: PensionReductionParams): number {
+    const { lower, upper } = p.baseLimits;
+    if (p.baseZeroLimits && t > p.baseZeroLimits.from) {
+        const { from, to } = p.baseZeroLimits;
+        return t > to ? 0 : (to - t) / (to - from) / 3;
+    }
+    if (t >= upper) return 1 / 3;
+    if (t > lower) return 1 / 3 + ((2 / 3) * (upper - t)) / (upper - lower);
+    return 1;
+}
+
+/** Share of the art. 147 additional reduction granted at taxable income `t` (art. 151/1). */
+export function pensionAdditionalReductionFactor(t: number, p: PensionReductionParams): number {
+    const { lower, upper } = p.additionalLimits;
+    if (t >= upper) return 0;
+    if (t > lower) return (upper - t) / (upper - lower);
+    return 1;
+}
+
+/**
+ * Reduction for pensions of one taxpayer (WIB 92 art. 147 al. 1, 1°-2°; arts 151/1, 151/2, 152,
+ * 153; computed per spouse under a joint assessment, art. 150):
+ *  - base and additional amounts in full when the net income consists only of pensions, else
+ *    in proportion to net pensions / total net income;
+ *  - the additional amount tapers to nothing between the art. 151/1 limits of the taxable
+ *    income; the base amount to one third between the art. 152 limits (from AY 2027 art. 151/2,
+ *    which also tapers the last third to nothing);
+ *  - art. 153: never more than the part of the tax after the tax-free sum that relates to the
+ *    pensions, in proportion to the net income (Com.IB 146/20 and the example of 146/24).
+ * The exclusion of activity income from the proportion (art. 147 al. 1, 2°, b-c) needs the
+ * statutory pension and the pension age, which the model does not carry: the household engine
+ * raises `pension_reduction_activity_income_not_excluded` instead.
+ */
+export function computePensionReduction(
+    input: PensionReductionInput,
+    table: BelgianTaxYearTable,
+): PensionReductionResult {
+    const pension = Math.max(input.pensionIncome, 0);
+    const netIncome = Math.max(input.netIncome, 0);
+    if (pension <= 0 || netIncome <= 0) return NO_PENSION_REDUCTION;
+    const p = table.pensionReduction;
+    const share = Math.min(pension / netIncome, 1);
+    const taxable = Math.max(input.taxableIncome, 0);
+    const base = p.base * share * pensionBaseReductionFactor(taxable, p);
+    const additional = p.additional * share * pensionAdditionalReductionFactor(taxable, p);
+    const taxShareLimit = Math.max(input.taxAfterExemption, 0) * share;
+    return { base, additional, taxShareLimit, total: Math.min(base + additional, taxShareLimit) };
 }
 
 /** Mortgage and residence fields that drive the regional own-home credit. */
@@ -415,14 +530,20 @@ export interface OwnHomeCreditTaxpayer {
 /**
  * Resolve the regional own-home credit regime applicable to the user's mortgage.
  * Returns 'none' when the mortgage doesn't fit a modeled regime.
+ *
+ * The regime is that of the taxpayer's region (`inputs.region`): the special finance law of
+ * 16 January 1989 art. 5/1 §2 localises the personal income tax "op de plaats waar de
+ * belastingplichtige zijn fiscale woonplaats heeft gevestigd op 1 januari van het aanslagjaar",
+ * and art. 5/5 §4 makes the regions exclusively competent for the own-home reductions without
+ * reference to where the home lies. The deprecated `mortgageRegion` is ignored.
  */
 export function resolveMortgageRegime(
-    inputs: OwnHomeCreditInputs,
+    inputs: Omit<OwnHomeCreditInputs, "mortgageRegion">,
 ): MortgageCreditRegime {
     if (!inputs.mortgageIsPrimaryResidence) return "none";
     if (!inputs.mortgageInterestPaid && !inputs.mortgageCapitalRepaid)
         return "none";
-    const region = inputs.mortgageRegion ?? inputs.region;
+    const region = inputs.region;
     const startYear = inputs.mortgageStartYear ?? 0;
     if (region === "flanders" && startYear > 0 && startYear < 2020)
         return "flemish_woonbonus";
@@ -470,64 +591,103 @@ export function computeOwnHomeCredit(
     regime: MortgageCreditRegime,
     taxpayer: OwnHomeCreditTaxpayer,
 ): number {
-    if (regime === "none") return 0;
-    const interest = Math.max(inputs.mortgageInterestPaid || 0, 0);
-    const capital = Math.max(inputs.mortgageCapitalRepaid || 0, 0);
+    const payments = mortgagePayments(inputs);
+    if (regime === "flemish_woonbonus") {
+        const basket = woonbonusBasket(inputs, table, taxpayer);
+        return Math.min(payments, basket.cap) * basket.rate;
+    }
+    if (regime === "walloon_cheque_habitat") {
+        const parts = chequeHabitatParts(inputs, table, taxpayer);
+        if (!parts) return 0;
+        return Math.min((parts.base + parts.childSupplement) * parts.factor, payments);
+    }
+    return 0;
+}
+
+/** Interest plus capital paid on the loan in the period (each clamped at 0). */
+export function mortgagePayments(
+    inputs: Pick<OwnHomeCreditInputs, "mortgageInterestPaid" | "mortgageCapitalRepaid">,
+): number {
+    return (
+        Math.max(inputs.mortgageInterestPaid || 0, 0) +
+        Math.max(inputs.mortgageCapitalRepaid || 0, 0)
+    );
+}
+
+/** Woonbonus of one taxpayer: the expense cap of the period ("per belastingplichtige") and rate. */
+export interface WoonbonusBasket {
+    cap: number;
+    rate: number;
+}
+
+/** Flemish woonbonus cap and rate of one taxpayer (arts 145/37 §§2-3, 145/38/2 §§2-3). */
+export function woonbonusBasket(
+    inputs: OwnHomeCreditInputs,
+    table: BelgianTaxYearTable,
+    taxpayer: OwnHomeCreditTaxpayer,
+): WoonbonusBasket {
     const startYear = inputs.mortgageStartYear ?? 0;
     // Taxable periods since the loan year: 0 is the first period, 10 the eleventh.
     const loanAge = Math.max(0, taxpayer.incomeYear - startYear);
-
-    if (regime === "flemish_woonbonus") {
-        let cap: number;
-        let rate: number;
-        if (startYear < 2015) {
-            cap = table.flemishWoonbonusBaseCap;
-            rate = Math.max(
-                taxpayer.marginalRatePercent / 100,
-                table.flemishWoonbonusPre2015MinimumRate,
-            );
-        } else if (startYear === 2015) {
-            cap = table.flemishWoonbonus2015BaseCap;
-            rate = table.flemishWoonbonusRate;
-        } else {
-            cap = table.flemishIntegratedWoonbonusBaseCap;
-            rate = table.flemishWoonbonusRate;
-        }
-        if (loanAge < 10) {
-            cap += table.flemishWoonbonusExtraFirst10y;
-            if (woonbonusChildCount(inputs) >= 3) cap += table.flemishWoonbonusExtraChildren;
-        }
-        return Math.min(interest + capital, cap) * rate;
-    }
-
-    if (regime === "walloon_cheque_habitat") {
-        const income = Math.max(taxpayer.taxableIncome, 0);
-        const { lower, upper } = table.walloonChequeHabitatIncomeThresholds;
-        if (income > upper) return 0;
-        const base =
-            income <= lower
-                ? table.walloonChequeHabitatBase
-                : table.walloonChequeHabitatBase -
-                  (income - lower) * table.walloonChequeHabitatPhaseOutRate;
-        const children = Math.max(inputs.dependentChildren || 0, 0);
-        const disabled = Math.min(
-            Math.max(inputs.dependentChildrenDisabled || 0, 0),
-            children,
+    let cap: number;
+    let rate: number;
+    if (startYear < 2015) {
+        cap = table.flemishWoonbonusBaseCap;
+        rate = Math.max(
+            taxpayer.marginalRatePercent / 100,
+            table.flemishWoonbonusPre2015MinimumRate,
         );
-        const childSupplement =
-            (children + disabled) * table.walloonChequeHabitatChildSupplement;
-        // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
-        // Before the first qualifying year the conditions are not met yet.
-        const first = inputs.firstQualifyingYear;
-        if (first !== undefined && taxpayer.incomeYear < first) return 0;
-        const period = first !== undefined ? taxpayer.incomeYear - first : loanAge;
-        if (period >= 20) return 0;
-        let credit = Math.max(base, 0) + childSupplement;
-        if (period >= 10) credit /= 2;
-        return Math.min(credit, interest + capital);
+    } else if (startYear === 2015) {
+        cap = table.flemishWoonbonus2015BaseCap;
+        rate = table.flemishWoonbonusRate;
+    } else {
+        cap = table.flemishIntegratedWoonbonusBaseCap;
+        rate = table.flemishWoonbonusRate;
     }
+    if (loanAge < 10) {
+        cap += table.flemishWoonbonusExtraFirst10y;
+        if (woonbonusChildCount(inputs) >= 3) cap += table.flemishWoonbonusExtraChildren;
+    }
+    return { cap, rate };
+}
 
-    return 0;
+/**
+ * Chèque habitat of one taxpayer before the payments cap of art. 145/46ter §4: the income-based
+ * amount (`base`, never negative), the €125 per dependent child (`childSupplement`) and the
+ * halving `factor` (0.5 from the eleventh period). Undefined when nothing is due: income above
+ * the upper limit, before the first qualifying year or from the twenty-first period.
+ */
+export interface ChequeHabitatParts {
+    base: number;
+    childSupplement: number;
+    factor: number;
+}
+
+export function chequeHabitatParts(
+    inputs: OwnHomeCreditInputs,
+    table: BelgianTaxYearTable,
+    taxpayer: OwnHomeCreditTaxpayer,
+): ChequeHabitatParts | undefined {
+    const income = Math.max(taxpayer.taxableIncome, 0);
+    const { lower, upper } = table.walloonChequeHabitatIncomeThresholds;
+    if (income > upper) return undefined;
+    const base =
+        income <= lower
+            ? table.walloonChequeHabitatBase
+            : table.walloonChequeHabitatBase -
+              (income - lower) * table.walloonChequeHabitatPhaseOutRate;
+    const children = Math.max(inputs.dependentChildren || 0, 0);
+    const disabled = Math.min(Math.max(inputs.dependentChildrenDisabled || 0, 0), children);
+    const childSupplement = (children + disabled) * table.walloonChequeHabitatChildSupplement;
+    // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
+    // Before the first qualifying year the conditions are not met yet.
+    const startYear = inputs.mortgageStartYear ?? 0;
+    const loanAge = Math.max(0, taxpayer.incomeYear - startYear);
+    const first = inputs.firstQualifyingYear;
+    if (first !== undefined && taxpayer.incomeYear < first) return undefined;
+    const period = first !== undefined ? taxpayer.incomeYear - first : loanAge;
+    if (period >= 20) return undefined;
+    return { base: Math.max(base, 0), childSupplement, factor: period >= 10 ? 0.5 : 1 };
 }
 
 export interface InvestmentSideCalc {
@@ -572,6 +732,8 @@ export interface CalculationBreakdownValues {
     maritalQuotientTransfer: number;
     maritalQuotientBenefit: number;
     personalExemptionBenefit: number;
+    /** Reduction for pensions (arts 147-153); adds a row when > 0. */
+    pensionReduction: number;
     ownHomeCredit: number;
     serviceVoucherCredit: number;
     federalTaxCredits: number;
@@ -665,6 +827,9 @@ export function buildCalculationBreakdown(
                       amount: -v.personalExemptionBenefit,
                   },
               ]
+            : []),
+        ...(v.pensionReduction > 0
+            ? [{ label: "Pension reduction (arts 147-153)", amount: -v.pensionReduction }]
             : []),
         ...(v.ownHomeCredit > 0
             ? [{ label: "Own-home credit", amount: -v.ownHomeCredit }]

@@ -22,6 +22,7 @@ import {
     type RelationshipEventKind,
 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdStepProps } from "./types";
+import { ProfileNumberInput } from "./ProfileNumberInput";
 import {
     addPartnerB,
     addRelationshipEvent,
@@ -45,16 +46,30 @@ interface PartnerSelectProps {
     value: PartnerId;
     partners: PartnerId[];
     onValueChange: (value: PartnerId) => void;
+    disabled?: boolean;
+    describedBy?: string;
 }
 
-function PartnerSelect({ id, value, partners, onValueChange }: PartnerSelectProps) {
+function PartnerSelect({
+    id,
+    value,
+    partners,
+    onValueChange,
+    disabled,
+    describedBy,
+}: PartnerSelectProps) {
     const { t } = useLanguage();
     return (
         <Select
             value={value}
             onValueChange={(next) => onValueChange(next as PartnerId)}
+            {...(disabled ? { disabled: true } : {})}
         >
-            <SelectTrigger id={id} className="w-full">
+            <SelectTrigger
+                id={id}
+                className="w-full"
+                {...(describedBy ? { "aria-describedby": describedBy } : {})}
+            >
                 <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -174,6 +189,10 @@ export function HouseholdStep({
     const { decision } = deriveAssessment(household, year);
     const hasPartner = household.partners.some((p) => p.id === "B");
     const partnerIds = household.partners.map((p) => p.id);
+    // With partner B's share entered, the share decides who claims the own-home credit (0 → A,
+    // 100 → B, 1-99 → both), so the single-claimant picker no longer applies.
+    const shareB = household.home.mortgageSharePartnerB;
+    const shareSet = shareB !== undefined && partnerIds.includes("B");
     const events = household.relationship.events;
 
     return (
@@ -330,10 +349,18 @@ export function HouseholdStep({
                                 <PartnerSelect
                                     id="household-home-claimant"
                                     value={
-                                        household.home.mortgageCreditPartnerId ??
-                                        "A"
+                                        shareSet && shareB === 100
+                                            ? "B"
+                                            : shareSet && shareB === 0
+                                              ? "A"
+                                              : (household.home.mortgageCreditPartnerId ??
+                                                "A")
                                     }
                                     partners={partnerIds}
+                                    disabled={shareSet}
+                                    {...(shareSet
+                                        ? { describedBy: "household-home-claimant-hint" }
+                                        : {})}
                                     onValueChange={(mortgageCreditPartnerId) =>
                                         updateHousehold((h) => ({
                                             ...h,
@@ -344,7 +371,46 @@ export function HouseholdStep({
                                         }))
                                     }
                                 />
+                                {shareSet && (
+                                    <FieldHint id="household-home-claimant-hint">
+                                        {t("tax.household.field.ownHomeClaimant.shareSet")}
+                                    </FieldHint>
+                                )}
                             </div>
+                            {partnerIds.includes("B") && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="household-home-share-b">
+                                        {t("tax.household.field.mortgageSharePartnerB")}
+                                    </Label>
+                                    <ProfileNumberInput
+                                        id="household-home-share-b"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={household.home.mortgageSharePartnerB}
+                                        allowEmpty
+                                        onValueChange={(mortgageSharePartnerB) =>
+                                            updateHousehold((h) => {
+                                                const { mortgageSharePartnerB: _old, ...home } =
+                                                    h.home;
+                                                return {
+                                                    ...h,
+                                                    home:
+                                                        mortgageSharePartnerB === undefined
+                                                            ? home
+                                                            : { ...home, mortgageSharePartnerB },
+                                                };
+                                            })
+                                        }
+                                        placeholder={t(
+                                            "tax.household.placeholder.mortgageSharePartnerB",
+                                        )}
+                                    />
+                                    <FieldHint>
+                                        {t("tax.household.field.mortgageSharePartnerB.desc")}
+                                    </FieldHint>
+                                </div>
+                            )}
                         </div>
                         <FieldHint>{t("tax.household.claims.note")}</FieldHint>
                     </div>

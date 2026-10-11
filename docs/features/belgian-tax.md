@@ -20,6 +20,7 @@ related_code:
   - apps/frontend/src/stores/belgianTaxStore.ts
   - apps/frontend/src/lib/belgianTax/householdRuntime.ts
   - apps/frontend/src/lib/belgianTax/pit.ts
+  - apps/frontend/src/lib/belgianTax/householdOwnHome.ts
   - apps/frontend/src/lib/belgianTax/constants.ts
   - apps/frontend/src/lib/belgianTax/socialSecurity.ts
   - apps/frontend/src/lib/belgianTax/propertyTax.ts
@@ -80,6 +81,7 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | `exemptions.ts`       | Dependent supplements and tax-free sum allocation between partners          |
 | `maritalQuotient.ts`  | Arts 87-88 quotient on professional income, IY 2026 senior cap              |
 | `household.ts`        | `computeHouseholdTax`, `toBelgianTaxCalculation`                            |
+| `householdOwnHome.ts` | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202) |
 | `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                |
 | `householdSchema.ts`  | zod schemas for the v2 setting values                                       |
 | `householdRuntime.ts` | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff |
@@ -220,7 +222,7 @@ Investments of type `real_estate` include Belgian-specific fields:
 4. Deductions from taxable basis: alimony at the art. 104 share for the income year (80% up to 2024, 70% in 2025, 60% in 2026 — law of 18 December 2025). (2026-06-11 correction: union dues now deduct only inside the _actual_ professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
 5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
 5b. Marital quotient under `married_joint` (arts 87-88): the spouse's own professional income is taxed in their own name with the basic exemption (art. 126 §1 al. 2, décumul); up to 30% of the household professional income is transferred to the spouse so that own income plus transfer reaches the indexed cap (art. 88), and the transfer is kept only when the two spouses' combined tax is lower than without it (art. 88 al. 2). In the household engine that comparison is made on the final tax (after each partner's reductions, the state/regional factor and the communal surcharge), so a partner's reductions cannot make an automatic transfer costly; the quotient benefit is that saving. Until 2026-10-11 the no-quotient baseline omitted the spouse's own tax.
-6. Regional own-home credit (optional): applies to mortgages on the taxpayer's primary residence. The claimant's taxable income before the marital quotient sets the woonbonus marginal rate and the chèque habitat income limits (both engines; in the household engine the claimant is `mortgageCreditPartnerId`). Corrected on 2026-10-11 against the regional WIB 92 texts; amounts are not indexed.
+6. Regional own-home credit (optional): applies to mortgages on the taxpayer's primary residence. The regime is that of the taxpayer's region (`region`, the fiscal domicile on 1 January of the assessment year; special finance law of 16 January 1989 arts 5/1 §2 and 5/5 §4), wherever the home lies; the deprecated `mortgageRegion` is ignored since 2026-10-11 ([[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]]). The claimant's taxable income before the marital quotient sets the woonbonus marginal rate and the chèque habitat income limits (both engines; in the household engine the claimant is `mortgageCreditPartnerId`). Corrected on 2026-10-11 against the regional WIB 92 texts; amounts are not indexed.
    - **Flemish woonbonus (loans signed before 2020)**, credit = min(interest + capital repaid, base + increases) × rate:
      - _Loans before 2015_ (art. 145/37 §2): base €2,280 at the taxpayer's highest art. 130 rate, minimum 30%.
      - _Loans signed in 2015_ (art. 145/37 §3): base €1,520 at 40%.
@@ -228,7 +230,8 @@ Investments of type `real_estate` include Belgian-specific fields:
      - In the first ten taxable periods the base rises by €760, and by a further €80 when the taxpayer had three or more dependent children on 1 January of the year after the loan year, a disabled child counted twice (arts 145/37 §2 al. 3, 145/38/2 §2 al. 3); after year ten neither applies. `computeBelgianPIT` has no input for that date and counts the current dependent children (disabled twice) as a proxy; the household engine uses `home.woonbonusChildrenAtLoanStart` when set (corrected 2026-10-11).
    - **Walloon `chèque habitat` (loans signed 2016-2024)**, art. 145/46ter as coordinated in FPS circular 2026/C/18: €1,520 when the taxable income is at or below the lower limit; €1,520 − 1.275% × (income − lower limit) between the limits; nothing above the upper limit (IY 2024 26,394 / 101,805; IY 2025 27,353 / 105,503; IY 2026 28,024 / 108,093). Plus €125 per dependent child (disabled children count twice) except above the upper limit. Halved from the eleventh taxable period, granted for twenty assessment years at most (art. 145/46quinquies), and never more than the interest and capital paid; the loan age is counted from the income year being computed. Loans signed from 1 January 2025 no longer qualify. The halving for a second home is not modelled.
    - **Brussels & post-2020 Flanders**: Not modeled (regime = 'none', credit = 0).
-7. Tax credits ("réductions d'impôt", IY 2025 amounts): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,450 @30%, frozen by the law of 18 December 2025), employee group insurance (30%), donations (30% since 2025, 45% in 2024, ≥€40, capped at 10% of net income and €408,130), childcare (45%, €16.90/day cap). The domestic-personnel reduction (art. 145/34) was abolished from income year 2025; the IY 2024 table keeps it (30%, €8,160 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
+7. Tax credits ("réductions d'impôt", IY 2025 amounts): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,450 @30%, frozen by the law of 18 December 2025), employee group insurance (30%), donations (30% since 2025, 45% in 2024, ≥€40, capped at 10% of the total net income before the alimony deduction and at €408,130; art. 145/33 §1 al. 4, base corrected 2026-10-11 from the taxable income after alimony; under `married_joint` the spouses' combined net income), childcare (45%, €16.90/day cap). The domestic-personnel reduction (art. 145/34) was abolished from income year 2025; the IY 2024 table keeps it (30%, €8,160 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
+   - **Reduction for pensions** (arts 147-153, added 2026-10-11): for a `retired` profile, a base reduction (IY 2024 €2,151.72, IY 2025 €2,219.27, IY 2026 €2,182.06) and an additional reduction (€444.78 / €457.23 / €467.87), in proportion to net pensions / total net income when other income exists (art. 147 al. 1, 2°). The additional reduction tapers to nothing between the art. 151/1 limits (IY 2025 €19,630-€28,780); the base reduction tapers to one third between the art. 152 limits (IY 2025 €28,780-€57,560) and, from IY 2026, to nothing between €60,260 and €72,310 (art. 151/2). Art. 153 limits it to the share of the tax after the tax-free sum that relates to the pensions. Both engines compute it per spouse (art. 150) on each spouse's taxable income and own tax after the quotient; the pension part of the quotient counts as the receiving spouse's pension (corrected 2026-10-11: `computeBelgianPIT` took the art. 153 limit from the couple's tax). The reduction is charged before the other credits (special finance law art. 5/2 §2, 4°, a), so `pensionReduction` and its breakdown row show the applied amount.
    - **Service vouchers** (regional art. 145/21): reduction = rate × min(spend, cap per taxpayer). Flanders 20% up to €1,790 (IY 2024), abolished from IY 2025; Wallonia 30% up to €1,790 / €1,850 / €1,890; Brussels 15% up to €1,790 / €1,850, abolished from IY 2026. The spend is the optional `serviceVoucherSpend` field; when it is absent the legacy `serviceVoucherCount` is converted with the year table's voucher price (€9 or €10). Until 2026-10-11 the engine used voucher counts (€0.90 × 150 in Wallonia, 15% × 172 × €10 in Brussels).
 8. **State + regional factor**: federal PIT after credits × (reduced state tax 75.043%) × (1 + regional opcentiemen) = 1.0000 for Flanders and Wallonia (33.257%) and 0.9950 for Brussels (32.591%), for IY 2024-2026. Until 2026-10-11 the engine used 0.9951 / 0.9951 / 0.9945, calibrated on a PwC sample whose factor matches Brussels; no Flemish 2% reduction exists in the sources read.
 9. Communal surcharge applied to federal PIT after the state + regional factor.
@@ -249,6 +252,7 @@ The `BelgianTaxCalculation` result object includes:
 | `federalTaxCredits`         | Total tax credits (pension savings, life insurance, donations, childcare, domestic help, etc.), clamped so sum ≤ `federalPITBeforeExemption` |
 | `ownHomeCreditRegime`       | Applicable regime: `'flemish_woonbonus'`, `'walloon_cheque_habitat'`, or `'none'`                                                            |
 | `ownHomeCredit`             | Regional own-home credit amount (0 if regime is `'none'`)                                                                                    |
+| `pensionReduction`          | Reduction for pensions (arts 147-153), part of `federalTaxCredits`; absent on calculations frozen before 2026-10-11                          |
 | `totalPIT`                  | Federal PIT after exemption, credits, and communal surcharge (income tax only)                                                               |
 | `totalTaxBurden`            | `totalPIT` + employee SS + special SS + property tax estimate (no double-counting)                                                           |
 
@@ -374,12 +378,30 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    supplements to the higher taxable income under a joint assessment (to the claimant
    otherwise); the unused balance of one spouse moves to the other (art. 134).
 7. **Tax per partner**, then reductions capped at that partner's tax, regional factor and
-   communal surcharge.
+   communal surcharge. The reduction for pensions is computed per spouse (art. 150) on the
+   partner's own pensions and net income, against the partner's taxable income and tax after the
+   quotient. The quotient keeps the nature of the income it comes from (Com.IB 87/22-23; FPS
+   circular AAFisc 40/2011): the receiving spouse has pensions pro rata and the transferring
+   spouse's pensions are measured after the transfer (scenario JP-02). Gifts are pooled under a joint assessment, capped once at 10% of the spouses'
+   combined net income, and apportioned on each spouse's taxed income (art. 145/33 §1 al. 5;
+   `donation_joint_ceiling_unverified` when a per-spouse ceiling would give less). Other
+   reductions stay with the payer.
 8. **CSSS**: under a joint assessment the joint scale applies to both partners' net professional
    income (pensions excluded); otherwise the single scale per partner who is an employee.
 9. Property tax for the home and the investment side calculation per partner.
 
-The own-home credit goes to `mortgageCreditPartnerId`. The chèque habitat €125 per child counts
+The own-home credit goes to `mortgageCreditPartnerId`, unless both partners borrowed:
+`home.mortgageSharePartnerB` (0-100, partner B's share of the payments, in Wallonia B's
+ownership share) strictly between 0 and 100 gives each partner a basket of their own
+(`householdOwnHome.ts`, [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]];
+scenarios RG-16 to RG-18, RG-20). Under a joint assessment the woonbonus payments are divided
+freely within the two caps: first where each spouse's tax can absorb the credit (higher rate
+first; at equal rates each keeps their own payments and only what their tax cannot use moves),
+then up to the caps; credit that is still lost raises `joint_reduction_allocation_unverified`.
+The chèque habitat €125 per child goes to the borrower with the most room
+under their payments cap. Outside a joint assessment each borrower claims their own share. The
+regime follows `household.region`; a different stored `home.mortgageRegion` raises
+`mortgage_region_not_used` (info, scenario RG-19). The chèque habitat €125 per child counts
 this year's children under a joint assessment; otherwise only when that partner is also the
 dependants' claimant (corrected 2026-10-11, scenario RG-12). The woonbonus €80 follows
 `home.woonbonusChildrenAtLoanStart` (scenarios RG-05, RG-13); when it is absent, this year's
@@ -481,14 +503,18 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   (kind and date, the deceased partner for a death; a new event is a marriage on 1 January of
   the year before the income year, so a migrated joint household stays joint until the user
   enters the actual date); the death-year election when the year is
-  electable; who claims the dependants and the own-home credit.
+  electable; who claims the dependants and the own-home credit; with partner B, B's share of
+  the home loan (`home.mortgageSharePartnerB`, empty for one borrower).
 - **Income** step, per partner: activities (kind, gross amount or the net amount of a
   `net_professional_amount`, optional start and end dates), the expense method per forfait
   category with the actual amount, other taxable income, alimony, union dues, birth year and
   disability. Activity ids follow `act_<partner>_<n>`; an expense choice is dropped when no
   activity uses its category any more. A one-partner household with one activity round-trips
   unchanged, and editing its amount gives the same household as the v1 gross-income patch.
-- **Home** step: the v1 home fields, plus `home.firstQualifyingYear` for a Walloon loan and
+- **Home** step: the v1 home fields except the mortgage region (ADR-202: the household region
+  decides the regime; saving the step drops a stored `home.mortgageRegion`, and a v1-shaped edit
+  through the projection drops `mortgageRegion` too, so `mortgage_region_not_used` clears after
+  one edit), plus `home.firstQualifyingYear` for a Walloon loan and
   `home.woonbonusChildrenAtLoanStart` for a Flemish loan signed before 2020.
 - **Deductions** step: dependants for the household and, per partner, the reductions of the v1
   sheet plus `serviceVoucherSpend` and the isolated-parent request.
@@ -500,7 +526,10 @@ the v1 sheet becomes partner B's disability switch.
 Walloon chèque habitat was claimed. When set, `computeOwnHomeCredit` counts the halving from the
 eleventh period and the twenty-period limit (art. 145/46quinquies) from it and grants nothing
 for an earlier year; otherwise the loan year stays the proxy. It has no v1 source and is not
-projected to the v1 profile, so `computeBelgianPIT` keeps the proxy.
+projected to the v1 profile, so `computeBelgianPIT` keeps the proxy. Limitation: the household
+has one `firstQualifyingYear` for both chèque-habitat borrowers, while the twenty periods run per
+taxpayer; a co-borrower who first claimed in another year cannot be entered (no model change
+planned yet).
 
 `home.woonbonusChildrenAtLoanStart` (optional, a non-negative integer) is the number of dependent
 children of the borrower on 1 January of the year after the loan year, a disabled child counted
@@ -513,7 +542,8 @@ without it equals `computeBelgianPIT`.
 The tax overview shows a **Per-partner breakdown** card (widget `householdBreakdown`) for a
 year with two assessed partners: taxable income, tax-free sum charged (`exemption.applied`,
 after the art. 134 transfer and capped at the partner's taxable income), tax after the tax-free
-sum, reductions charged, the regional factor and communal surcharge (final tax − (tax after the
+sum, the reduction for pensions (only when a partner has one), the other reductions charged,
+the regional factor and communal surcharge (final tax − (tax after the
 tax-free sum − reductions)) and final tax for each partner and the household, so each column
 adds up; then the assessment mode and, under a joint assessment, the marital
 quotient transfer and saving. A one-partner household shows no card.
@@ -555,7 +585,8 @@ frontend refetches the aggregations and deduction candidates.
 
 - Brussels stamp-duty rebate (one-time, not annual).
 - Flemish post-2020 mortgages (no successor regime — capital owners only).
-- Walloon chèque habitat: the halving when the taxpayer acquires a second home, and the free split of the per-child increase between spouses (the household engine gives the whole credit to `mortgageCreditPartnerId`).
+- Walloon chèque habitat: the halving when the taxpayer acquires a second home. With two borrowers the household engine places the per-child increase where it fits under a joint assessment; with one borrower the whole credit goes to `mortgageCreditPartnerId`.
+- Reduction for pensions: only the pension part of art. 147 (no unemployment, sickness or other replacement income, no art. 154); the art. 147 al. 1, 2°, b-c exclusion of activity income for a statutory pensioner at the legal pension age needs inputs the profile lacks (`pension_reduction_activity_income_not_excluded`, warning, also for a spouse who receives pensions through the quotient).
 - Co-parenting (art. 132bis): the household has one claimant for all dependants.
 - The "fiscal widow(er)" treatment in the year after a partner's death (unsourced; the survivor is assessed alone).
 - Foreign tax credit on foreign dividends (DBI-RDT regime).
@@ -745,6 +776,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — As-filed frozen calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, single-year CSV export (May 2026)
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
+- [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] — The household region decides the own-home regime (`mortgageRegion` deprecated); an own-home basket per borrower (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/reference/belgian-tax-scenario-matrix|Belgian tax scenario matrix]] — law-derived household scenarios per rule-matrix row
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio

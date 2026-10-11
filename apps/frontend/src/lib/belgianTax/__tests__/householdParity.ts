@@ -20,8 +20,8 @@
  *  6. A quotient towards partner A or dependent supplements allocated to partner B: v1 always
  *     treats A as the earner.
  *  7. A category loss (actual expenses above the income): v1 offsets it against other income.
- *  8. Two partners where the reductions exceed partner A's own tax: v1 caps them at the combined
- *     tax.
+ *  8. Two partners where the reductions (with the reduction for pensions) exceed a partner's own
+ *     tax: v1 caps them at the combined tax.
  * Field-level exclusion: when the quotient applies and partner B's own income is below their
  * tax-free sum, `maritalQuotientBenefit` (and its breakdown row amount) differs, because the v2
  * no-quotient baseline includes the art. 134 balance transfer. The tax itself is compared.
@@ -72,7 +72,8 @@ export function parityExclusion(
     if (
         result.partners.length === 2 &&
         result.partners.some(
-            (p) => p.reductions.total + p.ownHomeCredit > p.pitAfterExemption,
+            (p) =>
+                p.pensionReduction + p.reductions.total + p.ownHomeCredit > p.pitAfterExemption,
         )
     )
         return "reductions_above_partner_tax";

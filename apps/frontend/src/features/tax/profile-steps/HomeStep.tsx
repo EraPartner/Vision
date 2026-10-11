@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import type { HouseholdStepProps, StepProps } from "./types";
+import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
+import { withoutMortgageRegion } from "./householdEditing";
 import { ProfileNumberInput } from "./ProfileNumberInput";
 import { ProfileNumberField } from "./ProfileNumberField";
 import { BelgianRegionSelect } from "./ProfileSelectFields";
@@ -34,9 +36,14 @@ export function HomeStep({
     profile,
     updateProfile,
     household,
-    updateHousehold,
+    updateHousehold: updateHouseholdRaw,
 }: StepProps & HouseholdStepProps) {
     const { t } = useLanguage();
+    // The deprecated mortgage region (ADR-202) has no field here any more; any edit of a
+    // household-only home field drops it, as v1 home edits do in the projection.
+    const updateHousehold = (
+        update: (h: BelgianTaxHouseholdV2) => BelgianTaxHouseholdV2,
+    ) => updateHouseholdRaw((h) => withoutMortgageRegion(update(h)));
     const residenceUids = useRef<string[]>([]);
     const residences = profile.additionalResidences || [];
     while (residenceUids.current.length < residences.length) {
@@ -233,23 +240,6 @@ export function HomeStep({
                                     )}
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="mortgage-region">
-                                    {t("tax.profile.field.mortgageRegion")}
-                                </Label>
-                                <BelgianRegionSelect
-                                    id="mortgage-region"
-                                    value={
-                                        profile.mortgageRegion ?? profile.region
-                                    }
-                                    onValueChange={(v) =>
-                                        updateProfile({
-                                            mortgageRegion: v,
-                                        })
-                                    }
-                                    className="w-full"
-                                />
-                            </div>
                         </div>
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -289,7 +279,7 @@ export function HomeStep({
                             />
                         </div>
 
-                        {(profile.mortgageRegion ?? profile.region) ===
+                        {profile.region ===
                             "wallonia" && (
                             <ProfileNumberField
                                 id="cheque-habitat-first-year"
@@ -338,7 +328,7 @@ export function HomeStep({
                             />
                         )}
 
-                        {(profile.mortgageRegion ?? profile.region) ===
+                        {profile.region ===
                             "flanders" &&
                             profile.mortgageStartYear !== undefined &&
                             profile.mortgageStartYear < 2020 && (
