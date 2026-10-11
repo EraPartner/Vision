@@ -3,7 +3,7 @@ title: Reference Documentation Index
 type: reference-index
 status: active
 date: 2026-04-25
-updated: 2026-09-13
+updated: 2026-10-11
 tags:
   [
     reference,
@@ -56,6 +56,7 @@ SORT title ASC
 | Document                                                    | Description                                                                   |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [[docs/reference/algorithms\|Algorithms & Data Structures]] | LTTB, SHA-256 dedup, recurring detection, currency conversion, Modified Dietz |
+| [[docs/reference/belgian-tax-rule-matrix\|Belgian Tax Rule Coverage Matrix]] | Per-rule legal basis, primary source, code and test location for the Belgian PIT engine (IY 2024-2026) |
 
 ## Database
 

@@ -288,7 +288,7 @@ describe("renderBelgianRulesSummary", () => {
     for (const p of pctCells) expect(Math.abs(p)).toBeLessThanOrEqual(100);
 
     // Surrounding currency figures still render, so the section isn't an empty state.
-    expect(html).toContain(eur("859.00")); // 2025 dividend exemption
+    expect(html).toContain(eur("833.00")); // 2025 dividend exemption (frozen)
     expect(html).toContain(eur("1,600.00")); // shares & other TOB cap
     expect(html).toContain(eur("12,345.67")); // estimated total PIT
   });

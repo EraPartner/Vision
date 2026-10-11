@@ -20,14 +20,16 @@ export function computeEmployeeSocialSecurity(profile: BelgianTaxProfile, table:
 /**
  * Special social security contribution ("CSSS" / "bijzondere bijdrage voor de sociale zekerheid").
  *
- * Step function on **net taxable professional income**. Two annual tables apply since the
- * 1 April 2022 reform:
- *  - `csssTable` for single filers (`gemeenschappelijke aanslag = nee`), cap €731.28.
- *  - `csssTableJoint` for married / legal-cohabiting joint filers (`gemeenschappelijke
- *    aanslag = ja`). Same floor as single, flatter middle tier, same household max €731.28.
+ * Law of 30 March 1994 art. 108 §1 (as amended by the laws of 28 March 2022 and
+ * 20 November 2022): a step function on the **household income** of art. 107, 2°. Two annual
+ * scales exist:
+ *  - `csssTable` for taxpayers assessed alone, cap €731.28;
+ *  - `csssTableJoint` for a joint assessment (`gemeenschappelijke aanslag`), applied to the sum
+ *    of both spouses' income, same household cap €731.28.
  *
- * The joint table is used when `profile.filingStatus === 'married_joint'`. Returns 0 for
- * income types that are not subject to CSSS (self-employed, retired without salary).
+ * The joint table is used when `profile.filingStatus === 'married_joint'`; the caller passes
+ * the household base. Returns 0 for taxpayers outside art. 106 (self-employed, pensioners),
+ * who owe no CSSS.
  */
 export function computeSpecialSocialSecurityContribution(
     profile: BelgianTaxProfile,
@@ -42,9 +44,9 @@ export function computeSpecialSocialSecurityContribution(
         profile.filingStatus === 'married_joint' ? table.csssTableJoint : table.csssTable;
 
     for (const tier of tiers) {
-        // Tier bounds are [from, to], inclusive on BOTH ends — the year tables
-        // leave a cent gap between consecutive tiers (…18,592.02 / 18,592.03…).
-        // Earlier code used `<= tier.from`, which skipped income equal to a tier boundary.
+        // Tier bounds are [from, to] with the upper bound inclusive; consecutive tiers
+        // share their boundary, and the first matching tier wins. Each tier is continuous
+        // with the next at the shared boundary, so the choice does not change the result.
         if (netTaxableIncome < tier.from) continue;
         if (netTaxableIncome > tier.to) continue;
 

@@ -112,23 +112,38 @@ function computeProfessionalExpenses(
             Math.max(profile.unionDues || 0, 0)
         );
     }
-    // PwC: only employees and civil servants get the 30% / EUR-cap forfait.
-    // Directors get 3% / lower cap. Self-employed (zelfstandigen / indépendants) only deduct
-    // actual professional expenses — no statutory forfait.
+    // WIB 92 art. 51 (amounts: FPS indexation notice per assessment year, table I):
+    //  - al. 2, 1° + al. 3: employees, civil servants and self-employed trading profits
+    //    (winsten) get 30% with the "rémunérations des travailleurs et bénéfices" cap;
+    //  - al. 2, 2°: company directors get 3% with their own cap;
+    //  - al. 2, 4°: liberal-profession fees (baten) get the degressive 28.7/10/5/3% scale
+    //    with the "conjoints aidants et profits" cap.
+    // Pensions and other replacement income carry no forfait.
+    const gross = Math.max(profile.grossAnnualIncome || 0, 0);
     if (profile.employmentType === "director") {
         return Math.min(
-            profile.grossAnnualIncome * table.directorProfessionalExpenseRate,
+            gross * table.directorProfessionalExpenseRate,
             table.directorProfessionalExpenseCap,
         );
     }
     if (
         profile.employmentType === "employee" ||
-        profile.employmentType === "civil_servant"
+        profile.employmentType === "civil_servant" ||
+        (profile.employmentType === "self_employed" &&
+            (profile.selfEmployedIncomeKind ?? "profits") === "profits")
     ) {
         return Math.min(
-            profile.grossAnnualIncome * table.employeeProfessionalExpenseRate,
+            gross * table.employeeProfessionalExpenseRate,
             table.employeeProfessionalExpenseCap,
         );
+    }
+    if (profile.employmentType === "self_employed") {
+        let forfait = 0;
+        for (const b of table.selfEmployedFeesExpenseBrackets) {
+            if (gross <= b.from) break;
+            forfait += (Math.min(gross, b.to) - b.from) * b.rate;
+        }
+        return Math.min(forfait, table.selfEmployedFeesExpenseCap);
     }
     return 0;
 }
@@ -329,16 +344,16 @@ function applyMaritalQuotient(
     const household = earnerTaxableIn + spouseTaxableIn;
     if (household <= 0) return baseline;
 
-    // Target spouse income = min(30% of household, spouse + cap). Transfer brings spouse up to target.
+    // WIB 92 art. 87 (spouse without professional income): 30% of the earner's income, capped.
+    // Art. 88 (spouse below 30%): the transfer tops the spouse up so that own income PLUS the
+    // transferred part reaches 30% of the household total, "doch niet hoger dan" the cap —
+    // the cap bounds the SUM, not the transfer. Both articles share one indexed cap
+    // (arts 87 al. 2 and 88 al. 1 in the FPS indexation notices).
     const target = Math.min(
         household * table.maritalQuotientRate,
-        spouseTaxableIn + table.maritalQuotientCap,
+        table.maritalQuotientCap,
     );
-    const transferRaw = target - spouseTaxableIn;
-    const transfer = Math.max(
-        0,
-        Math.min(transferRaw, table.maritalQuotientCap),
-    );
+    const transfer = Math.max(0, target - spouseTaxableIn);
     if (transfer <= 0) return baseline;
 
     const earnerTaxable = clampAtZero(earnerTaxableIn - transfer);
@@ -422,7 +437,8 @@ export function computeBelgianPIT(
     // 3. Professional expense deduction
     const profExpenses = computeProfessionalExpenses(profile, table);
 
-    // 4. True deductions from taxable basis: alimony (80%, CIR-92 art. 104).
+    // 4. True deductions from taxable basis: alimony (CIR-92 art. 104; 80% up to 2024,
+    //    70% in 2025, 60% in 2026 — `table.alimonyDeductibleFraction`).
     //    Pension, life insurance, donations, childcare, domestic help, group insurance =
     //    tax credits, applied below — NOT subtracted from taxable basis.
     //    Union dues deduct only inside ACTUAL professional expenses (handled in
@@ -573,11 +589,19 @@ export function computeBelgianPIT(
     const communalSurcharge =
         federalPITAfterReductions * (profile.communalSurchargePercent / 100);
 
-    // 10. Special social security contribution (function of net taxable PROFESSIONAL income).
-    //     Non-professional income (rental, dividends) is statutorily excluded from this base.
+    // 10. Special social security contribution. Law of 30 March 1994 art. 107, 2°: under a
+    //     joint assessment the base is the HOUSEHOLD income (sum of both spouses' net income,
+    //     before the marital quotient). Non-professional income (rental, dividends) is excluded
+    //     from this base in the current single-profile model; the spouse's professional income
+    //     is the only spouse figure the profile carries.
+    const csssBase =
+        profile.filingStatus === "married_joint"
+            ? netTaxableProfessional +
+              Math.max(profile.spouseProfessionalIncome || 0, 0)
+            : netTaxableProfessional;
     const specialSS = computeSpecialSocialSecurityContribution(
         profile,
-        netTaxableProfessional,
+        csssBase,
         table,
     );
 
@@ -623,7 +647,7 @@ export function computeBelgianPIT(
         ...(profile.alimonyPaid
             ? [
                   {
-                      label: "Alimony paid (80% deductible)",
+                      label: `Alimony paid (${Math.round(table.alimonyDeductibleFraction * 100)}% deductible)`,
                       amount: -cappedAlimony,
                   },
               ]

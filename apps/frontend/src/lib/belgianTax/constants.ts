@@ -3,15 +3,16 @@
  *
  * All figures expressed in EUR. Income year = year income earned; assessment year = income year + 1.
  *
- * Sources (cross-checked):
- *  - PwC Worldwide Tax Summaries — Belgium — Individual (taxes on personal income, deductions, sample calc),
- *    reviewed May 2026.
- *  - FOD Financiën / SPF Finances published indexed amounts (Moniteur belge / Belgisch Staatsblad).
- *  - Federal "personenbelasting" / "impôt des personnes physiques" indexation tables.
- *  - "Law Miscellaneous of 11 December 2025" — charitable donation reduction lowered from 45% to 30%
- *    as from assessment year 2026 (income year 2025).
- *  - Partena Professional infoflashes — cadastral income indexation coefficients (IY 2024 = 2.1763,
- *    IY 2025 = 2.2446).
+ * Sources: every amount below is traced to a primary source in
+ * docs/reference/belgian-tax-rule-matrix.md (rule coverage matrix, one row per rule). The main
+ * ones are the FPS Finance "Avis relatif à l'indexation automatique" notices for assessment years
+ * 2025, 2026 and 2027 (Fisconetplus), the FPS Finance consumer pages (fin.belgium.be), the law of
+ * 30 March 1994 (CSSS, arts 106-109), the law of 18 December 2025 (indexation freeze, donations
+ * 30%, alimony 70/60/50%, domestic-help reduction abolished) and the law of 15 July 2026 (PIT
+ * reform from AY 2027). PwC Worldwide Tax Summaries is used only as a secondary cross-check: its
+ * IY 2025 dividend (859), savings (1,050) and life-insurance (2,530) figures ignore the freeze.
+ * Rows marked "unverified" in the matrix (civil-servant rate, regional property tax, regional
+ * own-home credits, cadastral coefficients) keep their previous values pending a source.
  *
  * NOTE: regional tax differences (Flanders / Wallonia / Brussels) are simplified — own-home regional credits
  * (e.g. Flemish "geïntegreerde woonbonus", Brussels abattement) are not modeled here. Property tax is a
@@ -142,10 +143,19 @@ export interface BelgianTaxYearTable {
     csssTableJoint: ReadonlyArray<CSSSTier>;
 
     // ── Professional expenses (forfait) ─────────────────────────────────────
+    /** Art. 51 al. 2, 1°: employees, civil servants and self-employed trading profits (winsten). */
     employeeProfessionalExpenseRate: number;
+    /** Art. 51 al. 3: cap for employee remuneration and trading profits. */
     employeeProfessionalExpenseCap: number;
     directorProfessionalExpenseRate: number;
     directorProfessionalExpenseCap: number;
+    /**
+     * Art. 51 al. 2, 4°: degressive forfait for liberal-profession fees (baten). Rates are fixed
+     * in the law (28.7% / 10% / 5% / 3%); the bracket boundaries are indexed per assessment year.
+     */
+    selfEmployedFeesExpenseBrackets: ReadonlyArray<PitBracket>;
+    /** Art. 51 al. 3: cap for fees (same cap as helping-spouse remuneration). */
+    selfEmployedFeesExpenseCap: number;
 
     // ── Tax credits / reductions ────────────────────────────────────────────
     pensionSavingsCapStandard: number;
@@ -265,12 +275,10 @@ const TABLE_2024: BelgianTaxYearTable = {
         { from: 48_320, to: Infinity, rate: 0.50 },
     ],
     exemptionBrackets: [
-        // IY 2024 exemption-valuation brackets. Inner boundaries (11,110 and 26,360) are
-        // de-indexed estimates from the PwC-confirmed IY 2025 figures (11,460 / 27,190)
-        // using the published 3.15% bracket indexation step. FOD Financiën publishes the
-        // exact AY 2025 values; substitute when verified.
-        { from: 0, to: 11_110, rate: 0.25 },
-        { from: 11_110, to: 15_820, rate: 0.30 },
+        // IY 2024 exemption-valuation brackets (WIB 92 art. 134 §2 al. 2): FPS indexation
+        // notice AY 2025 gives 11,120 / 15,820 / 26,360 / 48,320.
+        { from: 0, to: 11_120, rate: 0.25 },
+        { from: 11_120, to: 15_820, rate: 0.30 },
         { from: 15_820, to: 26_360, rate: 0.40 },
         { from: 26_360, to: 48_320, rate: 0.45 },
         { from: 48_320, to: Infinity, rate: 0.50 },
@@ -292,29 +300,38 @@ const TABLE_2024: BelgianTaxYearTable = {
 
     employeeSSRate: 0.1307,
     civilServantSSRate: 0.1107,
-    // CSSS thresholds reset by Programmawet of 1 Apr 2022 (mini-taxshift) — singles tier 3
-    // dropped from 7.6% to 1.3%, tier 2 from 9% flat to 5% rate-based. Thresholds are not
-    // indexed, so the same values apply for IY 2024 / 2025 / 2026.
+    // CSSS annual scale: law of 30 March 1994 art. 108 §1, as amended by the laws of
+    // 28 March 2022 and 20 November 2022 (the latter inserted the 40,997.26 cut, effective
+    // 1 Jan 2022). Thresholds are not indexed, so the same values apply for IY 2024 / 2025 / 2026.
     csssTable: [
         { from: 0, to: 18_592.02, flat: 0 },
         { from: 18_592.02, to: 21_070.96, flat: 0, rate: 0.05, subtractBase: 18_592.02 },
         { from: 21_070.96, to: 37_344.00, flat: 123.95, rate: 0.013, subtractBase: 21_070.96 },
-        { from: 37_344.00, to: 47_215.31, flat: 335.50, rate: 0.04009, subtractBase: 37_344.00, cap: 731.28 },
-        { from: 47_215.31, to: Infinity, flat: 731.28 },
+        { from: 37_344.00, to: 40_997.26, flat: 335.50, rate: 0.04009, subtractBase: 37_344.00 },
+        { from: 40_997.26, to: 60_181.95, flat: 481.96, rate: 0.012996, subtractBase: 40_997.26, cap: 731.28 },
+        { from: 60_181.95, to: Infinity, flat: 731.28 },
     ],
     csssTableJoint: [
         { from: 0, to: 18_592.02, flat: 0 },
         { from: 18_592.02, to: 21_070.96, flat: 0, rate: 0.05, subtractBase: 18_592.02 },
         { from: 21_070.96, to: 60_181.95, flat: 123.95, rate: 0.013, subtractBase: 21_070.96 },
         { from: 60_181.95, to: 74_688.00, flat: 632.39 },
-        { from: 74_688.00, to: 81_944.96, flat: 632.39, rate: 0.013629, subtractBase: 74_688.00, cap: 731.28 },
-        { from: 81_944.96, to: Infinity, flat: 731.28 },
+        { from: 74_688.00, to: 81_944.00, flat: 632.39, rate: 0.013629, subtractBase: 74_688.00, cap: 731.28 },
+        { from: 81_944.00, to: Infinity, flat: 731.28 },
     ],
 
     employeeProfessionalExpenseRate: 0.30,
     employeeProfessionalExpenseCap: 5_750,
     directorProfessionalExpenseRate: 0.03,
     directorProfessionalExpenseCap: 3_030,
+    // Art. 51 al. 2, 4° (baten / profits): FPS indexation notice AY 2025.
+    selfEmployedFeesExpenseBrackets: [
+        { from: 0, to: 7_310, rate: 0.287 },
+        { from: 7_310, to: 14_520, rate: 0.10 },
+        { from: 14_520, to: 24_160, rate: 0.05 },
+        { from: 24_160, to: Infinity, rate: 0.03 },
+    ],
+    selfEmployedFeesExpenseCap: 5_050,
 
     pensionSavingsCapStandard: 1_020,
     pensionSavingsRateStandard: 0.30,
@@ -329,7 +346,9 @@ const TABLE_2024: BelgianTaxYearTable = {
     childcareDailyCap: 16.40,
     childcareRate: 0.45,
     domesticHelpRate: 0.30,
-    domesticHelpCap: 8_030,
+    // Art. 145/34 al. 5: FPS indexation notice AY 2025.
+    domesticHelpCap: 8_160,
+    // Art. 104, 1°-2°: 80% for payments up to 31 Dec 2024 (FPS "Betaald onderhoudsgeld").
     alimonyDeductibleFraction: 0.80,
 
     dividendExemption: 833,
@@ -348,9 +367,8 @@ const TABLE_2024: BelgianTaxYearTable = {
     reyndersBondThreshold: 0.10,
 
     maritalQuotientRate: 0.30,
-    // IY 2024 cap — typical year-over-year indexation from prior years. Authoritative value
-    // can be substituted once the published 'huwelijksquotiënt' table for AY 2025 is verified.
-    maritalQuotientCap: 13_070,
+    // Arts 87-88 cap: FPS indexation notice AY 2025 and fin.belgium.be previous-years page.
+    maritalQuotientCap: 13_050,
 
     // Per-transaction caps (statutory): 0.12% rate capped at €1,300; 0.35% rate capped
     // at €1,600 (NOT €4,000 — that cap belongs to the 1.32% rate only); 1.32% rate
@@ -438,43 +456,62 @@ const TABLE_2025: BelgianTaxYearTable = {
         { from: 0, to: 18_592.02, flat: 0 },
         { from: 18_592.02, to: 21_070.96, flat: 0, rate: 0.05, subtractBase: 18_592.02 },
         { from: 21_070.96, to: 37_344.00, flat: 123.95, rate: 0.013, subtractBase: 21_070.96 },
-        { from: 37_344.00, to: 47_215.31, flat: 335.50, rate: 0.04009, subtractBase: 37_344.00, cap: 731.28 },
-        { from: 47_215.31, to: Infinity, flat: 731.28 },
+        { from: 37_344.00, to: 40_997.26, flat: 335.50, rate: 0.04009, subtractBase: 37_344.00 },
+        { from: 40_997.26, to: 60_181.95, flat: 481.96, rate: 0.012996, subtractBase: 40_997.26, cap: 731.28 },
+        { from: 60_181.95, to: Infinity, flat: 731.28 },
     ],
     csssTableJoint: [
         { from: 0, to: 18_592.02, flat: 0 },
         { from: 18_592.02, to: 21_070.96, flat: 0, rate: 0.05, subtractBase: 18_592.02 },
         { from: 21_070.96, to: 60_181.95, flat: 123.95, rate: 0.013, subtractBase: 21_070.96 },
         { from: 60_181.95, to: 74_688.00, flat: 632.39 },
-        { from: 74_688.00, to: 81_944.96, flat: 632.39, rate: 0.013629, subtractBase: 74_688.00, cap: 731.28 },
-        { from: 81_944.96, to: Infinity, flat: 731.28 },
+        { from: 74_688.00, to: 81_944.00, flat: 632.39, rate: 0.013629, subtractBase: 74_688.00, cap: 731.28 },
+        { from: 81_944.00, to: Infinity, flat: 731.28 },
     ],
 
     employeeProfessionalExpenseRate: 0.30,
     employeeProfessionalExpenseCap: 5_930,
     directorProfessionalExpenseRate: 0.03,
     directorProfessionalExpenseCap: 3_130,
+    // Art. 51 al. 2, 4° (baten / profits): FPS indexation notice AY 2026.
+    selfEmployedFeesExpenseBrackets: [
+        { from: 0, to: 7_540, rate: 0.287 },
+        { from: 7_540, to: 14_970, rate: 0.10 },
+        { from: 14_970, to: 24_920, rate: 0.05 },
+        { from: 24_920, to: Infinity, rate: 0.03 },
+    ],
+    selfEmployedFeesExpenseCap: 5_210,
 
     pensionSavingsCapStandard: 1_050,
     pensionSavingsRateStandard: 0.30,
     pensionSavingsCapAlternative: 1_350,
     pensionSavingsRateAlternative: 0.25,
-    lifeInsuranceCap: 2_530,
+    // Art. 145/6: frozen at the AY 2025 level by the law of 18 Dec 2025 (art. 43); FPS
+    // indexation notice AY 2026 prints "2.530 — après gel: 2.450".
+    lifeInsuranceCap: 2_450,
     lifeInsuranceRate: 0.30,
     groupInsuranceRate: 0.30,
     charitableDonationMin: 40,
-    // Law Miscellaneous of 11 Dec 2025 lowered the rate from 45% → 30% as from AY 2026 (IY 2025).
+    // Law of 18 Dec 2025 art. 67 lowered the art. 145/33 rate from 45% to 30% from AY 2026
+    // (IY 2025); confirmed on fin.belgium.be "Giften".
     charitableDonationRate: 0.30,
     charitableDonationAbsoluteCap: 408_130,
     childcareDailyCap: 16.90,
     childcareRate: 0.45,
-    domesticHelpRate: 0.30,
-    domesticHelpCap: 8_290,
-    alimonyDeductibleFraction: 0.80,
+    // Art. 145/34 (domestic personnel) was abolished by the law of 18 Dec 2025 art. 68,
+    // applicable from AY 2026 (art. 90). Rate 0 keeps the input harmless for IY 2025+.
+    domesticHelpRate: 0,
+    domesticHelpCap: 0,
+    // Art. 104: 70% for alimony paid in 2025 (law of 18 Dec 2025 art. 35; FPS page).
+    alimonyDeductibleFraction: 0.70,
 
-    dividendExemption: 859,
+    // Art. 21, 14°: 833 after the freeze (FPS indexation notice AY 2026 and fin.belgium.be
+    // "Vrijstellingen dividenden"); PwC's 859 ignores the freeze.
+    dividendExemption: 833,
     dividendWHTRate: 0.30,
-    savingsInterestExemption: 1_050,
+    // Art. 21, 5°: 1,020 after the freeze (FPS indexation notice AY 2026; fin.belgium.be
+    // "Spaargeld en beleggingen"); PwC's 1,050 ignores the freeze.
+    savingsInterestExemption: 1_020,
     savingsInterestExcessRate: 0.15,
     securitiesAccountTaxRate: 0.0015,
     securitiesAccountTaxThreshold: 1_000_000,
@@ -488,7 +525,7 @@ const TABLE_2025: BelgianTaxYearTable = {
     reyndersBondThreshold: 0.10,
 
     maritalQuotientRate: 0.30,
-    // AY 2026 (IY 2025) — KPMG / Vialto / Loyens & Loeff confirm €13,460.
+    // Arts 87-88 cap: FPS indexation notice AY 2026 and fin.belgium.be "Huwelijk en samenwonen".
     maritalQuotientCap: 13_460,
 
     // Per-transaction caps (statutory): see IY 2024 table for rationale. Cap is a
@@ -534,19 +571,65 @@ const TABLE_2025: BelgianTaxYearTable = {
 // ──────────────────────────────────────────────────────────────────────────────
 // Income year 2026 (assessment year 2027)
 //
-// Brackets/indexed amounts copied forward from IY 2025 — FPS Finance has not yet published
-// the IY 2026 indexation. Values will be approximated to IY 2025 until the official tables
-// land in the Belgian Official Gazette (typically October–December 2025 publication, often
-// retroactive to 1 January). The capital-gains tax is the only IY 2026-specific change
-// that is in force: 10% rate, €10,000 single / €20,000 married annual exemption, applied
-// to gains REALIZED on or after 1 January 2026 (the law was passed 3 April 2026; broker-level
-// withholding starts 1 June 2026 but the taxable event covers the full year). Pre-1-Jan-2026
-// gains stay exempt; FMV-at-31-Dec-2025 acts as the step-up basis for pre-2026 holdings.
+// Indexed amounts come from the FPS Finance indexation notice for AY 2027 (Fisconetplus,
+// dated 3 Aug 2026), which already applies the law of 15 July 2026 reforming the PIT
+// (basic exemption raised to a base of 4,945; child supplements for 1-2 children raised and
+// the other supplements frozen at the AY 2026 coefficient; marital quotient cap lowered to a
+// base of 5,860, or 6,365 when both spouses are 66+). The fin.belgium.be consumer pages
+// still showed pre-reform IY 2026 figures (11,180 / 2,030 / 13,800) on 2026-10-11; the
+// notice wins because it post-dates the published law. Items frozen by the law of
+// 18 Dec 2025 (dividends 833, savings interest 1,020, life insurance 2,450, pension savings
+// 1,050 / 1,350, donations cap 408,130) are unchanged from IY 2025.
+// The capital-gains tax (10%, €10,000 single / €20,000 married) applies to gains REALIZED on
+// or after 1 January 2026; pre-2026 gains stay exempt and FMV-at-31-Dec-2025 is the step-up
+// basis for pre-2026 holdings.
 // ──────────────────────────────────────────────────────────────────────────────
 
 const TABLE_2026: BelgianTaxYearTable = {
     ...TABLE_2025,
     year: 2026,
+    // Art. 130 (FPS indexation notice AY 2027).
+    brackets: [
+        { from: 0, to: 16_720, rate: 0.25 },
+        { from: 16_720, to: 29_510, rate: 0.40 },
+        { from: 29_510, to: 51_070, rate: 0.45 },
+        { from: 51_070, to: Infinity, rate: 0.50 },
+    ],
+    // Art. 134 §2 al. 2 (FPS indexation notice AY 2027).
+    exemptionBrackets: [
+        { from: 0, to: 11_750, rate: 0.25 },
+        { from: 11_750, to: 16_720, rate: 0.30 },
+        { from: 16_720, to: 27_860, rate: 0.40 },
+        { from: 27_860, to: 51_070, rate: 0.45 },
+        { from: 51_070, to: Infinity, rate: 0.50 },
+    ],
+    // Arts 131-133 after the law of 15 July 2026 (FPS indexation notice AY 2027).
+    basicPersonalExemption: 11_550,
+    dependentChildExemptionIncreases: [0, 2_130, 5_130, 11_440, 18_510],
+    extraChildExemptionFromFifth: 7_070,
+    childUnder3Supplement: 740,
+    otherDependentExemption: 1_980,
+    disabledSupplement: 2_030,
+    isolatedParentSupplement: 1_980,
+    // Art. 51 al. 3 caps and al. 2, 4° scale (FPS indexation notice AY 2027; fin.belgium.be
+    // "Beroepsinkomen" gives the same 6,070 / 3,200 / 5,340).
+    employeeProfessionalExpenseCap: 6_070,
+    directorProfessionalExpenseCap: 3_200,
+    selfEmployedFeesExpenseBrackets: [
+        { from: 0, to: 7_720, rate: 0.287 },
+        { from: 7_720, to: 15_340, rate: 0.10 },
+        { from: 15_340, to: 25_530, rate: 0.05 },
+        { from: 25_530, to: Infinity, rate: 0.03 },
+    ],
+    selfEmployedFeesExpenseCap: 5_340,
+    // Art. 145/35 al. 6 (FPS indexation notice AY 2027; fin.belgium.be "Kinderopvang").
+    childcareDailyCap: 17.30,
+    // Art. 104: 60% for alimony paid in 2026 (law of 18 Dec 2025 art. 35; FPS page).
+    alimonyDeductibleFraction: 0.60,
+    // Arts 87-88 after the law of 15 July 2026: base 5,860 → 11,780 (FPS indexation notice
+    // AY 2027). The 12,790 cap for couples where both spouses are 66+ on 1 Jan 2027 needs
+    // birth years, which the profile does not carry yet; the lower cap is used.
+    maritalQuotientCap: 11_780,
     // Cap-gains tax on financial assets — Arizona reform. Realization-based: applies to gains
     // realized on or after 1 January 2026. Step-up basis (FMV at 31 Dec 2025) and 5-year
     // €1k/year carryforward of unused exemption are documented in the BelgianTaxYearTable
@@ -557,9 +640,6 @@ const TABLE_2026: BelgianTaxYearTable = {
     // Reynders survives the 2026 reform; rate unchanged at 30% on the bond-attributable portion.
     reyndersTaxRate: 0.30,
     reyndersBondThreshold: 0.10,
-    // Marital quotient: phase-out begins AY 2027 (IY 2026). Reform halves benefit over 4 years
-    // and freezes indexation; until the implementing law is published, model uses the IY 2025 cap.
-    maritalQuotientCap: TABLE_2025.maritalQuotientCap,
 };
 
 const TABLES: Record<number, BelgianTaxYearTable> = {

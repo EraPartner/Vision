@@ -8,7 +8,7 @@ describe('belgianTaxTables', () => {
     expect(t.capitalGainsTaxRate).toBe(0.10);
     expect(t.capitalGainsTaxExemptionSingle).toBe(10_000);
     expect(t.capitalGainsTaxExemptionMarried).toBe(20_000);
-    expect(t.dividendExemption).toBe(859); // unchanged from 2025
+    expect(t.dividendExemption).toBe(833); // frozen since 2024 (WIB 92 art. 21, 14°)
     expect(t.approximated).toBeUndefined();
   });
 

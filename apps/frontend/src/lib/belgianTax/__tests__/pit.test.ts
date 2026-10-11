@@ -91,12 +91,66 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.professionalExpenses).toBe(3_130);
     });
 
-    test("self-employed gets NO forfait when method = lump_sum", () => {
+    test("self-employed trading profits (winsten) get the employee forfait: 30% capped at €5,930", () => {
+        // WIB 92 art. 51 al. 2, 1° and al. 3 — FPS indexation notice AY 2026, table I:
+        // "Rémunérations des travailleurs et bénéfices: 5.930". `selfEmployedIncomeKind`
+        // defaults to "profits".
         const result = computeBelgianPIT(
             profile({
                 employmentType: "self_employed",
                 grossAnnualIncome: 80_000,
             }),
+        );
+        expect(result.professionalExpenses).toBe(5_930);
+        const small = computeBelgianPIT(
+            profile({
+                employmentType: "self_employed",
+                selfEmployedIncomeKind: "profits",
+                grossAnnualIncome: 10_000,
+            }),
+        );
+        expect(small.professionalExpenses).toBe(3_000);
+    });
+
+    test("self-employed fees (baten) use the degressive art. 51 al. 2, 4° scale, capped at €5,210", () => {
+        // FPS indexation notice AY 2026: 28.7% to 7,540 / 10% to 14,970 / 5% to 24,920 / 3% above;
+        // cap "conjoints aidants et profits" 5,210.
+        const fees = computeBelgianPIT(
+            profile({
+                employmentType: "self_employed",
+                selfEmployedIncomeKind: "fees",
+                grossAnnualIncome: 30_000,
+            }),
+        );
+        const expected =
+            7_540 * 0.287 +
+            (14_970 - 7_540) * 0.1 +
+            (24_920 - 14_970) * 0.05 +
+            (30_000 - 24_920) * 0.03;
+        expect(fees.professionalExpenses).toBeCloseTo(expected, 2); // 3,556.88
+        const capped = computeBelgianPIT(
+            profile({
+                employmentType: "self_employed",
+                selfEmployedIncomeKind: "fees",
+                grossAnnualIncome: 100_000,
+            }),
+        );
+        expect(capped.professionalExpenses).toBe(5_210);
+        // IY 2024 scale (notice AY 2025): 7,310 / 14,520 / 24,160, cap 5,050.
+        const y24 = computeBelgianPIT(
+            profile({
+                taxYear: 2024,
+                employmentType: "self_employed",
+                selfEmployedIncomeKind: "fees",
+                grossAnnualIncome: 100_000,
+            }),
+        );
+        expect(y24.professionalExpenses).toBe(5_050);
+    });
+
+    test("pensions and other income carry no forfait", () => {
+        const result = computeBelgianPIT(
+            profile({ employmentType: "retired", grossAnnualIncome: 30_000 }),
         );
         expect(result.professionalExpenses).toBe(0);
     });
@@ -145,10 +199,10 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("PwC screenshot case: taxable €19,105.84 → exemption benefit €2,727.50", () => {
         // Real-world reproduction of the user's PIT breakdown screenshot. Before the F1 fix
         // the value was €3,145.38 (exemption applied at the top). PwC-correct value is €2,727.50.
-        // Use self_employed so all of the gross flows straight to taxable income (no SS, no forfait).
+        // Use "other" so all of the gross flows straight to taxable income (no SS, no forfait).
         const result = computeBelgianPIT(
             profile({
-                employmentType: "self_employed",
+                employmentType: "other",
                 grossAnnualIncome: 19_105.84,
             }),
         );
@@ -418,26 +472,49 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(y25.federalTaxCredits).toBeCloseTo(408_130 * 0.3, 0);
     });
 
-    test("domestic help credit caps at €8,290 wages IY 2025", () => {
-        const result = computeBelgianPIT(
+    test("domestic help credit: €8,160 wage cap for IY 2024, abolished from IY 2025", () => {
+        // Art. 145/34 al. 5 — FPS indexation notice AY 2025: 8,160. Abolished by the law of
+        // 18 Dec 2025 art. 68, applicable from AY 2026 (art. 90).
+        const y24 = computeBelgianPIT(
+            profile({
+                taxYear: 2024,
+                grossAnnualIncome: 100_000,
+                domesticHelpCosts: 50_000,
+                domesticHelpEligible: true,
+            }),
+        );
+        expect(y24.federalTaxCredits).toBeCloseTo(8_160 * 0.3, 2);
+        const y25 = computeBelgianPIT(
             profile({
                 grossAnnualIncome: 100_000,
                 domesticHelpCosts: 50_000,
                 domesticHelpEligible: true,
             }),
         );
-        expect(result.federalTaxCredits).toBeCloseTo(8_290 * 0.3, 2);
+        expect(y25.federalTaxCredits).toBe(0);
     });
 
-    test("alimony deductible at 80%", () => {
+    test("alimony deductible at 80% (2024), 70% (2025) and 60% (2026) — art. 104", () => {
+        // Law of 18 Dec 2025 art. 35; fin.belgium.be "Betaald onderhoudsgeld".
+        const deducted = (taxYear: number) => {
+            const result = computeBelgianPIT(
+                profile({ taxYear, grossAnnualIncome: 60_000, alimonyPaid: 10_000 }),
+            );
+            const noAlimony = computeBelgianPIT(
+                profile({ taxYear, grossAnnualIncome: 60_000 }),
+            );
+            return noAlimony.taxableIncome - result.taxableIncome;
+        };
+        expect(deducted(2024)).toBe(8_000);
+        expect(deducted(2026)).toBe(6_000);
         const result = computeBelgianPIT(
             profile({ grossAnnualIncome: 60_000, alimonyPaid: 10_000 }),
         );
         const noAlimony = computeBelgianPIT(
             profile({ grossAnnualIncome: 60_000 }),
         );
-        // 80% × 10_000 = 8_000 less taxable income
-        expect(noAlimony.taxableIncome - result.taxableIncome).toBe(8_000);
+        // 70% × 10_000 = 7_000 less taxable income
+        expect(noAlimony.taxableIncome - result.taxableIncome).toBe(7_000);
     });
 
     test("communal surcharge applied to federal PIT after credits", () => {
@@ -454,16 +531,44 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         const result = computeBelgianPIT(
             profile({ annualDividendIncome: 2_000 }),
         );
-        // 859 × 30% = 257.70
-        expect(result.dividendWhtReclaim).toBeCloseTo(859 * 0.3, 2);
+        // Art. 21, 14°: €833 for IY 2024, 2025 and 2026 (frozen by the law of 18 Dec 2025;
+        // FPS indexation notices AY 2025-2027, fin.belgium.be "Vrijstellingen dividenden").
+        // 833 × 30% = 249.90
+        expect(result.dividendWhtReclaim).toBeCloseTo(833 * 0.3, 2);
+        for (const taxYear of [2024, 2026]) {
+            expect(
+                computeBelgianPIT(profile({ taxYear, annualDividendIncome: 2_000 }))
+                    .dividendWhtReclaim,
+            ).toBeCloseTo(833 * 0.3, 2);
+        }
     });
 
-    test("savings interest tax = 15% above the €1,050 IY 2025 exemption", () => {
+    test("savings interest tax = 15% above the €1,020 exemption (IY 2024-2026)", () => {
+        // Art. 21, 5°: 1,020 after the freeze (FPS indexation notice AY 2026 prints
+        // "1.050 — après gel: 1.020"; fin.belgium.be "Spaargeld en beleggingen").
         const result = computeBelgianPIT(
             profile({ annualSavingsInterest: 2_000 }),
         );
-        // (2_000 - 1_050) × 0.15 = 142.5
-        expect(result.savingsInterestTax).toBeCloseTo(142.5, 2);
+        // (2_000 - 1_020) × 0.15 = 147
+        expect(result.savingsInterestTax).toBeCloseTo(147, 2);
+        expect(
+            computeBelgianPIT(profile({ taxYear: 2026, annualSavingsInterest: 2_000 }))
+                .savingsInterestTax,
+        ).toBeCloseTo(147, 2);
+    });
+
+    test("life insurance reduction cap is €2,450 for IY 2024-2026 (art. 145/6, frozen)", () => {
+        for (const taxYear of [2024, 2025, 2026]) {
+            const result = computeBelgianPIT(
+                profile({
+                    taxYear,
+                    grossAnnualIncome: 60_000,
+                    lifeInsurancePremiums: 5_000,
+                    lifeInsuranceEligible: true,
+                }),
+            );
+            expect(result.federalTaxCredits).toBeCloseTo(2_450 * 0.3, 2);
+        }
     });
 
     test("IY 2024 tables apply when taxYear = 2024", () => {
@@ -652,7 +757,8 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.maritalQuotientBenefit).toBe(0);
     });
 
-    test("IY 2024 marital quotient uses the lower cap (€13,070)", () => {
+    test("IY 2024 marital quotient uses the lower cap (€13,050)", () => {
+        // Arts 87-88 — FPS indexation notice AY 2025 and fin.belgium.be previous-years page.
         const result = computeBelgianPIT(
             profile({
                 taxYear: 2024,
@@ -661,7 +767,34 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 spouseProfessionalIncome: 0,
             }),
         );
-        expect(result.maritalQuotientTransfer).toBeCloseTo(13_070, 0);
+        expect(result.maritalQuotientTransfer).toBeCloseTo(13_050, 0);
+    });
+
+    test("IY 2026 marital quotient cap is €11,780 after the law of 15 July 2026", () => {
+        // Art. 88 base 5,860 indexed — FPS indexation notice AY 2027.
+        const result = computeBelgianPIT(
+            profile({
+                taxYear: 2026,
+                grossAnnualIncome: 80_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 0,
+            }),
+        );
+        expect(result.maritalQuotientTransfer).toBeCloseTo(11_780, 0);
+    });
+
+    test("marital quotient: art. 88 caps own income PLUS transfer at the cap", () => {
+        // Art. 88 al. 1: the spouse is topped up so that own income + transferred part reaches
+        // 30% of the household total "doch niet hoger dan" the cap. With €5,000 own income and
+        // 30% of the household above the cap, the transfer is 13,460 − 5,000, not 13,460.
+        const result = computeBelgianPIT(
+            profile({
+                grossAnnualIncome: 80_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 5_000,
+            }),
+        );
+        expect(result.maritalQuotientTransfer).toBeCloseTo(13_460 - 5_000, 0);
     });
 
     test("service vouchers: Brussels 15% rate applies to first 172 vouchers", () => {
@@ -711,11 +844,25 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.serviceVoucherCredit).toBe(0);
     });
 
-    test("IY 2026 table inherits IY 2025 brackets and enables 10% capital gains tax", () => {
+    test("IY 2026 table carries the AY 2027 indexation notice (post-reform) and 10% capital gains tax", () => {
         const t26 = getTaxTable(2026);
         const t25 = getTaxTable(2025);
-        expect(t26.brackets).toEqual(t25.brackets);
-        expect(t26.basicPersonalExemption).toBe(t25.basicPersonalExemption);
+        // Art. 130 and art. 134 §2 — FPS indexation notice AY 2027.
+        expect(t26.brackets.map((b) => b.to)).toEqual([16_720, 29_510, 51_070, Infinity]);
+        expect(t26.exemptionBrackets.map((b) => b.to)).toEqual([
+            11_750, 16_720, 27_860, 51_070, Infinity,
+        ]);
+        // Arts 131-133 after the law of 15 July 2026.
+        expect(t26.basicPersonalExemption).toBe(11_550);
+        expect(t26.dependentChildExemptionIncreases).toEqual([0, 2_130, 5_130, 11_440, 18_510]);
+        expect(t26.disabledSupplement).toBe(2_030);
+        expect(t26.employeeProfessionalExpenseCap).toBe(6_070);
+        expect(t26.directorProfessionalExpenseCap).toBe(3_200);
+        expect(t26.childcareDailyCap).toBe(17.3);
+        // Frozen items stay at the IY 2025 level.
+        expect(t26.dividendExemption).toBe(t25.dividendExemption);
+        expect(t26.savingsInterestExemption).toBe(t25.savingsInterestExemption);
+        expect(t26.pensionSavingsCapStandard).toBe(1_050);
         expect(t26.capitalGainsTaxRate).toBe(0.1);
         expect(t26.capitalGainsTaxExemptionSingle).toBe(10_000);
         expect(t26.capitalGainsTaxExemptionMarried).toBe(20_000);
@@ -796,6 +943,35 @@ describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
 });
 
 describe("special SS basis", () => {
+    test("joint assessment: CSSS is computed on the household income, not the earner alone", () => {
+        // Law of 30 March 1994 art. 107, 2° ("gezinsinkomen" = sum of each spouse's net income).
+        // Earner alone: €50,000 gross → net professional ≈ 37,535 → joint scale €123.95 + 1.3% × …
+        const alone = computeBelgianPIT(
+            profile({
+                grossAnnualIncome: 50_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 0,
+            }),
+        );
+        const withSpouse = computeBelgianPIT(
+            profile({
+                grossAnnualIncome: 50_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 20_000,
+            }),
+        );
+        expect(withSpouse.specialSocialSecurityContribution).toBeCloseTo(
+            alone.specialSocialSecurityContribution + 0.013 * 20_000,
+            2,
+        );
+    });
+
+    test("IY 2024 exemption valuation brackets follow the AY 2025 notice (11,120 / 15,820 / 26,360 / 48,320)", () => {
+        expect(getTaxTable(2024).exemptionBrackets.map((b) => b.to)).toEqual([
+            11_120, 15_820, 26_360, 48_320, Infinity,
+        ]);
+    });
+
     test("uses professional income only, not other taxable income", () => {
         // Tiny salary + large rental income. Professional net (after SS + forfait) is well below
         // the €18,592 CSSS floor, so the contribution must be 0 even though `taxableIncome` is huge.
@@ -868,12 +1044,34 @@ describe("computeSpecialSocialSecurityContribution — post 1 April 2022 reform"
         ).toBeCloseTo(422.94, 2);
     });
 
-    test("tier 4 single: €335.50 + 4.009% × (income − €37,344) at €44,070", () => {
-        // Single tier 4: €335.50 + 4.009% × €6,726 = €605.14
+    test("tier 4 single: €335.50 + 4.009% × (income − €37,344) up to €40,997.26", () => {
+        // Law of 30 March 1994 art. 108 §1 (law of 20 Nov 2022 version).
         const p = profile({ employmentType: "employee" });
         expect(
+            computeSpecialSocialSecurityContribution(p, 40_000, table),
+        ).toBeCloseTo(335.5 + 0.04009 * (40_000 - 37_344), 2);
+        // Continuity at the tier 4 / tier 5 boundary: 335.50 + 4.009% × 3,653.26 = 481.96.
+        expect(
+            computeSpecialSocialSecurityContribution(p, 40_997.26, table),
+        ).toBeCloseTo(481.96, 1);
+    });
+
+    test("tier 5 single: €481.96 + 1.2996% × (income − €40,997.26) up to €60,181.95", () => {
+        const p = profile({ employmentType: "employee" });
+        // 481.96 + 1.2996% × 3,072.74 = 521.89 (the pre-fix code returned 605.15 here).
+        expect(
             computeSpecialSocialSecurityContribution(p, 44_070, table),
-        ).toBeCloseTo(605.15, 1);
+        ).toBeCloseTo(521.89, 1);
+        expect(
+            computeSpecialSocialSecurityContribution(p, 50_000, table),
+        ).toBeCloseTo(481.96 + 0.012996 * (50_000 - 40_997.26), 2);
+        // Reaches the €731.28 cap at the top of the tier.
+        expect(
+            computeSpecialSocialSecurityContribution(p, 60_181.95, table),
+        ).toBeCloseTo(731.28, 1);
+        expect(
+            computeSpecialSocialSecurityContribution(p, 60_182, table),
+        ).toBeCloseTo(731.28, 2);
     });
 
     test("caps at €731.28 for high incomes", () => {
@@ -937,7 +1135,7 @@ describe('CSSS joint table — used when filingStatus === "married_joint"', () =
         );
     });
 
-    test("joint pays less than single at €50,000 — single capped, joint still on 1.3% ramp", () => {
+    test("joint pays less than single at €50,000 — single on the 1.2996% ramp, joint on the 1.3% ramp", () => {
         const single = profile({ employmentType: "employee" });
         const joint = profile({
             employmentType: "employee",
@@ -953,7 +1151,8 @@ describe('CSSS joint table — used when filingStatus === "married_joint"', () =
             50_000,
             table,
         );
-        expect(singleAmt).toBeCloseTo(731.28, 2);
+        // Single: €481.96 + 1.2996% × (50,000 − 40,997.26) = €598.96
+        expect(singleAmt).toBeCloseTo(598.96, 1);
         // Joint: €123.95 + 1.3% × (50,000 − 21,070.96) = €123.95 + €376.08 = €500.03
         expect(jointAmt).toBeCloseTo(500.03, 1);
         expect(jointAmt).toBeLessThan(singleAmt);

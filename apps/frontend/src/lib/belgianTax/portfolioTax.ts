@@ -331,7 +331,7 @@ export function computeDividendWht(
 
     const grossDividendBase =
         unknownDividendConventionCount > 0 ? null : sumDecimal(grossTerms);
-    // The Belgian dividend exemption (~€859 for IY2025) is per taxpayer, so joint
+    // The Belgian dividend exemption (€833 for IY 2024-2026, WIB 92 art. 21, 14°) is per taxpayer, so joint
     // filers can reclaim up to 2× — mirrors computeCgtEstimate's married doubling.
     const exemption =
         filingStatus === "married_joint"
