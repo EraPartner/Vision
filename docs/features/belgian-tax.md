@@ -119,7 +119,9 @@ decided in [[docs/adr/199-belgian-tax-source-verification|ADR-199]]. The primary
 - The law of 18 December 2025 (indexation freeze, donations 30%, alimony 70/60/50%, domestic-help reduction abolished), the law of 15 July 2026 (PIT reform from AY 2027) and the law of 30 March 1994 (special social security contribution).
 - PwC _Worldwide Tax Summaries — Belgium — Individual_ remains a secondary cross-check only; its IY 2025 dividend, savings and life-insurance figures ignore the freeze and are not used.
 
-Rows the matrix marks `unverified` (civil-servant contribution rate, regional property tax and own-home credits) keep their earlier values until their primary page is reached.
+- For the regional layer (2026-10-11): the regional versions of WIB 92 on Fisconetplus (woonbonus, chèque habitat, service vouchers, property tax), the Vlaamse Codex Fiscaliteit on Justel, the FPS circulars 2026/C/63, 2026/C/18, 2025/C/20, 2026/C/34 and 2026/C/74, the Royal Decree of 19 December 2017 and the special finance law (state/regional factor), and Royal Decree no. 38 with its yearly art. 14 decrees (self-employed contributions).
+
+Rows the matrix marks `unverified` (the communal property-tax centimes) keep their earlier values until their primary page is reached.
 
 `SUPPORTED_TAX_YEARS` (sorted numerically) lists the years with a complete table; `LATEST_TAX_YEAR` is the default.
 
@@ -157,13 +159,14 @@ New years are added by appending a `BelgianTaxYearTable` entry — no calculator
 | Mortgage details                                                                   | Interest, capital repaid, region, start year, primary residence status                                           |
 | Taxable income source categories                                                   | Filter for income categories included in tax calculations; used for graph filtering                              |
 | Alimony / pension savings / life insurance / donations / childcare / domestic help | With per-item eligibility flags                                                                                  |
+| Service vouchers                                                                   | `serviceVoucherSpend` (EUR, optional, takes precedence) or the legacy `serviceVoucherCount`, with eligibility flag |
 | Annual dividend income                                                             | Drives WHT reclaim estimate                                                                                      |
 | Annual savings interest                                                            | Drives 15% above-exemption tax estimate                                                                          |
 | Tax year                                                                           | Income year — selects the corresponding bracket table                                                            |
 
 ### Employment type → professional expense forfait
 
-WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.07% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](apps/frontend/src/lib/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
+WIB 92 art. 51 (amounts from the FPS Finance indexation notice per assessment year, see [[docs/reference/belgian-tax-rule-matrix]]): employees, civil servants and self-employed **trading profits** (winsten) get the 30% forfait (cap €5,930 IY 2025, €6,070 IY 2026). Remunerated company directors get the 3% forfait (cap €3,130 IY 2025). Self-employed **fees** (baten, liberal professions) get the degressive 28.7% / 10% / 5% / 3% scale with its own cap (€5,210 IY 2025). The optional profile field `selfEmployedIncomeKind` (`profits` by default, `fees`) selects the scale; pensions and other replacement income get no forfait. Per art. 51 al. 1 the percentages apply to the gross income after the employee social-security contribution, so for employees and civil servants the 13.07% / 11.05% contribution comes off before the 30% (this matters below the cap, about €22,700 gross in IY 2025). This is enforced in `computeProfessionalExpenses` in [pit.ts](apps/frontend/src/lib/belgianTax/pit.ts). (Until 2026-10-11 the engine gave self-employed taxpayers no forfait at all.)
 
 ### Taxable Income Sources
 
@@ -196,22 +199,23 @@ Investments of type `real_estate` include Belgian-specific fields:
 ## PIT calculation pipeline (`computeBelgianPIT`)
 
 1. Gross = salary + other taxable income.
-2. Employee social security: 13.07% (employee) / 11.07% (civil servant), salary only.
+2. Employee social security: 13.07% (employee) / 11.05% (statutory civil servant: 3.55% health care + 7.5% survivors' pension; 11.07% until 2026-10-11), salary only.
 3. Professional expenses: lump-sum forfait (employee / director / self-employed profits or fees, see above) or actual.
 4. Deductions from taxable basis: alimony at the art. 104 share for the income year (80% up to 2024, 70% in 2025, 60% in 2026 — law of 18 December 2025). (2026-06-11 correction: union dues now deduct only inside the _actual_ professional-expense method — they are professional expenses, not a separate deduction — and medical expenses no longer deduct at all; Belgian PIT has no general medical deduction. The breakdown also gained a 'Property Tax (estimate)' row so the visible rows reconcile to Net Take-Home.)
 5. Personal exemption (`quotité du revenu exempté`): basic + dependents (with disabled count doubling per CIR-92 art. 132 4° / 136) + under-3 (forfeited if childcare claimed per CIR-92 art. 132bis) + other dependents + disability + single-parent supplements; applied at the **lowest brackets first** via a dedicated exemption-bracket rate table (CIR-92 art. 134 §3). The exemption amount is taxed from bracket 1 upward using reduced rates (25% on bracket-1 portion, 30% on bracket-2 overflow, then main rates above), and the result is subtracted from gross PIT and reported as `personalExemptionBenefit`. Disabled dependents count as TWO heads each; `dependentChildrenDisabled` and `dependentOtherPersonsDisabled` are clamped to their respective head counts.
 5b. Marital quotient under `married_joint` (arts 87-88): the spouse's own professional income is taxed in their own name with the basic exemption (art. 126 §1 al. 2, décumul); up to 30% of the household professional income is transferred to the spouse so that own income plus transfer reaches the indexed cap (art. 88), and the transfer is kept only when the two spouses' combined tax is lower than without it (art. 88 al. 2). Until 2026-10-11 the no-quotient baseline omitted the spouse's own tax.
-6. Regional own-home credit (optional): Applies to mortgages on the taxpayer's primary residence.
-   - **Flemish woonbonus (pre-2020 loans)** — two sub-regimes by origination year:
-     - _Pre-2016 "ordinary" woonbonus_: base cap €2,280 (IY 2025).
-     - _2016-2019 "geïntegreerde" woonbonus_: base cap €1,520 (IY 2025; the 2016 reform merged the ordinary and housing credits into a single, reduced-cap scheme).
-     - Both share the same +€760 first-10-year supplement, +€80 3+-children supplement, and 40% rate.
-     - Credit = min(interest + capital repaid, base cap + supplements) × 40%.
-   - **Walloon `chèque habitat` (post-2016 loans, first 10 years)**: Credit = base annual amount + (dependent children × €125/child). [Note: Actual scheme has income-based phaseouts and years 11–20 tail; simplified here.]
+6. Regional own-home credit (optional): applies to mortgages on the taxpayer's primary residence. The claimant's taxable income before the marital quotient sets the woonbonus marginal rate and the chèque habitat income limits (both engines; in the household engine the claimant is `mortgageCreditPartnerId`). Corrected on 2026-10-11 against the regional WIB 92 texts; amounts are not indexed.
+   - **Flemish woonbonus (loans signed before 2020)**, credit = min(interest + capital repaid, base + increases) × rate:
+     - _Loans before 2015_ (art. 145/37 §2): base €2,280 at the taxpayer's highest art. 130 rate, minimum 30%.
+     - _Loans signed in 2015_ (art. 145/37 §3): base €1,520 at 40%.
+     - _2016-2019 "geïntegreerde" woonbonus_ (art. 145/38/2): base €1,520 at 40%.
+     - In the first ten taxable periods the base rises by €760, and by a further €80 with three or more dependent children; after year ten neither applies.
+   - **Walloon `chèque habitat` (loans signed 2016-2024)**, art. 145/46ter as coordinated in FPS circular 2026/C/18: €1,520 when the taxable income is at or below the lower limit; €1,520 − 1.275% × (income − lower limit) between the limits; nothing above the upper limit (IY 2024 26,394 / 101,805; IY 2025 27,353 / 105,503; IY 2026 28,024 / 108,093). Plus €125 per dependent child (disabled children count twice) except above the upper limit. Halved from the eleventh taxable period, and never more than the interest and capital paid. Loans signed from 1 January 2025 no longer qualify. The halving for a second home is not modelled.
    - **Brussels & post-2020 Flanders**: Not modeled (regime = 'none', credit = 0).
 7. Tax credits ("réductions d'impôt", IY 2025 amounts): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,450 @30%, frozen by the law of 18 December 2025), employee group insurance (30%), donations (30% since 2025, 45% in 2024, ≥€40, capped at 10% of net income and €408,130), childcare (45%, €16.90/day cap). The domestic-personnel reduction (art. 145/34) was abolished from income year 2025; the IY 2024 table keeps it (30%, €8,160 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
-8. **Regional autonomy factor** (May 2026 audit): Multiply federal PIT after credits by region-specific factor (Flanders: 0.9951, Wallonia: 0.9951, Brussels: 0.9945) to reflect region's own tax adjustments before communal surcharge.
-9. Communal surcharge applied to federal PIT after regional autonomy factor.
+   - **Service vouchers** (regional art. 145/21): reduction = rate × min(spend, cap per taxpayer). Flanders 20% up to €1,790 (IY 2024), abolished from IY 2025; Wallonia 30% up to €1,790 / €1,850 / €1,890; Brussels 15% up to €1,790 / €1,850, abolished from IY 2026. The spend is the optional `serviceVoucherSpend` field; when it is absent the legacy `serviceVoucherCount` is converted with the year table's voucher price (€9 or €10). Until 2026-10-11 the engine used voucher counts (€0.90 × 150 in Wallonia, 15% × 172 × €10 in Brussels).
+8. **State + regional factor**: federal PIT after credits × (reduced state tax 75.043%) × (1 + regional opcentiemen) = 1.0000 for Flanders and Wallonia (33.257%) and 0.9950 for Brussels (32.591%), for IY 2024-2026. Until 2026-10-11 the engine used 0.9951 / 0.9951 / 0.9945, calibrated on a PwC sample whose factor matches Brussels; no Flemish 2% reduction exists in the sources read.
+9. Communal surcharge applied to federal PIT after the state + regional factor.
 10. Special social security contribution (law of 30 March 1994 arts 106-109): a step function of the household income (€0 up to €18,592.02, then the single or joint scale, cap €731.28). Under a joint assessment the base is the earner's net professional income plus the spouse's professional income (art. 107, 2°), and the joint scale applies.
 11. Property tax (informational, not part of PIT): `nominalCI × indexationCoefficient × regionalBaseRate × (1 + centimes/100)`, summed across main + additional residences. **May 2026 audit:** centimes reductions calibrated to Belgium-wide commune medians (Flanders 1450→1100, Wallonia 4000→3300, Brussels 4500→4200) to align estimates with typical 20–50%-of-indexed-CI range.
 12. Investment side calc:
@@ -335,9 +339,13 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    year of a factual separation → joint, later years separate; the year of a death → separate
    unless the survivor elects joint (art. 126 §3), later years → the survivor alone;
    treaty-exempt professional income above the threshold → separate.
-2. **Activities**: 13.07% employee and civil-servant-rate contributions per activity;
+2. **Activities**: 13.07% employee and 11.05% civil-servant contributions per activity;
    self-employed contributions entered for profits, fees and helping-spouse activities are
-   deducted before the forfait (art. 52, 7°).
+   deducted before the forfait (art. 52, 7°). The engine deducts the amount entered
+   (`socialContributionsPaid`); `estimateSelfEmployedContributions(netProfessionalIncome, table)`
+   in `socialSecurity.ts` estimates the RSVZ main-occupation contributions (20.50% up to the
+   first threshold on at least the minimum income, 14.16% up to the second, per-year thresholds
+   in `selfEmployedContributions`) for the phase B2 UI and is not used by the engine.
 3. **Forfait per category and partner** (art. 51 al. 3): two part-time jobs share one capped
    forfait; trading profits form their own category (open item); helping spouses get 5%.
    Union dues count only inside an actual remuneration claim. A category never goes below 0.
@@ -383,13 +391,13 @@ snapshot meta may carry `frozenHouseholdResult`.
 
 - Brussels stamp-duty rebate (one-time, not annual).
 - Flemish post-2020 mortgages (no successor regime — capital owners only).
-- Regional own-home credit income-based phaseouts and year-11–20 decreasing tail (Walloon chèque habitat especially).
+- Walloon chèque habitat: the halving when the taxpayer acquires a second home, and the free split of the per-child increase between spouses (the household engine gives the whole credit to `mortgageCreditPartnerId`).
 - Foreign tax credit on foreign dividends (DBI-RDT regime).
 - Speculative capital gains (article 90, 1°).
 - Securities account tax (TACR) for accounts ≥ €1M — values exposed in `BelgianTaxYearTable.securitiesAccountTaxRate` for future UI use.
 - "Truly isolated" low-income single-parent additional supplement and its refundable-credit conversion: only the base €1,980 isolated-parent supplement is applied; the income-tested extra is not modeled.
 - Reynders on mixed funds (post-ADR-057): the interest-attributable share is now configurable per investment via `reyndersInterestPortion` (range 0–1, default 1.0). For pure accumulating bond funds the default 100% portion matches reality; mixed funds need a manual lower value. The non-interest remainder routes to the 10% CGT pool from IY 2026 onwards.
-- Arizona capital gains tax (IY 2026): the rate (10%) and exemption (€10,000 single / €20,000 married) are modeled. The tax applies to gains realized from **1 January 2026** (broker withholding starts 1 June 2026 but the full year is in scope). **Not** modeled: (a) the **31 Dec 2025 step-up basis** that shields pre-2026 historical gains — the calculator uses `realizedGain` against the original cost basis; (b) the **5-year +€1k/year carryforward** of unused exemption (cumulative cap €5k single / €10k married, so the annual exemption can grow to €15k / €30k after five unused years); (c) the **33% rate** on gains realized outside normal-management private estate; (d) direct-bond capital gains pre-2026 (correctly exempt under normal management — only the IY 2026+ inclusion is modeled, see ADR-057).
+- Capital gains tax (IY 2026, law of 6 April 2026, numac 2026002780; FPS circular 2026/C/74): the rate (10%) and the exemption of €10,000 **per taxpayer** (€20,000 for two spouses) are modeled. The tax applies to gains realized from **1 January 2026** (broker withholding starts 1 June 2026 but the full year is in scope). **Not** modeled: (a) the **31 Dec 2025 step-up basis** that shields pre-2026 historical gains — the calculator uses `realizedGain` against the original cost basis; (b) the per-taxpayer **carry-forward** of art. 96/2, 3° (an extra slice of base €480, set at €1,000 for AY 2028, per year without realised gains; at most base €2,426 used per period — there is no €20,000 carry-forward); (c) the **33% rate** on gains realized outside normal-management private estate; (d) direct-bond capital gains pre-2026 (correctly exempt under normal management — only the IY 2026+ inclusion is modeled, see ADR-057).
 
 ---
 

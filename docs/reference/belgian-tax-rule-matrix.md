@@ -42,7 +42,25 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | L2  | Law of 15 July 2026 *tot hervorming van de personenbelasting* (BS 29-07-2026, Justel 2026005724)                                 | Arts 131-134, 87-88, 126 from AY 2027; CSSS and surcharge changes from AY 2029 |
 | L3  | Law of 30 March 1994 *houdende sociale bepalingen*, arts 106-110 (Justel 1994021117, consolidated)                               | Special social security contribution (CSSS)                        |
 | L4  | WIB 92 on Justel (1992041050; text not updated since 2002, wording only) and Codex Vlaanderen (2011 consolidation)              | Article structure of arts 51, 86-89, 126, 131-134                  |
-| R1  | RSVZ, *Hoeveel sociale bijdragen moet ik betalen?*                                                                              | Self-employed social contributions 2026                            |
+| R1  | RSVZ, *Hoeveel sociale bijdragen moet ik betalen?* and the folder *Sociale bijdragen* (January 2026)                            | Self-employed social contributions 2026                            |
+| R38 | Royal Decree no. 38 of 27 July 1967 *houdende inrichting van het sociaal statuut der zelfstandigen*, arts 12 §1, 13bis, 14 (Justel 1967072702) | Self-employed contribution rates and base amounts (15,831.12 / 23,330.06 / 3,666.15 at index 142.75) |
+| R14 | Yearly art. 14 royal decrees: RD 17-12-2023 (numac 2023206853, fraction 656.54/142.75), RD 29-11-2024 (2024205904, 662.28/142.75), RD 25-11-2025 (2025203558, 676.50/142.75) | Self-employed contribution thresholds 2024, 2025, 2026 |
+| W1  | WIB 92, Flemish Region version, arts 145/37 and 145/38/2 (Fisconetplus `2cea1dd2-9260-4e01-a287-7407c9d1884b`, `4de78004-13bc-4858-b519-4312c09f38c8`) | Flemish woonbonus and geïntegreerde woonbonus; amounts not indexed (art. 178 §5, 4°) |
+| W2  | WIB 92 art. 145/21, regional versions (Fisconetplus): Flanders income 2024 `bcb41a3c-bdb5-4b67-879a-72f538ffe4c8`; Wallonia income 2024 `360e95ff-2899-4037-9f23-7deaac95794d`, 2025 `19a6ca22-88a1-4777-9961-de056536adc6`, 2026 `bbda59c3-b9c5-4d4b-a838-0913695d355e`; Brussels income 2024 `a747184a-d367-4a5f-8066-ffaa5f7f75df`, 2025 `7c0161d3-42e2-4dcf-a0da-fcda6fea8979` | Service-voucher reduction rate and expense cap per region and year |
+| W3  | WIB 92 art. 255, Walloon and Brussels versions (Fisconetplus `47b520a5-dca5-4454-a6ee-f47dfdd89ecf`, `83ade4ce-e808-4a3b-8741-a6a4a464482a`; FPS consolidated texts titled "historisch") | Walloon and Brussels property-tax base rate 1.25% |
+| V1  | Vlaamse Codex Fiscaliteit art. 2.1.4.0.1 (decree of 13-12-2013, Justel 2013036154, consolidated to 30-06-2026) | Flemish property-tax base rate 3.97% |
+| C63 | FPS circular 2026/C/63 on the mortgage-loan reductions in the Flemish Region (Fisconetplus `7ffb1e80-32b2-4714-9961-c87aca7394b7`) | Woonbonus amounts AY 2026; no integrated woonbonus for loans from 1 Jan 2020 |
+| C18 | FPS circular 2026/C/18 on the end of the Chèque Habitat (Fisconetplus `ca250aba-f172-4eb3-83ab-ac476883bb99`, 16-01-2026), with the coordinated arts 145/46ter-quater | Chèque habitat formula, halving, cap; loans from 1 Jan 2025 excluded |
+| C20 | FPS circular 2025/C/20 on reductions abolished by the Flemish Region (Fisconetplus `b8383bc8-f4c0-4f71-85f8-cab07881d481`) | Flemish service-voucher reduction abolished for periods starting after 31-12-2024 |
+| C34 | FPS circular 2026/C/34 on the abolition of the Brussels reduction for ALE cheques and service vouchers (Fisconetplus `0b274dac-47a2-45ba-a899-9cf884cedf03`); Brussels ordinance of 18-12-2025 (BS 31-12-2025, numac 2025009750) | Brussels service-voucher reduction abolished from AY 2027 |
+| C74 | FPS circular 2026/C/74 on the tax on capital gains on financial assets (Fisconetplus `7f6b62c6-1baa-487a-8f59-c883dd5485c4`) | Capital gains tax rate, exemption, carry-forward |
+| L5  | Law of 6 April 2026 introducing a tax on capital gains on financial assets (BS 21-04-2026, numac 2026002780), arts 10, 14, 35 | Capital gains tax from 1 Jan 2026 |
+| RD17 | Royal Decree of 19 December 2017 fixing the autonomy factor (Justel 2017032216) | Autonomy factor 24.957% from AY 2018 |
+| LSF | Special finance law of 16 January 1989, arts 5/2 and 81quater (Justel eli/wet/1989/01/16/1989021010) | Reduced state tax; default regional opcentiemen = factor / (1 − factor) |
+| WD17 | Walloon decree of 13 December 2017, art. 33 (Fisconetplus extract `96617d24-11ec-4943-b65c-4b075a06c16c`) | Walloon opcentiemen 33.257% |
+| BQ104 | Brussels Finance Minister's answer to written question no. 104, Brussels Parliament, web-published 24-10-2025 (Fisconetplus `711156ec-1171-458e-82bf-6ee59396fbba`) | Opcentiemen 33.257% in the other regions, 32.591% in Brussels |
+| S1  | Law of 29 June 1981, art. 38 §2 (Justel 1981001048); RSZ administrative instructions 2026/3, social security contributions | Employee contribution 7.5 + 1.15 + 0.87 + 3.55 = 13.07% |
+| S2  | RSZ administrative instructions, limited insurance, public sector ("beperkt tot de sector ZIV-geneeskundige verzorging"); law of 15 May 1984, art. 60 (Justel 1984022160) | Statutory civil servant contribution (3.55% health care + 7.5% survivors' pension) |
 | P1  | PwC Worldwide Tax Summaries, Belgium — Individual (taxes on personal income, deductions, other taxes, sample calculation; reviewed 10 Sep 2026) | Secondary cross-check only                                         |
 
 > [!warning] PwC figures that disagree with the primary sources
@@ -112,9 +130,10 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Donations capped at 10% of net income      | art. 145/33 §1 al. 4   | rule                    | rule                         | rule                         | F6                 | `pit.ts` donation block            | —                                               | verified (rule) |
 | Childcare 45%, daily cap                   | art. 145/35            | 16.40                   | 16.90                        | 17.30                        | N25, N26, N27, F6  | `childcare*`                       | "childcare" tests                               | verified; the 75% rate for low-income isolated parents is not modelled |
 | Domestic personnel 30%, wage cap           | art. 145/34            | 8,160                   | abolished (L1 art. 68, from AY 2026 per art. 90) | abolished             | N25, N26, L1       | `domesticHelp*`                    | "domestic help credit: €8,160 wage cap for IY 2024, abolished from IY 2025" | verified (IY 2024 corrected from 8,030) |
-| Service and PWA vouchers: federal expense cap per taxpayer | art. 145/21 (regionalised) | 1,790     | 1,850                        | 1,890                        | F6, F7             | —                                  | —                                               | not modelled (the engine caps by voucher count) |
-| Service vouchers: Flanders abolished from 2025 | Flemish decree, via F6 | 20% (regional)        | 0                            | 0                            | F6                 | `serviceVoucherRegional.flanders`  | —                                               | verified for 2025+; IY 2024 Flemish rate unverified |
-| Service vouchers: Wallonia €0.90 × 150, Brussels 15% × 172 | regional decrees | as code              | as code                      | as code                      | —                  | `serviceVoucherRegional`           | "service vouchers" tests                        | unverified (wallonie.be and Brussels pages not reachable) |
+| Service vouchers: reduction = rate × min(spend, cap per taxpayer); spend from `serviceVoucherSpend`, else legacy count × `voucherPrice` | art. 145/21 (regional versions) | rule | rule | rule | W2 ("uitgaven tot ten hoogste … per belastingplichtige") | `serviceVoucherRegional`, `personPit.ts` `computeServiceVoucherCredit` | "service vouchers: spend overrides the count …"; `household.test.ts` "service-voucher spend is capped per partner …" | verified (rule; replaces the count-based model); the count conversion price is the earlier assumption, not sourced |
+| Service vouchers: Flanders 20%                 | Flemish art. 145/21; C20 | 20% to 1,790 | abolished                 | abolished                    | W2, C20            | `serviceVoucherRegional.flanders`  | "service vouchers: spend overrides the count …" | verified |
+| Service vouchers: Wallonia 30%                 | Walloon art. 145/21      | 30% to 1,790 | 30% to 1,850              | 30% to 1,890                 | W2                 | `serviceVoucherRegional.wallonia`  | same                                            | verified (previously €0.90 × 150 vouchers) |
+| Service vouchers: Brussels 15%                 | Brussels art. 145/21; ordinance 18-12-2025 | 15% to 1,790 | 15% to 1,850 | abolished (from AY 2027) | W2, C34            | `serviceVoucherRegional.brussels`  | same                                            | verified (previously 15% × 172 × €10, still applied in IY 2026) |
 | Employee group insurance 30%               | art. 145/1, 1°         | 30%, no cap             | 30%                          | 30%                          | —                  | `groupInsuranceRate`               | —                                               | unverified (cap missing; see open items) |
 
 ## Marital quotient and joint assessment
@@ -131,24 +150,35 @@ fin.belgium.be explain the rules; the laws give the rule text.
 
 | Rule                                            | Legal basis                              | IY 2024 | IY 2025 | IY 2026 | Source | Code                                   | Tests                                           | Status   |
 | ----------------------------------------------- | ---------------------------------------- | ------- | ------- | ------- | ------ | -------------------------------------- | ----------------------------------------------- | -------- |
-| Employee contribution 13.07%                    | Law 29 June 1981 / RSZ                   | 13.07%  | 13.07%  | 13.07%  | P1 (other taxes) | `employeeSSRate`              | "employee SS = 13.07%"                          | verified on P1 only (secondary) |
-| Statutory civil servant contribution            | —                                        | 11.07%  | 11.07%  | 11.07%  | —      | `civilServantSSRate`                   | `socialSecurity.test.ts`                        | unverified (RSZ instructions are a JS application; no page read) |
+| Employee contribution 13.07%                    | Law 29 June 1981 art. 38 §2 / RSZ        | 13.07%  | 13.07%  | 13.07%  | S1, P1 | `employeeSSRate`                       | "employee SS = 13.07%"                          | verified (7.5 + 1.15 + 0.87 + 3.55) |
+| Statutory civil servant contribution: 3.55% (health care only) + 7.5% (survivors' pension) | Law 29 June 1981 art. 38 §2, 4°; law 15 May 1984 art. 60 | 11.05% | 11.05% | 11.05% | S1, S2 | `civilServantSSRate` | `socialSecurity.test.ts` "gives statutory civil servants 3.55% + 7.5% = 11.05%" | verified (derived from two sources; no page states the sum; corrected from 11.07%) |
 | CSSS single scale: 0 to 18,592.02; 5%; 123.95 + 1.3%; 335.50 + 4.009% to 40,997.26; 481.96 + 1.2996% to 60,181.95; 731.28 | L3 art. 108 §1 al. 2 (laws of 28-03-2022 and 20-11-2022) | same | same | same (L2 art. 91 rewrites it from AY 2029) | L3 | `csssTable` | "tier 4 single", "tier 5 single", "joint pays less than single at €50,000" | verified (tiers 4-5 corrected: the code ended tier 4 at 47,215.31) |
 | CSSS joint scale: 5%; 123.95 + 1.3% to 60,181.95; 632.39 to 74,688; 632.39 + 1.3629% to 81,944; 731.28 | L3 art. 108 §1 al. 3 | same | same | same | L3, P1 sample (422.93 at 44,070) | `csssTableJoint` | "joint flat €632.39", PwC sample test | verified (upper bound corrected from 81,944.96 to 81,944.00) |
 | CSSS base under joint assessment = household income (sum of both spouses' net income, before the quotient) | L3 art. 107, 2° | rule | rule | rule | L3 | `pit.ts` step 10 | "joint assessment: CSSS is computed on the household income" | verified (previously the earner's income alone) |
 | CSSS only for employees under art. 106 (not self-employed, not pensioners) | L3 art. 106 | rule | rule | rule | L3 | `computeSpecialSocialSecurityContribution` | "returns 0 for self-employed" | verified (rule) |
-| Self-employed contributions: 20.50% to 75,024.54; 14.16% to 110,562.42; minimum income 17,374.08 | RSVZ 2026 | — | — | 2026 rates | R1 | — | — | not computed; the household engine takes the amount paid as input (`socialContributionsPaid`) and deducts it (see [[#Household taxation]]); the 2024 and 2025 tables are still to be read |
+| Self-employed contributions (main occupation): 20.50% up to threshold 1 on at least the minimum income; 14.16% between threshold 1 and threshold 2; nothing above | RD no. 38 art. 12 §1, art. 14 | 72,810.95 / 107,300.30 / 16,861.46 | 73,447.52 / 108,238.40 / 17,008.88 | 75,024.54 / 110,562.42 / 17,374.08 | R38, R14, R1 (2026) | `selfEmployedContributions`, `socialSecurity.ts` `estimateSelfEmployedContributions` | `socialSecurity.test.ts` "self-employed contribution estimate …" | verified (rule); 2024/2025 euro amounts computed from the decrees (base × fraction, cent rounding inferred; 2026 matches R1 exactly). Estimate helper only: the household engine deducts the user-entered `socialContributionsPaid` (see [[#Household taxation]]) |
 
 ## Regional layer, surcharge, property
 
 | Rule                                            | Legal basis                     | IY 2024 | IY 2025 | IY 2026 | Source | Code                        | Tests                            | Status   |
 | ----------------------------------------------- | ------------------------------- | ------- | ------- | ------- | ------ | --------------------------- | -------------------------------- | -------- |
-| Reduced state tax 75.043% + Flemish regional surtax 33.257% with 2% Flemish reduction → combined factor 0.9950 | Special finance law, art. 5/1 ff. | 0.9951 | 0.9951 | 0.9951 | P1 sample (433.56 / 577.75; 141.30) | `regionalAutonomyFactor.flanders` | "regional autonomy factor 0.9951" | derived from P1 (0.99501); primary text not read |
-| Wallonia 0.9951, Brussels 0.9945 factors        | regional surtax rates           | as code | as code | as code | —      | `regionalAutonomyFactor`    | —                                | unverified |
+| Reduced state tax 75.043% (autonomy factor 24.957%) | LSF art. 5/2; RD17          | 75.043% | 75.043% | 75.043% | RD17, LSF | `regionalAutonomyFactor` docstring | "state + regional factor …" | verified |
+| Flanders and Wallonia: opcentiemen 33.257% → combined factor 0.75043 × 1.33257 = 1.0000 | LSF art. 81quater, 1° (default); Walloon decree 13-12-2017 art. 33 | 1.0000 | 1.0000 | 1.0000 | WD17, LSF, BQ104 | `regionalAutonomyFactor.flanders`, `.wallonia` | "state + regional factor …", PwC sample tests | verified (corrected from 0.9951; no Flemish reduction appears in the sources read; the Flemish rate rests on BQ104 and the LSF default) |
+| Brussels: opcentiemen 32.591% → 0.75043 × 1.32591 = 0.9950 | Brussels opcentiemen | 0.9950 | 0.9950 | 0.9950 | BQ104 | `regionalAutonomyFactor.brussels` | same | verified on BQ104 (corrected from 0.9951 / 0.9945); the PwC AY 2026 sample's 0.99501 equals this Brussels product |
 | Communal surcharge 0-9% on the tax, default 7%  | WIB 92 arts 465-469             | 7%      | 7%      | 7% (L2 art. 99 adds a correction factor from AY 2029) | P1, L2 | `communalSurchargePercent` | surcharge tests | verified (rule); the L2 correction factor is not modelled |
-| Cadastral income indexation coefficient         | WIB 92 art. 518                 | 2.1763  | 2.2446  | 2.3000  | N25 point H, N26 point H, N27 point J; F7 | `cadastralIndexationCoefficient` | `pit.test.ts` "cadastral indexation coefficient" | verified (IY 2026 corrected from the copied 2.2446) |
-| Property tax base rates and centimes            | regional codes                  | as code | as code | as code | —      | `regionPropertyTax`         | `propertyTax.test.ts`            | unverified (vlaanderen.be and wallonie.be not reachable) |
-| Flemish woonbonus / Walloon chèque habitat      | regional codes                  | as code | as code | as code | F6 (no advantage for loans from 1 Jan 2025) | `computeOwnHomeCredit` | own-home tests | unverified amounts; the 2025 cut-off is verified |
+| Cadastral income indexation coefficient         | WIB 92 art. 518; V1 art. 1.1.0.0.2, 11° (Flemish KI indexed under art. 518) | 2.1763  | 2.2446  | 2.3000  | N25 point H, N26 point H, N27 point J ("2,3000 pour l'année des revenus 2026"); F7 | `cadastralIndexationCoefficient` | `pit.test.ts` "cadastral indexation coefficient" | verified |
+| Property tax base rate, Flanders 3.97%          | V1 art. 2.1.4.0.1 §1            | 3.97%   | 3.97%   | 3.97%   | V1     | `regionPropertyTax.flanders.baseRate` | `propertyTax.test.ts` | verified |
+| Property tax base rate, Wallonia and Brussels 1.25% | WIB 92 art. 255 (regional versions) | 1.25% | 1.25% | 1.25% | W3 | `regionPropertyTax.*.baseRate` | `propertyTax.test.ts` | verified on the FPS consolidated texts only (the Walloon decree and Brussels ordinance were not read) |
+| Property tax centimes (communal + provincial)   | communal and provincial decisions | estimate | estimate | estimate | — | `regionPropertyTax.*.centimes` | `propertyTax.test.ts` | unverified (median estimates; the user can override) |
+| Flemish woonbonus, loans before 2015: base 2,280 at the highest art. 130 rate, minimum 30% | Flemish art. 145/37 §2 | 2,280; max(marginal, 30%) | same | same | W1, C63 | `flemishWoonbonusBaseCap`, `flemishWoonbonusPre2015MinimumRate`, `computeOwnHomeCredit` | "Flemish woonbonus, loan signed before 2015 …" | verified (corrected from a flat 40%) |
+| Flemish woonbonus, loans signed in 2015: base 1,520 at 40% | Flemish art. 145/37 §3 | 1,520; 40% | same | same | W1, C63 | `flemishWoonbonus2015BaseCap` | "Flemish woonbonus, loan signed in 2015 …" | verified (corrected from 2,280) |
+| Integrated woonbonus, loans 2016-2019: base 1,520 at 40% | Flemish art. 145/38/2 §§2-3 | 1,520; 40% | same | same | W1, C63 | `flemishIntegratedWoonbonusBaseCap`, `flemishWoonbonusRate` | "geïntegreerde woonbonus" tests | verified |
+| Woonbonus +760 in the first ten periods, +80 more with 3+ children (only together with the 760); amounts frozen | Flemish arts 145/37 §§2-3, 145/38/2 §2; art. 178 §5, 4° | 760 / 80 | 760 / 80 | 760 / 80 | W1, C63 | `flemishWoonbonusExtra*` | "the €80 for 3+ children applies only with …" | verified (the 80 was previously added after year 10 as well) |
+| No woonbonus for loans from 1 Jan 2020           | C63                             | rule    | rule    | rule    | C63, F6 | `resolveMortgageRegime`    | "Post-2020 Flemish mortgage"     | verified |
+| Chèque habitat: 1,520 at or below the lower limit; 1,520 − 1.275% × (income − lower limit) between the limits; 0 above the upper limit; +125 per dependent child (disabled ×2) except above the upper limit | Walloon art. 145/46ter §2 | limits 26,394 / 101,805 | 27,353 / 105,503 | 28,024 / 108,093 | C18 (formula, base 21,000 / 81,000), N25, N26, N27 ("Règle spécifique art. 178, § 6bis") | `walloonChequeHabitat*`, `computeOwnHomeCredit` | "Walloon chèque habitat between the income limits …", "… at or below the lower limit …", "… above the upper limit …" | verified (the formula is explicit in C18; the indexed limits replace 21,000 / 81,000; previously no phase-out) |
+| Chèque habitat halved from the eleventh taxable period; never more than the interest, capital and premiums paid | Walloon art. 145/46ter §§3-4 | rule | rule | rule | C18 | `computeOwnHomeCredit` | "Walloon chèque habitat: halved from the eleventh period, capped …" | verified (previously 0 from year 11 and no cap); the halving for a second home is not modelled |
+| Chèque habitat only for loans signed 2016-2024  | Walloon art. 145/46quater §1, 3° (decree 05-12-2024) | rule | rule | rule | C18, F6 | `resolveMortgageRegime` | "Walloon chèque habitat: loans signed from 1 Jan 2025 do not qualify" | verified (previously no upper bound) |
+| Income for the woonbonus rate and the chèque habitat limits = the claimant's taxable income before the marital quotient | arts 145/37 §2, 145/46ter §2 last al. | rule | rule | rule | W1, C18 | `pit.ts`, `household.ts` (`mortgageCreditPartnerId`) | `household.test.ts` "own-home credit uses the claiming partner's income …" | derived (art. 6 income without non-professional movable income; the engine's taxable income excludes dividends and interest; whether the quotient applies first was not read) |
 
 ## Investment income
 
@@ -156,7 +186,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | -------------------------------------- | ------------------- | ------- | ------- | ------- | ----------------- | ------------------------------------------------- | -------------------------------------------- | -------- |
 | Dividend exemption, 30% WHT reclaim    | art. 21, 14°; art. 269 | 833  | 833 ("après gel") | 833 | N25, N26, N27, F5, F7 | `dividendExemption`, backend `services/reports/belgianTaxTables.ts` | "dividend WHT reclaim" | verified (IY 2025/2026 corrected from 859) |
 | Savings-deposit interest exemption, 15% above | art. 21, 5°; art. 171, 3°quinquies | 1,020 | 1,020 ("après gel") | 1,020 | N25, N26, N27, F5, F7 | `savingsInterestExemption`, `savingsInterestExcessRate` | "savings interest tax" | verified (IY 2025/2026 corrected from 1,050) |
-| Capital gains tax 10%, 10,000 / 20,000 exemption from 2026 | law of 2026 on capital gains | 0 | 0 | 10% | — | `capitalGainsTax*` | CGT tests | unverified (law text not read in this pass) |
+| Capital gains tax 10%, exemption 10,000 per taxpayer (20,000 for two spouses) from 2026 | L5 arts 10 (art. 96/2, 2°, base 4,855), 14 (art. 171, 2°, e)), 35 | 0 | 0 | 10%; 10,000 per taxpayer | L5, C74, N27 | `capitalGainsTax*` | CGT tests | verified; the per-taxpayer carry-forward of art. 96/2, 3° (base 480 per year, set at €1,000 for AY 2028; at most base 2,426 used per period) is not modelled; there is no 20,000 carry-forward |
 | TOB, TACR, Reynders                    | Code of miscellaneous duties and taxes; art. 19bis | as code | as code | as code | — | `portfolioTax.ts` | `portfolioTax.test.ts` | unverified in this pass |
 
 ## Household taxation
@@ -198,17 +228,25 @@ severity; each one is listed in [[#Open items]]. Amounts are those of the tables
 
 ## Open items
 
-1. **Regional sources are unreachable** from the sandbox (vlaanderen.be, wallonie.be; the Brussels
-   tax pages 404 after the fiscalite.brussels redirect). Property tax, own-home credits, service
-   voucher amounts and the Wallonia/Brussels surtax factors stay unverified until those domains
-   are allowed.
-2. **Civil servant contribution rate** (11.07% in code) has no readable primary page yet.
+1. **Regional sources read through FPS texts.** vlaanderen.be and wallonie.be stay unreachable
+   from the sandbox; the regional rules come from the regional WIB 92 versions on Fisconetplus,
+   the FPS circulars and Justel.
+   - Brussels/Walloon property-tax rates read only from the FPS consolidated texts (W3); the
+     Walloon decree and the Brussels ordinance themselves were not read. The communal centimes
+     are estimates.
+   - Flemish and Brussels opcentiemen rest on the October 2025 ministerial answer (BQ104); the
+     Flemish rate also equals the special finance law default. Later Walloon amendments to
+     33.257% were not checked.
+2. **RSVZ cent rounding**: the 2024 and 2025 self-employed thresholds are computed from R38 and
+   R14 with half-up rounding to the cent, inferred from the exact 2026 match; no published 2024 or
+   2025 table was reachable.
 3. **Rules known but not modelled**: refundable child tax credit (art. 134 §3), low-income
    isolated-parent supplement (art. 133 al. 2-3), dependent 66+ supplement (art. 132 7°), the
-   federal voucher expense cap, the 75% childcare rate, the L2 surcharge correction factor, the
-   computation of self-employed social contributions. The helping-spouse forfait and the 66+
-   marital quotient cap are modelled in the household engine (2026-10-11), not in
-   `computeBelgianPIT`.
+   75% childcare rate, the L2 surcharge correction factor, the chèque habitat halving for a second
+   home and its free split of the child increase between spouses, the capital-gains
+   carry-forward. `estimateSelfEmployedContributions` exists but no engine uses it yet. The
+   helping-spouse forfait and the 66+ marital quotient cap are modelled in the household engine
+   (2026-10-11), not in `computeBelgianPIT`.
 4. **Employee group insurance** has no cap in the engine; art. 145/1 and 145/3 limit it through
    the 80% rule, which needs a pension-promise input.
 5. **IY 2026 consumer pages** of FPS Finance still show pre-reform values; re-check F1-F3 when
@@ -232,7 +270,7 @@ severity; each one is listed in [[#Open items]]. Amounts are those of the tables
 7. **Household rules not modelled or not read**: the current wording of art. 134 §4 after L2 (only
    the 2011 §1 al. 2 text was read); the art. 127, 4° 50% split of income that cannot be
    attributed to one spouse; the art. 133 al. 1, 2° supplement in the year of marriage; loss
-   offset between categories and spouses; the RSVZ 2024 and 2025 contribution tables.
+   offset between categories and spouses.
 
 ## Related
 
