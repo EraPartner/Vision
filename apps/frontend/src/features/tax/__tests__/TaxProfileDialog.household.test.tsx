@@ -237,6 +237,21 @@ describe("TaxProfileDialog household editing", () => {
         expect(storedHousehold()?.home.mortgageCreditPartnerId).toBe("B");
     });
 
+    it("disables the own-home claimant once partner B's share is entered", async () => {
+        serveHousehold(coupleHousehold());
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+        await openSheet(user);
+
+        const picker = await screen.findByRole("combobox", { name: "Home credit" });
+        expect(picker).toBeEnabled();
+        await user.type(screen.getByLabelText(/partner B's share of the home loan/i), "100");
+        expect(storedHousehold()?.home.mortgageSharePartnerB).toBe(100);
+        expect(picker).toBeDisabled();
+        expect(picker).toHaveTextContent("Partner");
+        expect(picker).toHaveAccessibleDescription(/set by partner B's share/i);
+    });
+
     it("edits service-voucher spending per partner", async () => {
         serveHousehold(coupleHousehold());
         const user = userEvent.setup();
@@ -253,21 +268,6 @@ describe("TaxProfileDialog household editing", () => {
         expect(storedHousehold()?.partners[0]?.reductions.serviceVoucherSpend).toBeUndefined();
     });
 
-    it("asks for the chèque habitat first qualifying year only for a Walloon home", async () => {
-        serveHousehold(
-            singleHousehold({
-                region: "wallonia",
-                mortgageIsPrimaryResidence: true,
-                mortgageStartYear: 2017,
-                mortgageInterestPaid: 3_000,
-            }),
-        );
-        const user = userEvent.setup();
-        renderWithApp(<TaxProfileDialog initialStep="home" />);
-        await openSheet(user);
-
-        const field = await screen.findByLabelText(/first year the chèque habitat/i);
-        await user.type(field, "2019");
     it("drops a stored mortgage region after one edit of the home step", async () => {
         serveHousehold(
             singleHousehold({
@@ -288,6 +288,21 @@ describe("TaxProfileDialog household editing", () => {
         expect(storedHousehold()?.home).not.toHaveProperty("mortgageRegion");
     });
 
+    it("asks for the chèque habitat first qualifying year only for a Walloon home", async () => {
+        serveHousehold(
+            singleHousehold({
+                region: "wallonia",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2017,
+                mortgageInterestPaid: 3_000,
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog initialStep="home" />);
+        await openSheet(user);
+
+        const field = await screen.findByLabelText(/first year the chèque habitat/i);
+        await user.type(field, "2019");
         expect(storedHousehold()?.home.firstQualifyingYear).toBe(2019);
         await user.clear(field);
         expect(storedHousehold()?.home).not.toHaveProperty("firstQualifyingYear");

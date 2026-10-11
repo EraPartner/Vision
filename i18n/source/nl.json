@@ -4248,6 +4248,7 @@
   "tax.household.field.mortgageSharePartnerB": "Aandeel van partner B in de woninglening (%)",
   "tax.household.field.mortgageSharePartnerB.desc": "Vul dit in wanneer beide partners voor de woning leenden: elk heeft dan een eigen grens voor de woonbonus of de chèque habitat. Geef in Wallonië het eigendomsaandeel van partner B op. Laat het leeg wanneer één partner het hele voordeel aanvraagt.",
   "tax.household.field.ownHomeClaimant": "Woonkrediet",
+  "tax.household.field.ownHomeClaimant.shareSet": "Bepaald door het aandeel van partner B in de woninglening: bij 0% krijgt partner A het voordeel, bij 100% partner B, en bij elk ander aandeel krijgt elke partner een eigen deel.",
   "tax.household.issue.csss_mixed_activity_base_unverified": "De grondslag van de bijzondere bijdrage voor de sociale zekerheid bij gemengde activiteiten is nog niet getoetst aan de wet.",
   "tax.household.issue.deceased_partner_not_assessed": "De partner die in een eerder jaar overleden is, wordt voor dit jaar niet belast.",
   "tax.household.issue.director_contributions_not_deducted": "Sociale bijdragen ingevuld voor een activiteit als bedrijfsleider worden in deze raming niet afgetrokken.",

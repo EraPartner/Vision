@@ -4250,6 +4250,7 @@ const en: Record<string, string> = {
   'tax.household.field.mortgageSharePartnerB': 'Partner B\'s share of the home loan (%)',
   'tax.household.field.mortgageSharePartnerB.desc': 'Fill this in when both partners borrowed for the home: each then has their own woonbonus or chèque habitat limit. In Wallonia, enter partner B\'s ownership share. Leave it empty when one partner claims the whole credit.',
   'tax.household.field.ownHomeClaimant': 'Home credit',
+  'tax.household.field.ownHomeClaimant.shareSet': 'Set by partner B\'s share of the home loan: 0% gives the credit to partner A, 100% to partner B, and any other share gives each partner their own part.',
   'tax.household.issue.csss_mixed_activity_base_unverified': 'The special social security contribution base for mixed activities is not yet verified against the law.',
   'tax.household.issue.deceased_partner_not_assessed': 'The partner who died in an earlier year is not assessed for this year.',
   'tax.household.issue.director_contributions_not_deducted': 'Social contributions entered for a company director activity are not deducted in this estimate.',
