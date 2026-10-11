@@ -17,22 +17,27 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 > figures worked out by hand from the cited WIB 92 article and the indexed amounts recorded in
 > [[docs/reference/belgian-tax-rule-matrix|the rule matrix]]. The arithmetic is written next to
 > every scenario in the test file; no expected figure is copied from the engine.
-> 77 scenarios: 71 verified, 6 needs_source.
+> 78 scenarios: 70 verified, 8 needs_source.
 
 ## How to read it
 
-- **Code**: `apps/frontend/src/lib/belgianTax/__tests__/scenarioMatrix.*.test.ts`; the shared
-  `Scenario` type and runner are in `scenarioMatrix.ts`. Run them with
+- **Code**: `apps/frontend/src/lib/belgianTax/__tests__/scenarioMatrix.*.test.ts` run the
+  scenarios listed in `scenarioMatrix.<part>.ts` (single, joint, assessment, regions, and the
+  invariant metadata); the shared `Scenario` type and runner are in `scenarioMatrix.ts`. Run them with
   `bunx vitest run src/lib/belgianTax` from `apps/frontend`.
 - **Status**: `verified` = every asserted figure follows from verified rule-matrix rows.
-  `needs_source` = the correct result depends on a rule the matrix does not carry; the scenario
-  asserts only the sourced parts (and the issue the engine raises) and states what is missing.
+  `needs_source` = the correct result depends on a rule the matrix does not carry, or on an
+  input the household leaves empty (RG-15); the scenario asserts only the sourced parts (and the
+  issue the engine raises) and states what is missing.
 - **Matrix rows**: the row keys below; the rule matrix shows the same key and the scenario ids in
   its `Scenarios` column.
 - **Defaults** unless a scenario says otherwise: income year (IY) 2025, Flemish Region (factor
   1.0000), 7% communal surcharge, couples married in 2015 (joint assessment), an
   employee pays 13.07% personal social security.
-- Every scenario id must appear on this page; the runner fails a scenario whose id is missing.
+- `scenarioMatrix.docs.test.ts` keeps this page and the scenario lists in sync both ways: every
+  scenario row needs a scenario with the same status and matrix rows, every scenario (IN-01 to
+  IN-04 included) needs a row, the Needs source table lists exactly the `needs_source` scenarios,
+  and the Row keys table lists every cited key with exactly the scenarios that cite it.
 
 ## Scenarios
 
@@ -103,7 +108,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | AS-10 | year of death without election → separate (electable) | WIB 92 art. 126 §2 al. 1, 3° and §3 | `hh-death` | verified |
 | AS-11 | year of death with the survivor's election → joint (quotient of JQ-05) | WIB 92 art. 126 §3, art. 87 | `hh-death`, `mq-cap` | verified |
 | AS-12 | year after the death → only the survivor is assessed | WIB 92 art. 126 §2 al. 1, 3° | `hh-death` | verified |
-| AS-13 | factual cohabitants: separate; dependants with the claimant partner B | WIB 92 arts 126 §1, 132 al. 1, 1° | `hh-no-union`, `hh-supplements-allocation`, `children-supplements` | verified |
+| AS-13 | factual cohabitants: separate; dependants with the claimant partner B (figures before the art. 134 §3 refundable credit) | WIB 92 arts 126 §1, 132 al. 1, 1° | `hh-no-union`, `hh-supplements-allocation`, `children-supplements` | needs_source |
 | AS-14 | isolated-parent supplement under a separate assessment with a partner | WIB 92 art. 133 al. 1, 1°; law of 15 July 2026 art. 9 | `hh-isolated-parent-partner` | needs_source |
 
 ### Regions
@@ -116,7 +121,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | RG-02 | Wallonia factor 1.0000 with a 7.5% communal surcharge, IY 2025 | Walloon decree 13-12-2017 art. 33; WIB 92 arts 465-469 | `factor-flanders-wallonia`, `surcharge` | verified |
 | RG-03 | Brussels: regional reduction deducted before the 0.9950 factor | Special finance law art. 5/2 (where federal and regional reductions are charged) | `factor-brussels`, `service-voucher-brussels` | needs_source |
 | RG-04 | Flemish woonbonus, loan of 2012, IY 2024: base 2,280 at the 45% marginal rate | WIB 92 Flemish art. 145/37 §2; art. 178 §5, 4° (not indexed) | `woonbonus-pre2015`, `woonbonus-extra`, `brackets` | verified |
-| RG-05 | integrated woonbonus, loan of 2018, three children, IY 2025 | WIB 92 Flemish art. 145/38/2 §§2-3; art. 132 al. 1, 3° | `woonbonus-integrated`, `woonbonus-extra`, `children-supplements` | verified |
+| RG-05 | integrated woonbonus, loan of 2018, three children on 1 January 2019, IY 2025 | WIB 92 Flemish art. 145/38/2 §2 al. 3, §3; art. 132 al. 1, 3° | `woonbonus-integrated`, `woonbonus-extra`, `children-supplements` | verified |
 | RG-06 | no woonbonus for a Flemish loan signed in 2020 | FPS circular 2026/C/63 | `woonbonus-post2020` | verified |
 | RG-07 | chèque habitat, tenth period (IY 2025): full amount between the income limits | WIB 92 Walloon art. 145/46ter §§2-4 (N26 limits 27,353 / 105,503) | `cheque-habitat-formula`, `cheque-habitat-periods`, `children-supplements` | verified |
 | RG-08 | chèque habitat, eleventh period (IY 2026): halved | WIB 92 Walloon art. 145/46ter §3 (N27 limits 28,024 / 108,093) | `cheque-habitat-formula`, `cheque-habitat-periods`, `children-supplements` | verified |
@@ -124,8 +129,9 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | RG-10 | chèque habitat: nothing before the first qualifying year | WIB 92 Walloon art. 145/46quinquies | `cheque-habitat-periods` | verified |
 | RG-11 | chèque habitat: loans signed from 1 January 2025 do not qualify | WIB 92 Walloon art. 145/46quater §1, 3° (decree of 5 Dec 2024); FPS circular 2026/C/18 | `cheque-habitat-loans` | verified |
 | RG-12 | separate assessment: the chèque habitat child increase follows the partner the child is a dependant of | WIB 92 Walloon art. 145/46ter §2 ("par enfant à charge"); WIB 92 arts 126 §1, 136 | `cheque-habitat-formula`, `hh-supplements-allocation` | verified |
-| RG-13 | separate assessment: the woonbonus +80 for three children follows the children's claimant | WIB 92 Flemish art. 145/38/2 §2 ("drie of meer kinderen ten laste"); WIB 92 arts 126 §1, 136 | `woonbonus-extra`, `hh-supplements-allocation` | verified |
+| RG-13 | separate assessment: the woonbonus +80 follows the borrower's children on 1 January after the loan year, not this year's claimant | WIB 92 Flemish art. 145/38/2 §2 al. 3 ("op 1 januari van het jaar na dat waarin de leningsovereenkomst wordt afgesloten"); WIB 92 arts 126 §1, 136 | `woonbonus-extra`, `hh-supplements-allocation` | verified |
 | RG-14 | Flemish woonbonus, loan signed in 2015, eleventh period (IY 2025): base 1,520 at 40% | WIB 92 Flemish art. 145/37 §3 | `woonbonus-2015`, `woonbonus-extra` | verified |
+| RG-15 | woonbonus +80 without the children at the loan start: this year's children of the claimant stand in, with an info issue | WIB 92 Flemish art. 145/38/2 §2 al. 3; WIB 92 arts 126 §1, 136 | `woonbonus-extra`, `hh-supplements-allocation` | needs_source |
 | SV-2024-brussels | service vouchers, Brussels, IY 2024, spend 2,000: 15% × 1,790 = 268.50 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-brussels` | verified |
 | SV-2024-flanders | service vouchers, Flanders, IY 2024, spend 2,000: 20% × 1,790 = 358 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-flanders` | verified |
 | SV-2024-wallonia | service vouchers, Wallonia, IY 2024, spend 2,000: 30% × 1,790 = 537 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-wallonia` | verified |
@@ -155,9 +161,19 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | SC-07 | WIB 92 art. 147 (tax reduction for pensions and replacement income) is not in the rule matrix or the engine, so a pensioner's final tax is incomplete. Only the absence of a forfait and of the CSSS is asserted. |
 | SC-10 | Whether employee remuneration and trading profits (both art. 51 al. 2, 1°) share one art. 51 al. 3 cap (`forfait_category_aggregation_unverified`). |
 | SC-14 | The art. 134 §3 refundable child tax credit formula (`refundable_child_credit_not_modelled`). |
+| AS-13 | B's child supplement is not used in full (exemption 12,890 against taxable income 12,170.20), so B is owed the art. 134 §3 refundable child tax credit, whose formula the matrix does not carry (`refundable_child_credit_not_modelled`). The asserted figures hold before that credit. |
+| RG-15 | The borrower's dependent children on 1 January of the year after the loan year (`home.woonbonusChildrenAtLoanStart`) are not entered. The engine falls back to this year's dependent children of the claimant, disabled counted twice, and raises `woonbonus_children_at_loan_start_missing` (info); the law does not use this year's children. |
 | JR-01 | How reductions are apportioned between jointly assessed spouses (`joint_reduction_allocation_unverified`). |
 | AS-14 | Whether a separately assessed taxpayer living with a partner is "alone" for art. 133 al. 1, 1° after L2 art. 9 (`isolated_parent_supplement_not_granted`). |
 | RG-03 | Where regional and federal reductions are charged relative to the state/regional factor (special finance law art. 5/2). The engine deducts every reduction from the tax before multiplying by the combined factor, which differs from charging federal reductions on the reduced state tax and regional reductions on the regional surcharge by 0.5% of the reductions in Brussels. |
+
+## Scope notes
+
+- Co-parenting (art. 132bis, children whose dependency is shared between parents who live apart)
+  is not modelled: the household has one claimant for all dependants, so RG-12 covers the
+  sole-claimant case only.
+- The IY 2026 senior quotient cap (JQ-06, JQ-07) compares birth years only. Someone born on
+  1 January 1961 is 66 on 1 January 2027, yet the engine applies the ordinary cap to them.
 
 ## Engine fixes found by the matrix
 
@@ -168,7 +184,15 @@ aliases: [belgian tax scenarios, tax scenario matrix]
   three or more dependent children (arts 145/37, 145/38/2), both for the claiming taxpayer. The
   household engine gave these increases to the mortgage partner even when the other partner
   claimed the children. `computeHouseholdTax` now passes the children to the own-home credit only
-  under a joint assessment or when the mortgage partner is also the dependants' claimant.
+  under a joint assessment or when the mortgage partner is also the dependants' claimant. For the
+  woonbonus this now applies only to the proxy below.
+- **Woonbonus +80 on the children at the loan start** (RG-05, RG-13, RG-15; fixed 2026-10-11). The
+  Flemish arts 145/37 §2 al. 3 and 145/38/2 §2 al. 3 grant the +80 when the taxpayer has three or
+  more dependent children on 1 January of the year after the loan year, a disabled child counted
+  twice (rule-matrix source W1). The engine counted this year's dependent children and did not
+  count disabled children twice. It now uses `home.woonbonusChildrenAtLoanStart` when entered;
+  without it, this year's children of the claimant (disabled counted twice) stand in and the
+  engine raises `woonbonus_children_at_loan_start_missing` (info).
 
 ## Row keys
 
@@ -229,7 +253,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `woonbonus-pre2015` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Flemish woonbonus, loans before 2015… | RG-04 |
 | `woonbonus-2015` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Flemish woonbonus, loans signed in 2015… | RG-14 |
 | `woonbonus-integrated` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Integrated woonbonus… | RG-05 |
-| `woonbonus-extra` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Woonbonus +760… | RG-04, RG-05, RG-14, RG-13 |
+| `woonbonus-extra` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Woonbonus +760… | RG-04, RG-05, RG-13, RG-14, RG-15 |
 | `woonbonus-post2020` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | No woonbonus for loans… | RG-06 |
 | `cheque-habitat-formula` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat: 1,520… | RG-07, RG-08, RG-12 |
 | `cheque-habitat-periods` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat halved… | RG-07, RG-08, RG-09, RG-10 |
@@ -259,7 +283,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `hh-senior-cap` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | IY 2026 quotient cap… | JQ-06, JQ-07 |
 | `hh-exemption-after-quotient` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Tax-free sum and supplements are allocated after… | JT-01 |
 | `hh-basic-each` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Each spouse gets the basic amount… | JD-02 |
-| `hh-supplements-allocation` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Joint: dependent supplements… | AS-13, JD-01, RG-12, RG-13 |
+| `hh-supplements-allocation` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Joint: dependent supplements… | AS-13, JD-01, RG-12, RG-13, RG-15 |
 | `hh-balance-transfer` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Joint: the part of a spouse… | JQ-01, JQ-03, JQ-05, JT-01, JD-02, JA-01, IN-01, IN-03 |
 | `hh-isolated-parent-partner` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Isolated-parent supplement when… | AS-14, JD-03 |
 | `hh-reductions-allocation` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Tax reductions stay… | JR-01 |

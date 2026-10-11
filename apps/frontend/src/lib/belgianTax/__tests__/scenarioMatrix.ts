@@ -13,15 +13,14 @@
  *    asserts only the sourced parts (and the issue the engine raises) and names what is missing.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { computeHouseholdTax } from "../household";
 import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "../householdTypes";
 
 export type ScenarioStatus = "verified" | "needs_source";
 
-export interface Scenario {
+/** What the scenario matrix page lists for a scenario. */
+export interface ScenarioMeta {
     id: string;
     description: string;
     /** Rule-matrix row keys (see the scenario matrix page, "Row keys"). */
@@ -31,6 +30,9 @@ export interface Scenario {
     status: ScenarioStatus;
     /** For `needs_source`: the rule or amount the matrix does not carry. */
     missing?: string;
+}
+
+export interface Scenario extends ScenarioMeta {
     household: BelgianTaxHouseholdV2;
     verify: (result: HouseholdTaxResult) => void;
 }
@@ -41,17 +43,18 @@ export function eur(actual: number | undefined, expected: number): void {
     expect(actual as number).toBeCloseTo(expected, 6);
 }
 
-/** The page that lists every scenario (vitest runs from apps/frontend). */
-const SCENARIO_PAGE = join(process.cwd(), "../../docs/reference/belgian-tax-scenario-matrix.md");
+export function scenarioTitle(s: ScenarioMeta): string {
+    return `${s.id} [${s.status}] ${s.description}`;
+}
 
+/**
+ * Run each scenario through `computeHouseholdTax`. That every scenario is listed on the scenario
+ * matrix page with its status and rows is checked once, in scenarioMatrix.docs.test.ts.
+ */
 export function runScenarios(title: string, scenarios: readonly Scenario[]): void {
     describe(title, () => {
-        const page = readFileSync(SCENARIO_PAGE, "utf8");
         for (const s of scenarios) {
-            test(`${s.id} [${s.status}] ${s.description}`, () => {
-                const row = page.split("\n").find((line) => line.startsWith(`| ${s.id} |`));
-                expect(row, "scenario listed on the scenario matrix page").toBeDefined();
-                expect(row?.endsWith(`| ${s.status} |`), "status on the page").toBe(true);
+            test(scenarioTitle(s), () => {
                 if (s.status === "needs_source") expect(s.missing).toBeTruthy();
                 s.verify(computeHouseholdTax(s.household));
             });

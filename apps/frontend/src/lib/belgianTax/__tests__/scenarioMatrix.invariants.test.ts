@@ -15,6 +15,8 @@ import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "../householdType
 import { activity, event, household, partner } from "./testHousehold";
 import { compareParity } from "./householdParity";
 import { makeTaxProfile } from "./testProfile";
+import { scenarioTitle } from "./scenarioMatrix";
+import { INVARIANT_SCENARIOS } from "./scenarioMatrix.invariants";
 
 const money = (max: number) =>
     fc.oneof(fc.constant(0), fc.integer({ min: 0, max: max * 100 }).map((c) => c / 100));
@@ -82,7 +84,7 @@ const sum = (r: HouseholdTaxResult, pick: (p: HouseholdTaxResult["partners"][num
 const close = (a: number, b: number) => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b));
 
 describe("scenario matrix: invariants", () => {
-    test("IN-01 joint PIT never exceeds separate PIT without dependants (arts 87-88, 134)", () => {
+    test(scenarioTitle(INVARIANT_SCENARIOS["IN-01"]), () => {
         fc.assert(
             fc.property(coupleArb, (input) => {
                 const joint = computeHouseholdTax(couple(input, "2015-05-02"));
@@ -96,7 +98,7 @@ describe("scenario matrix: invariants", () => {
         );
     });
 
-    test("IN-02 per-partner figures sum to the household totals (art. 126 §1 al. 2, art. 130)", () => {
+    test(scenarioTitle(INVARIANT_SCENARIOS["IN-02"]), () => {
         fc.assert(
             fc.property(coupleArb, fc.boolean(), (input, joint) => {
                 const r = computeHouseholdTax(couple(input, joint ? "2015-05-02" : `${input.taxYear}-06-01`));
@@ -110,7 +112,7 @@ describe("scenario matrix: invariants", () => {
         );
     });
 
-    test("IN-03 exemption balances and quotient transfers are conserved (art. 134, arts 87-88)", () => {
+    test(scenarioTitle(INVARIANT_SCENARIOS["IN-03"]), () => {
         fc.assert(
             fc.property(coupleArb, (input) => {
                 const r = computeHouseholdTax(couple(input, "2015-05-02"));
@@ -131,7 +133,7 @@ describe("scenario matrix: invariants", () => {
         ["IY 2024 dependants", makeTaxProfile({ taxYear: 2024, dependentChildren: 1, dependentChildrenDisabled: 1, dependentOtherPersons: 1 })],
         ["IY 2026 Walloon chèque habitat", makeTaxProfile({ taxYear: 2026, region: "wallonia", dependentChildren: 1, mortgageIsPrimaryResidence: true, mortgageInterestPaid: 4_000, mortgageStartYear: 2016 })],
         ["Brussels service vouchers", makeTaxProfile({ region: "brussels", serviceVoucherEligible: true, serviceVoucherSpend: 2_000 })],
-    ] as const)("IN-04 one partner equals computeBelgianPIT: %s", (_name, profile) => {
+    ] as const)(`${scenarioTitle(INVARIANT_SCENARIOS["IN-04"])}: %s`, (_name, profile) => {
         const outcome = compareParity(profile);
         expect(outcome.exclusion).toBeUndefined();
         expect(outcome.difference).toBeUndefined();
