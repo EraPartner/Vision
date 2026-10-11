@@ -110,31 +110,40 @@ export default function PortfolioForecastPage() {
             ? "—"
             : formatPercent(v * 100, { digits: 1, signed });
 
+    const contributionAmount =
+        monthlyContribution.trim() === ""
+            ? 0
+            : parseDecimal(monthlyContribution, appSettings.numberFormat, NaN);
+    const targetAmount =
+        targetValue.trim() === ""
+            ? undefined
+            : parseDecimal(targetValue, appSettings.numberFormat, NaN);
+    const contributionInvalid =
+        !Number.isFinite(contributionAmount) || contributionAmount < 0;
+    const targetInvalid =
+        targetAmount !== undefined &&
+        (!Number.isFinite(targetAmount) || targetAmount <= 0);
+    const inputsValid = !contributionInvalid && !targetInvalid;
+
     const input = useMemo(
         () => ({
             horizonMonths,
-            monthlyContribution: parseDecimal(
-                monthlyContribution,
-                appSettings.numberFormat,
-            ),
+            monthlyContribution: contributionAmount,
             forwardBlend: returnSource === "blended" ? blendPct / 100 : 0,
             method,
             paths,
-            targetValue:
-                parseDecimal(targetValue, appSettings.numberFormat, NaN) ||
-                undefined,
+            targetValue: targetAmount,
             currency,
         }),
         [
             horizonMonths,
-            monthlyContribution,
+            contributionAmount,
             returnSource,
             blendPct,
             method,
             paths,
-            targetValue,
+            targetAmount,
             currency,
-            appSettings.numberFormat,
         ],
     );
     const debouncedInput = useDebounce(input, 450);
@@ -143,8 +152,12 @@ export default function PortfolioForecastPage() {
         data: result,
         isFetching,
         isError,
-    } = usePortfolioForecastQuery(debouncedInput);
-    const forecast = result?.data;
+    } = usePortfolioForecastQuery(
+        debouncedInput,
+        inputsValid && input === debouncedInput,
+    );
+    const forecast =
+        inputsValid && input === debouncedInput ? result?.data : undefined;
 
     const { rows, series } = useMemo(() => {
         const points = forecast?.points ?? [];
@@ -242,6 +255,12 @@ export default function PortfolioForecastPage() {
                         </Label>
                         <Input
                             id="contribution"
+                            aria-invalid={contributionInvalid}
+                            aria-describedby={
+                                contributionInvalid
+                                    ? "contribution-error"
+                                    : undefined
+                            }
                             type="text"
                             inputMode="decimal"
                             placeholder="0"
@@ -250,6 +269,15 @@ export default function PortfolioForecastPage() {
                                 setMonthlyContribution(e.target.value)
                             }
                         />
+                        {contributionInvalid && (
+                            <p
+                                id="contribution-error"
+                                role="alert"
+                                className="type-footnote text-destructive"
+                            >
+                                {t("research.forecast.contributionInvalid")}
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -258,6 +286,10 @@ export default function PortfolioForecastPage() {
                         </Label>
                         <Input
                             id="target"
+                            aria-invalid={targetInvalid}
+                            aria-describedby={
+                                targetInvalid ? "target-error" : undefined
+                            }
                             type="text"
                             inputMode="decimal"
                             placeholder={t(
@@ -266,6 +298,15 @@ export default function PortfolioForecastPage() {
                             value={targetValue}
                             onChange={(e) => setTargetValue(e.target.value)}
                         />
+                        {targetInvalid && (
+                            <p
+                                id="target-error"
+                                role="alert"
+                                className="type-footnote text-destructive"
+                            >
+                                {t("research.forecast.targetInvalid")}
+                            </p>
+                        )}
                     </div>
 
                     <Disclosure
@@ -393,7 +434,7 @@ export default function PortfolioForecastPage() {
                 </CardContent>
             </Card>
 
-            {isError && (
+            {inputsValid && isError && (
                 <Card>
                     <CardContent variant="flush">
                         <StateBlock
@@ -422,7 +463,7 @@ export default function PortfolioForecastPage() {
                 </Card>
             )}
 
-            {!unavailable && (
+            {inputsValid && !unavailable && (
                 <>
                     {/* Summary — the four StatCards go busy together, so the grid
               announces once for the row instead of each card announcing. */}

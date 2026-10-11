@@ -64,7 +64,14 @@ describe("TransactionInspector", () => {
                 ok({ items: [], total: 0 }),
             ),
             http.get(`${API_BASE}/api/recipients/1`, () =>
-                ok(recipientRow({ id: 1, name: "Alice", is_active: true, links: [] })),
+                ok(
+                    recipientRow({
+                        id: 1,
+                        name: "Alice",
+                        is_active: true,
+                        links: [],
+                    }),
+                ),
             ),
         );
     });
@@ -114,25 +121,27 @@ describe("TransactionInspector", () => {
     it("shows the recipient and category pickers with the row's values", async () => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok(categoryTreeBody({
-                    items: [
-                        categoryNode({
-                            id: 1,
-                            name: "GROCERIES",
-                            parentId: null,
-                            pathIds: [1],
-                            path: ["FOOD", "GROCERIES"],
-                            category_name: "FOOD:GROCERIES",
-                            depth: 2,
-                            description: null,
-                            is_active: true,
-                            hierarchyOnly: false,
-                            legacyCompatible: false,
-                        }),
-                    ],
-                    total: 1,
-                    links: [],
-                })),
+                ok(
+                    categoryTreeBody({
+                        items: [
+                            categoryNode({
+                                id: 1,
+                                name: "GROCERIES",
+                                parentId: null,
+                                pathIds: [1],
+                                path: ["FOOD", "GROCERIES"],
+                                category_name: "FOOD:GROCERIES",
+                                depth: 2,
+                                description: null,
+                                is_active: true,
+                                hierarchyOnly: false,
+                                legacyCompatible: false,
+                            }),
+                        ],
+                        total: 1,
+                        links: [],
+                    }),
+                ),
             ),
         );
         renderInspector();
@@ -153,32 +162,36 @@ describe("TransactionInspector", () => {
         const onSelectCategory = vi.fn();
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok(categoryTreeBody({
-                    items: [
-                        categoryNode({
-                            id: 2,
-                            name: "Household",
-                            parentId: null,
-                            pathIds: [2],
-                            path: ["Household"],
-                            category_name: "Household",
-                            depth: 1,
-                            description: null,
-                            is_active: true,
-                            hierarchyOnly: false,
-                            legacyCompatible: false,
-                        }),
-                    ],
-                    total: 1,
-                    links: [],
-                })),
+                ok(
+                    categoryTreeBody({
+                        items: [
+                            categoryNode({
+                                id: 2,
+                                name: "Household",
+                                parentId: null,
+                                pathIds: [2],
+                                path: ["Household"],
+                                category_name: "Household",
+                                depth: 1,
+                                description: null,
+                                is_active: true,
+                                hierarchyOnly: false,
+                                legacyCompatible: false,
+                            }),
+                        ],
+                        total: 1,
+                        links: [],
+                    }),
+                ),
             ),
         );
         renderInspector({ onSelectCategory });
         await user.click(
             await screen.findByRole("combobox", { name: /^category$/i }),
         );
-        await user.click(await screen.findByRole("option", { name: "Household" }));
+        await user.click(
+            await screen.findByRole("option", { name: "Household" }),
+        );
         expect(onSelectCategory).toHaveBeenCalledWith(42, 2, "Household");
     });
 
@@ -188,14 +201,21 @@ describe("TransactionInspector", () => {
         server.use(
             http.patch(`${API_BASE}/api/recipients/1`, async ({ request }) => {
                 patched = (await request.json()) as Record<string, unknown>;
-                return ok({ id: 1, name: "Alice", default_category_id: 1, links: [] });
+                return ok({
+                    id: 1,
+                    name: "Alice",
+                    default_category_id: 1,
+                    links: [],
+                });
             }),
         );
         renderInspector();
         await user.click(
             await screen.findByRole("button", { name: /^always use$/i }),
         );
-        await waitFor(() => expect(patched).toEqual({ default_category_id: 1 }));
+        await waitFor(() =>
+            expect(patched).toEqual({ default_category_id: 1 }),
+        );
     });
 
     it("shows the row actions in the footer and routes them to the page", async () => {
@@ -204,14 +224,23 @@ describe("TransactionInspector", () => {
         const onToggleActive = vi.fn();
         const onDelete = vi.fn();
         const onFilterByRecipient = vi.fn();
-        renderInspector({ onDuplicate, onToggleActive, onDelete, onFilterByRecipient });
+        renderInspector({
+            onDuplicate,
+            onToggleActive,
+            onDelete,
+            onFilterByRecipient,
+        });
         await screen.findByRole("complementary");
 
         await user.click(screen.getByRole("button", { name: /^duplicate$/i }));
         expect(onDuplicate).toHaveBeenCalledWith(TX);
-        await user.click(screen.getByRole("button", { name: /exclude from totals/i }));
+        await user.click(
+            screen.getByRole("button", { name: /exclude from totals/i }),
+        );
         expect(onToggleActive).toHaveBeenCalledWith(42, true);
-        await user.click(screen.getByRole("button", { name: /show all from payee/i }));
+        await user.click(
+            screen.getByRole("button", { name: /show all from payee/i }),
+        );
         expect(onFilterByRecipient).toHaveBeenCalledWith(TX);
         await user.click(screen.getByRole("button", { name: /^delete…$/i }));
         expect(onDelete).toHaveBeenCalledWith(42, "Test purchase");
@@ -220,19 +249,42 @@ describe("TransactionInspector", () => {
         ).toBeInTheDocument();
     });
 
-    it.each(["docked", "sheet"] as const)("opens the existing split workflow from the %s inspector with the keyboard", async (presentation) => {
-        server.use(http.get(`${API_BASE}/api/splits/transaction/42`, () => ok({ items: [] })));
-        const user = userEvent.setup();
-        renderInspector({}, presentation);
-        const split = await screen.findByRole("button", { name: /split transaction/i });
-        split.focus();
-        await user.keyboard("{Enter}");
-        expect(await screen.findByRole("dialog", { name: /split transaction/i })).toBeInTheDocument();
-        expect(await screen.findByText(/not split yet/i)).toBeInTheDocument();
-        await user.click(screen.getByRole("button", { name: /^cancel$/i }));
-        await waitFor(() => expect(screen.queryByRole("dialog", { name: /split transaction/i })).not.toBeInTheDocument());
-        expect(screen.getByRole("button", { name: /split transaction/i })).toBeInTheDocument();
-    });
+    it.each(["docked", "sheet"] as const)(
+        "opens the existing split workflow from the %s inspector with the keyboard",
+        async (presentation) => {
+            server.use(
+                http.get(`${API_BASE}/api/splits/transaction/42`, () =>
+                    ok({ items: [] }),
+                ),
+            );
+            const user = userEvent.setup();
+            renderInspector({}, presentation);
+            const split = await screen.findByRole("button", {
+                name: /split transaction/i,
+            });
+            split.focus();
+            await user.keyboard("{Enter}");
+            expect(
+                await screen.findByRole("dialog", {
+                    name: /split transaction/i,
+                }),
+            ).toBeInTheDocument();
+            expect(
+                await screen.findByText(/not split yet/i),
+            ).toBeInTheDocument();
+            await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+            await waitFor(() =>
+                expect(
+                    screen.queryByRole("dialog", {
+                        name: /split transaction/i,
+                    }),
+                ).not.toBeInTheDocument(),
+            );
+            expect(
+                screen.getByRole("button", { name: /split transaction/i }),
+            ).toBeInTheDocument();
+        },
+    );
 
     it("shows comment value", async () => {
         renderInspector();
@@ -486,7 +538,9 @@ describe("TransactionInspector", () => {
         const user = userEvent.setup();
         const onClose = vi.fn();
         renderInspector({ onClose });
-        await user.click(await screen.findByRole("button", { name: /^close$/i }));
+        await user.click(
+            await screen.findByRole("button", { name: /^close$/i }),
+        );
         expect(onClose).toHaveBeenCalled();
     });
 
@@ -676,4 +730,36 @@ describe("TransactionInspector", () => {
         await new Promise((r) => setTimeout(r, 100));
         expect(patchCalled).toBe(false);
     });
+});
+
+it("retains malformed amount and explains the error before allowing a corrected save", async () => {
+    const user = userEvent.setup();
+    const onApplyLocal = vi.fn();
+    let writes = 0;
+    server.use(
+        http.patch(`${API_BASE}/api/transactions/42`, () => {
+            writes++;
+            return ok({ id: 42 });
+        }),
+    );
+    renderInspector({ onApplyLocal });
+    await user.click(
+        await screen.findByRole("button", { name: "Edit Amount" }),
+    );
+    const input = screen.getByRole("textbox", { name: "Amount" });
+    await user.clear(input);
+    await user.type(input, "12,,3");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+        /invalid amount/i,
+    );
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveValue("12,,3");
+    expect(writes).toBe(0);
+    expect(onApplyLocal).not.toHaveBeenCalled();
+    await user.clear(input);
+    await user.type(input, "12");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(writes).toBe(1));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });

@@ -2124,9 +2124,9 @@
                 "from": "sv.import",
                 "to": "be.bankadapters",
                 "title": "Parse bank records",
-                "note": "Interpret financial fields while retaining exact logical CSV records.",
+                "note": "Interpret financial fields while retaining exact logical CSV records. Before any staging insert, reject unparseable data with VALIDATION_ERROR; intentional non-settled exclusions remain allowed.",
                 "payload": "adapter parsing",
-                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts"
+                "annotation": "apps/node-backend/src/services/importPipeline/stage.ts; apps/node-backend/src/lib/importProgress.ts returns the actionable failure before review or commit"
               },
               {
                 "from": "sv.import",

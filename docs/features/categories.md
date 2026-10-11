@@ -2,7 +2,7 @@
 title: Categories
 type: feature
 status: active
-date: 2026-10-07
+date: 2026-10-11
 tags: [feature, categories, transactions, organization, hierarchy]
 description: Parent-linked transaction categories with stable IDs, ordered paths, and legacy GENERAL:DETAIL compatibility
 aliases:
@@ -203,3 +203,8 @@ The category error state offers Retry. Whitespace-only general/detail values rec
 ### Merge context
 
 The merge dialog identifies the source by its full category path. Selecting a destination adds a concise source-to-destination summary, so the category being removed and the category being kept are visible before confirmation.
+
+### Required category names
+
+The category dialog validates the trimmed name. Submitting only whitespace shows the required-name
+error and keeps the dialog open for correction; it does not send a save request.

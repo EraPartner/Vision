@@ -175,8 +175,14 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   });
 
   const transactions: ParsedBankTransactions = [];
+  let excluded = 0;
   let skipped = 0;
   for (const row of records) {
+    if ((row["Status"] || "").trim().toUpperCase() !== "COMPLETED") {
+      skipped++;
+      excluded++;
+      continue;
+    }
     try {
       const tx = rowToTransaction(row);
       if (tx) transactions.push(tx);
@@ -186,6 +192,7 @@ export async function parse(filePath: string): Promise<ParsedBankTransactions> {
     }
   }
   transactions.skipped = skipped;
+  transactions.excluded = excluded;
 
   logger.info(
     `Wise CSV parsed: ${transactions.length} transactions, ${skipped} skipped`,

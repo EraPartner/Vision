@@ -82,8 +82,8 @@ describe("recipientRepository", () => {
         active: false,
       });
       const [sql, params] = query.mock.calls[0]!;
-      expect(sql).toContain("r.name ILIKE");
-      expect(sql).toContain("rba.account_number ILIKE");
+      expect(sql).toContain("r.name COLLATE pg_catalog.pg_unicode_fast ILIKE");
+      expect(sql).toContain("rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE");
       expect(sql).toContain("r.notes DESC, r.name ASC");
       expect(sql).not.toContain("r.is_active = true");
       expect(params).toContain("%aldi%");

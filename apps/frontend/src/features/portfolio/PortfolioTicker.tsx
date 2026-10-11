@@ -54,13 +54,11 @@ interface TickerEntry {
 const SECONDS_PER_ITEM = 4.5;
 const MIN_DURATION_S = 24;
 
-// The Yahoo symbol to quote: prefer the explicit provider id (e.g. a holding
-// stored as "Apple" but priced via "AAPL"), else the bare ticker.
+// Only the configured Yahoo identity is safe to send to Yahoo. Bare symbols
+// from manual or other providers can identify completely different instruments.
 function quoteSymbolFor(inv: InvestmentSummary): string {
-    if (inv.price_provider === "yahoo" && inv.price_provider_id) {
-        return inv.price_provider_id.toUpperCase();
-    }
-    return (inv.symbol ?? "").toUpperCase();
+    if (inv.price_provider !== "yahoo") return "";
+    return (inv.price_provider_id || inv.symbol || "").trim().toUpperCase();
 }
 
 const isIncluded = (inv: InvestmentSummary): boolean =>
@@ -139,14 +137,8 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
         const out: TickerEntry[] = [];
         for (const inv of included) {
             const qs = quoteSymbolFor(inv);
-            // Fall back to the bare ticker, or a crypto pair's base (BTC-USD → BTC),
-            // mirroring how Market Overview reconciles held vs. quoted symbols.
-            const quote =
-                bySymbol.get(qs) ??
-                bySymbol.get((inv.symbol ?? "").toUpperCase()) ??
-                (qs.endsWith("-USD")
-                    ? bySymbol.get(qs.slice(0, -4))
-                    : undefined);
+            // Never substitute a base symbol or another provider's identifier.
+            const quote = bySymbol.get(qs);
             if (!quote || quote.price == null) continue;
             const changePercent = quote.changePercent ?? 0;
             const up = changePercent >= 0;

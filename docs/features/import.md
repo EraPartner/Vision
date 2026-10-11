@@ -2,9 +2,9 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-10
-updated: 2026-10-08
-last_modified: 2026-10-03
+date: 2026-10-11
+updated: 2026-10-11
+last_modified: 2026-10-11
 tags:
   [
     feature,
@@ -343,6 +343,7 @@ Each phase is idempotent at its boundary. On error, the batch is marked `failed`
   cells to uppercase. Blank or malformed free text becomes `EUR` immediately for Vision; the other
   six stage `NULL`, which the commit phase defaults to `EUR`, instead of reaching the database
   currency constraint as a raw error.
+- Reject the entire file if any data row cannot be parsed, before inserting staging rows or matching recipients. Explicitly excluded non-settled payments do not trigger rejection.
 - Store parsed rows in `import_staging_rows`. `raw_data` retains the exact logical CSV record,
   including source quoting, escaped quotes, and embedded newlines. The parser removes only the
   terminal record delimiter.
@@ -501,7 +502,7 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
   `NULL` for the commit boundary to default. SABB derives a fixed or embedded code. Wise keeps its
   source/target currency choice (falling back to `USD` when both cells are blank) and passes the
   result through `normalizeIsoCurrency()`; a row whose currency is not an ISO-4217-shaped code is
-  skipped and counted in the adapter's `skipped` total instead of failing the whole import.
+  counted as an invalid row and causes the uploaded file to be rejected before staging.
 - Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.ts]]).
 
 ### 3. Deduplication
@@ -1000,3 +1001,21 @@ Related testing docs: [[docs/testing/testing|Testing Documentation]], [[docs/tes
 ## Recipient match labels
 
 Import review labels match sources as Exact match, Suggested match, Rule match, New recipient, and Needs review. The labels are localized; match rules, similarity percentages, and review decisions are unchanged.
+
+### Invalid source rows
+
+Bank CSV staging now rejects a file containing unparseable transaction rows before inserting any
+staging rows or committing any transactions. The error reports the rejected count and asks the user
+to correct dates, amounts or CSV structure and upload again. Vision-format imports additionally
+report up to ten data-row ordinals and field reasons, without echoing source values. For example,
+a file with one valid row and two invalid rows now fails with two rejected rows; it cannot report
+one imported transaction and zero errors.
+
+Wise and Revolut non-completed rows, BNP refused or cancelled rows, and SABB non-settled rows keep
+their intentional exclusion behavior. Their `excluded` adapter count is a subset of `skipped`;
+only `skipped - excluded` blocks bank staging. Headers, configured preambles and blank lines retain
+their existing handling. Portfolio staging is unchanged.
+
+This deliberately changes previous partial-acceptance behavior for malformed bank files. Existing
+parked batches cannot recover records discarded by an older parser: discard the batch and upload
+the corrected original file. The failed batch retains its error summary. See [[docs/api/imports]].

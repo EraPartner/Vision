@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-10
-updated: 2026-10-10
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     feature,
@@ -328,3 +328,9 @@ Debt-summary and recipient-detail query failures show a retry action rather than
 Who owes you uses a fixed-width amount/progress column. Recipient detail separates the outstanding
 summary from recent transactions. A successfully loaded empty transaction list shows one empty
 state without search, table headings or zero-row pagination; loading and failure handling are retained.
+
+### Repayment amount feedback
+
+The recipient's repayment form shows an inline positive-amount error for zero, negative, malformed
+or non-finite amounts and retains the draft. It sends no repayment request until the amount is
+valid. Existing overpayment checks remain in force.

@@ -1183,7 +1183,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List recipients */
+        /**
+         * List recipients
+         * @description Name and general search filters use Unicode case-insensitive matching, including accented uppercase/lowercase pairs on native C-locale clusters. Accents are preserved. Stored names, sort order and response shape are unchanged.
+         */
         get: operations["getRecipients"];
         put?: never;
         /** Create or get existing recipient */
@@ -3093,7 +3096,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import transactions from bank CSV */
+        /**
+         * Import transactions from bank CSV
+         * @description Rejects the whole file before staging if any transaction data row cannot be parsed. No transactions are imported from a rejected file. Correct the reported dates, amounts or CSV structure and upload again. Intentionally excluded non-settled records do not trigger this rejection. JSON uploads return 400 VALIDATION_ERROR; streaming uploads emit an error event with code VALIDATION_ERROR and an actionable detail message.
+         */
         post: operations["importCsv"];
         delete?: never;
         options?: never;
@@ -3110,7 +3116,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Import CSV with custom column mapping */
+        /**
+         * Import CSV with custom column mapping
+         * @description Rejects the whole file before staging if any transaction data row cannot be parsed. No transactions are imported from a rejected file. Correct the reported dates, amounts or CSV structure and upload again. Intentionally excluded non-settled records do not trigger this rejection. JSON uploads return 400 VALIDATION_ERROR; streaming uploads emit an error event with code VALIDATION_ERROR and an actionable detail message.
+         */
         post: operations["importCsvCustom"];
         delete?: never;
         options?: never;
@@ -3127,7 +3136,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stream-import large CSV file */
+        /**
+         * Stream-import large CSV file
+         * @description Rejects the whole file before staging if any transaction data row cannot be parsed. No transactions are imported from a rejected file. Correct the reported dates, amounts or CSV structure and upload again. Intentionally excluded non-settled records do not trigger this rejection. JSON uploads return 400 VALIDATION_ERROR; streaming uploads emit an error event with code VALIDATION_ERROR and an actionable detail message.
+         */
         post: operations["importCsvStream"];
         delete?: never;
         options?: never;

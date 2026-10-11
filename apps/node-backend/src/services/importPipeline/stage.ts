@@ -10,6 +10,7 @@
 import { query, withTransaction } from "../../database/connection.ts";
 import { queryRows } from "../../database/rowContracts.ts";
 import { importBatchIdRowSchema } from "../../database/rows/imports.ts";
+import { ValidationError } from "../../middleware/errorHandler.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { getAdapter } from "./adapters/index.ts";
@@ -73,8 +74,8 @@ export async function createBatch({
 /**
  * Run the stage phase: parse the file, bulk-insert staging rows.
  *
- * @returns `rowsSkipped` is the adapter's own count of data rows it could not
- *   interpret.
+ * Reject malformed data before inserting any rows. `rowsSkipped` on success
+ * counts only deliberately excluded non-settled records.
  */
 export async function stageBatch({
   batchId,
@@ -105,10 +106,23 @@ export async function stageBatch({
       query(`UPDATE import_batches SET status = 'staging' WHERE id = $1`, [
         batchId,
       ]),
-    parseRows: () =>
-      customConfig && typeof adapter.parseWithConfig === "function"
+    parseRows: async () => {
+      const rows = await (customConfig &&
+      typeof adapter.parseWithConfig === "function"
         ? adapter.parseWithConfig(filePath, customConfig)
-        : adapter.parse(filePath),
+        : adapter.parse(filePath));
+      const rejected = (rows.skipped || 0) - (rows.excluded || 0);
+      if (rejected > 0) {
+        const diagnostics = rows.issues?.length
+          ? ` ${rows.issues.join("; ")}.`
+          : "";
+        throw new ValidationError(
+          `Import stopped: ${rejected} source row(s) could not be parsed. No transactions were imported.${diagnostics} Correct the invalid dates, amounts or CSV structure and import the file again.`,
+          { details: { rejected_rows: rejected, parsed_rows: rows.length } },
+        );
+      }
+      return rows;
+    },
     persistTotal: (total) =>
       query(`UPDATE import_batches SET rows_total = $1 WHERE id = $2`, [
         total,

@@ -79,7 +79,7 @@ function buildWhereClause({
 
   if (active) sql += ` AND r.is_active = true`;
   if (name) {
-    sql += ` AND r.name ILIKE $${p++}`;
+    sql += ` AND r.name COLLATE pg_catalog.pg_unicode_fast ILIKE $${p++}`;
     params.push(`%${name}%`);
   }
   if (uncategorized) {
@@ -106,13 +106,14 @@ function buildWhereClause({
   }
   if (search) {
     const sp = `%${search}%`;
-    // Use GIN trigram index on r.name for fast ILIKE; other columns fall back to seq scan
+    // Native clusters use the C locale. Select Unicode case mapping explicitly
+    // for search without changing stored names, sorting, or database collation.
     sql += ` AND (
-      r.name ILIKE $${p} OR
-      r.notes ILIKE $${p} OR
-      c.general ILIKE $${p} OR
-      c.detail ILIKE $${p} OR
-      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number ILIKE $${p})
+      r.name COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
+      r.notes COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
+      c.general COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
+      c.detail COLLATE pg_catalog.pg_unicode_fast ILIKE $${p} OR
+      EXISTS (SELECT 1 FROM recipient_bank_accounts rba WHERE rba.recipient_id = r.id AND rba.account_number COLLATE pg_catalog.pg_unicode_fast ILIKE $${p})
     )`;
     p++;
     params.push(sp);

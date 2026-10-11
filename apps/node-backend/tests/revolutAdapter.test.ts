@@ -26,6 +26,8 @@ describe("RevolutAdapter", () => {
     tmpPath = writeTempCSV(SAMPLE_REVOLUT_CSV);
     const txns = await parse(tmpPath);
     expect(txns).toHaveLength(4);
+    expect(txns.skipped).toBe(1);
+    expect(txns.excluded).toBe(1);
   });
 
   it("detects Current account type", async () => {

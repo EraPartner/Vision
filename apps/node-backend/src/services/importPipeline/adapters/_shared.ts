@@ -83,6 +83,10 @@ export interface ParsedBankTransaction {
  */
 export type ParsedBankTransactions = ParsedBankTransaction[] & {
   skipped?: number;
+  /** Non-settled records intentionally excluded, included in skipped. */
+  excluded?: number;
+  /** Safe diagnostics containing source row ordinals and field names only. */
+  issues?: string[];
 };
 
 /** True for a Date at exactly 00:00:00.000 UTC. */
@@ -125,6 +129,8 @@ export const parsedBankTransactionSchema = z.strictObject({
 export const parsedBankTransactionsSchema = z.object({
   rows: z.array(parsedBankTransactionSchema),
   skipped: z.number().int().nonnegative().optional(),
+  excluded: z.number().int().nonnegative().optional(),
+  issues: z.array(z.string()).optional(),
 });
 
 /**

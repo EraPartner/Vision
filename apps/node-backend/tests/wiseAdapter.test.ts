@@ -23,6 +23,8 @@ PENDING,2026-03-02 10:00:00,,OUT,20.00,20.00,EUR,EUR,Pending Shop,My Account,Ref
     const txns = await parse(tmpPath);
 
     expect(txns).toHaveLength(1);
+    expect(txns.skipped).toBe(1);
+    expect(txns.excluded).toBe(1);
     expect(txns[0]!.recipient).toBe("COFFEE SHOP");
   });
 

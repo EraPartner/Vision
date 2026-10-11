@@ -1444,22 +1444,38 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                             : undefined
                                     }
                                 >
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex min-w-0 items-center gap-1">
                                         {isSortable ? (
                                             <button
                                                 type="button"
                                                 onClick={() =>
                                                     handleSort(col.key)
                                                 }
-                                                className="flex items-center gap-1 rounded-chip text-left transition-colors duration-fast hover:text-foreground focus-ring"
+                                                className="flex min-w-0 items-center gap-1 rounded-chip text-left transition-colors duration-fast hover:text-foreground focus-ring"
                                             >
-                                                <span className="pr-0.5">
+                                                <span
+                                                    className="truncate pr-0.5"
+                                                    title={
+                                                        typeof col.header ===
+                                                        "string"
+                                                            ? col.header
+                                                            : undefined
+                                                    }
+                                                >
                                                     {col.header}
                                                 </span>
                                                 <SortIcon colKey={col.key} />
                                             </button>
                                         ) : (
-                                            <span className="pr-2">
+                                            <span
+                                                className="min-w-0 truncate pr-2"
+                                                title={
+                                                    typeof col.header ===
+                                                    "string"
+                                                        ? col.header
+                                                        : undefined
+                                                }
+                                            >
                                                 {col.header}
                                             </span>
                                         )}
@@ -1487,7 +1503,7 @@ export function VirtualDataTable<T extends Record<string, unknown>>({
                                                             },
                                                         )}
                                                         className={cn(
-                                                            "icon-touch-target rounded-chip transition-colors duration-fast focus-ring",
+                                                            "icon-touch-target shrink-0 rounded-chip transition-colors duration-fast focus-ring",
                                                             hasFilter
                                                                 ? "text-primary"
                                                                 : "text-label-tertiary opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(pointer:coarse)]:opacity-100 hover:text-foreground",

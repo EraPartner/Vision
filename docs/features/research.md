@@ -2,8 +2,8 @@
 title: Research Feature
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   - url-state
   - feature
@@ -381,3 +381,12 @@ inputs with their currency and displays a persistent legend for every plotted se
 explanation identifies P10–P90 as simulated percentiles and P50 as the median, without presenting
 those scenarios as guaranteed outcomes. Research ratios and compact market values follow the
 selected number format; Market lookup uses the interface language for abbreviated month names.
+
+### Forecast assumption validation
+
+Monthly contribution must be a finite nonnegative number; blank means zero. A target, when entered,
+must be a finite positive number; blank means no target. Parsing follows the selected number format.
+Invalid fields show inline messages and suspend the forecast query. Results from previous assumptions
+are hidden while inputs are invalid or waiting for the debounce, so a visible chart cannot silently
+represent a different contribution or target. This is frontend validation; the projection API
+contract in [[docs/api/research]] is unchanged.

@@ -2,7 +2,7 @@
 title: Recipients
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-11
 tags: [feature, recipients, transactions, payees, payers, merge, atomic]
 description: Recipient (payee/payer) management with atomic merge, normalization-based fuzzy matching, and UNIQUE constraints
 aliases:
@@ -156,3 +156,15 @@ Initial list failures offer Retry. If loading the next page fails, already loade
 Recipient merge loading failures display Retry instead of an empty results message. Existing selections remain available after recovery; merging is disabled while the list is unavailable.
 
 Pattern preview counts belong to the current text, pattern type, and case-sensitivity setting. Changing those fields, switching drafts, or closing the dialog invalidates pending and completed previews. Late responses cannot replace a newer preview. Preview trims surrounding whitespace in the same way as Save, and match counts are announced as status updates.
+
+### Unicode search and table headings
+
+The payee list matches accented case equivalents, such as `Café` and `CAFÉ`, in both the name
+filter and general search. PostgreSQL 18's `pg_catalog.pg_unicode_fast` collation is selected on
+these search expressions, so native clusters initialized with the C locale have Unicode case
+mapping. This changes neither stored names nor database collation and needs no migration. It is
+case-insensitive matching, not accent removal; sorting remains unchanged. See
+[[docs/api/recipients]] for the search contract.
+
+Shared virtual-table headings truncate within their columns, retaining the full heading as a
+title. Narrow payee columns no longer paint their headings over neighboring columns.

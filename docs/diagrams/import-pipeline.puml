@@ -11,7 +11,14 @@ start
 
 partition "importPipeline: prepare" {
   :createBatch()\nRecord source file and adapter;
-  :stageBatch()\nParse with bank or generic adapter,\nstore import_staging_rows;
+  :stageBatch()\nParse with bank or generic adapter;
+  if (Unparseable transaction rows?) then (yes)
+    :Fail batch with actionable validation error;
+    note right: No staging rows or transactions inserted.
+    stop
+  else (no)
+    :Store import_staging_rows;
+  endif
   :validateBatch()\nValidate required fields, assign source hash\nand versioned occurrence fingerprint;
   note right
     Invalid rows retain error details.

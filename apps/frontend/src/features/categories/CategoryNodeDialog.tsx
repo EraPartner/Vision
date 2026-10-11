@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,8 @@ export function CategoryNodeDialog({
 }: CategoryNodeDialogProps) {
     const { t } = useLanguage();
     const [localOpen, setLocalOpen] = useState(false);
+    const nameRef = useRef<HTMLInputElement>(null);
+    const [nameError, setNameError] = useState(false);
     const [name, setName] = useState(editNode?.name ?? "");
     const [parentId, setParentId] = useState<number | null>(
         editNode?.parentId ?? initialParentId,
@@ -70,7 +72,12 @@ export function CategoryNodeDialog({
     const submit = (event: FormEvent) => {
         event.preventDefault();
         const normalized = name.trim();
-        if (!normalized) return;
+        if (!normalized) {
+            setNameError(true);
+            nameRef.current?.focus();
+            return;
+        }
+        setNameError(false);
         const data = {
             name: normalized,
             parentId,
@@ -117,11 +124,28 @@ export function CategoryNodeDialog({
                     </Label>
                     <Input
                         id="category-node-name"
+                        ref={nameRef}
+                        aria-invalid={nameError || undefined}
+                        aria-describedby={
+                            nameError ? "category-node-name-error" : undefined
+                        }
                         value={name}
                         maxLength={100}
-                        onChange={(event) => setName(event.target.value)}
+                        onChange={(event) => {
+                            setName(event.target.value);
+                            setNameError(false);
+                        }}
                         required
                     />
+                    {nameError && (
+                        <p
+                            id="category-node-name-error"
+                            role="alert"
+                            className="type-footnote text-destructive"
+                        >
+                            {t("validation.required")}
+                        </p>
+                    )}
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="category-node-parent">

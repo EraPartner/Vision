@@ -76,6 +76,7 @@ export function RecipientOwesDetail({
         remaining: number;
     } | null>(null);
     const paymentId = useId();
+    const [payError, setPayError] = useState(false);
     const [payAmount, setPayAmount] = useState("");
     const [isExportingCsv, setIsExportingCsv] = useState(false);
     const { t } = useLanguage();
@@ -95,7 +96,11 @@ export function RecipientOwesDetail({
         event.preventDefault();
         if (!payDialog) return;
         const amount = parseDecimal(payAmount, appSettings.numberFormat);
-        if (!amount || amount <= 0) return;
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setPayError(true);
+            return;
+        }
+        setPayError(false);
         recordPayment.mutate(
             { splitId: payDialog.splitId, amount },
             {
@@ -247,6 +252,7 @@ export function RecipientOwesDetail({
                                     splitId: split.id,
                                     remaining: split.remaining,
                                 });
+                                setPayError(false);
                                 setPayAmount(
                                     formatEditableNumber(
                                         split.remaining,
@@ -398,17 +404,30 @@ export function RecipientOwesDetail({
                                 </Label>
                                 <Input
                                     id={paymentId}
-                                    aria-describedby={`${paymentId}-remaining`}
+                                    aria-invalid={payError || undefined}
+                                    aria-describedby={`${paymentId}-remaining${payError ? ` ${paymentId}-error` : ""}`}
                                     type="text"
                                     inputMode="decimal"
                                     value={payAmount}
-                                    onChange={(event) =>
-                                        setPayAmount(event.target.value)
-                                    }
+                                    onChange={(event) => {
+                                        setPayAmount(event.target.value);
+                                        setPayError(false);
+                                    }}
                                     placeholder={t(
                                         "owesPage.recordDialog.placeholder",
                                     )}
                                 />
+                                {payError && (
+                                    <p
+                                        id={`${paymentId}-error`}
+                                        role="alert"
+                                        className="type-footnote text-destructive"
+                                    >
+                                        {t(
+                                            "owesPage.recordDialog.invalidAmount",
+                                        )}
+                                    </p>
+                                )}
                                 {payDialog && (
                                     <p
                                         id={`${paymentId}-remaining`}
