@@ -41,6 +41,7 @@ import {
     computeProfessionalExpenseClaim,
     computeProgressiveTax,
     computeTaxReductions,
+    type TaxReductionBreakdown,
     isChildcareDeducted,
     resolveMortgageRegime,
     type ForfaitCategory,
@@ -436,44 +437,6 @@ export function computeHouseholdTax(
     );
     const incomes = partners.map((p) => computePartnerIncome(p, table, issues));
 
-    // Marital quotient (joint assessment of two partners only).
-    let quotient: MaritalQuotientResult = {
-        applied: false,
-        transfer: 0,
-        target: 0,
-        cap: table.maritalQuotientCap,
-        benefit: 0,
-    };
-    if (mode === "joint" && incomes.length === 2) {
-        const [i0, i1] = incomes as [PartnerIncome, PartnerIncome];
-        const quotientPartners = [i0, i1].map((inc) => {
-            const q: { id: PartnerId; netProfessionalIncome: number; birthYear?: number } = {
-                id: inc.partner.id,
-                netProfessionalIncome: inc.netProfessionalIncome,
-            };
-            if (inc.partner.birthYear !== undefined) q.birthYear = inc.partner.birthYear;
-            return q;
-        });
-        const cap = resolveMaritalQuotientCap(quotientPartners, incomeYear, table);
-        issues.push(...cap.issues);
-        quotient = computeMaritalQuotient({
-            partners: [quotientPartners[0]!, quotientPartners[1]!],
-            rate: table.maritalQuotientRate,
-            cap: cap.cap,
-            evaluate: (transfer) =>
-                computeTaxStep(household, incomes, mode, transfer, table).combined,
-        });
-    }
-    const appliedTransfer: QuotientTransfer | undefined =
-        quotient.applied && quotient.fromPartnerId && quotient.toPartnerId
-            ? { from: quotient.fromPartnerId, to: quotient.toPartnerId, transfer: quotient.transfer }
-            : undefined;
-    const step = computeTaxStep(household, incomes, mode, appliedTransfer, table);
-    issues.push(...step.issues);
-    if (step.unusedExemption > 0 && step.supplementTotalChildren > 0) {
-        issues.push({ code: "refundable_child_credit_not_modelled", severity: "needs_source" });
-    }
-
     // Own-home credit to the partner who claims it (default A, else the first assessed partner).
     const homeInputs = {
         ...household.home,
@@ -503,14 +466,72 @@ export function computeHouseholdTax(
     const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
     const surchargePct = household.communalSurchargePercent;
 
-    const partnerResults: PartnerTaxResult[] = incomes.map((inc, i) => {
-        const id = inc.partner.id;
-        const reductions = computeTaxReductions(
+    // Reductions and the own-home credit depend on the pre-quotient income only, so they are
+    // fixed before the quotient is decided and feed the art. 88 comparison below.
+    const partnerReductions = incomes.map((inc) =>
+        computeTaxReductions(
             inc.partner.reductions,
             household.region,
             inc.taxableIncomeBeforeQuotient,
             table,
-        );
+        ),
+    );
+    const partnerCredits = incomes.map(
+        (inc, i) =>
+            (partnerReductions[i] as TaxReductionBreakdown).total +
+            (inc.partner.id === mortgagePartnerId ? ownHomeCreditTotal : 0),
+    );
+    // Art. 88 withholds the quotient when "the assessment" would be higher: the comparison is
+    // made on the tax after reductions, the state/regional factor and the communal surcharge,
+    // not on the tax after the tax-free sum alone (a partner's reductions cannot offset the tax
+    // the transfer creates for the other partner).
+    const finalTaxOf = (step: TaxStep): number =>
+        step.pitAfterExemption.reduce((acc, pitAfter, i) => {
+            const applied = Math.min(partnerCredits[i] as number, pitAfter);
+            return acc + (pitAfter - applied) * autonomyFactor * (1 + surchargePct / 100);
+        }, 0);
+
+    // Marital quotient (joint assessment of two partners only).
+    let quotient: MaritalQuotientResult = {
+        applied: false,
+        transfer: 0,
+        target: 0,
+        cap: table.maritalQuotientCap,
+        benefit: 0,
+    };
+    if (mode === "joint" && incomes.length === 2) {
+        const [i0, i1] = incomes as [PartnerIncome, PartnerIncome];
+        const quotientPartners = [i0, i1].map((inc) => {
+            const q: { id: PartnerId; netProfessionalIncome: number; birthYear?: number } = {
+                id: inc.partner.id,
+                netProfessionalIncome: inc.netProfessionalIncome,
+            };
+            if (inc.partner.birthYear !== undefined) q.birthYear = inc.partner.birthYear;
+            return q;
+        });
+        const cap = resolveMaritalQuotientCap(quotientPartners, incomeYear, table);
+        issues.push(...cap.issues);
+        quotient = computeMaritalQuotient({
+            partners: [quotientPartners[0]!, quotientPartners[1]!],
+            rate: table.maritalQuotientRate,
+            cap: cap.cap,
+            evaluate: (transfer) =>
+                finalTaxOf(computeTaxStep(household, incomes, mode, transfer, table)),
+        });
+    }
+    const appliedTransfer: QuotientTransfer | undefined =
+        quotient.applied && quotient.fromPartnerId && quotient.toPartnerId
+            ? { from: quotient.fromPartnerId, to: quotient.toPartnerId, transfer: quotient.transfer }
+            : undefined;
+    const step = computeTaxStep(household, incomes, mode, appliedTransfer, table);
+    issues.push(...step.issues);
+    if (step.unusedExemption > 0 && step.supplementTotalChildren > 0) {
+        issues.push({ code: "refundable_child_credit_not_modelled", severity: "needs_source" });
+    }
+
+    const partnerResults: PartnerTaxResult[] = incomes.map((inc, i) => {
+        const id = inc.partner.id;
+        const reductions = partnerReductions[i] as TaxReductionBreakdown;
         const ownHomeCredit = id === mortgagePartnerId ? ownHomeCreditTotal : 0;
         const pitAfter = step.pitAfterExemption[i] as number;
         const reductionsApplied = Math.min(reductions.total + ownHomeCredit, pitAfter);
@@ -556,7 +577,7 @@ export function computeHouseholdTax(
             csssSubject: inc.csssSubject,
             dividendWhtReclaim: investment.dividendWhtReclaim,
             savingsInterestTax: investment.savingsInterestTax,
-            marginalRate: computeMarginalRate(inc.taxableIncomeBeforeQuotient, table.brackets),
+            marginalRate: computeMarginalRate(taxable, table.brackets),
         };
     });
 
@@ -612,7 +633,14 @@ export function computeHouseholdTax(
     let dividendWhtReclaim = 0;
     let savingsInterestTax = 0;
     for (const p of partnerResults) {
-        grossIncome += p.grossIncome + p.otherTaxableIncome;
+        // Already-net activities carry no gross; their net amount is the cash the household has.
+        grossIncome +=
+            p.grossIncome +
+            p.otherTaxableIncome +
+            sum(
+                p.activities.filter((a) => a.kind === "net_professional_amount"),
+                (a) => a.netProfessionalIncome,
+            );
         employeeSocialSecurity += p.employeeSocialSecurity;
         professionalExpenses += p.professionalExpenses;
         netProfessionalIncome += p.netProfessionalIncome;

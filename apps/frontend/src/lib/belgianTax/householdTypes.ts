@@ -365,6 +365,7 @@ export interface HouseholdCsssResult {
 }
 
 export interface HouseholdTotals {
+    /** Cash income: gross activity income, other taxable income and already-net amounts. */
     grossIncome: number;
     employeeSocialSecurity: number;
     professionalExpenses: number;

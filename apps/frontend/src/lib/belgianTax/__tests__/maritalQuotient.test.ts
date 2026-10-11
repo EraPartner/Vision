@@ -28,7 +28,9 @@ describe("marital quotient (arts 87-88)", () => {
         expect(b?.taxableIncome).toBeCloseTo(13_460, 9);
         expect(a?.pitAfterExemption).toBeCloseTo(26_662.5, 6);
         expect(b?.pitAfterExemption).toBeCloseTo(637.5, 6);
-        expect(r.quotient.benefit).toBeCloseTo(29_097 - 27_300, 6);
+        // The benefit is the saving on the final assessment (art. 88 al. 2): no reductions here,
+        // factor 1.0000 (Flanders), 7% communal surcharge → (29,097 − 27,300) × 1.07.
+        expect(r.quotient.benefit).toBeCloseTo((29_097 - 27_300) * 1.07, 6);
     });
 
     test("quotient goes to the lower earner, whichever partner that is", () => {

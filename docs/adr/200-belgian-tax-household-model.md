@@ -56,7 +56,8 @@ while preserving single-person results.
    verified source uses a stated default and returns a `needs_source` issue. `engineVersion: 2`
    is stored with each result.
 4. **Settings keys.** The household is stored under `belgian_tax_household_v2`; year snapshots
-   under `belgian_tax_household_snapshots_v2` (`Record<"YYYY", household>`). Both are validated by
+   under `belgian_tax_household_snapshots_v2` (`Record<"YYYY", household>`, each key equal to its
+   household's `taxYear`). Both are validated by
    zod schemas in `apps/node-backend/src/routes/belgianTaxSettingsSchemas.ts`, mirrored in
    `householdSchema.ts`. The existing `belgian_tax_profile_snapshot_meta_v1` sidecar keeps its key
    and gains `frozenHouseholdResult` next to `frozenCalculation`; audit entries gain

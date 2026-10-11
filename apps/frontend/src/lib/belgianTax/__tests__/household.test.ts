@@ -192,6 +192,52 @@ describe("household assembly", () => {
         expect(computeHouseholdTax(h).totals.refundableChildCredit).toBe(0);
     });
 
+    test("quotient is withheld when a partner's reductions already clear the household tax (art. 88 al. 2)", () => {
+        // A's childcare reduction wipes A's tax; a 30% transfer to B would create tax for B that
+        // A's reduction cannot offset, so the assessment would be higher with the quotient.
+        const h = married([activity("employee", 40_000)], [activity("employee", 0)]);
+        h.partners[0]!.reductions = {
+            ...h.partners[0]!.reductions,
+            childcareEligible: true,
+            childcareEligibleDays: 2_000,
+            childcareCosts: 30_000,
+        };
+        const r = computeHouseholdTax(h);
+        expect(r.quotient.applied).toBe(false);
+        expect(r.totals.totalPIT).toBe(0);
+    });
+
+    test("quotient benefit is the saving on the final tax, after the factor and the surcharge", () => {
+        const a = [activity("employee", 40_000)];
+        const b = [activity("employee", 0)];
+        const flanders = computeHouseholdTax(married(a, b));
+        const brussels = computeHouseholdTax(
+            married(a, b, { region: "brussels", communalSurchargePercent: 6 }),
+        );
+        expect(flanders.quotient.applied).toBe(true);
+        expect(brussels.quotient.applied).toBe(true);
+        // Same transfer and bracket saving; Brussels factor 0.9950 and 6% instead of 1.0000 and 7%.
+        expect(brussels.quotient.transfer).toBeCloseTo(flanders.quotient.transfer, 9);
+        expect(brussels.quotient.benefit).toBeCloseTo(
+            (flanders.quotient.benefit / 1.07) * 0.995 * 1.06,
+            6,
+        );
+    });
+
+    test("marginal rate follows the post-quotient taxable income", () => {
+        const r = computeHouseholdTax(married([activity("employee", 40_000)], [activity("employee", 0)]));
+        expect(r.quotient.applied).toBe(true);
+        // A: about 29.7k taxable before the transfer (45% bracket), about 20.8k after it (40%).
+        expect(r.partners[0]!.marginalRate).toBe(40);
+        expect(r.partners[1]!.marginalRate).toBe(25);
+    });
+
+    test("household cash totals include already-net activity amounts", () => {
+        const r = computeHouseholdTax(married([activity("employee", 50_000)], [activity("net_professional_amount", 20_000)]));
+        expect(r.totals.grossIncome).toBe(70_000);
+        expect(r.totals.netTakeHome).toBeCloseTo(70_000 - r.totals.totalTaxBurden, 9);
+    });
+
     test("does not mutate its input", () => {
         const h = married([activity("employee", 50_000)], [activity("net_professional_amount", 0)]);
         const before = structuredClone(h);
