@@ -347,7 +347,12 @@ export interface PartnerTaxResult {
     reductions: TaxReductionBreakdown;
     ownHomeCreditRegime: MortgageCreditRegime;
     ownHomeCredit: number;
-    /** Reductions charged on this partner's tax: min(reductions + own-home credit, tax). */
+    /** Reduction for pensions of this partner (WIB 92 arts 147-153, per spouse by art. 150). */
+    pensionReduction: number;
+    /**
+     * Reductions charged on this partner's tax: min(pension reduction + reductions + own-home
+     * credit, tax).
+     */
     reductionsApplied: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;
@@ -414,7 +419,11 @@ export type HouseholdTaxIssueCode =
     | "refundable_child_credit_not_modelled"
     | "isolated_parent_supplement_not_granted"
     | "senior_quotient_cap_birth_years_missing"
-    | "woonbonus_children_at_loan_start_missing";
+    | "woonbonus_children_at_loan_start_missing"
+    | "pension_reduction_activity_income_not_excluded"
+    | "pension_reduction_quotient_unverified"
+    | "donation_joint_ceiling_unverified"
+    | "mortgage_region_not_used";
 
 export type HouseholdTaxIssueSeverity = "info" | "warning" | "needs_source";
 

@@ -89,6 +89,32 @@ export interface SelfEmployedContributionParams {
  * specific to this valuation table and unrelated to the main PIT bracket cuts
  * (which run 16,320 / 28,800 / 49,840 for IY 2025).
  */
+/**
+ * Reduction for pensions (WIB 92 arts 146-153; "pensioenen" of art. 146, 1°, i.e. art. 34
+ * income). Amounts are the FPS indexation notice figures (art. 178 §3) per assessment year.
+ */
+export interface PensionReductionParams {
+    /** Art. 147 al. 1, 1°: basisvermindering when the net income consists only of pensions. */
+    base: number;
+    /**
+     * Art. 147 al. 1, 1°: aanvullende vermindering; for AY 2025 and 2026 the amount raised by
+     * royal decree under art. 147 al. 4 (KB/WIB 92 art. 63^18/18).
+     */
+    additional: number;
+    /** Art. 151/1: the additional reduction is granted in full up to `lower`, not from `upper`. */
+    additionalLimits: { lower: number; upper: number };
+    /**
+     * Art. 152 (to AY 2026) / art. 151/2 al. 4 (from AY 2027): the base reduction is granted in
+     * full up to `lower` and tapers to one third at `upper`.
+     */
+    baseLimits: { lower: number; upper: number };
+    /**
+     * Art. 151/2 al. 1-3 (from AY 2027): one third up to `from`, tapering to nothing at `to`
+     * ("meer dan" `to`: none). Absent before IY 2026, when art. 152 keeps one third.
+     */
+    baseZeroLimits?: { from: number; to: number };
+}
+
 export interface ExemptionBracket {
     from: number;
     to: number;
@@ -144,6 +170,9 @@ export interface BelgianTaxYearTable {
     walloonChequeHabitatIncomeThresholds: { lower: number; upper: number };
     /** Art. 145/46ter §2, 2°: coefficient of 1.275% applied to the income above the lower limit. */
     walloonChequeHabitatPhaseOutRate: number;
+
+    // ── Reduction for pensions (arts 146-153) ───────────────────────────────
+    pensionReduction: PensionReductionParams;
 
     // ── Personal exemptions (quotité du revenu exempté) ─────────────────────
     basicPersonalExemption: number;
@@ -450,6 +479,16 @@ const TABLE_2024: BelgianTaxYearTable = {
     reyndersTaxRate: 0.30,
     reyndersBondThreshold: 0.10,
 
+    // Arts 147, 151/1, 152 (FPS indexation notice AY 2025, Fisconetplus 15618a3b): base
+    // 1,148.93 → 2,151.72; additional 237.495 (raised by KB/WIB 92 art. 63^18/18) → 444.78;
+    // art. 151/1 limits 19,030 / 27,900; art. 152 limits 27,900 / 55,810.
+    pensionReduction: {
+        base: 2_151.72,
+        additional: 444.78,
+        additionalLimits: { lower: 19_030, upper: 27_900 },
+        baseLimits: { lower: 27_900, upper: 55_810 },
+    },
+
     maritalQuotientRate: 0.30,
     // Arts 87-88 cap: FPS indexation notice AY 2025 and fin.belgium.be previous-years page.
     maritalQuotientCap: 13_050,
@@ -639,6 +678,16 @@ const TABLE_2025: BelgianTaxYearTable = {
     reyndersTaxRate: 0.30,
     reyndersBondThreshold: 0.10,
 
+    // Arts 147, 151/1, 152 (FPS indexation notice AY 2026, Fisconetplus 934106e5): base
+    // 1,148.93 → 2,219.27; additional 236.71 (raised by KB/WIB 92 art. 63^18/18) → 457.23;
+    // art. 151/1 limits 19,630 / 28,780; art. 152 limits 28,780 / 57,560.
+    pensionReduction: {
+        base: 2_219.27,
+        additional: 457.23,
+        additionalLimits: { lower: 19_630, upper: 28_780 },
+        baseLimits: { lower: 28_780, upper: 57_560 },
+    },
+
     maritalQuotientRate: 0.30,
     // Arts 87-88 cap: FPS indexation notice AY 2026 and fin.belgium.be "Huwelijk en samenwonen".
     maritalQuotientCap: 13_460,
@@ -756,6 +805,18 @@ const TABLE_2026: BelgianTaxYearTable = {
     // Arts 87-88 when both spouses are 66+ on 1 Jan 2027: base 6,365 → 12,790 (N27; L2 arts 27
     // and 30, A). Applied by the household engine when both birth years are known.
     maritalQuotientCapBothSenior: 12_790,
+    // Arts 147, 151/1, 151/2 after the law of 15 July 2026 (FPS indexation notice AY 2027,
+    // Fisconetplus 042cb526; art. 147 income 2026 text 29f2d0bb): base 1,102.44 → 2,182.06;
+    // additional 236.38 → 467.87 (no art. 147 al. 4 increase published for AY 2027 on
+    // 2026-10-11); art. 151/1 limits 20,110 / 29,490; art. 151/2: one third from 58,980, tapering
+    // from 60,260 to nothing above 72,310. Art. 152 no longer covers pensions.
+    pensionReduction: {
+        base: 2_182.06,
+        additional: 467.87,
+        additionalLimits: { lower: 20_110, upper: 29_490 },
+        baseLimits: { lower: 29_490, upper: 58_980 },
+        baseZeroLimits: { from: 60_260, to: 72_310 },
+    },
     // Art. 126 §2 al. 1, 4° a) after L2 art. 32: "meer dan het in artikel 131, eerste lid,
     // vermelde bedrag", i.e. the basic exemption (11,550 per N27).
     treatyExemptSeparateThreshold: 11_550,

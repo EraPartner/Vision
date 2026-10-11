@@ -43,7 +43,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 
 ### One taxpayer
 
-`scenarioMatrix.single.test.ts`. Every activity kind, two activities, dependants, IY 2024-2026.
+`scenarioMatrix.single.test.ts`. Every activity kind, two activities, dependants, the reduction for pensions, the gift ceiling, IY 2024-2026.
 
 | Id | What it verifies | Articles | Matrix rows | Status |
 | -- | ---------------- | -------- | ----------- | ------ |
@@ -53,7 +53,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | SC-04 | self-employed trading profits 40,000, contributions 8,000, IY 2025 | WIB 92 arts 51 al. 1 and al. 2, 1°, 52, 7°, 130, 131 | `forfait-employee`, `hh-self-employed-contrib`, `brackets`, `csss-subject` | verified |
 | SC-05 | liberal-profession fees 30,000, contributions 5,000, IY 2025: degressive forfait | WIB 92 arts 51 al. 2, 4°, 52, 7°, 130, 131 | `forfait-fees`, `hh-self-employed-contrib`, `brackets` | verified |
 | SC-06 | helping spouse 20,000, contributions 3,000, IY 2025: 5% forfait | WIB 92 arts 51 al. 2, 3°, 52, 7°, 130, 131 | `forfait-helping-spouse`, `hh-helping-spouse`, `hh-self-employed-contrib`, `brackets` | verified |
-| SC-07 | pension 25,000, IY 2025: no forfait, no CSSS; tax not asserted | WIB 92 art. 51 al. 1; law 30-03-1994 art. 106; art. 147 not in the matrix | `forfait-none-pensions`, `csss-subject` | needs_source |
+| SC-07 | pension 25,000, IY 2025: no forfait, no CSSS; full base and tapered additional reduction for pensions | WIB 92 arts 51 al. 1, 130, 131, 147 al. 1, 1°, 151/1, 152, 153; law 30-03-1994 art. 106 | `forfait-none-pensions`, `csss-subject`, `pension-reduction`, `pension-reduction-taper`, `pension-reduction-limit` | verified |
 | SC-08 | already-net professional amount 30,000, IY 2025 | WIB 92 arts 130, 131, 134 §2 | `brackets`, `basic-exemption`, `exemption-scale` | verified |
 | SC-09 | one person: employee 40,000 + fees 20,000 (contributions 4,000): one forfait per category | WIB 92 art. 51 al. 2, 1° and 4°, al. 3; art. 130 | `hh-forfait-category`, `forfait-employee`, `forfait-fees`, `hh-csss-mixed` | verified |
 | SC-10 | one person: employee + trading profits; whether art. 51 al. 3 caps them together is open | WIB 92 art. 51 al. 2, 1° and al. 3 | `hh-profits-category` | needs_source |
@@ -64,10 +64,16 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | SC-15 | IY 2024: one disabled child and one disabled other dependant each count twice | WIB 92 arts 132 al. 1, 2° and 8°, 132bis; art. 134 §2 (IY 2024 scale 11,120 / 15,820) | `disabled-dependent`, `children-supplements`, `other-dependent`, `exemption-scale`, `csss-single` | verified |
 | SC-16 | five children, IY 2025: the fifth child adds 7,070 | WIB 92 art. 132 al. 1, 4°-5°, art. 134 §2 | `children-supplements`, `children-fifth`, `exemption-scale` | verified |
 | SC-17 | donation 500, IY 2024: 45% (the 30% rate starts in IY 2025) | WIB 92 art. 145/33; law of 18 December 2025 art. 67 | `donations` | verified |
+| SC-18 | pension 40,000, IY 2025: base reduction tapered towards one third, no additional reduction | WIB 92 arts 147 al. 1, 1°, 151/1, 152 (N26 limits 28,780 / 57,560) | `pension-reduction`, `pension-reduction-taper` | verified |
+| SC-19 | pension 20,000 and other income 5,000, IY 2025: reduction in proportion to the pensions | WIB 92 art. 147 al. 1, 2°; arts 151/1, 152, 153; Com.IB 146/15 | `pension-reduction`, `pension-reduction-share`, `pension-reduction-taper` | verified |
+| SC-20 | pension 65,000, IY 2026: art. 151/2 tapers the last third of the base reduction | WIB 92 arts 147 al. 1, 1°, 151/1, 151/2 (N27: 2,182.06; limits 60,260 / 72,310) | `pension-reduction`, `pension-reduction-taper` | verified |
+| SC-21 | pension 18,000, IY 2024: the reduction is limited to the tax on the pensions | WIB 92 arts 147 al. 1, 1° (N25: 2,151.72 / 444.78), 153 | `pension-reduction`, `pension-reduction-limit` | verified |
+| SC-22 | pension with employee income: the art. 147 al. 1, 2°, b-c exclusions cannot be applied | WIB 92 art. 147 al. 1, 2°, a-c | `pension-reduction-share`, `pension-activity-income` | needs_source |
+| SC-23 | gifts 4,000 with alimony paid: the 10% ceiling is on the net income before the alimony deduction | WIB 92 art. 145/33 §1 al. 4 ("10 % van het totale netto-inkomen"); art. 104, 1°; Com.IB 146/15 | `donations`, `donations-cap`, `alimony` | verified |
 
 ### Joint assessment
 
-`scenarioMatrix.joint.test.ts`. Marital quotient in both directions, the cap and the IY 2026 senior cap, the art. 88 comparison, the art. 134 balance transfer, dependants, alimony, CSSS on household income, treaty-exempt income.
+`scenarioMatrix.joint.test.ts`. The reduction for pensions per spouse, gifts under a joint assessment, marital quotient in both directions, the cap and the IY 2026 senior cap, the art. 88 comparison, the art. 134 balance transfer, dependants, alimony, CSSS on household income, treaty-exempt income.
 
 | Id | What it verifies | Articles | Matrix rows | Status |
 | -- | ---------------- | -------- | ----------- | ------ |
@@ -89,6 +95,10 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | JX-01 | treaty-exempt income 13,461 (IY 2025, "meer dan" 13,460) → separate assessment | WIB 92 art. 126 §2 al. 1, 4° (N26: 13,460) | `treaty-threshold`, `hh-treaty` | verified |
 | JX-02 | treaty-exempt income exactly at the threshold 13,460 → still joint | WIB 92 art. 126 §2 al. 1, 4° | `treaty-threshold`, `hh-treaty` | verified |
 | JX-03 | IY 2026: threshold is the basic exemption 11,550; 11,551 → separate | WIB 92 art. 126 §2 al. 1, 4° after the law of 15 July 2026 art. 32 (N27) | `treaty-threshold`, `hh-treaty` | verified |
+| JP-01 | two pensioners 30,000 + 15,000: the reduction for pensions per spouse, each with its own limits | WIB 92 arts 147 al. 1, 1°, 150, 151/1, 152, 153; arts 87-88 | `hh-pension-per-spouse`, `pension-reduction`, `pension-reduction-taper`, `pension-reduction-limit` | verified |
+| JP-02 | pensioner 40,000 with a quotient towards a spouse without income: which taxable income the pension limits read | WIB 92 arts 87-88, 147, 151/1, 152 ("belastbaar inkomen" after the quotient not read) | `hh-pension-quotient`, `hh-quotient` | needs_source |
+| JG-01 | gifts 1,000 paid by A under a joint assessment: the reduction is apportioned on each spouse's taxed income | WIB 92 art. 145/33 §1 al. 3-5 ("evenredig omgedeeld in functie van het overeenkomstig artikel 130 belaste inkomen") | `hh-donations-joint`, `donations`, `donations-cap` | verified |
+| JG-02 | gifts 5,000 paid by A under a joint assessment: the 10% ceiling on whose net income | WIB 92 art. 145/33 §1 al. 4-5 | `hh-donations-joint-ceiling`, `hh-donations-joint` | needs_source |
 
 ### Assessment mode (art. 126)
 
@@ -158,7 +168,6 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 
 | Id | What is missing |
 | -- | --------------- |
-| SC-07 | WIB 92 art. 147 (tax reduction for pensions and replacement income) is not in the rule matrix or the engine, so a pensioner's final tax is incomplete. Only the absence of a forfait and of the CSSS is asserted. |
 | SC-10 | Whether employee remuneration and trading profits (both art. 51 al. 2, 1°) share one art. 51 al. 3 cap (`forfait_category_aggregation_unverified`). |
 | SC-14 | The art. 134 §3 refundable child tax credit formula (`refundable_child_credit_not_modelled`). |
 | AS-13 | B's child supplement is not used in full (exemption 12,890 against taxable income 12,170.20), so B is owed the art. 134 §3 refundable child tax credit, whose formula the matrix does not carry (`refundable_child_credit_not_modelled`). The asserted figures hold before that credit. |
@@ -166,6 +175,9 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | JR-01 | How reductions are apportioned between jointly assessed spouses (`joint_reduction_allocation_unverified`). |
 | AS-14 | Whether a separately assessed taxpayer living with a partner is "alone" for art. 133 al. 1, 1° after L2 art. 9 (`isolated_parent_supplement_not_granted`). |
 | RG-03 | Where regional and federal reductions are charged relative to the state/regional factor (special finance law art. 5/2). The engine deducts every reduction from the tax before multiplying by the combined factor, which differs from charging federal reductions on the reduced state tax and regional reductions on the regional surcharge by 0.5% of the reductions in Brussels. |
+| SC-22 | The statutory pension amount and the legal pension age that art. 147 al. 1, 2°, b-c use to leave a pensioner's activity income out of the proportion are not inputs (`pension_reduction_activity_income_not_excluded`, warning). The engine applies the plain proportion of art. 147 al. 1, 2°. |
+| JP-02 | Whether arts 151/1, 151/2 and 152 compare a spouse's taxable income after the art. 87 quotient transfer (`pension_reduction_quotient_unverified`). The engine uses the income after the transfer; only the quotient itself is asserted. |
+| JG-02 | Whether the 10% ceiling of art. 145/33 §1 al. 4 is taken on the spouses' combined net income or per spouse under a joint assessment (`donation_joint_ceiling_unverified`). The engine pools the gifts and caps them once on the combined income; only the apportionment is asserted. |
 
 ## Scope notes
 
@@ -279,7 +291,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `hh-union-dues` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Union dues… | — |
 | `hh-category-loss` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | A category whose actual expenses… | — |
 | `hh-alimony` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Alimony is charged… | JA-01 |
-| `hh-quotient` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Quotient on net professional income… | JQ-01, JQ-02, JQ-04 |
+| `hh-quotient` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Quotient on net professional income… | JQ-01, JQ-02, JQ-04, JP-02 |
 | `hh-senior-cap` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | IY 2026 quotient cap… | JQ-06, JQ-07 |
 | `hh-exemption-after-quotient` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Tax-free sum and supplements are allocated after… | JT-01 |
 | `hh-basic-each` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Each spouse gets the basic amount… | JD-02 |
@@ -290,6 +302,17 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `hh-csss` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | CSSS: joint scale… | AS-01, JC-01 |
 | `hh-csss-mixed` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | CSSS base for a spouse who combines… | SC-09 |
 | `hh-investment-side` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Dividend and savings side… | — |
+| `pension-reduction` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Reduction for pensions… | JP-01, SC-07, SC-18, SC-19, SC-20, SC-21 |
+| `pension-reduction-share` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Pension reduction in proportion… | SC-19, SC-22 |
+| `pension-reduction-taper` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Pension reduction tapers… | JP-01, SC-07, SC-18, SC-19, SC-20 |
+| `pension-reduction-limit` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Pension reduction limited… | JP-01, SC-07, SC-21 |
+| `pension-activity-income` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Activity income left out… | SC-22 |
+| `region-competence` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | The own-home regime follows… | RG-19 |
+| `hh-pension-per-spouse` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Reduction for pensions per spouse… | JP-01 |
+| `hh-pension-quotient` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Pension limits after the quotient… | JP-02 |
+| `hh-donations-joint` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Joint: gifts apportioned… | JG-01, JG-02 |
+| `hh-donations-joint-ceiling` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Joint: 10% gift ceiling… | JG-02 |
+| `hh-own-home-borrowers` | [[docs/reference/belgian-tax-rule-matrix#Household taxation\|Household taxation]] | Two borrowers: a basket each… | RG-16, RG-17, RG-18 |
 
 ## Related
 

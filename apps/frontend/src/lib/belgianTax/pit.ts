@@ -51,6 +51,7 @@ import {
     computeInvestmentSideCalc,
     computeMarginalRate,
     computeOwnHomeCredit,
+    computePensionReduction,
     computeProfessionalExpenseClaim,
     computeProgressiveTax,
     computeTaxReductions,
@@ -350,6 +351,23 @@ export function computeBelgianPIT(
         taxableIncome,
         table,
     );
+
+    // 7a. Reduction for pensions (arts 147-153) on the tax after the tax-free sum. The single
+    //     profile's only pension source is a `retired` employment type. Under `married_joint`
+    //     this engine uses the earner's taxable income after the quotient and the couple's tax,
+    //     an approximation of the per-spouse rule of art. 150 that the household engine applies.
+    const pensionReduction =
+        profile.employmentType === "retired"
+            ? computePensionReduction(
+                  {
+                      pensionIncome: clampAtZero(grossSalary - employeeSS - profExpenses),
+                      netIncome: totalNetIncome,
+                      taxableIncome: quotient.earnerTaxable,
+                      taxAfterExemption: pitAfterExemption,
+                  },
+                  table,
+              ).total
+            : 0;
     const serviceVoucherCredit = reductions.serviceVouchers;
 
     // Regional own-home credit (Flemish woonbonus / Walloon chèque habitat).
@@ -367,7 +385,7 @@ export function computeBelgianPIT(
         },
     );
 
-    const totalTaxCredits = reductions.total + ownHomeCredit;
+    const totalTaxCredits = pensionReduction + reductions.total + ownHomeCredit;
 
     // 8. Federal PIT after credits (cannot go below zero).
     const appliedTaxCredits = Math.min(totalTaxCredits, pitAfterExemption);
@@ -446,6 +464,7 @@ export function computeBelgianPIT(
         maritalQuotientTransfer: quotient.transfer,
         maritalQuotientBenefit: quotient.benefit,
         personalExemptionBenefit,
+        pensionReduction,
         ownHomeCredit,
         serviceVoucherCredit,
         federalTaxCredits: appliedTaxCredits,
@@ -494,6 +513,7 @@ export function computeBelgianPIT(
         ownHomeCreditRegime,
         ownHomeCredit,
         taxReductions: personalExemptionBenefit + appliedTaxCredits,
+        pensionReduction,
         federalPITAfterReductions,
         communalSurcharge,
         totalPIT,

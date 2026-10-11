@@ -117,18 +117,24 @@ export const SINGLE_SCENARIOS: readonly Scenario[] = [
     },
     {
         id: "SC-07",
-        description: "pension 25,000, IY 2025: no forfait, no CSSS; tax not asserted",
-        rows: ["forfait-none-pensions", "csss-subject"],
-        articles: "WIB 92 art. 51 al. 1; law 30-03-1994 art. 106; art. 147 not in the matrix",
-        status: "needs_source",
-        missing:
-            "WIB 92 art. 147 (tax reduction for pensions and replacement income) is not in the rule matrix or the engine, so the final tax of a pensioner is not law-complete",
+        description: "pension 25,000, IY 2025: no forfait, no CSSS; full base and tapered additional reduction for pensions",
+        rows: ["forfait-none-pensions", "csss-subject", "pension-reduction", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 arts 51 al. 1, 130, 131, 147 al. 1, 1°, 151/1, 152, 153; law 30-03-1994 art. 106",
+        status: "verified",
         household: single(activity("pension", 25_000)),
         verify: (r) => {
-            // Sourced parts only: no forfait, taxable 25,000, no CSSS.
+            // No forfait, taxable 25,000, no CSSS.
+            // art. 130: 4,080 + 8,680 × 40% (3,472) = 7,552 − 2,727.50 = 4,824.50
+            // art. 147 al. 1, 1° (N26): base 2,219.27 in full (25,000 ≤ 28,780, art. 152);
+            // additional 457.23 × (28,780 − 25,000) / (28,780 − 19,630) = 457.23 × 3,780 / 9,150
+            //   = 188.888459016… (art. 151/1); total 2,408.158459016…
+            // art. 153: pensions are the whole net income, so the limit is the tax 4,824.50.
+            // (4,824.50 − 2,408.158459016) × 1.0000 × 1.07 = 2,585.485448852…
             eur(r.partners[0]?.professionalExpenses, 0);
             eur(r.partners[0]?.taxableIncome, 25_000);
             eur(r.csss.total, 0);
+            eur(r.partners[0]?.pensionReduction, 2_408.158459016);
+            eur(r.totals.totalPIT, 2_585.485448852);
         },
     },
     {
@@ -336,6 +342,119 @@ export const SINGLE_SCENARIOS: readonly Scenario[] = [
                 code: "refundable_child_credit_not_modelled",
                 severity: "needs_source",
             });
+        },
+    },
+    {
+        id: "SC-18",
+        description: "pension 40,000, IY 2025: base reduction tapered towards one third, no additional reduction",
+        rows: ["pension-reduction", "pension-reduction-taper"],
+        articles: "WIB 92 arts 147 al. 1, 1°, 151/1, 152 (N26 limits 28,780 / 57,560)",
+        status: "verified",
+        household: single(activity("pension", 40_000)),
+        verify: (r) => {
+            // art. 130: 4,080 + 4,992 + 11,200 × 45% (5,040) = 14,112 − 2,727.50 = 11,384.50
+            // art. 151/1: 40,000 ≥ 28,780 → no additional reduction
+            // art. 152: 1/3 + 2/3 × (57,560 − 40,000) / (57,560 − 28,780) = 1,065 / 1,439
+            //   = 0.740097289…; 2,219.27 × 1,065 / 1,439 = 1,642.475712300…
+            // (11,384.50 − 1,642.475712300) × 1.07 = 10,423.965987838…
+            eur(r.partners[0]?.pensionReduction, 1_642.4757123);
+            eur(r.totals.totalPIT, 10_423.965987838);
+        },
+    },
+    {
+        id: "SC-19",
+        description: "pension 20,000 and other income 5,000, IY 2025: reduction in proportion to the pensions",
+        rows: ["pension-reduction", "pension-reduction-share", "pension-reduction-taper"],
+        articles: "WIB 92 art. 147 al. 1, 2°; arts 151/1, 152, 153; Com.IB 146/15",
+        status: "verified",
+        household: household([partner("A", [activity("pension", 20_000)], { otherTaxableIncome: 5_000 })]),
+        verify: (r) => {
+            // taxable 25,000 → tax after the tax-free sum 4,824.50 (SC-07)
+            // art. 147 al. 1, 2°: share 20,000 / 25,000 = 0.8 of (2,219.27 + 188.888459016)
+            //   = 1,926.526767213; art. 153 limit 4,824.50 × 0.8 = 3,859.60 (not reached)
+            // (4,824.50 − 1,926.526767213) × 1.07 = 3,100.831359082
+            eur(r.partners[0]?.pensionReduction, 1_926.526767213);
+            eur(r.totals.totalPIT, 3_100.831359082);
+            expect(r.issues.map((i) => i.code)).not.toContain("pension_reduction_activity_income_not_excluded");
+        },
+    },
+    {
+        id: "SC-20",
+        description: "pension 65,000, IY 2026: art. 151/2 tapers the last third of the base reduction",
+        rows: ["pension-reduction", "pension-reduction-taper"],
+        articles: "WIB 92 arts 147 al. 1, 1°, 151/1, 151/2 (N27: 2,182.06; limits 60,260 / 72,310)",
+        status: "verified",
+        household: { ...single(activity("pension", 65_000)), taxYear: 2026 },
+        verify: (r) => {
+            // art. 130 (N27): 4,180 + 12,790 × 40% (5,116) + 21,560 × 45% (9,702)
+            //   + 13,930 × 50% (6,965) = 25,963 − 11,550 × 25% (2,887.50) = 23,075.50
+            // art. 151/2: 60,260 < 65,000 ≤ 72,310 → 1/3 × (72,310 − 65,000) / (72,310 − 60,260)
+            //   = 731 / 3,615; 2,182.06 × 731 / 3,615 = 441.240901798…
+            // (23,075.50 − 441.240901798) × 1.07 = 24,218.657235076…
+            eur(r.partners[0]?.pensionReduction, 441.240901798);
+            eur(r.totals.totalPIT, 24_218.657235076);
+        },
+    },
+    {
+        id: "SC-21",
+        description: "pension 18,000, IY 2024: the reduction is limited to the tax on the pensions",
+        rows: ["pension-reduction", "pension-reduction-limit"],
+        articles: "WIB 92 arts 147 al. 1, 1° (N25: 2,151.72 / 444.78), 153",
+        status: "verified",
+        household: { ...single(activity("pension", 18_000)), taxYear: 2024 },
+        verify: (r) => {
+            // art. 130 (IY 2024): 3,955 + 2,180 × 40% (872) = 4,827 − 10,570 × 25% (2,642.50)
+            //   = 2,184.50; base 2,151.72 + additional 444.78 (18,000 ≤ 19,030) = 2,596.50
+            // art. 153: at most the tax on the pensions, 2,184.50 → tax 0
+            eur(r.partners[0]?.pensionReduction, 2_184.5);
+            eur(r.totals.totalPIT, 0);
+        },
+    },
+    {
+        id: "SC-22",
+        description: "pension with employee income: the art. 147 al. 1, 2°, b-c exclusions cannot be applied",
+        rows: ["pension-reduction-share", "pension-activity-income"],
+        articles: "WIB 92 art. 147 al. 1, 2°, a-c",
+        status: "needs_source",
+        missing:
+            "The statutory pension amount and the legal pension age that art. 147 al. 1, 2°, b-c use to leave activity income out of the proportion are not inputs (pension_reduction_activity_income_not_excluded)",
+        household: single(activity("pension", 20_000), activity("employee", 10_000)),
+        verify: (r) => {
+            // Sourced part: the issue; the reduction then uses the plain art. 147 al. 1, 2° share.
+            expect(r.issues).toContainEqual({
+                code: "pension_reduction_activity_income_not_excluded",
+                severity: "warning",
+                partnerId: "A",
+            });
+            expect(r.partners[0]?.pensionReduction).toBeGreaterThan(0);
+        },
+    },
+    {
+        id: "SC-23",
+        description: "gifts 4,000 with alimony paid: the 10% ceiling is on the net income before the alimony deduction",
+        rows: ["donations", "donations-cap", "alimony"],
+        articles: "WIB 92 art. 145/33 §1 al. 4 (\"10 % van het totale netto-inkomen\"); art. 104, 1°; Com.IB 146/15",
+        status: "verified",
+        household: household([
+            partner("A", [activity("employee", 50_000)], {
+                alimonyPaid: 10_000,
+                reductions: {
+                    personalPensionContributions: 0,
+                    lifeInsurancePremiums: 0,
+                    charitableDonations: 4_000,
+                    charitableDonationsEligible: true,
+                    childcareCosts: 0,
+                    medicalExpenses: 0,
+                },
+            }),
+        ]),
+        verify: (r) => {
+            // net 37,535 (SC-01); alimony 10,000 × 70% = 7,000 → taxable 30,535
+            // ceiling 10% × 37,535 = 3,753.50 < 4,000 → 3,753.50 × 30% = 1,126.05
+            // art. 130: 4,080 + 4,992 + 1,735 × 45% (780.75) = 9,852.75 − 2,727.50 = 7,125.25
+            // (7,125.25 − 1,126.05) × 1.07 = 6,419.144
+            eur(r.partners[0]?.reductions.donations, 1_126.05);
+            eur(r.totals.totalPIT, 6_419.144);
         },
     },
 ];

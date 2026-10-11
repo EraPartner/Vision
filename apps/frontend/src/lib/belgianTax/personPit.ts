@@ -13,7 +13,11 @@ import type {
     MortgageCreditRegime,
     ProfessionalExpenseMethod,
 } from "./types";
-import type { BelgianTaxYearTable, ExemptionBracket } from "./constants";
+import type {
+    BelgianTaxYearTable,
+    ExemptionBracket,
+    PensionReductionParams,
+} from "./constants";
 
 /**
  * Professional-expense forfait category of WIB 92 art. 51 al. 2. The cap of art. 51 al. 3
@@ -350,6 +354,95 @@ export function isChildcareDeducted(
     );
 }
 
+/** Figures of one taxpayer for the reduction for pensions (WIB 92 arts 147-153). */
+export interface PensionReductionInput {
+    /** Net pensions (art. 146, 1°: the art. 34 income) of the taxpayer. */
+    pensionIncome: number;
+    /**
+     * Total net income of the taxpayer, before the deductible spending of arts 104-116 (FPS
+     * commentary Com.IB 146/15): the denominator of the art. 147 al. 1, 2° proportion and of the
+     * art. 153 tax share.
+     */
+    netIncome: number;
+    /** Taxable income (art. 130 base) that arts 151/1, 151/2 and 152 compare with their limits. */
+    taxableIncome: number;
+    /** Tax after the tax-free sum ("om te slane belasting", Com.IB 146/20). */
+    taxAfterExemption: number;
+}
+
+export interface PensionReductionResult {
+    /** Art. 147 al. 1, 1°-2° base reduction after art. 152 / art. 151/2. */
+    base: number;
+    /** Art. 147 al. 1, 1°-2° additional reduction after art. 151/1. */
+    additional: number;
+    /** Art. 153: the part of the tax on the pensions (tax × pensions / total net income). */
+    taxShareLimit: number;
+    /** min(base + additional, taxShareLimit). */
+    total: number;
+}
+
+export const NO_PENSION_REDUCTION: PensionReductionResult = {
+    base: 0,
+    additional: 0,
+    taxShareLimit: 0,
+    total: 0,
+};
+
+/**
+ * Share of the art. 147 base reduction granted at taxable income `t`: art. 152 (to AY 2026: in
+ * full up to the lower limit, one third from the upper limit, linear in between) or, from
+ * AY 2027, art. 151/2 (the same taper to one third, then from `baseZeroLimits.from` a taper to
+ * nothing above `baseZeroLimits.to`).
+ */
+export function pensionBaseReductionFactor(t: number, p: PensionReductionParams): number {
+    const { lower, upper } = p.baseLimits;
+    if (p.baseZeroLimits && t > p.baseZeroLimits.from) {
+        const { from, to } = p.baseZeroLimits;
+        return t > to ? 0 : (to - t) / (to - from) / 3;
+    }
+    if (t >= upper) return 1 / 3;
+    if (t > lower) return 1 / 3 + ((2 / 3) * (upper - t)) / (upper - lower);
+    return 1;
+}
+
+/** Share of the art. 147 additional reduction granted at taxable income `t` (art. 151/1). */
+export function pensionAdditionalReductionFactor(t: number, p: PensionReductionParams): number {
+    const { lower, upper } = p.additionalLimits;
+    if (t >= upper) return 0;
+    if (t > lower) return (upper - t) / (upper - lower);
+    return 1;
+}
+
+/**
+ * Reduction for pensions of one taxpayer (WIB 92 art. 147 al. 1, 1°-2°; arts 151/1, 151/2, 152,
+ * 153; computed per spouse under a joint assessment, art. 150):
+ *  - base and additional amounts in full when the net income consists only of pensions, else
+ *    in proportion to net pensions / total net income;
+ *  - the additional amount tapers to nothing between the art. 151/1 limits of the taxable
+ *    income; the base amount to one third between the art. 152 limits (from AY 2027 art. 151/2,
+ *    which also tapers the last third to nothing);
+ *  - art. 153: never more than the part of the tax after the tax-free sum that relates to the
+ *    pensions, in proportion to the net income (Com.IB 146/20 and the example of 146/24).
+ * The exclusion of activity income from the proportion (art. 147 al. 1, 2°, b-c) needs the
+ * statutory pension and the pension age, which the model does not carry: the household engine
+ * raises `pension_reduction_activity_income_not_excluded` instead.
+ */
+export function computePensionReduction(
+    input: PensionReductionInput,
+    table: BelgianTaxYearTable,
+): PensionReductionResult {
+    const pension = Math.max(input.pensionIncome, 0);
+    const netIncome = Math.max(input.netIncome, 0);
+    if (pension <= 0 || netIncome <= 0) return NO_PENSION_REDUCTION;
+    const p = table.pensionReduction;
+    const share = Math.min(pension / netIncome, 1);
+    const taxable = Math.max(input.taxableIncome, 0);
+    const base = p.base * share * pensionBaseReductionFactor(taxable, p);
+    const additional = p.additional * share * pensionAdditionalReductionFactor(taxable, p);
+    const taxShareLimit = Math.max(input.taxAfterExemption, 0) * share;
+    return { base, additional, taxShareLimit, total: Math.min(base + additional, taxShareLimit) };
+}
+
 /** Mortgage and residence fields that drive the regional own-home credit. */
 export type OwnHomeCreditInputs = Pick<
     BelgianTaxProfile,
@@ -572,6 +665,8 @@ export interface CalculationBreakdownValues {
     maritalQuotientTransfer: number;
     maritalQuotientBenefit: number;
     personalExemptionBenefit: number;
+    /** Reduction for pensions (arts 147-153); adds a row when > 0. */
+    pensionReduction: number;
     ownHomeCredit: number;
     serviceVoucherCredit: number;
     federalTaxCredits: number;
@@ -665,6 +760,9 @@ export function buildCalculationBreakdown(
                       amount: -v.personalExemptionBenefit,
                   },
               ]
+            : []),
+        ...(v.pensionReduction > 0
+            ? [{ label: "Pension reduction (arts 147-153)", amount: -v.pensionReduction }]
             : []),
         ...(v.ownHomeCredit > 0
             ? [{ label: "Own-home credit", amount: -v.ownHomeCredit }]

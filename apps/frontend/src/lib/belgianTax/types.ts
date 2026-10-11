@@ -292,6 +292,11 @@ export interface BelgianTaxCalculation {
     ownHomeCredit: number;
     /** Sum of reductions actually applied to PIT (clamped — never exceeds gross PIT). */
     taxReductions: number;
+    /**
+     * Reduction for pensions (WIB 92 arts 147-153), part of `federalTaxCredits`. Absent on
+     * calculations frozen before 2026-10-11.
+     */
+    pensionReduction?: number;
     federalPITAfterReductions: number;
     communalSurcharge: number;
     /** Federal PIT after reductions + communal surcharge (income tax only). */

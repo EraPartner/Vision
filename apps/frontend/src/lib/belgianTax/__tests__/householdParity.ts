@@ -20,8 +20,11 @@
  *  6. A quotient towards partner A or dependent supplements allocated to partner B: v1 always
  *     treats A as the earner.
  *  7. A category loss (actual expenses above the income): v1 offsets it against other income.
- *  8. Two partners where the reductions exceed partner A's own tax: v1 caps them at the combined
- *     tax.
+ *  8. Two partners where the reductions (with the reduction for pensions) exceed a partner's own
+ *     tax: v1 caps them at the combined tax.
+ *  9. married_joint with a retired earner whose reduction for pensions is limited by art. 153:
+ *     v1 takes the tax share from the couple's combined tax, v2 from partner A's own tax
+ *     (per spouse, art. 150).
  * Field-level exclusion: when the quotient applies and partner B's own income is below their
  * tax-free sum, `maritalQuotientBenefit` (and its breakdown row amount) differs, because the v2
  * no-quotient baseline includes the art. 134 balance transfer. The tax itself is compared.
@@ -29,6 +32,8 @@
 
 import { expect } from "vitest";
 import { computeBelgianPIT } from "../pit";
+import { getTaxTable } from "../constants";
+import { computePensionReduction } from "../personPit";
 import { computeHouseholdTax, toBelgianTaxCalculation } from "../household";
 import { upgradeProfileV1ToHousehold } from "../householdMigration";
 import type { BelgianTaxCalculation, BelgianTaxProfile } from "../types";
@@ -42,7 +47,8 @@ export type ParityExclusion =
     | "exemption_balance_transfer"
     | "quotient_or_supplements_towards_other_partner"
     | "category_loss"
-    | "reductions_above_partner_tax";
+    | "reductions_above_partner_tax"
+    | "joint_pension_tax_share_limit";
 
 export function parityExclusion(
     profile: BelgianTaxProfile,
@@ -72,10 +78,27 @@ export function parityExclusion(
     if (
         result.partners.length === 2 &&
         result.partners.some(
-            (p) => p.reductions.total + p.ownHomeCredit > p.pitAfterExemption,
+            (p) =>
+                p.pensionReduction + p.reductions.total + p.ownHomeCredit > p.pitAfterExemption,
         )
     )
         return "reductions_above_partner_tax";
+    const a = result.partners.find((p) => p.partnerId === "A");
+    if (joint && profile.employmentType === "retired" && a) {
+        const pension = computePensionReduction(
+            {
+                pensionIncome: a.activities
+                    .filter((x) => x.kind === "pension")
+                    .reduce((acc, x) => acc + x.netProfessionalIncome, 0),
+                netIncome: a.netProfessionalIncome + a.otherTaxableIncome,
+                taxableIncome: a.taxableIncome,
+                taxAfterExemption: a.pitAfterExemption,
+            },
+            getTaxTable(result.incomeYear),
+        );
+        if (pension.taxShareLimit < pension.base + pension.additional)
+            return "joint_pension_tax_share_limit";
+    }
     return undefined;
 }
 

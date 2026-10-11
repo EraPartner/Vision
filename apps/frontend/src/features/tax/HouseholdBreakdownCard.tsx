@@ -44,6 +44,10 @@ interface BreakdownRow {
     tone: RowTone;
 }
 
+/** Part of a partner's applied reductions that is the reduction for pensions (charged first). */
+const pensionPart = (p: PartnerTaxResult): number =>
+    Math.min(p.pensionReduction, p.reductionsApplied);
+
 const sum = (result: HouseholdTaxResult, pick: (p: PartnerTaxResult) => number) =>
     result.partners.reduce((total, p) => total + pick(p), 0);
 
@@ -99,10 +103,20 @@ export function HouseholdBreakdownCard({
             value: (p) => p.pitAfterExemption,
             tone: "base",
         },
+        ...(result.partners.some((p) => p.pensionReduction > 0)
+            ? [
+                  {
+                      key: "pensionReduction",
+                      label: t("tax.householdBreakdown.row.pensionReduction"),
+                      value: (p: PartnerTaxResult) => pensionPart(p),
+                      tone: "reduction" as const,
+                  },
+              ]
+            : []),
         {
             key: "reductions",
             label: t("tax.householdBreakdown.row.reductions"),
-            value: (p) => p.reductionsApplied,
+            value: (p) => p.reductionsApplied - pensionPart(p),
             tone: "reduction",
         },
         {
