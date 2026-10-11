@@ -1185,9 +1185,11 @@ describe('CSSS joint table — used when filingStatus === "married_joint"', () =
 describe("computePropertyTaxEstimate", () => {
     const table = getTaxTable(2025);
 
-    test("cadastral indexation coefficient matches FOD Financiën — IY 2024 = 2.1763, IY 2025 = 2.2446", () => {
+    test("cadastral indexation coefficient follows the FPS notices — IY 2024 = 2.1763, IY 2025 = 2.2446, IY 2026 = 2.3000", () => {
+        // Art. 518 WIB 92; notices AY 2025 (point H), AY 2026 (point H), AY 2027 (point J).
         expect(getTaxTable(2024).cadastralIndexationCoefficient).toBe(2.1763);
         expect(getTaxTable(2025).cadastralIndexationCoefficient).toBe(2.2446);
+        expect(getTaxTable(2026).cadastralIndexationCoefficient).toBe(2.3);
     });
 
     test("Flanders precompte = indexed CI × 3.97% × (1 + opcentiemen/100) — IY 2025", () => {

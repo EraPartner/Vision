@@ -12,7 +12,7 @@
  * reform from AY 2027). PwC Worldwide Tax Summaries is used only as a secondary cross-check: its
  * IY 2025 dividend (859), savings (1,050) and life-insurance (2,530) figures ignore the freeze.
  * Rows marked "unverified" in the matrix (civil-servant rate, regional property tax, regional
- * own-home credits, cadastral coefficients) keep their previous values pending a source.
+ * own-home credits) keep their previous values pending a source.
  *
  * NOTE: regional tax differences (Flanders / Wallonia / Brussels) are simplified — own-home regional credits
  * (e.g. Flemish "geïntegreerde woonbonus", Brussels abattement) are not modeled here. Property tax is a
@@ -380,6 +380,7 @@ const TABLE_2024: BelgianTaxYearTable = {
         distributingFunds: { rate: 0.0012, cap: 1_300 },
     },
 
+    // Art. 518 coefficient for income year 2024 (FPS indexation notice AY 2025, point H).
     cadastralIndexationCoefficient: 2.1763,
     // Centimes additionnels (communal + provincial) — Belgium-wide median estimates
     // chosen so total tax (baseRate × (1 + centimes/100)) lands inside PwC's typical
@@ -538,6 +539,7 @@ const TABLE_2025: BelgianTaxYearTable = {
         distributingFunds: { rate: 0.0012, cap: 1_300 },
     },
 
+    // Art. 518 coefficient for income year 2025 (FPS indexation notice AY 2026, point H).
     cadastralIndexationCoefficient: 2.2446,
     regionPropertyTax: {
         flanders: { baseRate: 0.0397, centimes: 1100 },
@@ -588,6 +590,9 @@ const TABLE_2025: BelgianTaxYearTable = {
 const TABLE_2026: BelgianTaxYearTable = {
     ...TABLE_2025,
     year: 2026,
+    // Art. 518 coefficient for income year 2026 (FPS indexation notice AY 2027, point J):
+    // average 2025 index 135.30 / average 1988-1989 index 58.825 = 2.3000.
+    cadastralIndexationCoefficient: 2.3,
     // Art. 130 (FPS indexation notice AY 2027).
     brackets: [
         { from: 0, to: 16_720, rate: 0.25 },

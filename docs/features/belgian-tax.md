@@ -111,7 +111,7 @@ decided in [[docs/adr/199-belgian-tax-source-verification|ADR-199]]. The primary
 - The law of 18 December 2025 (indexation freeze, donations 30%, alimony 70/60/50%, domestic-help reduction abolished), the law of 15 July 2026 (PIT reform from AY 2027) and the law of 30 March 1994 (special social security contribution).
 - PwC _Worldwide Tax Summaries — Belgium — Individual_ remains a secondary cross-check only; its IY 2025 dividend, savings and life-insurance figures ignore the freeze and are not used.
 
-Rows the matrix marks `unverified` (civil-servant contribution rate, regional property tax and own-home credits, cadastral coefficients after 2024) keep their earlier values until their primary page is reached.
+Rows the matrix marks `unverified` (civil-servant contribution rate, regional property tax and own-home credits) keep their earlier values until their primary page is reached.
 
 `SUPPORTED_TAX_YEARS` (sorted numerically) lists the years with a complete table; `LATEST_TAX_YEAR` is the default.
 

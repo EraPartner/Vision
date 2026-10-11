@@ -53,7 +53,10 @@ fin.belgium.be explain the rules; the laws give the rule text.
 > [!note] IY 2026 (AY 2027)
 > N27 (3 Aug 2026) already applies the law of 15 July 2026. On 2026-10-11 the consumer pages F1,
 > F2 and F3 still showed pre-reform IY 2026 figures (basic exemption 11,180, one child 2,030,
-> quotient cap 13,800). The engine follows N27 because it post-dates the published law.
+> quotient cap 13,800). The engine follows N27, and N27 is reproducible from the law: L2 art. 2
+> sets the art. 131 base amount to 4,945 and N27 point A states the art. 178 §2 coefficient for
+> AY 2027 as 2.3356 (average 2025 index 135.30 / average 1988 index 57.93); 4,945 × 2.3356 =
+> 11,549.5, rounded to 11,550. N27 table I lists base and indexed amounts for every art. 131-134 figure used here.
 
 ## Legend
 
@@ -141,7 +144,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Reduced state tax 75.043% + Flemish regional surtax 33.257% with 2% Flemish reduction → combined factor 0.9950 | Special finance law, art. 5/1 ff. | 0.9951 | 0.9951 | 0.9951 | P1 sample (433.56 / 577.75; 141.30) | `regionalAutonomyFactor.flanders` | "regional autonomy factor 0.9951" | derived from P1 (0.99501); primary text not read |
 | Wallonia 0.9951, Brussels 0.9945 factors        | regional surtax rates           | as code | as code | as code | —      | `regionalAutonomyFactor`    | —                                | unverified |
 | Communal surcharge 0-9% on the tax, default 7%  | WIB 92 arts 465-469             | 7%      | 7%      | 7% (L2 art. 99 adds a correction factor from AY 2029) | P1, L2 | `communalSurchargePercent` | surcharge tests | verified (rule); the L2 correction factor is not modelled |
-| Cadastral income indexation coefficient         | WIB 92 art. 518                 | 2.1763  | 2.2446  | 2.2446 (copied) | F7 (IY 2024 only) | `cadastralIndexationCoefficient` | `propertyTax.test.ts` | IY 2024 verified; IY 2025 and IY 2026 unverified |
+| Cadastral income indexation coefficient         | WIB 92 art. 518                 | 2.1763  | 2.2446  | 2.3000  | N25 point H, N26 point H, N27 point J; F7 | `cadastralIndexationCoefficient` | `pit.test.ts` "cadastral indexation coefficient" | verified (IY 2026 corrected from the copied 2.2446) |
 | Property tax base rates and centimes            | regional codes                  | as code | as code | as code | —      | `regionPropertyTax`         | `propertyTax.test.ts`            | unverified (vlaanderen.be and wallonie.be not reachable) |
 | Flemish woonbonus / Walloon chèque habitat      | regional codes                  | as code | as code | as code | F6 (no advantage for loans from 1 Jan 2025) | `computeOwnHomeCredit` | own-home tests | unverified amounts; the 2025 cut-off is verified |
 
