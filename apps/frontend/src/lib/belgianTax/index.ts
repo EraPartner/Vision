@@ -85,10 +85,6 @@ export {
     projectHouseholdToProfileV1,
     applyProfileV1PatchToHousehold,
 } from "./householdMigration";
-export {
-    belgianTaxHouseholdV2Schema,
-    belgianTaxHouseholdSnapshotsV2Schema,
-    parseHouseholdV2,
-    parseHouseholdSnapshotsV2,
-} from "./householdSchema";
-export type { ParseResult } from "./householdSchema";
+// `householdSchema.ts` is imported by path, not re-exported here: its module-level zod
+// schemas are not tree-shakeable, so a barrel export would pull them into the boot
+// bundle of every eager importer of this library (see scripts/check-bundle-size.ts).
