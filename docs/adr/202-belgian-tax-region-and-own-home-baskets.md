@@ -46,9 +46,12 @@ listed in [[docs/reference/belgian-tax-rule-matrix|the rule matrix]] (LSF, W1, C
 1. **Region.** `resolveMortgageRegime` reads `region` only. In the household it is
    `household.region`; in the v1 profile it is `profile.region`. `mortgageRegion` is deprecated:
    the field stays in the v1 and v2 types and schemas, the v1 upgrade still copies it unchanged
-   (the upgrade stays deterministic and idempotent), and no stored value is rewritten. When a
-   stored `home.mortgageRegion` differs from the household region, the household engine raises
-   `mortgage_region_not_used` (info). The home step no longer shows the mortgage-region select.
+   (the upgrade stays deterministic and idempotent), and the upgrade rewrites no stored value.
+   When a stored `home.mortgageRegion` differs from the household region, the household engine
+   raises `mortgage_region_not_used` (info). The home step no longer shows the mortgage-region
+   select, and the next edit of a home field (in the home step, or a v1 patch with a home field
+   through `applyProfileV1PatchToHousehold`) drops the stored value, so the note clears after
+   one edit. A v1 patch never writes `mortgageRegion`.
 2. **Two borrowers.** The optional `home.mortgageSharePartnerB` (0-100) is partner B's share of
    the payments; in Wallonia, B's ownership share. Strictly between 0 and 100, with both partners
    assessed, each partner has an own-home basket (`householdOwnHome.ts`):

@@ -268,6 +268,26 @@ describe("TaxProfileDialog household editing", () => {
 
         const field = await screen.findByLabelText(/first year the chèque habitat/i);
         await user.type(field, "2019");
+    it("drops a stored mortgage region after one edit of the home step", async () => {
+        serveHousehold(
+            singleHousehold({
+                region: "wallonia",
+                mortgageRegion: "flanders",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2017,
+                mortgageInterestPaid: 3_000,
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog initialStep="home" />);
+        await openSheet(user);
+        await waitFor(() => expect(storedHousehold()?.home.mortgageRegion).toBe("flanders"));
+
+        await user.type(await screen.findByLabelText(/first year the chèque habitat/i), "2019");
+        expect(storedHousehold()?.home.firstQualifyingYear).toBe(2019);
+        expect(storedHousehold()?.home).not.toHaveProperty("mortgageRegion");
+    });
+
         expect(storedHousehold()?.home.firstQualifyingYear).toBe(2019);
         await user.clear(field);
         expect(storedHousehold()?.home).not.toHaveProperty("firstQualifyingYear");

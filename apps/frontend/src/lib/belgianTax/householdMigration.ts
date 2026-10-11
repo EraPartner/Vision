@@ -464,7 +464,9 @@ export function projectHouseholdToProfileV1(
 /**
  * Apply a v1 profile patch (as the v1 profile editor emits it) to a household, field by field.
  * Household-only data (relationship events, extra activities, partner B's own data, birth years)
- * is preserved. Unknown keys are ignored.
+ * is preserved. Unknown keys are ignored. The deprecated `mortgageRegion` (ADR-202) is never
+ * written, and a patch that edits a home field drops a stored one, so the household region is
+ * the only regime input after one edit of the home step.
  */
 export function applyProfileV1PatchToHousehold(
     household: BelgianTaxHouseholdV2,
@@ -485,6 +487,7 @@ export function applyProfileV1PatchToHousehold(
     };
 
     for (const [key, value] of entries) {
+        if (key === "mortgageRegion") continue;
         if ((HOUSEHOLD_KEYS as readonly string[]).includes(key)) set(next, key, value);
         else if ((PARTNER_A_KEYS as readonly string[]).includes(key)) set(partnerA, key, value);
         else if ((REDUCTION_KEYS as readonly string[]).includes(key))
@@ -496,6 +499,8 @@ export function applyProfileV1PatchToHousehold(
     for (const key of REQUIRED_REDUCTION_KEYS) {
         partnerA.reductions[key] = num(partnerA.reductions[key]);
     }
+    if (entries.some(([k]) => (HOME_KEYS as readonly string[]).includes(k)))
+        delete next.home.mortgageRegion;
 
     const touches = (keys: readonly string[]) => entries.some(([k]) => keys.includes(k));
     if (touches(PRIMARY_ACTIVITY_KEYS)) {

@@ -292,3 +292,10 @@ export function resolvePartnerId(
 ): PartnerId {
     return household.partners.some((p) => p.id === selected) ? selected : "A";
 }
+
+/** The household without the deprecated `home.mortgageRegion` (ADR-202). */
+export function withoutMortgageRegion(household: BelgianTaxHouseholdV2): BelgianTaxHouseholdV2 {
+    if (household.home.mortgageRegion === undefined) return household;
+    const { mortgageRegion: _dropped, ...home } = household.home;
+    return { ...household, home };
+}

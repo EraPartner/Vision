@@ -512,7 +512,9 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   activity uses its category any more. A one-partner household with one activity round-trips
   unchanged, and editing its amount gives the same household as the v1 gross-income patch.
 - **Home** step: the v1 home fields except the mortgage region (ADR-202: the household region
-  decides the regime; the stored field is kept), plus `home.firstQualifyingYear` for a Walloon loan and
+  decides the regime; saving the step drops a stored `home.mortgageRegion`, and a v1-shaped edit
+  through the projection drops `mortgageRegion` too, so `mortgage_region_not_used` clears after
+  one edit), plus `home.firstQualifyingYear` for a Walloon loan and
   `home.woonbonusChildrenAtLoanStart` for a Flemish loan signed before 2020.
 - **Deductions** step: dependants for the household and, per partner, the reductions of the v1
   sheet plus `serviceVoucherSpend` and the isolated-parent request.
