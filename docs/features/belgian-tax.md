@@ -395,7 +395,10 @@ to partner A and activity `act_A_1`; a `married_joint` profile adds partner B wi
 `net_professional_amount` activity `act_B_1` and is assumed joint until relationship dates are
 entered. Spouse fields on a single profile and unknown keys are kept under
 `migratedFrom.unmappedFields`. `projectHouseholdToProfileV1` and
-`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. Frozen
+`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. The projection
+reports `isSpouseDisabled: false` when there is no partner B (the household engine grants no
+spouse supplement then, and no step could clear the flag); removing partner B also drops a
+migrated `isSpouseDisabled` entry. Frozen
 snapshot meta may carry `frozenHouseholdResult`.
 
 **Load (phase B2).** `BelgianTaxProfileProvider` loads `lib/belgianTax/householdRuntime.ts` with a

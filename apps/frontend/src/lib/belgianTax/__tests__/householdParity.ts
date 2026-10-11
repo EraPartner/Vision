@@ -8,7 +8,9 @@
  *  1. married_joint with other income or alimony: v1 applies the marital quotient to the whole
  *     taxable income; arts 87-88 use professional income only.
  *  2. isSpouseDisabled: v1 adds the spouse's disability supplement to the taxpayer's exemption;
- *     v2 gives it to partner B (art. 131 al. 3).
+ *     v2 gives it to partner B (art. 131 al. 3). On a single profile there is no partner B, so
+ *     v2 grants nothing and `projectHouseholdToProfileV1` reports `isSpouseDisabled: false`
+ *     (the v1 flag stays only as an unmapped field); the projection then matches v2, not v1.
  *  3. married_joint with an isolated-parent flag: v1 grants the supplement under a joint
  *     assessment; art. 133 al. 1, 1° requires a taxpayer "die alleen wordt belast".
  *  4. Union dues with the actual method outside employee / civil-servant pay: v2 counts them only

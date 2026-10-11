@@ -84,6 +84,19 @@ describe("householdEditing", () => {
         valid(removed);
     });
 
+    test("removing partner B drops a migrated spouse-disability field", () => {
+        const migrated = upgradeProfileV1ToHousehold({
+            ...DEFAULT_BELGIAN_TAX_PROFILE,
+            filingStatus: "single",
+            isSpouseDisabled: true,
+        });
+        const removed = removePartnerB(addPartnerB(migrated));
+        expect(removed.migratedFrom?.unmappedFields.map((f) => f.field)).not.toContain(
+            "isSpouseDisabled",
+        );
+        valid(removed);
+    });
+
     test("a recorded event replaces the legacy joint assumption; death events name a partner", () => {
         const legacy = upgradeProfileV1ToHousehold({
             ...DEFAULT_BELGIAN_TAX_PROFILE,

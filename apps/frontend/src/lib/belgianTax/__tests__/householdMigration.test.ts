@@ -7,6 +7,9 @@ import {
 } from "../householdMigration";
 import { parseHouseholdSnapshotsV2, parseHouseholdV2 } from "../householdSchema";
 import type { BelgianTaxProfile } from "../types";
+import { computeHouseholdTax, toBelgianTaxCalculation } from "../household";
+import { computeBelgianPIT } from "../pit";
+import { firstDifference } from "./householdParity";
 import { makeTaxProfile } from "./testProfile";
 
 const employee = makeTaxProfile({ filingStatus: "single", dependentChildren: 2, unionDues: 120 });
@@ -130,6 +133,21 @@ describe("projectHouseholdToProfileV1", () => {
         ],
     ])("round-trips a %s profile", (_label, profile) => {
         expect(projectHouseholdToProfileV1(upgradeProfileV1ToHousehold(profile))).toEqual(profile);
+    });
+
+    test("a single profile's spouse disability is not projected without partner B", () => {
+        const profile = makeTaxProfile({ filingStatus: "single", isSpouseDisabled: true });
+        const h = upgradeProfileV1ToHousehold(profile);
+        expect(h.migratedFrom?.unmappedFields.map((f) => f.field)).toContain("isSpouseDisabled");
+        const projected = projectHouseholdToProfileV1(h);
+        expect(projected.isSpouseDisabled).toBe(false);
+        // The projection agrees with the household engine, which has no partner B to disable.
+        expect(
+            firstDifference(
+                computeBelgianPIT(projected),
+                toBelgianTaxCalculation(computeHouseholdTax(h), h),
+            ),
+        ).toBeUndefined();
     });
 });
 

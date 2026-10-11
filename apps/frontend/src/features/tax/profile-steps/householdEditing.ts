@@ -169,7 +169,8 @@ export function addPartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHouseho
 
 /**
  * Remove partner B. Events naming B, B as dependants or own-home claimant, the death-year
- * election and the legacy joint assumption go with it; the couple's other events are kept so
+ * election, the legacy joint assumption and a migrated v1 spouse-disability flag go with it; the
+ * couple's other events are kept so
  * that adding the partner back restores them.
  */
 export function removePartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHouseholdV2 {
@@ -183,7 +184,7 @@ export function removePartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHous
     if (dependents.claimantPartnerId === "B") dependents.claimantPartnerId = "A";
     const home = { ...household.home };
     if (home.mortgageCreditPartnerId === "B") home.mortgageCreditPartnerId = "A";
-    return {
+    const next: BelgianTaxHouseholdV2 = {
         ...household,
         partners: household.partners.filter((p) => p.id !== "B"),
         relationship: {
@@ -193,6 +194,15 @@ export function removePartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHous
         dependents,
         home,
     };
+    if (household.migratedFrom) {
+        next.migratedFrom = {
+            ...household.migratedFrom,
+            unmappedFields: household.migratedFrom.unmappedFields.filter(
+                (f) => f.field !== "isSpouseDisabled",
+            ),
+        };
+    }
+    return next;
 }
 
 export function nextEventId(household: BelgianTaxHouseholdV2): string {
