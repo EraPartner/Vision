@@ -212,6 +212,28 @@ function computeYearResults(state: YearState, year: number): YearResults {
     };
 }
 
+/**
+ * Calculation of `year`'s household with a v1 patch applied (e.g. a chart bar's gross income on
+ * partner A's primary activity), through the loaded engine; `undefined` before hydration.
+ */
+export function calculateBelgianTaxHouseholdWithPatch(
+    state: Pick<BelgianTaxSlice, "household" | "householdSnapshots">,
+    year: number,
+    patch: Partial<BelgianTaxProfile>,
+): BelgianTaxCalculation | undefined {
+    const runtime = householdRuntime;
+    const household = resolveBelgianTaxHousehold(state, year);
+    if (!runtime || !household) return undefined;
+    const next: BelgianTaxHouseholdV2 = {
+        ...runtime.applyProfileV1PatchToHousehold(household, patch),
+        taxYear: year,
+    };
+    return runtime.toBelgianTaxCalculation(
+        runtime.computeHouseholdTax(next),
+        next,
+    );
+}
+
 export function resolveBelgianTaxCalculation(
     state: YearState & Pick<BelgianTaxSlice, "snapshotMetas">,
     year: number,
