@@ -45,6 +45,8 @@ export function useTaxOverviewData() {
     const {
         profile: liveProfile,
         snapshots,
+        household,
+        householdSnapshots,
         snapshotMetas,
         isLoading: isProfileLoading,
         viewedYear,
@@ -52,6 +54,8 @@ export function useTaxOverviewData() {
     } = useBelgianTaxProfile((state) => ({
         profile: state.profile,
         snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
         snapshotMetas: state.snapshotMetas,
         isLoading: state.isLoading,
         viewedYear: state.viewedYear,
@@ -72,10 +76,23 @@ export function useTaxOverviewData() {
     const calculation = useMemo(
         () =>
             resolveBelgianTaxCalculation(
-                { profile: liveProfile, snapshots, snapshotMetas },
+                {
+                    profile: liveProfile,
+                    snapshots,
+                    household,
+                    householdSnapshots,
+                    snapshotMetas,
+                },
                 viewedYear,
             ),
-        [liveProfile, snapshots, snapshotMetas, viewedYear],
+        [
+            liveProfile,
+            snapshots,
+            household,
+            householdSnapshots,
+            snapshotMetas,
+            viewedYear,
+        ],
     );
     const stats = useStatistics();
     const { allSummaries: summaries } = usePortfolio();

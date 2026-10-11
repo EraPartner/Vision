@@ -1,16 +1,26 @@
 import type { StateCreator } from "zustand";
 import type { SettingsStore } from "@/stores/settingsStore";
-import {
-    computeBelgianPIT,
-    LATEST_TAX_YEAR,
-    type BelgianTaxCalculation,
-    type BelgianTaxProfile,
-    type BelgianTaxProfileSnapshotMeta,
-    type BelgianTaxProfileSnapshotMetas,
-    type BelgianTaxProfileSnapshots,
-    type SnapshotAuditEntry,
-    type SnapshotAuditEntryKind,
+// Value imports by path, not through the `@/lib/belgianTax` barrel: the barrel also re-exports
+// the household engine, and a boot-path import of it pulls that engine into the boot chunk
+// once the lazily loaded householdRuntime uses it (see scripts/check-bundle-size.ts).
+import { computeBelgianPIT } from "@/lib/belgianTax/pit";
+import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
+import type {
+    BelgianTaxCalculation,
+    BelgianTaxHouseholdSnapshotsV2,
+    BelgianTaxHouseholdV2,
+    BelgianTaxProfile,
+    HouseholdTaxResult,
+    BelgianTaxProfileSnapshotMeta,
+    BelgianTaxProfileSnapshotMetas,
+    BelgianTaxProfileSnapshots,
+    SnapshotAuditEntry,
+    SnapshotAuditEntryKind,
 } from "@/lib/belgianTax";
+// Type-only: the provider loads the household engine lazily and passes it to `_hydrate`.
+import type * as HouseholdRuntimeModule from "@/lib/belgianTax/householdRuntime";
+
+export type HouseholdRuntime = typeof HouseholdRuntimeModule;
 
 const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
@@ -79,6 +89,13 @@ export function hasMeaningfulBelgianTaxData(
     );
 }
 
+/**
+ * Household engine handed over by `_hydrate`. Until the provider has loaded it, the year
+ * resolvers fall back to `computeBelgianPIT` on the v1 projection (the defaults are a
+ * one-partner household, for which both engines agree) and the editing actions are no-ops.
+ */
+let householdRuntime: HouseholdRuntime | undefined;
+
 function appendHistoryEntry(
     metas: BelgianTaxProfileSnapshotMetas,
     year: number,
@@ -100,8 +117,17 @@ function appendHistoryEntry(
 }
 
 export interface BelgianTaxSlice {
+    /** Source of truth (ADR-200): the live household; `null` until hydrated. */
+    household: BelgianTaxHouseholdV2 | null;
+    /** Source of truth: year snapshots of the household. */
+    householdSnapshots: BelgianTaxHouseholdSnapshotsV2;
+    /** Raw engine result of the live household (per partner, quotient, CSSS, issues). */
+    householdResult: HouseholdTaxResult | null;
+    /** v1 projection of `household` for v1-shaped editors and consumers. */
     profile: BelgianTaxProfile;
+    /** v1-shaped calculation of the live household. */
     calculation: BelgianTaxCalculation;
+    /** v1 projection of `householdSnapshots`. */
     snapshots: BelgianTaxProfileSnapshots;
     snapshotMetas: BelgianTaxProfileSnapshotMetas;
     viewedYear: number;
@@ -126,13 +152,19 @@ export interface BelgianTaxSlice {
     markYearAsFiled: (year: number, reference?: string) => void;
     unmarkYearAsFiled: (year: number) => void;
     _hydrate: (
-        profile: BelgianTaxProfile,
-        snapshots: BelgianTaxProfileSnapshots,
+        runtime: HouseholdRuntime,
+        household: BelgianTaxHouseholdV2,
+        householdSnapshots: BelgianTaxHouseholdSnapshotsV2,
         metas: BelgianTaxProfileSnapshotMetas,
     ) => void;
     _beginHydration: () => void;
     _markSaveError: () => void;
 }
+
+type YearState = Pick<
+    BelgianTaxSlice,
+    "profile" | "snapshots" | "household" | "householdSnapshots"
+>;
 
 export function resolveBelgianTaxProfile(
     state: Pick<BelgianTaxSlice, "profile" | "snapshots">,
@@ -142,13 +174,51 @@ export function resolveBelgianTaxProfile(
     return state.snapshots[year] ?? { ...state.profile, taxYear: year };
 }
 
+/** Household for `year`: the live one, its snapshot, or the live one moved to that year. */
+export function resolveBelgianTaxHousehold(
+    state: Pick<BelgianTaxSlice, "household" | "householdSnapshots">,
+    year: number,
+): BelgianTaxHouseholdV2 | null {
+    const live = state.household;
+    if (!live) return null;
+    if (year === live.taxYear) return live;
+    return state.householdSnapshots[year] ?? { ...live, taxYear: year };
+}
+
+type YearResults = Pick<
+    BelgianTaxProfileSnapshotMeta,
+    "frozenHouseholdResult"
+> & {
+    frozenCalculation: BelgianTaxCalculation;
+};
+
+function computeYearResults(state: YearState, year: number): YearResults {
+    const runtime = householdRuntime;
+    const household = resolveBelgianTaxHousehold(state, year);
+    if (runtime && household) {
+        const result = runtime.computeHouseholdTax(household);
+        return {
+            frozenCalculation: runtime.toBelgianTaxCalculation(
+                result,
+                household,
+            ),
+            frozenHouseholdResult: result,
+        };
+    }
+    return {
+        frozenCalculation: computeBelgianPIT(
+            resolveBelgianTaxProfile(state, year),
+        ),
+    };
+}
+
 export function resolveBelgianTaxCalculation(
-    state: Pick<BelgianTaxSlice, "profile" | "snapshots" | "snapshotMetas">,
+    state: YearState & Pick<BelgianTaxSlice, "snapshotMetas">,
     year: number,
 ): BelgianTaxCalculation {
     return (
         state.snapshotMetas[year]?.frozenCalculation ??
-        computeBelgianPIT(resolveBelgianTaxProfile(state, year))
+        computeYearResults(state, year).frozenCalculation
     );
 }
 
@@ -158,6 +228,9 @@ export const createBelgianTaxSlice: StateCreator<
     [],
     BelgianTaxSlice
 > = (set, get) => ({
+    household: null,
+    householdSnapshots: {},
+    householdResult: null,
     profile: DEFAULT_BELGIAN_TAX_PROFILE,
     calculation: computeBelgianPIT(DEFAULT_BELGIAN_TAX_PROFILE),
     snapshots: {},
@@ -169,24 +242,35 @@ export const createBelgianTaxSlice: StateCreator<
 
     updateProfile: (updates) =>
         set((state) => {
-            const nextProfile = { ...state.profile, ...updates };
+            const runtime = householdRuntime;
+            const current = state.household;
+            if (!runtime || !current) return state;
+            const next = runtime.applyProfileV1PatchToHousehold(
+                current,
+                updates,
+            );
+            const live = runtime.liveHouseholdState(
+                next,
+                DEFAULT_BELGIAN_TAX_PROFILE,
+            );
+            const isViewingHistorical = state.viewedYear !== next.taxYear;
             const shouldArchive =
-                nextProfile.taxYear > state.profile.taxYear &&
-                !state.snapshots[state.profile.taxYear];
-            if (!shouldArchive) {
-                return {
-                    profile: nextProfile,
-                    calculation: computeBelgianPIT(nextProfile),
-                    isViewingHistorical:
-                        state.viewedYear !== nextProfile.taxYear,
-                };
-            }
-            const year = state.profile.taxYear;
+                next.taxYear > current.taxYear &&
+                !state.householdSnapshots[current.taxYear];
+            if (!shouldArchive) return { ...live, isViewingHistorical };
+            const year = current.taxYear;
+            const householdSnapshots = {
+                ...state.householdSnapshots,
+                [year]: current,
+            };
             return {
-                profile: nextProfile,
-                calculation: computeBelgianPIT(nextProfile),
-                isViewingHistorical: state.viewedYear !== nextProfile.taxYear,
-                snapshots: { ...state.snapshots, [year]: { ...state.profile } },
+                ...live,
+                isViewingHistorical,
+                householdSnapshots,
+                snapshots: runtime.projectSnapshotsToV1(
+                    householdSnapshots,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
                 snapshotMetas: appendHistoryEntry(
                     state.snapshotMetas,
                     year,
@@ -195,32 +279,48 @@ export const createBelgianTaxSlice: StateCreator<
             };
         }),
     resetProfile: () =>
-        set((state) => ({
-            profile: DEFAULT_BELGIAN_TAX_PROFILE,
-            calculation: computeBelgianPIT(DEFAULT_BELGIAN_TAX_PROFILE),
-            isViewingHistorical:
-                state.viewedYear !== DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
-        })),
+        set((state) => {
+            const runtime = householdRuntime;
+            if (!runtime) return state;
+            const household = runtime.defaultHousehold(
+                DEFAULT_BELGIAN_TAX_PROFILE,
+            );
+            return {
+                ...runtime.liveHouseholdState(
+                    household,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
+                isViewingHistorical: state.viewedYear !== household.taxYear,
+            };
+        }),
     setViewedYear: (viewedYear) =>
         set((state) => ({
             viewedYear,
             isViewingHistorical: viewedYear !== state.profile.taxYear,
         })),
     snapshotExistsForYear: (year) =>
-        Object.prototype.hasOwnProperty.call(get().snapshots, year),
+        Object.prototype.hasOwnProperty.call(get().householdSnapshots, year),
     profileForYear: (year) => resolveBelgianTaxProfile(get(), year),
     calculationForYear: (year) =>
-        computeBelgianPIT(resolveBelgianTaxProfile(get(), year)),
+        computeYearResults(get(), year).frozenCalculation,
     displayCalculationForYear: (year) =>
         resolveBelgianTaxCalculation(get(), year),
     createSnapshotFromLive: (year) =>
         set((state) => {
-            if (state.snapshots[year]) return state;
+            const runtime = householdRuntime;
+            const live = state.household;
+            if (!runtime || !live || state.householdSnapshots[year])
+                return state;
+            const householdSnapshots = {
+                ...state.householdSnapshots,
+                [year]: { ...structuredClone(live), taxYear: year },
+            };
             return {
-                snapshots: {
-                    ...state.snapshots,
-                    [year]: { ...state.profile, taxYear: year },
-                },
+                householdSnapshots,
+                snapshots: runtime.projectSnapshotsToV1(
+                    householdSnapshots,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
                 snapshotMetas: appendHistoryEntry(
                     state.snapshotMetas,
                     year,
@@ -230,22 +330,34 @@ export const createBelgianTaxSlice: StateCreator<
         }),
     updateSnapshot: (year, updates) =>
         set((state) => {
-            const existing = state.snapshots[year];
-            if (!existing) return state;
+            const runtime = householdRuntime;
+            const existing = state.householdSnapshots[year];
+            if (!runtime || !existing) return state;
             const { taxYear: _ignored, ...changes } = updates;
-            void _ignored;
+            const next: BelgianTaxHouseholdV2 = {
+                ...runtime.applyProfileV1PatchToHousehold(existing, changes),
+                taxYear: year,
+            };
+            const householdChanges = runtime.diffHousehold(existing, next);
+            const householdSnapshots = {
+                ...state.householdSnapshots,
+                [year]: next,
+            };
             return {
-                snapshots: {
-                    ...state.snapshots,
-                    [year]: { ...existing, ...updates, taxYear: year },
-                },
+                householdSnapshots,
+                snapshots: runtime.projectSnapshotsToV1(
+                    householdSnapshots,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
                 snapshotMetas:
                     Object.keys(changes).length > 0
                         ? appendHistoryEntry(
                               state.snapshotMetas,
                               year,
                               "patched",
-                              { changes },
+                              Object.keys(householdChanges).length > 0
+                                  ? { changes, householdChanges }
+                                  : { changes },
                           )
                         : state.snapshotMetas,
             };
@@ -256,27 +368,32 @@ export const createBelgianTaxSlice: StateCreator<
         get().snapshotMetas[year]?.frozenCalculation ?? null,
     getSnapshotHistory: (year) => get().snapshotMetas[year]?.history ?? [],
     freezeCalculation: (year) =>
-        set((state) => ({
-            snapshotMetas: appendHistoryEntry(
-                {
-                    ...state.snapshotMetas,
-                    [year]: {
-                        ...(state.snapshotMetas[year] ?? {}),
-                        frozenCalculation: computeBelgianPIT(
-                            resolveBelgianTaxProfile(state, year),
-                        ),
+        set((state) => {
+            const { frozenHouseholdResult: _stale, ...existing } =
+                state.snapshotMetas[year] ?? {};
+            return {
+                snapshotMetas: appendHistoryEntry(
+                    {
+                        ...state.snapshotMetas,
+                        [year]: {
+                            ...existing,
+                            ...computeYearResults(state, year),
+                        },
                     },
-                },
-                year,
-                "frozen",
-            ),
-        })),
+                    year,
+                    "frozen",
+                ),
+            };
+        }),
     unfreezeCalculation: (year) =>
         set((state) => {
             const existing = state.snapshotMetas[year];
             if (!existing?.frozenCalculation) return state;
-            const { frozenCalculation: _ignored, ...rest } = existing;
-            void _ignored;
+            const {
+                frozenCalculation: _calculation,
+                frozenHouseholdResult: _result,
+                ...rest
+            } = existing;
             return {
                 snapshotMetas: appendHistoryEntry(
                     { ...state.snapshotMetas, [year]: rest },
@@ -299,11 +416,9 @@ export const createBelgianTaxSlice: StateCreator<
                         [year]: {
                             ...(existing ?? {}),
                             filing,
-                            frozenCalculation:
-                                existing?.frozenCalculation ??
-                                computeBelgianPIT(
-                                    resolveBelgianTaxProfile(state, year),
-                                ),
+                            ...(existing?.frozenCalculation
+                                ? {}
+                                : computeYearResults(state, year)),
                         },
                     },
                     year,
@@ -317,7 +432,6 @@ export const createBelgianTaxSlice: StateCreator<
             const existing = state.snapshotMetas[year];
             if (!existing?.filing) return state;
             const { filing: _ignored, ...rest } = existing;
-            void _ignored;
             return {
                 snapshotMetas: appendHistoryEntry(
                     { ...state.snapshotMetas, [year]: rest },
@@ -326,18 +440,29 @@ export const createBelgianTaxSlice: StateCreator<
                 ),
             };
         }),
-    _hydrate: (profile, snapshots, snapshotMetas) =>
+    _hydrate: (runtime, household, householdSnapshots, snapshotMetas) => {
+        householdRuntime = runtime;
         set({
-            profile,
-            calculation: computeBelgianPIT(profile),
-            snapshots,
+            ...runtime.liveHouseholdState(
+                household,
+                DEFAULT_BELGIAN_TAX_PROFILE,
+            ),
+            householdSnapshots,
+            snapshots: runtime.projectSnapshotsToV1(
+                householdSnapshots,
+                DEFAULT_BELGIAN_TAX_PROFILE,
+            ),
             snapshotMetas,
-            viewedYear: profile.taxYear,
+            viewedYear: household.taxYear,
             isViewingHistorical: false,
             isLoading: false,
-        }),
+        });
+    },
     _beginHydration: () =>
         set({
+            household: null,
+            householdSnapshots: {},
+            householdResult: null,
             profile: DEFAULT_BELGIAN_TAX_PROFILE,
             calculation: computeBelgianPIT(DEFAULT_BELGIAN_TAX_PROFILE),
             snapshots: {},

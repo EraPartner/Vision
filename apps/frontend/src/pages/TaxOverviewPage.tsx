@@ -4,6 +4,8 @@ import { PAGE_ICONS } from "@/lib/pageIcons";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useTaxOverviewData } from "@/hooks/useTaxOverviewData";
 import { useTaxYearParam } from "@/hooks/useTaxYearParam";
+import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
+import type { HouseholdTaxIssue } from "@/lib/belgianTax";
 import { TaxFilingMasthead } from "@/features/tax/TaxFilingMasthead";
 import { MultiYearTrendStrip } from "@/features/tax/MultiYearTrendStrip";
 import { YearComparisonCard } from "@/features/tax/YearComparisonCard";
@@ -75,6 +77,8 @@ function getBudgetTaxWidgets(t: (key: string) => string): WidgetDefinition[] {
     ];
 }
 
+const NO_HOUSEHOLD_ISSUES: readonly HouseholdTaxIssue[] = [];
+
 export default function TaxOverviewPage() {
     const { t } = useLanguage();
     // Keeps the viewed income year in `?year=` so reload/share preserves it.
@@ -96,6 +100,20 @@ export default function TaxOverviewPage() {
         hasProfile,
         isEmpty,
     } = useTaxOverviewData();
+    // Household engine notes for the live year (ADR-200); one line per issue code.
+    const householdIssues = useBelgianTaxProfile((state) =>
+        state.isViewingHistorical
+            ? NO_HOUSEHOLD_ISSUES
+            : (state.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES),
+    );
+    const householdNotes = [
+        ...new Map(
+            householdIssues.map((issue) => [issue.code, issue]),
+        ).values(),
+    ].map(
+        (issue) =>
+            `${t(`tax.household.issue.severity.${issue.severity}`)}: ${t(`tax.household.issue.${issue.code}`)}`,
+    );
     const WIDGETS = getBudgetTaxWidgets(t);
     const {
         isVisible,
@@ -207,6 +225,7 @@ export default function TaxOverviewPage() {
                 <TaxDisclaimerBanner
                     title={t("tax.belgianRulesDesc")}
                     description={`${t("tax.disclaimerTitle")}: ${t("tax.disclaimerText")}`}
+                    notes={householdNotes}
                 />
 
                 {isProfileLoading ? (

@@ -1357,6 +1357,99 @@ const taxProfile = {
 S(
   `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_profile', '${JSON.stringify(taxProfile).replace(/'/g, "''")}'::jsonb);`,
 );
+// Household v2 (ADR-200), the frontend's source of truth: partner A carries the
+// figures above; partner B has an employee job of 22,000 gross (the v1 row's
+// spouseProfessionalIncome, which the v1 projection of this household reproduces).
+// The marriage predates the income year, so the year is assessed jointly.
+const taxHousehold = {
+  version: 2,
+  taxYear: taxProfile.taxYear,
+  profileConfigured: true,
+  region: taxProfile.region,
+  communalSurchargePercent: taxProfile.communalSurchargePercent,
+  partners: [
+    {
+      id: "A",
+      isDisabled: false,
+      isIsolatedParent: false,
+      activities: [
+        {
+          id: "act_A_1",
+          kind: "employee",
+          grossIncome: taxProfile.grossAnnualIncome,
+        },
+      ],
+      professionalExpenses: {
+        remuneration: { method: "lump_sum", actualAmount: 0 },
+      },
+      unionDues: taxProfile.unionDues,
+      otherTaxableIncome: 0,
+      alimonyPaid: 0,
+      reductions: {
+        personalPensionContributions: taxProfile.personalPensionContributions,
+        pensionScheme: taxProfile.pensionScheme,
+        pensionEligible: taxProfile.pensionEligible,
+        lifeInsurancePremiums: 0,
+        employeeGroupInsuranceContributions: 0,
+        charitableDonations: taxProfile.charitableDonations,
+        charitableDonationsEligible: taxProfile.charitableDonationsEligible,
+        childcareCosts: 0,
+        medicalExpenses: 0,
+      },
+      annualDividendIncome: taxProfile.annualDividendIncome,
+      annualSavingsInterest: taxProfile.annualSavingsInterest,
+    },
+    {
+      id: "B",
+      isDisabled: false,
+      activities: [
+        {
+          id: "act_B_1",
+          kind: "employee",
+          grossIncome: taxProfile.spouseProfessionalIncome,
+        },
+      ],
+      professionalExpenses: {},
+      unionDues: 0,
+      otherTaxableIncome: 0,
+      alimonyPaid: 0,
+      reductions: {
+        personalPensionContributions: 0,
+        lifeInsurancePremiums: 0,
+        charitableDonations: 0,
+        childcareCosts: 0,
+        medicalExpenses: 0,
+      },
+    },
+  ],
+  relationship: {
+    events: [
+      {
+        id: "evt_marriage",
+        kind: "marriage",
+        date: `${taxProfile.taxYear - 11}-06-21`,
+      },
+    ],
+  },
+  dependents: {
+    children: taxProfile.dependentChildren,
+    childrenUnder3: taxProfile.dependentChildrenUnder3,
+    otherPersons: taxProfile.dependentOtherPersons,
+    claimantPartnerId: "A",
+  },
+  home: {
+    cadastralIncome: taxProfile.cadastralIncome,
+    mortgageInterestPaid: taxProfile.mortgageInterestPaid,
+    mortgageCapitalRepaid: taxProfile.mortgageCapitalRepaid,
+    mortgageStartYear: taxProfile.mortgageStartYear,
+    mortgageRegion: taxProfile.mortgageRegion,
+    mortgageIsPrimaryResidence: taxProfile.mortgageIsPrimaryResidence,
+  },
+  taxIncomeCategoryIds: taxProfile.taxIncomeCategoryIds,
+};
+S(
+  `INSERT INTO user_settings (key,value) VALUES ('belgian_tax_household_v2', '${JSON.stringify(taxHousehold).replace(/'/g, "''")}'::jsonb);`,
+);
 S(
   "INSERT INTO user_settings (key,value) VALUES ('onboarding_complete', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;",
 );

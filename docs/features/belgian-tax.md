@@ -14,6 +14,8 @@ related_code:
   - apps/frontend/src/features/tax/DeductionCandidatesCard.tsx
   - apps/frontend/src/features/tax/TaxYearStatusIcon.tsx
   - apps/frontend/src/contexts/BelgianTaxProfileContext.tsx
+  - apps/frontend/src/stores/belgianTaxStore.ts
+  - apps/frontend/src/lib/belgianTax/householdRuntime.ts
   - apps/frontend/src/lib/belgianTax/pit.ts
   - apps/frontend/src/lib/belgianTax/constants.ts
   - apps/frontend/src/lib/belgianTax/socialSecurity.ts
@@ -74,6 +76,7 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | `household.ts`        | `computeHouseholdTax`, `toBelgianTaxCalculation`                            |
 | `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                |
 | `householdSchema.ts`  | zod schemas for the v2 setting values                                       |
+| `householdRuntime.ts` | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff |
 | `index.ts`            | Explicit supported public re-exports; year-table internals stay private     |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
@@ -103,10 +106,13 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 
 **Tests:** `apps/frontend/src/lib/belgianTax/__tests__/portfolioTax.test.ts` — 13 golden-output cases locking all estimators to 8 decimal places. Integrated into the frontend Vitest suite (94 tax-unit + 88 portfolio-integration tests pass; see [[docs/testing/test-inventory|Test Inventory]]).
 
-The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns profile, snapshot,
-audit, viewed-year, and calculation state. The compatibility provider in
+The Belgian-tax slice in [[apps/frontend/src/stores/belgianTaxStore]] owns household, snapshot,
+audit, viewed-year, and calculation state; `profile` and `snapshots` are v1 projections of the
+household (see [Household taxation](#household-taxation)). The compatibility provider in
 [[apps/frontend/src/contexts/BelgianTaxProfileContext]] only hydrates and persists that slice.
 Consumers use narrow selectors, and pure tax symbols come directly from `lib/belgianTax`.
+Boot-path modules import the library by file path, not through the barrel, so the household
+engine stays in the lazily loaded `householdRuntime.ts` chunk.
 
 ## Sources of truth
 
@@ -320,9 +326,10 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 
 ## Household taxation
 
-> [!info] Phase B1 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
-> The library, the settings schemas and this documentation are in place. The store, context, UI
-> and Demo seed still use `computeBelgianPIT` until phase B2.
+> [!info] Phase B2 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
+> The store computes the live tax from the household. Editors still use the v1 profile shape
+> through the compatibility helpers; household screens and the partner-to-account-owner link
+> follow in phase C.
 
 A household (`BelgianTaxHouseholdV2`) has one or two partners. Each partner has income
 activities (employee, civil servant, director, self-employed profits or fees, helping spouse,
@@ -388,6 +395,39 @@ entered. Spouse fields on a single profile and unknown keys are kept under
 `applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. Frozen
 snapshot meta may carry `frozenHouseholdResult`.
 
+**Load (phase B2).** `BelgianTaxProfileProvider` loads `lib/belgianTax/householdRuntime.ts` with a
+dynamic import, so the engine and its zod schemas stay out of the boot bundle, and resolves the
+stored values with `loadHouseholdSettings`:
+
+- A v2 value that passes `parseHouseholdV2` / `parseHouseholdSnapshotsV2` is used as stored and
+  never rewritten on load.
+- An absent v2 key is upgraded from the matching v1 key (or built from the v1 defaults when the
+  v1 key is absent too). When the v1 key exists, the upgraded v2 value is written immediately.
+- An invalid v2 value logs a console warning and falls back to the v1 upgrade or the defaults;
+  it is not overwritten until the user edits.
+
+The v1 keys are kept but no longer written: no backend code reads `belgian_tax_profile` or
+`belgian_tax_profile_snapshots_v1` (reports receive the projected profile in the request body).
+
+**Store.** `household` and `householdSnapshots` are the source of truth; `householdResult` holds
+the raw `HouseholdTaxResult` (per partner, quotient, CSSS, issues). `calculation` is
+`toBelgianTaxCalculation(computeHouseholdTax(household), household)`, and `calculationForYear`,
+`displayCalculationForYear` and `resolveBelgianTaxCalculation` compute through the household of
+that year. `profile`, `snapshots` and `profileForYear` are `projectHouseholdToProfileV1`
+projections (filled with the v1 defaults), and `updateProfile` / `updateSnapshot` apply their v1
+patches with `applyProfileV1PatchToHousehold`. A one-partner household gives the same calculation
+as `computeBelgianPIT` on its projection. Freezing and filing store `frozenHouseholdResult` next
+to `frozenCalculation`; unfreezing clears both. A `'patched'` audit entry records the v1
+`changes` and the top-level `householdChanges`.
+
+**Issues.** Each `HouseholdTaxIssueCode` and severity has an EN/NL string under
+`tax.household.issue.*`. The tax overview lists the live year's issues, one line per code, in its
+disclaimer banner.
+
+**Demo.** The native Demo seeds `belgian_tax_household_v2` (partner A with the v1 figures, partner
+B with an employee job of 22,000 gross, a marriage before the income year) next to the v1 row,
+whose figures equal the household's v1 projection.
+
 ## Limitations / not modeled
 
 - Brussels stamp-duty rebate (one-time, not annual).
@@ -408,17 +448,17 @@ The Belgian Tax Overview and Portfolio Tax pages share a year switcher that lets
 
 ### Storage
 
-- `belgian_tax_profile` — live, active profile (always represents the user's current income year).
-- `belgian_tax_profile_snapshots_v1` — JSONB `Record<incomeYear, BelgianTaxProfile>` of frozen snapshots. Created automatically when the live profile's `taxYear` advances; can also be seeded retroactively for years that show up in the year list only because of transaction data.
+- `belgian_tax_household_v2` — live, active household (always represents the user's current income year). Until phase B2 this was `belgian_tax_profile`, which is now only read once for the upgrade (see [Storage and upgrade](#storage-and-upgrade)).
+- `belgian_tax_household_snapshots_v2` — JSONB `Record<incomeYear, BelgianTaxHouseholdV2>` of frozen snapshots (formerly `belgian_tax_profile_snapshots_v1`). Created automatically when the live household's `taxYear` advances; can also be seeded retroactively for years that show up in the year list only because of transaction data.
 
 ### Store and compatibility hook surface
 
 | Member                         | Purpose                                                                                     |
 | ------------------------------ | ------------------------------------------------------------------------------------------- |
 | `viewedYear` / `setViewedYear` | Transient UI year. Defaults to the live profile's `taxYear`; never persisted.               |
-| `snapshots`                    | Loaded from preload.                                                                        |
+| `snapshots`                    | v1 projection of `householdSnapshots` (loaded from preload).                                |
 | `profileForYear(y)`            | Returns snapshot when present, else live profile with `taxYear` overridden (estimate mode). |
-| `calculationForYear(y)`        | `computeBelgianPIT(profileForYear(y))` — live recompute.                                    |
+| `calculationForYear(y)`        | Household engine on that year's household — live recompute.                                 |
 | `snapshotExistsForYear(y)`     | Boolean.                                                                                    |
 | `createSnapshotFromLive(y)`    | Seeds `snapshots[y]` from the live profile (no-op if one already exists).                   |
 | `updateSnapshot(y, updates)`   | Patches a snapshot; strips `taxYear` from patches so the year stays pinned.                 |
@@ -477,6 +517,7 @@ Layered on top of ADR-058. Adds engine-drift protection, a filed soft-lock, an a
 ```ts
 type BelgianTaxProfileSnapshotMeta = {
   frozenCalculation?: BelgianTaxCalculation; // "as-filed" calc, byte-stable
+  frozenHouseholdResult?: HouseholdTaxResult; // household result frozen with it (ADR-200)
   filing?: { filedAt: string; reference?: string }; // present iff year is filed
   history?: SnapshotAuditEntry[]; // append-only, bounded
 };

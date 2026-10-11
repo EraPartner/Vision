@@ -75,10 +75,16 @@ const DIST_DIR = process.env.VISION_DIST_DIR
  */
 const BUDGETS_KB = {
     // 445.33 * 1.05 = 467.60, rounded up after measured feature growth.
-    preload: 468,
+    // Raised from 468 for the Belgian-tax household store wiring (ADR-200,
+    // phase B2): 467.53 -> 469.33 measured. The household engine itself loads
+    // lazily (householdRuntime); only the store and provider glue are boot code.
+    preload: 470,
     // 1310.71 measured after the lazily loaded xlsx chunk arrived with the
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
-    total: 1340,
+    // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
+    // settings schemas and the household issue locale strings (ADR-200, phase
+    // B2): 1334.97 -> 1348.31 measured.
+    total: 1349,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

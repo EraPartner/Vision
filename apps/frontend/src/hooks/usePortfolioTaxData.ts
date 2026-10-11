@@ -59,13 +59,21 @@ export interface MonthlyCostDatum {
 export function usePortfolioTaxData() {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
-    const { liveProfile, snapshots, snapshotMetas, viewedYear } =
-        useBelgianTaxProfile((state) => ({
-            liveProfile: state.profile,
-            snapshots: state.snapshots,
-            snapshotMetas: state.snapshotMetas,
-            viewedYear: state.viewedYear,
-        }));
+    const {
+        liveProfile,
+        snapshots,
+        household,
+        householdSnapshots,
+        snapshotMetas,
+        viewedYear,
+    } = useBelgianTaxProfile((state) => ({
+        liveProfile: state.profile,
+        snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
+        snapshotMetas: state.snapshotMetas,
+        viewedYear: state.viewedYear,
+    }));
     const profile = useMemo(
         () =>
             resolveBelgianTaxProfile(
@@ -77,10 +85,23 @@ export function usePortfolioTaxData() {
     const calculation = useMemo(
         () =>
             resolveBelgianTaxCalculation(
-                { profile: liveProfile, snapshots, snapshotMetas },
+                {
+                    profile: liveProfile,
+                    snapshots,
+                    household,
+                    householdSnapshots,
+                    snapshotMetas,
+                },
                 viewedYear,
             ),
-        [liveProfile, snapshots, snapshotMetas, viewedYear],
+        [
+            liveProfile,
+            snapshots,
+            household,
+            householdSnapshots,
+            snapshotMetas,
+            viewedYear,
+        ],
     );
     const { allSummaries: rawSummaries } = usePortfolio();
     const { getAdjustment } = usePortfolioTaxAdjustments();
