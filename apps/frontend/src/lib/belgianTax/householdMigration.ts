@@ -488,8 +488,12 @@ export function applyProfileV1PatchToHousehold(
             partnerA.activities.unshift(primary);
         }
         if (primary.kind !== kind) {
+            const oldCategory = forfaitCategoryOf(primary.kind);
             delete primary.netProfessionalIncome;
             primary.kind = kind;
+            // Drop the expense choice of a category no activity uses any more.
+            if (!partnerA.activities.some((x) => forfaitCategoryOf(x.kind) === oldCategory))
+                delete partnerA.professionalExpenses[oldCategory];
         }
         if (Object.hasOwn(patch, "grossAnnualIncome")) primary.grossIncome = num(merged.grossAnnualIncome);
         partnerA.professionalExpenses[forfaitCategoryOf(kind)] = {

@@ -79,3 +79,16 @@ export {
     forfaitCategoryOf,
     toBelgianTaxCalculation,
 } from "./household";
+export {
+    upgradeProfileV1ToHousehold,
+    upgradeSnapshotsV1ToV2,
+    projectHouseholdToProfileV1,
+    applyProfileV1PatchToHousehold,
+} from "./householdMigration";
+export {
+    belgianTaxHouseholdV2Schema,
+    belgianTaxHouseholdSnapshotsV2Schema,
+    parseHouseholdV2,
+    parseHouseholdSnapshotsV2,
+} from "./householdSchema";
+export type { ParseResult } from "./householdSchema";
