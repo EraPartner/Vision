@@ -2,7 +2,7 @@
 title: Research Dossiers
 type: feature
 status: active
-date: 2026-10-09
+date: 2026-10-10
 tags: [feature, research, dossiers, evidence, provenance, analysis]
 description: Local versioned research records for questions, thesis, evidence, conclusions, and linked financial context.
 aliases: [dossier workspace, research dossier library]
@@ -39,6 +39,8 @@ remains readable if the document is later deleted or re-extracted. A new or chan
 citation must match an available source. This is not continuous fact checking or monitoring.
 An optional [[docs/features/analysis-monitors|evidence monitor]] can later report changes to the
 saved evidence set; it does not revalidate citations.
+
+Review targets and citation source dates use the shared themed date picker, with localized display and optional clearing. Clearing stores an absent date; selected dates retain their calendar day. Citation access timestamps keep their date-and-time input.
 
 Links are current references, not copies of source records. A deleted category, investment, or
 saved analysis is shown as unavailable using the link's last saved label. Such a link is absent

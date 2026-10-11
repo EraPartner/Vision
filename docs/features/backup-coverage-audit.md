@@ -225,6 +225,7 @@ Captured as `frontend-state.json` in the bundle. Restored after DB load triggers
 | `vision_theme_variant`                        | Color variant                                   | ✅ Included                                                                                                 |
 | `vision.backup.passphrase.reminder.dismissed` | Passphrase reminder dismissed flag              | ✅ Included                                                                                                 |
 | `dismissed_upcoming_planned_payments`         | Dismissed upcoming-payment IDs                  | ✅ Included                                                                                                 |
+| `vision.home.dismissedAccountInactivity` | Account IDs and dismissed last-transaction days | ✅ Included through the frontend key registry |
 | `dismissed_recurring_patterns`                | Dismissed recurring-pattern keys                | ✅ Included                                                                                                 |
 | `vision.onboarding.draft.v1`                  | Resumable onboarding draft (no file bytes)      | ✅ Included                                                                                                 |
 | `vision.research.chartBuilder.layouts.v2`     | Chart Builder draft and named layouts           | ✅ Included                                                                                                 |

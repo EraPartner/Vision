@@ -2,8 +2,8 @@
 title: Layout Components
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     components,
@@ -136,7 +136,7 @@ The footer holds AI chat (a registry item) and Settings (a button that opens the
 - **Labelled by default, icons-only remembered**: the sidebar opens with labels (15rem). Collapsing it to the 48px icon rail (⌘B, the collapse button, the logo, Electron View › Toggle Sidebar, or Settings › Appearance › *Sidebar: Labels / Icons only*) is written to `localStorage` key `vision.sidebar.collapsed` and read back through `SidebarProvider`'s `defaultOpen` on the next launch. The primitive no longer writes a cookie, and its page gap now follows the open state, so an expanded sidebar pushes the page instead of covering it.
 - **Hideable sections**: each headed section has a *Hide* / *Show* button. Hidden section ids are stored as a JSON object under `vision.sidebar.hiddenSections` (`useHiddenSections` in `hooks/useSidebarPreferences.ts`); Research is hidden until the user shows it. Landing on a page inside a hidden section (deep link, palette, go-to key, Electron menu) shows that section and persists it.
 - **Selection and rows**: rows are 30px with the chip radius, primary-coloured icons and a `primary` selection fill (12% light, 16% dark). The former framer `ActiveRail` is gone. Rows with a go-to key show `G <key>` on hover; the collapsed rail shows it in the tooltip. The active row scrolls into view on navigation.
-- **Live counts**: `NavItemBadge` renders the registry `badge` ids as counts: `needs-category` on Transactions (uncategorised active transactions via `useNeedsCategoryCount`, filled), `planned-due` on Planned Payments (payments due in the next seven days via `useUpcomingPlannedPayments`, filled), `insights` on Statistics (`useInsightsCount`, quiet) and `monitors` on Analysis monitors (unread notifications via `useMonitorNotifications`, quiet). On the icon rail the count becomes a pill on the icon corner. `InsightsNavBadge` and `MonitorInboxBadge` were replaced by this component.
+- **Live counts**: `NavItemBadge` renders the registry `badge` ids as counts: `needs-category` on Transactions (uncategorised active transactions via `useNeedsCategoryCount`, filled), `planned-due` on Planned Payments (payments due in the next seven days via `useUpcomingPlannedPayments`, filled), `insights` on Insights (`useInsightsCount`, quiet) and `monitors` on Analysis monitors (unread notifications via `useMonitorNotifications`, quiet). On the icon rail the count becomes a pill on the icon corner. `InsightsNavBadge` and `MonitorInboxBadge` were replaced by this component.
 - **Update dot**: the Settings row shows a dot with a screen-reader label (`layout.updateReady`) when `useUpdateStatus` reports an update. See [[docs/features/application-updates|Application updates]].
 - **Route prefetch**: `onMouseEnter` / `onFocus` on each nav item calls `preloadRoute(path)` via `lib/routePreload.ts`, warming the lazy chunk, and prefetches Net Worth and Performance data.
 - **Keyboard accessible**: full keyboard navigation; the section toggles are buttons with `aria-expanded` / `aria-controls`, and a hidden section's content is `inert`.
@@ -163,6 +163,10 @@ interface NavSection {
 ```
 
 `lib/navigation.ts` also exports `ADMIN_SECTION`, `FOOTER_NAV_ITEMS`, `ALL_NAV_ITEMS`, `PALETTE_SECTIONS`, `GO_TO_ROUTES`, `SECTION_CYCLE` (Home, Portfolio and Research roots, stepped by `[` / `]`), `SECTION_ID_BY_URL`, `isActiveNavItem`, `matchNavItem`, `matchNavTitleKey` and `matchNavSectionId`. `lib/__tests__/navigation.test.ts` asserts that every parameterless route in `appRouteManifest` has exactly one entry and that admin routes live only in the Admin section.
+
+Go-to bindings use the current English names in both locales. Insights uses `G I`, Payees uses
+`G Y` (Portfolio owns `G P`), and Import & Export uses `G E` (Export). Sidebar and palette hints,
+shortcut help, and dispatch all consume the same registry; see [[docs/features/views#Keyboard Shortcuts|Keyboard shortcuts]].
 
 ### Internationalization
 

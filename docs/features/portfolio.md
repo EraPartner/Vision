@@ -2,9 +2,9 @@
 title: Feature - Portfolio & Investments
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-10
 last_modified: 2026-10-08
-updated: 2026-10-08
+updated: 2026-10-10
 tags: [feature, portfolio, investments, stocks, crypto, metals, phase-1, phase-3.5, phase-3.6, phase-9, phase-8, phase-14, pdf-export, offline-resilience, stale-prices, online-status-detection, graceful-degradation, portfolio-summary, realtime-totals, decimal-precision, monetary-math, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, historical-fx, snapshot-fx, loading-states, error-states, page-error, skeleton, portfolio-unit-math, shared-utils, splits-event, return-of-capital, banker-rounding, fx-attribution, asset-gain, fx-gain, purchase-date-rates, value-fx-neutral, adr-074, adr-091, adr-100, per-account, move-holding, close-account, brokerage-fanout, rebalancing, saved-plans, cash-aware, cross-workspace, adr-098, portfolio-ticker, marquee, live-quotes, ticker-manager, show-in-ticker, migration-0061, fx-aware-pnl, unified-detail-dialog, useFxAwarePnl]
 aliases: [portfolio-feature, investments-feature, holdings, net-worth, stocks, crypto, real-estate, savings, bonds, metals, performance, watchlist]
 description: "Track stocks, ETFs, crypto, metals, real estate, savings, and bonds; includes Phase 8 PDF report export with 6 portfolio sections. 2026-05-29 adds historical FX in snapshots and loading/error states on all asset pages. June 2026 adds snapshotBuilder split/return_of_capital events, APP_TIMEZONE day-boundary fix, shared portfolioUnitMath.ts, and FX attribution UI (ADR-074): asset gain / FX effect decomposition on overview, performance, asset pages, and investment detail."
@@ -1115,6 +1115,7 @@ The hook:
 - Calls `useFxAwarePnl(targetCurrency)` internally to compute the P&L.
 - The FX-aware realized/unrealized rows and the FX attribution card are rendered **only** when the holding is in a genuinely foreign currency. The gate compares the holding's NATIVE currency (`holding.originalCurrency`) to `targetCurrency` — **not** `holding.currency`, which on an `InvestmentSummary` is the display/target currency (every monetary field is converted to it). The native-value row and the transactions tab also label amounts in the holding's own currency. This removes spurious FX rows for base-currency holdings while keeping them for foreign ones. (Editing the same `currency`-vs-`originalCurrency` distinction: [[apps/frontend/src/features/portfolio/EditInvestmentDialog.tsx]] edits `originalCurrency`.)
 - The dialog renders identically regardless of which page opened it (Stocks, Crypto, Overview, dashboard, Real Estate, Savings).
+- On the asset pages using `useHoldingActions`, the open detail dialog resolves the selected holding by ID from current portfolio summaries. Refreshed edits, additions, deletions, and totals appear without closing and reopening the window. The transaction editor continues resolving its selected transaction by ID from those refreshed rows.
 
 **StocksPage:** Now uses `useFxAwarePnl` for its holdings table column as well, ensuring the table values match the detail dialog values. The previously passed-down props have been removed from the component signature.
 

@@ -15,4 +15,17 @@ describe("ShortcutsOverlay", () => {
         expect(within(toastRow!).getByText("Alt")).toBeInTheDocument();
         expect(within(toastRow!).getByText("T")).toBeInTheDocument();
     });
+    it("shows current destination names with their updated keys", async () => {
+        renderWithApp(<ShortcutsOverlay open onOpenChange={() => {}} />);
+        for (const [label, key] of [
+            ["Insights", "I"],
+            ["Payees", "Y"],
+            ["Import & Export", "E"],
+        ]) {
+            const name = await screen.findByText(label);
+            const row = name.closest("div")!;
+            expect(within(row).getByText("G")).toBeInTheDocument();
+            expect(within(row).getByText(key)).toBeInTheDocument();
+        }
+    });
 });

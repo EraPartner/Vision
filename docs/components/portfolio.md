@@ -2,8 +2,8 @@
 title: Portfolio Components
 type: component
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     components,
@@ -329,7 +329,7 @@ import { AddToWatchlistDialog } from "@/features/portfolio/AddToWatchlistDialog"
 Stocks, crypto, metals, real estate and savings share two modules in `features/portfolio/` ([[docs/adr/187-completeness-sweep|ADR-187]]):
 
 - `assetPageParts.tsx` exports `Figure` (secondary hero figure), `FactRow` (one `dt`/`dd` line of a holding card), `AssetPageActions` (primary _Add investment_ plus a header ••• menu with _Export PDF_, hidden when `showExport` is false as on the Crypto page, and _Import history_) and `HoldingActionsMenu` (row ••• menu: Details, Add transaction, Archive, Delete).
-- `useHoldingActions.tsx` mounts the controlled `InvestmentDetailDialog` and `AddPortfolioTxnDialog` once per page (`dialogs`) and runs Archive and Delete through `useConfirmDialog`.
+- `useHoldingActions.tsx` mounts the controlled `InvestmentDetailDialog` and `AddPortfolioTxnDialog` once per page (`dialogs`) and runs Archive and Delete through `useConfirmDialog`. The detail selection stores the holding ID and resolves it from the current `usePortfolio().allSummaries` each render, so an open detail window follows refreshed totals and transaction rows instead of keeping the opening snapshot. Reordering preserves the selected holding; archived holdings remain resolvable and a removed holding no longer renders a detail dialog.
 
 `PortfolioExposureCard`'s dimension toggle is a `SegmentedControl`. `AddToWatchlistDialog` has a Cancel button. `TotalValueCard` and `netContributionSparkline` no longer exist.
 

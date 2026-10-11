@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Label } from "@/components/ui/label";
 import { List, ListRow } from "@/components/ui/list";
 import { Switch } from "@/components/ui/switch";
@@ -32,7 +33,7 @@ import {
     invalidateTransactionData,
 } from "@/lib/queryKeys";
 import { parseDecimal } from "@/lib/decimal";
-import { toYmd } from "@/lib/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import type {
     AccountType,
     AccountOwner,
@@ -217,6 +218,12 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
     const [openingBalanceDate, setOpeningBalanceDate] = useState(() =>
         toYmd(new Date()),
     );
+    const showOpeningDateError =
+        openingBalanceSubmitted &&
+        openingBalance.trim().length > 0 &&
+        !openingBalanceDate;
+    const [portalContainer, setPortalContainer] =
+        useState<HTMLDivElement | null>(null);
 
     const stampOpeningBalance = useMutation({
         mutationFn: (input: {
@@ -332,6 +339,12 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                     ?.focus();
                 return;
             }
+            if (hasOpeningBalance && !openingBalanceDate) {
+                e.currentTarget
+                    .querySelector<HTMLButtonElement>("#acct-opening-date")
+                    ?.focus();
+                return;
+            }
             createMutation.mutate(
                 toAccountPayload(values, "create", appSettings.numberFormat),
                 {
@@ -396,6 +409,7 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
 
     const sheet = (
         <SheetContent
+            ref={setPortalContainer}
             side="right"
             className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-[470px]"
         >
@@ -548,15 +562,40 @@ export function AddAccountDialog(props: AddAccountDialogProps = {}) {
                                 <Label htmlFor="acct-opening-date">
                                     {t("accounts.openingBalance.dateLabel")}
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="acct-opening-date"
-                                    type="date"
-                                    required={!!openingBalance.trim()}
-                                    value={openingBalanceDate}
-                                    onChange={(e) =>
-                                        setOpeningBalanceDate(e.target.value)
+                                    value={
+                                        openingBalanceDate
+                                            ? parseLocalDateFromYmd(
+                                                  openingBalanceDate,
+                                              )
+                                            : undefined
+                                    }
+                                    onChange={(date) =>
+                                        setOpeningBalanceDate(
+                                            date ? toYmd(date) : "",
+                                        )
+                                    }
+                                    allowClear
+                                    portalContainer={portalContainer}
+                                    aria-invalid={
+                                        showOpeningDateError || undefined
+                                    }
+                                    aria-describedby={
+                                        showOpeningDateError
+                                            ? "acct-opening-date-error"
+                                            : undefined
                                     }
                                 />
+                                {showOpeningDateError && (
+                                    <p
+                                        id="acct-opening-date-error"
+                                        role="alert"
+                                        className="type-footnote text-destructive"
+                                    >
+                                        {t("validation.required")}
+                                    </p>
+                                )}
                             </div>
                             <div className="-mt-2 sm:col-span-2">
                                 {fieldHint(

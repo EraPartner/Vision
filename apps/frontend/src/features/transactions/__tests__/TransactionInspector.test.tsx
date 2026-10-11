@@ -220,6 +220,20 @@ describe("TransactionInspector", () => {
         ).toBeInTheDocument();
     });
 
+    it.each(["docked", "sheet"] as const)("opens the existing split workflow from the %s inspector with the keyboard", async (presentation) => {
+        server.use(http.get(`${API_BASE}/api/splits/transaction/42`, () => ok({ items: [] })));
+        const user = userEvent.setup();
+        renderInspector({}, presentation);
+        const split = await screen.findByRole("button", { name: /split transaction/i });
+        split.focus();
+        await user.keyboard("{Enter}");
+        expect(await screen.findByRole("dialog", { name: /split transaction/i })).toBeInTheDocument();
+        expect(await screen.findByText(/not split yet/i)).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+        await waitFor(() => expect(screen.queryByRole("dialog", { name: /split transaction/i })).not.toBeInTheDocument());
+        expect(screen.getByRole("button", { name: /split transaction/i })).toBeInTheDocument();
+    });
+
     it("shows comment value", async () => {
         renderInspector();
 

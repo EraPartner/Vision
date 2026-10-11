@@ -248,6 +248,17 @@ async function renderDialog(account: Account, queryClient?: QueryClient) {
     return result;
 }
 
+async function setReadingDate(
+    user: ReturnType<typeof userEvent.setup>,
+    date: string,
+) {
+    await user.click(screen.getByLabelText(/^as of$/i));
+    const input = screen.getByRole("textbox", { name: /enter date/i });
+    await user.clear(input);
+    await user.type(input, date);
+    await user.keyboard("{Enter}{Escape}");
+}
+
 /** The live difference figure (stored drift, or the preview once typed into). */
 function deltaText() {
     return screen.getByTestId("reconcile-delta").textContent ?? "";
@@ -328,8 +339,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             screen.getByLabelText(/new statement reading/i),
             "1042,75",
         );
-        await user.clear(screen.getByLabelText(/^as of$/i));
-        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
+        await setReadingDate(user, "20/07/2026");
         await user.click(screen.getByRole("button", { name: /save reading/i }));
 
         await waitFor(() => expect(calls.patch).toHaveLength(1));
@@ -424,8 +434,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             screen.getByLabelText(/new statement reading/i),
             "1042,75",
         );
-        await user.clear(screen.getByLabelText(/^as of$/i));
-        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
+        await setReadingDate(user, "20/07/2026");
         await user.click(
             screen.getByRole("button", { name: /opening balance/i }),
         );
@@ -468,7 +477,13 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
                 screen.getByLabelText(/new statement reading/i),
                 draft,
             );
-            if (clearDate) await user.clear(screen.getByLabelText(/^as of$/i));
+            if (clearDate) {
+                await user.click(screen.getByLabelText(/^as of$/i));
+                await user.click(
+                    screen.getByRole("button", { name: /^clear$/i }),
+                );
+                await user.keyboard("{Escape}");
+            }
 
             expect(
                 screen.queryByRole("button", { name: /opening balance/i }),
@@ -505,7 +520,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             screen.getByLabelText(/new statement reading/i),
             "1042,75",
         );
-        await user.clear(screen.getByLabelText(/^as of$/i));
+        await user.click(screen.getByLabelText(/^as of$/i));
+        await user.click(screen.getByRole("button", { name: /^clear$/i }));
+        await user.keyboard("{Escape}");
 
         expect(
             await screen.findByText(/add the as-of date for this reading/i),
@@ -552,8 +569,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             screen.getByLabelText(/new statement reading/i),
             "1042,75",
         );
-        await user.clear(screen.getByLabelText(/^as of$/i));
-        await user.type(screen.getByLabelText(/^as of$/i), "2026-07-20");
+        await setReadingDate(user, "20/07/2026");
 
         await user.click(
             await screen.findByRole("button", {
@@ -574,8 +590,10 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         await user.type(screen.getByLabelText(/new statement reading/i), "800");
-        await user.clear(screen.getByLabelText(/^as of$/i));
-        await user.type(screen.getByLabelText(/^as of$/i), ymdDaysAgo(26));
+        await setReadingDate(
+            user,
+            ymdDaysAgo(26).split("-").reverse().join("/"),
+        );
 
         // The server computes drift against the balance as of NOW and stamps any
         // adjustment TODAY, so a backdated reading can mint a bogus row.
@@ -606,7 +624,9 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await renderDialog(DRIFTING);
 
         // The date input already defaults to today.
-        expect(screen.getByLabelText(/^as of$/i)).toHaveValue(TODAY);
+        expect(screen.getByLabelText(/^as of$/i)).toHaveTextContent(
+            TODAY.split("-").reverse().join("/"),
+        );
         await user.type(screen.getByLabelText(/new statement reading/i), "800");
 
         await waitFor(() => expect(deltaText()).toMatch(/-200,00/));

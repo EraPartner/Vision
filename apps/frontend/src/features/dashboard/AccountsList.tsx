@@ -6,6 +6,8 @@ import { List, ListRow } from "@/components/ui/list";
 import { Money } from "@/components/shared/Money";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useAccounts } from "@/hooks/useAccounts";
+import { useCurrencyConverter } from "@/hooks/useCurrencyConverter";
+import { useCurrencyFormatSettings } from "@/hooks/useCurrencyFormatter";
 import { useBalanceProvenance } from "@/features/accounts/balanceProvenance";
 
 const MAX_ROWS = 6;
@@ -14,8 +16,31 @@ const MAX_ROWS = 6;
 export function AccountsList() {
     const { t } = useLanguage();
     const { data } = useAccounts({ active: "true" });
+    const { currency } = useCurrencyFormatSettings();
+    const { convertToTargetIfAvailable } = useCurrencyConverter(currency);
     const provenance = useBalanceProvenance();
-    const accounts = (data?.items ?? []).slice(0, MAX_ROWS);
+    const accounts = (data?.items ?? [])
+        .map((account) => ({
+            account,
+            balance:
+                account.computed_balance == null
+                    ? undefined
+                    : convertToTargetIfAvailable(
+                          account.computed_balance,
+                          account.currency,
+                      ),
+        }))
+        .sort((a, b) => {
+            const aKnown =
+                a.balance !== undefined && Number.isFinite(a.balance);
+            const bKnown =
+                b.balance !== undefined && Number.isFinite(b.balance);
+            if (!aKnown) return bKnown ? 1 : 0;
+            if (!bKnown) return -1;
+            return (b.balance ?? 0) - (a.balance ?? 0);
+        })
+        .slice(0, MAX_ROWS)
+        .map(({ account }) => account);
 
     return (
         <Card>
@@ -28,10 +53,15 @@ export function AccountsList() {
             <CardContent>
                 <List>
                     {accounts.length === 0 ? (
-                        <ListRow leading={<Landmark />} title={t("home.accounts.none")} />
+                        <ListRow
+                            leading={<Landmark />}
+                            title={t("home.accounts.none")}
+                        />
                     ) : (
                         accounts.map((account) => {
-                            const typeLabel = t(`accounts.type.${account.type}`);
+                            const typeLabel = t(
+                                `accounts.type.${account.type}`,
+                            );
                             const origin = provenance({
                                 anchor_date: account.anchor_date,
                                 post_anchor_count: account.post_anchor_count,
@@ -42,11 +72,20 @@ export function AccountsList() {
                                     asChild
                                     chevron
                                     title={account.display_name || account.name}
-                                    subtitle={origin ? `${typeLabel} · ${origin}` : typeLabel}
+                                    subtitle={
+                                        origin
+                                            ? `${typeLabel} · ${origin}`
+                                            : typeLabel
+                                    }
                                     trailing={
                                         account.computed_balance != null ? (
                                             <span className="font-medium text-foreground">
-                                                <Money amount={account.computed_balance} currency={account.currency} />
+                                                <Money
+                                                    amount={
+                                                        account.computed_balance
+                                                    }
+                                                    currency={account.currency}
+                                                />
                                             </span>
                                         ) : undefined
                                     }

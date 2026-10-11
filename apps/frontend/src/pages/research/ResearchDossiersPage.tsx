@@ -1,3 +1,4 @@
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { useEffect, useId, useRef, useState } from "react";
 import {
     AlertTriangle,
@@ -36,6 +37,7 @@ import { PageError } from "@/components/shared/PageError";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -784,15 +786,21 @@ export default function ResearchDossiersPage() {
                                         <Label htmlFor="dossier-review">
                                             {t("dossiers.field.reviewDate")}
                                         </Label>
-                                        <Input
+                                        <DatePicker
                                             id="dossier-review"
-                                            type="date"
-                                            value={draft.reviewDate ?? ""}
-                                            onChange={(event) =>
+                                            value={
+                                                draft.reviewDate
+                                                    ? parseLocalDateFromYmd(
+                                                          draft.reviewDate,
+                                                      )
+                                                    : undefined
+                                            }
+                                            allowClear
+                                            onChange={(date) =>
                                                 edit({
-                                                    reviewDate:
-                                                        event.target.value ||
-                                                        null,
+                                                    reviewDate: date
+                                                        ? toYmd(date)
+                                                        : null,
                                                 })
                                             }
                                         />
@@ -1208,13 +1216,17 @@ function EvidenceEditor({
                     <Label htmlFor={`source-date-${item.id}`}>
                         {t("dossiers.field.sourceDate")}
                     </Label>
-                    <Input
+                    <DatePicker
                         id={`source-date-${item.id}`}
-                        type="date"
-                        value={item.source.sourceDate ?? ""}
-                        onChange={(event) =>
+                        value={
+                            item.source.sourceDate
+                                ? parseLocalDateFromYmd(item.source.sourceDate)
+                                : undefined
+                        }
+                        allowClear
+                        onChange={(date) =>
                             updateSource({
-                                sourceDate: event.target.value || null,
+                                sourceDate: date ? toYmd(date) : null,
                             })
                         }
                     />

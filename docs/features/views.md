@@ -2,8 +2,8 @@
 title: Views & Pages
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     feature,
@@ -720,18 +720,25 @@ The in-app help sheet (`?`) lists all active shortcuts. The table below mirrors 
 
 ### Go-to sequences (`g`, then destination key)
 
-| Shortcut | Destination                            |
-| -------- | -------------------------------------- |
-| `g h`    | Home (`/`; was `g d`)                  |
-| `g t`    | Transactions (`/transactions`)         |
-| `g s`    | Statistics (`/statistics`)             |
-| `g c`    | Categories (`/categories`)             |
-| `g r`    | Recipients (`/recipients`)             |
-| `g i`    | Import (`/import`)                     |
-| `g p`    | Portfolio (`/portfolio`)               |
-| `g n`    | Net Worth (`/portfolio/net-worth`)     |
-| `g m`    | Markets Overview (`/research/markets`) |
-| `g a`    | AI Chat (`/ai-chat`)                   |
+| Shortcut | Destination |
+| -------- | ----------- |
+| `g h` | Home (`/`) |
+| `g t` | Transactions (`/transactions`) |
+| `g i` | Insights (`/statistics`) |
+| `g c` | Categories (`/categories`) |
+| `g y` | Payees (`/recipients`) |
+| `g e` | Import & Export (`/import`) |
+| `g p` | Portfolio (`/portfolio`) |
+| `g n` | Net worth (`/portfolio/net-worth`) |
+| `g m` | Markets (`/research/markets`) |
+| `g a` | AI chat (`/ai-chat`) |
+
+Bindings stay the same in English and Dutch. They follow the English labels: `y` comes from
+Payees because `p` belongs to Portfolio, and `e` comes from Export because `i` belongs to Insights.
+The former `g s` and `g r` bindings are retired. The sidebar, command palette, help sheet, and
+key handler derive their bindings from `lib/navigation.ts`. Go-to sequences are inert while
+typing, while a dialog or alert dialog is open, or with Ctrl, Command, or Alt held. Press the
+second key within 900 ms.
 
 ### Command palette ticker lookup
 

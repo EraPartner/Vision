@@ -99,13 +99,13 @@ const MONEY_SECTION: NavSection = {
             titleKey: "nav.recipients",
             url: "/recipients",
             icon: PAGE_ICONS["/recipients"],
-            shortcutKey: "r",
+            shortcutKey: "y",
         },
         {
             titleKey: "nav.statistics",
             url: "/statistics",
             icon: PAGE_ICONS["/statistics"],
-            shortcutKey: "s",
+            shortcutKey: "i",
             badge: "insights",
         },
         {
@@ -122,7 +122,7 @@ const MONEY_SECTION: NavSection = {
             titleKey: "nav.importExport",
             url: "/import",
             icon: PAGE_ICONS["/import"],
-            shortcutKey: "i",
+            shortcutKey: "e",
         },
     ],
 };

@@ -24,6 +24,7 @@ import {
     Import,
     Info,
     Pencil,
+    Split,
     ToggleLeft,
     ToggleRight,
     Trash2,
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import type { Column } from "@/types/dataTable";
 import type { RawApiTransaction, TableTransaction } from "../types";
 import { amountClass } from "../amountClass";
+import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
 
 interface TransactionsTableProps {
     transactions: TableTransaction[];
@@ -108,6 +110,7 @@ export function TransactionsTable({
         observer.observe(container);
         return () => observer.disconnect();
     }, []);
+    const [splitRow, setSplitRow] = useState<TableTransaction | null>(null);
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const fmt = useCurrencyFormatter();
@@ -268,8 +271,8 @@ export function TransactionsTable({
                 key: "category",
                 header: t("txPage.col.category"),
                 editable: false,
-                defaultWidth: 220,
-                minWidth: 160,
+                minWidth: 240,
+                className: "min-w-[240px]",
                 render: (row, isEditing) => {
                     if (isEditing) {
                         const original = allItems.find((t) => t.id === row.id);
@@ -587,6 +590,10 @@ export function TransactionsTable({
                         <Pencil className="mr-2 h-4 w-4 text-label-secondary" />
                         {t("contextMenu.editInline")}
                     </ContextMenuItem>
+                    <ContextMenuItem onSelect={() => setSplitRow(row)}>
+                        <Split className="mr-2 h-4 w-4 text-label-secondary" />
+                        {t("splitDialog.buttonTitle")}
+                    </ContextMenuItem>
                     {(canDuplicate || hasRecipient) && <ContextMenuSeparator />}
                     {canDuplicate && (
                         <ContextMenuItem onSelect={() => onDuplicate(row)}>
@@ -652,6 +659,18 @@ export function TransactionsTable({
 
     return (
         <div ref={containerRef} className="min-w-0">
+            {splitRow && (
+                <SplitTransactionDialog
+                    transactionId={splitRow.id}
+                    transactionAmount={splitRow.amount}
+                    transactionCurrency={splitRow.currency}
+                    trigger={null}
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setSplitRow(null);
+                    }}
+                />
+            )}
             <VirtualDataTable
                 columns={columns}
                 data={transactions}
