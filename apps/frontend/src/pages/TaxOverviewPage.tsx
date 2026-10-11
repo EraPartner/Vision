@@ -103,6 +103,7 @@ export default function TaxOverviewPage() {
         totalTaxIncludingPropertyEstimate,
         yearlyIncome,
         monthlyIncomeTax,
+        recordedIncomeByPartner,
         hasProfile,
         isEmpty,
     } = useTaxOverviewData();
@@ -289,7 +290,10 @@ export default function TaxOverviewPage() {
                         </div>
 
                         {isVisible("householdBreakdown") && (
-                            <HouseholdBreakdownCard viewedYear={viewedYear} />
+                            <HouseholdBreakdownCard
+                                viewedYear={viewedYear}
+                                recordedIncome={recordedIncomeByPartner}
+                            />
                         )}
 
                         <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">

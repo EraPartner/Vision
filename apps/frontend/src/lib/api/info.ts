@@ -216,6 +216,11 @@ export interface DeductionCandidateCategory {
 export interface DeductionTypeGroup {
     deductionType: string;
     total: number;
+    /**
+     * The total split by account owner (ADR-201); the values add up to `total`. Optional so a
+     * response from an older backend still parses: everything then counts as `me`.
+     */
+    byOwner?: { me: number; partner: number; joint: number };
     categoryCount: number;
     /** Contributing categories, sorted by total desc. */
     categories: DeductionCandidateCategory[];

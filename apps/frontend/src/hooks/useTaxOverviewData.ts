@@ -7,8 +7,22 @@ import { isApproximatedTaxYear } from "@/lib/belgianTax/constants";
 import {
     calculateBelgianTaxHouseholdWithPatch,
     resolveBelgianTaxCalculation,
+    resolveBelgianTaxHousehold,
     resolveBelgianTaxProfile,
 } from "@/stores/belgianTaxStore";
+// The household engine is already loaded on the tax pages; by file path, not the barrel.
+import {
+    computeHouseholdTax,
+    toBelgianTaxCalculation,
+} from "@/lib/belgianTax/household";
+import {
+    attributeToPartners,
+    householdHasPartnerB,
+    householdWithRecordedIncome,
+    partnerBShare,
+    type OwnerAmounts,
+    type PartnerAmounts,
+} from "@/lib/belgianTax/partnerAttribution";
 import {
     recordedTaxesForYear,
     type PortfolioTaxInvestment,
@@ -25,6 +39,13 @@ export interface YearlyIncomeDatum {
     estimatedTax: number;
     netAfterTax: number;
     isApproximated: boolean;
+}
+
+/** Adds owner amounts into `target` (partner / joint only; the rest is partner A's). */
+function addOwnerAmounts(target: OwnerAmounts, amounts: OwnerAmounts | undefined) {
+    if (!amounts) return;
+    if (amounts.partner) target.partner = (target.partner ?? 0) + amounts.partner;
+    if (amounts.joint) target.joint = (target.joint ?? 0) + amounts.joint;
 }
 
 /** One bar of the monthly income / PIT-reserve chart. */
@@ -132,6 +153,45 @@ export function useTaxOverviewData() {
         return result;
     }, [categoryPivot, hasIncomeSources, taxIncomeCategoryIds]);
 
+    /**
+     * Per-period part of the taxable income booked on partner / joint accounts (ADR-201), from
+     * the same categories as `taxableIncomeByMonth`. Empty when no income is on such accounts.
+     */
+    const taxableOwnerIncomeByMonth = useMemo(() => {
+        const result = new Map<string, OwnerAmounts>();
+        if (!hasIncomeSources || !categoryPivot) return result;
+        for (const cat of categoryPivot) {
+            if (!cat.incomeByOwnerMonths) continue;
+            if (!matchesCategorySelection(cat, taxIncomeCategoryIds)) continue;
+            for (const [period, amounts] of Object.entries(cat.incomeByOwnerMonths)) {
+                const entry = result.get(period) ?? {};
+                addOwnerAmounts(entry, amounts);
+                result.set(period, entry);
+            }
+        }
+        return result;
+    }, [categoryPivot, hasIncomeSources, taxIncomeCategoryIds]);
+
+    /** Owner amounts summed over the given periods (all periods of a year, or a window). */
+    const ownerIncomeFor = useCallback(
+        (periods: Iterable<string>): OwnerAmounts => {
+            const total: OwnerAmounts = {};
+            for (const period of periods)
+                addOwnerAmounts(total, taxableOwnerIncomeByMonth.get(period));
+            return total;
+        },
+        [taxableOwnerIncomeByMonth],
+    );
+    const ownerIncomeForYear = useCallback(
+        (year: number): OwnerAmounts =>
+            ownerIncomeFor(
+                [...taxableOwnerIncomeByMonth.keys()].filter((period) =>
+                    period.startsWith(`${year}-`),
+                ),
+            ),
+        [ownerIncomeFor, taxableOwnerIncomeByMonth],
+    );
+
     /** Per-year taxable income, summed from the monthly map. */
     const taxableIncomeByYear = useMemo(() => {
         const result = new Map<number, number>();
@@ -172,9 +232,11 @@ export function useTaxOverviewData() {
      * falls back to the live household applied to that year's tax tables. The bar's gross
      * replaces partner A's primary activity income and the household engine computes the year,
      * like the overview; `computeBelgianPIT` on the v1 projection serves only before hydration.
+     * With partner B in that year's household, `owners` attributes part of the gross to B's
+     * gross activity (ADR-201) and each partner is taxed on their own share.
      */
     const pitForGross = useCallback(
-        (gross: number, year: number): number => {
+        (gross: number, year: number, owners?: OwnerAmounts): number => {
             if (gross <= 0) return 0;
             // For years whose calculation is frozen, scale the frozen PIT proportionally to the
             // bar's gross relative to the frozen gross — this keeps historical filed numbers in the
@@ -183,6 +245,23 @@ export function useTaxOverviewData() {
             if (frozen && frozen.grossIncome > 0) {
                 const ratio = gross / frozen.grossIncome;
                 return frozen.totalPIT * ratio;
+            }
+            const yearHousehold = resolveBelgianTaxHousehold(
+                { household, householdSnapshots },
+                year,
+            );
+            const partnerB = partnerBShare(
+                owners,
+                householdHasPartnerB(yearHousehold),
+            );
+            const attributed =
+                yearHousehold && partnerB > 0
+                    ? householdWithRecordedIncome(yearHousehold, gross, partnerB)
+                    : undefined;
+            if (attributed) {
+                const next = { ...attributed, taxYear: year };
+                return toBelgianTaxCalculation(computeHouseholdTax(next), next)
+                    .totalPIT;
             }
             const householdCalculation = calculateBelgianTaxHouseholdWithPatch(
                 { household, householdSnapshots },
@@ -215,7 +294,11 @@ export function useTaxOverviewData() {
                     const incomeForYear = hasIncomeSources
                         ? (taxableIncomeByYear.get(y.year) ?? 0)
                         : y.totalIncome;
-                    const estimatedPIT = pitForGross(incomeForYear, y.year);
+                    const estimatedPIT = pitForGross(
+                        incomeForYear,
+                        y.year,
+                        hasIncomeSources ? ownerIncomeForYear(y.year) : undefined,
+                    );
                     return {
                         year: y.year.toString(),
                         income: incomeForYear,
@@ -225,7 +308,13 @@ export function useTaxOverviewData() {
                     };
                 })
                 .filter((y) => y.income > 0),
-        [yearlyData, pitForGross, hasIncomeSources, taxableIncomeByYear],
+        [
+            yearlyData,
+            pitForGross,
+            hasIncomeSources,
+            taxableIncomeByYear,
+            ownerIncomeForYear,
+        ],
     );
 
     /**
@@ -268,7 +357,13 @@ export function useTaxOverviewData() {
         const referenceYear = isViewingHistorical
             ? viewedYear
             : Number.parseInt(latest.period.slice(0, 4), 10);
-        const annualPIT = pitForGross(yearlyTaxable, referenceYear);
+        const annualPIT = pitForGross(
+            yearlyTaxable,
+            referenceYear,
+            hasIncomeSources
+                ? ownerIncomeFor(series.map((m) => m.period))
+                : undefined,
+        );
 
         return series.map((m) => ({
             period: m.period,
@@ -282,6 +377,32 @@ export function useTaxOverviewData() {
         taxableIncomeByMonth,
         isViewingHistorical,
         viewedYear,
+        ownerIncomeFor,
+    ]);
+
+    /**
+     * Taxable income recorded in transactions for the viewed year, per partner (ADR-201):
+     * `undefined` without income categories or without partner B in that year's household.
+     */
+    const recordedIncomeByPartner = useMemo<PartnerAmounts | undefined>(() => {
+        if (!hasIncomeSources) return undefined;
+        const yearHousehold = resolveBelgianTaxHousehold(
+            { household, householdSnapshots },
+            viewedYear,
+        );
+        if (!householdHasPartnerB(yearHousehold)) return undefined;
+        return attributeToPartners(
+            taxableIncomeByYear.get(viewedYear) ?? 0,
+            ownerIncomeForYear(viewedYear),
+            true,
+        );
+    }, [
+        hasIncomeSources,
+        household,
+        householdSnapshots,
+        viewedYear,
+        taxableIncomeByYear,
+        ownerIncomeForYear,
     ]);
 
     const hasProfile =
@@ -315,6 +436,8 @@ export function useTaxOverviewData() {
         totalTaxIncludingPropertyEstimate,
         yearlyIncome,
         monthlyIncomeTax,
+        /** Viewed year's recorded taxable income per partner; only with partner B. */
+        recordedIncomeByPartner,
         hasProfile,
         isEmpty,
     };

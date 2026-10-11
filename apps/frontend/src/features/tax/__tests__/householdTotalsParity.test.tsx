@@ -128,3 +128,75 @@ describe("two-partner household totals", () => {
         );
     });
 });
+
+describe("recorded income attributed to partners (ADR-201)", () => {
+    const INCOME_CATEGORY = 7;
+    const period = `${LIVE_YEAR}-03`;
+
+    function statsWithRecordedIncome(owners?: { partner?: number; joint?: number }) {
+        vi.mocked(useStatistics).mockReturnValue({
+            data: {
+                totalIncome: 74_000,
+                monthlyData: [{ period, income: 74_000 }],
+                yearlyComparison: [{ year: LIVE_YEAR, totalIncome: 74_000 }],
+                categoryPivot: [
+                    {
+                        categoryId: INCOME_CATEGORY,
+                        categoryPathIds: [INCOME_CATEGORY],
+                        incomeMonths: { [period]: 74_000 },
+                        ...(owners
+                            ? { incomeByOwnerMonths: { [period]: owners } }
+                            : {}),
+                    },
+                ],
+            },
+            isError: false,
+            isLoading: false,
+        } as never);
+    }
+
+    function hydrate(withPartnerB: boolean) {
+        const household = married(
+            [{ ...activity("employee", PARTNER_A_GROSS), id: "act_A_1" }],
+            [activity("employee", 22_000)],
+            { taxYear: LIVE_YEAR, taxIncomeCategoryIds: [INCOME_CATEGORY] },
+        );
+        if (!withPartnerB) household.partners = household.partners.slice(0, 1);
+        useSettingsStore.getState()._hydrate(runtime, household, {}, {});
+    }
+
+    it("taxes each partner on their recorded share", () => {
+        hydrate(true);
+        // 20 000 on partner accounts + half of 4 000 joint = 22 000 for B, 52 000 for A:
+        // exactly the live household, so the bar equals the overview total.
+        statsWithRecordedIncome({ partner: 20_000, joint: 4_000 });
+        const { result } = renderHook(() => useTaxOverviewData());
+        expect(result.current.recordedIncomeByPartner).toEqual({
+            A: 52_000,
+            B: 22_000,
+        });
+        const liveBar = result.current.yearlyIncome.find(
+            (bar) => bar.year === String(LIVE_YEAR),
+        );
+        expect(liveBar?.estimatedTax).toBeCloseTo(
+            useSettingsStore.getState().calculation.totalPIT,
+            6,
+        );
+        const reserve = result.current.monthlyIncomeTax.reduce(
+            (sum, m) => sum + m.estimatedTax,
+            0,
+        );
+        expect(reserve).toBeCloseTo(liveBar!.estimatedTax, 6);
+    });
+
+    it("keeps the whole recorded income on partner A without partner B", () => {
+        hydrate(false);
+        statsWithRecordedIncome({ partner: 20_000, joint: 4_000 });
+        const attributed = renderHook(() => useTaxOverviewData()).result.current;
+        statsWithRecordedIncome();
+        const plain = renderHook(() => useTaxOverviewData()).result.current;
+        expect(attributed.recordedIncomeByPartner).toBeUndefined();
+        expect(attributed.yearlyIncome).toEqual(plain.yearlyIncome);
+        expect(attributed.monthlyIncomeTax).toEqual(plain.monthlyIncomeTax);
+    });
+});

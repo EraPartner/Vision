@@ -5,6 +5,10 @@
  * marks a year as filed. Filing also freezes the calculation — see ADR-059 §filing.
  *
  * Reference is free-text and stored verbatim. Empty reference is permitted.
+ *
+ * Filing also records the household: a past year without its own household snapshot is computed
+ * from the live household, so the dialog pins that household as the year's snapshot first. Later
+ * edits to the live household then no longer change the filed year's inputs.
  */
 import { useState, type ReactNode } from "react";
 import {
@@ -29,15 +33,22 @@ interface MarkAsFiledDialogProps {
 
 export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
     const { t } = useLanguage();
-    const markYearAsFiled = useBelgianTaxProfile(
-        (state) => state.markYearAsFiled,
-    );
+    const { markYearAsFiled, createSnapshotFromLive, needsSnapshot } =
+        useBelgianTaxProfile((state) => ({
+            markYearAsFiled: state.markYearAsFiled,
+            createSnapshotFromLive: state.createSnapshotFromLive,
+            needsSnapshot:
+                state.household != null &&
+                year !== state.household.taxYear &&
+                !Object.hasOwn(state.householdSnapshots, year),
+        }));
     const [open, setOpen] = useState(false);
     const [reference, setReference] = useState("");
 
     function handleConfirm(e: React.FormEvent) {
         e.preventDefault();
         const trimmed = reference.trim();
+        if (needsSnapshot) createSnapshotFromLive(year);
         markYearAsFiled(year, trimmed.length > 0 ? trimmed : undefined);
         handleOpenChange(false);
     }

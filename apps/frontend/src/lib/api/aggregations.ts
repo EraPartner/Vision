@@ -165,6 +165,8 @@ export interface CategoryPivotItem {
     income?: number; // sum of amount >= 0 (explicit, not sign-of-net)
     expense?: number; // sum of amount < 0 (negative)
     transactionCount: number;
+    /** Part of `income` on partner / joint accounts (ADR-201); absent when both are 0. */
+    incomeByOwner?: { partner?: number; joint?: number };
 }
 
 export interface RecipientYearlySpending {

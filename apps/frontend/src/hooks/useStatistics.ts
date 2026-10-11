@@ -35,6 +35,8 @@ interface CategoryMonthlyData {
     categoryPathSegments?: string[];
     months: Record<string, number>;
     incomeMonths: Record<string, number>;
+    /** Per period, the part of the income on partner / joint accounts (ADR-201). */
+    incomeByOwnerMonths?: Record<string, { partner?: number; joint?: number }>;
     expenseMonths: Record<string, number>;
     netMonths: Record<string, number>;
     total: number;
@@ -247,6 +249,8 @@ export function mapToStatisticsData(
             cd.incomeMonths[period] =
                 (cd.incomeMonths[period] ?? 0) + incomeAmount;
             cd.netMonths[period] = (cd.netMonths[period] ?? 0) + item.total;
+            if (item.incomeByOwner)
+                (cd.incomeByOwnerMonths ??= {})[period] = item.incomeByOwner;
             cd.total += absTotal;
             cd.expenseTotal += expenseAmount;
             cd.incomeTotal += incomeAmount;

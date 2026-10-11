@@ -7,6 +7,7 @@ import type {
     HouseholdTaxResult,
     PartnerTaxResult,
 } from "@/lib/belgianTax/householdTypes";
+import type { PartnerAmounts } from "@/lib/belgianTax/partnerAttribution";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,6 +28,11 @@ import { partnerLabel } from "./profile-steps/householdEditing";
 
 interface HouseholdBreakdownCardProps {
     viewedYear: number;
+    /**
+     * Taxable income recorded in transactions for the viewed year, per partner (ADR-201). Shown
+     * next to each partner's entered gross income; omitted without income categories.
+     */
+    recordedIncome?: PartnerAmounts | undefined;
 }
 
 type RowTone = "base" | "reduction" | "adjustment" | "total";
@@ -47,8 +53,15 @@ const sum = (result: HouseholdTaxResult, pick: (p: PartnerTaxResult) => number) 
  * and communal surcharge, and final tax for each partner and the household, so that each
  * column adds up,
  * with the assessment mode and the marital quotient. Renders nothing for one partner.
+ *
+ * A frozen year shows its frozen household result. A year frozen before the household result
+ * was stored (only `frozenCalculation`) renders nothing rather than a live recompute that could
+ * disagree with the frozen figures.
  */
-export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardProps) {
+export function HouseholdBreakdownCard({
+    viewedYear,
+    recordedIncome,
+}: HouseholdBreakdownCardProps) {
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const inputs = useBelgianTaxProfile((state) => ({
@@ -59,10 +72,11 @@ export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardPro
         householdResult: state.householdResult,
         snapshotMetas: state.snapshotMetas,
     }));
-    const result = useMemo(
-        () => resolveBelgianTaxHouseholdResult(inputs, viewedYear),
-        [inputs, viewedYear],
-    );
+    const result = useMemo(() => {
+        const meta = inputs.snapshotMetas[viewedYear];
+        if (meta?.frozenCalculation && !meta.frozenHouseholdResult) return null;
+        return resolveBelgianTaxHouseholdResult(inputs, viewedYear);
+    }, [inputs, viewedYear]);
 
     if (!result || result.partners.length < 2) return null;
 
@@ -202,6 +216,64 @@ export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardPro
                         })}
                     </TableBody>
                 </Table>
+                {recordedIncome && (
+                    <Table aria-label={t("tax.householdBreakdown.recorded.title")}>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>
+                                    {t("tax.householdBreakdown.recorded.title")}
+                                </TableHead>
+                                {result.partners.map((p) => (
+                                    <TableHead key={p.partnerId} className="text-right">
+                                        {partnerLabel(t, p.partnerId)}
+                                    </TableHead>
+                                ))}
+                                <TableHead className="text-right">
+                                    {t("tax.householdBreakdown.column.household")}
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            <TableRow>
+                                <TableCell>
+                                    {t("tax.householdBreakdown.recorded.entered")}
+                                </TableCell>
+                                {result.partners.map((p) => (
+                                    <TableCell
+                                        key={p.partnerId}
+                                        className="text-right tabular-nums"
+                                    >
+                                        {fmt(p.grossIncome)}
+                                    </TableCell>
+                                ))}
+                                <TableCell className="text-right tabular-nums">
+                                    {fmt(sum(result, (p) => p.grossIncome))}
+                                </TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell>
+                                    {t("tax.householdBreakdown.recorded.transactions")}
+                                </TableCell>
+                                {result.partners.map((p) => (
+                                    <TableCell
+                                        key={p.partnerId}
+                                        className="text-right tabular-nums"
+                                    >
+                                        {fmt(recordedIncome[p.partnerId])}
+                                    </TableCell>
+                                ))}
+                                <TableCell className="text-right tabular-nums">
+                                    {fmt(recordedIncome.A + recordedIncome.B)}
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                )}
+                {recordedIncome && (
+                    <p className="type-footnote text-label-secondary">
+                        {t("tax.householdBreakdown.recorded.note")}
+                    </p>
+                )}
                 <KeyValueRows rows={summaryRows} />
                 <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline" size="sm">

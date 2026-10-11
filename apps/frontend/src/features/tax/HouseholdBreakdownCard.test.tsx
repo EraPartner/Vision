@@ -10,7 +10,7 @@ import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
 import { upgradeProfileV1ToHousehold } from "@/lib/belgianTax/householdMigration";
-import { computeHouseholdTax } from "@/lib/belgianTax/household";
+import { computeHouseholdTax, toBelgianTaxCalculation } from "@/lib/belgianTax/household";
 import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import { HouseholdBreakdownCard } from "./HouseholdBreakdownCard";
 
@@ -158,5 +158,105 @@ describe("HouseholdBreakdownCard", () => {
                     signed(adjustment[column]?.textContent),
             ).toBeCloseTo(amount(final[column]?.textContent), 1);
         }
+    });
+
+    it("compares entered gross income with income recorded per partner", async () => {
+        const household = married();
+        serve(household);
+        const user = userEvent.setup();
+        renderWithApp(
+            <HouseholdBreakdownCard
+                viewedYear={household.taxYear}
+                recordedIncome={{ A: 41_000, B: 9_000.5 }}
+            />,
+        );
+
+        await user.click(await screen.findByText("Per-partner breakdown"));
+        const table = await screen.findByRole("table", {
+            name: "Income: entered and recorded",
+        });
+        const cellsOf = (name: RegExp) =>
+            within(within(table).getByRole("row", { name })).getAllByRole("cell");
+        const entered = cellsOf(/^Gross income entered/);
+        expect(amount(entered[1]?.textContent)).toBe(60_000);
+        expect(amount(entered[2]?.textContent)).toBe(0);
+        const recorded = cellsOf(/^Recorded in transactions/);
+        expect(amount(recorded[1]?.textContent)).toBe(41_000);
+        expect(amount(recorded[2]?.textContent)).toBe(9_000.5);
+        expect(amount(recorded[3]?.textContent)).toBe(50_000.5);
+    });
+
+    it("renders nothing for a year frozen before the household result was stored", async () => {
+        const household = married();
+        const live = computeHouseholdTax(household);
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_household_v2: household,
+                        belgian_tax_profile_snapshot_meta_v1: {
+                            [household.taxYear]: {
+                                // Only the v1 calculation: no frozenHouseholdResult.
+                                frozenCalculation: toBelgianTaxCalculation(live, household),
+                                history: [],
+                            },
+                        },
+                    }),
+                ),
+            ),
+        );
+        const { container } = renderWithApp(
+            <HouseholdBreakdownCard viewedYear={household.taxYear} />,
+        );
+        await waitFor(() => expect(useSettingsStore.getState().isLoading).toBe(false));
+        await waitFor(() =>
+            expect(
+                useSettingsStore.getState().snapshotMetas[household.taxYear]
+                    ?.frozenCalculation,
+            ).toBeDefined(),
+        );
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it("shows the frozen household result, not a live recompute", async () => {
+        const household = married();
+        // Frozen with a different income than the live household now has.
+        const frozenHousehold = {
+            ...household,
+            partners: household.partners.map((p) =>
+                p.id === "B"
+                    ? { ...p, activities: [{ id: "act_B_1", kind: "employee" as const, grossIncome: 30_000 }] }
+                    : p,
+            ),
+        };
+        const frozen = computeHouseholdTax(frozenHousehold);
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_household_v2: household,
+                        belgian_tax_profile_snapshot_meta_v1: {
+                            [household.taxYear]: {
+                                frozenCalculation: toBelgianTaxCalculation(frozen, frozenHousehold),
+                                frozenHouseholdResult: frozen,
+                                history: [],
+                            },
+                        },
+                    }),
+                ),
+            ),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<HouseholdBreakdownCard viewedYear={household.taxYear} />);
+        await user.click(await screen.findByText("Per-partner breakdown"));
+        const table = await screen.findByRole("table");
+        const final = within(
+            within(table).getByRole("row", { name: /Income tax incl\. communal surcharge/ }),
+        ).getAllByRole("cell");
+        expect(amount(final[2]?.textContent)).toBeCloseTo(frozen.partners[1]!.totalPIT, 1);
+        expect(frozen.partners[1]!.totalPIT).not.toBeCloseTo(
+            computeHouseholdTax(household).partners[1]!.totalPIT,
+            0,
+        );
     });
 });
