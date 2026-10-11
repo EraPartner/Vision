@@ -372,6 +372,11 @@ export interface OwnHomeCreditTaxpayer {
     taxableIncome: number;
     /** Highest art. 130 rate reached, in percent (the pre-2015 woonbonus rate). */
     marginalRatePercent: number;
+    /**
+     * Income year being computed. Sets the loan age; it differs from `table.year` when the year
+     * runs on an approximated (nearest) table.
+     */
+    incomeYear: number;
 }
 
 /**
@@ -416,6 +421,8 @@ export function resolveMortgageRegime(
  *   - §3: halved from the eleventh taxable period. The halving for a second home is not
  *     modelled (no input).
  *   - §4: never more than the interest, capital and premiums actually paid.
+ *   - Art. 145/46quinquies: granted for twenty assessment years from the first, so nothing from
+ *     the twenty-first period.
  *
  * All other cases (Brussels, post-2020 Flemish, post-2024 Walloon, secondary residences): 0.
  */
@@ -430,7 +437,7 @@ export function computeOwnHomeCredit(
     const capital = Math.max(inputs.mortgageCapitalRepaid || 0, 0);
     const startYear = inputs.mortgageStartYear ?? 0;
     // Taxable periods since the loan year: 0 is the first period, 10 the eleventh.
-    const loanAge = Math.max(0, table.year - startYear);
+    const loanAge = Math.max(0, taxpayer.incomeYear - startYear);
 
     if (regime === "flemish_woonbonus") {
         let cap: number;
@@ -472,6 +479,7 @@ export function computeOwnHomeCredit(
         );
         const childSupplement =
             (children + disabled) * table.walloonChequeHabitatChildSupplement;
+        if (loanAge >= 20) return 0;
         let credit = Math.max(base, 0) + childSupplement;
         if (loanAge >= 10) credit /= 2;
         return Math.min(credit, interest + capital);

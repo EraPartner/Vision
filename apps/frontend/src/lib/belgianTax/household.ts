@@ -460,6 +460,7 @@ export function computeHouseholdTax(
                   mortgageIncome.taxableIncomeBeforeQuotient,
                   table.brackets,
               ),
+              incomeYear,
           })
         : 0;
 

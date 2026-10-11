@@ -780,6 +780,19 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(capped.ownHomeCredit).toBeCloseTo(800, 2);
     });
 
+    test("Walloon chèque habitat: twenty assessment years at most (art. 145/46quinquies); loan age follows the income year", () => {
+        // 2017 loan in IY 2027 (approximated year on the 2026 table) is the eleventh period: halved,
+        // not full as `table.year` − 2017 = 9 would give.
+        const eleventh = walloon({ taxYear: 2027, grossAnnualIncome: 20_000, mortgageStartYear: 2017 });
+        expect(eleventh.ownHomeCredit).toBeCloseTo(1_520 / 2, 2);
+        // 2016 loan in IY 2035 is the twentieth period (still halved); IY 2036 is the twenty-first.
+        const twentieth = walloon({ taxYear: 2035, grossAnnualIncome: 20_000, mortgageStartYear: 2016 });
+        expect(twentieth.ownHomeCredit).toBeCloseTo(1_520 / 2, 2);
+        const twentyFirst = walloon({ taxYear: 2036, grossAnnualIncome: 20_000, mortgageStartYear: 2016 });
+        expect(twentyFirst.ownHomeCreditRegime).toBe("walloon_cheque_habitat");
+        expect(twentyFirst.ownHomeCredit).toBe(0);
+    });
+
     test("Walloon chèque habitat: loans signed from 1 Jan 2025 do not qualify", () => {
         const result = walloon({ grossAnnualIncome: 20_000, mortgageStartYear: 2025 });
         expect(result.ownHomeCreditRegime).toBe("none");

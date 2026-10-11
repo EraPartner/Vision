@@ -363,6 +363,7 @@ export function computeBelgianPIT(
         {
             taxableIncome,
             marginalRatePercent: computeMarginalRate(taxableIncome, table.brackets),
+            incomeYear: profile.taxYear,
         },
     );
 
