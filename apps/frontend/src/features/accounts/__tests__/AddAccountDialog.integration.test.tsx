@@ -128,7 +128,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             screen.getByRole("button", { name: /^add account$/i }),
         );
         await waitFor(() => expect(calls.opening).toHaveLength(1));
-        expect(calls.opening[0].body).toMatchObject({
+        expect(calls.opening[0]?.body).toMatchObject({
             date: "2025-01-15",
             balance: 123.45,
         });

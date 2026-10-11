@@ -103,6 +103,12 @@ const INVESTMENT: InvestmentSummary = {
     transactions: [TXN],
 };
 
+function firstHolding(): InvestmentSummary {
+    const holding = portfolio.holdings[0];
+    if (!holding) throw new Error("Expected a holding fixture");
+    return holding;
+}
+
 function Harness() {
     const { dialogs, renderMenu } = useHoldingActions({
         deleteTitleKey: "common.delete",
@@ -160,11 +166,12 @@ describe("holding detail refresh", () => {
         expect(
             within(dialog).queryByText("Initial buy"),
         ).not.toBeInTheDocument();
+        const updated = firstHolding();
         portfolio.holdings = [
             {
-                ...portfolio.holdings[0],
+                ...updated,
                 transactions: [
-                    ...portfolio.holdings[0].transactions,
+                    ...updated.transactions,
                     { ...TXN, id: 102, note: "Added buy" },
                 ],
             },
@@ -175,7 +182,7 @@ describe("holding detail refresh", () => {
         ).toBeInTheDocument();
         portfolio.holdings = [
             {
-                ...portfolio.holdings[0],
+                ...firstHolding(),
                 transactions: [{ ...TXN, id: 102, note: "Added buy" }],
             },
         ];
@@ -198,7 +205,7 @@ describe("holding detail refresh", () => {
         expect(
             await screen.findByRole("dialog", { name: "Renamed holding" }),
         ).toBeInTheDocument();
-        portfolio.holdings = [portfolio.holdings[0]];
+        portfolio.holdings = [firstHolding()];
         view.rerender(<Harness />);
         expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
