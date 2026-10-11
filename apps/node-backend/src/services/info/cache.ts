@@ -24,11 +24,12 @@ export const MAX_CACHE_ENTRIES = 100;
  *
  * The payload type differs per cache (net-worth response, performance
  * response, portfolio summary, statistics pivots) and these helpers never look
- * inside it, so it is deliberately `any` rather than a guessed union.
+ * inside it, so it is `unknown` rather than a guessed union;
+ * {@link resolveCacheWithInflight} hands it back as its loader's type.
  */
 export interface InfoCacheEntry {
-  data: any;
-  inflight: Promise<any> | undefined;
+  data: unknown;
+  inflight: Promise<unknown> | undefined;
   expiresAt: number;
 }
 
@@ -197,16 +198,18 @@ export async function resolveCacheWithInflight<T>(
     loader: () => Promise<T>;
   },
 ): Promise<T> {
-  const cachedData: T | undefined = getFreshCachedData(cache, key, {
+  // Every entry of one cache holds what that route's loader resolves (see
+  // above), so the stored payload is the loader's T.
+  const cachedData = getFreshCachedData(cache, key, {
     requireData,
-  });
+  }) as T | undefined;
   if (cachedData !== undefined) {
     return cachedData;
   }
 
   const cachedEntry = cache.get(key);
   if (cachedEntry?.inflight) {
-    return cachedEntry.inflight;
+    return cachedEntry.inflight as Promise<T>;
   }
 
   const inflight: Promise<T> = loader()

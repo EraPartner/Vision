@@ -30,6 +30,9 @@ const payload = {
   occurredAt: "2026-09-20T00:00:00.000Z",
 };
 
+/** TIMESTAMPTZ columns arrive from pg as `Date`s. */
+const CREATED_AT = new Date("2026-09-20T00:00:00.000Z");
+
 describe("auditChainRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -39,20 +42,20 @@ describe("auditChainRepository", () => {
         rows: [{ last_sequence: "0", last_hash: AUDIT_CHAIN_GENESIS_HASH }],
       })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ created_at: "now" }] })
+      .mockResolvedValueOnce({ rows: [{ created_at: CREATED_AT }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     const entry = await appendAuditEvent(payload);
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
     expect(client.query).toHaveBeenCalledTimes(4);
-    expect(client.query.mock.calls[0][0]).toContain("FOR UPDATE");
-    expect(client.query.mock.calls[1][0]).toContain("ORDER BY sequence DESC");
-    expect(client.query.mock.calls[2][1][0]).toBe(1);
-    expect(client.query.mock.calls[2][1][4]).toBe(
+    expect(client.query.mock.calls[0]![0]).toContain("FOR UPDATE");
+    expect(client.query.mock.calls[1]![0]).toContain("ORDER BY sequence DESC");
+    expect(client.query.mock.calls[2]![1][0]).toBe(1);
+    expect(client.query.mock.calls[2]![1][4]).toBe(
       JSON.stringify(Object.fromEntries(Object.entries(payload).sort())),
     );
-    expect(client.query.mock.calls[3][1]).toEqual([
+    expect(client.query.mock.calls[3]![1]).toEqual([
       1,
       entry.hash,
       0,
@@ -74,7 +77,7 @@ describe("auditChainRepository", () => {
         rows: [{ last_sequence: "0", last_hash: AUDIT_CHAIN_GENESIS_HASH }],
       })
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ created_at: "now" }] })
+      .mockResolvedValueOnce({ rows: [{ created_at: CREATED_AT }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
 
     await appendAuditEvent(payload, client);
@@ -117,7 +120,7 @@ describe("auditChainRepository", () => {
           }),
       )
       .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{ created_at: "now" }] })
+      .mockResolvedValueOnce({ rows: [{ created_at: CREATED_AT }] })
       .mockResolvedValueOnce({ rowCount: 1, rows: [] });
     const mutable = { ...payload };
     const pending = appendAuditEvent(mutable);
@@ -127,7 +130,7 @@ describe("auditChainRepository", () => {
 
     const entry = await pending;
     expect((entry.payload as typeof payload).action).toBe("create");
-    expect(JSON.parse(client.query.mock.calls[2][1][4]).action).toBe("create");
+    expect(JSON.parse(client.query.mock.calls[2]![1][4]).action).toBe("create");
     expect(
       verifyAuditChain([entry], {
         firstSequence: 1,
@@ -156,13 +159,16 @@ describe("auditChainRepository", () => {
       .mockResolvedValueOnce({
         rows: [{ last_sequence: "3", last_hash: hash }],
       })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "7" }] });
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: "7", created_at: CREATED_AT }],
+      });
 
     await expect(recordAuditCheckpoint(receipt)).resolves.toMatchObject({
       id: "7",
     });
-    expect(client.query.mock.calls[0][0]).toContain("FOR UPDATE");
-    expect(client.query.mock.calls[1][1]).toEqual([
+    expect(client.query.mock.calls[0]![0]).toContain("FOR UPDATE");
+    expect(client.query.mock.calls[1]![1]).toEqual([
       3,
       hash,
       "external-file",
@@ -185,12 +191,15 @@ describe("auditChainRepository", () => {
         rows: [{ last_sequence: "4", last_hash: "c".repeat(64) }],
       })
       .mockResolvedValueOnce({ rows: [{ entry_hash: olderHash }] })
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: "7" }] });
+      .mockResolvedValueOnce({
+        rowCount: 1,
+        rows: [{ id: "7", created_at: CREATED_AT }],
+      });
 
     await expect(recordAuditCheckpoint(receipt)).resolves.toMatchObject({
       id: "7",
     });
-    expect(client.query.mock.calls[1][1]).toEqual([3]);
+    expect(client.query.mock.calls[1]![1]).toEqual([3]);
   });
 
   it("accepts an exact repeated checkpoint and rejects a conflicting receipt identity", async () => {
@@ -214,6 +223,7 @@ describe("auditChainRepository", () => {
             sequence: "3",
             head_hash: hash,
             receipt_hash: receipt.receiptHash,
+            created_at: CREATED_AT,
           },
         ],
       });
@@ -233,6 +243,7 @@ describe("auditChainRepository", () => {
             sequence: "3",
             head_hash: hash,
             receipt_hash: "c".repeat(64),
+            created_at: CREATED_AT,
           },
         ],
       });
@@ -251,7 +262,7 @@ describe("auditChainRepository", () => {
             previous_hash: "a".repeat(64),
             entry_hash: "b".repeat(64),
             payload,
-            created_at: "now",
+            created_at: CREATED_AT,
           },
         ],
       }),
@@ -265,9 +276,9 @@ describe("auditChainRepository", () => {
         previousHash: "a".repeat(64),
         hash: "b".repeat(64),
         payload,
-        createdAt: "now",
+        createdAt: CREATED_AT,
       },
     ]);
-    expect(query.mock.calls[0][1]).toEqual([8, 1]);
+    expect(query.mock.calls[0]![1]).toEqual([8, 1]);
   });
 });

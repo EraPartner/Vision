@@ -6,9 +6,17 @@ import { http } from "msw";
 import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { err, ok, ACCOUNT_STUB } from "@/test/msw/handlers";
+import {
+    err,
+    ok,
+    ACCOUNT_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+} from "@/test/msw/handlers";
 import { toYmd } from "@/lib/dateUtils";
 import AccountsPage from "@/pages/AccountsPage";
+import {
+    accountListItem,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -82,10 +90,14 @@ const FIXTURE = [
 
 // `unknown[]`: fixtures below deliberately vary in shape (drift/statement
 // fields present or null), which a FIXTURE-inferred parameter type would reject.
+// Each item is completed to the real list-item shape (accountService.list).
 function mockAccounts(items: unknown[] = FIXTURE) {
+    const listItems = items.map((item) =>
+        accountListItem(item as Record<string, unknown>),
+    );
     server.use(
         http.get(`${API_BASE}/api/accounts`, () =>
-            ok({ items, total: items.length, links: [] }),
+            ok({ items: listItems, total: listItems.length, links: [] }),
         ),
     );
 }
@@ -257,9 +269,8 @@ describe("AccountsPage (integration, grouped list)", () => {
         server.use(
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [1, 4].map((account_id) => ({
                         account_id,
@@ -332,9 +343,8 @@ describe("AccountsPage (integration, grouped list)", () => {
             http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
                 await pending;
                 return ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [],
                 });
@@ -378,9 +388,8 @@ describe("AccountsPage (integration, grouped list)", () => {
         server.use(
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [
                         {
@@ -560,11 +569,9 @@ describe("AccountsPage (integration, grouped list)", () => {
     // ── WP-B5 §3 F1: drift badge carries its statement date + a stale tone ───
 
     // Realistic money: a positive drift on a checking account, negative ones on
-    // a mortgage. The per-currency `balance_date` is a bare YYYY-MM-DD on the
-    // wire; "Day 44" keeps the ISO
-    // timestamp shape as the ONE fixture covering the defensive slice. "Day 46"
-    // additionally sends drift/computed_balance as NUMERIC strings — how pg
-    // actually returns them — to exercise normalizeAccount in the render path.
+    // a mortgage. accountService.list sends every balance as a JSON number and
+    // each per-currency `balance_date` as a bare YYYY-MM-DD
+    // (`to_char(..., 'YYYY-MM-DD')`); the list contract rejects anything else.
     const FRESH_YMD = ymdDaysAgo(10);
     const DAY_44_YMD = ymdDaysAgo(44);
     const DAY_45_YMD = ymdDaysAgo(45);
@@ -594,15 +601,10 @@ describe("AccountsPage (integration, grouped list)", () => {
             computed_balance: -8420.15,
             statement_balance: -8500,
             drift: -79.85,
-            statement_balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
+            statement_balance_date: DAY_44_YMD,
             statement_balances: [
-                {
-                    currency: "EUR",
-                    balance: -8500,
-                    balance_date: `${DAY_44_YMD}T00:00:00.000Z`,
-                },
+                { currency: "EUR", balance: -8500, balance_date: DAY_44_YMD },
             ],
-            // (ISO-timestamp shape — the defensive slice in statementYmd.)
         },
         {
             ...ACCOUNT_STUB,
@@ -610,16 +612,12 @@ describe("AccountsPage (integration, grouped list)", () => {
             name: "Day 46",
             display_name: "Day 46",
             type: "liability",
-            computed_balance: "-8420.15",
-            statement_balance: "-8500.00",
-            drift: "-79.85",
+            computed_balance: -8420.15,
+            statement_balance: -8500,
+            drift: -79.85,
             statement_balance_date: DAY_46_YMD,
             statement_balances: [
-                {
-                    currency: "EUR",
-                    balance: "-8500.00",
-                    balance_date: DAY_46_YMD,
-                },
+                { currency: "EUR", balance: -8500, balance_date: DAY_46_YMD },
             ],
         },
         {
@@ -682,7 +680,7 @@ describe("AccountsPage (integration, grouped list)", () => {
         return within(card).getByRole("button", { name: "Reconcile balance" });
     }
 
-    it("puts the statement date on the drift badge, sliced off its ISO timestamp", async () => {
+    it("puts the statement date on the drift badge", async () => {
         mockAccounts(DRIFT_FIXTURE);
         renderWithApp(<AccountsPage />);
         await screen.findByRole("region", { name: "Cash & savings" });
@@ -733,7 +731,6 @@ describe("AccountsPage (integration, grouped list)", () => {
         const day46 = driftBadgeFor("Day 46");
         expect(day46.className).toMatch(/text-warning/);
         expect(day46.className).not.toMatch(/text-destructive/);
-        // NUMERIC-string drift still renders as money (normalizeAccount coercion).
         expect(day46.textContent).toMatch(/-79,85/);
     });
 

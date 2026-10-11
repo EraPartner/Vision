@@ -82,13 +82,18 @@ describe("live contract schema projections", () => {
         expect(
             CategoryItemSchema.safeParse({
                 id: 1,
-                general: "Food",
-                detail: null,
+                general: "FOOD",
+                detail: "GROCERIES",
                 is_active: true,
                 description: null,
                 created_at: "2026-08-25T00:00:00.000Z",
-                updated_at: null,
-                category_name: "Food",
+                updated_at: "2026-08-25T00:00:00.000Z",
+                parent_id: 100,
+                name: "GROCERIES",
+                hierarchy_only: false,
+                legacy_compatible: true,
+                path_name: "FOOD:GROCERIES",
+                category_name: "FOOD:GROCERIES",
                 links: [],
             }).success,
         ).toBe(true);

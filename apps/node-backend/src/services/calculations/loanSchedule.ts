@@ -59,7 +59,8 @@ function addMonthsAtDay(
   monthOffset: number,
   preferredDay: number,
 ) {
-  const [year, month] = baseDateStr.split("-").map(Number);
+  // A missing part is NaN, as it was when read past the end of the split.
+  const [year = NaN, month = NaN] = baseDateStr.split("-").map(Number);
   const firstOfTarget = new Date(Date.UTC(year, month - 1 + monthOffset, 1));
   const lastDay = new Date(
     Date.UTC(

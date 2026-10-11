@@ -5,7 +5,9 @@
  * investment, and threads through optional Belgian tax profile data from the client.
  */
 
-import { query } from "../../database/connection.ts";
+import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import { taxTxnRowSchema } from "../../database/rows/info.ts";
+import type { TaxTxnRow } from "../../database/rows/info.ts";
 import {
   convertWithRates,
   loadCurrentRates,
@@ -60,23 +62,7 @@ export type PrecomputedPIT = {
  * COALESCE with a numeric literal, so they stay strings here (parsed via
  * `Number()`/`convert()` below), matching `PortfolioMathTxRow` in types/rows.ts.
  */
-export type TaxTxnRow = {
-  id: number;
-  investment_id: number;
-  investment_name: string;
-  symbol: string | null;
-  asset_class: string;
-  type: string;
-  dividend_amount_convention: 'gross' | 'net' | 'unknown';
-  income_recognition_role?: 'standard' | 'included_in_units';
-  amount: string;
-  taxes: string;
-  fees: string;
-  currency: string;
-  rate_date: string;
-  year: number;
-  month: number;
-};
+export type { TaxTxnRow };
 
 /**
  * One month's tax/fee totals, keyed 'YYYY-MM' in `byMonth`. Carries the four
@@ -155,9 +141,14 @@ export type TaxReportData = {
   unconvertedCurrencies: string[];
 };
 
-/** Unwrap a settled Promise result; log and return null on rejection. */
+/**
+ * Unwrap a settled Promise result; log and return null on rejection. A row
+ * contract mismatch is rethrown instead: the report must not silently render
+ * an empty section over data the code no longer understands (ADR-193).
+ */
 function unwrap<T>(result: PromiseSettledResult<T>, label: string): T | null {
   if (result.status === "fulfilled") return result.value;
+  if (result.reason instanceof RowContractError) throw result.reason;
   logger.warn(`[dataFetcherTax] ${label} failed — section will be skipped`, {
     reason: result.reason?.message,
   });
@@ -241,7 +232,8 @@ async function fetchTaxTransactions(
   startDate: string,
   endDate: string,
 ): Promise<TaxTransactionAggregates> {
-  const result = await query<TaxTxnRow>(
+  const taxRows = await queryRows(
+    taxTxnRowSchema,
     `
     SELECT
       pt.id,
@@ -306,7 +298,7 @@ async function fetchTaxTransactions(
 
   const relevantCurrencies = [
     ...new Set([
-      ...result.rows.map((r) =>
+      ...taxRows.map((r) =>
         String(r.currency || "EUR")
           .toUpperCase()
           .trim(),
@@ -334,7 +326,7 @@ async function fetchTaxTransactions(
     return currentRates[c];
   };
 
-  for (const row of result.rows) {
+  for (const row of taxRows) {
     // Normalize the source currency ONCE so the skip-guard and the rowRates keys
     // can't disagree for mixed-case/whitespace currency strings.
     const cur = String(row.currency || "EUR")
@@ -345,11 +337,12 @@ async function fetchTaxTransactions(
     // applies the same conversion math and unsupported-currency handling as the live
     // path — only the rate source (historical vs current) differs.
     const fromRate = rateToEurForDate(cur, rowDate);
-    const rowRates = {
-      EUR: 1,
-      [cur]: fromRate,
-      [toCur]: rateToEurForDate(toCur, rowDate),
-    };
+    // An unresolved rate stays absent, which convertWithRates reads the same
+    // way as the former `undefined` entry.
+    const toRate = rateToEurForDate(toCur, rowDate);
+    const rowRates: Record<string, number> = { EUR: 1 };
+    if (fromRate !== undefined) rowRates[cur] = fromRate;
+    if (toRate !== undefined) rowRates[toCur] = toRate;
     // No rate resolved for a non-target foreign currency → convertWithRates will
     // sum it 1:1. Record it so the report can flag the total as approximate.
     if (

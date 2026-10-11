@@ -103,24 +103,47 @@ export function noContent() {
 
 // ── Mutation fixture stubs — minimal valid shapes matching backend formatters ─
 
+/**
+ * A transaction as `formatTransaction` emits it (routes/transactions.ts): the
+ * list, detail and PATCH body. `running_balance` is only added on
+ * `include_balance=true` list reads; POST also adds `auto_linked`
+ * (`TRANSACTION_CREATED_STUB`). Checked by `TransactionSchema`.
+ */
 export const TRANSACTION_STUB = {
     id: 1,
     transaction_date: "2025-01-15",
     bank_account: "BE12345678901234",
+    account_id: 1,
+    is_transfer: false,
+    transfer_peer_id: null,
+    transfer_source: null,
     recipient_id: 1,
     recipient_name: "Test Recipient",
     memo: "Test memo",
     amount: -25.5,
+    amount_eur: -25.5,
     currency: "EUR",
     balance: null,
     category_id: 1,
     category_name: "FOOD:GROCERIES",
     comment: null,
+    tags: [],
     is_active: true,
     created_at: "2025-01-15T10:00:00.000Z",
-    updated_at: null,
+    updated_at: "2025-01-15T10:00:00.000Z",
+    links: [],
 };
 
+/** `POST /api/transactions`: the formatted row plus `auto_linked`. */
+export const TRANSACTION_CREATED_STUB = {
+    ...TRANSACTION_STUB,
+    auto_linked: null,
+};
+
+/**
+ * A legacy category row: `SELECT * FROM categories` (hierarchy columns
+ * included) plus `category_name` and `links: []`. Checked by `CategorySchema`.
+ */
 export const CATEGORY_STUB = {
     id: 1,
     general: "FOOD",
@@ -128,11 +151,35 @@ export const CATEGORY_STUB = {
     description: null,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
+    updated_at: "2025-01-01T00:00:00.000Z",
+    parent_id: 100,
+    name: "GROCERIES",
+    hierarchy_only: false,
+    legacy_compatible: true,
+    path_name: "FOOD:GROCERIES",
     category_name: "FOOD:GROCERIES",
     links: [],
 };
 
+/** A canonical tree node as `mapNode` emits it. Checked by `CategoryNodeSchema`. */
+export const CATEGORY_NODE_STUB = {
+    id: 1,
+    name: "GROCERIES",
+    parentId: 100,
+    pathIds: [100, 1],
+    path: ["FOOD", "GROCERIES"],
+    category_name: "FOOD:GROCERIES",
+    depth: 2,
+    description: null,
+    is_active: true,
+    hierarchyOnly: false,
+    legacyCompatible: true,
+};
+
+/**
+ * An `EnrichedRecipientRow` plus `links: []` (list, detail, PATCH, merge
+ * primary). Checked by `RecipientSchema`.
+ */
 export const RECIPIENT_STUB = {
     id: 1,
     name: "Test Recipient",
@@ -142,8 +189,32 @@ export const RECIPIENT_STUB = {
     notes: null,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
+    updated_at: "2025-01-01T00:00:00.000Z",
+    default_category_name: null,
+    primary_bank_account: null,
+    primary_recipient_name: null,
+    alias_count: 0,
     links: [],
+};
+
+/** `POST /api/recipients`: `withCreateOutcome` adds `created`. */
+export const RECIPIENT_CREATED_STUB = {
+    ...RECIPIENT_STUB,
+    created: false,
+};
+
+/** A `recipient_match_patterns` row (`listPatternsForRecipient`). */
+export const RECIPIENT_PATTERN_STUB = {
+    id: 1,
+    pattern: "TEST RECIPIENT",
+    pattern_kind: "literal_prefix",
+    case_sensitive: false,
+    priority: 100,
+    is_active: true,
+    source: "user",
+    notes: null,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-01T00:00:00.000Z",
 };
 
 export const INVESTMENT_STUB = {
@@ -175,6 +246,140 @@ export const INVESTMENT_STUB = {
     updated_at: "2025-01-15T10:00:00.000Z",
 };
 
+/** A `portfolio_transactions` row after `mapPortfolioTxRow`. */
+export const PORTFOLIO_TRANSACTION_STUB = {
+    id: 1,
+    investment_id: 1,
+    type: "buy",
+    date: "2025-01-01",
+    amount: 100,
+    units: 1,
+    price_per_unit: 100,
+    fees: null,
+    taxes: null,
+    dividend_amount_convention: "unknown",
+    income_recognition_role: "standard",
+    currency: "EUR",
+    fx_rate_to_eur: null,
+    note: null,
+    is_recurring: false,
+    recurrence_interval: null,
+    recurrence_end_date: null,
+    account_id: null,
+    import_batch_id: null,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-01T00:00:00.000Z",
+};
+
+/** portfolioSummaryService.getPortfolioSummary with no holdings. */
+export const PORTFOLIO_SUMMARY_STUB = {
+    currency: "EUR",
+    computed_at: "2025-01-01T00:00:00.000Z",
+    totals: {
+        totalPortfolioValue: 0,
+        totalInvested: 0,
+        totalGainLoss: 0,
+        totalRealizedGain: 0,
+        totalUnrealizedGain: 0,
+        totalGain: 0,
+        totalIncome: 0,
+        totalDividends: 0,
+        totalInKindIncome: 0,
+        totalFees: 0,
+        totalTaxes: 0,
+        totalAssetGain: 0,
+        totalFxGain: 0,
+        totalReturnPct: 0,
+        usedFallbackRate: false,
+    },
+    summaries: [],
+    byAccount: [],
+    archivedInKindIncome: [],
+    brokerageCashFees: {
+        total: 0,
+        gainAfterFees: 0,
+        usedFallbackRate: false,
+        byAccount: [],
+    },
+};
+
+/**
+ * One portfolio-summary `summaries[]` entry for INVESTMENT_STUB with no
+ * transactions. The `SELECT i.*` passthrough keeps NUMERIC columns as strings
+ * and maturity_date as a serialized Date.
+ */
+export const PORTFOLIO_SUMMARY_ITEM_STUB = {
+    id: 1,
+    name: "MSCI World ETF",
+    symbol: "IWDA",
+    asset_class: "etf",
+    assetClass: "etf",
+    is_active: true,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-15T10:00:00.000Z",
+    notes: null,
+    location: null,
+    municipality: null,
+    cadastral_income: null,
+    municipality_tax_rate: null,
+    maturity_date: null,
+    maturityDate: null,
+    price_provider: "yahoo",
+    price_provider_id: "IWDA.AS",
+    price_updated_at: "2025-01-15T10:00:00.000Z",
+    currency: "EUR",
+    originalCurrency: "EUR",
+    totalUnits: 0,
+    currentPrice: 95.5,
+    current_price: 95.5,
+    interestRate: 0,
+    interest_rate: 0,
+    totalInvested: 0,
+    totalBuyCost: 0,
+    totalSellProceeds: 0,
+    currentValue: 0,
+    totalFees: 0,
+    totalTaxes: 0,
+    totalDividends: 0,
+    totalIncome: 0,
+    totalInKindIncome: 0,
+    avgCostBasis: 0,
+    realizedGain: 0,
+    unrealizedGain: 0,
+    totalGain: 0,
+    gainLoss: 0,
+    gainLossPercent: 0,
+    assetGain: 0,
+    fxGain: 0,
+    nativeCurrentValue: 0,
+    usedFallbackRate: false,
+    accruedInterest: 0,
+    projectedAnnualInterest: 0,
+    totalAppreciation: 0,
+    fullyAssigned: true,
+    oversold: false,
+    byAccount: [],
+};
+
+/** A `saved_charts` row (routes/savedCharts.ts). */
+export const SAVED_CHART_STUB = {
+    id: 1,
+    name: "Test chart",
+    chart_type: "line",
+    category_ids: [],
+    recipient_ids: [],
+    tag_ids: [],
+    all_categories: false,
+    all_recipients: false,
+    all_tags: false,
+    chart_variant: "default",
+    time_bucket: "monthly",
+    date_range_start: null,
+    date_range_end: null,
+    created_at: "2025-01-01T00:00:00.000Z",
+    updated_at: "2025-01-01T00:00:00.000Z",
+};
+
 export const PLANNED_TRANSACTION_STUB = {
     id: 1,
     planned_date: "2025-02-01",
@@ -190,6 +395,8 @@ export const PLANNED_TRANSACTION_STUB = {
     url: null,
     is_recurring: true,
     recurrence_pattern: "monthly",
+    recurrence_end_date: null,
+    max_occurrences: null,
     reminder_days_before: null,
     is_executed: false,
     last_executed_date: null,
@@ -206,6 +413,7 @@ export const PLANNED_TRANSACTION_STUB = {
     executed_transaction_id: null,
     execution_count: 0,
     executions: [],
+    tags: [],
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
     updated_at: null,
@@ -243,23 +451,37 @@ export const ACCOUNT_STUB = {
     // route's `res.ok({ ...account, links: [] })` (routes/accounts.js:45/56/…).
     closed_at: null,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
+    updated_at: "2025-01-01T00:00:00.000Z",
     links: [],
 };
 
+const { links: _accountLinks, ...ACCOUNT_COLUMNS } = ACCOUNT_STUB;
+
 /**
- * An accounts LIST item: the single-row columns plus the enrichments
- * `accountRepository.list` computes per row (`computed_balance` — the
- * anchor+delta running balance, ADR-094 — and `drift`, statement −
- * reconciliation base, null when no statement balance). The list also emits
- * `reconcilable_balance`/`reconcilable_currency`/`anchor_date`/
- * `post_anchor_count`/`has_transactions`; add those explicitly in tests that
- * assert on them, as the reconcile-dialog tests already do.
+ * An accounts LIST item: the single-row columns (no per-item `links`) plus the
+ * enrichments `accountService.list` computes per row, all as JSON numbers:
+ * `computed_balance` (the anchor+delta balance, ADR-094), the per-currency
+ * `balance_parts` and `statement_balances`, the reconciliation base
+ * (`reconcilable_balance`/`reconcilable_currency`) and `drift` (statement −
+ * base, null when no statement reading). `anchor_date`/`post_anchor_count`
+ * are omitted for an unstamped account; tests that need them add them.
+ * Checked by `AccountListItemSchema`.
  */
 export const ACCOUNT_LIST_ITEM_STUB = {
-    ...ACCOUNT_STUB,
+    ...ACCOUNT_COLUMNS,
+    has_transactions: true,
+    statement_balances: [] as Array<{
+        currency: string;
+        balance: number;
+        balance_date: string;
+    }>,
     computed_balance: 0,
-    drift: null,
+    balance_parts: [] as Array<{ currency: string; balance: number }>,
+    balance_incomplete: false,
+    unconverted_currencies: [] as string[],
+    reconcilable_balance: 0,
+    reconcilable_currency: "EUR",
+    drift: null as number | null,
 };
 
 /**
@@ -492,7 +714,10 @@ export const defaultHandlers = [
         aggOk({ recipientsByYear: {} }),
     ),
     http.get(`${API_BASE}/api/aggregations/recipient-pivot`, () =>
-        aggOk({ recipientPivot: {} }),
+        aggOk({
+            recipientPivot: {},
+            conversion: { usedHistoricalFallback: false, affectedCurrencies: [] },
+        }),
     ),
     http.get(`${API_BASE}/api/aggregations/sankey`, () =>
         aggOk({ nodes: [], links: [], year: 2025 }),
@@ -551,8 +776,16 @@ export const defaultHandlers = [
         }),
     ),
 
+    // routes/info/rates.ts GET /exchange-rates: no stored rates yet.
     http.get(`${API_BASE}/api/info/exchange-rates`, () =>
-        ok({ rates: [], fallback_rates: {}, base: "EUR", date: "2025-01-01" }),
+        ok({
+            total_rates: 0,
+            rates: [],
+            fallback_rates: {},
+            source: "fallback",
+            is_stale: true,
+            last_fetched_at: null,
+        }),
     ),
     http.get(`${API_BASE}/api/market/news`, () => ok({ items: [], total: 0 })),
 
@@ -572,7 +805,8 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })),
 
     http.get(`${API_BASE}/api/market/quote`, () => ok({ items: [], total: 0 })),
-    http.get(`${API_BASE}/api/market/search`, () => ok({ results: [] })),
+    // marketLookupService search: `{items}` without `total`.
+    http.get(`${API_BASE}/api/market/search`, () => ok({ items: [] })),
     // Research aggregator endpoints (consumed by the Market Lookup Details tabs
     // — scorecard fires on load, analyst/news on tab-click). Default to an
     // unavailable envelope so component tests degrade gracefully; integration
@@ -583,42 +817,99 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/research/analyst`, () =>
         ok(null, { provider: null, source: "unavailable" }),
     ),
+    // routes/research.ts EMPTY_BY_TYPE: news degrades to `{articles: []}`.
     http.get(`${API_BASE}/api/research/news`, () =>
-        ok(null, { provider: null, source: "unavailable" }),
+        ok({ articles: [] }, { provider: null, source: "unavailable" }),
     ),
     http.get(`${API_BASE}/api/watchlist`, () =>
         ok({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
 
+    // routes/ai.ts GET /status: every key is always sent.
     http.get(`${API_BASE}/api/ai/status`, () =>
-        ok({ ok: false, baseUrl: "", defaultModel: "", enabled: false }),
+        ok({
+            ok: false,
+            baseUrl: "",
+            displayUrl: "",
+            modelCount: 0,
+            error: null,
+            code: null,
+            hint: null,
+            defaultModel: "",
+            enabled: false,
+        }),
     ),
+    // routes/aiResearch.ts GET /status with Ollama and OpenAI unavailable.
     http.get(`${API_BASE}/api/ai-research/status`, () =>
         ok({
+            defaultRoute: "local",
+            providers: [
+                {
+                    id: "ollama",
+                    route: "local",
+                    status: "unavailable",
+                    models: [],
+                    configuredContextTokens: 8192,
+                    supportsTools: true,
+                    supportsEmbeddings: false,
+                },
+                {
+                    id: "openai-api",
+                    route: "openai-api",
+                    status: "disabled",
+                    models: [],
+                    supportsTools: false,
+                    supportsEmbeddings: false,
+                },
+            ],
             openai: {
                 enabled: false,
                 model: null,
                 models: [],
+                storageRequested: false,
+                hostedToolsEnabled: false,
+                disclosureModes: [],
+                monthlyBudgetMicros: 0,
+                reversibleReferences: {
+                    configured: false,
+                    markerSyntax: "[[vision-ref:type|value]]",
+                    classification: "pseudonymized-not-anonymous",
+                },
+                agentCloakPreflight: {
+                    enabled: false,
+                    mode: "block-on-change",
+                    location: "operator-managed-loopback",
+                },
             },
+            web: { enabled: false, searchLimitPerJob: 0, pageLimitPerJob: 0 },
+            localDocuments: {
+                supportedMediaTypes: ["text/plain", "text/markdown", "text/html"],
+                pdfSupported: false,
+            },
+            orchestration: { maxConcurrentJobs: 1 },
         }),
     ),
+    // Always paginated (`parsePagination` defaults to limit 50).
     http.get(`${API_BASE}/api/ai/conversations`, () =>
-        ok({ items: [], total: 0 }),
+        ok({ items: [], total: 0, limit: 50, offset: 0 }),
     ),
 
+    // buildPortfolioPerformancePayload with no snapshots in range.
     http.get(`${API_BASE}/api/info/portfolio-performance`, () =>
         ok({
-            snapshots: [],
             currency: "EUR",
-            start_value: 0,
-            end_value: 0,
-            absolute_return: 0,
-            percentage_return: 0,
+            start_date: "2025-01-01",
+            end_date: "2025-01-31",
+            snapshots: [],
+            metrics: null,
+            heatmap: { years: [], data: {}, maxAbsPct: 0 },
+            breakdownSummary: [],
+            totals: PORTFOLIO_SUMMARY_STUB.totals,
         }),
     ),
     http.get(`${API_BASE}/api/info/net-worth`, () =>
         ok({
-            current: { liquid: 0, investments: 0, netWorth: 0 },
+            current: { liquid: 0, liabilities: 0, investments: 0, netWorth: 0 },
             monthlyChange: 0,
             monthlyChangePercent: 0,
             snapshots: [],
@@ -669,7 +960,9 @@ export const defaultHandlers = [
     // tests. Integration tests override them per-flow via server.use().
 
     // 201: routes/transactions.js:576.
-    http.post(`${API_BASE}/api/transactions`, () => ok201(TRANSACTION_STUB)),
+    http.post(`${API_BASE}/api/transactions`, () =>
+        ok201(TRANSACTION_CREATED_STUB),
+    ),
     http.patch(`${API_BASE}/api/transactions/:id`, () => ok(TRANSACTION_STUB)),
     http.delete(`${API_BASE}/api/transactions/:id`, () => noContent()),
 
@@ -720,7 +1013,7 @@ export const defaultHandlers = [
         }),
     ),
 
-    http.post(`${API_BASE}/api/recipients`, () => ok(RECIPIENT_STUB)),
+    http.post(`${API_BASE}/api/recipients`, () => ok(RECIPIENT_CREATED_STUB)),
     http.patch(`${API_BASE}/api/recipients/:id`, () => ok(RECIPIENT_STUB)),
     http.delete(`${API_BASE}/api/recipients/:id`, () => noContent()),
 
@@ -743,6 +1036,8 @@ export const defaultHandlers = [
                 portfolio: 0,
                 funding: 0,
             },
+            stampsInterleaved: false,
+            links: [],
         }),
     ),
 
@@ -863,16 +1158,17 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/ai/models`, () => ok({ items: [], total: 0 })),
 
     // Attachments
+    // `listBody(items, total)` — routes/attachments.ts.
     http.get(`${API_BASE}/api/attachments/transaction/:id`, () =>
-        ok({ items: [] }),
+        ok({ items: [], total: 0 }),
     ),
     // 201: routes/attachments.js:113. Body is `attachmentRepository.formatRow`
     // (attachmentRepository.js:19-29) — `size_bytes` (a number) and
     // `stored_path`, NOT `size`. `AttachmentPanel.tsx:61` renders
-    // `attachment.size_bytes`.
+    // `attachment.size_bytes`. `id` is a BIGSERIAL, so pg sends its text.
     http.post(`${API_BASE}/api/attachments/transaction/:id`, () =>
         ok201({
-            id: 1,
+            id: "1",
             transaction_id: 1,
             filename: "test.pdf",
             stored_path: "attachments/test.pdf",
@@ -948,23 +1244,7 @@ export const defaultHandlers = [
 
     // Info / portfolio extras
     http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-        ok({
-            currency: "EUR",
-            totals: {
-                totalPortfolioValue: 0,
-                totalInvested: 0,
-                totalGainLoss: 0,
-                totalRealizedGain: 0,
-                totalUnrealizedGain: 0,
-                totalGain: 0,
-                totalIncome: 0,
-                totalFees: 0,
-                totalTaxes: 0,
-                totalReturnPct: 0,
-            },
-            summaries: [],
-            byAccount: [],
-        }),
+        ok(PORTFOLIO_SUMMARY_STUB),
     ),
     // `res.ok({ message: 'Exchange rates refreshed from ECB' })` —
     // routes/info/rates.js:94. The route counts nothing: there is no
@@ -980,52 +1260,23 @@ export const defaultHandlers = [
     http.get(`${API_BASE}/api/investments/providers`, () =>
         ok({ providers: [] }),
     ),
+    // investmentService.refreshPrices with nothing to refresh.
     http.post(`${API_BASE}/api/investments/refresh-prices`, () =>
-        ok({
-            message: "Prices refreshed",
-            updated_count: 0,
-            stale_count: 0,
-            cached_count: 0,
-            live: true,
-        }),
+        ok({ updated: 0, message: "No investments with live price providers" }),
     ),
     http.get(`${API_BASE}/api/investments/transactions`, () =>
         ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
     ),
     http.get(`${API_BASE}/api/investments/:id/transactions`, () =>
-        ok({ items: [], total: 0 }),
+        ok({ items: [], total: 0, limit: 100, offset: 0, links: [] }),
     ),
     // 201: services/investmentService.js:612. The PATCH below is 200
     // (same controller, :682).
     http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
-        ok201({
-            id: 1,
-            investment_id: 1,
-            type: "buy",
-            date: "2025-01-01",
-            amount: 100,
-            units: 1,
-            price_per_unit: 100,
-            currency: "EUR",
-            is_recurring: false,
-            created_at: "2025-01-01T00:00:00Z",
-            updated_at: "2025-01-01T00:00:00Z",
-        }),
+        ok201(PORTFOLIO_TRANSACTION_STUB),
     ),
     http.patch(`${API_BASE}/api/investments/transactions/:id`, () =>
-        ok({
-            id: 1,
-            investment_id: 1,
-            type: "buy",
-            date: "2025-01-01",
-            amount: 100,
-            units: 1,
-            price_per_unit: 100,
-            currency: "EUR",
-            is_recurring: false,
-            created_at: "2025-01-01T00:00:00Z",
-            updated_at: "2025-01-01T00:00:00Z",
-        }),
+        ok(PORTFOLIO_TRANSACTION_STUB),
     ),
     http.delete(`${API_BASE}/api/investments/transactions/:id`, () =>
         noContent(),
@@ -1092,8 +1343,9 @@ export const defaultHandlers = [
     http.delete(`${API_BASE}/api/recipients/:id/patterns/:patternId`, () =>
         noContent(),
     ),
+    // `previewPatternMatches` — routes/recipients.ts (`res.ok(result)`).
     http.post(`${API_BASE}/api/recipients/:id/patterns/preview`, () =>
-        ok({ matches: [] }),
+        ok({ matchCount: 0, recipientIds: [] }),
     ),
 
     // Reports
@@ -1122,26 +1374,14 @@ export const defaultHandlers = [
     // Saved charts
     http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [], total: 0 })),
     // 201: routes/savedCharts.js:175.
-    http.post(`${API_BASE}/api/saved-charts`, () =>
-        ok201({
-            id: 1,
-            name: "Test chart",
-            config: {},
-            created_at: "2025-01-01T00:00:00Z",
-        }),
-    ),
+    http.post(`${API_BASE}/api/saved-charts`, () => ok201(SAVED_CHART_STUB)),
     http.patch(`${API_BASE}/api/saved-charts/:id`, () =>
-        ok({
-            id: 1,
-            name: "Updated",
-            config: {},
-            created_at: "2025-01-01T00:00:00Z",
-        }),
+        ok({ ...SAVED_CHART_STUB, name: "Updated" }),
     ),
     http.delete(`${API_BASE}/api/saved-charts/:id`, () => noContent()),
 
     // Splits sub-routes
-    http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [] })),
+    http.get(`${API_BASE}/api/splits/transaction/:id`, () => ok({ items: [], total: 0 })),
     // 201: routes/splits.js:298.
     http.post(`${API_BASE}/api/splits/batch`, () => ok201({ items: [] })),
     // NOTE: there is deliberately no `http.patch('/api/splits/:id')` handler.
@@ -1197,6 +1437,7 @@ export const defaultHandlers = [
             asset_class: "stock",
             currency: "USD",
             target_price: 100,
+            added_price: null,
             notes: null,
             price_provider_id: "TEST",
             created_at: "2025-01-01T00:00:00Z",
@@ -1211,6 +1452,7 @@ export const defaultHandlers = [
             asset_class: "stock",
             currency: "USD",
             target_price: 100,
+            added_price: null,
             notes: null,
             price_provider_id: "TEST",
             created_at: "2025-01-01T00:00:00Z",

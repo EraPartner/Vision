@@ -24,17 +24,12 @@ export interface PgPoolClient {
 }
 
 /**
- * Typed callers pass a row interface, e.g. `query<TransactionRow>(...)`, and
- * get `rows: TransactionRow[]`. Untyped callers (`R` left as `any`) get
- * `rows: any` rather than `any[]`: the pre-conversion JSDoc type was `any`,
- * and an array type makes `.map()` callbacks in JS consumers infer tuple-less
- * `any[][]` results that their existing annotations reject.
+ * `query<Row>(...)` is an unchecked claim about the row shape; untyped callers
+ * get `unknown` rows. Prefer `queryRows`/`checkRows` (rowContracts.ts), which
+ * check rows against a schema (ADR-193).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export interface PgQueryResult<R = any> {
-  // `0 extends 1 & R` holds only when R is `any`.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rows: 0 extends 1 & R ? any : R[];
+export interface PgQueryResult<R = unknown> {
+  rows: R[];
   rowCount: number | null;
 }
 
@@ -115,8 +110,7 @@ function isRetryableStatement(sql: string): boolean {
  * @param text - SQL query
  * @param params - Query parameters
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function query<R = any>(
+export async function query<R = unknown>(
   text: string,
   params?: readonly unknown[],
   opts: QueryOptions = {},
@@ -128,7 +122,9 @@ export async function query<R = any>(
   // statement would run outside it (or on a poisoned client).
   const ambient = getAmbientTransactionClient();
   if (ambient) {
-    return ambient.query(text, values);
+    // `R` is the caller's unchecked claim, as for `pool.query` below; checked
+    // callers go through rowContracts.ts.
+    return (await ambient.query(text, values)) as PgQueryResult<R>;
   }
 
   const retries = opts.retries ?? 0;

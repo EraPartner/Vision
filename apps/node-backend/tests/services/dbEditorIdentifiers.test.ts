@@ -387,7 +387,7 @@ describe("pagination", () => {
       release: vi.fn(),
     });
     const page = await readRows(CATALOG_TABLE, { limit: 1 });
-    expect(page.rows[0].__vision_cursor_value_1).toBe("user value");
+    expect(page.rows[0]!.__vision_cursor_value_1).toBe("user value");
     expect(page.rows[0]).not.toHaveProperty("__vision_cursor_value_1_2");
     expect(clientSql.find((sql) => sql.startsWith("SELECT *"))).toContain(
       '(ctid)::text AS "__vision_cursor_value_1_2"',
@@ -470,10 +470,10 @@ describe("mutation identifiers", () => {
       { dryRun: true },
     );
     expect(res.dryRun).toBe(true);
-    expect(res.statements![0].preview).toContain(
+    expect(res.statements![0]!.preview).toContain(
       'INSERT INTO "transactions" ("memo")',
     );
-    expect(res.statements![0].preview).not.toContain("VALUES (1)--");
+    expect(res.statements![0]!.preview).not.toContain("VALUES (1)--");
   });
 
   it("rejects a batch whose columns are all unknown", async () => {
@@ -492,9 +492,9 @@ describe("mutation identifiers", () => {
       [{ op: "update", pk: { id: 1 }, set: { memo: "x" } }],
       { dryRun: true },
     );
-    expect(res.statements![0].preview).toContain(
+    expect(res.statements![0]!.preview).toContain(
       'UPDATE "transactions" SET "memo"',
     );
-    expect(res.statements![0].preview).toContain('WHERE "id"');
+    expect(res.statements![0]!.preview).toContain('WHERE "id"');
   });
 });

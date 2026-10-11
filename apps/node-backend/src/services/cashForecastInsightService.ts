@@ -37,9 +37,8 @@ const MOVE_PCT = 0.15;
 const MOVE_ABS_FLOOR = 100;
 
 /**
- * The subset of a computeCashflowForecast method result this module reads.
- * The envelope's `methods` field is `any[]` (calculations/forecast/ is
- * outside this ratchet slice) — narrowed locally to what this file touches.
+ * The subset of a computeCashflowForecast method result this module reads,
+ * narrowed locally to what this file touches.
  */
 export interface ForecastMethod {
   id: string;
@@ -119,11 +118,14 @@ export function buildCashForecastInsight(
   if (!method) return null;
 
   const cumulative = method.cumulative;
-  if (!Array.isArray(cumulative) || cumulative.length === 0) return null;
+  const monthEndPoint = Array.isArray(cumulative)
+    ? cumulative.at(-1)
+    : undefined;
+  if (!cumulative || !monthEndPoint) return null;
 
   // P50 month-end net cash flow: last point of the cumulative (actuals folded
   // with the projection; for MC methods the projection is the median path).
-  const monthEndNetCashflow = cumulative[cumulative.length - 1].value;
+  const monthEndNetCashflow = monthEndPoint.value;
   const hasFuture = cumulative.slice(payload.current_day ?? 0).length > 0;
 
   let monthEndNetCashflowLow: number | null = null;

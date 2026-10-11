@@ -109,16 +109,16 @@ describe("production OpenAI adapter traffic, offline", () => {
       });
 
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      const [url, init] = fetchImpl.mock.calls[0];
-      const sent = Buffer.from(exchanges[0].request!.bodyBase64!, "base64");
+      const [url, init] = fetchImpl.mock.calls[0]!;
+      const sent = Buffer.from(exchanges[0]!.request!.bodyBase64!, "base64");
       expect(url).toBe("https://api.openai.com/v1/responses");
       expect(init!.redirect).toBe("error");
       expect(init!.body).toBe(preview.serialized);
       expect(sent.equals(Buffer.from(preview.serialized))).toBe(true);
-      expect(exchanges[0].request!.byteLength).toBe(
+      expect(exchanges[0]!.request!.byteLength).toBe(
         Buffer.byteLength(preview.serialized),
       );
-      expect(exchanges[0].request!.headers).toEqual({
+      expect(exchanges[0]!.request!.headers).toEqual({
         authorization: "Bearer synthetic-key",
         "content-type": "application/json",
       });
@@ -161,9 +161,9 @@ describe("production OpenAI adapter traffic, offline", () => {
       await vi.advanceTimersByTimeAsync(100);
       await expect(pending).resolves.toEqual({ ok: false, code: "TIMEOUT" });
       expect(fetchImpl).toHaveBeenCalledTimes(1);
-      expect(fetchImpl.mock.calls[0][1]!.redirect).toBe("error");
+      expect(fetchImpl.mock.calls[0]![1]!.redirect).toBe("error");
       expect(exchanges).toHaveLength(1);
-      expect(exchanges[0].response).toBeUndefined();
+      expect(exchanges[0]!.response).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }

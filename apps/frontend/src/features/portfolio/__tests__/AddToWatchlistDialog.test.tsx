@@ -26,8 +26,9 @@ const WATCHLIST_STUB = {
     target_price: 200,
     notes: null,
     price_provider_id: "AAPL",
+    added_price: null,
     created_at: "2025-01-01T00:00:00Z",
-    updated_at: null,
+    updated_at: "2025-01-01T00:00:00Z",
 };
 
 afterEach(() => vi.restoreAllMocks());

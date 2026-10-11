@@ -1,4 +1,7 @@
-import { settingsRepository } from "../../../repositories/settingsRepository.ts";
+import {
+  settingField,
+  settingsRepository,
+} from "../../../repositories/settingsRepository.ts";
 import { getPortfolioSummary } from "../../portfolio/portfolioSummaryService.ts";
 import { memoizeAsync } from "../toolCache.ts";
 import type { ToolCache } from "../toolCache.ts";
@@ -15,7 +18,9 @@ export async function getAiDisplayCurrency(
   const settings = await memoizeAsync(cache, "settings:app_settings", () =>
     settingsRepository.get("app_settings"),
   );
-  const currency = String(settings?.defaultCurrency || "EUR").toUpperCase();
+  const currency = String(
+    settingField(settings, "defaultCurrency") || "EUR",
+  ).toUpperCase();
   return ISO_CURRENCY.test(currency) ? currency : "EUR";
 }
 

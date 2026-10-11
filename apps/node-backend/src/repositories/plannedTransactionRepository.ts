@@ -7,6 +7,7 @@ import { query } from "../database/connection.ts";
 import { queryRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
+  idRowSchema,
   keyedLoanScheduleRowSchema,
   loanScheduleRowSchema,
   plannedCommitmentRowSchema,
@@ -132,8 +133,7 @@ async function hydratePlannedRow(
   );
   row.executions = executions;
   row.execution_count = executions.length;
-  row.executed_transaction_id =
-    executions.length > 0 ? executions[0].executed_transaction_id : null;
+  row.executed_transaction_id = executions[0]?.executed_transaction_id ?? null;
 
   if (row.is_loan) {
     row.loan_schedule = await queryRows(
@@ -288,12 +288,14 @@ export async function setPlannedTransactionTags(
     [plannedTransactionId],
   );
   if (!slugs || slugs.length === 0) return;
-  const resolved = await client.query(
+  const resolved = await queryRows(
+    idRowSchema,
     "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
+    client,
   );
-  if (resolved.rows.length === 0) return;
-  const tagIds = resolved.rows.map((r: { id: number }) => r.id);
+  if (resolved.length === 0) return;
+  const tagIds = resolved.map((r) => r.id);
   await client.query(
     `INSERT INTO planned_transaction_tags (planned_transaction_id, tag_id)
      SELECT $1, unnest($2::int[])
@@ -365,8 +367,9 @@ export async function updatePlannedFields(
      ${PLANNED_JOINS}`,
     params,
   );
-  if (rows.length === 0) return null;
-  return hydratePlannedRow(rows[0], id);
+  const [row] = rows;
+  if (!row) return null;
+  return hydratePlannedRow(row, id);
 }
 
 /**
@@ -390,7 +393,8 @@ export async function insertPlannedTransactionInTransaction(
   client: QueryRunner,
   input: Record<string, unknown>,
 ): Promise<number> {
-  const result = await client.query(
+  const [inserted] = await queryRows(
+    idRowSchema,
     `INSERT INTO planned_transactions (
        planned_date, account_id, recipient_id, amount, memo, currency, category_id, comment, url,
        is_recurring, recurrence_pattern, recurrence_end_date, max_occurrences,
@@ -428,8 +432,11 @@ export async function insertPlannedTransactionInTransaction(
       input.loan_regular_payment_amount,
       input.loan_first_payment_date,
     ],
+    client,
   );
-  return result.rows[0].id;
+  // A plain INSERT ... RETURNING yields exactly one row or throws.
+  if (!inserted) throw new Error("planned transaction INSERT returned no row");
+  return inserted.id;
 }
 
 /** @returns false when the execution was already recorded */
@@ -519,8 +526,9 @@ export const plannedTransactionRepository = {
       limit,
       offset,
     ]);
-    let total = pageRows.length > 0 ? parseInt(pageRows[0].total_count, 10) : 0;
-    if (pageRows.length === 0) {
+    const [firstPageRow] = pageRows;
+    let total = firstPageRow ? parseInt(firstPageRow.total_count, 10) : 0;
+    if (!firstPageRow) {
       const countSql = `
         SELECT count(*)
         FROM planned_transactions pt
@@ -528,7 +536,8 @@ export const plannedTransactionRepository = {
         ${whereClause}
       `;
       const [countRow] = await queryRows(countRowSchema, countSql, params);
-      total = parseInt(countRow?.count, 10) || 0;
+      // String(): parseInt coerced a missing row's `undefined` the same way.
+      total = parseInt(String(countRow?.count), 10) || 0;
     }
     const rows: PlannedRowInHydration[] = pageRows.map(
       ({ total_count: _total_count, ...row }) => row,
@@ -627,7 +636,7 @@ export const plannedTransactionRepository = {
       row.executions = executions;
       row.execution_count = executions.length;
       row.executed_transaction_id =
-        executions.length > 0 ? executions[0].executed_transaction_id : null;
+        executions[0]?.executed_transaction_id ?? null;
       row.loan_schedule = row.is_loan
         ? schedulesByPlannedTransactionId.get(row.id) || []
         : [];
@@ -674,10 +683,10 @@ export const plannedTransactionRepository = {
       ${PLANNED_JOINS}
       WHERE pt.id = $1
     `;
-    const rows = await queryRows(plannedTransactionListRowSchema, sql, [id]);
-    if (rows.length === 0) return null;
+    const [row] = await queryRows(plannedTransactionListRowSchema, sql, [id]);
+    if (!row) return null;
 
-    return hydratePlannedRow(rows[0], id);
+    return hydratePlannedRow(row, id);
   },
 
   /**

@@ -12,8 +12,17 @@
  */
 
 import { query } from "../../database/connection.ts";
+import { queryRows, RowContractError } from "../../database/rowContracts.ts";
+import {
+  currencyDatePairRowSchema,
+  currencyDayKeyRowSchema,
+  historicalRateRowSchema,
+  latestStoredRateRowSchema,
+} from "../../database/rows/portfolio.ts";
+import type { LatestStoredRateDbRow } from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
 import { toDecimal, toNumber } from "../../lib/money.ts";
+import type { DecimalInput } from "../../lib/money.ts";
 import {
   recordSuccess as recordProviderSuccess,
   recordError as recordProviderError,
@@ -35,11 +44,7 @@ import {
   clearHistoricalCache,
 } from "./rateFetcher.ts";
 import { settingsRepository } from "../../repositories/settingsRepository.ts";
-import type {
-  ExchangeRateRow,
-  HistoricalRateIndex,
-  RateTable,
-} from "../../types/rows.ts";
+import type { HistoricalRateIndex, RateTable } from "../../types/rows.ts";
 
 /** Message of a caught value, for log metadata. */
 function errorMessage(err: unknown) {
@@ -180,18 +185,15 @@ export async function getHistoricalRateIndex(
   const union = fresh
     ? [...new Set([...cache.currencies, ...wanted])]
     : wanted;
-  const result = await query<
-    Pick<ExchangeRateRow, "currency_code" | "rate_to_eur"> & {
-      rate_date: string;
-    }
-  >(
+  const rows = await queryRows(
+    historicalRateRowSchema,
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])
      ORDER BY currency_code ASC, rate_date ASC`,
     [union],
   );
-  const index = buildHistoricalRateIndex(result.rows || []);
+  const index = buildHistoricalRateIndex(rows);
   historicalIndexCache = { index, currencies: union, builtAt: Date.now() };
   return index;
 }
@@ -239,17 +241,23 @@ function mergeFetchedRatesIntoHistoricalIndex(
 
 /**
  * Latest stored exchange-rate rows (`is_latest = true`), one per currency,
- * ordered by currency code. Returns the raw pg result — the /exchange-rates
- * route owns response shaping (ADR-067: routes call services, never the
- * database layer directly).
+ * ordered by currency code, as `{ rows }` like the raw pg result it used to
+ * return — the /exchange-rates route owns response shaping (ADR-067: routes
+ * call services, never the database layer directly).
  */
-export async function listLatestStoredRates() {
-  return query(`
+export async function listLatestStoredRates(): Promise<{
+  rows: LatestStoredRateDbRow[];
+}> {
+  const rows = await queryRows(
+    latestStoredRateRowSchema,
+    `
       SELECT currency_code, rate_to_eur, rate_date, fetched_at
       FROM exchange_rates
       WHERE is_latest = true
       ORDER BY currency_code ASC
-    `);
+    `,
+  );
+  return { rows };
 }
 
 /**
@@ -316,6 +324,8 @@ export async function warmCache() {
     // refresh cycle is the primary invalidation hook for it.
     clearHistoricalIndexCache();
   } catch (err) {
+    // A contract violation is a data fault, not a transient failure: surface it.
+    if (err instanceof RowContractError) throw err;
     logger.warn("Failed to warm exchange rate cache", {
       error: errorMessage(err),
     });
@@ -326,6 +336,7 @@ export async function warmCache() {
 
 export interface ConvertRowsOptions {
   useHistoricalRatesByDate?: boolean;
+  /** Column holding the row's date; falls back to the well-known date columns. */
   dateField?: string | null;
 }
 
@@ -336,10 +347,38 @@ export type ConversionFields = {
   fallback_reason?: string;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary SQL projection; see convertRowsToEur
-export type ConvertibleRow = Record<string, any>;
+/** A date column value {@link normalizeDateInput} understands. */
+type DateColumn = string | Date | null | undefined;
 
-export type ConvertedRow = ConvertibleRow & ConversionFields;
+/**
+ * The columns {@link convertRowsToEur} reads. Rows are arbitrary query
+ * projections: every other column passes through to the result untouched.
+ */
+export interface ConvertibleRow {
+  amount?: DecimalInput;
+  currency?: string | null;
+  date?: DateColumn;
+  day?: DateColumn;
+  transaction_date?: DateColumn;
+  planned_date?: DateColumn;
+  rate_date?: DateColumn;
+}
+
+/** A row returned by {@link convertRowsToEur}: the input row plus the conversion fields. */
+export type ConvertedRow<T extends ConvertibleRow = ConvertibleRow> = T &
+  ConversionFields;
+
+/**
+ * Narrow a `dateField` column (named at runtime, so untyped) to a date input.
+ * A value of another type is stringified, exactly as
+ * {@link normalizeDateInput} itself would.
+ */
+function toDateColumn(value: unknown): DateColumn {
+  if (value === null || value === undefined || value instanceof Date) {
+    return value;
+  }
+  return typeof value === "string" ? value : String(value);
+}
 
 /**
  * Convert an array of rows to a target currency (default EUR).
@@ -347,14 +386,13 @@ export type ConvertedRow = ConvertibleRow & ConversionFields;
  * Returns rows with an `amount_eur` field containing the converted amount.
  *
  * Rows are arbitrary query projections (any column may be the date — see
- * `dateField`) and callers read their own projected columns back off the
- * result, so rows stay loosely typed records at this boundary.
+ * `dateField`); each result row keeps the caller's own row type.
  */
-export async function convertRowsToEur(
-  rows: ConvertibleRow[],
+export async function convertRowsToEur<T extends ConvertibleRow>(
+  rows: readonly T[],
   targetCurrency = "EUR",
   options: ConvertRowsOptions | null = {},
-): Promise<ConvertedRow[]> {
+): Promise<ConvertedRow<T>[]> {
   if (!rows || rows.length === 0) return [];
 
   const { useHistoricalRatesByDate = false, dateField = null } = options || {};
@@ -362,8 +400,12 @@ export async function convertRowsToEur(
   const rates = await getRates();
 
   /** @returns 'YYYY-MM-DD', or null when the row carries no usable date */
-  function resolveDateFromRow(row: ConvertibleRow): string | null {
-    if (dateField && row[dateField]) return normalizeDateInput(row[dateField]);
+  function resolveDateFromRow(row: T): string | null {
+    // Any column may be the date; read it through an untyped view of the row.
+    const fieldValue: unknown = dateField
+      ? (row as Readonly<Record<string, unknown>>)[dateField]
+      : undefined;
+    if (fieldValue) return normalizeDateInput(toDateColumn(fieldValue));
     return normalizeDateInput(
       row.date ||
         row.day ||
@@ -443,7 +485,7 @@ export async function convertRowsToEur(
     }
   }
 
-  const converted: ConvertedRow[] = [];
+  const converted: ConvertedRow<T>[] = [];
   for (const row of rows) {
     const currency = (row.currency || "EUR").toUpperCase().trim();
     const amount = toNumber(toDecimal(row.amount));
@@ -596,18 +638,15 @@ async function repairHistoricalRatesFromFullHistory(
       ),
     ),
   ].filter(Boolean);
-  const storedResult = await query<
-    Pick<ExchangeRateRow, "currency_code" | "rate_to_eur"> & {
-      rate_date: string;
-    }
-  >(
+  const storedRows = await queryRows(
+    historicalRateRowSchema,
     `SELECT currency_code, to_char(rate_date, 'YYYY-MM-DD') AS rate_date, rate_to_eur
      FROM exchange_rates
      WHERE currency_code = ANY($1::text[])`,
     [currencies],
   );
   const storedByKey = new Map(
-    storedResult.rows.map((r) => [
+    storedRows.map((r) => [
       `${r.currency_code}:${r.rate_date}`,
       toNumber(toDecimal(r.rate_to_eur)),
     ]),
@@ -677,11 +716,9 @@ async function stampTransactionFxRates() {
   return result.rowCount ?? 0;
 }
 
-/** A distinct (currency, transaction day) pair; `rate_date` is a pg DATE. */
-type CurrencyDatePairRow = { currency_code: string; rate_date: Date };
-
 export async function backfillPortfolioHistoricalRates() {
-  const pairsResult = await query<CurrencyDatePairRow>(
+  const pairRows = await queryRows(
+    currencyDatePairRowSchema,
     `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
      FROM portfolio_transactions pt
      WHERE pt.currency IS NOT NULL
@@ -689,20 +726,23 @@ export async function backfillPortfolioHistoricalRates() {
      GROUP BY pt.currency::text, pt.date::date
      ORDER BY pt.date::date ASC`,
   );
-  if (pairsResult.rows.length === 0)
+  if (pairRows.length === 0)
     return { inserted: 0, missing: 0, repaired: 0, stamped: 0 };
 
   let repaired = 0;
   try {
     repaired =
-      (await repairHistoricalRatesFromFullHistory(pairsResult.rows)) ?? 0;
+      (await repairHistoricalRatesFromFullHistory(pairRows)) ?? 0;
   } catch (err) {
+    // A contract violation is a data fault, not a transient failure: surface it.
+    if (err instanceof RowContractError) throw err;
     logger.warn("Full-history FX repair failed — will retry next startup", {
       error: errorMessage(err),
     });
   }
 
-  const missingResult = await query<CurrencyDatePairRow>(
+  const missingRows = await queryRows(
+    currencyDatePairRowSchema,
     `SELECT pt.currency::text AS currency_code, pt.date::date AS rate_date
      FROM portfolio_transactions pt
      LEFT JOIN exchange_rates er
@@ -719,7 +759,7 @@ export async function backfillPortfolioHistoricalRates() {
   let unresolved = 0;
 
   const resolvedPairs: Array<{ currencyCode: string; rateDate: string }> = [];
-  for (const row of missingResult.rows) {
+  for (const row of missingRows) {
     const currencyCode = String(row.currency_code || "")
       .toUpperCase()
       .trim();
@@ -741,9 +781,8 @@ export async function backfillPortfolioHistoricalRates() {
   if (resolvedPairs.length > 0) {
     const codes = resolvedPairs.map((p) => p.currencyCode);
     const dates = resolvedPairs.map((p) => p.rateDate);
-    const existsResult = await query<
-      Pick<ExchangeRateRow, "currency_code"> & { rate_date: string }
-    >(
+    const existsRows = await queryRows(
+      currencyDayKeyRowSchema,
       `SELECT er.currency_code, er.rate_date::text AS rate_date
          FROM exchange_rates er
          JOIN UNNEST($1::text[], $2::text[]) AS want(currency_code, rate_date)
@@ -752,7 +791,7 @@ export async function backfillPortfolioHistoricalRates() {
       [codes, dates],
     );
     const present = new Set(
-      existsResult.rows.map(
+      existsRows.map(
         (r) => `${r.currency_code}|${String(r.rate_date).slice(0, 10)}`,
       ),
     );

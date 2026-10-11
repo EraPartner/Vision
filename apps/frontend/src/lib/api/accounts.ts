@@ -4,17 +4,22 @@ import type {
     AccountUpdate,
     AccountsListResponse,
 } from "@/types/api";
-import { AccountListSchema } from "@vision/types/contracts";
-import { apiRequest, checkResponseContract } from "@/lib/api/client";
+import {
+    AccountListSchema,
+    AccountMergePreviewSchema,
+    AccountMergeResultSchema,
+    AccountPortfolioLotRetagPreviewSchema,
+    AccountSchema,
+    OpeningBalanceResultSchema,
+} from "@vision/types/contracts";
+import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
-// Money fields the Account type declares as numbers. Collection readings can
-// arrive from PostgreSQL NUMERIC values while derived balance figures are summed
-// server-side in JS and already arrive as JSON numbers. Coercing all of them
-// here — at the single fetch boundary — keeps the runtime shape honest for every
-// consumer (e.g. AccountsPage's drift.toFixed()) regardless of which side of
-// that boundary a given field is produced on. `null` becomes `undefined`: the
-// backend's convention is that absent means absent.
+// Money fields the Account type declares as numbers. accountService.list emits
+// them as JSON numbers and AccountListSchema requires that, so `Number(...)` is
+// an identity here; the one real conversion is `drift: null` (no statement
+// reading) becoming `undefined`: the frontend convention is that absent means
+// absent.
 function normalizeAccount(a: Account): Account {
     return {
         ...a,
@@ -39,10 +44,10 @@ function normalizeAccount(a: Account): Account {
 export async function getAccounts(params?: {
     active?: "true" | "false" | "all";
 }): Promise<AccountsListResponse> {
-    const res = checkResponseContract(
-        AccountListSchema,
-        await requestWithQuery<AccountsListResponse>("/api/accounts", params),
-        "GET /api/accounts",
+    const res = await requestWithQuery<AccountsListResponse>(
+        "/api/accounts",
+        params,
+        { schema: AccountListSchema },
     );
     return { ...res, items: res.items.map(normalizeAccount) };
 }
@@ -51,6 +56,7 @@ export function createAccount(account: AccountCreate): Promise<Account> {
     return apiRequest<Account>("/api/accounts", {
         method: "POST",
         body: JSON.stringify(account),
+        schema: AccountSchema,
     });
 }
 
@@ -82,6 +88,7 @@ export function getAccountPortfolioLotRetagPreview(
 ): Promise<AccountPortfolioLotRetagPreview> {
     return apiRequest<AccountPortfolioLotRetagPreview>(
         `/api/accounts/${id}/portfolio-lot-retag-preview`,
+        { schema: AccountPortfolioLotRetagPreviewSchema },
     );
 }
 
@@ -126,6 +133,7 @@ export function mergeAccounts(
     return apiRequest<AccountMergeResult>(`/api/accounts/${targetId}/merge`, {
         method: "POST",
         body: JSON.stringify({ source_ids: sourceIds }),
+        schema: AccountMergeResultSchema,
     });
 }
 
@@ -167,6 +175,7 @@ export function previewMerge(
     return requestWithQuery<AccountMergePreview>(
         `/api/accounts/${sourceId}/merge-preview`,
         { into: targetId },
+        { schema: AccountMergePreviewSchema },
     );
 }
 
@@ -179,7 +188,8 @@ export interface OpeningBalanceInput {
 export interface OpeningBalanceResult {
     transaction: {
         id: number;
-        balance: number;
+        /** NUMERIC decimal string: the anchor is a raw `RETURNING *` row. */
+        balance: string;
         transfer_source: string;
     } | null;
     /** Set when the anchor date does not precede existing activity (anchor+delta makes it inert). */
@@ -200,6 +210,7 @@ export function setOpeningBalance(
         {
             method: "POST",
             body: JSON.stringify(input),
+            schema: OpeningBalanceResultSchema,
         },
     );
 }

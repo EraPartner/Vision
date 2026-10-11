@@ -7,6 +7,9 @@ import { server } from "@/test/msw/server";
 import { ok, aggOk, ACCOUNT_STUB } from "@/test/msw/handlers";
 import { toYmd } from "@/lib/dateUtils";
 import { BankBalancesWidget } from "@/features/dashboard/BankBalancesWidget";
+import {
+    accountListItem,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -49,7 +52,7 @@ const TOTAL = 2450.75 + 8100.2 + 0; // 10.550,95 €
 // The entity population behind the CARDS: active accounts only, and the widget
 // drops zero-balance ones — deliberately a different (smaller) set than above.
 const ENTITY_ACCOUNTS = [
-    {
+    accountListItem({
         ...ACCOUNT_STUB,
         id: 1,
         name: "KBC Checking",
@@ -64,23 +67,23 @@ const ENTITY_ACCOUNTS = [
         drift: -49.25,
         anchor_date: ymdDaysAgo(10),
         post_anchor_count: 3,
-    },
-    {
+    }),
+    accountListItem({
         ...ACCOUNT_STUB,
         id: 2,
         name: "Argenta Savings",
         display_name: "Argenta Savings",
         computed_balance: 8100.2,
         drift: null,
-    },
-    {
+    }),
+    accountListItem({
         ...ACCOUNT_STUB,
         id: 3,
         name: "Old Joint",
         display_name: "Old Joint",
         computed_balance: 0,
         drift: null,
-    },
+    }),
 ];
 
 function mockWidgetApi({
@@ -99,7 +102,12 @@ function mockWidgetApi({
     server.use(
         http.get(`${API_BASE}/api/aggregations/bank-balances`, () =>
             aggOk({
-                accounts: payloadAccounts,
+                // The repository always sends the ledger-span columns.
+                accounts: payloadAccounts.map((account) => ({
+                    first_transaction: null,
+                    last_transaction: null,
+                    ...account,
+                })),
                 total_net_position: total,
                 history,
                 total_history: totalHistory,
@@ -117,15 +125,15 @@ function mockWidgetApi({
 
 describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
     it("excludes wallet and exchange fiat ledgers from cash cards while retaining brokerage cash", async () => {
-        const broker = {
+        const broker = accountListItem({
             ...ACCOUNT_STUB,
             id: 4,
             name: "Ordinary broker",
             display_name: "Ordinary broker",
             type: "brokerage",
             computed_balance: 200,
-        };
-        const wallet = {
+        });
+        const wallet = accountListItem({
             ...ACCOUNT_STUB,
             id: 5,
             name: "Hardware wallet",
@@ -133,8 +141,8 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
             type: "wallet",
             computed_balance: 9999,
             has_transactions: true,
-        };
-        const exchange = {
+        });
+        const exchange = accountListItem({
             ...ACCOUNT_STUB,
             id: 6,
             name: "Crypto exchange",
@@ -142,7 +150,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
             type: "crypto_exchange",
             computed_balance: -432.1,
             has_transactions: true,
-        };
+        });
         // The cash aggregation excludes holdings-only types from its totals and
         // history; its entity query still returns their real partial fiat rows.
         mockWidgetApi({
@@ -394,7 +402,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
                 {
                     ...ENTITY_ACCOUNTS[1],
                     name: nameOnlyIban,
-                    display_name: undefined,
+                    display_name: null,
                     computed_balance: 250,
                     is_active: false,
                     in_net_worth: true,

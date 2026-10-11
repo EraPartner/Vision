@@ -1,6 +1,11 @@
 /** Parameterized SQL writes for portfolio transactions. */
 
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  portfolioIntIdRowSchema,
+  portfolioTransactionDbRowSchema,
+} from "../database/rows/portfolio.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
 import { mapPortfolioTxRow } from "./portfolioTxRepo.reads.ts";
 import { hasPortfolioTransactionImportBatchIdColumn } from "./portfolioTxRepo.common.ts";
@@ -96,7 +101,8 @@ export async function insert(
       payload.dedup_fingerprint_version,
     );
   }
-  const result = await query<Record<string, unknown>>(
+  const row = await queryOne(
+    portfolioTransactionDbRowSchema,
     `INSERT INTO portfolio_transactions
        (${columns.join(", ")})
        VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
@@ -104,7 +110,7 @@ export async function insert(
        RETURNING *`,
     values,
   );
-  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
+  return row ? mapPortfolioTxRow(row) : null;
 }
 
 export async function updateFields(
@@ -131,11 +137,12 @@ export async function updateFields(
   const { clauses, params, nextIdx } = buildSetClauses(fields, { allowed });
   if (clauses.length === 0) return unchanged;
   params.push(id);
-  const result = await query<Record<string, unknown>>(
+  const row = await queryOne(
+    portfolioTransactionDbRowSchema,
     `UPDATE portfolio_transactions SET ${clauses.join(", ")} WHERE id = $${nextIdx} RETURNING *`,
     params,
   );
-  return result.rows[0] ? mapPortfolioTxRow(result.rows[0]) : null;
+  return row ? mapPortfolioTxRow(row) : null;
 }
 
 export async function hardDelete(id: number): Promise<boolean> {
@@ -150,11 +157,12 @@ export async function hardDeleteByImportBatch(
   batchId: number | string,
 ): Promise<Array<number | string>> {
   if (!(await hasPortfolioTransactionImportBatchIdColumn())) return [];
-  const result = await query<{ id: number | string }>(
+  const rows = await queryRows(
+    portfolioIntIdRowSchema,
     "DELETE FROM portfolio_transactions WHERE import_batch_id = $1 RETURNING id",
     [batchId],
   );
-  return result.rows.map((row) => row.id);
+  return rows.map((row) => row.id);
 }
 
 export async function repointAccount(

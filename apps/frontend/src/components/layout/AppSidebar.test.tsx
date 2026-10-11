@@ -28,7 +28,7 @@ function quietCounts() {
             ok({ count: 0, status: "ready", computed_at: null }),
         ),
         http.get(`${API_BASE}/api/analysis/monitors/notifications`, () =>
-            ok({ items: [], total: 0, unreadCount: 0, links: [] }),
+            ok({ items: [], total: 0, unreadCount: 0, limit: 200, offset: 0 }),
         ),
     );
 }

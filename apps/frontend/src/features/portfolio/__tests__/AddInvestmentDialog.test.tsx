@@ -5,7 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import {
+    ok,
+    err,
+    INVESTMENT_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import { AddInvestmentDialog } from "@/features/portfolio/AddInvestmentDialog";
 
 const API_BASE = "http://localhost:3002";
@@ -13,7 +18,7 @@ const API_BASE = "http://localhost:3002";
 beforeEach(() => {
     server.use(
         http.post(`${API_BASE}/api/investments/:id/transactions`, () =>
-            ok({ id: 1, type: "buy" }),
+            ok(PORTFOLIO_TRANSACTION_STUB),
         ),
     );
 });
@@ -211,7 +216,7 @@ describe("AddInvestmentDialog", () => {
 
 describe("investment numeric validation", () => {
     it("rejects malformed fees before creating a holding, focuses the field, and preserves the purchase", async () => {
-        const create = vi.fn(() => ok({ id: 23 }));
+        const create = vi.fn(() => ok({ ...INVESTMENT_STUB, id: 23 }));
         server.use(http.post(`${API_BASE}/api/investments`, create));
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentDialog allowedAssetClasses={["etf"]} />);
@@ -238,7 +243,7 @@ describe("investment numeric validation", () => {
     });
 
     it("requires both editable initial purchase values without suggesting a read-only price input", async () => {
-        const create = vi.fn(() => ok({ id: 23 }));
+        const create = vi.fn(() => ok({ ...INVESTMENT_STUB, id: 23 }));
         server.use(http.post(`${API_BASE}/api/investments`, create));
         const user = userEvent.setup();
         renderWithApp(<AddInvestmentDialog allowedAssetClasses={["etf"]} />);
@@ -256,7 +261,7 @@ describe("investment numeric validation", () => {
     });
 
     it("rejects malformed optional interest instead of saving zero", async () => {
-        const create = vi.fn(() => ok({ id: 23 }));
+        const create = vi.fn(() => ok({ ...INVESTMENT_STUB, id: 23 }));
         server.use(http.post(`${API_BASE}/api/investments`, create));
         const user = userEvent.setup();
         renderWithApp(
@@ -277,7 +282,7 @@ describe("investment numeric validation", () => {
     it.each([/cadastral income/i, /municipal tax rate/i])(
         "rejects malformed property numbers in %s",
         async (label) => {
-            const create = vi.fn(() => ok({ id: 23 }));
+            const create = vi.fn(() => ok({ ...INVESTMENT_STUB, id: 23 }));
             server.use(http.post(`${API_BASE}/api/investments`, create));
             const user = userEvent.setup();
             renderWithApp(

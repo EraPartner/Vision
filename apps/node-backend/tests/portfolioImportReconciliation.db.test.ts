@@ -64,6 +64,7 @@ import {
   retainedEvidenceRow,
   retainedReferenceConfiguration,
 } from "./fixtures/retainedPortfolioEvidence.ts";
+import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
 
 const historicalWarm = vi.hoisted(() => vi.fn());
 vi.mock(
@@ -253,7 +254,7 @@ async function stagedKinesisScope(
         `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,rows_error,account_id,is_brokerage)
      VALUES ('kinesis_transaction_history',$1,'awaiting_review',$2,$3,$4,true) RETURNING id`,
         [
-          JSON.stringify(source.batches[0].custom_config),
+          JSON.stringify(source.batches[0]!.custom_config),
           source.rows.length,
           source.rows.filter((row) => row.status === "error").length,
           fx.account,
@@ -333,7 +334,7 @@ async function kinesisClosedGroupFixture() {
     [
       prior.id,
       JSON.stringify({
-        ...fixtureGroup.prior.batches[0].custom_config,
+        ...fixtureGroup.prior.batches[0]!.custom_config,
         portfolio_performance_reference: cache,
       }),
     ],
@@ -463,14 +464,14 @@ async function installStoredGroup(fx: ClosedGroupFixture, batchId = fx.id) {
   );
   await pool.query(
     "UPDATE portfolio_import_batches SET custom_config=$2 WHERE id=$1",
-    [batchId, JSON.stringify(source.batches[0].custom_config)],
+    [batchId, JSON.stringify(source.batches[0]!.custom_config)],
   );
 }
 
 type CorrectionFixture = Awaited<ReturnType<typeof kinesisCorrectionFixture>>;
 async function installStoredCorrection(fx: CorrectionFixture) {
   const rows = await readReconciliationSources(fx.request.batchIds);
-  const row = rows[6];
+  const row = rows[6]!;
   const event = retainedEvent({
     date: row.tx_date!,
     shares: row.units!,
@@ -501,7 +502,7 @@ async function installStoredCorrection(fx: CorrectionFixture) {
   );
   const current = await readReconciliationSources(fx.request.batchIds);
   const config = {
-    ...current[0].custom_config,
+    ...batchConfigFields(current[0]!.custom_config),
     portfolio_performance_reference: retainedReferenceConfiguration(
       current,
       "correct_existing_only",
@@ -519,8 +520,8 @@ async function kinesisScopeFixture() {
   const staged = await stagedKinesisScope(fx);
   const manual: number[] = [];
   for (const [index, row] of [
-    staged.source.rows[0],
-    staged.source.rows[5],
+    staged.source.rows[0]!,
+    staged.source.rows[5]!,
   ].entries()) {
     const before = syntheticKinesisManual(row);
     const id = (
@@ -601,7 +602,7 @@ async function kinesisCorrectionFixture({ warmRates = true } = {}) {
   const retained = { ...fx, request: fx.request };
   const oldState = await kinesisState(retained);
   const fresh = await stagedKinesisScope(fx);
-  const gift = fresh.source.rows[6];
+  const gift = fresh.source.rows[6]!;
   const existingId = (
     await pool.query(
       `INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,fx_rate_to_eur,note)
@@ -753,7 +754,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     ).toMatchObject({ imported: 0, adopted: 0, duplicates: 0 });
     expect(await kinesisState(all)).toEqual(after);
     const cloned = structuredClone(fx.source);
-    delete cloned.batches[0].custom_config.portfolio_performance_reference;
+    delete cloned.batches[0]!.custom_config.portfolio_performance_reference;
     const fresh = await stagedKinesisScope(fx, { source: cloned });
     const freshRequest = { ...fx.request, batchIds: [fresh.id] };
     await installStoredGroup(fx, fresh.id);
@@ -1154,7 +1155,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       "UPDATE portfolio_transactions SET fees=fees+1 WHERE id=$1",
       [fx.manual[0]],
     );
-    const gift = fx.source.rows[6];
+    const gift = fx.source.rows[6]!;
     await pool.query(
       "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,note) VALUES ($1,'gift',$2,100,$3,12743.09,0,0,'EUR','Original meaningful gift')",
       [fx.investment, gift.tx_date, gift.units],
@@ -1194,7 +1195,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
 
   it("defers an unqualified Kinesis canonical gift from an older incomplete receipt while committing only eligible adoptions", async () => {
     const fx = await kinesisScopeFixture();
-    const gift = fx.source.rows[6];
+    const gift = fx.source.rows[6]!;
     const prior = await stagedKinesisScope(fx);
     await pool.query(
       "DELETE FROM portfolio_import_staging_rows WHERE batch_id=$1 AND row_index<>6",
@@ -1363,7 +1364,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
   it("reports a fully settled sibling batch truthfully while the whole partial Kinesis session stays reviewable on retry", async () => {
     const fx = await kinesisScopeFixture();
     const sibling = await stagedKinesisScope(fx, { singleGift: true });
-    const manual = syntheticKinesisManual(sibling.source.rows[0]);
+    const manual = syntheticKinesisManual(sibling.source.rows[0]!);
     await pool.query(
       "INSERT INTO portfolio_transactions(investment_id,type,date,amount,units,price_per_unit,fees,taxes,currency,note) VALUES ($1,'gift',$2,$3,$4,$5,$6,$7,$8,$9)",
       [
@@ -1575,7 +1576,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       ready: true,
       summary: { adopt: 1, insert: 0 },
     });
-    expect(preview.actions[0].existingTransactionId).toBe(old);
+    expect(preview.actions[0]!.existingTransactionId).toBe(old);
     const result = await commitReviewedPortfolioImports({
       batchIds: [id],
       adoptPolicy: "prefer_source",
@@ -1616,7 +1617,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         adoptPolicy: "prefer_source",
       });
       expect(plan.ready).toBe(true);
-      expect(plan.actions[0].economicsProven).toBe(true);
+      expect(plan.actions[0]!.economicsProven).toBe(true);
       await commitReviewedPortfolioImports({
         batchIds: [id],
         adoptPolicy: "prefer_source",
@@ -2185,7 +2186,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     );
     expect(
       (await previewPortfolioImportReconciliation({ batchIds: [wallet] }))
-        .blockers[0].reason,
+        .blockers[0]!.reason,
     ).toBe("missing_companion_pro_history");
     const pro = await batch(fx);
     await pool.query(
@@ -2274,7 +2275,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
           `INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,account_id,is_brokerage)
        VALUES ('ibkr_transaction_history',$1,'awaiting_review',$2,$3,true) RETURNING id`,
           [
-            JSON.stringify(sources[0].custom_config),
+            JSON.stringify(sources[0]!.custom_config),
             sources.length,
             fx.account,
           ],
@@ -2354,7 +2355,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
           }),
         ]
       : [syntheticIbkrPlannerSource()];
-    const context = sources[0].custom_config.ibkr_source_context;
+    const context = sources[0]!.custom_config.ibkr_source_context;
     context.record_hashes = sources.map((row) => row.source_record_hash);
     const originalBatch = await ibkrBatch(fx, sources);
     await commitReviewedPortfolioImports({ batchIds: [originalBatch] });
@@ -2531,7 +2532,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
         taxes: "0.0000",
         currency: "EUR",
         dividend_amount_convention: "unknown",
-        note: data.sources[1].note,
+        note: data.sources[1]!.note,
       },
     ]);
     await rollbackBatch(data.reviewBatch);
@@ -2618,7 +2619,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       adoptPolicy: "prefer_source",
     };
     const plan = await previewPortfolioImportReconciliation(scope);
-    const originalConfig = data.sources[0].custom_config;
+    const originalConfig = data.sources[0]!.custom_config;
     await pool.query(
       "UPDATE portfolio_import_batches SET custom_config=$2 WHERE id=$1",
       [
@@ -2705,7 +2706,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
     const absent = await previewPortfolioImportReconciliation({
       batchIds: [data.reviewBatch],
     });
-    expect(absent.blockers[0].reason).toBe("duplicate_repair_policy_required");
+    expect(absent.blockers[0]!.reason).toBe("duplicate_repair_policy_required");
     const scope = {
       batchIds: [data.reviewBatch],
       adoptPolicy: "prefer_source",
@@ -2924,7 +2925,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
       ).rows;
       const plan = await previewPortfolioImportReconciliation(scope);
       expect(plan.ready).toBe(false);
-      expect(plan.blockers[0].reason).toBe(reason);
+      expect(plan.blockers[0]!.reason).toBe(reason);
       await expect(
         commitReviewedPortfolioImports({
           ...scope,
@@ -3438,7 +3439,7 @@ describeDb("real PostgreSQL reversible source adoption", () => {
             `${record.cells[bookingColumn]}-${index}`;
       }
       const raw = JSON.stringify(envelope);
-      const main = envelope.records[0];
+      const main = envelope.records[0]!;
       const csvRaw = main.cells
         .map((cell) => {
           const value =

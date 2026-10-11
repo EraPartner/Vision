@@ -11,19 +11,25 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import {
+  activePatternRowSchema,
+  idRowSchema,
+  patternDefinitionRowSchema,
+  recipientNameRowSchema,
+  recipientPatternListRowSchema,
+  requireRow,
+} from '../database/rows/catalog.ts';
+import type {
+  ActivePatternRow,
+  RecipientPatternListRow,
+} from '../database/rows/catalog.ts';
 import { buildSetClauses } from '../lib/sqlClauses.ts';
 import { logger } from '../config/logger.ts';
 import { ValidationError, NotFoundError } from '../middleware/errorHandler.ts';
 import type { RecipientMatchPatternRow } from '../types/rows.ts';
 
-export type { RecipientMatchPatternRow };
-
-/**
- * `RecipientMatchPatternRow` as `loadActivePatterns` projects it: `updated_at`
- * is explicitly cast to text in that query (used verbatim in the compile-cache
- * key), so it is `string` here rather than the raw row's `Date`.
- */
-export type ActivePatternRow = Omit<RecipientMatchPatternRow, 'updated_at'|'created_at'> & { updated_at: string };
+export type { ActivePatternRow, RecipientMatchPatternRow };
 
 const MIN_LCP_LENGTH = 8;
 
@@ -169,14 +175,14 @@ function validatePattern(row: {
  * Returns raw rows — callers compile as needed.
  */
 export async function loadActivePatterns(): Promise<ActivePatternRow[]> {
-  const { rows } = await query<ActivePatternRow>(
+  return queryRows(
+    activePatternRowSchema,
     `SELECT id, recipient_id, pattern, pattern_kind, case_sensitive,
             priority, source, updated_at::text AS updated_at
        FROM recipient_match_patterns
       WHERE is_active = true
       ORDER BY priority ASC, id ASC`,
   );
-  return rows;
 }
 
 /**
@@ -224,10 +230,11 @@ export async function applyPatterns(
  * then trim any trailing partial word/punctuation.
  */
 function longestCommonPrefix(strs: string[]): string {
-  if (!strs.length) return '';
-  let prefix = strs[0];
-  for (let i = 1; i < strs.length; i++) {
-    while (!strs[i].startsWith(prefix)) {
+  const [first, ...rest] = strs;
+  if (first === undefined) return '';
+  let prefix = first;
+  for (const str of rest) {
+    while (!str.startsWith(prefix)) {
       prefix = prefix.slice(0, -1);
       if (!prefix) return '';
     }
@@ -322,20 +329,22 @@ export async function previewPatternMatches(patternRow: {
   // For literal_prefix/glob the patterns are safe POSIX ERE and Postgres is faster.
   if (patternRow.pattern_kind === 'regex') {
     const re = compilePattern({ id: 0, updated_at: '0', ...patternRow });
-    const { rows } = await query<{ id: number; name: string | null }>(
+    const rows = await queryRows(
+      recipientNameRowSchema,
       `SELECT id, name FROM recipients WHERE is_active = true ORDER BY id LIMIT $1`,
       [PREVIEW_REGEX_SCAN_CAP + 1],
     );
     const truncated = rows.length > PREVIEW_REGEX_SCAN_CAP;
     const scanned = truncated ? rows.slice(0, PREVIEW_REGEX_SCAN_CAP) : rows;
-    const matched = scanned.filter((r) => re.test(String(r.name ?? '').toUpperCase()));
+    const matched = scanned.filter((r) => re.test(r.name.toUpperCase()));
     return { matchCount: matched.length, recipientIds: matched.map((r) => r.id), truncated };
   }
 
   const sqlPattern = buildSqlRegexPattern(patternRow);
   const op = patternRow.case_sensitive ? '~' : '~*';
 
-  const { rows } = await query<{ id: number }>(
+  const rows = await queryRows(
+    idRowSchema,
     `SELECT id FROM recipients WHERE is_active = true AND UPPER(name) ${op} $1`,
     [sqlPattern],
   );
@@ -364,7 +373,8 @@ export async function createPattern(opts: {
   const validation = validatePattern({ ...opts, pattern_kind: patternKind });
   if (!validation.valid) throw new ValidationError(validation.error);
 
-  const { rows } = await query<{ id: number }>(
+  const inserted = await queryOne(
+    idRowSchema,
     `INSERT INTO recipient_match_patterns
        (recipient_id, pattern, pattern_kind, case_sensitive, priority, source, notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -379,7 +389,7 @@ export async function createPattern(opts: {
       opts.notes ?? null,
     ],
   );
-  return { id: rows[0].id };
+  return { id: requireRow(inserted, 'recipient pattern insert').id };
 }
 
 /**
@@ -401,17 +411,16 @@ export async function updatePattern(
     // a partial PATCH like {case_sensitive:true} must keep the stored pattern
     // (else it fails "must not be empty"), and a pattern-only edit on a regex
     // row must still run the ReDoS guard against the stored kind.
-    const { rows } = await query<
-      Pick<RecipientMatchPatternRow, 'pattern' | 'pattern_kind' | 'case_sensitive'>
-    >(
+    const stored = await queryOne(
+      patternDefinitionRowSchema,
       `SELECT pattern, pattern_kind, case_sensitive FROM recipient_match_patterns WHERE id = $1`,
       [patternId],
     );
-    if (!rows[0]) throw new NotFoundError(`Pattern ${patternId} not found`);
+    if (!stored) throw new NotFoundError(`Pattern ${patternId} not found`);
     const merged = {
-      pattern: updates.pattern ?? rows[0].pattern,
-      pattern_kind: updates.pattern_kind ?? rows[0].pattern_kind,
-      case_sensitive: updates.case_sensitive ?? rows[0].case_sensitive,
+      pattern: updates.pattern ?? stored.pattern,
+      pattern_kind: updates.pattern_kind ?? stored.pattern_kind,
+      case_sensitive: updates.case_sensitive ?? stored.case_sensitive,
     };
     const validation = validatePattern(merged);
     if (!validation.valid) throw new ValidationError(validation.error);
@@ -445,8 +454,9 @@ export async function deletePattern(patternId: number): Promise<void> {
  */
 export async function listPatternsForRecipient(
   recipientId: number,
-): Promise<Omit<RecipientMatchPatternRow, 'recipient_id'>[]> {
-  const { rows } = await query<Omit<RecipientMatchPatternRow, 'recipient_id'>>(
+): Promise<RecipientPatternListRow[]> {
+  return queryRows(
+    recipientPatternListRowSchema,
     `SELECT id, pattern, pattern_kind, case_sensitive, priority, is_active, source, notes,
             created_at, updated_at
        FROM recipient_match_patterns
@@ -454,5 +464,4 @@ export async function listPatternsForRecipient(
       ORDER BY priority ASC, id ASC`,
     [recipientId],
   );
-  return rows;
 }

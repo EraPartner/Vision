@@ -31,6 +31,8 @@ const content = {
 const row = {
   id,
   version: 1,
+  workspace: content.workspace,
+  title: content.title,
   content_json: content,
   created_at: new Date("2026-09-19T00:00:00Z"),
   updated_at: new Date("2026-09-19T00:00:00Z"),
@@ -275,6 +277,6 @@ describe("research dossier persistence", () => {
     ]);
     expect(listed.items[0]).not.toHaveProperty("evidence");
     expect(mockQuery).toHaveBeenCalledTimes(2);
-    expect(mockQuery.mock.calls[0][0]).not.toContain("SELECT *");
+    expect(mockQuery.mock.calls[0]![0]).not.toContain("SELECT *");
   });
 });

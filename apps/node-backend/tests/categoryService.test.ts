@@ -60,6 +60,6 @@ describe("resolveCategoryIdByName", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 42 }] }));
 
     await expect(resolveCategoryIdByName("Food:Groceries")).resolves.toBe(42);
-    expect(query.mock.calls[1][0]).toContain("category_merge_aliases");
+    expect(query.mock.calls[1]![0]).toContain("category_merge_aliases");
   });
 });

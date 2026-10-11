@@ -201,7 +201,7 @@ export async function networkSource({
     const path = join(directory, "receipt.csv");
     await writeFile(path, networkCsv(receipt, kind));
     const parsed = await parseWithConfig(path, networkMapping),
-      item = parsed[0],
+      item = parsed[0]!,
       config = { ...networkMapping, source_columns: parsed.sourceColumns };
     const row: NetworkSourceRow = {
       id: rowId,
@@ -236,7 +236,7 @@ export async function networkSource({
     Object.assign(row, {
       dedup_fingerprint: assignImportIdentities([row], (source) =>
         portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
-      )[0].fingerprint,
+      )[0]!.fingerprint,
       dedup_fingerprint_version: 1,
       dedup_occurrence: 1,
     });

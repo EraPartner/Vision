@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api/client";
+import { PortfolioExposureSchema } from "@vision/types/contracts";
 
 export interface PortfolioExposureContribution {
     sourceType: "direct" | "fund";
@@ -50,6 +51,7 @@ export interface PortfolioExposureResponse {
 export const getPortfolioExposure = (currency: string) =>
     apiRequest<PortfolioExposureResponse>(
         `/api/investments/exposure?currency=${encodeURIComponent(currency)}`,
+        { schema: PortfolioExposureSchema },
     );
 export const upsertPortfolioExposureSources = (bundle: unknown) =>
     apiRequest<Record<string, unknown>>("/api/investments/exposure/sources", {

@@ -715,12 +715,8 @@ router.get("/", async (req, res) => {
   }
 
   if (normalizeToEur) {
-    // convertRowsToEur's JSDoc widens rows to Record<string, any>; it returns
-    // the input rows with `amount_eur` added.
-    items = (await convertRowsToEur(
-      items,
-      targetCurrency || "EUR",
-    )) as FormattableTransactionRow[];
+    // The input rows with `amount_eur` added.
+    items = await convertRowsToEur(items, targetCurrency || "EUR");
   }
 
   res.ok({

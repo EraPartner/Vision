@@ -23,6 +23,39 @@ type FakeQuery = (
 ) => Promise<{ rows: unknown[] }>;
 const query = rawQuery as unknown as Mock<FakeQuery>;
 
+const PENDING_NUMERIC = [
+  "units",
+  "price_per_unit",
+  "amount",
+  "fees",
+  "taxes",
+] as const;
+const PENDING_NULLABLE = [
+  "symbol_raw",
+  "name_raw",
+  "fees",
+  "taxes",
+  "currency",
+  "note",
+  "source_transaction_id",
+  "source_account_identity",
+  "asset_transfer_details",
+  "asset_adjustment_details",
+] as const;
+
+/**
+ * The pending-row read as pg returns it: BIGINT id and NUMERIC columns as
+ * text, every selected column present (NULL when the fixture omits it).
+ */
+function pendingWireRow(fixture: Record<string, unknown>) {
+  const wire: Record<string, unknown> = { status: "pending", ...fixture };
+  wire.id = String(wire.id);
+  for (const key of PENDING_NUMERIC)
+    if (typeof wire[key] === "number") wire[key] = String(wire[key]);
+  for (const key of PENDING_NULLABLE) wire[key] ??= null;
+  return wire;
+}
+
 /** Wire query() to respond by SQL shape, returning the given pending rows. */
 function wireQuery(pending: Record<string, unknown>[]) {
   query.mockImplementation(async (sql) => {
@@ -35,18 +68,36 @@ function wireQuery(pending: Record<string, unknown>[]) {
             default_type: null,
             custom_config: {},
             is_brokerage: false,
+            adapter_name: "portfolio_generic",
+            account_import_identity: null,
           },
         ],
       };
     }
     if (sql.includes("FROM portfolio_import_staging_rows"))
-      return { rows: pending };
+      return { rows: pending.map(pendingWireRow) };
     return { rows: [] }; // UNNEST update + counter updates
   });
 }
 
 /** The UNNEST batch update: each param is one column array. */
-type UnnestCall = [sql: string, params: unknown[][]];
+type Column = unknown[];
+// The update binds at least nine column arrays; the tests read up to index 8.
+type UnnestCall = [
+  sql: string,
+  params: [
+    Column,
+    Column,
+    Column,
+    Column,
+    Column,
+    Column,
+    Column,
+    Column,
+    Column,
+    ...Column[],
+  ],
+];
 
 function findUnnestUpdate() {
   return query.mock.calls.find(([sql]) => sql.includes("FROM unnest(")) as
@@ -90,8 +141,8 @@ describe("validateBatch — future-dated rows", () => {
     const update = findUnnestUpdate();
     expect(update).toBeTruthy();
     const [, [ids, statuses, , , , , , , errorMessages]] = update!;
-    const idx1 = ids.indexOf(1);
-    const idx2 = ids.indexOf(2);
+    const idx1 = ids.indexOf("1");
+    const idx2 = ids.indexOf("2");
     expect(statuses[idx1]).toBe("error");
     expect(errorMessages[idx1]).toBe("transaction date is in the future");
     expect(statuses[idx2]).toBe("validated");

@@ -59,7 +59,7 @@ describe("recipients API client", () => {
 
   it("createRecipient reports wasCreated=true on 201", async () => {
     server.use(
-      http.post(`${API_BASE}/api/recipients`, () => ok({ id: 9, name: "New" }, { status: 201 })),
+      http.post(`${API_BASE}/api/recipients`, () => ok({ ...RECIPIENT_STUB, id: 9, name: "New", created: true }, { status: 201 })),
     );
     const res = await createRecipient({ name: "New" } as never);
     expect(res.recipient.id).toBe(9);
@@ -68,7 +68,7 @@ describe("recipients API client", () => {
 
   it("createRecipient reports wasCreated=false on 200 (existing)", async () => {
     server.use(
-      http.post(`${API_BASE}/api/recipients`, () => ok({ id: 9, name: "Existing" }, { status: 200 })),
+      http.post(`${API_BASE}/api/recipients`, () => ok({ ...RECIPIENT_STUB, id: 9, name: "Existing", created: false }, { status: 200 })),
     );
     const res = await createRecipient({ name: "Existing" } as never);
     expect(res.wasCreated).toBe(false);
@@ -89,7 +89,16 @@ describe("recipients API client", () => {
     server.use(
       http.post(`${API_BASE}/api/recipients/1/merge`, async ({ request }) => {
         body = await request.json();
-        return ok({ primary: { id: 1 }, merged_ids: [2, 3], aliases: [], patternSuggestion: null });
+        return ok({
+          primary: { ...RECIPIENT_STUB, id: 1, alias_count: 2 },
+          merged_ids: [2, 3],
+          reassigned: { transactions: 4, splits: 0, planned: 0, bankAccounts: 0 },
+          aliases: [
+            { id: 2, name: "Alias Two" },
+            { id: 3, name: "Alias Three" },
+          ],
+          patternSuggestion: null,
+        });
       }),
     );
     const res = await mergeRecipients(1, [2, 3]);

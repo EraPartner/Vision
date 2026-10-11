@@ -201,7 +201,7 @@ function createResearchMappingService({
       }
       try {
         // adapterSupports() above guarantees the search method exists.
-        const { items = [] } = await adapters[provider].search!(query);
+        const { items = [] } = await adapters[provider]!.search!(query);
         noteSuccess(provider);
         const top = items[0];
         proposals.push(
@@ -281,7 +281,7 @@ function createResearchMappingService({
       }
       try {
         // adapterSupports() above guarantees the quote method exists.
-        const q = await adapters[r.provider].quote!(r.provider_symbol);
+        const q = await adapters[r.provider]!.quote!(r.provider_symbol);
         noteSuccess(r.provider);
         quotes.push({
           provider: r.provider,
@@ -335,7 +335,7 @@ function analyzeQuotes(quotes: AuditQuote[]): AuditDiscrepancy[] {
   if (priced.length >= 2) {
     const prices = priced.map((q) => q.price).sort((a, b) => a - b);
     const median = prices[Math.floor(prices.length / 2)];
-    if (median > 0) {
+    if (median !== undefined && median > 0) {
       for (const q of priced) {
         if (Math.abs(q.price - median) / median > AUDIT_PRICE_TOLERANCE) {
           discrepancies.push({

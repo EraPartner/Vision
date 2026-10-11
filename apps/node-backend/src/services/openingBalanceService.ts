@@ -25,6 +25,9 @@
 
 import { z } from "zod";
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne } from "../database/rowContracts.ts";
+import { transactionRowSchema } from "../database/rowSchemas.ts";
+import { earliestDateRowSchema } from "../database/rows/ledger.ts";
 import accountRepository from "../repositories/accountRepository.ts";
 import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
@@ -143,7 +146,8 @@ export async function setOpeningBalance(
 
     // Warn when the anchor does not precede the account's real activity: a later
     // import-stamped balance wins, leaving a mid-history anchor inert.
-    const earliestRes = await query<{ earliest: Date | null }>(
+    const earliestRow = await queryOne(
+      earliestDateRowSchema,
       `SELECT MIN(date) AS earliest
          FROM transactions
         WHERE account_id = $1
@@ -155,7 +159,7 @@ export async function setOpeningBalance(
     // pg reads MIN(date) as a JS Date (no setTypeParser override); String(Date)
     // yields "Wed Jul 01", which is never lexically <= an ISO "YYYY-MM-DD" — the
     // warning was dead code. Normalize to a calendar-day string before comparing.
-    const earliest = toWireDate(earliestRes.rows[0]?.earliest);
+    const earliest = toWireDate(earliestRow?.earliest);
     const warning =
       earliest && earliest <= date
         ? "Opening-balance date does not precede existing activity; a later import-stamped balance will override this anchor."
@@ -170,7 +174,8 @@ export async function setOpeningBalance(
     // Single atomic upsert: UPDATE the existing (account, currency) anchor if one
     // exists, else INSERT. `balance` is server-stamped here — the one sanctioned
     // exception to the ADR-094 import-pipeline-only write protection.
-    const upsertRes = await query<TransactionRow>(
+    const upserted = await queryOne(
+      transactionRowSchema,
       `WITH existing AS (
           SELECT id FROM transactions
            WHERE account_id = $1 AND transfer_source = 'opening' AND currency = $3
@@ -197,7 +202,7 @@ export async function setOpeningBalance(
       [accountId, balance, currency, date, OPENING_MEMO, systemRecipientId],
     );
 
-    return { transaction: upsertRes.rows[0] || null, warning };
+    return { transaction: upserted ?? null, warning };
   });
 }
 

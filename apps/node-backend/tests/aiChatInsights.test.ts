@@ -116,7 +116,7 @@ describe("getBankBalances", () => {
       }),
     );
     const r = await getBankBalances.run({});
-    expect(r.data[0].balance).toBe(100);
+    expect(r.data[0]!.balance).toBe(100);
     expect(r.meta.totalNetPosition).toBe(100);
   });
 
@@ -158,8 +158,8 @@ describe("getBankBalances", () => {
       }),
     );
     const r = await getBankBalances.run({});
-    expect(r.data[0].firstTransaction).toBe("2024-12-31");
-    expect(r.data[0].lastTransaction).toBe("2025-06-15");
+    expect(r.data[0]!.firstTransaction).toBe("2024-12-31");
+    expect(r.data[0]!.lastTransaction).toBe("2025-06-15");
   });
 
   it("handles missing accounts array", async () => {
@@ -332,7 +332,7 @@ describe("getRecipientInsights", () => {
     );
     const r = await getRecipientInsights.run({});
     expect(r.data).toHaveLength(1);
-    expect(r.data[0].recipient).toBe("Alice");
+    expect(r.data[0]!.recipient).toBe("Alice");
   });
 
   it("passes recipientId filter through to the repository", async () => {
@@ -385,7 +385,7 @@ describe("getRecipientInsights", () => {
       ]),
     );
     const r = await getRecipientInsights.run({});
-    expect(r.data[0].lastDate).toBe("2025-05-08");
+    expect(r.data[0]!.lastDate).toBe("2025-05-08");
   });
 
   it("rejects invalid recipientId", async () => {
@@ -468,9 +468,9 @@ describe("getWatchlist", () => {
     );
     const r = await getWatchlist.run({});
     expect(getQuotes).not.toHaveBeenCalled();
-    expect(r.data[0].currentPrice).toBeNull();
-    expect(r.data[0].currency).toBe("EUR"); // fallback
-    expect(r.data[0].symbol).toBeNull();
+    expect(r.data[0]!.currentPrice).toBeNull();
+    expect(r.data[0]!.currency).toBe("EUR"); // fallback
+    expect(r.data[0]!.symbol).toBeNull();
   });
 
   it("degrades to null prices when the quote service fails", async () => {
@@ -493,7 +493,7 @@ describe("getWatchlist", () => {
 
     const r = await getWatchlist.run({});
     expect(r.ok).toBe(true);
-    expect(r.data[0].currentPrice).toBeNull();
+    expect(r.data[0]!.currentPrice).toBeNull();
   });
 
   it("reports null price for a symbol the quote batch dropped", async () => {
@@ -530,8 +530,8 @@ describe("getWatchlist", () => {
 
     const r = await getWatchlist.run({});
     expect(getQuotes).toHaveBeenCalledWith(["AAPL", "NOPE"], true);
-    expect(r.data[0].currentPrice).toBe(200.5);
-    expect(r.data[1].currentPrice).toBeNull();
+    expect(r.data[0]!.currentPrice).toBe(200.5);
+    expect(r.data[1]!.currentPrice).toBeNull();
   });
 
   it("rejects unknown asset class", async () => {
@@ -569,7 +569,7 @@ describe("getCategories", () => {
   it("omits search when empty", async () => {
     categoryRepository.getAll.mockResolvedValueOnce([]);
     await getCategories.run({});
-    const args = categoryRepository.getAll.mock.calls[0][0];
+    const args = categoryRepository.getAll.mock.calls[0]![0];
     expect(args!.search).toBeUndefined();
   });
 });
@@ -605,7 +605,7 @@ describe("getRecurringDetected", () => {
     );
     const r = await getRecurringDetected.run({});
     expect(r.data).toHaveLength(1);
-    expect(r.data[0].recipient).toBe("Netflix");
+    expect(r.data[0]!.recipient).toBe("Netflix");
     expect(r.meta.minOccurrences).toBe(3);
   });
 

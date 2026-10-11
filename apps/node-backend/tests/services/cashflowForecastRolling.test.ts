@@ -91,9 +91,9 @@ describe("computeCashflowForecastRolling", () => {
     })) as RollingEnvelope;
 
     expect(env.data.actual).toHaveLength(61);
-    expect(env.data.actual[0].date).toBe(isoOffsetFromToday(-30));
-    expect(env.data.actual[30].date).toBe(todayIso());
-    expect(env.data.actual[60].date).toBe(isoOffsetFromToday(30));
+    expect(env.data.actual[0]!.date).toBe(isoOffsetFromToday(-30));
+    expect(env.data.actual[30]!.date).toBe(todayIso());
+    expect(env.data.actual[60]!.date).toBe(isoOffsetFromToday(30));
     expect(env.data.actual.slice(0, 31).every((r) => r.net !== null)).toBe(
       true,
     );
@@ -122,7 +122,7 @@ describe("computeCashflowForecastRolling", () => {
       userId: "u1",
     })) as RollingEnvelope;
     const first = env.data.actual[0];
-    expect(first.cumulative).toBe(first.net);
+    expect(first!.cumulative).toBe(first!.net);
   });
 
   it("actual entries past today have null net + cumulative", async () => {
@@ -179,7 +179,7 @@ describe("computeCashflowForecastRolling", () => {
     const aMc = a.data.methods.find((m) => m.id === "monte_carlo_parametric");
     const bMc = b.data.methods.find((m) => m.id === "monte_carlo_parametric");
     // p25 series will differ in length and values
-    expect(aMc!.bands!.p25.length).not.toBe(bMc!.bands!.p25.length);
+    expect(aMc!.bands!.p25!.length).not.toBe(bMc!.bands!.p25!.length);
   });
 
   it("include_planned=false leaves cumulative untouched by future planned", async () => {
@@ -204,9 +204,9 @@ describe("computeCashflowForecastRolling", () => {
     );
     const withMethod = withp.data.methods.find((m) => m.id === "simple_avg");
     const lastWithout =
-      withoutMethod!.cumulative[withoutMethod!.cumulative.length - 1].value;
+      withoutMethod!.cumulative[withoutMethod!.cumulative.length - 1]!.value;
     const lastWith =
-      withMethod!.cumulative[withMethod!.cumulative.length - 1].value;
+      withMethod!.cumulative[withMethod!.cumulative.length - 1]!.value;
     // Mock plants a -200 planned at offset 5 inside the 10-day forecast window.
     expect(Math.round(lastWith - lastWithout)).toBe(-200);
   });

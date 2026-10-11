@@ -65,6 +65,14 @@ import type {
   transactionTagRefSchema,
   unlinkedTransactionRowSchema,
 } from "../database/rowSchemas.ts";
+import type {
+  assetPriceHistoryRowSchema,
+  instrumentProviderMapRowSchema,
+  portfolioMathTxRowSchema,
+  portfolioPerformanceSnapshotRowSchema,
+  watchlistRowSchema,
+} from "../database/rows/portfolio.ts";
+import type { CategoryRow as CatalogCategoryRow } from "../database/rows/catalog.ts";
 
 // ---------------------------------------------------------------------------
 // Query plumbing
@@ -81,8 +89,8 @@ import type {
 export type QueryRunner = {
   query: (
     text: string,
-    params?: any[],
-  ) => Promise<{ rows: any[]; rowCount: number | null }>;
+    params?: unknown[],
+  ) => Promise<{ rows: unknown[]; rowCount: number | null }>;
 };
 
 // ---------------------------------------------------------------------------
@@ -167,92 +175,29 @@ export type PlannedForecastRow = z.output<typeof plannedForecastRowSchema>;
 // Recipients
 // ---------------------------------------------------------------------------
 
-/** A row of `recipients` as returned by `SELECT *` / `SELECT r.*`. */
-export type RecipientRow = {
-  id: number;
-  name: string;
-  normalized_name: string;
-  default_category_id: number | null;
-  /** Merge target (self-referencing). */
-  primary_recipient_id: number | null;
-  notes: string | null;
-  is_active: boolean;
-  created_at?: Date | null;
-  updated_at?: Date | null;
-};
-
 /**
- * A row of `recipient_bank_accounts` (`SELECT *` / `RETURNING *`; baseline
- * schema).
+ * `recipients`, `recipient_bank_accounts` and `recipient_match_patterns` rows.
+ * Derived from the row schemas the recipient repositories and the pattern
+ * service check them against.
  */
-export type RecipientBankAccountRow = {
-  id: number;
-  recipient_id: number | null;
-  /** VARCHAR(34), stored trimmed + uppercased. */
-  account_number: string;
-  bank_name: string | null;
-  account_label: string | null;
-  address: string | null;
-  is_primary: boolean;
-  is_active: boolean;
-  created_at: Date | null;
-  updated_at: Date | null;
-};
-
-/** `RecipientRow` plus the derived columns the list / detail / update reads project. */
-export type EnrichedRecipientRow = RecipientRow & {
-  default_category_name: string | null;
-  primary_bank_account: string | null;
-  primary_recipient_name: string | null;
-  alias_count: number;
-};
-
-/**
- * A row of `recipient_match_patterns` as returned by `SELECT *` (migration
- * 0015). `pattern_kind` is CHECK-constrained to 'regex'|'glob'|'literal_prefix',
- * `source` to 'user'|'suggested'|'system' — kept as plain `string` here since
- * Postgres CHECK constraints are not reflected in the driver's row shape.
- */
-export type RecipientMatchPatternRow = {
-  /** SERIAL */
-  id: number;
-  /** FK → recipients, ON DELETE CASCADE */
-  recipient_id: number;
-  pattern: string;
-  /** 'regex'|'glob'|'literal_prefix', DEFAULT 'literal_prefix' */
-  pattern_kind: string;
-  /** DEFAULT false */
-  case_sensitive: boolean;
-  /** DEFAULT 100 */
-  priority: number;
-  /** DEFAULT true */
-  is_active: boolean;
-  /** 'user'|'suggested'|'system', DEFAULT 'user' */
-  source: string;
-  notes: string | null;
-  /** TIMESTAMPTZ */
-  created_at: Date;
-  /** TIMESTAMPTZ */
-  updated_at: Date;
-};
+export type {
+  EnrichedRecipientRow,
+  RecipientBankAccountRow,
+  RecipientMatchPatternRow,
+  RecipientRow,
+} from "../database/rows/catalog.ts";
 
 // ---------------------------------------------------------------------------
 // Categories
 // ---------------------------------------------------------------------------
 
-/** A row of `categories`. */
-export type CategoryRow = {
-  id: number;
-  general: string;
-  detail: string;
-  description: string | null;
-  is_active: boolean;
-  created_at?: Date | null;
-  updated_at?: Date | null;
-};
+/** A row of `categories` (`SELECT *`), derived from its checked row schema. */
+export type { CategoryRow } from "../database/rows/catalog.ts";
 
 /** `CategoryRow` after `enrichCategory` adds the `GENERAL:DETAIL` display name. */
-export type EnrichedCategoryRow = CategoryRow & { category_name: string };
+export type EnrichedCategoryRow = CatalogCategoryRow & {
+  category_name: string;
+};
 
 // ---------------------------------------------------------------------------
 // Accounts (ADR-088)
@@ -470,40 +415,14 @@ export type PortfolioTransactionRow = {
 
 /**
  * A row of `portfolioTxRepo.reads.getRowsForPortfolioMath` — portfolio_transactions
- * JOINed to investments, deliberately NOT passed through `mapPortfolioTxRow` (see
- * that function's comment): every NUMERIC column stays a pg string, and the
- * transaction day is emitted under both `date` and `day` (identical values).
+ * UNIONed with asset transfers and adjustments and JOINed to investments,
+ * deliberately NOT passed through `mapPortfolioTxRow`: every NUMERIC column
+ * stays a pg string, the UNION widens `id` to BIGINT (a string), and the
+ * transaction day is emitted under both `date` and `day`. Derived from
+ * `portfolioMathTxRowSchema` (src/database/rows/portfolio.ts), which the
+ * repository checks at runtime.
  */
-export type PortfolioMathTxRow = {
-  income_recognition_role?: "standard" | "included_in_units";
-  id: number;
-  investment_id: number;
-  /** `portfolio_txn_type` enum. */
-  type: string;
-  /** NUMERIC(18,4), `COALESCE(pt.amount, 0)` — pg emits NUMERIC as a string. */
-  amount: string;
-  /** NUMERIC(18,8), `COALESCE(pt.units, 0)`. */
-  units: string;
-  /** NUMERIC, `COALESCE(pt.fees, 0)`. */
-  fees: string;
-  /** NUMERIC, `COALESCE(pt.taxes, 0)`. */
-  taxes: string;
-  /** 'YYYY-MM-DD' — `to_char(pt.date::date, …)`. */
-  date: string;
-  /** 'YYYY-MM-DD' — same value as `date`, second alias. */
-  day: string;
-  /** `COALESCE(pt.currency, i.currency, 'EUR')`. */
-  currency: string;
-  /** NUMERIC(20,10), not coalesced — null when unset. */
-  fx_rate_to_eur: string | null;
-  account_id: number | null;
-  /** Canonical custody event origin. */
-  source_account_id?: number;
-  /** Canonical custody event destination. */
-  destination_account_id?: number;
-  /** Verified asset units spent on custody fees. */
-  fee_units?: string;
-};
+export type PortfolioMathTxRow = z.output<typeof portfolioMathTxRowSchema>;
 
 /** Per-type aggregate from `portfolioTxRepo.reads.getSummary`. */
 export type PortfolioTransactionSummaryRow = {
@@ -522,60 +441,21 @@ export type PortfolioTransactionSummaryRow = {
 
 /**
  * A row of `saved_charts` as projected by `savedChartsRepository`'s shared
- * `COLUMNS` list (baseline + migrations 0017/0063/0064). The two DATE columns
- * are `to_char`-formatted in SQL, so they are calendar-day strings, not `Date`s.
- * INTEGER[] columns come back from pg as `number[]` already; the repository's
- * `mapRow` re-normalises them (and the three booleans) defensively without
- * changing the type, so raw and emitted shapes coincide.
+ * `COLUMNS` list, derived from its checked row schema. The two DATE columns
+ * are `to_char`-formatted in SQL, so they are calendar-day strings.
  */
-export type SavedChartRow = {
-  id: number;
-  name: string;
-  chart_type: string;
-  /** INTEGER[]. */
-  category_ids: number[];
-  /** INTEGER[]. */
-  recipient_ids: number[];
-  /** INTEGER[] (migration 0063). */
-  tag_ids: number[];
-  all_categories: boolean;
-  all_recipients: boolean;
-  all_tags: boolean;
-  chart_variant: string;
-  time_bucket: string;
-  /** 'YYYY-MM-DD' — `to_char`-formatted in the projection. */
-  date_range_start: string | null;
-  /** 'YYYY-MM-DD' — `to_char`-formatted in the projection. */
-  date_range_end: string | null;
-  created_at: Date;
-  updated_at: Date;
-};
+export type { SavedChartRow } from "../database/rows/catalog.ts";
 
 // ---------------------------------------------------------------------------
 // Watchlist
 // ---------------------------------------------------------------------------
 
 /**
- * A raw row of `watchlist` (`SELECT *` / `RETURNING *`; baseline schema +
- * migration 0058). NOT what the repository returns — every read funnels
- * through `mapWatchlistRow`.
+ * A raw row of `watchlist` (`SELECT *` / `RETURNING *`). NOT what the
+ * repository returns — every read funnels through `mapWatchlistRow`. Derived
+ * from `watchlistRowSchema` (src/database/rows/portfolio.ts).
  */
-export type WatchlistRow = {
-  id: number;
-  name: string;
-  symbol: string | null;
-  /** `asset_class` enum: stock|etf|crypto|metals|real_estate|savings|bond. */
-  asset_class: string;
-  /** NUMERIC(18,6) — pg emits NUMERIC as a string. */
-  target_price: string;
-  currency: string;
-  notes: string | null;
-  price_provider_id: string | null;
-  /** NUMERIC(18,6); NULL on rows predating migration 0058. */
-  added_price: string | null;
-  created_at: Date;
-  updated_at: Date;
-};
+export type WatchlistRow = z.output<typeof watchlistRowSchema>;
 
 /**
  * A `watchlist` row after `mapWatchlistRow` coerced the two NUMERIC columns
@@ -603,88 +483,38 @@ export type FormattedWatchlistRow = {
 // Tags
 // ---------------------------------------------------------------------------
 
-/** A row of `tags`. */
-export type TagRow = {
-  id: number;
-  slug: string;
-  color: string | null;
-  is_active: boolean;
-  created_at: Date;
-  updated_at: Date;
-};
+/** A row of `tags`, derived from its checked row schema. */
+export type { TagRow } from "../database/rows/catalog.ts";
 
 // ---------------------------------------------------------------------------
 // AI chat (ai_conversations + ai_messages)
 // ---------------------------------------------------------------------------
 
 /**
- * An `ai_conversations` row as projected by `aiChatRepository`'s
- * `CONVERSATION_COLUMNS` — the timestamps are aliased to camelCase in SQL.
+ * `ai_conversations` / `ai_messages` rows as projected by `aiChatRepository`
+ * (snake_case aliased to camelCase in SQL). Derived from the row schemas the
+ * repository checks them against.
  */
-export type AiConversationRow = {
-  /** UUID. */
-  id: string;
-  title: string;
-  model: string;
-  /** Aliased from `created_at` (TIMESTAMPTZ). */
-  createdAt: Date;
-  /** Aliased from `updated_at` (TIMESTAMPTZ). */
-  updatedAt: Date;
-};
-
-/**
- * An `ai_messages` row as projected by `aiChatRepository`'s `MESSAGE_COLUMNS`
- * — the snake_case columns are aliased to camelCase in SQL.
- */
-export type AiMessageRow = {
-  /** UUID. */
-  id: string;
-  /** UUID FK → ai_conversations. */
-  conversationId: string;
-  role: "user" | "assistant" | "tool" | "system";
-  content: string | null;
-  toolName: string | null;
-  /**
-   * JSONB — the args the tool actually received (the
-   *   dispatcher-coerced object); when coercion failed, the raw model-emitted
-   *   value (e.g. a malformed JSON string) persisted next to the error result.
-   *   Null on non-tool rows.
-   */
-  toolArgs: any;
-  /** JSONB — parsed value or null. */
-  toolResult: any;
-  status: "complete" | "streaming" | "aborted" | "error";
-  createdAt: Date;
-};
+export type { AiConversationRow, AiMessageRow } from "../database/rows/ai.ts";
 
 // ---------------------------------------------------------------------------
 // Attachments
 // ---------------------------------------------------------------------------
 
 /**
- * A raw row of `attachments` (`SELECT *` / `RETURNING *`, migration 0004). All
- * three BIGINT columns come back from pg as strings.
+ * A raw row of `attachments` (`SELECT *` / `RETURNING *`), derived from its
+ * checked row schema: `id` and `size_bytes` are BIGINT strings,
+ * `transaction_id` is INTEGER (migration 0027).
  */
-export type AttachmentRow = {
-  /** BIGSERIAL — string, not number. */
-  id: string;
-  /** BIGINT FK → transactions — string. */
-  transaction_id: string;
-  filename: string;
-  stored_path: string;
-  mime_type: string;
-  /** BIGINT — string. */
-  size_bytes: string;
-  created_at: Date;
-};
+export type { AttachmentRow } from "../database/rows/catalog.ts";
 
 /**
  * What `attachmentRepository`'s `formatRow` emits: `size_bytes` coerced to a
- * number; `id` / `transaction_id` stay BIGINT strings.
+ * number; `id` stays a BIGINT string.
  */
 export type FormattedAttachment = {
   id: string;
-  transaction_id: string;
+  transaction_id: number;
   filename: string;
   stored_path: string;
   mime_type: string;
@@ -697,18 +527,11 @@ export type FormattedAttachment = {
 // ---------------------------------------------------------------------------
 
 /**
- * A raw row of `custom_parser_configs` (migrations 0037 + 0041). NOT what the
- * repository returns — every path funnels through its `mapRow`.
+ * A raw row of `custom_parser_configs`, derived from the row schema
+ * `customParserConfigRepository` checks it against. NOT what the repository
+ * returns: every path funnels through its `mapRow`.
  */
-export type CustomParserConfigRow = {
-  id: number;
-  name: string;
-  kind: "transaction" | "portfolio";
-  /** JSONB — pg hands it back already parsed. */
-  config_json: any;
-  created_at: Date;
-  updated_at: Date;
-};
+export type { CustomParserConfigRow } from "../database/rows/imports.ts";
 
 /**
  * What `customParserConfigRepository`'s `mapRow` emits: `config_json` re-keyed
@@ -718,8 +541,11 @@ export type FormattedCustomParserConfig = {
   id: number;
   name: string;
   kind: "transaction" | "portfolio";
-  /** Parsed JSONB parser definition. */
-  config: any;
+  /**
+   * Parsed JSONB parser definition, re-checked against the stored
+   * parser-config schema of its `kind` (ADR-193); narrow it before use.
+   */
+  config: unknown;
   created_at: Date;
   updated_at: Date;
 };
@@ -731,265 +557,55 @@ export type FormattedCustomParserConfig = {
 /**
  * A row of `instrument_provider_map` (migration 0042) as projected by
  * `instrumentProviderMapRepository`'s shared `COLUMNS` list — the full table.
+ * Derived from `instrumentProviderMapRowSchema` (src/database/rows/portfolio.ts).
  */
-export type InstrumentProviderMapRow = {
-  id: number;
-  /** ISIN (`key_type='isin'`) or internal id. */
-  instrument_key: string;
-  key_type: "isin" | "internal";
-  provider: string;
-  provider_symbol: string | null;
-  resolved_name: string | null;
-  exchange: string | null;
-  currency: string | null;
-  status: "confirmed" | "auto" | "failed";
-  /** TIMESTAMPTZ */
-  verified_at: Date | null;
-  created_at: Date;
-  updated_at: Date;
-};
+export type InstrumentProviderMapRow = z.output<
+  typeof instrumentProviderMapRowSchema
+>;
 
 // ---------------------------------------------------------------------------
 // Import batches
 // ---------------------------------------------------------------------------
 
 /**
- * A row of `import_batches` as projected by `listBatches` / `getBatch`. `id` is
- * BIGSERIAL, so pg emits it as a string; `transactions_remaining` is
- * `COUNT(...)::int`, so it really is a number.
+ * A row of `import_batches` as `getBatch` projects it (`listBatches` omits
+ * `custom_config`), derived from its checked row schema. `id` is BIGSERIAL,
+ * so a string; `transactions_remaining` is `COUNT(...)::int`, a number.
  */
-export type ImportBatchRow = {
-  /** BIGINT — string, not number. */
-  id: string;
-  adapter_name: string;
-  source_filename: string | null;
-  /** BIGINT — string. */
-  source_size_bytes: string | null;
-  /** JSONB; only selected by `getBatch`. */
-  custom_config?: object | null;
-  status:
-    | "pending"
-    | "staging"
-    | "validating"
-    | "matching"
-    | "committing"
-    | "complete"
-    | "failed"
-    | "aborted"
-    | "awaiting_review";
-  rows_total: number;
-  rows_imported: number;
-  rows_duplicate: number;
-  rows_error: number;
-  error_summary: string | null;
-  started_at: Date;
-  completed_at: Date | null;
-  transactions_remaining: number;
-};
+export type { ImportBatchRow } from "../database/rows/imports.ts";
 
 // ---------------------------------------------------------------------------
 // Import staging
 // ---------------------------------------------------------------------------
 
 /**
- * A row of `import_staging_rows` — the transaction import pipeline's work
- * table (migration 0001; `match_source` / `matched_pattern_id` /
- * `match_similarity` / `user_override_recipient_id` added by 0015,
- * `override_category_id` by 0020).
- *
- * Everything the adapter produced is nullable here on purpose: the STAGE phase
- * writes whatever it parsed and the VALIDATE phase is what rejects rows. The
- * pipeline phases select column subsets, so use `Pick<>` at the call site.
- *
- * `amount` and `balance` are NUMERIC → pg strings. `tx_date` is a DATE → a
- * local-midnight `Date`; validate.js and commit.js both project it as
- * `to_char(tx_date, 'YYYY-MM-DD')` instead, precisely so the fallback hash and
- * the insert can't shift a day (see the comment at the top of validate.js).
- * `match_similarity` is REAL, which pg DOES emit as a number.
+ * A row of `import_staging_rows`, the transaction import pipeline's work
+ * table, derived from the schema whose `pick`s the pipeline phases check
+ * their projections against (see `database/rows/imports.ts`).
  */
-export type ImportStagingRow = {
-  /** BIGSERIAL — string, not number. */
-  id: string;
-  /** BIGINT — string. */
-  batch_id: string;
-  /** INTEGER */
-  row_index: number;
-  status:
-    "pending" | "validated" | "matched" | "committed" | "duplicate" | "error";
-  /** DATE — local-midnight `Date` when selected raw. */
-  tx_date: Date | null;
-  bank_account: string | null;
-  recipient_raw: string | null;
-  memo: string | null;
-  /** NUMERIC(20,4) — string. */
-  amount: string | null;
-  currency: string | null;
-  /** NUMERIC(20,4) — string. */
-  balance: string | null;
-  recipient_account: string | null;
-  recipient_address: string | null;
-  recipient_bank_name: string | null;
-  comment: string | null;
-  raw_data: string | null;
-  source_transaction_id?: string | null;
-  source_account_identity?: string | null;
-  source_record_hash?: string | null;
-  dedup_fingerprint?: string | null;
-  dedup_fingerprint_version?: number | null;
-  dedup_occurrence?: number | null;
-  resolved_recipient_id: number | null;
-  error_message: string | null;
-  /** migration 0015. */
-  match_source?: "pattern" | "exact" | "fuzzy" | "new" | null;
-  /** migration 0015. */
-  matched_pattern_id?: number | null;
-  /** REAL — a number, not a string (migration 0015). */
-  match_similarity?: number | null;
-  /** migration 0015. */
-  user_override_recipient_id?: number | null;
-  /** migration 0020. */
-  override_category_id?: number | null;
-  /** TIMESTAMPTZ */
-  created_at: Date;
-};
+export type { ImportStagingRow } from "../database/rows/imports.ts";
 
 /**
- * A row of `portfolio_import_batches` (migration 0040; `account_id` added by
- * 0057, `is_brokerage` by 0060, the 'complete_with_errors' status by 0081).
+ * `portfolio_import_batches` and `portfolio_import_staging_rows` rows, derived
+ * from their row-contract schemas (ADR-193) so the type and the runtime check
+ * cannot drift.
  */
-export type PortfolioImportBatchRow = {
-  /** BIGSERIAL — string, not number. */
-  id: string;
-  adapter_name: string;
-  source_filename: string | null;
-  /** BIGINT — string. */
-  source_size_bytes: string | null;
-  /** JSONB — pg hands it back already parsed. */
-  custom_config: any;
-  /** `asset_class` enum. */
-  default_asset_class: string | null;
-  /** `portfolio_txn_type` enum. */
-  default_type: string | null;
-  status:
-    | "pending"
-    | "staging"
-    | "validating"
-    | "matching"
-    | "awaiting_review"
-    | "committing"
-    | "complete"
-    | "complete_with_errors"
-    | "failed"
-    | "aborted";
-  rows_total: number;
-  rows_imported: number;
-  rows_duplicate: number;
-  rows_error: number;
-  error_summary: string | null;
-  started_at: Date;
-  completed_at: Date | null;
-  /** FK → accounts (migration 0057). */
-  account_id: number | null;
-  /** migration 0060. */
-  is_brokerage: boolean;
-};
-
-/**
- * A row of `portfolio_import_staging_rows` — the portfolio import pipeline's
- * work table (migration 0040; `route` added by 0060).
- *
- * Every parsed field is nullable: STAGE writes what the adapter produced and
- * VALIDATE is what rejects rows. All NUMERIC columns are pg strings;
- * `match_similarity` is REAL, which pg DOES emit as a number. `tx_date` is a
- * DATE, so raw selects hand back a local-midnight `Date` — validate.js formats
- * it with LOCAL getters (`toYmd`) on purpose.
- */
-export type PortfolioImportStagingRow = {
-  /** BIGSERIAL — string, not number. */
-  id: string;
-  /** BIGINT — string. */
-  batch_id: string;
-  /** INTEGER */
-  row_index: number;
-  status:
-    "pending" | "validated" | "matched" | "committed" | "duplicate" | "error";
-  /** DATE — local-midnight `Date` when selected raw. */
-  tx_date: Date | null;
-  /** the CSV's own type label, pre-normalization. */
-  type_raw: string | null;
-  /** `portfolio_txn_type` enum — stamped by VALIDATE. */
-  type: string | null;
-  symbol_raw: string | null;
-  name_raw: string | null;
-  /** NUMERIC(18,8) — string. */
-  units: string | null;
-  /** NUMERIC(18,6) — string. */
-  price_per_unit: string | null;
-  /** NUMERIC(18,4) — string. */
-  amount: string | null;
-  /** NUMERIC(18,4) — string. */
-  fees: string | null;
-  /** NUMERIC(18,4) — string. */
-  taxes: string | null;
-  currency: string | null;
-  /** NUMERIC(20,10) — string. */
-  fx_rate_to_eur: string | null;
-  note: string | null;
-  raw_data: string | null;
-  source_transaction_id?: string | null;
-  source_account_identity?: string | null;
-  source_record_hash?: string | null;
-  dedup_fingerprint?: string | null;
-  dedup_fingerprint_version?: number | null;
-  dedup_occurrence?: number | null;
-  resolved_investment_id: number | null;
-  user_override_investment_id: number | null;
-  match_source: "symbol" | "name_exact" | null;
-  /** REAL — a number, not a string. */
-  match_similarity: number | null;
-  committed_txn_id: number | null;
-  error_message: string | null;
-  /** migration 0060 — brokerage routing (ADR-095); custody routes 0121/0123. */
-  route?:
-    | "cash"
-    | "portfolio"
-    | "asset_transfer"
-    | "asset_adjustment"
-    | "account_internal"
-    | null;
-  /** TIMESTAMPTZ */
-  created_at: Date;
-};
+export type {
+  PortfolioImportBatchRow,
+  PortfolioImportStagingRow,
+} from "../database/rows/portfolioImport.ts";
 
 // ---------------------------------------------------------------------------
 // Asset price history
 // ---------------------------------------------------------------------------
 
 /**
- * A row of `asset_price_history` (migration 0001; the FK to `investments` was
- * added by 0026 and is dropped again by priceCache's `_dropForeignKey`).
- *
- * `close_price` is NUMERIC so pg emits it as a string, and `price_date` is a
- * DATE so pg emits a local-midnight `Date` — `dateOnlyToTimestampMs` exists
- * precisely to unpick that (see its comment: treating it as a string NaN'd out
- * every cached read).
+ * A row of `asset_price_history`. `close_price` is NUMERIC so pg emits it as a
+ * string, and `price_date` is a DATE so pg emits a local-midnight `Date` —
+ * `dateOnlyToTimestampMs` exists precisely to unpick that. Derived from
+ * `assetPriceHistoryRowSchema` (src/database/rows/portfolio.ts).
  */
-export type AssetPriceHistoryRow = {
-  /** SERIAL */
-  id: number;
-  /** INTEGER NOT NULL */
-  investment_id: number;
-  /** DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
-  price_date: Date;
-  /** NUMERIC(18,6) — pg emits NUMERIC as a string. */
-  close_price: string;
-  /** VARCHAR(50) DEFAULT 'provider' */
-  source: string;
-  /** TIMESTAMPTZ */
-  fetched_at: Date;
-  /** TIMESTAMPTZ */
-  updated_at: Date | null;
-};
+export type AssetPriceHistoryRow = z.output<typeof assetPriceHistoryRowSchema>;
 
 /**
  * One point of a price series as the price layer passes it around: an
@@ -1007,57 +623,15 @@ export type PricePoint = {
 // ---------------------------------------------------------------------------
 
 /**
- * A row of `portfolio_performance_snapshots` as returned by `SELECT *`
- * (migration 0018; `value_fx_neutral` added by migration 0039).
- *
- * Every money/percentage column is NUMERIC, so pg emits it as a string — the
- * consumers all run them through `toDecimal`/`toNumber`. Every column except
- * `value_fx_neutral` is NOT NULL with a DEFAULT.
- *
- * `value_fx_neutral` is optional AND nullable on purpose: `getSnapshots` uses
- * `SELECT *` precisely so the projection still works on a database that has not
- * applied 0039 (the property is then absent, not null).
+ * A row of `portfolio_performance_snapshots` as returned by `SELECT *`. Every
+ * money/percentage column is NUMERIC (a pg string). `value_fx_neutral` is
+ * optional AND nullable: `getSnapshots` uses `SELECT *` so the projection still
+ * works on a database without migration 0039. Derived from
+ * `portfolioPerformanceSnapshotRowSchema` (src/database/rows/portfolio.ts).
  */
-export type PortfolioPerformanceSnapshotRow = {
-  /** SERIAL */
-  id: number;
-  /** DATE — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
-  snapshot_date: Date;
-  /** NUMERIC(18,6) */
-  invested: string;
-  /** NUMERIC(18,6) */
-  value: string;
-  /** NUMERIC(18,6) */
-  stocks_etfs_value: string;
-  /** NUMERIC(18,6) */
-  crypto_value: string;
-  /** NUMERIC(18,6) */
-  metals_value: string;
-  /** NUMERIC(18,6) */
-  cash_value: string;
-  /** NUMERIC(18,6) */
-  gain_loss: string;
-  /** NUMERIC(10,4) */
-  return_pct: string;
-  /** NUMERIC(18,6) */
-  inflation_adjusted_value: string;
-  /** NUMERIC(10,4) DEFAULT 1 */
-  cumulative_inflation: string;
-  /** NUMERIC(10,4) */
-  real_return_pct: string;
-  /** NUMERIC(18,6) */
-  stocks_etfs_invested: string;
-  /** NUMERIC(18,6) */
-  crypto_invested: string;
-  /** NUMERIC(18,6) */
-  metals_invested: string;
-  /** VARCHAR(3) DEFAULT 'EUR' */
-  currency: string;
-  /** TIMESTAMPTZ */
-  computed_at: Date;
-  /** NUMERIC(18,2), migration 0039 — absent on un-migrated databases. */
-  value_fx_neutral?: string | null;
-};
+export type PortfolioPerformanceSnapshotRow = z.output<
+  typeof portfolioPerformanceSnapshotRowSchema
+>;
 
 // ---------------------------------------------------------------------------
 // Exchange rates
@@ -1119,21 +693,8 @@ export type RateTable = Record<string, number>;
 // Belgian inflation rates
 // ---------------------------------------------------------------------------
 
-/** A row of `belgian_inflation_rates` (migration 0001). */
-export type BelgianInflationRateRow = {
-  /** SERIAL */
-  id: number;
-  /** DATE (first-of-month) — a local-midnight `Date`, NOT a 'YYYY-MM-DD' string. */
-  month_date: Date;
-  /** NUMERIC(10,8) — pg emits NUMERIC as a string. */
-  monthly_rate: string;
-  /** VARCHAR(50) NOT NULL DEFAULT 'statbel'. */
-  source: string;
-  /** TIMESTAMPTZ NOT NULL DEFAULT NOW(). */
-  fetched_at: Date;
-  /** TIMESTAMPTZ */
-  updated_at: Date | null;
-};
+/** A row of `belgian_inflation_rates`, derived from its checked row schema. */
+export type { BelgianInflationRateRow } from "../database/rows/info.ts";
 
 /**
  * The service's normalized shape for one month's inflation rate — used both

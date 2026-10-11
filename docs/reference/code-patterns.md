@@ -2,7 +2,7 @@
 title: Code Patterns Reference
 type: reference
 status: active
-date: 2026-10-09
+date: 2026-10-10
 updated: 2026-10-08
 tags: [reference, patterns, conventions, code-style, backend, frontend, delete-responses, http-204, phase-0, phase-1, phase-2, phase-3, phase-4, phase-5, phase-6, phase-9, phase-12, phase-14, phase-q, phase-c, phase-d, motion, liquid-glass, design-system, decimal, money, timezone, openapi, domain-split, import, import-pipeline, concurrency, batching, decimal-enforcement, zustand, slice-selection, typescript, error-handling, type-safety, csv, formula-injection, cwe-1236, csv-record-splitter, csv-parsing, multi-line-fields, date-utilities, immutability, aggregation-optimization, recipient-groups, portfolio-totals, query-parameter-filtering, buildquery, bug-hunt-2026-05-05, bug-hunt-2026-05-06, bug-hunt-2026-05-08, react-keys, stable-keys, mount-guard, memory-leak-prevention, parseLocaleNumber, number-parsing, locale-number, settings-backed-hook, portfolio-tax-classifications, audit-2026-05-11, belgian-tax, freeze-display-pattern, adr-059, dev-observability, devtools, api-inspector, observability, postgres-locking, for-update-group-by, accessibility, a11y, keyboard-operability, aria, onActivateKeyDown, shared-utils, monorepo, workspace, banker-rounding, plural, tc, portfolio-unit-math, premium-v3, optimistic-create, chart-scrub, chart-sync, context-menu, dialog-interplay, radix, role-based-glass, june-2026, skin-v2, feature-flag, css-scoping, unlayered-css, visual-skin, theming, inline-token-constraint, adr-104, wire-casing, snake-case, api-casing, database-naming, enum-discipline, check-constraints, chk-uq-idx]
 description: Standard code patterns used throughout the Vision project — repositories, routes, hooks, API client, Express setup, error handling, type safety, filter builders, aggregation envelopes, aggregation refresh, trigger-maintained tables, golden fixtures, database fixtures, pure calculation services, atomic multi-step transactions, streaming CSV exports with formula injection prevention, import batch concurrency, motion consumers, surface shells, gradient icon tiles, money utilities, decimal utilities, shared date utilities with input validation and locale support, timezone boundary handling, TypeScript type annotations, type-safe error handling, domain-split API client, Zustand store with useShallow slice selection, immutable PATCH field sanitization, aggregation query optimization with Map-based single-pass accumulation, recipient group resolution via an indexable semi-join (Phase Q; rewritten from the original scalar-subquery OR shape), portfolio totals single-source-of-truth pattern (Phase 14), Belgian Tax freeze/display pattern for engine-drift protection (ADR-059, May 2026), dev-only observability integration pattern (May 2026 devtools: module-level pub-sub event bus with zero-cost tree-shaking in production). May 2026 bug hunt adds React key generation pattern (use UUID instead of index), mount guard pattern (prevent setState after unmount), and documents parseLocaleNumber heuristic with single-comma thousands separator fix. May 2026 a11y pass adds onActivateKeyDown keyboard-activation helper pattern. June 2026: shared-utils cross-workspace package (@vision/shared-utils) consolidates money, slugify, and shared portfolio calculations; banker's rounding is now the canonical roundMoney mode; tc() plural pattern documented. June 2026 (ADR-070): optimistic mutation pattern (snapshot/patch/rollback via setQueriesData); surface shell updated with glass-regular/glass-elevated/opaque-table canonical rules; motion consumer updated for PageTransition re-addition and dialog keyframe animation. June 2026 Premium v3 (ADR-071): optimistic-create pattern (temp negative-id row, server swap, rollback, onSettled invalidate); chart scrub pattern (useChartScrub, pointer capture, glass Δ pill); chart sync pattern (ChartSyncProvider, syncId prop, domain guard). June 2026 Premium v3 V5 (ADR-071): Radix ContextMenu + Dialog interplay pattern — modal={false} prevents body pointer-events race when menu items spawn Dialogs. June 2026 (role-based glass): surface shell canonical rule broadened — glass-regular now applied to ALL content/chart/stat/state cards, including current table/form/callout/dialog-nested Card instances; old ~6-surface-per-viewport limit superseded; an explicit opaque exception uses a plain bordered bg-card container instead of Card. June 2026 (ADR-104): scoped-skin-behind-a-flag pattern — alternative visual skin shipped as UNLAYERED CSS under :root.skin-v2 toggled by VITE_SKIN_V2 booleanEnv flag (default OFF); localStorage runtime override + window.__setSkinV2 dev helper; critical inline-token constraint: applyThemePalette() writes color tokens as inline styles which beat any stylesheet rule. July 2026: wire casing convention — snake_case is the request/response body contract, translated to camelCase at the route edge; ai/savedCharts/crossWorkspace/admin-dbEditor requests plus marketLookup and import-rollback responses are grandfathered camelCase; dual-accept (`x_y ?? xY`) is banned.
@@ -571,35 +571,40 @@ export default entityRepository;
 
 ### Row contracts for new queries (ADR-193)
 
-**Source:** [[apps/node-backend/src/database/rowContracts.ts|database/rowContracts.ts]], [[apps/node-backend/src/database/rowSchemas.ts|database/rowSchemas.ts]], [[apps/node-backend/src/types/rows.ts|types/rows.ts]]
+**Source:** [[apps/node-backend/src/database/rowContracts.ts|database/rowContracts.ts]], [[apps/node-backend/src/database/rowSchemas.ts|database/rowSchemas.ts]], `database/rows/<area>.ts`, [[apps/node-backend/src/types/rows.ts|types/rows.ts]]
 
-`query<R>()` trusts its generic. A new read in a checked repository runs through `queryRows` or
-`queryOne` with a row schema instead, so the rows are checked against what node-postgres really
-returns ([[docs/adr/193-zod-runtime-contracts|ADR-193]]):
+`query<R>()` trusts its generic, and without one its rows are `unknown`. A new read whose rows are
+used runs through `queryRows` or `queryOne` with a row schema instead, so the rows are checked
+against what node-postgres really returns ([[docs/adr/193-zod-runtime-contracts|ADR-193]],
+[[docs/adr/194-runtime-contracts-completion|ADR-194]]):
 
 ```ts
-import { queryOne, queryRows } from "../database/rowContracts.ts";
+import { queryOne, queryRows, requireRow } from "../database/rowContracts.ts";
 import { accountRowSchema, countRowSchema } from "../database/rowSchemas.ts";
 
 const rows = await queryRows(accountRowSchema, sql, params);
 const account = await queryOne(accountRowSchema, sqlById, [id], client); // first row or undefined
 const [row] = await queryRows(countRowSchema, countSql, []);
-return parseInt(row.count, 10);
+return parseInt(requireRow(row, "account count").count, 10);
 ```
 
 | Rule             | Detail                                                                                                                                                                              |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema location  | Add the schema to `database/rowSchemas.ts`. Derive the TypeScript row type with `z.output<typeof schema>` in `types/rows.ts` so the type and the check cannot drift.                 |
+| Schema location  | Add the schema to the area module `database/rows/<area>.ts` (`admin`, `ai`, `analysis`, `audit`, `catalog`, `imports`, `info`, `ledger`, `portfolio`, `portfolioImport`), importing the `pg*` primitives from `database/rowSchemas.ts`. Export the row type as `z.output<typeof schema>` next to it (re-export it from `types/rows.ts` when other layers use it), so the type and the check cannot drift. |
 | pg default types | Use the `pg*` primitives: `pgNumeric`/`pgBigint` are strings, `pgDate`/`pgTimestamptz` are `Date`, `pgInt` is a number. No global type parsers are installed.                        |
 | Check only       | A `RowSchema<T>` has the same input and output type, so coercions and transforms do not compile. Callers get the exact objects pg returned, extra columns included.                   |
 | Columns          | Plain `z.object` ignores unlisted columns, so `SELECT t.*` keeps working after a migration adds one. `.optional()` marks a column only some projections select; `.nullable()` marks SQL NULL. |
 | Transactions     | Pass the `client` as the fourth argument inside `withTransaction`.                                                                                                                  |
 | Mismatch         | Never a 400. Tests and development throw `RowContractError` (a 500). Other environments follow `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"`: the owner chose to block (2026-10-09), so production fails the request too. Messages carry column paths and type names, never values. |
+| One row          | `requireRow(row, label)` returns the row of an `INSERT … RETURNING` or another always-one-row query and throws when it is missing. With `noUncheckedIndexedAccess` on, `rows[0]` is `T \| undefined`. |
+| Fallbacks        | A `catch` that falls back on failure rethrows `RowContractError` first (`if (err instanceof RowContractError) throw err;`): a drifted row is a data fault, not a transient failure. |
+| Not checked      | Rows that are never read, DDL and infrastructure queries, and tables only known at run time (admin database editor, analysis custom SQL).                                       |
 | Cost             | `checkRows` stops at the first failing row, so a systematic mismatch is one error.                                                                                                  |
 
-The account, planned-transaction, split and transaction repositories use these helpers. Other
-repositories still call `query<R>()` directly; move a read over when you touch it. Tests that mock
-`query` build rows with the pg-shaped helpers in `tests/helpers/pgRows.ts`.
+Almost every repository and service read uses these helpers. Tests that mock `query` build rows
+with the pg-shaped helpers in `tests/helpers/pgRows.ts`, `tests/helpers/portfolioPgRows.ts`
+(portfolio, investment, price and snapshot rows) and `tests/helpers/aiRows.ts` (AI, analysis,
+monitor and dossier rows).
 
 ### Layering: repositories must not import services — with a closed list of sanctioned exceptions
 
@@ -1309,9 +1314,10 @@ export const apiClient = new ApiClient();
 
 **Source:** [[apps/frontend/src/lib/api/client.ts|lib/api/client.ts]], [[packages/types/src/contracts/index.ts|packages/types/src/contracts]]
 
-A domain client can declare a zod schema for the unwrapped `data`. Pass it as the `schema` option
-of `apiRequest`, or call `checkResponseContract(schema, data, "METHOD /path")` on a value that went
-through `requestWithQuery`:
+A domain client declares a zod schema for the unwrapped `data`. Pass it as the `schema` option of
+`apiRequest` or of `requestWithQuery(endpoint, params, { signal, schema })`. Only a body that
+bypasses `apiRequest` (a `rawFetch` read, a multipart upload, `createWithStatus`) is checked by
+calling `checkResponseContract(schema, data, "METHOD /path")` directly:
 
 ```ts
 import { RecipientSchema } from "@vision/types/contracts";
@@ -1326,11 +1332,16 @@ export function getRecipient(id: number): Promise<Recipient> {
 - A mismatch throws `ApiContractError` in every build, production included (the owner chose to
   block, 2026-10-09). It is not retried, and `apiErrorToMessage` shows the generic server copy.
 - Messages and logs carry issue paths, never values. The label drops the query string.
-- Schemas live in `@vision/types/contracts` so the client and the frontend contract tests share
-  one definition. Keep them loose: identity fields required, other fields optional but typed.
-- Seven reads declare a schema today: `getTransactions`, `getAccounts`, `getCategories`,
-  `getCategoryTree`, `getRecipients`, `getRecipient` and `listRecipientPatterns`
-  ([[docs/adr/193-zod-runtime-contracts|ADR-193]]).
+- Schemas live in `@vision/types/contracts`, one module per API area, so the client and the
+  frontend contract tests share one definition. Wire schemas are `z.looseObject` and require every
+  field the backend always sends; `.optional()` marks a key some responses omit and `.nullable()` a
+  SQL-nullable value. Build dates, timestamps, currency codes and lists from `WireDateSchema`,
+  `WireTimestampSchema`, `CurrencyCodeSchema`, `wirePageOf` and `wireCollectionOf` in `common.ts`.
+- Check reads and the save responses whose result the UI uses. Leave the schema off only when the
+  caller ignores the body or the body is binary.
+- Test fixtures must be full responses. `src/test/msw/rowFixtures.ts` builds full transaction,
+  account, category and recipient rows from the fields a test sets
+  ([[docs/adr/193-zod-runtime-contracts|ADR-193]], [[docs/adr/194-runtime-contracts-completion|ADR-194]]).
 
 ---
 

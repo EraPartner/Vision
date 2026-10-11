@@ -17,6 +17,7 @@ import {
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
+  cellAt,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -52,18 +53,18 @@ function classifyTransactionType(
 function parseLine(parts: string[]): ParsedBankTransaction | null {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
-  const ownAccount = parts[0].trim(); // "Rekeningnummer" — the account holder's own IBAN
+  const ownAccount = cellAt(parts, 0).trim(); // "Rekeningnummer" — the account holder's own IBAN
   const currency = normalizeIsoCurrency(parts[3]);
-  const statementNumber = parts[4].trim();
-  const transactionDateStr = parts[5].trim();
-  const description = parts[6].trim();
-  const amountStr = parts[8].trim();
-  const balanceStr = parts[9].trim();
-  const creditStr = parts[10].trim();
-  const debitStr = parts[11].trim();
-  const counterpartyAccount = parts[12].trim();
-  const counterpartyBic = parts[13].trim();
-  const counterpartyName = parts[14].trim();
+  const statementNumber = cellAt(parts, 4).trim();
+  const transactionDateStr = cellAt(parts, 5).trim();
+  const description = cellAt(parts, 6).trim();
+  const amountStr = cellAt(parts, 8).trim();
+  const balanceStr = cellAt(parts, 9).trim();
+  const creditStr = cellAt(parts, 10).trim();
+  const debitStr = cellAt(parts, 11).trim();
+  const counterpartyAccount = cellAt(parts, 12).trim();
+  const counterpartyBic = cellAt(parts, 13).trim();
+  const counterpartyName = cellAt(parts, 14).trim();
   const counterpartyAddress = parts[15] ? parts[15].trim() : "";
   const structuredCommunication = parts[16] ? parts[16].trim() : "";
   const freeCommunication = parts[17] ? parts[17].trim() : "";
@@ -131,7 +132,7 @@ export function detect(csvSample: string | null | undefined): boolean {
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   const content = await readTextWithEncodingFallback(filePath);
   let malformed = 0;
-  const records = parseCsvText(content, {
+  const records = parseCsvText<string[]>(content, {
     delimiter: ";",
     skip_empty_lines: true,
     relax_column_count: true,

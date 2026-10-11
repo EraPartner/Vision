@@ -12,7 +12,16 @@ import {
 import { randomUUID } from "node:crypto";
 import { analysisDefinitionSchema } from "@vision/types/analysis";
 import { assertAnalysisDatasetReference } from "@vision/types/analysis-datasets";
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  savedAnalysisRowSchema,
+  savedAnalysisTableRowSchema,
+  savedAnalysisVersionRowSchema,
+  savedAnalysisVersionSourceRowSchema,
+  textIdRowSchema,
+} from "../database/rows/analysis.ts";
+import type { SavedAnalysisRow } from "../database/rows/analysis.ts";
 import { compileVisualAnalysis } from "./analysisCatalog.ts";
 import { executeAnalysisSql } from "./analysisExecutor.ts";
 import { evaluateAnalysisFormulas } from "./analysisFormulaEngine.ts";
@@ -113,26 +122,7 @@ export type SavedAnalysisUpdate = Partial<
   expectedVersion?: number | string | null;
 };
 
-interface SavedAnalysisRow {
-  id: string;
-  definition_id: string;
-  name: string;
-  workspace: string;
-  current_version: number | string;
-  refresh_mode: string;
-  parameters_json: SavedAnalysisParameters;
-  charts_json: unknown[];
-  source_references_json: unknown[];
-  refresh_status: string;
-  last_successful_run_id: string | null;
-  last_error_json: unknown;
-  created_at: Date;
-  updated_at: Date;
-  definition_json: AnalysisDefinition;
-  result_json?: unknown;
-}
-
-interface SavedVersionState {
+export interface SavedVersionState {
   parameters?: SavedAnalysisParameters;
   charts?: unknown[];
   sourceReferences?: unknown[];
@@ -467,7 +457,8 @@ export async function listSavedAnalyses(workspace?: string) {
       throw new Error("Unsupported analysis workspace");
     params.push(workspace);
   }
-  const result = await query<SavedAnalysisRow>(
+  const rows = await queryRows(
+    savedAnalysisRowSchema,
     `SELECT sa.*, versions.definition_json, runs.result_json
        FROM saved_analyses sa
        JOIN saved_analysis_definition_versions versions
@@ -477,11 +468,12 @@ export async function listSavedAnalyses(workspace?: string) {
       ORDER BY sa.updated_at DESC`,
     params,
   );
-  return result.rows.map(mapSaved);
+  return rows.map(mapSaved);
 }
 
 export async function getSavedAnalysis(id: string) {
-  const result = await query<SavedAnalysisRow>(
+  const row = await queryOne(
+    savedAnalysisRowSchema,
     `SELECT sa.*, versions.definition_json, runs.result_json
        FROM saved_analyses sa
        JOIN saved_analysis_definition_versions versions
@@ -490,7 +482,7 @@ export async function getSavedAnalysis(id: string) {
       WHERE sa.id = $1`,
     [id],
   );
-  return result.rows[0] ? mapSaved(result.rows[0]) : null;
+  return row ? mapSaved(row) : null;
 }
 
 export async function createSavedAnalysis(input: SavedAnalysisInput) {
@@ -564,15 +556,16 @@ export async function updateSavedAnalysis(
   input: SavedAnalysisUpdate,
 ) {
   await withTransaction(async (client) => {
-    const locked = await client.query(
+    const current = await queryOne(
+      savedAnalysisTableRowSchema,
       "SELECT * FROM saved_analyses WHERE id = $1 FOR UPDATE",
       [id],
+      client,
     );
-    if (!locked.rows[0])
+    if (!current)
       throw Object.assign(new Error("Saved analysis not found"), {
         status: 404,
       });
-    const current: SavedAnalysisRow = locked.rows[0];
     if (
       input.expectedVersion != null &&
       Number(input.expectedVersion) !== Number(current.current_version)
@@ -888,17 +881,11 @@ export async function runSavedAnalysis(
 }
 
 export async function listSavedAnalysisVersions(id: string) {
-  return (
-    await query<{
-      version: number;
-      definition: AnalysisDefinition;
-      state: SavedVersionState | null;
-      createdAt: Date;
-    }>(
-      `SELECT version,definition_json AS definition,state_json AS state,created_at AS "createdAt" FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 ORDER BY version DESC`,
-      [id],
-    )
-  ).rows;
+  return queryRows(
+    savedAnalysisVersionRowSchema,
+    `SELECT version,definition_json AS definition,state_json AS state,created_at AS "createdAt" FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 ORDER BY version DESC`,
+    [id],
+  );
 }
 
 export async function restoreSavedAnalysisVersion(
@@ -907,12 +894,12 @@ export async function restoreSavedAnalysisVersion(
   expectedVersion: number | string,
 ) {
   await withTransaction(async (client) => {
-    const locked: SavedAnalysisRow | undefined = (
-      await client.query(
-        `SELECT * FROM saved_analyses WHERE id=$1 FOR UPDATE`,
-        [id],
-      )
-    ).rows[0];
+    const locked = await queryOne(
+      savedAnalysisTableRowSchema,
+      `SELECT * FROM saved_analyses WHERE id=$1 FOR UPDATE`,
+      [id],
+      client,
+    );
     if (!locked)
       throw Object.assign(new Error("Saved analysis not found"), {
         status: 404,
@@ -922,17 +909,12 @@ export async function restoreSavedAnalysisVersion(
         new Error("Saved analysis changed since this restore was prepared"),
         { status: 409, code: "ANALYSIS_VERSION_CONFLICT" },
       );
-    const source:
-      | {
-          definition_json: AnalysisDefinition;
-          state_json: SavedVersionState | null;
-        }
-      | undefined = (
-      await client.query(
-        `SELECT definition_json,state_json FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 AND version=$2`,
-        [id, version],
-      )
-    ).rows[0];
+    const source = await queryOne(
+      savedAnalysisVersionSourceRowSchema,
+      `SELECT definition_json,state_json FROM saved_analysis_definition_versions WHERE saved_analysis_id=$1 AND version=$2`,
+      [id, version],
+      client,
+    );
     if (!source)
       throw Object.assign(new Error("Saved analysis version not found"), {
         status: 404,
@@ -974,11 +956,12 @@ export async function restoreSavedAnalysisVersion(
 }
 
 export async function deleteSavedAnalysis(id: string) {
-  const result = await query<{ id: string }>(
+  const rows = await queryRows(
+    textIdRowSchema,
     "DELETE FROM saved_analyses WHERE id = $1 RETURNING id",
     [id],
   );
-  return result.rows.length > 0;
+  return rows.length > 0;
 }
 
 export {

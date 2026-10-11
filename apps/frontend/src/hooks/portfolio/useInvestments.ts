@@ -182,29 +182,25 @@ export function useInvestmentMutations() {
         mutationFn: () => apiClient.refreshInvestmentPrices(),
         onSuccess: (data) => {
             invalidateAll();
+            // `total` is omitted when no holding has a live price provider.
+            const total = String(data.total ?? 0);
             const sources = Object.values(data.priceSources ?? {});
             const staleCount = sources.filter(
                 (s) => s === "historical_fallback" || s === "cached",
             ).length;
             // Stable id => Sonner replaces, never stacks duplicates on rapid re-clicks.
             if (staleCount > 0) {
-                toast.warning(
-                    t("portfolio.refreshedPrices", { n: String(data.total) }),
-                    {
-                        id: "portfolio-refresh-prices",
-                        description: t("portfolio.refreshedPricesStale", {
-                            n: String(staleCount),
-                            total: String(data.total),
-                        }),
-                    },
-                );
+                toast.warning(t("portfolio.refreshedPrices", { n: total }), {
+                    id: "portfolio-refresh-prices",
+                    description: t("portfolio.refreshedPricesStale", {
+                        n: String(staleCount),
+                        total,
+                    }),
+                });
             } else {
-                toast.success(
-                    t("portfolio.refreshedPrices", { n: String(data.total) }),
-                    {
-                        id: "portfolio-refresh-prices",
-                    },
-                );
+                toast.success(t("portfolio.refreshedPrices", { n: total }), {
+                    id: "portfolio-refresh-prices",
+                });
             }
         },
         onError: (err: Error) => {

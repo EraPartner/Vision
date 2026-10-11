@@ -143,13 +143,12 @@ function topByConfidence<T extends { confidence: number }>(findings: T[]): T[] {
     }
 
     const changes = pattern.amountChanges;
+    // The LAST element is the most recent change — that is the current one.
+    const change = Array.isArray(changes) ? changes.at(-1) : undefined;
     if (
-      Array.isArray(changes) &&
-      changes.length > 0 &&
+      change !== undefined &&
       !dismissed.has(dismissKey(pattern.recipientId, 'priceChange'))
     ) {
-      // The LAST element is the most recent change — that is the current one.
-      const change = changes[changes.length - 1];
       priceChangeFindings.push({
         recipientId: pattern.recipientId,
         recipientName: pattern.recipientName,

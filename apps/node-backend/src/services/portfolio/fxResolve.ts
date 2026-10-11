@@ -15,6 +15,7 @@ import {
   normalizeDateInput,
 } from "../currency/rateFetcher.ts";
 import { logger } from "../../config/logger.ts";
+import { RowContractError } from "../../database/rowContracts.ts";
 
 export async function autoResolveFxRateToEur(
   currency: string,
@@ -27,6 +28,8 @@ export async function autoResolveFxRateToEur(
   try {
     return await getStoredRateToEurOnOrBefore(code, normalizeDateInput(date));
   } catch (err) {
+    // A contract violation is a data fault, not a transient failure: surface it.
+    if (err instanceof RowContractError) throw err;
     logger.warn("fx_rate_to_eur auto-resolution failed", {
       currency: code,
       date,

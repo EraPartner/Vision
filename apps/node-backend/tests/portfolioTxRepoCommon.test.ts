@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { mockConnection } from "./helpers/repoMocks.ts";
 import { partial } from "./helpers/partial.ts";
+import { portfolioUnitEventDbRow } from "./helpers/portfolioPgRows.ts";
+import type { PortfolioUnitEventDbRow } from "../src/database/rows/portfolio.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
 import { query as rawQuery } from "../src/database/connection.ts";
@@ -18,8 +20,23 @@ import {
   validatePortfolioUnitMutation,
 } from "../src/services/portfolio/portfolioTransactionRules.ts";
 import type { UnitMutationParams } from "../src/services/portfolio/portfolioTransactionRules.ts";
+import { RowContractError } from "../src/database/rowContracts.ts";
 
 const query = vi.mocked(rawQuery);
+
+/**
+ * A unit-event row dated before the candidates below, with a unique id that
+ * never collides with an excluded transaction id.
+ */
+let nextUnitEventId = 100;
+const unitEvent = (
+  overrides: Partial<PortfolioUnitEventDbRow>,
+): PortfolioUnitEventDbRow =>
+  portfolioUnitEventDbRow({
+    id: String(nextUnitEventId++),
+    date: "2025-01-01",
+    ...overrides,
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -35,7 +52,7 @@ describe("import_batch_id column probe (0086)", () => {
     );
     expect(await hasPortfolioTransactionImportBatchIdColumn()).toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "to_regclass('public.portfolio_transactions')",
     );
 
@@ -387,7 +404,9 @@ describe("validateSellUnitsAvailability", () => {
 
   it("passes when sell units fit available holdings", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ type: "buy", units: "10" }] }),
+      partial<PgQueryResult>({
+        rows: [unitEvent({ type: "buy", units: "10" })],
+      }),
     );
     await expect(
       validateSellUnitsAvailability({
@@ -402,7 +421,9 @@ describe("validateSellUnitsAvailability", () => {
 
   it("throws VALIDATION_ERROR when exceeds available holdings", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ type: "buy", units: "5" }] }),
+      partial<PgQueryResult>({
+        rows: [unitEvent({ type: "buy", units: "5" })],
+      }),
     );
     await expect(
       validateSellUnitsAvailability({
@@ -424,8 +445,8 @@ describe("validateSellUnitsAvailability", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          { type: "buy", units: "10" },
-          { type: "split", units: "20" },
+          unitEvent({ type: "buy", units: "10" }),
+          unitEvent({ type: "split", units: "20" }),
         ],
       }),
     );
@@ -445,7 +466,9 @@ describe("validateSellUnitsAvailability", () => {
     // total (matches the canonical core, which requires units already held).
     // Held = 0, so any sell is an oversell and must be rejected.
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ type: "split", units: "20" }] }),
+      partial<PgQueryResult>({
+        rows: [unitEvent({ type: "split", units: "20" })],
+      }),
     );
     await expect(
       validateSellUnitsAvailability({
@@ -462,9 +485,9 @@ describe("validateSellUnitsAvailability", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          { type: "buy", units: "10" },
-          { type: "sell", units: "4" },
-          { type: "return_of_capital", units: "0" },
+          unitEvent({ type: "buy", units: "10" }),
+          unitEvent({ type: "sell", units: "4" }),
+          unitEvent({ type: "return_of_capital", units: "0" }),
         ],
       }),
     );
@@ -482,7 +505,9 @@ describe("validateSellUnitsAvailability", () => {
 
   it("loads the full ordered history once and excludes the edited row in memory", async () => {
     query.mockResolvedValueOnce(
-      partial<PgQueryResult>({ rows: [{ type: "buy", units: "50" }] }),
+      partial<PgQueryResult>({
+        rows: [unitEvent({ type: "buy", units: "50" })],
+      }),
     );
     await validateSellUnitsAvailability({
       type: "sell",
@@ -493,11 +518,11 @@ describe("validateSellUnitsAvailability", () => {
       excludeTransactionId: 99,
     });
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "to_char(date, 'YYYY-MM-DD') AS date",
     );
-    expect(query.mock.calls[0][1]).toEqual([1]);
-    expect(query.mock.calls[0][0]).not.toContain("SELECT EXISTS");
+    expect(query.mock.calls[0]![1]).toEqual([1]);
+    expect(query.mock.calls[0]![0]).not.toContain("SELECT EXISTS");
   });
 
   it("rejects reassigning a buy when that newly oversells a later broker partition", async () => {
@@ -505,32 +530,34 @@ describe("validateSellUnitsAvailability", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
-              id: 1,
+            unitEvent({
+              id: "1",
               type: "buy",
               units: "5",
               date: "2025-01-01",
               account_id: 1,
-            },
-            {
-              id: 3,
+            }),
+            unitEvent({
+              id: "3",
               type: "buy",
               units: "5",
               date: "2025-01-02",
               account_id: 2,
-            },
-            {
-              id: 2,
+            }),
+            unitEvent({
+              id: "2",
               type: "sell",
               units: "5",
               date: "2025-02-01",
               account_id: 1,
-            },
+            }),
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ display_name: "Broker A" }] }),
+        partial<PgQueryResult>({
+          rows: [{ display_name: "Broker A", name: "Broker" }],
+        }),
       );
 
     await expect(
@@ -555,14 +582,20 @@ describe("validateSellUnitsAvailability", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          { id: 1, type: "buy", units: "5", date: "2025-01-01", account_id: 1 },
-          {
-            id: 2,
+          unitEvent({
+            id: "1",
+            type: "buy",
+            units: "5",
+            date: "2025-01-01",
+            account_id: 1,
+          }),
+          unitEvent({
+            id: "2",
             type: "sell",
             units: "7",
             date: "2025-02-01",
             account_id: 1,
-          },
+          }),
         ],
       }),
     );
@@ -585,25 +618,27 @@ describe("validateSellUnitsAvailability", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
-              id: 1,
+            unitEvent({
+              id: "1",
               type: "buy",
               units: "10",
               date: "2025-01-01",
               account_id: 1,
-            },
-            {
-              id: 2,
+            }),
+            unitEvent({
+              id: "2",
               type: "sell",
               units: "8",
               date: "2025-03-01",
               account_id: 1,
-            },
+            }),
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ display_name: "Broker A" }] }),
+        partial<PgQueryResult>({
+          rows: [{ display_name: "Broker A", name: "Broker" }],
+        }),
       );
 
     await expect(
@@ -622,37 +657,72 @@ describe("validateSellUnitsAvailability", () => {
     });
   });
 
+  it("surfaces a broken account-label row instead of masking it as a lookup miss", async () => {
+    query
+      .mockResolvedValueOnce(
+        partial<PgQueryResult>({
+          rows: [
+            unitEvent({ id: "1", type: "buy", units: "10", account_id: 1 }),
+            unitEvent({
+              id: "2",
+              type: "sell",
+              units: "8",
+              date: "2025-03-01",
+              account_id: 1,
+            }),
+          ],
+        }),
+      )
+      // `accounts.name` is NOT NULL; a row without it breaks the contract.
+      .mockResolvedValueOnce(
+        partial<PgQueryResult>({ rows: [{ display_name: "Broker A" }] }),
+      );
+
+    await expect(
+      validatePortfolioUnitMutation({
+        investmentId: 1,
+        assetClass: "stock",
+        type: "split",
+        date: "2025-02-01",
+        units: 5,
+        checkProjectedHistory: true,
+      }),
+    ).rejects.toBeInstanceOf(RowContractError);
+  });
+
   it("rejects deleting a buy that a later broker sale depends on", async () => {
     query
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
-              id: 1,
+            unitEvent({
+              id: "1",
               type: "buy",
               units: "5",
               date: "2025-01-01",
               account_id: 1,
-            },
-            {
-              id: 2,
+            }),
+            unitEvent({
+              id: "2",
               type: "buy",
               units: "5",
               date: "2025-01-02",
               account_id: 1,
-            },
-            {
-              id: 3,
+            }),
+            unitEvent({
+              id: "3",
               type: "sell",
               units: "7",
               date: "2025-03-01",
               account_id: 1,
-            },
+            }),
           ],
         }),
       )
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ display_name: "Broker A" }] }),
+        partial<PgQueryResult>({
+          rows: [{ display_name: "Broker A", name: "Broker" }],
+        }),
       );
 
     await expect(

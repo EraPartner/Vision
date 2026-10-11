@@ -34,8 +34,8 @@ import { clearMvCache } from "../src/repositories/infoRepositoryHelpers.ts";
 import { clearMemoryCache } from "../src/services/currency/currencyConversionService.ts";
 import { closePool } from "../src/database/connection.ts";
 
-const cat: Record<string, number> = {};
-const rec: Record<string, number> = {};
+const cat = {} as Record<"Food" | "Bills", number>;
+const rec = {} as Record<"aldi" | "aldiAlias" | "misc", number>;
 
 async function seedBase() {
   const pool = getTestPool()!;
@@ -47,7 +47,7 @@ async function seedBase() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
   const addRecipient = async (
     name: string,
@@ -161,7 +161,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
-      for (const bag of [cat, rec])
+      for (const bag of [cat, rec] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
       // Process-level caches: rates loaded from this test's exchange_rates rows
       // (and the negative MV probe) must not leak into the next test.
@@ -351,7 +351,7 @@ describe.skipIf(!hasTestDatabase())(
         ]);
 
         const pivot = await statisticsRepository.getCategoryPivot();
-        const rows = pivot.categoryPivot["2024-03"];
+        const rows = pivot.categoryPivot["2024-03"]!;
         expect(
           rows.map((row) => row.total).reduce((sum, total) => sum + total, 0),
         ).toBe(-105);
@@ -569,7 +569,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const all = await statisticsRepository.getCategoryPivot();
         expect(
-          all.categoryPivot["2024-02"].map((c) => [c.categoryId, c.total]),
+          all.categoryPivot["2024-02"]!.map((c) => [c.categoryId, c.total]),
         ).toEqual([
           [cat.Bills, -20], // ascending by total
           [cat.Food, -10],
@@ -581,14 +581,14 @@ describe.skipIf(!hasTestDatabase())(
           excludedRecipientIds: [rec.aldi],
         });
         expect(
-          exclRecipient.categoryPivot["2024-02"].map((c) => c.categoryId),
+          exclRecipient.categoryPivot["2024-02"]!.map((c) => c.categoryId),
         ).toEqual([cat.Bills]);
 
         const exclCategory = await statisticsRepository.getCategoryPivot({
           excludedCategoryIds: [cat.Bills],
         });
         expect(
-          exclCategory.categoryPivot["2024-02"].map((c) => c.categoryId),
+          exclCategory.categoryPivot["2024-02"]!.map((c) => c.categoryId),
         ).toEqual([cat.Food]);
       });
 

@@ -373,9 +373,9 @@ describe("property: sanitizeSnapshotSpikes", () => {
       sanitizeSnapshotSpikes(original);
       for (let i = 0; i < len; i++) {
         expect(
-          original[i].value,
+          original[i]!.value,
           `trial ${trial} index ${i}: input was mutated`,
-        ).toBe(copy[i].value);
+        ).toBe(copy[i]!.value);
       }
     }
   });
@@ -390,13 +390,13 @@ describe("property: sanitizeSnapshotSpikes", () => {
         metals_value: randBetween(rng, 0, 500),
       }));
       const result = sanitizeSnapshotSpikes(snapshots);
-      expect(result[0].value, `trial ${trial}: first element changed`).toBe(
-        snapshots[0].value,
+      expect(result[0]!.value, `trial ${trial}: first element changed`).toBe(
+        snapshots[0]!.value,
       );
       expect(
-        result[len - 1].value,
+        result[len - 1]!.value,
         `trial ${trial}: last element changed`,
-      ).toBe(snapshots[len - 1].value);
+      ).toBe(snapshots[len - 1]!.value);
     }
   });
 
@@ -414,7 +414,7 @@ describe("property: sanitizeSnapshotSpikes", () => {
     }));
     const result = sanitizeSnapshotSpikes(snapshots);
     for (let i = 0; i < snapshots.length; i++) {
-      expect(result[i].value).toBeCloseTo(snapshots[i].value, 8);
+      expect(result[i]!.value).toBeCloseTo(snapshots[i]!.value, 8);
     }
   });
 
@@ -443,10 +443,10 @@ describe("property: sanitizeSnapshotSpikes", () => {
     const result = sanitizeSnapshotSpikes(snapshots);
     // Replacement is rounded to cents (shared sanitizer implementation).
     const expected = Math.sqrt(1000 * 1020);
-    expect(result[1].value).toBeCloseTo(expected, 2);
+    expect(result[1]!.value).toBeCloseTo(expected, 2);
     // Endpoints unchanged
-    expect(result[0].value).toBe(1000);
-    expect(result[2].value).toBe(1020);
+    expect(result[0]!.value).toBe(1000);
+    expect(result[2]!.value).toBe(1020);
   });
 
   it("preserves value == Σ(stocks, crypto, metals, cash) on realistic rows", () => {
@@ -505,7 +505,7 @@ describe("property: sanitizeSnapshotSpikes", () => {
       if (fxRatio === 1) seen.allEur += 1;
       if (!heldLegs[0] || !heldLegs[1] || !heldLegs[2]) seen.emptyLeg += 1;
       for (let i = 0; i < len; i++) {
-        const row = result[i];
+        const row = result[i]!;
         const sum =
           row.stocks_etfs_value +
           row.crypto_value +
@@ -527,11 +527,11 @@ describe("property: sanitizeSnapshotSpikes", () => {
         expect(
           row.cash_value,
           `trial ${trial} index ${i}: cash_value rewritten`,
-        ).toBe(snapshots[i].cash_value);
+        ).toBe(snapshots[i]!.cash_value);
         seen.cashPreserved += 1;
-        if (row.value !== snapshots[i].value) {
+        if (row.value !== snapshots[i]!.value) {
           seen.smoothed += 1;
-          if (snapshots[i].value > result[i - 1].value) seen.peaks += 1;
+          if (snapshots[i]!.value > result[i - 1]!.value) seen.peaks += 1;
           else seen.troughs += 1;
         }
       }
@@ -578,6 +578,6 @@ describe("property: sanitizeSnapshotSpikes", () => {
       },
     ];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].cash_value).toBe(60000);
+    expect(result[1]!.cash_value).toBe(60000);
   });
 });

@@ -51,7 +51,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0].price).toBeCloseTo(92.60, 2);
+      expect(result[0]!.price).toBeCloseTo(92.60, 2);
     });
 
     it('replaces first-point anomaly above threshold (2x spike)', () => {
@@ -59,7 +59,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0].price).toBeCloseTo(99, 2);
+      expect(result[0]!.price).toBeCloseTo(99, 2);
     });
 
     it('replaces last-point anomaly below threshold', () => {
@@ -67,7 +67,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[result.length - 1].price).toBeCloseTo(92.70, 2);
+      expect(result[result.length - 1]!.price).toBeCloseTo(92.70, 2);
     });
 
     it('replaces last-point anomaly above threshold', () => {
@@ -75,7 +75,7 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[result.length - 1].price).toBeCloseTo(99, 2);
+      expect(result[result.length - 1]!.price).toBeCloseTo(99, 2);
     });
 
     it('leaves normal first and last points untouched', () => {
@@ -83,8 +83,8 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
 
       const result = sanitizeKinesisIsolatedSpikes(input);
 
-      expect(result[0].price).toBeCloseTo(100, 4);
-      expect(result[result.length - 1].price).toBeCloseTo(100, 4);
+      expect(result[0]!.price).toBeCloseTo(100, 4);
+      expect(result[result.length - 1]!.price).toBeCloseTo(100, 4);
     });
   });
 
@@ -134,11 +134,11 @@ describe('sanitizeKinesisIsolatedSpikes', () => {
   describe('preserves immutability', () => {
     it('does not mutate the input array', () => {
       const input = pts(46.31, 92.60, 92.40, 92.80, 92.50);
-      const originalFirst = input[0].price;
+      const originalFirst = input[0]!.price;
 
       sanitizeKinesisIsolatedSpikes(input);
 
-      expect(input[0].price).toBe(originalFirst);
+      expect(input[0]!.price).toBe(originalFirst);
     });
   });
 });

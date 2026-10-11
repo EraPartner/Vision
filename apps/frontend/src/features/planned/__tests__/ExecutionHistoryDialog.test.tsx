@@ -10,6 +10,7 @@ import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { ExecutionHistoryDialog } from "@/features/planned/ExecutionHistoryDialog";
 import type { PlannedPayment } from "@/hooks/usePlannedPayments";
+import { transactionRow } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -43,25 +44,20 @@ const EXECUTED_PAYMENT: PlannedPayment = {
 // Transaction stub returned for transaction_id=99
 const GYM_TRANSACTION_RESPONSE = {
     items: [
-        {
+        transactionRow({
             id: 99,
             links: [],
             transaction_date: "2025-01-15",
-            date: "2025-01-15",
             bank_account: "BE12",
+            account_id: 1,
             recipient_id: 1,
             recipient_name: "Gym Corp",
             memo: "January membership",
             amount: -50,
             currency: "EUR",
-            balance: undefined,
-            category_id: undefined,
-            category_name: undefined,
-            comment: undefined,
             is_active: true,
             created_at: "2025-01-15T00:00:00.000Z",
-            updated_at: undefined,
-        },
+        }),
     ],
     total: 1,
     limit: 1,
@@ -252,8 +248,9 @@ describe("ExecutionHistoryDialog", () => {
             await screen.findByText(/no payments marked as paid yet/i),
         ).toBeInTheDocument();
         await act(async () => {
+            // The wire body carries SQL NULLs where the client type is optional.
             release(
-                GYM_TRANSACTION_RESPONSE as Awaited<
+                GYM_TRANSACTION_RESPONSE as unknown as Awaited<
                     ReturnType<typeof apiClient.getTransactions>
                 >,
             );

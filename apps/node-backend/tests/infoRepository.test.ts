@@ -10,6 +10,7 @@ import { mockConnection } from "./helpers/repoMocks.ts";
 import {
   mockCurrencyConversion,
   mockRowsAlreadyInTargetCurrency,
+  mockedConvertRowsToEur,
 } from "./helpers/mockCurrencyConversion.ts";
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
@@ -39,6 +40,7 @@ import { convertRowsToEur as rawConvertRowsToEur } from "../src/services/currenc
 import infoRepository from "../src/repositories/infoRepository.ts";
 import { clearMvCache } from "../src/repositories/infoRepository.ts";
 import { computedBalanceByCurrencyAggLateral } from "../src/repositories/accountBalanceSql.ts";
+import { makePlannedTransactionRow } from "./builders/domainRows.ts";
 
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
@@ -50,7 +52,7 @@ const queryPrepared = rawQueryPrepared as unknown as Mock<
     params?: readonly unknown[],
   ) => Promise<Partial<PgQueryResult>>
 >;
-const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 
 vi.mock("../src/config/logger.ts", () => ({
   logger: mockLogger(),
@@ -74,6 +76,9 @@ const prevPeriod = () => {
     .substring(0, 7);
 };
 
+// pg hands a DATE back as a local-midnight Date.
+const pgDay = (ymd: string) => new Date(`${ymd}T00:00:00`);
+
 describe("InfoRepository", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,7 +98,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: "2026-02-01" }] };
+          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -111,12 +116,14 @@ describe("InfoRepository", () => {
               {
                 day: "2026-02-01",
                 bank_account: "Chase",
+                is_liability: false,
                 balance: "4500",
                 currency: "EUR",
               },
               {
                 day: todayKey,
                 bank_account: "Chase",
+                is_liability: false,
                 balance: "5000",
                 currency: "EUR",
               },
@@ -147,7 +154,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: "2026-02-01" }] };
+          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -165,12 +172,14 @@ describe("InfoRepository", () => {
               {
                 day: "2026-02-01",
                 bank_account: "Chase",
+                is_liability: false,
                 balance: "4500",
                 currency: "EUR",
               },
               {
                 day: todayKey,
                 bank_account: "Chase",
+                is_liability: false,
                 balance: "5000",
                 currency: "EUR",
               },
@@ -190,7 +199,7 @@ describe("InfoRepository", () => {
       expect(result.current.netWorth).toBe(10123.45);
       // The latest chart point / table row reflects the same overlay so the
       // page is internally consistent with its own headline.
-      const lastSnapshot = result.snapshots[result.snapshots.length - 1];
+      const lastSnapshot = result.snapshots[result.snapshots.length - 1]!;
       expect(lastSnapshot.investments).toBe(5123.45);
       expect(lastSnapshot.netWorth).toBe(10123.45);
     });
@@ -200,7 +209,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: todayKey }] };
+          return { rows: [{ first_data_date: pgDay(todayKey) }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -213,6 +222,7 @@ describe("InfoRepository", () => {
               {
                 day: todayKey,
                 bank_account: "Chase",
+                is_liability: false,
                 balance: "5000",
                 currency: "EUR",
               },
@@ -269,7 +279,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: todayKey }] };
+          return { rows: [{ first_data_date: pgDay(todayKey) }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -282,6 +292,7 @@ describe("InfoRepository", () => {
               {
                 day: todayKey,
                 bank_account: "Main",
+                is_liability: false,
                 balance: "1234.56",
                 currency: "EUR",
               },
@@ -305,7 +316,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: firstDayKey }] };
+          return { rows: [{ first_data_date: pgDay(firstDayKey) }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -318,12 +329,14 @@ describe("InfoRepository", () => {
               {
                 day: firstDayKey,
                 bank_account: "A",
+                is_liability: false,
                 balance: "1000",
                 currency: "EUR",
               },
               {
                 day: secondDayKey,
                 bank_account: "A",
+                is_liability: false,
                 balance: "1100",
                 currency: "EUR",
               },
@@ -353,14 +366,24 @@ describe("InfoRepository", () => {
         if (sql.includes("tx_cumulative")) {
           return {
             rows: [
-              { day: "2026-02-01", currency: "EUR", value: "1200" },
-              { day: todayKey, currency: "EUR", value: "1500" },
+              {
+                day: "2026-02-01",
+                currency: "EUR",
+                is_liability: false,
+                value: "1200",
+              },
+              {
+                day: todayKey,
+                currency: "EUR",
+                is_liability: false,
+                value: "1500",
+              },
             ],
           };
         }
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: "2026-02-01" }] };
+          return { rows: [{ first_data_date: pgDay("2026-02-01") }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -397,7 +420,7 @@ describe("InfoRepository", () => {
         // all-transactions fallback into one COALESCE (SIMP-51); the DB resolves
         // the fallback and returns the seed date directly.
         if (sql.includes("first_data_date")) {
-          return { rows: [{ first_data_date: todayKey }] };
+          return { rows: [{ first_data_date: pgDay(todayKey) }] };
         }
         if (
           sql.includes("portfolio_performance_snapshots") &&
@@ -411,6 +434,7 @@ describe("InfoRepository", () => {
               {
                 day: todayKey,
                 bank_account: "FallbackAccount",
+                is_liability: false,
                 balance: "99",
                 currency: "EUR",
               },
@@ -456,7 +480,7 @@ describe("InfoRepository", () => {
         if (sql.includes("balance_parts")) return { rows: currentRows };
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: firstDataDate }] };
+          return { rows: [{ first_data_date: pgDay(firstDataDate) }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -534,10 +558,10 @@ describe("InfoRepository", () => {
 
       // History stays stamp-based (WP-A1 decision): earlier points are
       // untouched by the override.
-      expect(result.snapshots[0].liquid).toBe(4500);
-      expect(result.snapshots[0].liabilities).toBe(0);
+      expect(result.snapshots[0]!.liquid).toBe(4500);
+      expect(result.snapshots[0]!.liabilities).toBe(0);
       // Only the latest point was reconciled to the unified definition.
-      const last = result.snapshots[result.snapshots.length - 1];
+      const last = result.snapshots[result.snapshots.length - 1]!;
       expect(last.liquid).toBe(5350);
       expect(last.liabilities).toBe(-300);
       expect(last.netWorth).toBe(6050);
@@ -740,7 +764,7 @@ describe("InfoRepository", () => {
       query.mockImplementation(async (sql) => {
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
-          return { rows: [{ first_data_date: todayKey }] };
+          return { rows: [{ first_data_date: pgDay(todayKey) }] };
         if (
           sql.includes("portfolio_performance_snapshots") &&
           sql.includes("value AS investments")
@@ -753,6 +777,7 @@ describe("InfoRepository", () => {
               {
                 day: todayKey,
                 bank_account: "Main",
+                is_liability: false,
                 balance: "1000",
                 currency: "EUR",
               },
@@ -787,20 +812,22 @@ describe("InfoRepository", () => {
               {
                 recipient_id: 1,
                 recipient_name: "Amazon",
-                tx_count: 15,
+                tx_count: "15",
                 total_abs_amount: "750.50",
-                first_seen: "2025-01-15",
-                last_seen: "2026-03-01",
+                first_seen: pgDay("2025-01-15"),
+                last_seen: pgDay("2026-03-01"),
                 currency: "EUR",
+                date: pgDay("2026-03-01"),
               },
               {
                 recipient_id: 2,
                 recipient_name: "Walmart",
-                tx_count: 8,
+                tx_count: "8",
                 total_abs_amount: "420.00",
-                first_seen: "2025-06-01",
-                last_seen: "2026-02-28",
+                first_seen: pgDay("2025-06-01"),
+                last_seen: pgDay("2026-02-28"),
                 currency: "EUR",
+                date: pgDay("2026-02-28"),
               },
             ],
           };
@@ -814,6 +841,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Amazon",
                 period: currentPeriod(),
                 currency: "EUR",
+                date: pgDay(`${currentPeriod()}-01`),
                 abs_amount: "120.00",
               },
               {
@@ -821,6 +849,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Amazon",
                 period: prevPeriod(),
                 currency: "EUR",
+                date: pgDay(`${prevPeriod()}-01`),
                 abs_amount: "80.00",
               },
               {
@@ -828,6 +857,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Walmart",
                 period: currentPeriod(),
                 currency: "EUR",
+                date: pgDay(`${currentPeriod()}-01`),
                 abs_amount: "60.00",
               },
             ],
@@ -850,18 +880,18 @@ describe("InfoRepository", () => {
       const result = await infoRepository.getRecipientInsights();
 
       expect(result.topMerchants).toHaveLength(2);
-      expect(result.topMerchants[0].name).toBe("Amazon");
-      expect(result.topMerchants[0].totalSpend).toBe(750.5);
-      expect(result.topMerchants[0].transactionCount).toBe(15);
-      expect(result.topMerchants[0].avgAmount).toBe(50.03);
-      expect(result.topMerchants[1].name).toBe("Walmart");
+      expect(result.topMerchants[0]!.name).toBe("Amazon");
+      expect(result.topMerchants[0]!.totalSpend).toBe(750.5);
+      expect(result.topMerchants[0]!.transactionCount).toBe(15);
+      expect(result.topMerchants[0]!.avgAmount).toBe(50.03);
+      expect(result.topMerchants[1]!.name).toBe("Walmart");
 
       // MoM: only entries with non-null change_percent
       expect(result.monthOverMonth).toHaveLength(1);
-      expect(result.monthOverMonth[0].name).toBe("Amazon");
-      expect(result.monthOverMonth[0].changePercent).toBe(50.0);
-      expect(result.monthOverMonth[0].currentSpend).toBe(120);
-      expect(result.monthOverMonth[0].previousSpend).toBe(80);
+      expect(result.monthOverMonth[0]!.name).toBe("Amazon");
+      expect(result.monthOverMonth[0]!.changePercent).toBe(50.0);
+      expect(result.monthOverMonth[0]!.currentSpend).toBe(120);
+      expect(result.monthOverMonth[0]!.previousSpend).toBe(80);
     });
 
     it("should return empty arrays when no transactions", async () => {
@@ -887,11 +917,12 @@ describe("InfoRepository", () => {
               {
                 recipient_id: 1,
                 recipient_name: "Shop",
-                tx_count: 5,
+                tx_count: "5",
                 total_abs_amount: "200",
-                first_seen: "2025-01-01",
-                last_seen: "2026-03-01",
+                first_seen: pgDay("2025-01-01"),
+                last_seen: pgDay("2026-03-01"),
                 currency: "EUR",
+                date: pgDay("2026-03-01"),
               },
             ],
           };
@@ -903,6 +934,7 @@ describe("InfoRepository", () => {
                 recipient_name: "Shop",
                 period: currentPeriod(),
                 currency: "EUR",
+                date: pgDay(`${currentPeriod()}-01`),
                 abs_amount: "50",
               },
             ],
@@ -956,13 +988,19 @@ describe("InfoRepository", () => {
           return {
             rows: [
               {
+                account_id: 5,
                 bank_account: "Revolut",
+                display_name: "Revolut",
                 balance: "2500",
                 currency: "EUR",
+                statement_balances: [],
+                account_currency: "EUR",
+                anchor_date: null,
+                post_anchor_count: "25",
                 date: "2026-03-01",
                 transaction_count: "25",
-                first_transaction: "2025-01-01",
-                last_transaction: "2026-03-01",
+                first_transaction: pgDay("2025-01-01"),
+                last_transaction: pgDay("2026-03-01"),
               },
             ],
           };
@@ -975,8 +1013,8 @@ describe("InfoRepository", () => {
       const result = await infoRepository.getBankBalances();
 
       expect(result.accounts).toHaveLength(1);
-      expect(result.accounts[0].bank_account).toBe("Revolut");
-      expect(result.accounts[0].balance).toBe(2500);
+      expect(result.accounts[0]!.bank_account).toBe("Revolut");
+      expect(result.accounts[0]!.balance).toBe(2500);
       expect(result.total_net_position).toBe(2500);
       // Both current-balance and history rows are now batched into a single
       // convertRowsToEur call inside batchConvertGroupsWithHistoricalRateFallback.
@@ -1133,6 +1171,7 @@ describe("InfoRepository", () => {
                 category_id: 2,
                 name: "TRANSPORT:FUEL",
                 amount: "-3",
+                cnt: "1",
                 currency: "EUR",
                 date: "2026-01-01",
               },
@@ -1140,6 +1179,7 @@ describe("InfoRepository", () => {
                 category_id: -1,
                 name: "UNCATEGORISED",
                 amount: "-2",
+                cnt: "1",
                 currency: "USD",
                 date: "2026-01-02",
               },
@@ -1174,26 +1214,26 @@ describe("InfoRepository", () => {
       try {
         query.mockResolvedValueOnce({
           rows: [
-            {
+            makePlannedTransactionRow({
               id: 1,
-              planned_date: "2026-07-05",
+              planned_date: pgDay("2026-07-05"),
               amount: "-20",
               currency: "EUR",
               recipient_name: "Rent",
               category_name: "HOME:RENT",
               is_recurring: true,
               recurrence_pattern: "monthly",
-            },
-            {
+            }),
+            makePlannedTransactionRow({
               id: 2,
-              planned_date: "2026-07-05",
+              planned_date: pgDay("2026-07-05"),
               amount: "50",
               currency: "EUR",
               recipient_name: "Salary",
               category_name: null,
               is_recurring: false,
               recurrence_pattern: null,
-            },
+            }),
           ],
         });
 
@@ -1202,8 +1242,8 @@ describe("InfoRepository", () => {
         expect(result.summary.net_amount).toBe(30);
         expect(result.summary.transaction_count).toBe(2);
         // The SQL must exclude already-executed planned transactions.
-        expect(query.mock.calls[0][0]).toContain("is_executed = false");
-        expect(query.mock.calls[0][0]).toContain(
+        expect(query.mock.calls[0]![0]).toContain("is_executed = false");
+        expect(query.mock.calls[0]![0]).toContain(
           "COALESCE(pr.name, r.name) AS recipient_name",
         );
       } finally {
@@ -1250,7 +1290,7 @@ describe("InfoRepository", () => {
             year,
           });
           // …and the SQL window must be bound to that same month.
-          expect(query.mock.calls[0][1]).toEqual([
+          expect(query.mock.calls[0]![1]).toEqual([
             periodStart,
             expect.any(String),
           ]);
@@ -1273,16 +1313,16 @@ describe("InfoRepository", () => {
         // 2026-06-10 (outside next month); now it expands into July occurrences.
         query.mockResolvedValueOnce({
           rows: [
-            {
+            makePlannedTransactionRow({
               id: 1,
-              planned_date: "2026-06-10",
+              planned_date: pgDay("2026-06-10"),
               amount: "-50",
               currency: "EUR",
               recipient_name: "Gym",
               category_name: null,
               is_recurring: true,
               recurrence_pattern: "weekly",
-            },
+            }),
           ],
         });
 
@@ -1309,16 +1349,16 @@ describe("InfoRepository", () => {
         // (Wednesdays) is preserved through the jump.
         query.mockResolvedValueOnce({
           rows: [
-            {
+            makePlannedTransactionRow({
               id: 1,
-              planned_date: "2025-12-03",
+              planned_date: pgDay("2025-12-03"),
               amount: "-30",
               currency: "EUR",
               recipient_name: "Cleaner",
               category_name: null,
               is_recurring: true,
               recurrence_pattern: "biweekly",
-            },
+            }),
           ],
         });
 
@@ -1346,16 +1386,16 @@ describe("InfoRepository", () => {
         // divergence between the two steppers.
         query.mockResolvedValueOnce({
           rows: [
-            {
+            makePlannedTransactionRow({
               id: 1,
-              planned_date: "2026-10-07",
+              planned_date: pgDay("2026-10-07"),
               amount: "-15",
               currency: "EUR",
               recipient_name: "Gym",
               category_name: null,
               is_recurring: true,
               recurrence_pattern: "weekly",
-            },
+            }),
           ],
         });
 
@@ -1382,16 +1422,16 @@ describe("InfoRepository", () => {
         // land it back in the window with every July day present.
         query.mockResolvedValueOnce({
           rows: [
-            {
+            makePlannedTransactionRow({
               id: 1,
-              planned_date: "2025-11-01",
+              planned_date: pgDay("2025-11-01"),
               amount: "-5",
               currency: "EUR",
               recipient_name: "Coffee",
               category_name: null,
               is_recurring: true,
               recurrence_pattern: "daily",
-            },
+            }),
           ],
         });
 
@@ -1453,7 +1493,7 @@ describe("InfoRepository", () => {
           // back a DATE column (a Date at server-local midnight).
           query.mockResolvedValueOnce({
             rows: [
-              {
+              makePlannedTransactionRow({
                 id: 1,
                 planned_date: new Date(y, m - 1, d),
                 amount: "-50",
@@ -1462,7 +1502,7 @@ describe("InfoRepository", () => {
                 category_name: null,
                 is_recurring: true,
                 recurrence_pattern: pattern,
-              },
+              }),
             ],
           });
 
@@ -1487,19 +1527,39 @@ describe("InfoRepository", () => {
       query
         .mockResolvedValueOnce({
           rows: [
-            { amount: "-10", currency: "EUR", date: "2026-01-01" },
-            { amount: "-20", currency: "EUR", date: "2026-01-02" },
+            {
+              amount: "-10",
+              currency: "EUR",
+              is_spending: true,
+              date: pgDay("2026-01-01"),
+            },
+            {
+              amount: "-20",
+              currency: "EUR",
+              is_spending: true,
+              date: pgDay("2026-01-02"),
+            },
           ],
         })
         .mockResolvedValueOnce({
           rows: [
-            { amount: "-5", currency: "EUR", date: "2026-03-03" },
-            { amount: "1", currency: "EUR", date: "2026-03-03" },
+            {
+              amount: "-5",
+              currency: "EUR",
+              is_spending: true,
+              date: pgDay("2026-03-03"),
+            },
+            {
+              amount: "1",
+              currency: "EUR",
+              is_spending: false,
+              date: pgDay("2026-03-03"),
+            },
           ],
         })
         // Third call: the unfiltered ledger-start probe. A first row back at the
         // window floor means the full 6 observed months apply.
-        .mockResolvedValueOnce({ rows: [{ first_date: "2025-09-04" }] });
+        .mockResolvedValueOnce({ rows: [{ first_date: pgDay("2025-09-04") }] });
 
       // Pin the clock so the calendar-day denominators are deterministic.
       vi.useFakeTimers();
@@ -1529,8 +1589,8 @@ describe("InfoRepository", () => {
         );
         // ADR-083: both the 6-month and current-month queries must exclude
         // internal transfers when includeTransfers is off (the default).
-        expect(query.mock.calls[0][0]).toContain("is_transfer = false");
-        expect(query.mock.calls[1][0]).toContain("is_transfer = false");
+        expect(query.mock.calls[0]![0]).toContain("is_transfer = false");
+        expect(query.mock.calls[1]![0]).toContain("is_transfer = false");
       } finally {
         vi.useRealTimers();
       }
@@ -1554,7 +1614,7 @@ describe("InfoRepository", () => {
       // The average denominator must be probed UNFILTERED: an exclusion or the
       // ADR-083 transfer predicate emptying the oldest months would silently
       // re-base the divisor (see infoRepositoryForecast's sqlLedgerStart).
-      const probeSql = query.mock.calls[2][0];
+      const probeSql = query.mock.calls[2]![0];
       expect(probeSql).toContain("MIN(t.date)");
       expect(probeSql).toContain("t.is_active = true");
       expect(probeSql).toContain(

@@ -235,7 +235,7 @@ describe("runChatTurn — conversation lifecycle", () => {
     expect(result.userMessage).toBe(priorUser);
     expect(events).toEqual([]);
     const modelUserMessages =
-      ollamaClient.chat.mock.calls[0][0].messages.filter(
+      ollamaClient.chat.mock.calls[0]![0].messages.filter(
         (entry: OllamaMessage) => entry.role === "user",
       );
     expect(modelUserMessages).toEqual([
@@ -402,7 +402,7 @@ describe("runChatTurn — conversation lifecycle", () => {
 
     expect(aiChatRepository.createConversation).toHaveBeenCalledTimes(1);
     const { title, model } =
-      aiChatRepository.createConversation.mock.calls[0][0];
+      aiChatRepository.createConversation.mock.calls[0]![0];
     expect(title.length).toBeLessThanOrEqual(60);
     expect(title.endsWith("…")).toBe(true);
     expect(model).toBe(settings.ollama.defaultModel);
@@ -473,7 +473,7 @@ describe("runChatTurn — conversation lifecycle", () => {
       "c-1",
       "qwen2.5:7b",
     );
-    const chatCall = ollamaClient.chat.mock.calls[0][0];
+    const chatCall = ollamaClient.chat.mock.calls[0]![0];
     expect(chatCall.model).toBe("qwen2.5:7b");
   });
 
@@ -618,7 +618,7 @@ describe("runChatTurn — tool-call loop", () => {
       { from: "2025-01-01", to: "2025-12-31" },
       { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0][2]).not.toHaveProperty("conversationId");
+    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
     expect(result.toolMessages).toHaveLength(1);
     expect(result.iterations).toBe(2);
     expect(result.assistantMessage.content).toBe("Rent was €3600.");
@@ -795,7 +795,7 @@ describe("runChatTurn — tool-call loop", () => {
 
     // LLM retry contract: the second model call sees the byte-identical
     // stringified error payload as its role:'tool' message.
-    const secondCallMessages = ollamaClient.chat.mock.calls[1][0].messages;
+    const secondCallMessages = ollamaClient.chat.mock.calls[1]![0].messages;
     const toolMsg = secondCallMessages.find(
       (m: OllamaMessage) => m.role === "tool",
     );
@@ -943,9 +943,9 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
       {},
       { cache: expect.any(Map), maxRows: settings.aiChat.maxToolRows },
     );
-    expect(dispatchTool.mock.calls[0][2]).not.toHaveProperty("conversationId");
+    expect(dispatchTool.mock.calls[0]![2]).not.toHaveProperty("conversationId");
     expect(dispatchTool.mock.invocationCallOrder[0]).toBeLessThan(
-      ollamaClient.chat.mock.invocationCallOrder[0],
+      ollamaClient.chat.mock.invocationCallOrder[0]!,
     );
     expect(events).toEqual(["user_message", "tool_call", "tool_result"]);
     const toolAppend = aiChatRepository.appendMessage.mock.calls.find(
@@ -963,7 +963,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
     // role:'tool' digest message before being asked to generate — with tool
     // schemas still enabled.
     expect(ollamaClient.chat).toHaveBeenCalledTimes(1);
-    const chatArgs = ollamaClient.chat.mock.calls[0][0];
+    const chatArgs = ollamaClient.chat.mock.calls[0]![0];
     const syntheticIdx = chatArgs.messages.findIndex(
       (m: OllamaMessage) =>
         m.role === "assistant" && Array.isArray(m.tool_calls),
@@ -1008,7 +1008,7 @@ describe("runChatTurn — server-side pre-call (ADR-110 §4)", () => {
 
     expect(result.assistantMessage.content).toBe("plain reply");
     expect(result.toolMessages).toHaveLength(0);
-    const sentMessages = ollamaClient.chat.mock.calls[0][0].messages;
+    const sentMessages = ollamaClient.chat.mock.calls[0]![0].messages;
     expect(sentMessages.some((m: OllamaMessage) => m.role === "tool")).toBe(
       false,
     );
@@ -1300,7 +1300,7 @@ describe("runChatTurn — streaming", () => {
     expect(toolMsgIdx).toBeGreaterThan(toolCallIdx);
     expect(dispatchCountAtToolCall).toBe(0);
 
-    const toolCallEvt = events[toolCallIdx];
+    const toolCallEvt = events[toolCallIdx]!;
     expect(toolCallEvt.data).toEqual({
       name: "getSpendByCategory",
       args: { from: "2025-01-01", to: "2025-12-31" },

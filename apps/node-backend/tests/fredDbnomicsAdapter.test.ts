@@ -87,8 +87,8 @@ describe('fredAdapter', () => {
     expect(res.title).toBe('CPI');
     expect(res.units).toBe('Idx');
     expect(res.points).toHaveLength(2);
-    expect(res.points[0].close).toBe(100);
-    expect(res.points[1].close).toBe(102.5);
+    expect(res.points[0]!.close).toBe(100);
+    expect(res.points[1]!.close).toBe(102.5);
   });
 
   // ── malformed-response pins (ZOD-12): degrade exactly like the old guards ──
@@ -118,7 +118,7 @@ describe('fredAdapter', () => {
     });
     const res = await fredAdapter.macroSeries('FOO', { range: 'max' });
     expect(res.points).toHaveLength(1);
-    expect(res.points[0].close).toBe(1);
+    expect(res.points[0]!.close).toBe(1);
     expect(res.title).toBe('FOO'); // junk meta row -> seriesId fallback
   });
 
@@ -205,6 +205,6 @@ describe('dbnomicsAdapter', () => {
     });
     const res = await dbnomicsAdapter.macroSeries('PROV/DS/SER', { range: 'max' });
     expect(res.points).toHaveLength(2);
-    expect(res.points[0].close).toBe(10);
+    expect(res.points[0]!.close).toBe(10);
   });
 });

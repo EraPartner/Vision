@@ -203,10 +203,15 @@ export function scoreLocalAiRun(testCase: LocalAiCase, run: LocalAiRun) {
     expectedNames.every((name, index) => name === actualNames[index]);
   const scope =
     toolSelection &&
-    expectedCalls.every(
-      (expected, index) =>
-        calls[index].validJson && sameValue(expected.args, calls[index].args),
-    );
+    expectedCalls.every((expected, index) => {
+      // `toolSelection` already guarantees equal lengths.
+      const call = calls[index];
+      return (
+        call !== undefined &&
+        call.validJson &&
+        sameValue(expected.args, call.args)
+      );
+    });
 
   const permittedNumbers = collectNumbers(testCase.question);
   for (const call of expectedCalls)

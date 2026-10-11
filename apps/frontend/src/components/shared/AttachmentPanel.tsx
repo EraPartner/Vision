@@ -47,7 +47,7 @@ function AttachmentRow({
     deleting,
 }: {
     attachment: Attachment;
-    onDelete: (id: number) => void;
+    onDelete: (id: string) => void;
     deleting: boolean;
 }) {
     const { t } = useLanguage();
@@ -118,7 +118,7 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
     const queryClient = useQueryClient();
     const { confirm, ConfirmDialog } = useConfirmDialog();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const queryKey = attachmentKeys.byTransaction(transactionId);
 
@@ -134,7 +134,7 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
     });
 
     const deleteMutation = useMutation({
-        mutationFn: (id: number) => deleteAttachment(id),
+        mutationFn: (id: string) => deleteAttachment(id),
         onSuccess: () => {
             setDeletingId(null);
             void queryClient.invalidateQueries({ queryKey });
@@ -158,7 +158,7 @@ export function AttachmentPanel({ transactionId }: AttachmentPanelProps) {
         e.target.value = "";
     }
 
-    async function handleDelete(id: number) {
+    async function handleDelete(id: string) {
         const target = attachments.find((a) => a.id === id);
         const ok = await confirm({
             title: t("txPage.deleteAttachment"),

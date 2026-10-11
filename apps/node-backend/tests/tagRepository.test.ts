@@ -7,6 +7,22 @@ import { query as rawQuery } from '../src/database/connection.ts';
 import type { PgQueryResult } from '../src/database/connection.ts';
 import tagRepository from '../src/repositories/tagRepository.ts';
 import { partial } from './helpers/partial.ts';
+import type { TagRow } from '../src/repositories/tagRepository.ts';
+
+const STAMP = new Date('2026-01-01T00:00:00Z');
+
+/** A complete `tags` row, as the checked repository reads require. */
+function tagRow(fields: Partial<TagRow> = {}): TagRow {
+  return {
+    id: 1,
+    slug: 'tag',
+    color: null,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    ...fields,
+  };
+}
 
 const query = vi.mocked(rawQuery);
 
@@ -28,7 +44,7 @@ describe('tagRepository.getAll', () => {
   it('omits is_active filter when active=null', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await tagRepository.getAll({ active: null });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).not.toContain('is_active');
   });
 
@@ -46,7 +62,7 @@ describe('tagRepository.getAll', () => {
   it('emits no LIMIT/OFFSET when unspecified', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await tagRepository.getAll({});
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).not.toContain('LIMIT');
     expect(params).toEqual([]);
   });
@@ -61,7 +77,7 @@ describe('tagRepository.getAll', () => {
   });
 
   it('returns the rows from the query result', async () => {
-    const rows = [{ id: 1, slug: 'rome-2020', color: '#f00', is_active: true }];
+    const rows = [tagRow({ id: 1, slug: 'rome-2020', color: '#f00', is_active: true })];
     query.mockResolvedValue(partial<PgQueryResult>({ rows }));
     const result = await tagRepository.getAll({ active: true });
     expect(result).toEqual(rows);
@@ -84,14 +100,14 @@ describe('tagRepository.getCount', () => {
   it('applies the is_active filter matching getAll', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ count: '0' }] }));
     await tagRepository.getCount({ active: false });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain('is_active = false');
   });
 
   it('omits the is_active filter when active=null', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ count: '3' }] }));
     await tagRepository.getCount({ active: null });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).not.toContain('is_active');
   });
 });
@@ -101,7 +117,7 @@ describe('tagRepository.findOrCreateBySlug', () => {
 
   it('returns reactivated=false for a new tag (was_conflict=false)', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
-      rows: [{ id: 1, slug: 'rome-2020', color: null, is_active: true, was_conflict: false }],
+      rows: [{ ...tagRow({ id: 1, slug: 'rome-2020', color: null, is_active: true }), was_conflict: false }],
     }));
     const { tag, reactivated } = await tagRepository.findOrCreateBySlug('rome-2020', null);
     expect(reactivated).toBe(false);
@@ -110,7 +126,7 @@ describe('tagRepository.findOrCreateBySlug', () => {
 
   it('returns reactivated=true when existing active row is updated (was_conflict=true)', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
-      rows: [{ id: 2, slug: 'old-tag', color: '#blue', is_active: true, was_conflict: true }],
+      rows: [{ ...tagRow({ id: 2, slug: 'old-tag', color: '#blue', is_active: true }), was_conflict: true }],
     }));
     const { reactivated } = await tagRepository.findOrCreateBySlug('old-tag', '#blue');
     expect(reactivated).toBe(true);
@@ -118,7 +134,7 @@ describe('tagRepository.findOrCreateBySlug', () => {
 
   it('strips was_conflict from the returned tag object', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
-      rows: [{ id: 1, slug: 's', color: null, is_active: true, was_conflict: false }],
+      rows: [{ ...tagRow({ id: 1, slug: 's', color: null, is_active: true }), was_conflict: false }],
     }));
     const { tag } = await tagRepository.findOrCreateBySlug('s', null);
     expect(tag).not.toHaveProperty('was_conflict');
@@ -126,7 +142,7 @@ describe('tagRepository.findOrCreateBySlug', () => {
 
   it('uses INSERT ... ON CONFLICT upsert with slug and color params', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
-      rows: [{ id: 3, slug: 'tag-a', color: '#abc', is_active: true, was_conflict: false }],
+      rows: [{ ...tagRow({ id: 3, slug: 'tag-a', color: '#abc', is_active: true }), was_conflict: false }],
     }));
     await tagRepository.findOrCreateBySlug('tag-a', '#abc');
     expect(query).toHaveBeenCalledWith(
@@ -137,10 +153,10 @@ describe('tagRepository.findOrCreateBySlug', () => {
 
   it('includes RETURNING ... (xmax <> 0) AS was_conflict in query', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
-      rows: [{ id: 1, slug: 's', color: null, is_active: true, was_conflict: false }],
+      rows: [{ ...tagRow({ id: 1, slug: 's', color: null, is_active: true }), was_conflict: false }],
     }));
     await tagRepository.findOrCreateBySlug('s', null);
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain('was_conflict');
   });
 });
@@ -149,7 +165,7 @@ describe('tagRepository.softDelete', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('sets is_active=false and returns the updated row', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, slug: 'rome', is_active: false }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [tagRow({ id: 1, slug: 'rome', is_active: false })] }));
     const result = await tagRepository.softDelete(1);
     expect(result).toMatchObject({ id: 1, is_active: false });
     expect(query).toHaveBeenCalledWith(
@@ -175,7 +191,7 @@ describe('tagRepository.getManyBySlugs', () => {
   });
 
   it('queries using ANY($1::text[]) for non-empty slug list', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, slug: 'rome-2020' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [tagRow({ id: 1, slug: 'rome-2020' })] }));
     const result = await tagRepository.getManyBySlugs(['rome-2020', 'lisbon-2024']);
     expect(query).toHaveBeenCalledWith(
       expect.stringContaining('ANY($1::text[])'),
@@ -189,7 +205,7 @@ describe('tagRepository.update', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('updates color and returns the updated row', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, slug: 'rome', color: '#f00', is_active: true }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [tagRow({ id: 1, slug: 'rome', color: '#f00', is_active: true })] }));
     const result = await tagRepository.update(1, { color: '#f00' });
     expect(result).toMatchObject({ color: '#f00' });
     expect(query).toHaveBeenCalledWith(
@@ -199,7 +215,7 @@ describe('tagRepository.update', () => {
   });
 
   it('falls back to getById when no fields provided', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, slug: 'rome' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [tagRow({ id: 1, slug: 'rome' })] }));
     await tagRepository.update(1, {});
     expect(query).toHaveBeenCalledWith(expect.stringContaining('WHERE id = $1'), [1]);
   });

@@ -16,6 +16,7 @@ import type {
   PortfolioTransactionSnapshot,
   ReconciliationSourceRow,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 
 export interface PortfolioPerformanceMoney {
   amount: string;
@@ -374,8 +375,9 @@ export function verifiedPortfolioZeroYieldSource(
 ): boolean {
   try {
     if (
-      row.custom_config?.format !== "kinesis_transaction_history" ||
-      row.custom_config?.yield_basis_policy !== "zero" ||
+      batchConfigFields(row.custom_config)?.format !==
+        "kinesis_transaction_history" ||
+      batchConfigFields(row.custom_config)?.yield_basis_policy !== "zero" ||
       row.type !== "gift" ||
       row.asset_adjustment_details?.kind !== "yield_acquisition" ||
       row.asset_adjustment_details?.basisPolicy !== "zero" ||
@@ -391,14 +393,14 @@ export function verifiedPortfolioZeroYieldSource(
     )
       return false;
     const parsed = parseKinesisSourceRecordForBasisPolicy(raw, {
-      sourceColumns: row.custom_config.source_columns,
+      sourceColumns: batchConfigFields(row.custom_config)!.source_columns,
       yield_basis_policy: "zero",
     });
     const matches = parsed?.filter(
       (item) => item.sourceId === row.source_transaction_id,
     );
-    if (matches?.length !== 1) return false;
-    const item = matches[0];
+    const [item] = matches ?? [];
+    if (matches?.length !== 1 || !item) return false;
     return (
       item.typeRaw === "Gift" &&
       item.assetAdjustment?.kind === "yield_acquisition" &&
@@ -599,7 +601,8 @@ export function plausibleRoundedKinesisDepositLegacy(
 ): boolean {
   try {
     if (
-      row.custom_config?.format !== "kinesis_transaction_history" ||
+      batchConfigFields(row.custom_config)?.format !==
+        "kinesis_transaction_history" ||
       row.route !== "portfolio" ||
       row.type !== "gift" ||
       row.type_raw !== "Gift" ||
@@ -632,7 +635,8 @@ export function plausibleRoundedKinesisDepositLegacy(
 
 function literalKinesisAssetRecord(row: ReconciliationSourceRow) {
   if (
-    row.custom_config?.format !== "kinesis_transaction_history" ||
+    batchConfigFields(row.custom_config)?.format !==
+      "kinesis_transaction_history" ||
     !Number.isInteger(Number(row.account_id)) ||
     Number(row.account_id) <= 0
   )
@@ -643,7 +647,7 @@ function literalKinesisAssetRecord(row: ReconciliationSourceRow) {
     row.source_record_hash
   )
     return undefined;
-  const columns = row.custom_config.source_columns;
+  const columns = batchConfigFields(row.custom_config)!.source_columns;
   if (
     !Array.isArray(columns) ||
     columns.length !== KINESIS_COLUMNS.length ||
@@ -656,8 +660,8 @@ function literalKinesisAssetRecord(row: ReconciliationSourceRow) {
     skip_empty_lines: true,
     relax_column_count: false,
   });
-  if (records.length !== 1) return undefined;
-  const record = records[0];
+  const [record] = records;
+  if (records.length !== 1 || !record) return undefined;
   const clean = (value: unknown) => String(value ?? "").trim();
   const symbol = clean(record.Currency_Code).toUpperCase();
   const amount = parseAmountField(record.Amount);
@@ -714,8 +718,11 @@ export function __verifiedKinesisWithdrawal(row: ReconciliationSourceRow) {
       (literal.fee.gt(0) && literal.feeCurrency !== literal.symbol) ||
       !literal.delta.negated().eq(requiredStagedValue(row.units)) ||
       !literal.amount.plus(literal.fee).eq(requiredStagedValue(row.units)) ||
-      !literal.amount.eq(row.asset_transfer_details.receivedUnits) ||
-      !literal.fee.eq(row.asset_transfer_details.feeUnits)
+      // A missing value throws, as Decimal#eq did, and rejects the row.
+      !literal.amount.eq(
+        requiredStagedValue(row.asset_transfer_details.receivedUnits),
+      ) ||
+      !literal.fee.eq(requiredStagedValue(row.asset_transfer_details.feeUnits))
     )
       return undefined;
     return {
@@ -816,7 +823,7 @@ export function verifiedPortfolioPerformanceCustodyAnnotation(
       !!proof.literal.fromTransactionId &&
       !!proof.literal.toTransactionId &&
       row.asset_transfer_details?.direction === "internal" &&
-      row.custom_config?.transfer_origin_account_id != null
+      batchConfigFields(row.custom_config)?.transfer_origin_account_id != null
     );
   } catch {
     return false;

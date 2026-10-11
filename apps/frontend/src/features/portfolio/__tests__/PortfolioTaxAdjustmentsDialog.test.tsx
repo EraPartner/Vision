@@ -193,7 +193,19 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
     it("saves adjustments successfully and closes dialog", async () => {
         // Arrange — PUT /api/settings/:key is the endpoint used by saveManyForYear
         server.use(
-            http.put(`${API_BASE}/api/settings/:key`, () => ok({ ok: true })),
+            http.put(
+                `${API_BASE}/api/settings/:key`,
+                async ({ params, request }) => {
+                    const { value } = (await request.json()) as {
+                        value: unknown;
+                    };
+                    return ok({
+                        key: String(params.key),
+                        value,
+                        expected: { exists: true, value },
+                    });
+                },
+            ),
         );
         const user = userEvent.setup();
         renderWithApp(

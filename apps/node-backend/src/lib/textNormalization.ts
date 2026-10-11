@@ -53,7 +53,8 @@ export function cleanKbcRecipientName(
 
   for (const sep of KBC_SEPARATORS) {
     if (upper.includes(sep)) {
-      const first = recipient.split(new RegExp(sep, 'i'))[0].trim();
+      const [head = ''] = recipient.split(new RegExp(sep, 'i'));
+      const first = head.trim();
       return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
     }
   }
@@ -119,7 +120,8 @@ export function normalizeForMatching(name: string): string {
   if (!tokens.length) return '';
 
   // Single word name - just return it
-  if (tokens.length === 1) return tokens[0];
+  const [onlyToken] = tokens;
+  if (tokens.length === 1 && onlyToken !== undefined) return onlyToken;
 
   // Filter out single-LETTER tokens (initials like "F", "J")
   // Keep single-digit tokens as they're meaningful (e.g., "STORE 1" vs "STORE 2")
@@ -150,8 +152,8 @@ function formatAmountString(amountStr: string | null | undefined): number | null
 function extractCurrencyCode(currencyStr: string | null | undefined): string | null {
   if (!currencyStr) return null;
   const parts = currencyStr.split(/\s+/);
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (/^[A-Za-z]{3}$/.test(parts[i])) return parts[i].toUpperCase();
+  for (const part of [...parts].reverse()) {
+    if (/^[A-Za-z]{3}$/.test(part)) return part.toUpperCase();
   }
   if (/^[A-Za-z]{3}$/.test(currencyStr)) return currencyStr.toUpperCase();
   return null;

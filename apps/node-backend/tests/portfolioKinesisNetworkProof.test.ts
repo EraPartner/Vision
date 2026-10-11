@@ -38,7 +38,7 @@ describe("literal native wallet supplemental evidence", () => {
     "validates the exact %s operation without inventing a fee",
     async (kind) => {
       const source = await networkSource({ kind });
-      expect(verifiedKinesisNetworkRow(source.rows[0])).toMatchObject({
+      expect(verifiedKinesisNetworkRow(source.rows[0]!)).toMatchObject({
         kind,
         proof: { feeUnits: "0.0001500", principal: "0.0300000" },
       });
@@ -60,25 +60,25 @@ describe("literal native wallet supplemental evidence", () => {
     if (kind === "precision")
       (receipt.operation as { amount: string }).amount = "0.03000004";
     if (kind === "balance")
-      receipt.sourceAccount.balances[0].balance = "0.9698501";
+      receipt.sourceAccount.balances[0]!.balance = "0.9698501";
     if (kind === "missing_empty") receipt.sourceHistoryPages.splice(1, 1);
     if (kind === "missing_operation") receipt.sourceHistoryPages.pop();
     if (kind === "payer") receipt.transaction.fee_account = "UNPROVED-PAYER";
     if (kind === "operation_type") receipt.operation.type = "unsupported";
     if (kind === "negative_header")
-      receipt.sourceAccount.balances[0].balance = "-0.9698500";
+      receipt.sourceAccount.balances[0]!.balance = "-0.9698500";
     expect(() => verifyKinesisNetworkReceipt(receipt, "asset_fee")).toThrow();
   });
   it.each(["currency", "fx", "identity", "raw", "units", "account"])(
     "rejects fresh mapped %s tampering",
     async (kind) => {
       const source = await networkSource({ kind: "asset_fee" }),
-        row: TamperableRow = source.rows[0];
+        row: TamperableRow = source.rows[0]!;
       if (kind === "currency") {
         row.currency = "USD";
         row.dedup_fingerprint = assignImportIdentities([row], (item) =>
           portfolioIdentityBase(item, { accountIdentity: "UNASSIGNED" }),
-        )[0].fingerprint;
+        )[0]!.fingerprint;
       }
       if (kind === "fx") row.fx_rate_to_eur = "1";
       if (kind === "identity") row.dedup_fingerprint = "c".repeat(64);
@@ -98,8 +98,8 @@ import { networkBindingFixture } from "./helpers/kinesisNetworkBinding.ts";
 describe("unchanged original broker identity with native transfer witness", () => {
   it("binds the staged InternalMovement with NULL instrument through one literal matched peer", async () => {
     const source = await networkBindingFixture(),
-      original = structuredClone(source.primary.rows[0]),
-      witness = source.witness.rows[0];
+      original = structuredClone(source.primary.rows[0]!),
+      witness = source.witness.rows[0]!;
     witness.asset_transfer_details!.networkReceipt = reversed(
       witness.asset_transfer_details!.networkReceipt,
     );
@@ -145,8 +145,8 @@ describe("unchanged original broker identity with native transfer witness", () =
     "type",
   ])("rejects an unproved %s peer or witness", async (kind) => {
     const source = await networkBindingFixture(),
-      peer = source.primary.rows[0],
-      witness = source.witness.rows[0];
+      peer = source.primary.rows[0]!,
+      witness = source.witness.rows[0]!;
     if (kind === "missing_instrument") peer.investment_id = null;
     if (kind === "missing_resolved") peer.resolved_investment_id = null;
     if (kind === "invalid_instrument") peer.investment_id = -1;
@@ -194,7 +194,7 @@ describe("unchanged original broker identity with native transfer witness", () =
   it("reproves a fresh original-only source from retained witness and canonical transfer", async () => {
     const source = await networkBindingFixture(),
       result = proveKinesisNetworkBindings(source.rows, source.batches, []),
-      projected = result.overrides.get(source.primary.rows[0].id);
+      projected = result.overrides.get(source.primary.rows[0]!.id);
     const owner = { ...projected, status: "committed" },
       witness = { ...source.witness.rows[0], status: "duplicate" },
       current = {
@@ -207,7 +207,7 @@ describe("unchanged original broker identity with native transfer witness", () =
         destination_account_id: 7,
         date: owner.tx_date,
         units: owner.units,
-        fee_units: owner.asset_transfer_details.feeUnits,
+        fee_units: owner.asset_transfer_details!.feeUnits,
         source_record_hash: owner.source_record_hash,
         dedup_fingerprint: owner.dedup_fingerprint,
         dedup_fingerprint_version: 1,
@@ -265,8 +265,8 @@ function reversed<T>(value: T): T {
 }
 it("treats JSONB key ordering as the same typed receipt", async () => {
   const source = await networkSource({ kind: "asset_fee" });
-  source.rows[0].asset_adjustment_details!.networkReceipt = reversed(
-    source.rows[0].asset_adjustment_details!.networkReceipt,
+  source.rows[0]!.asset_adjustment_details!.networkReceipt = reversed(
+    source.rows[0]!.asset_adjustment_details!.networkReceipt,
   );
-  expect(verifiedKinesisNetworkRow(source.rows[0])).toBeDefined();
+  expect(verifiedKinesisNetworkRow(source.rows[0]!)).toBeDefined();
 });

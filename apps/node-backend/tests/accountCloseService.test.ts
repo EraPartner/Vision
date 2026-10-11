@@ -72,8 +72,8 @@ describe("previewAccountPortfolioLots", () => {
       transaction_ids: [2, 7, 9],
       limit: 500,
     });
-    expect(query.mock.calls[1][0]).toMatch(/type::text = ANY/);
-    expect(query.mock.calls[1][1]).toEqual([5, ["buy", "gift", "sell"], 501]);
+    expect(query.mock.calls[1]![0]).toMatch(/type::text = ANY/);
+    expect(query.mock.calls[1]![1]).toEqual([5, ["buy", "gift", "sell"], 501]);
   });
 
   it("withholds a partial ID list when the account exceeds the atomic limit", async () => {
@@ -106,9 +106,9 @@ describe("closeAccount", () => {
     const result = await closeAccount(5, { balance_handling: "preserve" });
 
     expect(withTransaction).toHaveBeenCalledOnce();
-    expect(query.mock.calls[0][0]).toMatch(/FOR UPDATE/);
-    expect(query.mock.calls[1][0]).toMatch(/UPDATE accounts/);
-    expect(query.mock.calls[1][0]).toMatch(/in_net_worth = false/);
+    expect(query.mock.calls[0]![0]).toMatch(/FOR UPDATE/);
+    expect(query.mock.calls[1]![0]).toMatch(/UPDATE accounts/);
+    expect(query.mock.calls[1]![0]).toMatch(/in_net_worth = false/);
     expect(systemRecipient).not.toHaveBeenCalled();
     expect(result.adjustments).toEqual([]);
   });
@@ -149,14 +149,14 @@ describe("closeAccount", () => {
       balance_handling: "adjustment",
     });
 
-    const [insertSql, insertParams] = query.mock.calls[2];
+    const [insertSql, insertParams] = query.mock.calls[2]!;
     expect(insertSql).toMatch(/INSERT INTO transactions/);
     expect(insertSql).toMatch(/transfer_source/);
     expect(insertSql).not.toMatch(/\bbalance\b/);
     expect(insertParams![4]).toEqual([-125.5, 20]);
     expect(insertParams![5]).toEqual(["EUR", "USD"]);
     expect(result.adjustments).toHaveLength(2);
-    expect(query.mock.calls[3][0]).toMatch(/UPDATE accounts/);
+    expect(query.mock.calls[3]![0]).toMatch(/UPDATE accounts/);
   });
 
   it("is retry-safe after the account is already closed", async () => {

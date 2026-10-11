@@ -71,7 +71,7 @@ describe('POST /bulk-tag — unknown slug rejection', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 400 listing unknown add slug before writing anything', async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // no active tag found
+    dbQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // no active tag found
 
     const res = await bulkTag({ transaction_ids: [1], add_slugs: ['ghost-tag'] }).expect(400);
 
@@ -80,7 +80,7 @@ describe('POST /bulk-tag — unknown slug rejection', () => {
   });
 
   it('returns 400 listing unknown remove slug before writing anything', async () => {
-    dbQuery.mockResolvedValueOnce({ rows: [] } as PgQueryResult); // no tag found
+    dbQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // no tag found
 
     await bulkTag({ transaction_ids: [1], remove_slugs: ['ghost-tag'] }).expect(400);
 

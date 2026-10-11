@@ -5,6 +5,11 @@ import type {
     PlannedTransactionUpdate,
     PlannedTransactionExecuteRequest,
 } from "@/types/api";
+import {
+    PlannedMatchSuggestionListSchema,
+    PlannedTransactionListSchema,
+    PlannedTransactionSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
@@ -25,6 +30,7 @@ export function getPlannedTransactions(params?: {
     return requestWithQuery<PlannedTransactionsListResponse>(
         "/api/planned-transactions",
         params,
+        { schema: PlannedTransactionListSchema },
     );
 }
 
@@ -34,6 +40,7 @@ export function createPlannedTransaction(
     return apiRequest<PlannedTransaction>("/api/planned-transactions", {
         method: "POST",
         body: JSON.stringify(transaction),
+        schema: PlannedTransactionSchema,
     });
 }
 
@@ -44,6 +51,7 @@ export function updatePlannedTransaction(
     return apiRequest<PlannedTransaction>(`/api/planned-transactions/${id}`, {
         method: "PATCH",
         body: JSON.stringify(transaction),
+        schema: PlannedTransactionSchema,
     });
 }
 
@@ -62,6 +70,7 @@ export function executePlannedTransaction(
         {
             method: "POST",
             body: JSON.stringify(executeRequest),
+            schema: PlannedTransactionSchema,
         },
     );
 }
@@ -99,6 +108,8 @@ export async function getPlannedMatchSuggestions(): Promise<
     const { items } = await apiRequest<{
         items: PlannedMatchSuggestion[];
         total: number;
-    }>("/api/planned-transactions/match-suggestions");
+    }>("/api/planned-transactions/match-suggestions", {
+        schema: PlannedMatchSuggestionListSchema,
+    });
     return items;
 }

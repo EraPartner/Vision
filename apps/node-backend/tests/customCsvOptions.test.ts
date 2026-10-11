@@ -66,7 +66,7 @@ for (const [name, parse] of adapters) {
       expect(rows).toHaveLength(2);
       expect(rows.map((row) => row.amount)).toEqual([12.5, 2.5]);
       expect(rows.skipped).toBe(0);
-      expect(rows[0].rawData).toBe(
+      expect(rows[0]!.rawData).toBe(
         '2026-09-01,Shop,12.50,"line one\nline two"',
       );
     });
@@ -80,8 +80,8 @@ for (const [name, parse] of adapters) {
         );
         const rows = await parse(fixture(csv), { ...config, encoding });
         expect(rows).toHaveLength(1);
-        expect(rows[0].recipient ?? rows[0].nameRaw).toBe("Café");
-        expect(rows[0].memo ?? rows[0].note).toBe("référence");
+        expect(rows[0]!.recipient ?? rows[0]!.nameRaw).toBe("Café");
+        expect(rows[0]!.memo ?? rows[0]!.note).toBe("référence");
       },
     );
 
@@ -95,7 +95,7 @@ for (const [name, parse] of adapters) {
         encoding: "windows-1252",
       });
       expect(rows).toHaveLength(1);
-      expect(rows[0].memo ?? rows[0].note).toBe("€ “é”");
+      expect(rows[0]!.memo ?? rows[0]!.note).toBe("€ “é”");
     });
 
     it("rejects unsupported encoding with a validation error", async () => {
@@ -215,7 +215,7 @@ describe("generic number formats", () => {
         },
       );
       expect(rows).toHaveLength(1);
-      expect(rows[0].amount).toBe(
+      expect(rows[0]!.amount).toBe(
         name === "portfolio" ? Math.abs(expected) : expected,
       );
     });

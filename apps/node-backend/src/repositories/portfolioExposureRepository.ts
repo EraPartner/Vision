@@ -1,5 +1,15 @@
 import type { FundHoldingsDocument } from "@vision/types/fund-holdings";
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  exposureClassificationRowSchema,
+  exposureTargetRowSchema,
+  fundHoldingsDocumentRowSchema,
+} from "../database/rows/portfolio.ts";
+import type {
+  ExposureClassificationDbRow,
+  FundHoldingsDocumentDbRow,
+} from "../database/rows/portfolio.ts";
 
 export type ExposureIdentifier = {
   type: string;
@@ -24,31 +34,11 @@ export type FundDocumentInput = {
   sourceSha256: string;
 };
 
-export type ExposureClassificationRow = {
-  id: number;
-  investmentId: number | null;
-  identifierType: string | null;
-  identifierValue: string | null;
-  identifierExchange: string | null;
-  issuerId: string;
-  issuerName: string;
-  sector: string | null;
-  issuerCountryCode: string | null;
-  sourceLabel: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+/** Derived from the checked row schema; `id` is a UUID string. */
+export type ExposureClassificationRow = ExposureClassificationDbRow;
 
-export type FundHoldingsDocumentRow = {
-  id: number;
-  investmentId: number;
-  shareClassIdentifier: ExposureIdentifier;
-  document: FundHoldingsDocument;
-  sourceAsOfDate: Date;
-  sourceSha256: string;
-  createdAt: Date;
-  updatedAt: Date;
-};
+/** Derived from the checked row schema; `id` is a UUID string. */
+export type FundHoldingsDocumentRow = FundHoldingsDocumentDbRow;
 
 const classificationColumns = `id,investment_id AS "investmentId",identifier_type AS "identifierType",
   identifier_value AS "identifierValue",identifier_exchange AS "identifierExchange",
@@ -61,28 +51,32 @@ export async function listExposureSources(): Promise<{
   documents: FundHoldingsDocumentRow[];
 }> {
   const [classifications, documents] = await Promise.all([
-    query<ExposureClassificationRow>(
+    queryRows(
+      exposureClassificationRowSchema,
       `SELECT ${classificationColumns} FROM portfolio_exposure_classifications ORDER BY issuer_name,id`,
     ),
-    query<FundHoldingsDocumentRow>(`SELECT id,investment_id AS "investmentId",share_class_identifier_json AS "shareClassIdentifier",
+    queryRows(
+      fundHoldingsDocumentRowSchema,
+      `SELECT id,investment_id AS "investmentId",share_class_identifier_json AS "shareClassIdentifier",
       document_json AS document,source_as_of_date AS "sourceAsOfDate",source_sha256 AS "sourceSha256",
       created_at AS "createdAt",updated_at AS "updatedAt"
-      FROM portfolio_fund_holdings_documents ORDER BY investment_id`),
+      FROM portfolio_fund_holdings_documents ORDER BY investment_id`,
+    ),
   ]);
-  return { classifications: classifications.rows, documents: documents.rows };
+  return { classifications, documents };
 }
 
 export async function listExposureTargets(
   investmentIds: readonly number[],
 ): Promise<{ id: number; assetClass: string }[]> {
   if (!investmentIds.length) return [];
-  const result = await query<{ id: number; assetClass: string }>(
+  return queryRows(
+    exposureTargetRowSchema,
     `SELECT id,asset_class AS "assetClass"
        FROM investments
       WHERE id = ANY($1::int[])`,
     [investmentIds],
   );
-  return result.rows;
 }
 
 export async function upsertExposureBundle({

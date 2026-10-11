@@ -17,6 +17,7 @@ import type {
   ReconciliationSourceRow,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import type { KinesisSourceProof } from "./portfolioKinesisAdoptionScope.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 
 export type KinesisCorrectionEvidence = ReturnType<
   typeof proveKinesisCorrectionSources
@@ -194,8 +195,8 @@ function retainedReceipt(
   const receipts = context.receipts.filter(
     (entry) => Number(entry.transaction_id) === Number(current.id),
   );
-  if (receipts.length !== 1) return undefined;
-  const receipt = receipts[0];
+  const [receipt] = receipts;
+  if (receipts.length !== 1 || !receipt) return undefined;
   const prior = context.sources.find(
     (item) => Number(item.id) === Number(receipt.staging_row_id),
   );
@@ -241,8 +242,8 @@ function nativeBoundary(
   reference: KinesisYieldReference,
 ) {
   const candidates = history.filter((current) => sourceMatches(row, current));
-  if (candidates.length !== 1) return undefined;
-  const current = candidates[0];
+  const [current] = candidates;
+  if (candidates.length !== 1 || !current) return undefined;
   const retained = retainedReceipt(
     row,
     current,
@@ -255,7 +256,7 @@ function nativeBoundary(
   const matches = reference.events.filter(
     (event) => event.id === basis?.transactionId,
   );
-  const event = matches[0];
+  const [event] = matches;
   if (
     !basis?.meaningful ||
     basis.basisPolicy !== "recorded_native" ||
@@ -275,6 +276,7 @@ function nativeBoundary(
     (basis.currency !== "EUR" &&
       !equalNullable(current.fx_rate_to_eur, basis.fxRateToEur, 10)) ||
     matches.length !== 1 ||
+    !event ||
     event.type !== "DELIVERY_INBOUND" ||
     event.portfolioId !== basis.portfolioId ||
     event.securityId !== basis.securityId ||
@@ -324,8 +326,8 @@ function recordedMember(
     (item) => Number(item.id) === Number(receipt.batch_id),
   );
   const manifests: KinesisYieldManifest[] =
-    batch?.custom_config?.portfolio_performance_reference?.yieldGroupEvidence
-      ?.manifests || [];
+    batchConfigFields(batch?.custom_config)?.portfolio_performance_reference
+      ?.yieldGroupEvidence?.manifests || [];
   const matches = manifests
     .flatMap((manifest) => manifest.members)
     .filter(
@@ -407,22 +409,27 @@ export function buildKinesisYieldGroups({
     try {
       records = parseCsvText(raw, {
         // A literal proof exists only for rows of a batch in `batches`.
-        columns: batch!.custom_config.source_columns,
+        columns: batchConfigFields(batch!.custom_config)!.source_columns,
         relax_column_count: false,
       });
     } catch {
       continue;
     }
-    if (records.length !== 1) continue;
+    const [literal] = records;
+    if (records.length !== 1 || !literal) continue;
     const key = `${row.batch_id}:${row.source_record_hash}`;
     if (!recordGroups.has(key))
-      recordGroups.set(key, { literal: records[0], rows: [], proof });
+      recordGroups.set(key, { literal, rows: [], proof });
     recordGroups.get(key)!.rows.push(row);
   }
-  const records = [...recordGroups.values()];
+  // Every record group holds the row that created it.
+  const records = [...recordGroups.values()].map((group) => ({
+    ...group,
+    firstRow: group.rows[0]!,
+  }));
   for (const batch of batches) {
     const scoped = records.filter(
-      (item) => Number(item.rows[0].batch_id) === Number(batch.id),
+      (item) => Number(item.firstRow.batch_id) === Number(batch.id),
     );
     const assets = new Set(
       scoped
@@ -440,24 +447,24 @@ export function buildKinesisYieldGroups({
           (a, b) => Number(a.proof.parsed.date) - Number(b.proof.parsed.date),
         );
       for (let index = 1; index < deposits.length; index++) {
-        const first = deposits[index - 1];
-        const last = deposits[index];
-        const lower = first.rows[0].tx_date;
-        const upper = last.rows[0].tx_date;
+        // 1 <= index < deposits.length
+        const first = deposits[index - 1]!;
+        const last = deposits[index]!;
+        const lower = first.firstRow.tx_date;
+        const upper = last.firstRow.tx_date;
         if (lower >= upper) continue;
         const interval = scoped.filter(
           (item) =>
             item.literal.Currency_Code === asset &&
-            inside(item.rows[0].tx_date, lower, upper),
+            inside(item.firstRow.tx_date, lower, upper),
         );
         if (
           interval.length < 2 ||
-          new Set(interval.map((item) => item.rows[0].tx_date)).size !== 1 ||
+          new Set(interval.map((item) => item.firstRow.tx_date)).size !== 1 ||
           interval.some(
             (item) =>
-              !["Holder's_Distribution", "Velocity's_Distribution"].includes(
-                item.literal.Transaction_Type,
-              ),
+              item.literal.Transaction_Type !== "Holder's_Distribution" &&
+              item.literal.Transaction_Type !== "Velocity's_Distribution",
           )
         )
           continue;
@@ -539,11 +546,13 @@ export function buildKinesisYieldGroups({
             event.securityId === start.event.securityId &&
             inside(event.date, lower, upper),
         );
+        // The interval check above admits at least two records.
+        const firstItem = interval[0]!;
         const fail = () =>
           blockers.push({
             batchId: Number(batch.id),
-            rowId: Number(interval[0].rows[0].id),
-            rowOrdinal: interval[0].rows[0].row_index + 1,
+            rowId: Number(firstItem.firstRow.id),
+            rowOrdinal: firstItem.firstRow.row_index + 1,
             reason: "yield_group_not_closed",
             candidateTransactionIds: currentInterval.map((current) =>
               Number(current.id),
@@ -580,13 +589,15 @@ export function buildKinesisYieldGroups({
               row.source_transaction_id ===
                 `${item.literal.Transaction_ID}:income`,
           );
-          const row = unitRows[0];
-          const income = incomeRows[0];
+          const [row] = unitRows;
+          const [income] = incomeRows;
           const proof = evidence.proofs.get(Number(row?.id));
           const incomeProof = evidence.literalProofs.get(Number(income?.id));
           if (
             unitRows.length !== 1 ||
             incomeRows.length !== 1 ||
+            !row ||
+            !income ||
             !proof ||
             !incomeProof ||
             item.rows.length !== 2 ||
@@ -617,7 +628,8 @@ export function buildKinesisYieldGroups({
               Number(candidate.id),
             );
             return (
-              literalProof?.parsed.symbolRaw === asset &&
+              literalProof !== undefined &&
+              literalProof.parsed.symbolRaw === asset &&
               literalProof.parsed.units != null &&
               equal(literalProof.parsed.units, row.units)
             );
@@ -627,8 +639,13 @@ export function buildKinesisYieldGroups({
               Number(current.investment_id) === Number(row.investment_id) &&
               equal(current.units, row.units),
           );
-          if (globalSources.length !== 1 || globalHistory.length !== 1) break;
-          const current = globalHistory[0];
+          const [current] = globalHistory;
+          if (
+            globalSources.length !== 1 ||
+            globalHistory.length !== 1 ||
+            !current
+          )
+            break;
           let retained: KinesisYieldRetained | undefined;
           if (
             current.dedup_fingerprint != null ||
@@ -655,17 +672,19 @@ export function buildKinesisYieldGroups({
               event.date === recorded.date &&
               equal(event.shares, current.units),
           );
+          const [witness] = witnesses;
           if (
             !currentInterval.includes(current) ||
             witnesses.length !== 1 ||
-            !referenceInterval.includes(witnesses[0])
+            !witness ||
+            !referenceInterval.includes(witness)
           )
             break;
           members.push({
             row,
             current,
             recorded,
-            referenceEvent: witnesses[0],
+            referenceEvent: witness,
             retained,
             proof,
           });
@@ -686,14 +705,15 @@ export function buildKinesisYieldGroups({
         // Round the complete literal sums once; per-member rounding can hide a residual.
         if (
           interval.some(
-            (item) => !/^\d+(?:\.\d+)?$/.test(item.literal.Amount.trim()),
+            // A proved Kinesis record carries every required column.
+            (item) => !/^\d+(?:\.\d+)?$/.test(item.literal.Amount!.trim()),
           )
         ) {
           fail();
           continue;
         }
         const sourceSum = interval.reduce(
-          (total, item) => total.plus(item.literal.Amount.trim()),
+          (total, item) => total.plus(item.literal.Amount!.trim()),
           toDecimal(0),
         );
         const currentSum = members.reduce(
@@ -712,7 +732,7 @@ export function buildKinesisYieldGroups({
           continue;
         }
         const manifest: KinesisYieldManifest = {
-          sourceFileHash: interval[0].proof.sourceFileHash,
+          sourceFileHash: firstItem.proof.sourceFileHash,
           referenceHash: reference.sourceHash,
           accountId: Number(batch.account_id),
           investmentId: Number(start.row.investment_id),
@@ -786,13 +806,12 @@ export function proveRetainedKinesisYieldGroups({
   const entries: KinesisYieldGroupEvidence[] = batches
     .map(
       (batch) =>
-        batch.custom_config?.portfolio_performance_reference
+        batchConfigFields(batch.custom_config)?.portfolio_performance_reference
           ?.yieldGroupEvidence,
     )
-    .filter(Boolean);
-  if (!entries.length)
-    return { groups: [], blockers: [], reservedRowIds: new Set() };
-  const entry = entries[0];
+    .filter((item): item is KinesisYieldGroupEvidence => Boolean(item));
+  const [entry] = entries;
+  if (!entry) return { groups: [], blockers: [], reservedRowIds: new Set() };
   if (
     entries.length !== batches.length ||
     entries.some(
@@ -803,15 +822,17 @@ export function proveRetainedKinesisYieldGroups({
     entry.version !== 1 ||
     !entry.reference ||
     entry.referenceDigest !== kinesisYieldReferenceDigest(entry.reference) ||
-    batches.some(
-      (batch) =>
-        !["adopt_existing_only", "correct_existing_only"].includes(
-          batch.custom_config.portfolio_performance_reference
-            .reconciliationScope,
-        ) ||
-        batch.custom_config.portfolio_performance_reference.sourceHash !==
-          entry.reference.sourceHash,
-    )
+    batches.some((batch) => {
+      // Every batch carries yield evidence (entries.length checked above).
+      const reference = batchConfigFields(
+        batch.custom_config,
+      )!.portfolio_performance_reference!;
+      return (
+        (reference.reconciliationScope !== "adopt_existing_only" &&
+          reference.reconciliationScope !== "correct_existing_only") ||
+        reference.sourceHash !== entry.reference.sourceHash
+      );
+    })
   )
     return {
       groups: [],

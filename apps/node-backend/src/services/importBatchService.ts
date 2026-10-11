@@ -1,5 +1,6 @@
 /** Import-batch service — repository access plus review view-model assembly. */
 import { getPreviewRows } from "../repositories/importBatchRepository.ts";
+import type { ImportPreviewRow } from "../repositories/importBatchRepository.ts";
 
 export {
   listBatches,
@@ -9,41 +10,6 @@ export {
   overrideCategory,
   categoryExists,
 } from "../repositories/importBatchRepository.ts";
-
-/**
- * A row as selected by `getPreviewRows` (import_staging_rows joined with the
- * effective recipient, its default category, the override category and the
- * matched pattern).
- */
-type ImportPreviewRow = {
-  /** BIGSERIAL — string. */
-  id: string;
-  row_index: number;
-  recipient_raw: string | null;
-  /** NUMERIC — string. */
-  amount: string | null;
-  currency: string | null;
-  tx_date: string | null;
-  memo: string | null;
-  bank_account: string | null;
-  match_source: string | null;
-  match_similarity: number | null;
-  matched_pattern_id: number | null;
-  resolved_recipient_id: number | null;
-  user_override_recipient_id: number | null;
-  override_category_id: number | null;
-  effective_recipient_id: number | null;
-  recipient_name: string | null;
-  recipient_default_category_id: number | null;
-  recipient_default_category_general: string | null;
-  recipient_default_category_detail: string | null;
-  recipient_default_category_path: string | null;
-  override_category_general: string | null;
-  override_category_detail: string | null;
-  override_category_path: string | null;
-  matched_pattern_text: string | null;
-  matched_pattern_kind: string | null;
-};
 
 type ImportPreviewGroupRow = Pick<
   ImportPreviewRow,
@@ -158,7 +124,5 @@ function buildImportBatchPreview(rows: ImportPreviewRow[]) {
 }
 
 export async function getImportBatchPreview(batchId: number) {
-  return buildImportBatchPreview(
-    (await getPreviewRows(batchId)) as ImportPreviewRow[],
-  );
+  return buildImportBatchPreview(await getPreviewRows(batchId));
 }

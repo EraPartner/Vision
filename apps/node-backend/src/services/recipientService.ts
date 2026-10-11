@@ -3,7 +3,8 @@
  * Routes delegate here instead of importing the repository directly
  * (eslint vision-local/no-repo-direct-from-route).
  */
-import { query } from '../database/connection.ts';
+import { queryOne } from '../database/rowContracts.ts';
+import { idRowSchema } from '../database/rows/catalog.ts';
 import { ValidationError } from '../middleware/errorHandler.ts';
 import { normalizeForMatching } from '../lib/textNormalization.ts';
 
@@ -23,12 +24,13 @@ export { default } from '../repositories/recipientRepository.ts';
  */
 export async function resolveRecipientIdByName(name: string): Promise<number> {
   const normalized = normalizeForMatching(name);
-  const result = await query<{ id: number }>(
+  const row = await queryOne(
+    idRowSchema,
     `SELECT id FROM recipients WHERE normalized_name = $1 LIMIT 1`,
     [normalized],
   );
-  if (result.rows.length === 0) {
+  if (!row) {
     throw new ValidationError(`Recipient with name '${name}' does not exist`);
   }
-  return result.rows[0].id;
+  return row.id;
 }

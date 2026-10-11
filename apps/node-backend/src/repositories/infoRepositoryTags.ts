@@ -13,7 +13,8 @@
  * transaction-list tag filter), so per-tag lines can legitimately overlap.
  */
 
-import { query } from '../database/connection.ts';
+import { queryRows } from '../database/rowContracts.ts';
+import { tagPivotRowSchema } from '../database/rows/info.ts';
 import { validateInt4Ids } from '../lib/filterBuilder.ts';
 import { convertRowsToEur } from '../services/currency/currencyConversionService.ts';
 import {
@@ -87,10 +88,10 @@ export const tagInsightsRepository = {
       GROUP BY tt.tag_id, tg.slug, ${periodExpr}, t.date, t.currency
     `;
 
-    const result = await query(sql, params);
+    const rows = await queryRows(tagPivotRowSchema, sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, 'abs_amount', false),
+      mapRowsForAmountConversion(rows, 'abs_amount', false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: 'date' }
     );

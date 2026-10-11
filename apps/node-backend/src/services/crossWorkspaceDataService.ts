@@ -9,7 +9,8 @@
  *    balances, FX-converted).
  */
 
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { rebalanceCashAccountRowSchema } from "../database/rows/info.ts";
 import {
   convertToCurrency,
   convertWithRates,
@@ -19,13 +20,6 @@ import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import { todayAppDateString } from "../lib/timezone.ts";
 import type { RateTable } from "../types/rows.ts";
-
-interface RebalanceCashAccountRow {
-  id: number | string;
-  name: string;
-  currency: string | null;
-  balance_parts: Array<{ currency: string; balance: string }> | null;
-}
 
 interface CashAccountEntry {
   id: number;
@@ -101,7 +95,8 @@ export async function assembleRebalanceInputs({
   // aggregated (one row per account) form keeps `cashAccounts` one entry per
   // account, including a spendable account with no ledger rows at all (NULL
   // parts → a 0 entry, as before).
-  const { rows } = await query<RebalanceCashAccountRow>(
+  const rows = await queryRows(
+    rebalanceCashAccountRowSchema,
     `SELECT a.id, a.name, a.currency, bp.balance_parts
        FROM accounts a
        ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$1::date" })}

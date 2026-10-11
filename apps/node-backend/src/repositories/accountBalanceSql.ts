@@ -296,7 +296,8 @@ export function statementPartition(
   // currency (no per-currency minor-unit table exists), so a fixed cent
   // threshold is the consistent choice.
   const funded = list.filter((p) => !roundToCents(p.balance).isZero());
-  if (funded.length === 1) return funded[0];
+  const [onlyFunded] = funded;
+  if (funded.length === 1 && onlyFunded) return onlyFunded;
 
   return { currency: want, balance: "0" };
 }

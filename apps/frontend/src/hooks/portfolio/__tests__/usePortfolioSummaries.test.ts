@@ -4,6 +4,7 @@ import { renderHook } from "@testing-library/react";
 import { createQueryWrapper } from "@/test/queryWrapper";
 import { usePortfolioSummaries } from "@/hooks/portfolio/usePortfolioSummaries";
 import type { Investment, PortfolioTransaction } from "@/types/api";
+import type { PortfolioSummaryItem } from "@/lib/api/info";
 
 // usePortfolioSummaries pulls FX rates via useExchangeRates (useQuery), so the
 // hook needs a QueryClientProvider. The query is left unresolved on purpose: the
@@ -49,6 +50,44 @@ function gainLossOf(
     );
     return result.current.summaries[0].gainLoss;
 }
+
+describe("usePortfolioSummaries — canonical identity columns", () => {
+    it("keeps the investment row's typed NUMERIC columns and calendar-day maturity", () => {
+        // portfolioSummaryService passes `SELECT i.*` through: NUMERIC columns
+        // arrive as strings and maturity_date as a serialized local-midnight
+        // Date, which is the previous UTC day for a server east of UTC.
+        const canonical = {
+            id: 1,
+            is_active: true,
+            cadastral_income: "1250.00",
+            municipality_tax_rate: "7.50",
+            maturity_date: "2030-06-14T22:00:00.000Z",
+            maturityDate: "2030-06-14T22:00:00.000Z",
+        } as unknown as PortfolioSummaryItem;
+        const { result } = renderHook(
+            () =>
+                usePortfolioSummaries({
+                    investments: [
+                        inv({
+                            id: 1,
+                            asset_class: "savings",
+                            cadastral_income: 1250,
+                            municipality_tax_rate: 7.5,
+                            maturity_date: "2030-06-15",
+                        }),
+                    ],
+                    transactions: [],
+                    canonicalSummaries: [canonical],
+                }),
+            { wrapper: makeWrapper() },
+        );
+        const [summary] = result.current.summaries;
+        expect(summary.cadastral_income).toBe(1250);
+        expect(summary.municipality_tax_rate).toBe(7.5);
+        expect(summary.maturity_date).toBe("2030-06-15");
+        expect(summary.maturityDate).toBe("2030-06-15");
+    });
+});
 
 describe("usePortfolioSummaries — gainLoss does not double-count (FE mirror of backend)", () => {
     it("waits for canonical dated FX when monetary rows use another booking currency", () => {

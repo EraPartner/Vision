@@ -40,7 +40,7 @@ function broker(id: number, institution: string, name = institution) {
 function serveAccounts(accounts: ReturnType<typeof broker>[]) {
     server.use(
         http.get(`${api}/accounts`, () =>
-            ok({ items: accounts, total: accounts.length }),
+            ok({ items: accounts, total: accounts.length, links: [] }),
         ),
     );
 }

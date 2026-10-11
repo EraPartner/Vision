@@ -65,13 +65,13 @@ const build = (source: CorrectionScope, extra: Record<string, unknown> = {}) =>
   });
 async function fixture() {
   const source: CorrectionScope = await syntheticKinesisScope();
-  const gift = source.rows[6];
+  const gift = source.rows[6]!;
   source.history = [
     {
-      ...syntheticKinesisManual(source.rows[0]),
-      fees: toDecimal(source.rows[0].fees).plus(1).toFixed(4),
+      ...syntheticKinesisManual(source.rows[0]!),
+      fees: toDecimal(source.rows[0]!.fees).plus(1).toFixed(4),
     },
-    syntheticKinesisManual(source.rows[5], 41),
+    syntheticKinesisManual(source.rows[5]!, 41),
     {
       ...syntheticKinesisManual(gift, 42),
       amount: "200.0000",
@@ -108,7 +108,7 @@ async function fixture() {
       destinationAccountId: null,
     },
   ];
-  source.batches[0].custom_config.portfolio_performance_reference = {
+  source.batches[0]!.custom_config.portfolio_performance_reference = {
     sourceHash: reference.sourceHash,
     reconciliationScope: "correct_existing_only",
     originalBatchIds: [2],
@@ -168,12 +168,12 @@ describe("bounded Kinesis financial correction", () => {
       ] as const)
         expect(after[key]).toBe(before[key]);
     }
-    expect(result.adoptions[1].after).toMatchObject({
+    expect(result.adoptions[1]!.after).toMatchObject({
       currency: "USD",
       fx_rate_to_eur: null,
     });
-    expect(source.rows[6].dedup_fingerprint).toBe(
-      result.adoptions[1].after.dedup_fingerprint,
+    expect(source.rows[6]!.dedup_fingerprint).toBe(
+      result.adoptions[1]!.after.dedup_fingerprint,
     );
   });
   it("defers missing historical conversion while independent literal fees remain selectable and binds rate evidence in the fingerprint", async () => {
@@ -206,7 +206,7 @@ describe("bounded Kinesis financial correction", () => {
     "does not correct a buy using tampered staged %s instead of literal execution facts",
     async (field) => {
       const { source } = await fixture();
-      source.rows[0][field] = field === "currency" ? "USD" : "2";
+      source.rows[0]![field] = field === "currency" ? "USD" : "2";
       const result = build(source);
       expect(result.plan.selectedRowIds).not.toContain(20);
     },
@@ -215,7 +215,7 @@ describe("bounded Kinesis financial correction", () => {
     "rejects an unverified native gift %s projection",
     async (kind) => {
       const { source } = await fixture();
-      const row = source.rows[6];
+      const row = source.rows[6]!;
       const envelope = JSON.parse(row.raw_data);
       if (kind === "account")
         envelope.__portfolioPerformanceReference.accountId = 8;
@@ -231,13 +231,13 @@ describe("bounded Kinesis financial correction", () => {
   );
   it("does not inflate an existing zero-basis gift from meaningful retained valuation", async () => {
     const { source } = await fixture();
-    source.history[2].amount = "0.0000";
-    source.history[2].price_per_unit = "0.000000";
+    source.history[2]!.amount = "0.0000";
+    source.history[2]!.price_per_unit = "0.000000";
     expect(build(source).plan.selectedRowIds).toEqual([20]);
   });
   it("classifies the complete source before selection and preserves contested candidate blockers", async () => {
     const { source } = await fixture();
-    source.history.push({ ...source.history[0], id: 43 });
+    source.history.push({ ...source.history[0]!, id: 43 });
     expect(build(source).plan.ready).toBe(false);
   });
   it("settles a fresh original CSV without XML from its corrected receipt and guards changed notes, receipt ambiguity and retained proof", async () => {
@@ -273,13 +273,13 @@ describe("bounded Kinesis financial correction", () => {
       pending: 10,
     });
     for (const mutate of [
-      (copy) => (copy.history[0].note = "Changed note"),
+      (copy) => (copy.history[0]!.note = "Changed note"),
       (copy) =>
         copy.kinesisAdoptionContext.receipts.push({
-          ...copy.kinesisAdoptionContext.receipts[0],
+          ...copy.kinesisAdoptionContext.receipts[0]!,
           id: 3,
         }),
-      (copy) => (copy.kinesisAdoptionContext.sources[6].raw_data += " "),
+      (copy) => (copy.kinesisAdoptionContext.sources[6]!.raw_data += " "),
     ] satisfies Array<
       (
         copy: Omit<SyntheticKinesisScope, "kinesisAdoptionContext"> & {

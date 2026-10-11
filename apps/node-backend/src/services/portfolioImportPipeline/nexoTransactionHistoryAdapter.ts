@@ -492,8 +492,8 @@ export async function parseNexoTransactionHistory(
     const matches = records.filter((record) =>
       cashCompanionMatches(primary, record),
     );
-    if (matches.length !== 1) continue;
-    const companion = matches[0];
+    const [companion] = matches;
+    if (matches.length !== 1 || !companion) continue;
     if (
       wrapperPrimaries.filter((record) =>
         cashCompanionMatches(record, companion),

@@ -1,9 +1,15 @@
 import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  forecastMcCacheRowSchema,
+  forecastUserIdRowSchema,
+} from "../database/rows/info.ts";
+import type { ForecastMcCacheRow } from "../database/rows/info.ts";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /** A cached forecast: the JSONB payload and when it was computed. */
-export type McCacheRow = { payload: object; computed_at: Date };
+export type McCacheRow = ForecastMcCacheRow;
 
 export async function get({
   userId,
@@ -14,15 +20,15 @@ export async function get({
   month: string;
   filterHash: string;
 }): Promise<McCacheRow | null> {
-  const res = await query<McCacheRow>(
+  const row = await queryOne(
+    forecastMcCacheRowSchema,
     `SELECT payload, computed_at
        FROM cashflow_forecast_mc
       WHERE user_id = $1 AND month = ($2 || '-01')::date AND filter_hash = $3
       LIMIT 1`,
     [userId, month, filterHash],
   );
-  if (res.rows.length === 0) return null;
-  return res.rows[0];
+  return row ?? null;
 }
 
 /**
@@ -75,10 +81,11 @@ export async function getActiveUserIds({
   strict = false,
 }: { strict?: boolean } = {}): Promise<string[]> {
   try {
-    const res = await query<{ user_id: string }>(
+    const rows = await queryRows(
+      forecastUserIdRowSchema,
       `SELECT DISTINCT user_id FROM cashflow_forecast_accuracy`,
     );
-    const ids = res.rows.map((r) => r.user_id);
+    const ids = rows.map((r) => r.user_id);
     if (!ids.includes("anonymous")) ids.push("anonymous");
     return ids;
   } catch (err) {

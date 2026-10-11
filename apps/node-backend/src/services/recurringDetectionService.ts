@@ -8,7 +8,13 @@
  * - Returns suggestions for planned transactions
  */
 
-import { query } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  plannedRecipientIdRowSchema,
+  recurringCandidateRowSchema,
+  tableExistsRowSchema,
+} from "../database/rows/ledger.ts";
+import type { RecurringCandidateRow } from "../database/rows/ledger.ts";
 import { normalizeDateLikeToYmd, toWireDate } from "../lib/dateFormat.ts";
 import { addDaysYmd, differenceInCalendarDaysYmd } from "../lib/timezone.ts";
 import { logger } from "../config/logger.ts";
@@ -18,22 +24,9 @@ import { median } from "../lib/math.ts";
 /**
  * The bespoke projection `detectRecurringPatterns`' query selects — not a
  * plain `SELECT t.*`, so distinct from `TransactionRow` in types/rows.ts.
+ * Derived from its row schema.
  */
-export interface RecurringCandidateRow {
-  id: number;
-  /** DATE */
-  date: Date;
-  /** NUMERIC */
-  amount: string;
-  currency: string|null;
-  memo: string|null;
-  account_id: number;
-  bank_account: string|null;
-  recipient_id: number|null;
-  recipient_name: string|null;
-  effective_category_id: number|null;
-  category_name: string|null;
-}
+export type { RecurringCandidateRow };
 
 export interface RecurringGroup {
   recipientId: number|null;
@@ -94,6 +87,12 @@ interface IntervalDetection {
 }
 
 const MIN_OCCURRENCES = 3; // Minimum transactions to consider a pattern
+
+/** `[items[i - 1], items[i]]` for every i >= 1, in order. */
+function consecutivePairs<T>(items: readonly T[]): Array<[T, T]> {
+  // i < items.length - 1, so items[i + 1] is in bounds.
+  return items.slice(0, -1).map((prev, i) => [prev, items[i + 1]!]);
+}
 const INTERVAL_TOLERANCE = 0.25; // 25% tolerance for interval matching
 
 // Short-TTL in-process cache for detectRecurringPatterns. The detection runs a
@@ -194,19 +193,18 @@ function detectAmountChanges(
   // Compare recent charges with the immediately preceding chronological
   // charge. This keeps `previousAmount` literal and avoids describing an
   // all-history median as the prior price.
-  for (let i = Math.max(1, sorted.length - 3); i < sorted.length; i++) {
-    const previousAmount = toDecimal(sorted[i - 1].amount)
-      .abs()
-      .toNumber();
+  // The last (up to) three consecutive pairs.
+  for (const [previous, current] of consecutivePairs(sorted).slice(-3)) {
+    const previousAmount = toDecimal(previous.amount).abs().toNumber();
     if (!Number.isFinite(previousAmount) || previousAmount === 0) continue;
 
-    const amt = toDecimal(sorted[i].amount).abs().toNumber();
+    const amt = toDecimal(current.amount).abs().toNumber();
     const pctChange = ((amt - previousAmount) / previousAmount) * 100;
 
     if (Math.abs(pctChange) > 5) {
       // More than 5% change from the preceding charge.
       changes.push({
-        date: sorted[i].date,
+        date: current.date,
         previousAmount,
         newAmount: amt,
         percentChange: Math.round(pctChange * 100) / 100,
@@ -236,7 +234,9 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     // a row recorded under an alias whose PRIMARY carries the default category
     // must not report a null category_name here while the transactions list
     // shows it categorised.
-    const result = await query<RecurringCandidateRow>(`
+    const rows = await queryRows(
+      recurringCandidateRowSchema,
+      `
       SELECT t.id, t.date, t.amount, t.currency, t.memo, t.account_id,
              acct.name AS bank_account,
              COALESCE(r.primary_recipient_id, t.recipient_id) AS recipient_id,
@@ -252,9 +252,10 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
         AND t.recipient_id IS NOT NULL
         AND t.date >= CURRENT_DATE - INTERVAL '3 years'
       ORDER BY COALESCE(r.primary_recipient_id, t.recipient_id), t.date
-    `);
+    `,
+    );
 
-    if (result.rows.length === 0) {
+    if (rows.length === 0) {
       const empty: RecurringDetectionResult = { patterns: [], total: 0 };
       recurringCache = {
         value: empty,
@@ -264,10 +265,11 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     }
 
     // planned_transactions may not exist in partially initialized environments.
-    const plannedTableCheck = await query<{ exists: boolean }>(
+    const plannedTableCheck = await queryOne(
+      tableExistsRowSchema,
       `SELECT to_regclass('public.planned_transactions') IS NOT NULL AS exists`,
     );
-    const plannedTableAvailable = Boolean(plannedTableCheck.rows[0]?.exists);
+    const plannedTableAvailable = Boolean(plannedTableCheck?.exists);
 
     // Group by recipient AND flow direction. Bucketing on recipient alone
     // blended income and expense from the same recipient (e.g. an employer
@@ -275,7 +277,7 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     // matched neither real flow — amounts go through .abs() below, so the
     // sign distinction would otherwise be lost entirely.
     const byRecipient: Record<string, RecurringGroup> = {};
-    for (const row of result.rows) {
+    for (const row of rows) {
       const direction = Number(row.amount) < 0 ? "expense" : "income";
       const key = `${row.recipient_id}:${direction}`;
       if (!byRecipient[key]) {
@@ -301,7 +303,8 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
     ];
     const plannedRecipientIds = new Set<number | null>();
     if (plannedTableAvailable && allRecipientIds.length > 0) {
-      const plannedResult = await query<{ recipient_id: number }>(
+      const plannedRows = await queryRows(
+        plannedRecipientIdRowSchema,
         `SELECT DISTINCT COALESCE(r.primary_recipient_id, pt.recipient_id) AS recipient_id
            FROM planned_transactions pt
            LEFT JOIN recipients r ON pt.recipient_id = r.id
@@ -309,22 +312,23 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
             AND pt.is_active = true`,
         [allRecipientIds],
       );
-      for (const row of plannedResult.rows)
-        plannedRecipientIds.add(row.recipient_id);
+      for (const row of plannedRows) plannedRecipientIds.add(row.recipient_id);
     }
 
     const patterns: RecurringPattern[] = [];
 
     for (const group of Object.values(byRecipient)) {
       const txns = group.transactions;
+      const [first] = txns;
+      const latest = txns.at(-1);
 
-      if (txns.length < MIN_OCCURRENCES) continue;
+      if (txns.length < MIN_OCCURRENCES || !first || !latest) continue;
 
       // Calculate intervals between consecutive transactions (in days)
       const intervals: number[] = [];
-      for (let i = 1; i < txns.length; i++) {
-        const d1 = normalizeDateLikeToYmd(txns[i - 1].date);
-        const d2 = normalizeDateLikeToYmd(txns[i].date);
+      for (const [previous, current] of consecutivePairs(txns)) {
+        const d1 = normalizeDateLikeToYmd(previous.date);
+        const d2 = normalizeDateLikeToYmd(current.date);
         if (!d1 || !d2) {
           continue;
         }
@@ -340,8 +344,8 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
       // Get amounts info — accumulated as Decimals per the monetary-arithmetic rule
       const amounts = txns.map((t) => toDecimal(t.amount).abs());
       const avgAmount = divide(addAll(amounts), amounts.length);
-      const latestAmount = amounts[amounts.length - 1];
-      const currency = txns[0].currency || "EUR";
+      const latestAmount = toDecimal(latest.amount).abs();
+      const currency = first.currency || "EUR";
 
       // Check for amount changes
       const amountChanges = detectAmountChanges(txns);
@@ -349,7 +353,7 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
       // Predict next occurrence. Advance in UTC so it stays consistent with
       // the interval calc above — mixing UTC interval math with local
       // getDate/setDate shifted predictedNext by a day across a DST boundary.
-      const lastDate = normalizeDateLikeToYmd(txns[txns.length - 1].date);
+      const lastDate = normalizeDateLikeToYmd(latest.date);
       if (!lastDate) {
         continue;
       }
@@ -368,14 +372,14 @@ export async function detectRecurringPatterns(): Promise<RecurringDetectionResul
         averageAmount: roundMoney(avgAmount),
         latestAmount: roundMoney(latestAmount),
         currency,
-        categoryId: txns[txns.length - 1].effective_category_id,
-        categoryName: txns[txns.length - 1].category_name,
-        bankAccount: txns[txns.length - 1].bank_account,
-        accountId: txns[txns.length - 1].account_id,
+        categoryId: latest.effective_category_id,
+        categoryName: latest.category_name,
+        bankAccount: latest.bank_account,
+        accountId: latest.account_id,
         // DATE columns: calendar-day strings, not raw pg Dates (which
         // toJSON to the previous day's ISO timestamp east of UTC).
-        firstSeen: toWireDate(txns[0].date),
-        lastSeen: toWireDate(txns[txns.length - 1].date),
+        firstSeen: toWireDate(first.date),
+        lastSeen: toWireDate(latest.date),
         predictedNext: nextDate,
         amountChanges,
         isAlreadyPlanned,

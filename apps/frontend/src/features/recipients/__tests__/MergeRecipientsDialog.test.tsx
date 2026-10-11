@@ -7,10 +7,13 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import { MergeRecipientsDialog } from "@/features/recipients/MergeRecipientsDialog";
+import {
+    recipientRow,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
-const ALICE = {
+const ALICE = recipientRow({
     id: 1,
     name: "Alice",
     normalized_name: "alice",
@@ -19,11 +22,10 @@ const ALICE = {
     notes: null,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
     links: [],
-};
+});
 
-const BOB = {
+const BOB = recipientRow({
     id: 2,
     name: "Bob",
     normalized_name: "bob",
@@ -32,9 +34,8 @@ const BOB = {
     notes: null,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
     links: [],
-};
+});
 
 const RECIPIENTS_LIST = {
     items: [ALICE, BOB],
@@ -59,6 +60,12 @@ describe("MergeRecipientsDialog", () => {
                 ok({
                     primary: ALICE,
                     merged_ids: [2],
+                    reassigned: {
+                        transactions: 0,
+                        splits: 0,
+                        planned: 0,
+                        bankAccounts: 0,
+                    },
                     aliases: [{ id: 2, name: "Bob" }],
                     patternSuggestion: null,
                 }),

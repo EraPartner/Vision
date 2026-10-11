@@ -33,6 +33,7 @@ import type {
   ReconciliationTransferEvent,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 import type { DecimalInput } from "../lib/money.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 /** A Horizon transaction record as embedded in a receipt (validated before use). */
 export interface HorizonTransaction {
   hash: string;
@@ -44,11 +45,24 @@ export interface HorizonTransaction {
   operation_count: number;
   paging_token: string;
 }
+/**
+ * A transaction record read from an untrusted history page. The typed fields
+ * are the ones {@link operationFor} requires; the rest are only compared.
+ */
+interface HorizonHistoryTransaction {
+  hash: string;
+  successful: boolean;
+  operation_count: number;
+  fee_charged: string | number;
+  created_at?: unknown;
+  source_account?: unknown;
+  fee_account?: unknown;
+  paging_token?: unknown;
+}
 /** One fetched Horizon page; `body` is the literal untrusted response JSON. */
 export interface HorizonPage {
   url: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- untrusted response JSON, checked field by field
-  body: any;
+  body: unknown;
 }
 export interface HorizonAccount {
   account_id: string;
@@ -138,7 +152,41 @@ const day = (value: string | undefined) =>
   Number.isFinite(Date.parse(value))
     ? value.slice(0, 10)
     : undefined;
-const financialTransaction = (tx: HorizonTransaction) => [
+/** `value?.[key]` on untrusted JSON: a member of an object, else undefined. */
+const member = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+// The fields operationFor needs before it can accept a history record.
+const isHorizonHistoryTransaction = (
+  value: unknown,
+): value is HorizonHistoryTransaction =>
+  isJsonRecord(value) &&
+  typeof value.hash === "string" &&
+  value.successful === true &&
+  value.operation_count === 1 &&
+  (typeof value.fee_charged === "string" ||
+    typeof value.fee_charged === "number");
+// String.prototype.localeCompare on the left side, as the original sort did.
+const compareText = (a: unknown, b: unknown) => {
+  if (typeof a !== "string") throw new Error("network_history_incomplete");
+  return a.localeCompare(String(b));
+};
+// toDecimal(a).comparedTo(b) for paging tokens; other JSON types throw.
+const comparePagingTokens = (a: unknown, b: unknown) => {
+  if (
+    (a !== null &&
+      a !== undefined &&
+      typeof a !== "string" &&
+      typeof a !== "number") ||
+    (typeof b !== "string" && typeof b !== "number")
+  )
+    throw new Error("network_history_incomplete");
+  return toDecimal(a).comparedTo(b);
+};
+const financialTransaction = (tx: HorizonHistoryTransaction) => [
   tx.hash,
   tx.successful,
   tx.created_at,
@@ -149,7 +197,7 @@ const financialTransaction = (tx: HorizonTransaction) => [
 ];
 
 function operationFor(
-  transaction: HorizonTransaction,
+  transaction: HorizonHistoryTransaction,
   pages: HorizonPage[],
   asset: string,
 ) {
@@ -168,11 +216,12 @@ function operationFor(
     !/^\d+$/.test(String(transaction.fee_charged))
   )
     throw new Error("network_operation_unverified");
-  const operations = matches[0].body?._embedded?.records;
+  const operations = member(member(matches[0]!.body, "_embedded"), "records");
   if (!Array.isArray(operations) || operations.length !== 1)
     throw new Error("network_operation_unverified");
-  const op = operations[0];
+  const op: unknown = operations[0];
   if (
+    !isJsonRecord(op) ||
     op.transaction_successful !== true ||
     op.transaction_hash !== transaction.hash ||
     op.created_at !== transaction.created_at ||
@@ -189,6 +238,7 @@ function operationFor(
   const destination = op.type === "payment" ? op.to : op.account;
   if (
     !principal ||
+    (typeof principal !== "string" && typeof principal !== "number") ||
     !toDecimal(principal).gt(0) ||
     !toDecimal(principal).times(10000000).isInteger() ||
     source !== op.source_account ||
@@ -233,11 +283,13 @@ export function verifyKinesisNetworkReceipt(
   const native = account.balances?.filter(
     (balance) => balance.asset_type === "native",
   );
+  const [nativeBalance] = native ?? [];
   if (
     native?.length !== 1 ||
-    !toDecimal(native[0].balance).isFinite() ||
-    toDecimal(native[0].balance).lt(0) ||
-    !toDecimal(native[0].balance).times(10000000).isInteger()
+    !nativeBalance ||
+    !toDecimal(nativeBalance.balance).isFinite() ||
+    toDecimal(nativeBalance.balance).lt(0) ||
+    !toDecimal(nativeBalance.balance).times(10000000).isInteger()
   )
     throw new Error("network_account_unverified");
   const starts = pages.filter((page) => {
@@ -251,22 +303,25 @@ export function verifyKinesisNetworkReceipt(
   });
   if (starts.length !== 1) throw new Error("network_history_incomplete");
   const seenPages = new Set<string>(),
-    transactions: HorizonTransaction[] = [];
+    transactions: unknown[] = [];
   let page: HorizonPage | undefined = starts[0];
   while (page) {
     if (seenPages.has(page.url)) throw new Error("network_history_incomplete");
     seenPages.add(page.url);
-    const records = page.body?._embedded?.records;
+    const records: unknown = member(member(page.body, "_embedded"), "records");
     if (!Array.isArray(records)) throw new Error("network_history_incomplete");
     if (!records.length) break;
-    transactions.push(...records);
+    transactions.push(...(records as unknown[]));
     // An absent link makes `new URL` throw, which rejects the history.
-    const next: string = page.body?._links?.next?.href;
+    const next = String(
+      member(member(member(page.body, "_links"), "next"), "href"),
+    );
     const url = new URL(next);
     if (
       hostAsset(next) !== asset ||
       url.pathname !== `/accounts/${account.account_id}/transactions` ||
-      url.searchParams.get("cursor") !== String(records.at(-1).paging_token) ||
+      url.searchParams.get("cursor") !==
+        String(member(records.at(-1), "paging_token")) ||
       url.searchParams.get("order") !== "desc"
     )
       throw new Error("network_history_incomplete");
@@ -278,24 +333,29 @@ export function verifyKinesisNetworkReceipt(
   }
   if (
     !transactions.length ||
-    new Set(transactions.map((item) => item.hash)).size !== transactions.length
+    new Set(transactions.map((item) => member(item, "hash"))).size !==
+      transactions.length
   )
     throw new Error("network_history_incomplete");
   let balance = toDecimal(0);
-  const operations = transactions.map((transaction) => ({
-    transaction,
-    ...operationFor(transaction, pages, asset),
-  }));
+  const operations = transactions.map((transaction) => {
+    if (!isHorizonHistoryTransaction(transaction))
+      throw new Error("network_operation_unverified");
+    return { transaction, ...operationFor(transaction, pages, asset) };
+  });
   const ordered = [...operations].sort(
     (a, b) =>
-      a.transaction.created_at.localeCompare(b.transaction.created_at) ||
-      toDecimal(a.transaction.paging_token).comparedTo(
+      compareText(a.transaction.created_at, b.transaction.created_at) ||
+      comparePagingTokens(
+        a.transaction.paging_token,
         b.transaction.paging_token,
       ),
   );
+  const [opening] = ordered;
   if (
-    ordered[0].op.type !== "create_account" ||
-    ordered[0].destination !== account.account_id
+    !opening ||
+    opening.op.type !== "create_account" ||
+    opening.destination !== account.account_id
   )
     throw new Error("network_opening_unverified");
   for (const item of ordered) {
@@ -308,17 +368,18 @@ export function verifyKinesisNetworkReceipt(
       balance = balance.minus(item.fee);
     if (balance.lt(0)) throw new Error("network_history_overdraw");
   }
-  if (!balance.eq(native[0].balance))
+  if (!balance.eq(nativeBalance.balance))
     throw new Error("network_balance_unverified");
   const listed = operations.filter((item) => item.transaction.hash === tx.hash);
+  const [item] = listed;
   if (
     listed.length !== 1 ||
-    JSON.stringify(financialTransaction(listed[0].transaction)) !==
+    !item ||
+    JSON.stringify(financialTransaction(item.transaction)) !==
       JSON.stringify(financialTransaction(tx)) ||
-    JSON.stringify(listed[0].op) !== JSON.stringify(receipt.operation)
+    JSON.stringify(item.op) !== JSON.stringify(receipt.operation)
   )
     throw new Error("network_operation_unverified");
-  const item = listed[0];
   if (
     kind === "gift"
       ? item.destination !== account.account_id ||
@@ -353,7 +414,7 @@ export function verifyKinesisNetworkReceipt(
 /** Re-read generic literal source rather than trusting mutable staging metadata. */
 export function verifiedKinesisNetworkRow(row: KinesisSourceRow) {
   try {
-    const config = row.custom_config || {};
+    const config = batchConfigFields(row.custom_config) || {};
     const columns = config.source_columns;
     if (!Array.isArray(columns)) return undefined;
     const records = parseCsvText(
@@ -363,40 +424,51 @@ export function verifiedKinesisNetworkRow(row: KinesisSourceRow) {
         skip_empty_lines: true,
       },
     );
-    if (records.length !== 1) return undefined;
-    const record = records[0],
-      mapping = config.column_mapping || {};
-    const kind = record[mapping.type];
-    if (!["asset_fee", "asset_transfer_witness"].includes(kind))
+    const [record] = records;
+    if (records.length !== 1 || !record) return undefined;
+    const mapping = config.column_mapping || {};
+    // Every failure in this try, thrown or returned, rejects the row alike.
+    const cell = (column: string | undefined) =>
+      column === undefined ? undefined : record[column];
+    const kind = cell(mapping.type);
+    if (kind !== "asset_fee" && kind !== "asset_transfer_witness")
       return undefined;
+    if (record.Receipt_JSON === undefined) return undefined;
     const receipt: KinesisNetworkReceipt = JSON.parse(record.Receipt_JSON);
     const proof = verifyKinesisNetworkReceipt(receipt, kind);
-    const number = (field: string) =>
-      mapping[field] && record[mapping[field]] !== ""
-        ? parseCustomAmount(record[mapping[field]], config.number_format, {
+    const number = (field: keyof typeof mapping) => {
+      const column = mapping[field];
+      return column && record[column] !== ""
+        ? parseCustomAmount(record[column], config.number_format, {
             rowNumber: 1,
-            column: mapping[field],
+            column,
           })
         : 0;
+    };
+    const dateCell = cell(mapping.date);
+    if (dateCell === undefined || config.date_format === undefined)
+      return undefined;
     if (
-      record[mapping.currency] !== proof.asset ||
-      record[mapping.symbol] !== proof.asset ||
-      record[mapping.source_id] !== proof.hash ||
-      record[mapping.source_account] !== proof.sourceAddress ||
-      parsedDateToYmd(
-        parseDateWithFormat(record[mapping.date], config.date_format),
-      ) !== proof.date ||
+      cell(mapping.currency) !== proof.asset ||
+      cell(mapping.symbol) !== proof.asset ||
+      cell(mapping.source_id) !== proof.hash ||
+      cell(mapping.source_account) !== proof.sourceAddress ||
+      parsedDateToYmd(parseDateWithFormat(dateCell, config.date_format)) !==
+        proof.date ||
       !equal(number("units"), proof.units) ||
-      ["amount", "price", "fees", "taxes", "fx_rate"].some(
+      (["amount", "price", "fees", "taxes", "fx_rate"] as const).some(
         (field) => !toDecimal(number(field)).eq(0),
       ) ||
       (row.fx_rate_to_eur != null && !toDecimal(row.fx_rate_to_eur).eq(0))
     )
       return undefined;
-    const identity = assignImportIdentities([row], (source: KinesisSourceRow) =>
-      portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
-    )[0];
+    const [identity] = assignImportIdentities(
+      [row],
+      (source: KinesisSourceRow) =>
+        portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
+    );
     if (
+      !identity ||
       row.currency !== proof.asset ||
       row.dedup_fingerprint !== identity.fingerprint ||
       row.dedup_fingerprint_version !== identity.version ||
@@ -460,7 +532,9 @@ export function proveKinesisNetworkBindings(
     ),
   ];
   const kmsBatches = batches.filter(
-    (batch) => batch.custom_config?.format === "kinesis_transaction_history",
+    (batch) =>
+      batchConfigFields(batch.custom_config)?.format ===
+      "kinesis_transaction_history",
   );
   const ids = new Set(kmsBatches.map((batch) => Number(batch.id)));
   const primaryRows = rows.filter((row) => ids.has(Number(row.batch_id)));
@@ -491,17 +565,18 @@ export function proveKinesisNetworkBindings(
           current.dedup_fingerprint === row.dedup_fingerprint &&
           current.dedup_fingerprint_version === row.dedup_fingerprint_version,
       );
+      const [match] = matches;
       if (
-        matches.length &&
+        match &&
         (matches.length !== 1 ||
-          matches[0].type !== "asset_adjustment" ||
-          (matches[0] as ReconciliationAdjustmentEvent).adjustment_kind !==
+          match.type !== "asset_adjustment" ||
+          (match as ReconciliationAdjustmentEvent).adjustment_kind !==
             "asset_fee" ||
-          Number(matches[0].account_id) !== Number(row.account_id) ||
-          Number(matches[0].investment_id) !== Number(row.investment_id) ||
-          matches[0].date !== row.tx_date ||
-          !equal(matches[0].units, row.units) ||
-          matches[0].source_record_hash !== row.source_record_hash)
+          Number(match.account_id) !== Number(row.account_id) ||
+          Number(match.investment_id) !== Number(row.investment_id) ||
+          match.date !== row.tx_date ||
+          !equal(match.units, row.units) ||
+          match.source_record_hash !== row.source_record_hash)
       )
         issue(row, "network_receipt_changed");
     }
@@ -532,12 +607,12 @@ export function proveKinesisNetworkBindings(
         ]),
       ).values(),
     ];
-    if (unique.length !== 1) {
+    const [witness] = unique;
+    if (unique.length !== 1 || !witness) {
       issue(row, "network_witness_ambiguous");
       continue;
     }
-    const witness = unique[0],
-      verified = verifiedKinesisNetworkRow(witness);
+    const verified = verifiedKinesisNetworkRow(witness);
     const retainedWitness = context.sources.some(
       (item) => Number(item.id) === Number(witness.id),
     );
@@ -558,9 +633,11 @@ export function proveKinesisNetworkBindings(
       verified.kind !== "asset_transfer_witness" ||
       Number(witness.account_id) <= 0 ||
       Number(witness.account_id) === Number(row.account_id) ||
-      (row.custom_config?.transfer_origin_account_id != null &&
-        Number(row.custom_config.transfer_origin_account_id) !==
-          Number(witness.account_id)) ||
+      (batchConfigFields(row.custom_config)?.transfer_origin_account_id !=
+        null &&
+        Number(
+          batchConfigFields(row.custom_config)!.transfer_origin_account_id,
+        ) !== Number(witness.account_id)) ||
       !Number.isSafeInteger(Number(row.investment_id)) ||
       Number(row.investment_id) <= 0 ||
       (witness.investment_id == null &&
@@ -606,8 +683,9 @@ export function proveKinesisNetworkBindings(
       type: null,
       type_raw: "AssetTransfer",
       units: toDecimal(binding.principal).plus(binding.feeUnits).toFixed(8),
+      // A primary row of a Kinesis batch, so its config is an object.
       custom_config: {
-        ...row.custom_config,
+        ...batchConfigFields(row.custom_config),
         transfer_origin_account_id: binding.originAccountId,
       },
       asset_transfer_details: details,
@@ -623,14 +701,17 @@ export function proveKinesisNetworkBindings(
         current.dedup_fingerprint_version === row.dedup_fingerprint_version,
     );
     if (owners.length || canonical.length) {
-      const owner = owners[0],
-        current = canonical[0];
+      const [owner] = owners,
+        [current] = canonical;
       if (
         owners.length !== 1 ||
         canonical.length !== 1 ||
+        !owner ||
+        !current ||
         owner.status !== "committed" ||
         owner.source_record_hash !== row.source_record_hash ||
-        hash(owner.asset_transfer_details.networkBinding) !== hash(binding) ||
+        // The owners filter matched this binding, so the details are present.
+        hash(owner.asset_transfer_details!.networkBinding) !== hash(binding) ||
         current.type !== "asset_transfer" ||
         Number((current as ReconciliationTransferEvent).staging_row_id) !==
           Number(owner.id) ||
@@ -663,7 +744,7 @@ export function proveKinesisNetworkBindings(
 function verifiedNativeGiftRow(row: KinesisSourceRow) {
   try {
     if (row.route !== "portfolio" || row.type !== "gift") return undefined;
-    const config = row.custom_config ?? {},
+    const config = batchConfigFields(row.custom_config) ?? {},
       mapping = config.column_mapping ?? {};
     const records = parseCsvText(
       portfolioPrimaryRawData(requiredStagedValue(row.raw_data)),
@@ -672,14 +753,18 @@ function verifiedNativeGiftRow(row: KinesisSourceRow) {
         skip_empty_lines: true,
       },
     );
+    const [raw] = records;
+    // Every failure in this try, thrown or returned, rejects the row alike.
+    const cell = (column: string | undefined) =>
+      column === undefined ? undefined : raw?.[column];
     if (
       records.length !== 1 ||
-      records[0][mapping.type] !== "gift" ||
-      !records[0].Receipt_JSON
+      !raw ||
+      cell(mapping.type) !== "gift" ||
+      !raw.Receipt_JSON
     )
       return undefined;
-    const raw = records[0],
-      receipt: KinesisNetworkReceipt = JSON.parse(raw.Receipt_JSON),
+    const receipt: KinesisNetworkReceipt = JSON.parse(raw.Receipt_JSON),
       proof = verifyKinesisNetworkReceipt(receipt, "gift");
     const witness = receipt.recordedBasisWitness,
       literal = witness?.literal;
@@ -705,32 +790,38 @@ function verifiedNativeGiftRow(row: KinesisSourceRow) {
       currency: literal.currency,
       units: literal.units,
     });
-    const identity = assignImportIdentities([row], (source: KinesisSourceRow) =>
-      portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
-    )[0];
-    const number = (field: string) =>
-      mapping[field] && raw[mapping[field]] !== ""
-        ? parseCustomAmount(raw[mapping[field]], config.number_format, {
+    const [identity] = assignImportIdentities(
+      [row],
+      (source: KinesisSourceRow) =>
+        portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
+    );
+    const number = (field: keyof typeof mapping) => {
+      const column = mapping[field];
+      return column && raw[column] !== ""
+        ? parseCustomAmount(raw[column], config.number_format, {
             rowNumber: 1,
-            column: mapping[field],
+            column,
           })
         : 0;
+    };
+    const dateCell = cell(mapping.date);
+    if (!identity || dateCell === undefined || config.date_format === undefined)
+      return undefined;
     if (
       !basis ||
       !toDecimal(basis.amount).gt("0.01") ||
       basis.currency !== row.currency ||
       !equal(row.amount, basis.amount) ||
       !equal(toDecimal(literal.sharesMinor).div(100000000), proof.principal) ||
-      raw[mapping.currency] !== basis.currency ||
-      raw[mapping.symbol] !== proof.asset ||
-      raw[mapping.source_id] !== proof.hash ||
-      raw[mapping.source_account] !== proof.sourceAddress ||
-      parsedDateToYmd(
-        parseDateWithFormat(raw[mapping.date], config.date_format),
-      ) !== proof.date ||
+      cell(mapping.currency) !== basis.currency ||
+      cell(mapping.symbol) !== proof.asset ||
+      cell(mapping.source_id) !== proof.hash ||
+      cell(mapping.source_account) !== proof.sourceAddress ||
+      parsedDateToYmd(parseDateWithFormat(dateCell, config.date_format)) !==
+        proof.date ||
       !equal(number("units"), proof.principal) ||
       !equal(number("amount"), basis.amount) ||
-      ["fees", "taxes", "fx_rate"].some(
+      (["fees", "taxes", "fx_rate"] as const).some(
         (field) => !toDecimal(number(field)).eq(0),
       ) ||
       row.source_record_hash !==
@@ -750,7 +841,7 @@ function verifiedNativeGiftRow(row: KinesisSourceRow) {
       row.fx_rate_to_eur != null ||
       (row.price_per_unit != null && !toDecimal(row.price_per_unit).eq(0)) ||
       !toDecimal(number("price")).eq(0) ||
-      row.note !== String(raw[mapping.note] ?? "").trim()
+      row.note !== String(cell(mapping.note) ?? "").trim()
     )
       return undefined;
     return { row, receipt, proof, witness, basis };
@@ -762,6 +853,38 @@ function verifiedNativeGiftRow(row: KinesisSourceRow) {
 export type NativeGiftMember = NonNullable<
   ReturnType<typeof verifiedNativeGiftRow>
 >;
+
+/**
+ * One literal history operation that delivered this gift's principal to the
+ * gift account. A record the original optional-chain reads would fault on
+ * (a missing record, a non-text date, a non-numeric amount) throws instead,
+ * which rejects the whole group as before.
+ */
+function isOriginalIncomingGift(
+  item: unknown,
+  date: string | undefined,
+  account: string | undefined,
+  principal: string,
+): item is Record<string, unknown> {
+  if (item === null || item === undefined)
+    throw new Error("network_gift_receipt_changed");
+  if (!isJsonRecord(item) || !item.transaction_hash) return false;
+  const created = item.created_at;
+  if (typeof created !== "string") {
+    if (created == null || Array.isArray(created)) return false;
+    throw new Error("network_gift_receipt_changed");
+  }
+  if (created.slice(0, 10) !== date || (item.to ?? item.account) !== account)
+    return false;
+  const amount = item.amount ?? item.starting_balance;
+  if (
+    amount != null &&
+    typeof amount !== "string" &&
+    typeof amount !== "number"
+  )
+    throw new Error("network_gift_receipt_changed");
+  return equal(amount, principal);
+}
 
 /** Closed cardinality associates equivalent daily gifts; it does not infer an individual legacy identity. */
 export function proveKinesisNativeGiftGroups(
@@ -780,8 +903,10 @@ export function proveKinesisNativeGiftGroups(
   const selected = rows.filter(
     (row) =>
       row.type === "gift" &&
-      row.custom_config?.column_mapping &&
-      row.custom_config?.source_columns?.includes("Receipt_JSON"),
+      batchConfigFields(row.custom_config)?.column_mapping &&
+      batchConfigFields(row.custom_config)?.source_columns?.includes(
+        "Receipt_JSON",
+      ),
   );
   const issue = (row: KinesisSourceRow, reason: string) =>
     blockers.push({
@@ -818,20 +943,24 @@ export function proveKinesisNativeGiftGroups(
             b.receipt.transaction.created_at,
           ) || a.proof.hash.localeCompare(b.proof.hash),
       );
-      const first = members[0],
+      // A group holds at least the member that created it.
+      const first = members[0]!,
         batch = batches.find(
           (item) => Number(item.id) === Number(first.row.batch_id),
         );
       const originalIncoming = first.receipt.sourceHistoryPages
-        .flatMap((page) => page.body?._embedded?.records ?? [])
-        .filter(
-          (item) =>
-            item.transaction_hash &&
-            item.created_at?.slice(0, 10) === first.proof.date &&
-            (item.to ?? item.account) ===
-              // verifyKinesisNetworkReceipt required this gift account.
-              first.receipt.destinationAccount?.account_id &&
-            equal(item.amount ?? item.starting_balance, first.proof.principal),
+        .flatMap(
+          (page): unknown =>
+            member(member(page.body, "_embedded"), "records") ?? [],
+        )
+        .filter((item) =>
+          isOriginalIncomingGift(
+            item,
+            first.proof.date,
+            // verifyKinesisNetworkReceipt required this gift account.
+            first.receipt.destinationAccount?.account_id,
+            first.proof.principal,
+          ),
         );
       const memberIds = members.map((member) => member.proof.hash);
       if (
@@ -847,13 +976,13 @@ export function proveKinesisNativeGiftGroups(
         new Set(originalIncoming.map((item) => item.transaction_hash)).size !==
           2 ||
         originalIncoming.some(
-          (item) => !memberIds.includes(item.transaction_hash),
+          (item) => !memberIds.some((id) => id === item.transaction_hash),
         ) ||
         !batch ||
         Number(batch.rows_total) !==
           rows.filter((row) => Number(row.batch_id) === Number(batch.id))
             .length ||
-        batch.custom_config?.included_symbols?.length ||
+        batchConfigFields(batch.custom_config)?.included_symbols?.length ||
         members.some(
           (member) =>
             Number(member.row.batch_id) !== Number(batch.id) ||
@@ -956,14 +1085,14 @@ export function proveKinesisNativeGiftGroups(
           receipt.proof.associatedSourceId !== first.proof.hash ||
           portfolioPrimaryRawData(owner.raw_data) !==
             portfolioPrimaryRawData(member.row.raw_data) ||
-          hash(owner.custom_config?.column_mapping) !==
-            hash(member.row.custom_config?.column_mapping) ||
-          hash(owner.custom_config?.source_columns) !==
-            hash(member.row.custom_config?.source_columns) ||
-          hash(owner.custom_config?.number_format) !==
-            hash(member.row.custom_config?.number_format) ||
-          hash(owner.custom_config?.date_format) !==
-            hash(member.row.custom_config?.date_format) ||
+          hash(batchConfigFields(owner.custom_config)?.column_mapping) !==
+            hash(batchConfigFields(member.row.custom_config)?.column_mapping) ||
+          hash(batchConfigFields(owner.custom_config)?.source_columns) !==
+            hash(batchConfigFields(member.row.custom_config)?.source_columns) ||
+          hash(batchConfigFields(owner.custom_config)?.number_format) !==
+            hash(batchConfigFields(member.row.custom_config)?.number_format) ||
+          hash(batchConfigFields(owner.custom_config)?.date_format) !==
+            hash(batchConfigFields(member.row.custom_config)?.date_format) ||
           (manifest && hash(manifest) !== hash(receipt))
         )
           throw new Error("network_gift_receipt_changed");
@@ -983,16 +1112,20 @@ export function proveKinesisNativeGiftGroups(
               Number(item.batch_id) === Number(owner.batch_id) &&
               Number(item.staging_row_id) === Number(owner.id),
           );
+          const [adoption] = receipts;
           if (
             receipts.length !== 1 ||
-            receipts[0].policy !== "prefer_source" ||
+            !adoption ||
+            adoption.policy !== "prefer_source" ||
             owner.status !== "duplicate" ||
-            hash(receipts[0].after_data) !== hash(current) ||
-            hash(receipts[0].before_data) !== hash(preserved)
+            hash(adoption.after_data) !== hash(current) ||
+            hash(adoption.before_data) !== hash(preserved)
           )
             throw new Error("network_gift_receipt_changed");
         }
       }
+      // Unowned groups have exactly one manual; owned ones set it above.
+      if (!preserved) throw new Error("network_gift_receipt_changed");
       const proof: NativeGiftGroupProof = {
         kind: "closed_native_gift_cardinality",
         memberSourceIds: memberIds,

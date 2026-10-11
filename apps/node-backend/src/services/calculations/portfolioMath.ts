@@ -125,6 +125,8 @@ export function computeMetrics(snapshots: MetricsSnapshot[]) {
 
   const first = snapshots[0];
   const last = snapshots[snapshots.length - 1];
+  // Non-empty (checked above), so both ends exist; the guard only narrows.
+  if (!first || !last) return null;
 
   const days = Math.max(
     1,
@@ -212,15 +214,20 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
     // Only compute a monthly return between *consecutive* calendar months.
     // monthKeys skips months with no snapshot, so a Jan→Mar pair would
     // otherwise be charted as March's one-month return when it spans two.
-    const [py, pm] = monthKeys[i - 1].split("-").map(Number);
-    const [cy, cm] = monthKeys[i].split("-").map(Number);
+    const prevKey = monthKeys[i - 1];
+    const currKey = monthKeys[i];
+    // 1 <= i < length keeps both in range; the guard only narrows.
+    if (prevKey === undefined || currKey === undefined) continue;
+    // A missing part is NaN, as it was when read past the end of the split.
+    const [py = NaN, pm = NaN] = prevKey.split("-").map(Number);
+    const [cy = NaN, cm = NaN] = currKey.split("-").map(Number);
     if (cy * 12 + cm !== py * 12 + pm + 1) continue;
 
     // monthKeys are byMonth's own keys.
-    const prev = byMonth.get(monthKeys[i - 1])!;
-    const curr = byMonth.get(monthKeys[i])!;
-    const year = parseInt(monthKeys[i].slice(0, 4));
-    const monthIdx = parseInt(monthKeys[i].slice(5, 7)) - 1;
+    const prev = byMonth.get(prevKey)!;
+    const curr = byMonth.get(currKey)!;
+    const year = parseInt(currKey.slice(0, 4));
+    const monthIdx = parseInt(currKey.slice(5, 7)) - 1;
 
     const monthlyReturn = contributionAdjustedMonthlyReturn(
       toNumber(toDecimal(curr.value)),
@@ -231,7 +238,8 @@ export function computeHeatmap(snapshots: HeatmapSnapshot[]): {
 
     const rounded =
       monthlyReturn !== null ? Math.round(monthlyReturn * 100) / 100 : null;
-    data[year][monthIdx] = rounded;
+    // Every year in monthKeys was seeded above; `??=` only narrows the type.
+    (data[year] ??= Array(12).fill(null))[monthIdx] = rounded;
     if (rounded !== null) {
       monthlyReturns.push(Math.abs(rounded));
     }

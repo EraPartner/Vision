@@ -6,13 +6,22 @@ import { http, HttpResponse } from "msw";
 import { Route, Routes } from "react-router";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, ACCOUNT_STUB } from "@/test/msw/handlers";
+import {
+    ok,
+    ACCOUNT_STUB,
+    PLANNED_TRANSACTION_STUB,
+    PORTFOLIO_SUMMARY_STUB,
+} from "@/test/msw/handlers";
 import { toYmd } from "@/lib/dateUtils";
 import AccountDetailPage from "@/pages/AccountDetailPage";
+import {
+    transactionRow,
+    accountListItem,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
-const CHECKING = {
+const CHECKING = accountListItem({
     ...ACCOUNT_STUB,
     id: 1,
     name: "KBC Checking",
@@ -23,9 +32,9 @@ const CHECKING = {
     anchor_date: "2025-01-31",
     post_anchor_count: 2,
     has_transactions: true,
-};
+});
 
-const BROKER = {
+const BROKER = accountListItem({
     ...ACCOUNT_STUB,
     id: 2,
     name: "Degiro",
@@ -33,9 +42,9 @@ const BROKER = {
     type: "brokerage",
     computed_balance: 0,
     has_transactions: false,
-};
+});
 
-const WALLET = {
+const WALLET = accountListItem({
     ...ACCOUNT_STUB,
     id: 7,
     name: "Cold storage",
@@ -45,7 +54,7 @@ const WALLET = {
     has_transactions: true,
     multi_currency_cash: true,
     drift: 25,
-};
+});
 
 const DRIFTING = {
     ...CHECKING,
@@ -63,11 +72,11 @@ const DRIFTING = {
 // Newest-first rows, the way the ledger queries them; running_balance is the
 // backend's per-account window (include_balance=true).
 const LEDGER_ROWS = [
-    {
+    transactionRow({
         id: 11,
         transaction_date: "2025-03-10",
-        date: "2025-03-10",
         bank_account: "KBC Checking",
+        account_id: 1,
         recipient_id: 5,
         recipient_name: "Albert Heijn",
         memo: "Groceries",
@@ -81,14 +90,13 @@ const LEDGER_ROWS = [
         tags: [],
         is_active: true,
         created_at: "2025-03-10T10:00:00.000Z",
-        updated_at: null,
         links: [],
-    },
-    {
+    }),
+    transactionRow({
         id: 12,
         transaction_date: "2025-02-01",
-        date: "2025-02-01",
         bank_account: "KBC Checking",
+        account_id: 1,
         recipient_id: 6,
         recipient_name: "Employer BV",
         memo: "Salary",
@@ -102,9 +110,8 @@ const LEDGER_ROWS = [
         tags: [],
         is_active: true,
         created_at: "2025-02-01T10:00:00.000Z",
-        updated_at: null,
         links: [],
-    },
+    }),
 ];
 
 function mockApi({
@@ -144,9 +151,8 @@ function mockApi({
         }),
         http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
             ok({
-                currency: "EUR",
+                ...PORTFOLIO_SUMMARY_STUB,
                 computed_at: "2026-09-08T00:00:00Z",
-                totals: {},
                 summaries: [],
                 byAccount: [],
             }),
@@ -579,9 +585,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         server.use(
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [
                         {
@@ -626,9 +631,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             http.get(`${API_BASE}/api/info/portfolio-summary`, async () => {
                 await pending;
                 return ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [],
                 });
@@ -684,9 +688,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
         server.use(
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
                 ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [
                         {
@@ -728,9 +731,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             http.get(`${API_BASE}/api/info/portfolio-summary`, () => {
                 summaryRequests += 1;
                 return ok({
-                    currency: "EUR",
+                    ...PORTFOLIO_SUMMARY_STUB,
                     computed_at: "2026-09-08T00:00:00Z",
-                    totals: {},
                     summaries: [],
                     byAccount: [],
                 });
@@ -848,6 +850,8 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
 
     it("shows account plans separately without changing ledger balances", async () => {
         const planned = {
+            ...PLANNED_TRANSACTION_STUB,
+            recipient_id: null,
             id: 81,
             planned_date: "2025-04-01",
             bank_account: "KBC Checking",

@@ -5,7 +5,12 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err, INVESTMENT_STUB } from "@/test/msw/handlers";
+import {
+    ok,
+    err,
+    INVESTMENT_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import { AddInvestmentFromMarketDialog } from "@/features/portfolio/AddInvestmentFromMarketDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
 
@@ -39,6 +44,7 @@ const EXISTING_INVESTMENT = {
 } as unknown as InvestmentSummary;
 
 const PORTFOLIO_TXN_STUB = {
+    ...PORTFOLIO_TRANSACTION_STUB,
     id: 1,
     type: "buy",
     date: "2025-01-01",

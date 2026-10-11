@@ -78,8 +78,11 @@ const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
  */
 const appTodaySql = () => `('${todayAppDateString()}'::date)`;
 
-const cat: Record<string, number> = {};
-const rec: Record<string, number> = {};
+const cat = {} as Record<"Food" | "Bills" | "Zzz", number>; // Zzz: seedAliasWithOwnDefault only
+const rec = {} as Record<
+  "electrabel" | "electrabelAlias" | "electrabelOwnAlias" | "aldi" | "misc",
+  number
+>;
 
 /**
  * Categories, plus the alias topology under test:
@@ -98,7 +101,7 @@ async function seedBase() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
   const addRecipient = async (
     name: string,
@@ -320,7 +323,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
-      for (const bag of [cat, rec])
+      for (const bag of [cat, rec] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
       clearMemoryCache();
       __clearRecurringCacheForTests();
@@ -424,10 +427,10 @@ describe.skipIf(!hasTestDatabase())(
         expect(mv.months).toEqual(live.months);
         expect(mv.summary).toEqual(live.summary);
         // Sanity: the alias row's −120 and −33 really are in there.
-        const current = mv.months[mv.months.length - 1];
+        const current = mv.months[mv.months.length - 1]!;
         expect(current.total_spending).toBe(-160);
         expect(current.total_income).toBe(2000);
-        expect(mv.months[mv.months.length - 2].total_spending).toBe(-33);
+        expect(mv.months[mv.months.length - 2]!.total_spending).toBe(-33);
       });
 
       // The live path's category exclusion resolves 3 levels too: excluding the
@@ -437,12 +440,12 @@ describe.skipIf(!hasTestDatabase())(
 
         const withBills = await getMonthlyFinancialSummary();
         expect(
-          withBills.months[withBills.months.length - 1].total_spending,
+          withBills.months[withBills.months.length - 1]!.total_spending,
         ).toBe(-160);
 
         const withoutBills = await getMonthlyFinancialSummary([cat.Bills]);
         expect(
-          withoutBills.months[withoutBills.months.length - 1].total_spending,
+          withoutBills.months[withoutBills.months.length - 1]!.total_spending,
         ).toBe(-40);
       });
     });
@@ -648,13 +651,15 @@ describe.skipIf(!hasTestDatabase())(
         const csvRes = collectingRes();
         await streamCsvExport(csvRes, buildIdListWhere([aliasTxn]));
         // [0] is the header line, [1] the single data row.
-        expect(csvRes.chunks[0].split(",")[CSV_CATEGORY_COL]).toBe("Category");
+        expect(csvRes.chunks[0]!.split(",")[CSV_CATEGORY_COL]).toBe("Category");
         // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
-        expect(csvRes.chunks[1].trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
+        expect(csvRes.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(
+          name,
+        );
 
         const jsonRes = collectingRes();
         await streamNdjsonExport(jsonRes, buildIdListWhere([aliasTxn]));
-        expect(JSON.parse(jsonRes.chunks[0]).category).toBe(name);
+        expect(JSON.parse(jsonRes.chunks[0]!).category).toBe(name);
       });
 
       it("an own category_id still wins over both recipient defaults", async () => {
@@ -671,7 +676,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const res = collectingRes();
         await streamCsvExport(res, buildIdListWhere([ownTxn]));
-        expect(res.chunks[1].trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
+        expect(res.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
       });
 
       it("still reaches the PRIMARY default when the alias has none of its own", async () => {
@@ -687,7 +692,7 @@ describe.skipIf(!hasTestDatabase())(
 
         const res = collectingRes();
         await streamCsvExport(res, buildIdListWhere([aliasTxn]));
-        expect(res.chunks[1].trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
+        expect(res.chunks[1]!.trim().split(",")[CSV_CATEGORY_COL]).toBe(name);
       });
     });
 
@@ -716,9 +721,9 @@ describe.skipIf(!hasTestDatabase())(
           rec.misc,
         );
         expect(rows).toHaveLength(1);
-        expect(rows[0].amount).toBe(5);
+        expect(rows[0]!.amount).toBe(5);
         // Pre-fix: 'Bills:Utilities' — the PRIMARY's category, not the alias's.
-        expect(rows[0].category_name).toBe(name);
+        expect(rows[0]!.category_name).toBe(name);
       });
 
       it("still reaches the PRIMARY default when the alias has none of its own", async () => {
@@ -738,7 +743,7 @@ describe.skipIf(!hasTestDatabase())(
         const rows = await splitRepository.getOwedExportRowsByRecipient(
           rec.misc,
         );
-        expect(rows[0].category_name).toBe(name);
+        expect(rows[0]!.category_name).toBe(name);
       });
     });
 

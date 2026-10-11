@@ -7,6 +7,12 @@
 
 import { getClient, query as dbQuery } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
+import { checkRows } from "../database/rowContracts.ts";
+import {
+  exportTransactionRowSchema,
+  intCountRowSchema,
+} from "../database/rows/ledger.ts";
+import type { ExportTransactionRow } from "../database/rows/ledger.ts";
 import { NotFoundError } from "../middleware/errorHandler.ts";
 import { toDecimal } from "../lib/money.ts";
 import { toYmd } from "./calculations/portfolioMath.ts";
@@ -23,8 +29,8 @@ import type Decimal from "decimal.js";
 
 /**
  * Query runner for the export pipeline; the default is the pooled `query`,
- * the bulk export passes its snapshot client. Rows are cast to
- * `ExportTransactionRow` at the read site.
+ * the bulk export passes its snapshot client. Rows are checked against
+ * `exportTransactionRowSchema` at the read site.
  */
 export type ExportQuery = (
   sql: string,
@@ -52,27 +58,9 @@ interface ExportWhereArgs {
 /**
  * A row as selected by `buildExportChunkSql` — a projection of
  * `EnrichedTransactionRow`, not the full row (no `is_active`, `recipient_id`,
- * etc. — only the columns the export needs).
+ * etc. — only the columns the export needs). Derived from its row schema.
  */
-export interface ExportTransactionRow {
-  id: number;
-  /** DATE — local-midnight `Date`; read via `toYmd`, never `String()`/`toISOString()`. */
-  date: Date;
-  bank_account: string | null;
-  account_id?: number | null;
-  recipient_name: string | null;
-  memo: string | null;
-  /** NUMERIC(18,4) — pg emits NUMERIC as a string. */
-  amount: string;
-  currency: string | null;
-  /** NUMERIC(18,4) since migration 0088 — pg emits NUMERIC as a string; null on manual rows. */
-  balance: string | null;
-  /** '' when the transaction has no resolved category. */
-  category_name: string;
-  comment: string | null;
-  /** tag slugs, `{}` (empty array) when none. */
-  tags: string[];
-}
+export type { ExportTransactionRow };
 
 export const EXPORT_CHUNK_SIZE = 1000;
 export const EXPORT_MAX_LIST_SIZE = 50;
@@ -119,7 +107,7 @@ function writeWithBackpressure(
   // there's no drain event to await, so just resolve.
   const once = res.once;
   if (res.write(chunk) || typeof once !== "function") return Promise.resolve();
-  return new Promise((resolve) => once.call(res, "drain", resolve));
+  return new Promise((resolve) => once.call(res, "drain", () => resolve()));
 }
 
 function buildExportChunkSql(
@@ -267,13 +255,13 @@ async function streamExport(
               ),
               [...params, EXPORT_CHUNK_SIZE, cursorDate, cursorId],
             );
-      const rows = chunk.rows as ExportTransactionRow[];
-      if (rows.length === 0) break;
+      const rows = checkRows(exportTransactionRowSchema, chunk.rows);
+      const last = rows.at(-1);
+      if (!last) break;
       for (const row of rows) {
         await writeWithBackpressure(res, formatRow(row, rowCount));
         rowCount++;
       }
-      const last = rows[rows.length - 1];
       // toYmd recovers the local calendar day from pg's local-midnight Date so
       // the ::date cursor never shifts a day in a UTC+ zone.
       cursorDate = toYmd(last.date);
@@ -426,7 +414,7 @@ export async function streamBulkTransactionExport(
       "SELECT COUNT(*)::int AS n FROM transactions WHERE id = ANY($1::int[])",
       [txIds],
     );
-    const countRow = countResult.rows[0] as { n: number } | undefined;
+    const [countRow] = checkRows(intCountRowSchema, countResult.rows);
     res.setHeader("X-Exported-Count", String(countRow?.n ?? 0));
     const where = buildIdListWhere(txIds);
 

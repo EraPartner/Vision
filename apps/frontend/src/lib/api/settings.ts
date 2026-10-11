@@ -1,3 +1,7 @@
+import {
+    SettingRecordSchema,
+    SettingsWithBaselinesSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 
 interface SettingBaseline {
@@ -19,7 +23,9 @@ export async function getSettings(): Promise<Record<string, unknown>> {
     const { settings: values, expected } = await apiRequest<{
         settings: Record<string, unknown>;
         expected: Record<string, SettingBaseline>;
-    }>("/api/settings?withBaselines=true");
+    }>("/api/settings?withBaselines=true", {
+        schema: SettingsWithBaselinesSchema,
+    });
     if (!allSettingsRead) {
         for (const [key, baseline] of Object.entries(expected)) {
             if (!baselines.has(key)) baselines.set(key, baseline);
@@ -32,6 +38,7 @@ export async function getSettings(): Promise<Record<string, unknown>> {
 export async function getSetting(key: string): Promise<SettingResult> {
     const result = await apiRequest<SettingResult>(
         `/api/settings/${encodeURIComponent(key)}`,
+        { schema: SettingRecordSchema },
     );
     if (!baselines.has(key)) baselines.set(key, result.expected);
     return result;
@@ -55,6 +62,7 @@ export function saveSetting(
             {
                 method: "PUT",
                 body: JSON.stringify({ value, expected }),
+                schema: SettingRecordSchema,
             },
             0,
         );

@@ -1,4 +1,6 @@
 import { query } from "../database/connection.ts";
+import { queryOne } from "../database/rowContracts.ts";
+import { forecastMcCacheRowSchema } from "../database/rows/info.ts";
 import type { McCacheRow } from "./cashflowForecastMcRepository.ts";
 
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -18,7 +20,8 @@ export async function get({
   daysForward,
   filterHash,
 }: McRollingKey): Promise<McCacheRow | null> {
-  const res = await query<McCacheRow>(
+  const row = await queryOne(
+    forecastMcCacheRowSchema,
     `SELECT payload, computed_at
        FROM cashflow_forecast_mc_rolling
       WHERE user_id = $1 AND today_iso = $2::date AND days_back = $3
@@ -26,8 +29,7 @@ export async function get({
       LIMIT 1`,
     [userId, todayIso, daysBack, daysForward, filterHash],
   );
-  if (res.rows.length === 0) return null;
-  return res.rows[0];
+  return row ?? null;
 }
 
 /**

@@ -80,16 +80,32 @@ function makeDispatch(
   return function dispatch(sql: string, params?: readonly unknown[]) {
     if (/SET status = 'matching'/.test(sql)) return { rows: [] };
     if (/route = 'cash'/.test(sql)) return { rows: [] };
-    if (/status = 'validated'/.test(sql)) return { rows: stagingRows };
+    // Staging ids are BIGINT, which pg returns as text.
+    if (/status = 'validated'/.test(sql))
+      return {
+        rows: stagingRows.map((row) => ({ ...row, id: String(row.id) })),
+      };
     if (/price_provider = 'yahoo'/.test(sql)) {
       capture.aliasLookups = (capture.aliasLookups ?? 0) + 1;
       return {
-        rows: investments.filter(
-          (inv) =>
-            inv.is_active &&
-            ((inv.price_provider === "yahoo" && inv.asset_class === "crypto") ||
-              inv.price_provider === "kinesis"),
-        ),
+        rows: investments
+          .filter(
+            (inv) =>
+              inv.is_active &&
+              ((inv.price_provider === "yahoo" &&
+                inv.asset_class === "crypto") ||
+                inv.price_provider === "kinesis"),
+          )
+          // The selected columns as pg returns them: asset_class is NOT NULL
+          // (only Kinesis fixtures omit it) and price_provider_id may be NULL.
+          .map((inv) => ({
+            id: inv.id,
+            symbol: inv.symbol,
+            name: inv.name,
+            asset_class: inv.asset_class ?? "metals",
+            price_provider: inv.price_provider,
+            price_provider_id: inv.price_provider_id ?? null,
+          })),
       };
     }
     if (/LOWER\(symbol\)/.test(sql)) {
@@ -152,7 +168,7 @@ describe("matchBatch (investment matching)", () => {
 
     // unnest update params: [ids, investmentIds, matchSources]
     const [ids, investmentIds, matchSources] = captured.update;
-    expect(ids).toEqual([11, 12, 13]);
+    expect(ids).toEqual(["11", "12", "13"]);
     expect(investmentIds).toEqual([1, 2, null]);
     expect(matchSources).toEqual(["symbol", "name_exact", null]);
   });
@@ -534,7 +550,7 @@ describe("matchBatch (investment matching)", () => {
     });
     expect(result.unresolved).toBe(3);
     const [ids, investmentIds, matchSources] = captured.update;
-    expect(ids).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(ids).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
     expect(investmentIds).toEqual([100, 100, 100, 200, 200, null, null, null]);
     expect(matchSources).toEqual([
       "symbol",

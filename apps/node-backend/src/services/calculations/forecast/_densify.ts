@@ -25,6 +25,8 @@ export function densifyDailyHistory(
   const sortedDates = [...byDate.keys()].sort();
   const startIso = sortedDates[0];
   const lastObserved = sortedDates[sortedDates.length - 1];
+  // history is non-empty, so both exist; the guard only narrows the type.
+  if (startIso === undefined || lastObserved === undefined) return history;
   const endStr = endIso && endIso >= startIso ? endIso : lastObserved;
   const out: Array<{ date: string; net: number }> = [];
   const startDay = ymdToEpochDay(startIso);

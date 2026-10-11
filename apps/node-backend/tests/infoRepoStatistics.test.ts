@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
-import { mockCurrencyConversion } from "./helpers/mockCurrencyConversion.ts";
+import {
+  mockCurrencyConversion,
+  mockedConvertRowsToEur,
+} from "./helpers/mockCurrencyConversion.ts";
 
 vi.mock("../src/database/connection.ts", () => mockConnection());
 
@@ -39,7 +42,7 @@ const queryPrepared = rawQueryPrepared as unknown as Mock<
     params?: readonly unknown[],
   ) => Promise<Partial<PgQueryResult>>
 >;
-const convertRowsToEur = vi.mocked(rawConvertRowsToEur);
+const convertRowsToEur = mockedConvertRowsToEur(rawConvertRowsToEur);
 const mvAvailable = vi.mocked(rawMvAvailable);
 
 beforeEach(() => vi.clearAllMocks());
@@ -48,14 +51,22 @@ describe("statisticsRepository.getCategoryBreakdown", () => {
   it("uses MV when available", async () => {
     mvAvailable.mockResolvedValueOnce(true);
     query.mockResolvedValueOnce({
-      rows: [{ category_id: 1, name: "Food", count: 5, total: "100" }],
+      rows: [
+        {
+          category_id: 1,
+          name: "Food",
+          count: "5",
+          total: "100",
+          currency: "EUR",
+        },
+      ],
     });
     convertRowsToEur.mockResolvedValueOnce([
       { category_id: 1, name: "Food", count: 5, amount_eur: 100 },
     ]);
     const r = await statisticsRepository.getCategoryBreakdown();
     expect(r).toHaveLength(1);
-    expect(query.mock.calls[0][0]).toContain("mv_category_totals");
+    expect(query.mock.calls[0]![0]).toContain("mv_category_totals");
   });
 
   it("groups categories from live query and sorts by count desc", async () => {
@@ -64,8 +75,8 @@ describe("statisticsRepository.getCategoryBreakdown", () => {
     // pre-summed with a COUNT(*) AS cnt column.
     query.mockResolvedValueOnce({
       rows: [
-        { category_id: 1, name: "A", amount: "-30", cnt: "2" },
-        { category_id: 2, name: "B", amount: "-50", cnt: "1" },
+        { category_id: 1, name: "A", amount: "-30", cnt: "2", currency: "EUR" },
+        { category_id: 2, name: "B", amount: "-50", cnt: "1", currency: "EUR" },
       ],
     });
     convertRowsToEur.mockResolvedValueOnce([
@@ -95,14 +106,14 @@ describe("statisticsRepository.getCategoryBreakdown", () => {
     ]);
     const r = await statisticsRepository.getCategoryBreakdown("EUR", 10);
     expect(r).toEqual([{ id: 10, name: "Food", count: 3, total: -60 }]);
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "JOIN category_ancestors ancestry",
     );
-    expect(query.mock.calls[0][0]).toContain("ancestry.ancestor_id = $1");
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain("ancestry.ancestor_id = $1");
+    expect(query.mock.calls[0]![0]).toContain(
       "COALESCE(t.category_id, r.default_category_id, pr.default_category_id)",
     );
-    expect(query.mock.calls[0][1]).toEqual([10]);
+    expect(query.mock.calls[0]![1]).toEqual([10]);
     expect(mvAvailable).not.toHaveBeenCalled();
   });
 });
@@ -161,7 +172,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
           category_name: "Home:Kitchen:Apples",
           category_path_ids: [1, 2, 3],
           category_path_segments: ["Home", "Kitchen:Tools", "Apples"],
-          date: "2025-04-01",
+          date: new Date(2025, 3, 1),
           currency: "EUR",
           income: null,
           expense: "-10",
@@ -172,17 +183,18 @@ describe("statisticsRepository.getCategoryPivot", () => {
     convertRowsToEur.mockImplementationOnce(async (rows) =>
       rows.map((row) => ({
         ...row,
-        amount_eur: row.amount,
+        // Already numeric: the repository maps `amount` through toNumber.
+        amount_eur: Number(row.amount),
       })),
     );
     const pivot = await statisticsRepository.getCategoryPivot();
-    expect(pivot.categoryPivot["2025-04"][0]).toMatchObject({
+    expect(pivot.categoryPivot["2025-04"]![0]).toMatchObject({
       categoryPathIds: [1, 2, 3],
       categoryPathSegments: ["Home", "Kitchen:Tools", "Apples"],
       total: -10,
       transactionCount: 1,
     });
-    expect(query.mock.calls[0][0]).toContain("LEFT JOIN category_paths path");
+    expect(query.mock.calls[0]![0]).toContain("LEFT JOIN category_paths path");
   });
 
   it("groups by period and category, sorts ascending by total", async () => {
@@ -288,7 +300,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
     const r = await statisticsRepository.getCategoryPivot();
     // Net +200, but income (500) and expense (-300) are reported separately so
     // consumers don't have to misclassify by the sign of the net.
-    expect(r.categoryPivot["2025-04"][0]).toEqual({
+    expect(r.categoryPivot["2025-04"]![0]).toEqual({
       categoryId: 1,
       categoryName: "Food",
       categoryPathIds: [],
@@ -308,7 +320,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
       targetCurrency: "EUR",
       excludedRecipientIds: [9],
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain(
       "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
     );
@@ -335,7 +347,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
       endDate: "2026-09-07",
     });
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("t.date >= $2");
     expect(sql).toContain("t.date <= $3");
     expect(params).toEqual([7, "2024-10-01", "2026-09-07"]);
@@ -365,7 +377,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
       targetCurrency: "EUR",
       excludedRecipientIds: [7],
     });
-    expect(query.mock.calls[0][1]).toEqual([2147483647, 5, 7]);
+    expect(query.mock.calls[0]![1]).toEqual([2147483647, 5, 7]);
   });
 
   it("treats missing category_id as Uncategorised", async () => {
@@ -389,7 +401,7 @@ describe("statisticsRepository.getCategoryPivot", () => {
       },
     ]);
     const r = await statisticsRepository.getCategoryPivot();
-    expect(r.categoryPivot["2025-04"][0]).toMatchObject({
+    expect(r.categoryPivot["2025-04"]![0]).toMatchObject({
       categoryId: null,
       categoryName: "Uncategorised",
     });

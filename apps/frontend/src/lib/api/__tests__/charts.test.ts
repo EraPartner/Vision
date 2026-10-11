@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
+import { SAVED_CHART_STUB } from "@/test/msw/handlers";
 
 import { getSavedCharts, createSavedChart, updateSavedChart, deleteSavedChart } from "@/lib/api/charts";
 
@@ -10,7 +11,7 @@ afterEach(() => server.resetHandlers());
 
 describe("saved charts API client", () => {
   it("getSavedCharts fetches the list", async () => {
-    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [{ id: 1, name: "C" }], total: 1 })));
+    server.use(http.get(`${API_BASE}/api/saved-charts`, () => ok({ items: [{ ...SAVED_CHART_STUB, id: 1, name: "C" }], total: 1 })));
     expect((await getSavedCharts())[0].id).toBe(1);
   });
 
@@ -19,7 +20,7 @@ describe("saved charts API client", () => {
     server.use(
       http.post(`${API_BASE}/api/saved-charts`, async ({ request }) => {
         body = await request.json();
-        return ok({ id: 2, name: "New" });
+        return ok({ ...SAVED_CHART_STUB, id: 2, name: "New" }, { status: 201 });
       }),
     );
     await createSavedChart({ name: "New" } as never);
@@ -27,7 +28,7 @@ describe("saved charts API client", () => {
   });
 
   it("updateSavedChart PATCHes by id", async () => {
-    server.use(http.patch(`${API_BASE}/api/saved-charts/2`, () => ok({ id: 2, name: "E" })));
+    server.use(http.patch(`${API_BASE}/api/saved-charts/2`, () => ok({ ...SAVED_CHART_STUB, id: 2, name: "E" })));
     expect((await updateSavedChart(2, { name: "E" })).name).toBe("E");
   });
 

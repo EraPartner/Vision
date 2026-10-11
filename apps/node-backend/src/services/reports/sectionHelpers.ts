@@ -361,8 +361,7 @@ export function svgHorizontalBars(
   const maxVal = Math.max(...top.map(it => Math.abs(it.value)), 1);
 
   let rows = '';
-  for (let i = 0; i < top.length; i++) {
-    const it = top[i];
+  for (const [i, it] of top.entries()) {
     const y = 4 + i * ROW_H;
     const barH = 14;
     const barW = Math.max(2, (Math.abs(it.value) / maxVal) * BAR_AREA);
@@ -421,18 +420,17 @@ export function svgGenericGroupedBarChart(
   let rects = `<line x1="${PAD_L}" y1="${baseline}" x2="${W - PAD_R}" y2="${baseline}" stroke="hsl(var(--border))" stroke-width="1"/>`;
   let labels = '';
 
-  for (let i = 0; i < groups.length; i++) {
-    const g = groups[i];
+  for (const [i, g] of groups.entries()) {
     const cx = PAD_L + i * groupW + groupW / 2;
     const groupTotalW = numSeries * barW + (numSeries - 1) * barGap;
     let startX = cx - groupTotalW / 2;
 
-    for (let s = 0; s < seriesDefs.length; s++) {
-      const val = Math.abs(Number(g[seriesDefs[s].key]) || 0);
+    for (const def of seriesDefs) {
+      const val = Math.abs(Number(g[def.key]) || 0);
       const bH = Math.max(1, (val / maxVal) * chartH);
-      const op = seriesDefs[s].opacity;
+      const op = def.opacity;
       const opacityAttr = op === null ? '' : ` opacity="${op ?? 0.85}"`;
-      rects += `<rect x="${startX.toFixed(1)}" y="${(baseline - bH).toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${seriesDefs[s].color}" rx="2"${opacityAttr}/>`;
+      rects += `<rect x="${startX.toFixed(1)}" y="${(baseline - bH).toFixed(1)}" width="${barW.toFixed(1)}" height="${bH.toFixed(1)}" fill="${def.color}" rx="2"${opacityAttr}/>`;
       startX += barW + barGap;
     }
 
@@ -486,8 +484,8 @@ export function svgLineChart(
   for (const s of series) {
     const pts = s.values.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`);
     paths += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    for (let i = 0; i < s.values.length; i++) {
-      dots += `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(s.values[i]).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
+    for (const [i, v] of s.values.entries()) {
+      dots += `<circle cx="${xOf(i).toFixed(1)}" cy="${yOf(v).toFixed(1)}" r="2.5" fill="${s.color}"/>`;
     }
   }
 

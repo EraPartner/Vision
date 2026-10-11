@@ -35,9 +35,9 @@ describe('densifyDailyHistory', () => {
     // On the sparse history the method divided by 1 occurrence → −300 (the bias).
     const dense = densifyDailyHistory([{ date: '2026-01-15', net: -300 }], '2026-02-28');
     const out = simpleAverage.forecast({ history: dense, forecastDates: ['2026-03-15'] });
-    expect(out[0].value).toBeCloseTo(-150, 5);
+    expect(out[0]!.value).toBeCloseTo(-150, 5);
 
     const sparse = simpleAverage.forecast({ history: [{ date: '2026-01-15', net: -300 }], forecastDates: ['2026-03-15'] });
-    expect(sparse[0].value).toBeCloseTo(-300, 5); // unchanged method, sparse input
+    expect(sparse[0]!.value).toBeCloseTo(-300, 5); // unchanged method, sparse input
   });
 });

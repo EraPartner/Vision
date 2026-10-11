@@ -208,7 +208,7 @@ describe.skipIf(!hasTestDatabase())(
           ["EXCHANGE", "100.00", "USD"],
           ["HARDWARE WALLET", "400.00", "EUR"],
           ["HARDWARE WALLET", "-500.00", "USD"],
-        ]) {
+        ] as const) {
           await insertTxn({ dateExpr: yesterday, bank, amount, currency });
         }
 
@@ -283,8 +283,8 @@ describe.skipIf(!hasTestDatabase())(
           transaction_count: 3,
           post_anchor_count: 3, // no anchor → "sum of 3 entries"
         });
-        expect(r.accounts[0].anchor_date).toBeUndefined();
-        expect(r.accounts[0].drift).toBeUndefined(); // no statement balance stored
+        expect(r.accounts[0]!.anchor_date).toBeUndefined();
+        expect(r.accounts[0]!.drift).toBeUndefined(); // no statement balance stored
         expect(r.accounts[1]).toMatchObject({
           account_id: stampedAccountId,
           bank_account: "BBB STAMPED",
@@ -348,7 +348,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         // The inactive row is also invisible to the activity lateral's MIN/MAX.
         // DATE columns cross the boundary as calendar-day strings (toWireDate).
-        expect(r.accounts[0].last_transaction).toBe(
+        expect(r.accounts[0]!.last_transaction).toBe(
           await ymdFromToday("- interval '3 days'"),
         );
       });
@@ -420,7 +420,7 @@ describe.skipIf(!hasTestDatabase())(
         expect(r.total_history).toEqual(r.history["HIST BANK"]);
         // The invariant both history findings demand: the headline IS the last
         // chart point, never a step above it.
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
           r.total_net_position,
         );
       });
@@ -436,7 +436,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        const points = r.history["OLD STAMP"];
+        const points = r.history["OLD STAMP"]!;
         // generate_series(CURRENT_DATE - 12 months, CURRENT_DATE, 1 day) inclusive.
         const { rows } = await getTestPool()!.query(
           appDated(
@@ -444,10 +444,10 @@ describe.skipIf(!hasTestDatabase())(
           ),
         );
         expect(points).toHaveLength(Number(rows[0].n));
-        expect(points[0].date).toBe(
+        expect(points[0]!.date).toBe(
           await ymdFromToday("- interval '12 months'"),
         );
-        expect(points[points.length - 1].date).toBe(await ymdFromToday());
+        expect(points[points.length - 1]!.date).toBe(await ymdFromToday());
         expect(points.every((p) => p.balance === 500)).toBe(true);
       });
 
@@ -470,8 +470,8 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        const points = r.history["OLD ACTIVITY"];
-        expect(points[0].date).toBe(
+        const points = r.history["OLD ACTIVITY"]!;
+        expect(points[0]!.date).toBe(
           await ymdFromToday("- interval '12 months'"),
         );
         expect(points.every((p) => p.balance === 400)).toBe(true);
@@ -519,7 +519,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.history["HIST ACTIVE"].every((p) => p.balance === 100)).toBe(
+        expect(r.history["HIST ACTIVE"]!.every((p) => p.balance === 100)).toBe(
           true,
         );
         expect(r.total_net_position).toBe(100);
@@ -588,7 +588,7 @@ describe.skipIf(!hasTestDatabase())(
           bank: "DATE SHAPE",
         });
 
-        const account = (await banksRepository.getBankBalances()).accounts[0];
+        const account = (await banksRepository.getBankBalances()).accounts[0]!;
         expect(account.first_transaction).toBe(
           await ymdFromToday("- interval '3 days'"),
         );
@@ -631,10 +631,10 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0].balance).toBe(150); // 100 EUR + (100 USD × 0.5) — NOT (100+100) × 0.5
+        expect(r.accounts[0]!.balance).toBe(150); // 100 EUR + (100 USD × 0.5) — NOT (100+100) × 0.5
         expect(r.total_net_position).toBe(150);
         // …and the chart agrees with the headline it sits under.
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(150);
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(150);
       });
 
       it("anchors each currency on ITS OWN latest stamp — a EUR statement never absorbs USD activity", async () => {
@@ -667,9 +667,9 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await banksRepository.getBankBalances();
         // The old cross-currency form gave 1000 + (100 − 25) = 1075 at one rate.
-        expect(r.accounts[0].balance).toBe(1025);
+        expect(r.accounts[0]!.balance).toBe(1025);
         expect(r.total_net_position).toBe(1025);
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(1025);
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(1025);
       });
 
       it("revalues the headline at TODAY rate, not at the last statement date, over a moving curve", async () => {
@@ -698,10 +698,10 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0].balance).toBe(900); // 1000 USD × today's 0.9
+        expect(r.accounts[0]!.balance).toBe(900); // 1000 USD × today's 0.9
         expect(r.total_net_position).toBe(900);
 
-        const points = r.history["WISE USD"];
+        const points = r.history["WISE USD"]!;
         expect(points[points.length - 1]).toEqual({
           date: await ymdFromToday(),
           balance: 900,
@@ -740,15 +740,15 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0].balance).toBe(260); // 100 EUR + 200 USD × 0.8
-        const points = r.history["MULTI MOVING"];
-        expect(points[points.length - 1].balance).toBe(260);
+        expect(r.accounts[0]!.balance).toBe(260); // 100 EUR + 200 USD × 0.8
+        const points = r.history["MULTI MOVING"]!;
+        expect(points[points.length - 1]!.balance).toBe(260);
         expect(points[0]).toEqual({
           // 20 days ago, at that day's 0.5
           date: await ymdFromToday("- interval '20 days'"),
           balance: 200,
         });
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
           r.total_net_position,
         );
       });
@@ -780,9 +780,9 @@ describe.skipIf(!hasTestDatabase())(
 
         const r = await banksRepository.getBankBalances();
 
-        expect(r.accounts[0].balance).toBe(150); // 100 EUR + 100 USD × 0.5
+        expect(r.accounts[0]!.balance).toBe(150); // 100 EUR + 100 USD × 0.5
         // 120 − the EUR partition's 100. The cross-currency Σ gave 120 − 200 = −80.
-        expect(r.accounts[0].drift).toBe(20);
+        expect(r.accounts[0]!.drift).toBe(20);
       });
 
       it("reports no drift when the statement matches its own currency partition", async () => {
@@ -811,7 +811,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0].drift).toBe(0);
+        expect(r.accounts[0]!.drift).toBe(0);
       });
 
       it("reconciles a lone partition even when its currency differs from the account", async () => {
@@ -834,8 +834,8 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await banksRepository.getBankBalances();
-        expect(r.accounts[0].balance).toBe(50); // 100 USD × 0.5, in the EUR target
-        expect(r.accounts[0].drift).toBe(-10); // native: 90 − the sole partition's 100
+        expect(r.accounts[0]!.balance).toBe(50); // 100 USD × 0.5, in the EUR target
+        expect(r.accounts[0]!.drift).toBe(-10); // native: 90 − the sole partition's 100
       });
 
       it("leaves a single-currency account byte-identical to the unpartitioned computation", async () => {
@@ -900,7 +900,7 @@ describe.skipIf(!hasTestDatabase())(
           { date: await ymdFromToday("- interval '1 day'"), balance: 70 },
           { date: await ymdFromToday(), balance: 70 },
         ]);
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
           r.total_net_position,
         );
       });
@@ -958,7 +958,7 @@ describe.skipIf(!hasTestDatabase())(
           { date: await ymdFromToday("- interval '1 day'"), balance: 180 },
           { date: await ymdFromToday(), balance: 180 },
         ]);
-        expect(r.total_history[r.total_history.length - 1].balance).toBe(
+        expect(r.total_history[r.total_history.length - 1]!.balance).toBe(
           r.total_net_position,
         );
       });

@@ -1,20 +1,24 @@
 import { query, withTransaction } from "../database/connection.ts";
-import type { PgQueryResult } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  nextVersionRowSchema,
+  researchDocumentRowSchema,
+  researchPassageRowSchema,
+  scoredResearchPassageRowSchema,
+} from "../database/rows/ai.ts";
+import type {
+  ResearchDocumentRow,
+  ResearchPassageEmbedding,
+  ResearchPassageRow,
+  ScoredResearchPassageRow,
+} from "../database/rows/ai.ts";
 
-export type ResearchDocumentRow = {
-  id: string;
-  title: string;
-  sourceName: string;
-  mediaType: string;
-  contentSha256: string;
-  version: number;
-  extractionStatus: string;
-  extractionError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+export type {
+  ResearchDocumentRow,
+  ResearchPassageEmbedding,
+  ResearchPassageRow,
+  ScoredResearchPassageRow,
 };
-
-export type ResearchPassageEmbedding = { model: string; vector: number[] };
 
 export type ResearchDocumentInput = {
   title: string;
@@ -33,41 +37,27 @@ export type ResearchPassageInput = {
   embedding?: ResearchPassageEmbedding | null;
 };
 
-export type ResearchPassageRow = {
-  id: string;
-  documentId: string;
-  ordinal: number;
-  pageNumber: number | null;
-  section: string | null;
-  content: string;
-  embedding: ResearchPassageEmbedding | null;
-  title: string;
-  sourceName: string;
-  version: number;
-  documentHash: string;
-};
-
-export type ScoredResearchPassageRow = ResearchPassageRow & { score: number };
-
 const DOCUMENT_COLUMNS = `id, title, source_name AS "sourceName", media_type AS "mediaType",
   content_sha256 AS "contentSha256", version, extraction_status AS "extractionStatus",
   extraction_error AS "extractionError", created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 export async function listDocuments(): Promise<ResearchDocumentRow[]> {
-  const result = await query<ResearchDocumentRow>(
+  return queryRows(
+    researchDocumentRowSchema,
     `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents ORDER BY updated_at DESC`,
   );
-  return result.rows;
 }
 
 export async function getDocument(
   id: string,
 ): Promise<ResearchDocumentRow | null> {
-  const result = await query<ResearchDocumentRow>(
-    `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents WHERE id=$1`,
-    [id],
+  return (
+    (await queryOne(
+      researchDocumentRowSchema,
+      `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents WHERE id=$1`,
+      [id],
+    )) ?? null
   );
-  return result.rows[0] ?? null;
 }
 
 export async function createDocument(
@@ -78,17 +68,25 @@ export async function createDocument(
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
       `ai-research-document:${input.sourceName}`,
     ]);
-    const existing: PgQueryResult<ResearchDocumentRow> = await client.query(
+    const existing = await queryOne(
+      researchDocumentRowSchema,
       `SELECT ${DOCUMENT_COLUMNS} FROM ai_research_documents
        WHERE source_name=$1 AND content_sha256=$2`,
       [input.sourceName, input.contentSha256],
+      client,
     );
-    if (existing.rows[0]) return existing.rows[0];
-    const next: PgQueryResult<{ version: number }> = await client.query(
+    if (existing) return existing;
+    const next = await queryOne(
+      nextVersionRowSchema,
       "SELECT COALESCE(MAX(version),0)+1 AS version FROM ai_research_documents WHERE source_name=$1",
       [input.sourceName],
+      client,
     );
-    const inserted: PgQueryResult<ResearchDocumentRow> = await client.query(
+    // An aggregate without GROUP BY always returns exactly one row.
+    if (!next)
+      throw new Error("research document version query returned no row");
+    const document = await queryOne(
+      researchDocumentRowSchema,
       `INSERT INTO ai_research_documents
         (title,source_name,media_type,content_sha256,version,extraction_status,extraction_error)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${DOCUMENT_COLUMNS}`,
@@ -97,12 +95,14 @@ export async function createDocument(
         input.sourceName,
         input.mediaType,
         input.contentSha256,
-        Number(next.rows[0].version),
+        Number(next.version),
         input.extractionStatus,
         input.extractionError ?? null,
       ],
+      client,
     );
-    const document = inserted.rows[0];
+    if (!document)
+      throw new Error("ai_research_documents insert returned no row");
     for (const passage of passages) {
       await client.query(
         `INSERT INTO ai_research_passages
@@ -135,7 +135,8 @@ export async function keywordSearch(
   limit: number,
 ): Promise<ScoredResearchPassageRow[]> {
   // ts_rank_cd() returns REAL, which pg parses to a number.
-  const result = await query<ScoredResearchPassageRow>(
+  return queryRows(
+    scoredResearchPassageRowSchema,
     `SELECT p.id, p.document_id AS "documentId", p.ordinal,
             p.page_number AS "pageNumber", p.section, p.content,
             p.embedding_json AS embedding, d.title, d.source_name AS "sourceName",
@@ -149,13 +150,13 @@ export async function keywordSearch(
       LIMIT $2`,
     [search, limit],
   );
-  return result.rows;
 }
 
 export async function semanticCandidates(
   limit = 200,
 ): Promise<ResearchPassageRow[]> {
-  const result = await query<ResearchPassageRow>(
+  return queryRows(
+    researchPassageRowSchema,
     `SELECT p.id, p.document_id AS "documentId", p.ordinal,
             p.page_number AS "pageNumber", p.section, p.content,
             p.embedding_json AS embedding, d.title, d.source_name AS "sourceName",
@@ -166,5 +167,4 @@ export async function semanticCandidates(
       ORDER BY d.updated_at DESC, p.ordinal LIMIT $1`,
     [limit],
   );
-  return result.rows;
 }

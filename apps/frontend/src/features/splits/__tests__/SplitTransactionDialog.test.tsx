@@ -5,14 +5,17 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import { ok, err, SPLIT_STUB } from "@/test/msw/handlers";
 import { SplitTransactionDialog } from "@/features/splits/SplitTransactionDialog";
+import {
+    recipientRow,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 const SPLITS_TX_URL = `${API_BASE}/api/splits/transaction/99`;
 const SPLITS_BATCH_URL = `${API_BASE}/api/splits/batch`;
 
-const RECIPIENT_ITEM = {
+const RECIPIENT_ITEM = recipientRow({
     id: 1,
     name: "Test Recipient",
     normalized_name: "test recipient",
@@ -21,9 +24,8 @@ const RECIPIENT_ITEM = {
     notes: null,
     is_active: true,
     created_at: "2025-01-01T00:00:00.000Z",
-    updated_at: null,
     links: [],
-};
+});
 
 const RECIPIENTS_LIST = { items: [RECIPIENT_ITEM], total: 1, limit: 1000, offset: 0, links: [] };
 
@@ -46,7 +48,7 @@ async function openDialog(user: ReturnType<typeof userEvent.setup>) {
 describe("SplitTransactionDialog", () => {
     beforeEach(() => {
         // Splits are fetched when dialog opens; not in default handlers
-        server.use(http.get(SPLITS_TX_URL, () => ok({ items: [] })));
+        server.use(http.get(SPLITS_TX_URL, () => ok({ items: [], total: 0 })));
     });
 
     it("renders trigger button", async () => {
@@ -72,7 +74,10 @@ describe("SplitTransactionDialog", () => {
     it("shows 'already split' alert when existing splits exist", async () => {
         server.use(
             http.get(SPLITS_TX_URL, () =>
-                ok({ items: [{ id: 1, recipient_id: 1, recipient_name: "Alice", amount: 30, note: "" }] }),
+                ok({
+                    items: [{ ...SPLIT_STUB, transaction_id: 99, recipient_name: "Alice", amount: 30, note: "" }],
+                    total: 1,
+                }),
             ),
         );
         const user = userEvent.setup();
@@ -126,7 +131,10 @@ describe("SplitTransactionDialog", () => {
         server.use(
             http.get(`${API_BASE}/api/recipients`, () => ok(RECIPIENTS_LIST)),
             http.get(SPLITS_TX_URL, () =>
-                ok({ items: [{ id: 1, recipient_id: 1, recipient_name: "Alice", amount: 30, note: "" }] }),
+                ok({
+                    items: [{ ...SPLIT_STUB, transaction_id: 99, recipient_name: "Alice", amount: 30, note: "" }],
+                    total: 1,
+                }),
             ),
         );
         const user = userEvent.setup();

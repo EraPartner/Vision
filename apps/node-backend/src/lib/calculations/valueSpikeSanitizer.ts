@@ -52,9 +52,14 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
   };
 
   for (let i = 1; i < out.length - 1; i += 1) {
-    const prev = Number(out[i - 1]?.[field]);
-    const current = Number(out[i]?.[field]);
-    const next = Number(out[i + 1]?.[field]);
+    const prevRow = out[i - 1];
+    const row = out[i];
+    const nextRow = out[i + 1];
+    // In range by the loop bounds; a missing row would read as NaN below.
+    if (!prevRow || !row || !nextRow) continue;
+    const prev = Number(prevRow[field]);
+    const current = Number(row[field]);
+    const next = Number(nextRow[field]);
     if (!Number.isFinite(prev) || !Number.isFinite(current) || !Number.isFinite(next)) continue;
     if (prev <= 0 || current <= 0 || next <= 0) continue;
     const jump = Math.log(current / prev);
@@ -69,23 +74,23 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
     const localNeedleTrough = current * localNeedleRatio <= minNeighbor && bridgeLooksNormal;
     if ((oppositeDirections && largeMove && bridgeLooksNormal) || localNeedlePeak || localNeedleTrough) {
       // Widened view of the copied row so smoothed fields can be written back.
-      const target: Record<string, unknown> = out[i];
+      const target: Record<string, unknown> = row;
       const reconcilable = sumFields.length > 0
-        && decomposes(out[i - 1]) && decomposes(out[i]) && decomposes(out[i + 1]);
+        && decomposes(prevRow) && decomposes(row) && decomposes(nextRow);
       for (const extra of extraFields) {
-        target[extra] = smoothedMean(out[i - 1]?.[extra], out[i + 1]?.[extra]);
+        target[extra] = smoothedMean(prevRow[extra], nextRow[extra]);
       }
-      const reconciled = reconcilable ? partsSum(out[i]) : undefined;
+      const reconciled = reconcilable ? partsSum(row) : undefined;
       target[field] = toNumber(roundToCents(reconciled ?? Math.sqrt(prev * next)));
 
       if (reconciled === undefined) continue;
       for (const { field: parallelField, sharedFields = [] } of parallelTotals) {
-        const shared = sumOf(out[i], sharedFields);
-        const prevShared = sumOf(out[i - 1], sharedFields);
-        const nextShared = sumOf(out[i + 1], sharedFields);
+        const shared = sumOf(row, sharedFields);
+        const prevShared = sumOf(prevRow, sharedFields);
+        const nextShared = sumOf(nextRow, sharedFields);
         if (shared === undefined || prevShared === undefined || nextShared === undefined) continue;
-        const prevParallel = Number(out[i - 1]?.[parallelField]);
-        const nextParallel = Number(out[i + 1]?.[parallelField]);
+        const prevParallel = Number(prevRow[parallelField]);
+        const nextParallel = Number(nextRow[parallelField]);
         if (!Number.isFinite(prevParallel) || !Number.isFinite(nextParallel)) continue;
         const ratios = [];
         for (const [parallelTotal, mainTotal, rowShared] of [
@@ -101,7 +106,10 @@ export function sanitizeIsolatedValueSpikes<T extends Record<string, unknown>>(
         // With neither neighbor usable the exclusive part is degenerate — it
         // reconciles to zero — so the factor it is multiplied by is moot, and 1
         // keeps a shared-only total (an all-cash portfolio) exactly on `field`.
-        const ratio = ratios.length === 2 ? Math.sqrt(ratios[0] * ratios[1]) : (ratios[0] ?? 1);
+        const [firstRatio, secondRatio] = ratios;
+        const ratio = firstRatio !== undefined && secondRatio !== undefined
+          ? Math.sqrt(firstRatio * secondRatio)
+          : (firstRatio ?? 1);
         target[parallelField] = toNumber(roundToCents(reconciled.minus(shared).times(ratio).plus(shared)));
       }
     }

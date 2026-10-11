@@ -1,6 +1,16 @@
 import { z } from "zod";
 import {
+    ImportBatchListSchema,
+    ImportCsvResponseSchema,
+    ImportCsvResultSchema,
+    ImportPreviewSchema,
+    ImportRollbackResultSchema,
+    SavedParserConfigListSchema,
+    SimpleImportResultSchema,
+} from "@vision/types/contracts";
+import {
     API_BASE_URL,
+    checkResponseContract,
     generateRequestId,
     parseEnvelopeError,
     apiRequest,
@@ -89,13 +99,21 @@ export function isReviewRequired(
     return "requires_review" in result;
 }
 
-export function importCSV(
+export async function importCSV(
     file: File,
     bankName: string,
 ): Promise<ImportCsvResponse> {
     const fields = new URLSearchParams();
     fields.append("bank_name", bankName);
-    return postMultipartImport("/api/import/csv", file, fields);
+    return checkResponseContract(
+        ImportCsvResponseSchema,
+        await postMultipartImport<ImportCsvResponse>(
+            "/api/import/csv",
+            file,
+            fields,
+        ),
+        "POST /api/import/csv",
+    );
 }
 
 export function importCSVWithProgress(
@@ -200,7 +218,7 @@ export function importCSVWithProgress(
     return { abort: () => controller.abort(), result };
 }
 
-export function importCSVCustom(
+export async function importCSVCustom(
     file: File,
     bankName: string,
     dateFormat: string,
@@ -224,7 +242,15 @@ export function importCSVCustom(
     fields.append("encoding", encoding);
     fields.append("skip_rows", skipRows.toString());
     fields.append("number_format", numberFormat);
-    return postMultipartImport("/api/import/csv/custom", file, fields);
+    return checkResponseContract(
+        ImportCsvResponseSchema,
+        await postMultipartImport<ImportCsvResponse>(
+            "/api/import/csv/custom",
+            file,
+            fields,
+        ),
+        "POST /api/import/csv/custom",
+    );
 }
 
 export type CsvNumberFormat = "auto" | "decimal_dot" | "decimal_comma";
@@ -244,6 +270,8 @@ export interface CustomParserConfigPayload {
 export interface SavedParserConfig {
     id: number;
     name: string;
+    /** `custom_parser_configs.kind`; this list reads the `transaction` kind. */
+    kind: string;
     config: CustomParserConfigPayload;
     created_at: string;
     updated_at: string;
@@ -257,7 +285,7 @@ export async function listCustomParserConfigs(): Promise<SavedParserConfig[]> {
     const { items } = await apiRequest<{
         items: SavedParserConfig[];
         total: number;
-    }>("/api/import/parsers");
+    }>("/api/import/parsers", { schema: SavedParserConfigListSchema });
     return items;
 }
 
@@ -285,34 +313,47 @@ export function deleteCustomParserConfig(id: number): Promise<void> {
     return apiRequest<void>(`/api/import/parsers/${id}`, { method: "DELETE" });
 }
 
-export function importRecipients(
-    file: File,
-    separator: string = ",",
-    encoding: string = "utf-8",
-): Promise<{
+/** `POST /api/import/recipients` and `/categories` result. */
+export interface SimpleImportResult {
     total_processed: number;
     imported: number;
     skipped: number;
     errors: number;
     status: string;
-}> {
-    const fields = new URLSearchParams({ separator, encoding });
-    return postMultipartImport("/api/import/recipients", file, fields);
 }
 
-export function importCategories(
+export async function importRecipients(
     file: File,
     separator: string = ",",
     encoding: string = "utf-8",
-): Promise<{
-    total_processed: number;
-    imported: number;
-    skipped: number;
-    errors: number;
-    status: string;
-}> {
+): Promise<SimpleImportResult> {
     const fields = new URLSearchParams({ separator, encoding });
-    return postMultipartImport("/api/import/categories", file, fields);
+    return checkResponseContract(
+        SimpleImportResultSchema,
+        await postMultipartImport<SimpleImportResult>(
+            "/api/import/recipients",
+            file,
+            fields,
+        ),
+        "POST /api/import/recipients",
+    );
+}
+
+export async function importCategories(
+    file: File,
+    separator: string = ",",
+    encoding: string = "utf-8",
+): Promise<SimpleImportResult> {
+    const fields = new URLSearchParams({ separator, encoding });
+    return checkResponseContract(
+        SimpleImportResultSchema,
+        await postMultipartImport<SimpleImportResult>(
+            "/api/import/categories",
+            file,
+            fields,
+        ),
+        "POST /api/import/categories",
+    );
 }
 
 export function listImportBatches(
@@ -321,6 +362,7 @@ export function listImportBatches(
 ): Promise<BatchListResponse> {
     return apiRequest<BatchListResponse>(
         `/api/import/batches?limit=${limit}&offset=${offset}`,
+        { schema: ImportBatchListSchema },
     );
 }
 
@@ -329,6 +371,7 @@ export function rollbackImportBatch(
 ): Promise<{ deleted: number }> {
     return apiRequest<{ deleted: number }>(`/api/import/batches/${id}`, {
         method: "DELETE",
+        schema: ImportRollbackResultSchema,
     });
 }
 
@@ -337,12 +380,13 @@ export function getImportPreview(
 ): Promise<ImportPreviewResponse> {
     return apiRequest<ImportPreviewResponse>(
         `/api/import/batches/${batchId}/preview`,
+        { schema: ImportPreviewSchema },
     );
 }
 
 export function overrideImportRow(
     batchId: number,
-    rowId: number,
+    rowId: number | string,
     recipientId: number | null,
 ): Promise<{ row_id: number; user_override_recipient_id: number | null }> {
     return apiRequest(`/api/import/batches/${batchId}/rows/${rowId}/override`, {
@@ -353,7 +397,7 @@ export function overrideImportRow(
 
 export function overrideImportRowCategory(
     batchId: number,
-    rowId: number,
+    rowId: number | string,
     categoryId: number | null,
 ): Promise<{ row_id: number; override_category_id: number | null }> {
     return apiRequest(
@@ -374,5 +418,6 @@ export function commitImportBatch(batchId: number): Promise<{
 }> {
     return apiRequest(`/api/import/batches/${batchId}/commit`, {
         method: "POST",
+        schema: ImportCsvResultSchema,
     });
 }

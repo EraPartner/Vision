@@ -29,10 +29,15 @@ class BlockedUrlError extends Error {
   }
 }
 
-function parseIpv4Octets(ip: string): number[] | undefined {
-  const parts = ip.split(".");
-  if (parts.length !== 4) return undefined;
-  const octets = parts.map((p) => Number(p));
+type Ipv4Octets = [number, number, number, number];
+
+function isOctetQuad(octets: number[]): octets is Ipv4Octets {
+  return octets.length === 4;
+}
+
+function parseIpv4Octets(ip: string): Ipv4Octets | undefined {
+  const octets = ip.split(".").map((p) => Number(p));
+  if (!isOctetQuad(octets)) return undefined;
   if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255))
     return undefined;
   return octets;
@@ -61,10 +66,10 @@ function isBlockedIpv4(ip: string): boolean {
  * @returns true when the address must not be reached by the server
  */
 function isBlockedIpv6(ip: string): boolean {
-  const addr = String(ip).toLowerCase().split("%")[0]; // drop zone id
+  const [addr = ""] = String(ip).toLowerCase().split("%"); // drop zone id
   if (addr === "::1" || addr === "::") return true; // loopback / unspecified
   const mapped = addr.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
-  if (mapped) return isBlockedIpv4(mapped[1]); // IPv4-mapped ::ffff:a.b.c.d
+  if (mapped?.[1] !== undefined) return isBlockedIpv4(mapped[1]); // IPv4-mapped ::ffff:a.b.c.d
   if (addr.startsWith("fc") || addr.startsWith("fd")) return true; // fc00::/7 ULA
   if (/^fe[89ab]/.test(addr)) return true; // fe80::/10 link-local
   return false;

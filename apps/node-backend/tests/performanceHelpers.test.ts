@@ -71,7 +71,7 @@ function snapshot({
 async function build(rows: WireSnapshot[]) {
   return buildPortfolioPerformancePayload(
     "EUR",
-    rows[0].snapshot_date,
+    rows[0]!.snapshot_date,
     rows.at(-1)!.snapshot_date,
     // The helper accepts string dates as well as pg's Date values.
     loose<PerformanceSnapshot[]>(rows),
@@ -113,7 +113,7 @@ describe("buildPortfolioPerformancePayload spike reconciliation", () => {
     ];
 
     const payload = await build(rows);
-    const cleanedMiddle = mockComputeMetrics.mock.calls[0][0][1];
+    const cleanedMiddle = mockComputeMetrics.mock.calls[0]![0][1]!;
 
     expect(cleanedMiddle.value).toBe("68000");
     expect(cleanedMiddle.cash_value).toBe("60000");
@@ -155,12 +155,12 @@ describe("buildPortfolioPerformancePayload spike reconciliation", () => {
         cash: 10_200,
       }),
     ];
-    rows[1].gain_loss = "999999";
-    rows[1].return_pct = "-999";
+    rows[1]!.gain_loss = "999999";
+    rows[1]!.return_pct = "-999";
 
     const payload = await build(rows);
-    const cleanedMiddle = mockComputeMetrics.mock.calls[0][0][1];
-    const servedMiddle = payload.snapshots[1];
+    const cleanedMiddle = mockComputeMetrics.mock.calls[0]![0][1]!;
+    const servedMiddle = payload.snapshots[1]!;
     const storedDecomposedValue =
       Number(cleanedMiddle.stocks_etfs_value) +
       Number(cleanedMiddle.crypto_value) +

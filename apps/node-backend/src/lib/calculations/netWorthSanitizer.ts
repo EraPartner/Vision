@@ -20,11 +20,12 @@ export function sanitizeIsolatedDailyInvestmentSpikes(
   const sanitized = sanitizeIsolatedValueSpikes(snapshots, 'investments');
   if (sanitized === snapshots) return sanitized;
 
-  for (let i = 0; i < sanitized.length; i += 1) {
-    if (sanitized[i].investments === snapshots[i].investments) continue;
-    const liquid = Number(sanitized[i]?.liquid) || 0;
-    const liabilities = Number(sanitized[i]?.liabilities) || 0;
-    sanitized[i].netWorth = roundMoney(liquid + liabilities + Number(sanitized[i].investments));
+  // `sanitized` is a same-length copy of `snapshots`.
+  for (const [i, point] of sanitized.entries()) {
+    if (point.investments === snapshots[i]?.investments) continue;
+    const liquid = Number(point.liquid) || 0;
+    const liabilities = Number(point.liabilities) || 0;
+    point.netWorth = roundMoney(liquid + liabilities + Number(point.investments));
   }
 
   return sanitized;

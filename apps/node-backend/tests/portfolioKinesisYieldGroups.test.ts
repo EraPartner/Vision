@@ -32,7 +32,7 @@ const syntheticKinesisYieldGroup = rawYieldGroup as (
 /** The reference cache `attachKinesisYieldReference` stores on each batch. */
 const yieldEvidence = (source: SyntheticKinesisScope) =>
   (
-    source.batches[0].custom_config.portfolio_performance_reference as {
+    source.batches[0]!.custom_config.portfolio_performance_reference as {
       yieldGroupEvidence: KinesisYieldPlan["yieldGroupEvidence"];
     }
   ).yieldGroupEvidence;
@@ -150,7 +150,7 @@ describe("closed original deposit-boundary yield groups", () => {
       });
     }
     source.kinesisAdoptionContext.batches.push(
-      structuredClone(source.batches[0]),
+      structuredClone(source.batches[0]!),
     );
     for (const row of source.rows)
       if (
@@ -235,28 +235,28 @@ describe("closed original deposit-boundary yield groups", () => {
     async (kind) => {
       const { source } = await syntheticKinesisYieldGroup();
       if (kind === "source_hash")
-        source.rows[2].source_record_hash = "e".repeat(64);
+        source.rows[2]!.source_record_hash = "e".repeat(64);
       if (kind === "reference_literal")
-        yieldEvidence(source).reference.events[1].literal.sharesMinor = "9";
-      if (kind === "deposit_note") source.history[0].note = "Changed boundary";
-      if (kind === "yield_anchor") source.history[3].note = "Changed anchor";
+        yieldEvidence(source).reference.events[1]!.literal.sharesMinor = "9";
+      if (kind === "deposit_note") source.history[0]!.note = "Changed boundary";
+      if (kind === "yield_anchor") source.history[3]!.note = "Changed anchor";
       if (kind === "old_note")
-        source.kinesisAdoptionContext.receipts[1].after_data.note =
+        source.kinesisAdoptionContext.receipts[1]!.after_data.note =
           "Not the current anchor";
-      if (kind === "currency") source.history[1].amount = "1.0000";
+      if (kind === "currency") source.history[1]!.amount = "1.0000";
       if (kind === "extra_history")
         source.history.push({
-          ...source.history[1],
+          ...source.history[1]!,
           id: 999,
           units: "0.00099999",
         });
       if (kind === "extra_xml")
         yieldEvidence(source).reference.events.push({
-          ...yieldEvidence(source).reference.events[1],
+          ...yieldEvidence(source).reference.events[1]!,
           id: "extra",
         });
       if (kind === "extra_source_identity")
-        source.rows[2].source_transaction_id = "hidden:units";
+        source.rows[2]!.source_transaction_id = "hidden:units";
       if (kind === "missing_pp_member")
         yieldEvidence(source).reference.events.splice(1, 1);
       const result = build(source);
@@ -266,7 +266,7 @@ describe("closed original deposit-boundary yield groups", () => {
   );
   it("rejects a global quantity collision outside the proved interval", async () => {
     const { source } = await syntheticKinesisYieldGroup();
-    source.history.push({ ...source.history[1], id: 999, date: "2023-01-01" });
+    source.history.push({ ...source.history[1]!, id: 999, date: "2023-01-01" });
     expect(build(source).plan.ready).toBe(false);
     expect(build(source).adoptions).toEqual([]);
   });
@@ -297,7 +297,7 @@ describe("closed original deposit-boundary yield groups", () => {
         after_data: item.after,
       });
     }
-    source.kinesisAdoptionContext.batches.push(source.batches[0]);
+    source.kinesisAdoptionContext.batches.push(source.batches[0]!);
     for (const row of source.rows)
       if (
         !source.kinesisAdoptionContext.sources.some(
@@ -316,7 +316,7 @@ describe("closed original deposit-boundary yield groups", () => {
   });
   it("rejects a changed retained account mapping without any partial group adoption", async () => {
     const { source } = await syntheticKinesisYieldGroup();
-    yieldEvidence(source).accountMappings[0].accountId = 999;
+    yieldEvidence(source).accountMappings[0]!.accountId = 999;
     expect(build(source).plan.ready).toBe(false);
     expect(build(source).adoptions).toEqual([]);
   });

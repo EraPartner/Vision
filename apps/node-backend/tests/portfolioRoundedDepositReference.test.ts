@@ -18,6 +18,7 @@ import type {
 } from "../src/repositories/portfolioImportReconciliationRepository.ts";
 import type { HistoryImage } from "../src/services/portfolioImportReconciliationService.ts";
 import type { LegacyPortfolioFacts } from "../src/services/portfolioPerformanceReferenceEvidence.ts";
+import { batchConfigFields } from "../src/database/rows/portfolioImport.ts";
 
 // The synthetic rows are wire-shaped: numeric ids where the row types carry
 // BIGINT strings, and no joined batch or investment metadata columns.
@@ -159,7 +160,7 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
       ready: true,
       summary: { insert: 0, adopt: 1 },
     });
-    expect(result.adoptions[0].after).toMatchObject({
+    expect(result.adoptions[0]!.after).toMatchObject({
       id: 40,
       units: "0.01234539",
       amount: "250",
@@ -181,7 +182,7 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
     });
     const result = plan(row, [current]);
     expect(result.plan.ready).toBe(true);
-    expect(result.adoptions[0].after).toMatchObject({
+    expect(result.adoptions[0]!.after).toMatchObject({
       id: 40,
       currency: "USD",
       fx_rate_to_eur: null,
@@ -207,7 +208,7 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
       policy_required: 1,
     });
     const preserve = plan(row, [legacy()], "preserve_existing");
-    expect(preserve.adoptions[0].after).toMatchObject({
+    expect(preserve.adoptions[0]!.after).toMatchObject({
       units: "0.01234500",
       amount: "0",
     });
@@ -217,7 +218,7 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
     const result = plan(enriched(), [legacy(), legacy({ id: 41 })]);
     expect(result.plan.ready).toBe(false);
     expect(result.plan.summary).toMatchObject({ insert: 0, adopt: 0 });
-    expect(result.plan.blockers[0].reason).toBe("ambiguous_history");
+    expect(result.plan.blockers[0]!.reason).toBe("ambiguous_history");
   });
 
   it.each([
@@ -276,7 +277,7 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
     const row = enriched();
     const noHeader = {
       ...row,
-      custom_config: { format: "kinesis_transaction_history" },
+      custom_config: { format: "kinesis_transaction_history" as const },
     };
     const wrongRaw = changeEnvelope(row, (envelope) => {
       envelope.primaryRawData = envelope.primaryRawData.replace(
@@ -330,7 +331,11 @@ describe("bounded rounded Kinesis deposit reference identity", () => {
       portfolioPerformanceRoundedDepositIdentifiesLegacy(
         {
           ...row,
-          custom_config: { ...row.custom_config, format: "portfolio_generic" },
+          // A format name no specialized adapter claims.
+          custom_config: loose<ReconciliationSourceRow["custom_config"]>({
+            ...batchConfigFields(row.custom_config),
+            format: "portfolio_generic",
+          }),
         },
         legacy(),
       ),
@@ -440,7 +445,7 @@ describe("verified literal Kinesis withdrawal quantities", () => {
     for (const source_columns of [
       undefined,
       columns.slice(1),
-      [...columns.slice(0, -1), columns[0]],
+      [...columns.slice(0, -1), columns[0]!],
     ]) {
       expect(
         verifiedKinesisWithdrawal({

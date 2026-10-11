@@ -55,7 +55,7 @@ export function syntheticIbkrPlannerSource(
     row_index: 0,
     status: "matched",
     route: "portfolio",
-    type: values["Transaction Type"].toLowerCase(),
+    type: values["Transaction Type"]!.toLowerCase(),
     type_raw: values["Transaction Type"],
     tx_date: values.Date,
     investment_id: 1,

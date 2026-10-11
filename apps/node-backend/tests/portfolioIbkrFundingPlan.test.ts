@@ -26,13 +26,13 @@ describe("IBKR native funding reviewed correction scope", () => {
   it("requires the reviewed source policy before applying changes", () => {
     const result = build(fixture(), { adoptPolicy: "preserve_existing" });
     expect(result.plan.ready).toBe(false);
-    expect(result.plan.actions[0].action).toBe("policy_required");
-    expect(result.plan.blockers[0].reason).toBe("source_policy_required");
+    expect(result.plan.actions[0]!.action).toBe("policy_required");
+    expect(result.plan.blockers[0]!.reason).toBe("source_policy_required");
   });
   it("blocks missing primary evidence and binds changed cash to the fingerprint", () => {
     const source = fixture();
     const before = build(source).plan.planFingerprint;
-    source.context.ledger[0].amount = "79.0000";
+    source.context.ledger[0]!.amount = "79.0000";
     const changed = build(source);
     expect(changed.plan.ready).toBe(false);
     expect(changed.plan.planFingerprint).not.toBe(before);
@@ -45,7 +45,7 @@ describe("IBKR native funding reviewed correction scope", () => {
   });
   it("repeat review settles the corrected ID without another correction", () => {
     const source = fixture();
-    const first = build(source).cashCorrections![0];
+    const first = build(source).cashCorrections![0]!;
     // The corrected after-image carries only the compared financial fields.
     source.context.ledger[0] = loose<Source["context"]["ledger"][number]>(first.after.snapshot);
     const receipts: unknown[] = source.context.receipts;

@@ -197,14 +197,18 @@ function findPlanNode(
   return undefined;
 }
 
-function median(values: number[]) {
+function median(values: number[]): number {
   const ordered = [...values].sort((a, b) => a - b);
-  return ordered[Math.floor(ordered.length / 2)];
+  const value = ordered[Math.floor(ordered.length / 2)];
+  if (value === undefined) throw new Error("median of an empty sample");
+  return value;
 }
 
-function nearestRank(values: number[], percentile: number) {
+function nearestRank(values: number[], percentile: number): number {
   const ordered = [...values].sort((a, b) => a - b);
-  return ordered[Math.ceil((percentile / 100) * ordered.length) - 1];
+  const value = ordered[Math.ceil((percentile / 100) * ordered.length) - 1];
+  if (value === undefined) throw new Error("percentile of an empty sample");
+  return value;
 }
 
 function summarizePlan(plan: ExplainedPlan) {

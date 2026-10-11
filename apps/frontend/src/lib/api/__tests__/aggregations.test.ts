@@ -22,8 +22,57 @@ function ok<T>(data: T) {
     return HttpResponse.json({ ok: true, data, meta: {} });
 }
 
+const AGG_META = { computedAt: "2025-01-01T00:00:00.000Z", source: "live" };
+
+/** The aggregation routes' `{ data, meta }` body (calc modules' buildEnvelope). */
+function agg(data: unknown) {
+    return { data, meta: AGG_META };
+}
+
+const EMPTY_FORECAST = {
+    currency: "EUR",
+    actual: [],
+    scheduled_actual: [],
+    methods: [],
+    planned: [],
+    diagnostics: null,
+    history_months: 0,
+    include_planned: false,
+};
+
+/** Realistic empty bodies for the routes whose tests only inspect the URL. */
+const DEFAULT_BODIES: Record<string, unknown> = {
+    "/api/aggregations/monthly-summary": agg({
+        months: [],
+        summary: {
+            total_spending: 0,
+            total_income: 0,
+            net_amount: 0,
+            transaction_count: 0,
+        },
+    }),
+    "/api/aggregations/cashflow-forecast-methods": agg({
+        ...EMPTY_FORECAST,
+        month: "2025-01",
+        days_in_month: 31,
+        current_day: 1,
+    }),
+    "/api/aggregations/cashflow-forecast-rolling": agg({
+        ...EMPTY_FORECAST,
+        window_start: "2024-12-18",
+        window_end: "2025-01-15",
+        today: "2025-01-01",
+        days_back: 14,
+        days_forward: 14,
+    }),
+};
+
 /** Capture the request URL for an aggregations sub-path. */
-function captureUrl(path: string, ref: { url: string }, data: unknown = {}) {
+function captureUrl(
+    path: string,
+    ref: { url: string },
+    data: unknown = DEFAULT_BODIES[path],
+) {
     server.use(
         http.get(`${API_BASE}${path}`, ({ request }) => {
             ref.url = request.url;
@@ -81,10 +130,14 @@ describe("aggregations — monthly summary branch coverage", () => {
 describe("aggregations — simple wrappers", () => {
     it("getAggregationRecipientInsights uses the shared exclusion query", async () => {
         const ref = { url: "" };
-        captureUrl("/api/aggregations/recipient-insights", ref, {
-            topMerchants: [],
-            monthOverMonth: [],
-        });
+        captureUrl(
+            "/api/aggregations/recipient-insights",
+            ref,
+            agg({
+                topMerchants: [],
+                monthOverMonth: [],
+            }),
+        );
         await getAggregationRecipientInsights({
             excluded_category_ids: [9],
             start_date: "2024-10-01",
@@ -97,10 +150,14 @@ describe("aggregations — simple wrappers", () => {
 
     it("getAggregationRecipientInsights omits the query with no params", async () => {
         const ref = { url: "" };
-        captureUrl("/api/aggregations/recipient-insights", ref, {
-            topMerchants: [],
-            monthOverMonth: [],
-        });
+        captureUrl(
+            "/api/aggregations/recipient-insights",
+            ref,
+            agg({
+                topMerchants: [],
+                monthOverMonth: [],
+            }),
+        );
         await getAggregationRecipientInsights();
         expect(ref.url.endsWith("/api/aggregations/recipient-insights")).toBe(
             true,
@@ -109,12 +166,16 @@ describe("aggregations — simple wrappers", () => {
 
     it("getAggregationBankBalances forwards currency", async () => {
         const ref = { url: "" };
-        captureUrl("/api/aggregations/bank-balances", ref, {
-            accounts: [],
-            total_net_position: 0,
-            history: {},
-            total_history: [],
-        });
+        captureUrl(
+            "/api/aggregations/bank-balances",
+            ref,
+            agg({
+                accounts: [],
+                total_net_position: 0,
+                history: {},
+                total_history: [],
+            }),
+        );
         await getAggregationBankBalances({ currency: "EUR" });
         expect(ref.url).toContain("currency=EUR");
     });
@@ -226,16 +287,16 @@ describe("aggregations — cashflow forecast branch coverage", () => {
     it("getCashflowForecastAccuracy sets limit_months when provided, omits otherwise", async () => {
         const ref = { url: "" };
         captureUrl("/api/aggregations/cashflow-forecast-accuracy", ref, {
-            methods: [],
-            limit_months: 6,
+            data: { methods: [], limit_months: 6 },
+            meta: { source: "db" },
         });
         await getCashflowForecastAccuracy({ limit_months: 6 });
         expect(ref.url).toContain("limit_months=6");
 
         const ref2 = { url: "" };
         captureUrl("/api/aggregations/cashflow-forecast-accuracy", ref2, {
-            methods: [],
-            limit_months: 0,
+            data: { methods: [], limit_months: 0 },
+            meta: { source: "db" },
         });
         await getCashflowForecastAccuracy();
         expect(
@@ -245,11 +306,15 @@ describe("aggregations — cashflow forecast branch coverage", () => {
 
     it("getSankeyFlow sets year + exclusions when provided", async () => {
         const ref = { url: "" };
-        captureUrl("/api/aggregations/sankey", ref, {
-            nodes: [],
-            links: [],
-            year: 2025,
-        });
+        captureUrl(
+            "/api/aggregations/sankey",
+            ref,
+            agg({
+                nodes: [],
+                links: [],
+                year: 2025,
+            }),
+        );
         await getSankeyFlow({
             currency: "EUR",
             year: 2025,
@@ -263,11 +328,15 @@ describe("aggregations — cashflow forecast branch coverage", () => {
 
     it("getSankeyFlow omits everything with no params", async () => {
         const ref = { url: "" };
-        captureUrl("/api/aggregations/sankey", ref, {
-            nodes: [],
-            links: [],
-            year: 0,
-        });
+        captureUrl(
+            "/api/aggregations/sankey",
+            ref,
+            agg({
+                nodes: [],
+                links: [],
+                year: 0,
+            }),
+        );
         await getSankeyFlow();
         expect(ref.url.endsWith("/api/aggregations/sankey")).toBe(true);
     });
@@ -281,7 +350,7 @@ describe("aggregations exclusion query building", () => {
                 `${API_BASE}/api/aggregations/category-pivot`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ categoryPivot: {} });
+                    return ok(agg({ categoryPivot: {} }));
                 },
             ),
         );
@@ -314,7 +383,7 @@ describe("aggregations exclusion query building", () => {
                 `${API_BASE}/api/aggregations/category-pivot`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ categoryPivot: {} });
+                    return ok(agg({ categoryPivot: {} }));
                 },
             ),
         );
@@ -329,7 +398,7 @@ describe("aggregations exclusion query building", () => {
                 `${API_BASE}/api/aggregations/recipient-by-year`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ recipientsByYear: {} });
+                    return ok(agg({ recipientsByYear: {} }));
                 },
             ),
         );
@@ -358,7 +427,15 @@ describe("aggregations exclusion query building", () => {
                 `${API_BASE}/api/aggregations/recipient-pivot`,
                 ({ request }) => {
                     url = request.url;
-                    return ok({ recipientPivot: {} });
+                    return ok(
+                        agg({
+                            recipientPivot: {},
+                            conversion: {
+                                usedHistoricalFallback: false,
+                                affectedCurrencies: [],
+                            },
+                        }),
+                    );
                 },
             ),
         );

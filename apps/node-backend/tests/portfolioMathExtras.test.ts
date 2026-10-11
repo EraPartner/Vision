@@ -547,9 +547,9 @@ describe("computeHeatmap", () => {
     ]);
     expect(r.years).toEqual([2025]);
     expect(r.data[2025]).toHaveLength(12);
-    expect(r.data[2025][1]).toBeCloseTo(10, 2); // Feb +10%
-    expect(r.data[2025][2]).toBeCloseTo(10, 2); // Mar +10%
-    expect(r.data[2025][0]).toBeNull(); // Jan has no prior month
+    expect(r.data[2025]![1]).toBeCloseTo(10, 2); // Feb +10%
+    expect(r.data[2025]![2]).toBeCloseTo(10, 2); // Mar +10%
+    expect(r.data[2025]![0]).toBeNull(); // Jan has no prior month
   });
 
   it("takes the last snapshot of each month for grouping", () => {
@@ -558,7 +558,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: "2025-01-31", value: 105, invested: 100 }, // last of Jan wins
       { snapshot_date: "2025-02-28", value: 110, invested: 100 }, // 110/100 vs 105/100 → ~4.76%
     ]);
-    expect(r.data[2025][1]).toBeCloseTo(4.76, 1);
+    expect(r.data[2025]![1]).toBeCloseTo(4.76, 1);
   });
 
   it("reports maxAbsPct from the largest monthly move (positive or negative)", () => {
@@ -576,7 +576,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: "2025-01-31", value: 110, invested: 100 },
     ]);
     expect(r.years).toEqual([2024, 2025]);
-    expect(r.data[2025][0]).toBeCloseTo(10, 2);
+    expect(r.data[2025]![0]).toBeCloseTo(10, 2);
   });
 
   it("accepts Date objects for snapshot_date", () => {
@@ -585,7 +585,7 @@ describe("computeHeatmap", () => {
       { snapshot_date: new Date("2025-02-28"), value: 110, invested: 100 },
     ]);
     expect(r.years).toEqual([2025]);
-    expect(r.data[2025][1]).toBeCloseTo(10, 2);
+    expect(r.data[2025]![1]).toBeCloseTo(10, 2);
   });
 
   it("buckets a local-midnight Date by its local calendar month (pg DATE shape)", () => {
@@ -598,8 +598,8 @@ describe("computeHeatmap", () => {
       { snapshot_date: new Date(2026, 5, 1), value: 110, invested: 100 }, // 2026-06-01
     ]);
     expect(r.years).toEqual([2026]);
-    expect(r.data[2026][5]).toBeCloseTo(10, 2); // June move present (not May)
-    expect(r.data[2026][4]).toBeNull(); // May is the first month, no prior
+    expect(r.data[2026]![5]).toBeCloseTo(10, 2); // June move present (not May)
+    expect(r.data[2026]![4]).toBeNull(); // May is the first month, no prior
   });
 });
 

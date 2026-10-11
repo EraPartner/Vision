@@ -20,6 +20,7 @@ import type {
   KinesisSourceIssue,
   KinesisSourceProof,
 } from "./portfolioKinesisAdoptionScope.ts";
+import { batchConfigFields } from "../database/rows/portfolioImport.ts";
 
 /** Proven ledger values of one native cash movement (or its funding fee). */
 export interface KinesisCashValues {
@@ -191,12 +192,13 @@ export function proveKinesisCashSources(
         const raw = parseCsvText(
           portfolioPrimaryRawData(requiredStagedValue(row.raw_data)),
           {
-            columns: batch.custom_config.source_columns,
+            // Every proved Kinesis batch carries its config (see configOf).
+            columns: batchConfigFields(batch.custom_config)!.source_columns,
             skip_empty_lines: true,
           },
         );
         if (raw.length !== 1) throw new Error("cash_source_unverified");
-        const record = raw[0];
+        const record = raw[0]!;
         const code = currency(record.Currency_Code);
         if (!fiat.has(code)) continue;
         const parsed = literal.parsed;
@@ -226,7 +228,7 @@ export function proveKinesisCashSources(
           [row],
           (source: ReconciliationSourceRow) =>
             portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
-        )[0];
+        )[0]!;
         if (
           currency(record.Starting_Balance_Currency) !== code ||
           currency(record.Closing_Balance_Currency) !== code ||
@@ -264,8 +266,10 @@ export function proveKinesisCashSources(
             if (!item || !["Buy", "Sell"].includes(item.typeRaw)) return false;
             const other = parseCsvText(
               portfolioPrimaryRawData(requiredStagedValue(candidate.raw_data)),
-              { columns: batch.custom_config.source_columns },
-            )[0];
+              {
+                columns: batchConfigFields(batch.custom_config)!.source_columns,
+              },
+            )[0]!;
             return (
               other.Order_ID === record.Order_ID &&
               other.DateTime === record.DateTime &&
@@ -344,27 +348,31 @@ export function proveKinesisCashSources(
               String(b.record.DateTime),
             ) || a.row.row_index - b.row.row_index,
         );
+        // A chain holds at least the member that created it.
+        const first = chain[0]!;
+        const last = chain[chain.length - 1]!;
         if (
-          !chain[0].start.eq(0) ||
+          !first.start.eq(0) ||
           chain.some(
             (item, index) =>
-              index > 0 && !item.start.eq(chain[index - 1].close),
+              index > 0 && !item.start.eq(chain[index - 1]!.close),
           ) ||
           !toDecimal(
             chain.reduce((sum, item) => sum.plus(item.delta), toDecimal(0)),
-          ).eq(chain[chain.length - 1].close) ||
+          ).eq(last.close) ||
           rounded(
             chain.reduce(
               (sum, item) =>
                 sum.plus(item.values.amount).plus(item.feeValues?.amount ?? 0),
               toDecimal(0),
             ),
-          ) !== rounded(chain[chain.length - 1].close)
+          ) !== rounded(last.close)
         )
           throw new Error("cash_chain_not_closed");
       }
       const groupKey = hash({
-        fileHash: batch.custom_config.kinesis_source_context.source_file_hash,
+        fileHash: batchConfigFields(batch.custom_config)!
+          .kinesis_source_context!.source_file_hash,
         account: batch.account_id,
         fundingPolicy,
         members: members.map((item) => ({
@@ -455,23 +463,25 @@ export function classifyKinesisCash({
         )
       )
         ready = false;
-      if (matching.length) {
-        const current = matching[0];
+      const [current] = matching;
+      if (current) {
         const owners = context.sources.filter(
           (source) => cashReceipt(source)?.after?.id === Number(current.id),
         );
-        const receipt = cashReceipt(owners[0] ?? {});
+        const [owner] = owners;
+        const receipt = cashReceipt(owner ?? {});
         if (
           matching.length !== 1 ||
           owners.length !== 1 ||
+          !owner ||
           !current.is_active ||
           receipt?.version !== 1 ||
-          owners[0].status !== "committed" ||
-          Number(owners[0].committed_txn_id) !== Number(current.id) ||
+          owner.status !== "committed" ||
+          Number(owner.committed_txn_id) !== Number(current.id) ||
           !cashImageEqual(current, receipt.after) ||
           !cashImageEqual(proof, receipt.proof) ||
-          owners[0].source_record_hash !== row.source_record_hash ||
-          !retained.proofs.has(Number(owners[0].id)) ||
+          owner.source_record_hash !== row.source_record_hash ||
+          !retained.proofs.has(Number(owner.id)) ||
           !cashImageEqual(values, receipt.values) ||
           !cashImageEqual(member.feeValues, receipt.feeValues) ||
           (member.feeValues &&
@@ -539,22 +549,22 @@ export function classifyKinesisCash({
           : [],
       ),
     );
+    // Groups are recorded only with at least one member.
+    const firstMember = group.members[0]!;
     if (
       (context.statementBalances ?? []).some(
         (reading) =>
-          Number(reading.account_id) ===
-          Number(group.members[0].values.accountId),
+          Number(reading.account_id) === Number(firstMember.values.accountId),
       ) ||
       context.ledger.some(
         (current) =>
           current.is_active &&
-          Number(current.account_id) ===
-            Number(group.members[0].values.accountId) &&
+          Number(current.account_id) === Number(firstMember.values.accountId) &&
           !ownedIds.has(Number(current.id)),
       )
     ) {
       valid = false;
-      const row = group.members[0].row;
+      const row = firstMember.row;
       blockers.push({
         reason: "cash_account_not_empty",
         batchId: Number(row.batch_id),

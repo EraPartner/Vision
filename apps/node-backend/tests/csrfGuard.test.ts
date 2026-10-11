@@ -32,7 +32,7 @@ describe('csrfGuard', () => {
   it('blocks cross-site and same-site state-changing requests via Sec-Fetch-Site', () => {
     for (const site of ['cross-site', 'same-site']) {
       const next = run({ method: 'POST', headers: { 'sec-fetch-site': site, origin: 'https://evil.com' } });
-      const err = next.mock.calls[0][0];
+      const err = next.mock.calls[0]![0];
       expect(err, site).toBeInstanceOf(ForbiddenError);
     }
   });
@@ -43,7 +43,7 @@ describe('csrfGuard', () => {
       url: '/api/admin/database/reset',
       headers: { 'sec-fetch-site': 'cross-site', origin: 'https://evil.example' },
     });
-    expect(next.mock.calls[0][0]).toBeInstanceOf(ForbiddenError);
+    expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
   });
 
   describe('Sec-Fetch-Site absent (older browsers / non-browser clients)', () => {
@@ -59,7 +59,7 @@ describe('csrfGuard', () => {
 
     it('blocks a non-allowlisted Origin', () => {
       const next = run({ method: 'POST', headers: { origin: 'https://evil.com' } });
-      expect(next.mock.calls[0][0]).toBeInstanceOf(ForbiddenError);
+      expect(next.mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
     });
   });
 

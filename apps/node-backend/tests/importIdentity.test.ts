@@ -25,12 +25,12 @@ describe("versioned import identity", () => {
   it("keeps source hashes byte-sensitive and dedup identity format-insensitive", () => {
     const a = budgetRow();
     const b = budgetRow({ raw_data: "coffee,-12.5000\r" });
-    const [ia] = assignImportIdentities([a], (row) =>
+    const ia = assignImportIdentities([a], (row) =>
       budgetingIdentityBase(row, "vision"),
-    );
-    const [ib] = assignImportIdentities([b], (row) =>
+    )[0]!;
+    const ib = assignImportIdentities([b], (row) =>
       budgetingIdentityBase(row, "vision"),
-    );
+    )[0]!;
     expect(ia.sourceRecordHash).not.toBe(ib.sourceRecordHash);
     expect(ia.fingerprint).toBe(ib.fingerprint);
     expect(ia.version).toBe(IMPORT_FINGERPRINT_VERSION);
@@ -57,7 +57,7 @@ describe("versioned import identity", () => {
     const identities = assignImportIdentities(rows, (row) =>
       budgetingIdentityBase(row, "wise"),
     );
-    expect(identities[0].fingerprint).toBe(identities[1].fingerprint);
+    expect(identities[0]!.fingerprint).toBe(identities[1]!.fingerprint);
   });
 
   it("isolates portfolio routes, accounts and currencies", () => {
@@ -81,7 +81,7 @@ describe("versioned import identity", () => {
           adapterName: "generic",
           accountIdentity,
         }),
-      )[0].fingerprint;
+      )[0]!.fingerprint;
     expect(fingerprint({ route: "cash" })).not.toBe(fingerprint({}));
     expect(fingerprint({}, "acct-b")).not.toBe(fingerprint({}));
     expect(fingerprint({ currency: "USD" })).not.toBe(fingerprint({}));
@@ -117,7 +117,7 @@ describe("versioned import identity", () => {
       }),
     );
 
-    expect(identities[0].fingerprint).not.toBe(identities[1].fingerprint);
+    expect(identities[0]!.fingerprint).not.toBe(identities[1]!.fingerprint);
   });
 
   it("hashes an empty literal record but not an absent record", () => {
@@ -126,12 +126,12 @@ describe("versioned import identity", () => {
   });
 
   it("does not make identity depend on the selected adapter path", () => {
-    const [builtIn] = assignImportIdentities([budgetRow()], (row) =>
+    const builtIn = assignImportIdentities([budgetRow()], (row) =>
       budgetingIdentityBase(row, "wise"),
-    );
-    const [generic] = assignImportIdentities([budgetRow()], (row) =>
+    )[0]!;
+    const generic = assignImportIdentities([budgetRow()], (row) =>
       budgetingIdentityBase(row, "renamed custom parser"),
-    );
+    )[0]!;
     expect(builtIn.fingerprint).toBe(generic.fingerprint);
   });
 });

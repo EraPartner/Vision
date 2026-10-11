@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockedBatchConvertGroups } from "./helpers/mockCurrencyConversion.ts";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 
@@ -20,11 +21,35 @@ import { balanceProvenanceLateral } from "../src/repositories/accountBalanceSql.
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
 >;
-const batchConvertGroupsWithHistoricalRateFallback = vi.mocked(
+const batchConvertGroupsWithHistoricalRateFallback = mockedBatchConvertGroups(
   rawBatchConvertGroupsWithHistoricalRateFallback,
 );
 
 beforeEach(() => vi.clearAllMocks());
+
+/**
+ * A current-balance row as pg returns it: BIGINT counts as text, DATE
+ * first/last transaction as local-midnight Dates, `date` through to_char.
+ */
+function balanceRow(overrides: Record<string, unknown> = {}) {
+  const bankAccount = String(overrides.bank_account ?? "A");
+  return {
+    account_id: 1,
+    bank_account: bankAccount,
+    display_name: bankAccount,
+    currency: "EUR",
+    balance: "0",
+    statement_balances: [],
+    account_currency: "EUR",
+    anchor_date: null,
+    post_anchor_count: null,
+    date: "2025-04-15",
+    transaction_count: "0",
+    first_transaction: null,
+    last_transaction: null,
+    ...overrides,
+  };
+}
 
 describe("banksRepository.getBankBalances", () => {
   it("returns empty when no transactions exist", async () => {
@@ -46,26 +71,26 @@ describe("banksRepository.getBankBalances", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          balanceRow({
             account_id: 41,
             bank_account: "A",
             currency: "EUR",
             balance: "1000",
             date: "2025-04-15",
             transaction_count: "10",
-            first_transaction: "2024-01-01",
-            last_transaction: "2025-04-15",
-          },
-          {
+            first_transaction: new Date(2024, 0, 1),
+            last_transaction: new Date(2025, 3, 15),
+          }),
+          balanceRow({
             account_id: 42,
             bank_account: "B",
             currency: "USD",
             balance: "200",
             date: "2025-04-15",
             transaction_count: "5",
-            first_transaction: "2024-06-01",
-            last_transaction: "2025-04-15",
-          },
+            first_transaction: new Date(2024, 5, 1),
+            last_transaction: new Date(2025, 3, 15),
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
@@ -117,21 +142,18 @@ describe("banksRepository.getBankBalances", () => {
           day: "2025-03-14",
           currency: "EUR",
           balance: "900",
-          date: "2025-03-14",
         },
         {
           bank_account: "A",
           day: "2025-03-15",
           currency: "EUR",
           balance: "1000",
-          date: "2025-03-15",
         },
         {
           bank_account: "B",
           day: "2025-03-15",
           currency: "EUR",
           balance: "500",
-          date: "2025-03-15",
         },
       ],
     });
@@ -185,14 +207,15 @@ describe("banksRepository.getBankBalances", () => {
     ]);
 
     const r = await banksRepository.getBankBalances();
-    expect(r.history.A[0].date).toBe("2025-04-01");
+    expect(r.history.A![0]!.date).toBe("2025-04-01");
   });
 
-  it("drops history rows missing a bank_account", async () => {
+  it("drops history rows with a blank bank_account", async () => {
+    // accounts.name is NOT NULL, so the defensive filter can only meet "".
     query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
       rows: [
         {
-          bank_account: null,
+          bank_account: "",
           day: "2025-04-01",
           currency: "EUR",
           balance: "100",
@@ -219,7 +242,8 @@ describe("banksRepository.getBankBalances", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          balanceRow({
+            account_id: 1,
             bank_account: "Cash",
             display_name: "Cash",
             currency: "EUR",
@@ -229,18 +253,20 @@ describe("banksRepository.getBankBalances", () => {
             anchor_date: null,
             post_anchor_count: "3",
             transaction_count: "3",
-            first_transaction: "2026-01-01",
-            last_transaction: "2026-07-01",
-          },
-          {
+            first_transaction: new Date(2026, 0, 1),
+            last_transaction: new Date(2026, 6, 1),
+          }),
+          balanceRow({
+            account_id: 2,
             bank_account: "BE12 3456",
             display_name: "KBC Zichtrekening",
             currency: "EUR",
             balance: "5100",
+            // json_build_object encodes the NUMERIC as a JSON number.
             statement_balances: [
               {
                 currency: "EUR",
-                balance: "5087.5",
+                balance: 5087.5,
                 balance_date: "2026-06-30",
               },
             ],
@@ -248,9 +274,9 @@ describe("banksRepository.getBankBalances", () => {
             anchor_date: "2026-06-30",
             post_anchor_count: "2",
             transaction_count: "40",
-            first_transaction: "2024-01-01",
-            last_transaction: "2026-07-20",
-          },
+            first_transaction: new Date(2024, 0, 1),
+            last_transaction: new Date(2026, 6, 20),
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
@@ -278,7 +304,7 @@ describe("banksRepository.getBankBalances", () => {
           balance: "5100",
           amount_eur: 5100,
           statement_balances: [
-            { currency: "EUR", balance: "5087.5", balance_date: "2026-06-30" },
+            { currency: "EUR", balance: 5087.5, balance_date: "2026-06-30" },
           ],
           account_currency: "EUR",
           anchor_date: "2026-06-30",
@@ -302,8 +328,8 @@ describe("banksRepository.getBankBalances", () => {
       balance: 200,
       post_anchor_count: 3,
     });
-    expect(r.accounts[0].anchor_date).toBeUndefined();
-    expect(r.accounts[0].drift).toBeUndefined();
+    expect(r.accounts[0]!.anchor_date).toBeUndefined();
+    expect(r.accounts[0]!.drift).toBeUndefined();
 
     // (b) stamped + manual: "as of 2026-06-30 statement + 2 entries since",
     // drift is the hub's native-currency figure, derived per currency from the
@@ -327,14 +353,14 @@ describe("banksRepository.getBankBalances", () => {
     query
       .mockResolvedValueOnce({
         rows: [
-          {
+          balanceRow({
             bank_account: "Old Row",
             currency: "EUR",
             balance: "10",
             transaction_count: "1",
-            first_transaction: "2026-01-01",
-            last_transaction: "2026-01-01",
-          },
+            first_transaction: new Date(2026, 0, 1),
+            last_transaction: new Date(2026, 0, 1),
+          }),
         ],
       })
       .mockResolvedValueOnce({ rows: [] });
@@ -352,7 +378,7 @@ describe("banksRepository.getBankBalances", () => {
     ]);
 
     const r = await banksRepository.getBankBalances();
-    expect(r.accounts[0].display_name).toBe("Old Row");
+    expect(r.accounts[0]!.display_name).toBe("Old Row");
   });
 
   it("selects display_name, the drift inputs and the lateral provenance columns in the current-balance SQL", async () => {
@@ -364,7 +390,7 @@ describe("banksRepository.getBankBalances", () => {
 
     await banksRepository.getBankBalances();
 
-    const currentBalanceSql = query.mock.calls[0][0];
+    const currentBalanceSql = query.mock.calls[0]![0];
     expect(currentBalanceSql).toContain("a.id AS account_id");
     expect(currentBalanceSql).toContain(
       "COALESCE(a.display_name, a.name) AS display_name",
@@ -397,7 +423,7 @@ describe("banksRepository.getBankBalances", () => {
 
     await banksRepository.getBankBalances();
 
-    const currentBalanceSql = query.mock.calls[0][0];
+    const currentBalanceSql = query.mock.calls[0]![0];
     expect(currentBalanceSql).toContain(
       balanceProvenanceLateral({ asOfDate: "$1::date" }).trim(),
     );
@@ -420,8 +446,8 @@ describe("banksRepository.getBankBalances", () => {
 
     await banksRepository.getBankBalances();
 
-    const currentBalanceSql = query.mock.calls[0][0];
-    const historySql = query.mock.calls[1][0];
+    const currentBalanceSql = query.mock.calls[0]![0];
+    const historySql = query.mock.calls[1]![0];
     expect(currentBalanceSql).toContain("a.in_net_worth = true");
     expect(historySql).toContain("a.in_net_worth = true");
     // The pre-existing filters stay.

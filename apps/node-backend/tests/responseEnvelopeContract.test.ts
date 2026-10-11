@@ -24,7 +24,7 @@ describe("response envelope writer convention", () => {
       return Array.from(source.matchAll(pattern), (match) => ({
         file: relativePath,
         method: match[1],
-        argument: match[2].trim(),
+        argument: match[2]!.trim(),
       }));
     });
 

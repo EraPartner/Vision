@@ -89,7 +89,7 @@ describe("bounded IBKR planner integration", () => {
       ready: true,
       summary: { repair_duplicate: 1, insert: 0 },
     });
-    expect(result.adoptions[0].after).toMatchObject({
+    expect(result.adoptions[0]!.after).toMatchObject({
       id: 40,
       note: "Keep this manual note",
       type: "buy",
@@ -175,7 +175,7 @@ describe("bounded IBKR planner integration", () => {
     expect(
       result.plan.actions.find((action) => action.rowId === 11),
     ).toMatchObject({ action: "duplicate", existingTransactionId: 42 });
-    expect(result.adoptions[0].before.id).toBe(40);
+    expect(result.adoptions[0]!.before.id).toBe(40);
   });
   it("keeps gross/net candidates ambiguous instead of expanding repair eligibility", () => {
     const exact = syntheticIbkrPlannerSource({
@@ -268,7 +268,7 @@ describe("bounded IBKR planner integration", () => {
       ready: true,
       summary: { repair_duplicate: 1, duplicate: 1, insert: 0 },
     });
-    expect(result.adoptions[0].after).toMatchObject({
+    expect(result.adoptions[0]!.after).toMatchObject({
       id: 40,
       amount: "3.3333",
       taxes: "0",

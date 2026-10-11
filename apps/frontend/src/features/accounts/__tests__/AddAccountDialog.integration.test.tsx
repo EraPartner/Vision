@@ -42,13 +42,16 @@ function mockCreate() {
                     id: String(params.id),
                     body: await request.json(),
                 });
+                // The anchor is a raw `RETURNING *` row: its NUMERIC(18,4)
+                // balance arrives as a decimal string.
                 return ok({
                     transaction: {
                         id: 1,
-                        balance: 123.45,
+                        balance: "123.4500",
                         transfer_source: "opening",
                     },
                     warning: null,
+                    links: [],
                 });
             },
         ),

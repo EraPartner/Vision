@@ -4,6 +4,8 @@ import type {
   ExpressNextFunction,
   ExpressRequest,
   ExpressResponse,
+  ResponseCallback,
+  ResponseChunk,
 } from "../types/express.ts";
 
 /**
@@ -22,6 +24,22 @@ const COMPRESSIBLE_RE = /json|text|javascript|xml|svg|x-www-form-urlencoded/;
 const NO_COMPRESS_BELOW = 1024;
 
 /**
+ * `Writable#write` called with the response's own argument shape. Node accepts
+ * `(chunk, encoding?, cb?)` with `encoding` doubling as the callback, which its
+ * overloaded type cannot express in one call.
+ */
+type WriteArgs = [
+  chunk: ResponseChunk,
+  encoding?: BufferEncoding | ResponseCallback,
+  cb?: ResponseCallback,
+];
+
+function writeTo(stream: Gzip, ...args: WriteArgs): boolean {
+  const write = stream.write.bind(stream) as (...args: WriteArgs) => boolean;
+  return write(...args);
+}
+
+/**
  * Quality-aware `Accept-Encoding` check. An explicit gzip entry takes
  * precedence over `*`, so `gzip;q=0, *;q=1` still refuses gzip.
  */
@@ -33,7 +51,7 @@ export function acceptsGzip(value: string | string[] | undefined): boolean {
   let wildcardQuality;
 
   for (const entry of entries) {
-    const [rawName, ...parameters] = entry.split(";");
+    const [rawName = "", ...parameters] = entry.split(";");
     const name = rawName.trim().toLowerCase();
     let quality = 1;
     for (const parameter of parameters) {
@@ -112,7 +130,7 @@ export function compression(
   // (their types come from the shared `ExpressResponse` write/end signatures).
   res.write = (chunk, encoding, cb) => {
     setup();
-    if (gzip) return gzip.write(chunk, encoding, cb);
+    if (gzip) return writeTo(gzip, chunk, encoding, cb);
     return originalWrite(chunk, encoding, cb);
   };
 
@@ -126,7 +144,8 @@ export function compression(
         cb = encoding;
         encoding = undefined;
       }
-      if (chunk != null && chunk !== "") gzip.write(chunk, encoding);
+      if (chunk != null && chunk !== "" && typeof chunk !== "function")
+        writeTo(gzip, chunk, encoding);
       gzip.end();
       if (typeof cb === "function") gzip.once("end", cb);
       return res;

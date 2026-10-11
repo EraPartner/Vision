@@ -7,20 +7,33 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  importBatchListRowSchema,
+  importBatchRowSchema,
+  importBatchTotalRowSchema,
+  importPreviewRowSchema,
+  recipientIdOnlyRowSchema,
+} from "../database/rows/imports.ts";
+import type {
+  ImportBatchListRow,
+  ImportPreviewRow,
+} from "../database/rows/imports.ts";
 
 import type { ImportBatchRow } from "../types/rows.ts";
 
-export type { ImportBatchRow };
+export type { ImportBatchRow, ImportPreviewRow };
 
 export async function listBatches({
   limit = 50,
   offset = 0,
 }: { limit?: number; offset?: number } = {}): Promise<{
-  batches: Omit<ImportBatchRow, "custom_config">[];
+  batches: ImportBatchListRow[];
   total: number;
 }> {
-  const [dataResult, countResult] = await Promise.all([
-    query<Omit<ImportBatchRow, "custom_config">>(
+  const [batches, countRows] = await Promise.all([
+    queryRows(
+      importBatchListRowSchema,
       `SELECT
                 b.id,
                 b.adapter_name,
@@ -42,21 +55,23 @@ export async function listBatches({
              LIMIT $1 OFFSET $2`,
       [limit, offset],
     ),
-    query<{ total: number }>(
+    queryRows(
+      importBatchTotalRowSchema,
       "SELECT COUNT(*)::int AS total FROM import_batches",
     ),
   ]);
 
-  return {
-    batches: dataResult.rows,
-    total: countResult.rows[0].total,
-  };
+  // An ungrouped COUNT(*) always returns exactly one row.
+  const [countRow] = countRows;
+  if (!countRow) throw new Error("import batch count returned no row");
+  return { batches, total: countRow.total };
 }
 
 export async function getBatch(
   id: number | string,
 ): Promise<ImportBatchRow | null> {
-  const { rows } = await query<ImportBatchRow>(
+  const row = await queryOne(
+    importBatchRowSchema,
     `SELECT
             b.id,
             b.adapter_name,
@@ -78,7 +93,7 @@ export async function getBatch(
          GROUP BY b.id`,
     [id],
   );
-  return rows[0] ?? null;
+  return row ?? null;
 }
 
 /**
@@ -90,8 +105,9 @@ export async function getBatch(
  */
 export async function getPreviewRows(
   batchId: number | string,
-): Promise<Record<string, unknown>[]> {
-  const { rows } = await query<Record<string, unknown>>(
+): Promise<ImportPreviewRow[]> {
+  return queryRows(
+    importPreviewRowSchema,
     `SELECT
             isr.id,
             isr.row_index,
@@ -133,7 +149,6 @@ export async function getPreviewRows(
           ORDER BY isr.row_index ASC`,
     [batchId],
   );
-  return rows;
 }
 
 /**
@@ -253,7 +268,8 @@ export async function rollbackBatch(
     // transaction, planned transaction, or merge alias. This prevents rolled-back
     // imports from leaving behind zero-transaction recipients, without touching
     // pre-existing recipients (older created_at) or any still in use.
-    const { rows: orphanRows } = await client.query(
+    const orphanRows = await queryRows(
+      recipientIdOnlyRowSchema,
       `SELECT r.id FROM recipients r
               WHERE r.id IN (
                     SELECT resolved_recipient_id FROM import_staging_rows
@@ -268,8 +284,9 @@ export async function rollbackBatch(
                 AND NOT EXISTS (SELECT 1 FROM planned_transactions pt WHERE pt.recipient_id = r.id)
                 AND NOT EXISTS (SELECT 1 FROM recipients r2 WHERE r2.primary_recipient_id = r.id)`,
       [id],
+      client,
     );
-    const orphanIds = orphanRows.map((r: { id: number }) => r.id);
+    const orphanIds = orphanRows.map((r) => r.id);
     let recipientsRemoved = 0;
     if (orphanIds.length > 0) {
       // recipient_bank_accounts FK is NO ACTION, so clear those first; the rest cascade.

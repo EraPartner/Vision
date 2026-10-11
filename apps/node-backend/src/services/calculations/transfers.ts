@@ -46,9 +46,14 @@ export function resolveTransferMatches(candidatePairs: TransferPair[]): {
   const usedIn = new Set<number>();
   for (const [outId, ins] of outToIns) {
     // Every inId of a candidate pair was seeded into `inToOuts` above.
-    if (ins.length === 1 && inToOuts.get(ins[0])!.length === 1) {
-      autoPairs.push({ outId, inId: ins[0] });
-      usedIn.add(ins[0]);
+    const [onlyIn] = ins;
+    if (
+      ins.length === 1 &&
+      onlyIn !== undefined &&
+      inToOuts.get(onlyIn)!.length === 1
+    ) {
+      autoPairs.push({ outId, inId: onlyIn });
+      usedIn.add(onlyIn);
     }
   }
 

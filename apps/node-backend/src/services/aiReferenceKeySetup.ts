@@ -59,7 +59,8 @@ export function ensureReferenceMappingKey({
   const keyLines = [
     ...content.matchAll(/^[ \t]*AI_REFERENCE_MAPPING_KEY[ \t]*=([^\r\n]*)$/gm),
   ];
-  if (keyLines.length > 1 || (keyLines.length === 1 && keyLines[0][1].trim()))
+  const [firstKeyLine] = keyLines;
+  if (keyLines.length > 1 || (firstKeyLine && firstKeyLine[1]?.trim()))
     throw Object.assign(
       new Error("The existing reference mapping key is invalid"),
       {
@@ -69,8 +70,8 @@ export function ensureReferenceMappingKey({
     );
   const encoded = random(32).toString("base64");
   const prefix = content && !content.endsWith("\n") ? "\n" : "";
-  const updated = keyLines.length
-    ? content.replace(keyLines[0][0], `AI_REFERENCE_MAPPING_KEY=${encoded}`)
+  const updated = firstKeyLine
+    ? content.replace(firstKeyLine[0], `AI_REFERENCE_MAPPING_KEY=${encoded}`)
     : `${content}${prefix}AI_REFERENCE_MAPPING_KEY=${encoded}\n`;
   const temporary = `${filePath}.agentcloak-${randomUUID()}.tmp`;
   let descriptor: number | undefined;

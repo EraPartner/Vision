@@ -2,7 +2,15 @@
  * Info sub-repository: category statistics and transaction summaries.
  */
 
-import { query, queryPrepared } from "../database/connection.ts";
+import { queryPrepared } from "../database/connection.ts";
+import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { countRowSchema } from "../database/rowSchemas.ts";
+import {
+  bankLabelRowSchema,
+  categoryCurrencyAmountRowSchema,
+  categoryPivotRowSchema,
+  mvCategoryTotalsRowSchema,
+} from "../database/rows/info.ts";
 import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import {
   toDecimal,
@@ -37,6 +45,13 @@ export interface CategoryPivotOptions {
   endDate?: string;
 }
 
+/** An ungrouped `count(*)` always returns exactly one row. */
+function parseCountRow(rows: Array<{ count: string }>): number {
+  const [row] = rows;
+  if (!row) throw new Error("count(*) returned no row");
+  return parseInt(row.count, 10);
+}
+
 export const statisticsRepository = {
   async getCategoryBreakdown(
     targetCurrency = "EUR",
@@ -48,7 +63,8 @@ export const statisticsRepository = {
       // Expand the effective category only once through the ancestry view. A
       // transaction assigned directly to the ancestor and one assigned four
       // levels below both contribute one row to this one requested rollup.
-      const result = await query(
+      const rows = await queryRows(
+        categoryCurrencyAmountRowSchema,
         `
         SELECT ancestor.id AS category_id, ancestor.path_name AS name,
                SUM(t.amount) AS amount, COUNT(*) AS cnt, t.currency
@@ -66,7 +82,7 @@ export const statisticsRepository = {
         [ancestorCategoryId],
       );
       const converted = await convertRowsToEur(
-        mapRowsForAmountConversion(result.rows, "amount", false),
+        mapRowsForAmountConversion(rows, "amount", false),
         targetCurrency,
       );
       let count = 0;
@@ -75,11 +91,12 @@ export const statisticsRepository = {
         count += parseInt(row.cnt, 10) || 0;
         total = total.plus(toDecimal(row.amount_eur));
       }
-      return converted.length
+      const [first] = converted;
+      return first
         ? [
             {
               id: ancestorCategoryId,
-              name: converted[0].name,
+              name: first.name,
               count,
               total: roundToCents(toNumber(total)),
             },
@@ -90,11 +107,12 @@ export const statisticsRepository = {
     // The MV (mv_category_totals) is built transfer-excluding, so it is only a
     // valid fast path when the caller also wants transfers excluded.
     if (!includeTransfers && (await mvAvailable("mv_category_totals"))) {
-      const catResult = await query(
+      const catRows = await queryRows(
+        mvCategoryTotalsRowSchema,
         "SELECT * FROM mv_category_totals ORDER BY count DESC LIMIT 500",
       );
       const convertedRows = await convertRowsToEur(
-        mapRowsForAmountConversion(catResult.rows, "total", true),
+        mapRowsForAmountConversion(catRows, "total", true),
         targetCurrency,
       );
       return buildCategoryFromConvertedRows(convertedRows);
@@ -114,7 +132,9 @@ export const statisticsRepository = {
     // default → PRIMARY recipient's default), matching transactionRepository —
     // an alias row categorised via its primary must not show as UNCATEGORISED
     // here while the transactions list shows it categorised.
-    const categoryAmountResult = await query(`
+    const categoryAmountRows = await queryRows(
+      categoryCurrencyAmountRowSchema,
+      `
       SELECT COALESCE(c.id, -1) AS category_id,
              COALESCE(c.path_name, 'UNCATEGORISED') AS name,
              SUM(t.amount) AS amount,
@@ -129,17 +149,18 @@ export const statisticsRepository = {
       GROUP BY COALESCE(c.id, -1),
                COALESCE(c.path_name, 'UNCATEGORISED'),
                t.currency
-    `);
+    `,
+    );
 
     const catConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(categoryAmountResult.rows, "amount", false),
+      mapRowsForAmountConversion(categoryAmountRows, "amount", false),
       targetCurrency,
     );
 
     const catMap: Record<string, CategoryTotal> = {};
     for (const row of catConverted) {
       const catId =
-        row.category_id === -1 ? null : parseInt(row.category_id, 10);
+        row.category_id === -1 ? null : parseInt(String(row.category_id), 10);
       const eur = row.amount_eur;
       const key = catId ?? "null";
       if (!catMap[key])
@@ -171,7 +192,9 @@ export const statisticsRepository = {
         ORDER BY a.name`,
       [],
     );
-    return result.rows.map((r: { bank_account: string }) => r.bank_account);
+    return checkRows(bankLabelRowSchema, result.rows).map(
+      (r) => r.bank_account,
+    );
   },
 
   async getTransactionCount(
@@ -187,14 +210,14 @@ export const statisticsRepository = {
         "SELECT count(*) FROM transactions WHERE is_active = true AND account_id = $1",
         [accountId],
       );
-      return parseInt(result.rows[0].count, 10);
+      return parseCountRow(checkRows(countRowSchema, result.rows));
     }
     const result = await queryPrepared(
       "info_tx_count",
       "SELECT count(*) FROM transactions WHERE is_active = true",
       [],
     );
-    return parseInt(result.rows[0].count, 10);
+    return parseCountRow(checkRows(countRowSchema, result.rows));
   },
 
   async getCategoryPivot({
@@ -271,12 +294,12 @@ export const statisticsRepository = {
       ORDER BY period
     `;
 
-    const result = await query(sql, params);
+    const pivotRows = await queryRows(categoryPivotRowSchema, sql, params);
 
     // Two conversion legs per group (income + expense) so each converts at its
     // own date's rate. cnt is the whole group's count — counted once (income leg).
     const convRows = [];
-    for (const r of result.rows) {
+    for (const r of pivotRows) {
       const base = {
         period: r.period,
         category_id: r.category_id,
@@ -304,7 +327,9 @@ export const statisticsRepository = {
     const periodCatMap: Record<string, Record<string, CategoryPivotCell>> = {};
     for (const row of converted) {
       const period = row.period;
-      const catId = row.category_id ? parseInt(row.category_id, 10) : null;
+      const catId = row.category_id
+        ? parseInt(String(row.category_id), 10)
+        : null;
       const catName = row.category_name || "Uncategorised";
       const eur = row.amount_eur;
       const catKey = catId ?? "null";

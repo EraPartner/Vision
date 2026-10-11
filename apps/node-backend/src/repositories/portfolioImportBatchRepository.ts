@@ -7,71 +7,37 @@
  */
 
 import { query } from "../database/connection.ts";
-import type { PortfolioImportBatchRow } from "../types/rows.ts";
+import { checkRows, queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  batchIdStatusRowSchema,
+  committedStagingRowSchema,
+  intTotalRowSchema,
+  investmentCreationRowSchema,
+  investmentResolutionRowSchema,
+  overrideInvestmentsSummaryRowSchema,
+  portfolioImportBatchLockRowSchema,
+  portfolioImportBatchSummaryRowSchema,
+  portfolioImportPreviewRowSchema,
+  stagingOldStatusRowSchema,
+  stagingRowIndexRowSchema,
+} from "../database/rows/portfolioImport.ts";
+import type {
+  CommittedStagingRow,
+  InvestmentCreationRow,
+  InvestmentResolutionRow,
+  PortfolioImportBatchLockRow,
+  PortfolioImportBatchSummaryRow,
+  PortfolioImportPreviewRow,
+} from "../database/rows/portfolioImport.ts";
+
+export type {
+  InvestmentResolutionRow,
+  PortfolioImportBatchLockRow,
+  PortfolioImportBatchSummaryRow,
+  PortfolioImportPreviewRow,
+};
 
 type Id = number | string;
-
-export type PortfolioImportBatchSummaryRow = Pick<
-  PortfolioImportBatchRow,
-  | "id"
-  | "adapter_name"
-  | "source_filename"
-  | "source_size_bytes"
-  | "default_asset_class"
-  | "default_type"
-  | "status"
-  | "account_id"
-  | "rows_total"
-  | "rows_imported"
-  | "rows_duplicate"
-  | "rows_error"
-  | "error_summary"
-  | "started_at"
-  | "completed_at"
->;
-
-export type PortfolioImportBatchLockRow = Pick<
-  PortfolioImportBatchRow,
-  "status" | "is_brokerage" | "adapter_name" | "custom_config" | "account_id"
->;
-
-/** NUMERIC columns arrive from pg as strings; BIGINT ids too. */
-export type PortfolioImportPreviewRow = {
-  id: string;
-  row_index: number;
-  status: string;
-  route: string | null;
-  /** 'YYYY-MM-DD' */
-  tx_date: string | null;
-  type: string | null;
-  type_raw: string | null;
-  symbol_raw: string | null;
-  name_raw: string | null;
-  units: string | null;
-  price_per_unit: string | null;
-  amount: string | null;
-  fees: string | null;
-  taxes: string | null;
-  currency: string | null;
-  fx_rate_to_eur: string | null;
-  note: string | null;
-  match_source: string | null;
-  error_message: string | null;
-  resolved_investment_id: number | null;
-  user_override_investment_id: number | null;
-  effective_investment_id: number | null;
-  investment_name: string | null;
-  investment_symbol: string | null;
-  investment_asset_class: string | null;
-};
-
-export type InvestmentResolutionRow = {
-  id: string;
-  status: string;
-  route: string | null;
-  error_message: string | null;
-  user_override_investment_id: number | null;
-};
 
 const BATCH_COLUMNS = `id, adapter_name, source_filename, source_size_bytes,
   default_asset_class, default_type, status, account_id,
@@ -151,25 +117,27 @@ export async function listBatches({
   batches: PortfolioImportBatchSummaryRow[];
   total: number;
 }> {
-  const { rows } = await query<PortfolioImportBatchSummaryRow>(
+  const rows = await queryRows(
+    portfolioImportBatchSummaryRowSchema,
     `SELECT ${BATCH_COLUMNS} FROM portfolio_import_batches
       ORDER BY started_at DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
-  const countResult = await query<{ total: number }>(
+  const countRow = await queryOne(
+    intTotalRowSchema,
     `SELECT COUNT(*)::int AS total FROM portfolio_import_batches`,
   );
-  return { batches: rows, total: countResult.rows[0]?.total ?? 0 };
+  return { batches: rows, total: countRow?.total ?? 0 };
 }
 
 export async function getBatch(
   id: Id,
 ): Promise<PortfolioImportBatchSummaryRow | undefined> {
-  const { rows } = await query<PortfolioImportBatchSummaryRow>(
+  return queryOne(
+    portfolioImportBatchSummaryRowSchema,
     `SELECT ${BATCH_COLUMNS} FROM portfolio_import_batches WHERE id = $1`,
     [id],
   );
-  return rows[0];
 }
 
 /**
@@ -178,14 +146,14 @@ export async function getBatch(
 export async function lockBatchForUpdate(
   batchId: Id,
 ): Promise<PortfolioImportBatchLockRow | undefined> {
-  const { rows } = await query<PortfolioImportBatchLockRow>(
+  return queryOne(
+    portfolioImportBatchLockRowSchema,
     `SELECT status, is_brokerage, adapter_name, custom_config, account_id
        FROM portfolio_import_batches
       WHERE id = $1
       FOR UPDATE`,
     [batchId],
   );
-  return rows[0];
 }
 
 /**
@@ -201,7 +169,8 @@ export async function getImportReadinessProblems(
   provedCompanionRowIds: Id[] = [],
   selectedRowIds: Id[] | undefined = undefined,
 ): Promise<Array<{ row_index: number }>> {
-  const { rows } = await query<{ row_index: number }>(
+  return queryRows(
+    stagingRowIndexRowSchema,
     `SELECT row_index
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1
@@ -221,7 +190,6 @@ export async function getImportReadinessProblems(
       ORDER BY row_index`,
     [batchId, accountId ?? null, provedCompanionRowIds, selectedRowIds ?? null],
   );
-  return rows;
 }
 
 /** Complete only the selected adoption scope; deferred source rows stay reviewable. */
@@ -229,8 +197,9 @@ export async function finalizeAdoptionOnlyBatch(
   batchId: Id,
   pending: number,
   complete: boolean,
-): Promise<{ id: number; status: string } | undefined> {
-  const { rows } = await query<{ id: number; status: string }>(
+): Promise<{ id: string; status: string } | undefined> {
+  return queryOne(
+    batchIdStatusRowSchema,
     `UPDATE portfolio_import_batches b SET status=CASE WHEN $3::boolean THEN 'complete' ELSE 'awaiting_review' END,
        completed_at=CASE WHEN $3::boolean THEN NOW() ELSE NULL END
      WHERE b.id=$1 AND (SELECT count(*) FROM portfolio_import_staging_rows s
@@ -238,7 +207,6 @@ export async function finalizeAdoptionOnlyBatch(
      RETURNING id,status`,
     [batchId, pending, complete],
   );
-  return rows[0];
 }
 
 /**
@@ -271,7 +239,8 @@ export async function getManualPortfolioOverlaps(
   batchId: Id,
   accountId: number | null | undefined,
 ): Promise<Array<{ row_index: number }>> {
-  const { rows } = await query<{ row_index: number }>(
+  return queryRows(
+    stagingRowIndexRowSchema,
     `SELECT DISTINCT isr.row_index
        FROM portfolio_import_staging_rows isr
        JOIN portfolio_transactions pt
@@ -304,7 +273,6 @@ export async function getManualPortfolioOverlaps(
       ORDER BY isr.row_index`,
     [batchId, accountId ?? null],
   );
-  return rows;
 }
 
 /**
@@ -314,7 +282,8 @@ export async function getManualPortfolioOverlaps(
 export async function getPreviewRows(
   batchId: Id,
 ): Promise<PortfolioImportPreviewRow[]> {
-  const { rows } = await query<PortfolioImportPreviewRow>(
+  return queryRows(
+    portfolioImportPreviewRowSchema,
     `SELECT isr.id,
             isr.row_index,
             isr.status,
@@ -347,7 +316,6 @@ export async function getPreviewRows(
       ORDER BY isr.row_index ASC`,
     [batchId],
   );
-  return rows;
 }
 
 /**
@@ -375,7 +343,7 @@ export async function overrideInvestment({
   // the caller can tell an error→matched reset from a plain re-point of an
   // already-matched row — RETURNING alone only sees the post-update state, which
   // is indistinguishable between the two.
-  const result = await query<{ old_status: string }>(
+  const result = await query(
     `WITH prev AS (
         SELECT id, status AS old_status
           FROM portfolio_import_staging_rows
@@ -404,13 +372,14 @@ export async function overrideInvestment({
      SELECT old_status FROM upd`,
     [batchId, rowId, investmentId],
   );
+  const [updated] = checkRows(stagingOldStatusRowSchema, result.rows);
 
   // If we flipped an error row back to matched, the batch's cumulative
   // rows_error over-counts it — decrement so total counts don't exceed rows_total.
   if (
     (result.rowCount ?? 0) > 0 &&
     investmentId != null &&
-    result.rows[0]?.old_status === "error"
+    updated?.old_status === "error"
   ) {
     await query(
       `UPDATE portfolio_import_batches
@@ -444,7 +413,8 @@ export async function lockInvestmentResolutionRows({
     return { batchStatus: undefined, rows: [] };
   }
 
-  const { rows } = await query<InvestmentResolutionRow>(
+  const rows = await queryRows(
+    investmentResolutionRowSchema,
     `SELECT id, status, route, error_message, user_override_investment_id
        FROM portfolio_import_staging_rows
       WHERE batch_id = $1 AND id = ANY($2::bigint[])
@@ -478,12 +448,8 @@ export async function overrideInvestments({
   updatedCount: number;
   resetErrorCount: number;
 }> {
-  const { rows } = await query<{
-    requested_count: number;
-    eligible_count: number;
-    updated_count: number;
-    reset_error_count: number;
-  }>(
+  const rows = await queryRows(
+    overrideInvestmentsSummaryRowSchema,
     `WITH requested AS (
         SELECT DISTINCT unnest($2::bigint[]) AS id
      ),
@@ -561,23 +527,9 @@ export async function getRowForInvestmentCreation({
 }: {
   batchId: Id;
   rowId: Id;
-}): Promise<
-  | {
-      symbol_raw: string | null;
-      name_raw: string | null;
-      currency: string | null;
-      default_asset_class: string | null;
-      custom_config: PortfolioImportBatchRow["custom_config"];
-    }
-  | undefined
-> {
-  const { rows } = await query<{
-    symbol_raw: string | null;
-    name_raw: string | null;
-    currency: string | null;
-    default_asset_class: string | null;
-    custom_config: PortfolioImportBatchRow["custom_config"];
-  }>(
+}): Promise<InvestmentCreationRow | undefined> {
+  return queryOne(
+    investmentCreationRowSchema,
     `SELECT isr.symbol_raw, isr.name_raw, isr.currency, b.default_asset_class,
             b.custom_config
        FROM portfolio_import_staging_rows isr
@@ -585,7 +537,6 @@ export async function getRowForInvestmentCreation({
       WHERE isr.batch_id = $1 AND isr.id = $2`,
     [batchId, rowId],
   );
-  return rows[0];
 }
 
 /**
@@ -599,14 +550,9 @@ export async function getRowForInvestmentCreation({
  */
 export async function getCommittedRows(
   batchId: Id,
-): Promise<
-  Array<{ id: number; route: string | null; investment_id: number | null }>
-> {
-  const { rows } = await query<{
-    id: number;
-    route: string | null;
-    investment_id: number | null;
-  }>(
+): Promise<CommittedStagingRow[]> {
+  return queryRows(
+    committedStagingRowSchema,
     `SELECT isr.committed_txn_id AS id, isr.route, pt.investment_id
        FROM portfolio_import_staging_rows isr
        LEFT JOIN portfolio_transactions pt
@@ -614,7 +560,6 @@ export async function getCommittedRows(
       WHERE isr.batch_id = $1 AND isr.committed_txn_id IS NOT NULL`,
     [batchId],
   );
-  return rows;
 }
 
 /**

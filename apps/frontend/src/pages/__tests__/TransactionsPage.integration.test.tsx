@@ -9,6 +9,15 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok, err } from "@/test/msw/handlers";
 import TransactionsPage from "@/pages/TransactionsPage";
+import {
+    transactionsBody,
+    transactionRow,
+    recipientsBody,
+    recipientRow,
+    accountsBody,
+    accountListItem,
+    transactionCreated,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -120,7 +129,7 @@ describe("TransactionsPage (integration)", () => {
         const retry = await screen.findByRole("button", { name: /retry/i });
         server.use(
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({ items: [], total: 0 }),
+                ok(transactionsBody({ items: [], total: 0 })),
             ),
         );
         await userEvent.setup().click(retry);
@@ -201,20 +210,20 @@ describe("TransactionsPage (integration)", () => {
         const captured: URLSearchParams[] = [];
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        {
+                        accountListItem({
                             id: 7,
                             name: "KBC Checking",
                             display_name: "KBC Checking",
                             currency: "EUR",
                             type: "checking",
                             is_active: true,
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 captured.push(new URL(request.url).searchParams);
@@ -343,43 +352,44 @@ describe("TransactionsPage (integration)", () => {
         // Return one recipient so the form guard passes
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        {
+                        accountListItem({
                             id: 8,
                             name: "IBAN001",
                             display_name: "IBAN001",
                             currency: "EUR",
                             type: "checking",
                             is_active: true,
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/recipients`, () =>
-                ok({
-                    items: [{ id: 1, name: "Test Recipient", active: true }],
+                ok(recipientsBody({
+                    items: [recipientRow({ id: 1, name: "Test Recipient", active: true })],
                     total: 1,
                     limit: 200,
                     offset: 0,
                     links: [],
-                }),
+                })),
             ),
             http.post(`${API_BASE}/api/transactions`, () => {
                 postCalled = true;
                 return HttpResponse.json({
                     ok: true,
-                    data: {
+                    data: transactionCreated({
                         id: 42,
                         transaction_date: "2025-01-15",
                         memo: "Test purchase",
                         amount: -25.5,
                         currency: "EUR",
                         bank_account: "IBAN001",
+                        account_id: 1,
                         is_active: true,
-                    },
+                    }),
                 });
             }),
         );
@@ -671,9 +681,9 @@ describe("TransactionsPage (integration)", () => {
     it("does not render error banner when paginated data is returned", async () => {
         server.use(
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({
+                ok(transactionsBody({
                     items: [
-                        {
+                        transactionRow({
                             id: 1,
                             transaction_date: "2025-01-15",
                             date: "2025-01-15",
@@ -684,8 +694,8 @@ describe("TransactionsPage (integration)", () => {
                             is_active: true,
                             bank_account: "BE12",
                             memo: "Test 1",
-                        },
-                        {
+                        }),
+                        transactionRow({
                             id: 2,
                             transaction_date: "2025-01-16",
                             date: "2025-01-16",
@@ -696,13 +706,13 @@ describe("TransactionsPage (integration)", () => {
                             is_active: true,
                             bank_account: "BE12",
                             memo: "Test 2",
-                        },
+                        }),
                     ],
                     total: 2,
                     limit: 50,
                     offset: 0,
                     links: [],
-                }),
+                })),
             ),
         );
         renderTransactionsPage();
@@ -719,15 +729,15 @@ describe("TransactionsPage (integration)", () => {
         let includeBalance: string | null = null;
         server.use(
             http.get(`${API_BASE}/api/recipients/:id`, ({ params }) =>
-                ok({ id: Number(params.id), name: "Test recipient" }),
+                ok(recipientRow({ id: Number(params.id), name: "Test recipient" })),
             ),
             http.get(`${API_BASE}/api/transactions`, ({ request }) => {
                 includeBalance = new URL(request.url).searchParams.get(
                     "include_balance",
                 );
-                return ok({
+                return ok(transactionsBody({
                     items: [
-                        {
+                        transactionRow({
                             id: 91,
                             transaction_date: "2026-01-02",
                             recipient_name: "Dollar row",
@@ -735,8 +745,8 @@ describe("TransactionsPage (integration)", () => {
                             currency: "USD",
                             running_balance: 35,
                             is_active: true,
-                        },
-                        {
+                        }),
+                        transactionRow({
                             id: 90,
                             transaction_date: "2026-01-01",
                             recipient_name: "Euro row",
@@ -744,13 +754,13 @@ describe("TransactionsPage (integration)", () => {
                             currency: "EUR",
                             running_balance: 110,
                             is_active: true,
-                        },
+                        }),
                     ],
                     total: 2,
                     limit: 50,
                     offset: 0,
                     links: [],
-                });
+                }));
             }),
         );
 

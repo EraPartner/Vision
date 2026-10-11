@@ -27,18 +27,21 @@ import {
 import { useExcludedIds } from "@/hooks/useExcludedIds";
 import { useAllCategories } from "@/hooks/useCategories";
 import { categoryKeys } from "@/lib/queryKeys";
+import {
+    categoryRow,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 function category(id: number, isActive: boolean) {
-    return {
+    return categoryRow({
         id,
         general: "FOOD",
         detail: `D${id}`,
         is_active: isActive,
         created_at: "2025-01-01T00:00:00.000Z",
         links: [],
-    };
+    });
 }
 
 /** Counts every GET /api/categories and answers with one hidden category (id 42). */

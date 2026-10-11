@@ -42,7 +42,7 @@ describe("OpenAI egress helper contract", () => {
       },
       { fetchImpl, apiKey: "synthetic-key" },
     );
-    const [url, options] = fetchImpl.mock.calls[0];
+    const [url, options] = fetchImpl.mock.calls[0]!;
     expect(url).toBe("https://api.openai.com/v1/responses");
     expect(options.redirect).toBe("error");
     expect(JSON.parse(options.body)).toEqual({
@@ -109,7 +109,10 @@ describe("OpenAI egress helper contract", () => {
           }),
       },
     );
-    expect(response.outputText).toBe('{"schemaVersion":1}');
+    expect(response).toMatchObject({
+      ok: true,
+      outputText: '{"schemaVersion":1}',
+    });
   });
 
   it("rejects oversized provider responses before buffering them", async () => {
@@ -276,6 +279,43 @@ describe("OpenAI egress helper contract", () => {
       else process.env.OPENAI_API_KEY = previous;
     }
   });
+
+  it.each([
+    ["no output text", { ok: true }],
+    [
+      "a non-numeric token count",
+      { ok: true, outputText: "{}", usage: { input_tokens: "12" } },
+    ],
+    ["a failure without a code", { ok: false }],
+  ])(
+    "rejects helper output with %s as invalid output",
+    async (_label, output) => {
+      const previous = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = "synthetic-key";
+      const spawnImpl = vi.fn(() => {
+        const child = new EventEmitter() as FakeChild;
+        child.stdin = new PassThrough();
+        child.stdout = new PassThrough();
+        child.kill = vi.fn();
+        queueMicrotask(() => {
+          child.stdout.end(JSON.stringify(output));
+          child.emit("close", 0, null);
+        });
+        return child;
+      });
+      try {
+        await expect(
+          callOpenAiBroker(
+            { body: "{}" },
+            { spawnImpl: loose<typeof spawn>(spawnImpl), platform: "darwin" },
+          ),
+        ).rejects.toMatchObject({ code: "BROKER_INVALID_OUTPUT" });
+      } finally {
+        if (previous === undefined) delete process.env.OPENAI_API_KEY;
+        else process.env.OPENAI_API_KEY = previous;
+      }
+    },
+  );
 
   it("does not launch a helper for an already cancelled parent request", async () => {
     const previous = process.env.OPENAI_API_KEY;

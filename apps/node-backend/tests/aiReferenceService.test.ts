@@ -100,11 +100,11 @@ describe("scoped reversible references", () => {
     );
     expect(prepared.scope).toMatchObject({ id: SCOPE_ID, count: 1 });
     expect(prepared.request.selectedSummary).not.toContain("<img");
-    const token = persisted!.entries[0].token;
+    const token = persisted!.entries[0]!.token;
     expect(prepared.request.selectedSummary!.match(/\[\[VR1:/g)).toHaveLength(
       2,
     );
-    expect(persisted!.entries[0].ciphertext.toString("utf8")).not.toContain(
+    expect(persisted!.entries[0]!.ciphertext.toString("utf8")).not.toContain(
       "<img",
     );
 
@@ -122,11 +122,11 @@ describe("scoped reversible references", () => {
       },
     );
     expect(restored.summary).toContain("<img src=x onerror=alert(1)>");
-    expect(restored.facts[0].text).toContain("<img");
-    expect(restored.evidence[0].excerpt).toContain("<img");
-    expect(restored.evidence[0].id).toBe("selected-evidence");
-    expect(restored.evidence[0].label).toBe("Stable structural label");
-    expect(restored.evidence[0].locator).toBe("stable:locator");
+    expect(restored.facts[0]!.text).toContain("<img");
+    expect(restored.evidence[0]!.excerpt).toContain("<img");
+    expect(restored.evidence[0]!.id).toBe("selected-evidence");
+    expect(restored.evidence[0]!.label).toBe("Stable structural label");
+    expect(restored.evidence[0]!.locator).toBe("stable:locator");
   });
 
   it("protects Desktop findings in the preview and reveals them from the encrypted scope", async () => {
@@ -166,10 +166,10 @@ describe("scoped reversible references", () => {
     expect(prepared.scope).toMatchObject({ id: SCOPE_ID, count: 1 });
     expect(prepared.request.selectedSummary).not.toContain("Alice Johnson");
     expect(prepared.request.selectedEvidence).not.toContain("Alice Johnson");
-    const token = persisted!.entries[0].token;
+    const token = persisted!.entries[0]!.token;
     expect(prepared.request.selectedSummary).toContain(token);
     expect(prepared.request.selectedEvidence).toContain(token);
-    expect(persisted!.entries[0].ciphertext.toString("utf8")).not.toContain(
+    expect(persisted!.entries[0]!.ciphertext.toString("utf8")).not.toContain(
       "Alice Johnson",
     );
     const restored = await restoreAnswerForJob(
@@ -372,7 +372,7 @@ describe("scoped reversible references", () => {
   it("rejects reference tokens in non-display response structure", async () => {
     const token = "[[VR1:account:AAAAAAAAAAAAAAAAAAAAAAAA]]";
     const response = answer("Safe display text");
-    response.evidence[0].label = token;
+    response.evidence[0]!.label = token;
     await expect(
       restoreAnswerForJob("job-without-scope", response, {
         key: KEY,

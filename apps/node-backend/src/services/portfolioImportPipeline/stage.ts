@@ -8,6 +8,8 @@
  */
 
 import { query, withTransaction } from "../../database/connection.ts";
+import { queryOne } from "../../database/rowContracts.ts";
+import { bigintIdRowSchema } from "../../database/rows/portfolioImport.ts";
 import { logger } from "../../config/logger.ts";
 import { parsedDateToYmd } from "../../lib/importDates.ts";
 import { parseWithConfig } from "./portfolioGenericAdapter.ts";
@@ -59,7 +61,8 @@ export async function createBatch({
   isBrokerage?: boolean;
   accountId?: number | string | null;
 }): Promise<number> {
-  const result = await query<{ id: string }>(
+  const inserted = await queryOne(
+    bigintIdRowSchema,
     `INSERT INTO portfolio_import_batches
        (adapter_name, source_filename, source_size_bytes, custom_config, default_asset_class, default_type, is_brokerage, account_id, status, started_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NOW())
@@ -75,7 +78,8 @@ export async function createBatch({
       accountId != null ? Number(accountId) : null,
     ],
   );
-  return normalizeCreatedBatchId(result.rows[0].id);
+  // INSERT ... RETURNING without ON CONFLICT yields exactly one row.
+  return normalizeCreatedBatchId(inserted!.id);
 }
 
 /**

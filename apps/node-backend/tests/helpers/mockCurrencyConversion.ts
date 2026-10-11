@@ -1,4 +1,10 @@
 import { vi } from "vitest";
+import type { Mock } from "vitest";
+import type {
+  ConvertRowsOptions,
+  convertRowsToEur,
+} from "../../src/services/currency/currencyConversionService.ts";
+import type { batchConvertGroupsWithHistoricalRateFallback } from "../../src/repositories/infoRepositoryHelpers.ts";
 
 /** A row as handed to the conversion boundary: anything with an optional `amount`. */
 export interface ConvertibleRow {
@@ -60,4 +66,38 @@ export function mockCurrencyConversion(
       FALLBACK_RATES: module.FALLBACK_RATES,
     },
   };
+}
+
+/** A primed converted row: the caller's own columns plus `amount_eur`. */
+export type ConvertedFixtureRow = Record<string, unknown> & {
+  amount_eur: number;
+};
+
+// `vi.mocked` instantiates a generic function at its type-parameter
+// constraint, so primed converted rows could carry only the conversion
+// columns. Fixtures prime the caller's own columns too; these views type the
+// mocks with fixture rows instead.
+
+/** The mocked `convertRowsToEur`, typed for fixture rows. */
+export function mockedConvertRowsToEur(fn: typeof convertRowsToEur) {
+  return vi.mocked(fn) as unknown as Mock<
+    (
+      rows: readonly Record<string, unknown>[],
+      targetCurrency?: string,
+      options?: ConvertRowsOptions | null,
+    ) => Promise<ConvertedFixtureRow[]>
+  >;
+}
+
+/** The mocked `batchConvertGroupsWithHistoricalRateFallback`, typed for fixture rows. */
+export function mockedBatchConvertGroups(
+  fn: typeof batchConvertGroupsWithHistoricalRateFallback,
+) {
+  return vi.mocked(fn) as unknown as Mock<
+    (
+      groups: readonly (readonly Record<string, unknown>[])[],
+      targetCurrency: string,
+      dateField?: string,
+    ) => Promise<ConvertedFixtureRow[][]>
+  >;
 }

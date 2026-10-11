@@ -10,7 +10,12 @@ import type {
     TransactionsListResponse,
     TransactionUpdate,
 } from "@/types/api";
-import { TransactionListSchema } from "@vision/types/contracts";
+import {
+    BulkDeleteResultSchema,
+    BulkUpdateResultSchema,
+    TransactionCreatedSchema,
+    TransactionListSchema,
+} from "@vision/types/contracts";
 import { apiRequest, checkResponseContract } from "@/lib/api/client";
 import { requestBlobWithResponse } from "@/lib/api/helpers";
 import { requestWithQuery } from "@/lib/api/helpers";
@@ -76,6 +81,7 @@ export function createTransaction(
     return apiRequest<Transaction>("/api/transactions", {
         method: "POST",
         body: JSON.stringify(transaction),
+        schema: TransactionCreatedSchema,
     });
 }
 
@@ -110,6 +116,7 @@ export function bulkDeleteTransactions(
     return apiRequest<BulkDeleteResult>("/api/transactions/bulk-delete", {
         method: "POST",
         body: JSON.stringify(request),
+        schema: BulkDeleteResultSchema,
     });
 }
 
@@ -119,6 +126,7 @@ export function bulkUpdateTransactions(
     return apiRequest<BulkUpdateResult>("/api/transactions/bulk-update", {
         method: "POST",
         body: JSON.stringify(request),
+        schema: BulkUpdateResultSchema,
     });
 }
 

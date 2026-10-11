@@ -199,7 +199,8 @@ describe("recipient merge atomicity (ADR-014)", () => {
     client.query.mockImplementation(async (sql) => {
       if (sql === "BEGIN" || sql === "ROLLBACK" || sql === "COMMIT")
         return { rows: [] };
-      if (sql.includes("FOR UPDATE")) return { rows: [{ id: 1 }] };
+      if (sql.includes("FOR UPDATE"))
+        return { rows: [{ id: 1, primary_recipient_id: null }] };
       if (sql.includes("information_schema")) return { rows: [] };
       // Last statement of the merge — fails after every FK has been reassigned.
       if (sql.includes("WHERE primary_recipient_id = ANY")) {
@@ -274,6 +275,6 @@ describe("transfer mark atomicity (ADR-083)", () => {
         typeof sql === "string" && sql.includes("transfer_source = 'manual'"),
     );
     expect(manualMarks).toHaveLength(2); // first succeeded, second threw
-    expect(manualMarks[0][1]).toEqual([10, 20]);
+    expect(manualMarks[0]![1]).toEqual([10, 20]);
   });
 });

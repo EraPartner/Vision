@@ -16,8 +16,10 @@ import {
   accountBalanceQueryRowSchema,
   accountRowSchema,
   countRowSchema,
+  idRowSchema,
   statementBalanceRowSchema,
 } from "../database/rowSchemas.ts";
+import { accountNameRowSchema } from "../database/rows/ledger.ts";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
@@ -90,14 +92,13 @@ export const accountRepository = {
     id: unknown,
     { client }: { client?: QueryRunner } = {},
   ): Promise<number | undefined> {
-    const runQuery: QueryRunner["query"] = client
-      ? client.query.bind(client)
-      : query;
-    const result = await runQuery(
+    const row = await queryOne(
+      idRowSchema,
       "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
       [id],
+      client,
     );
-    return result.rows[0]?.id;
+    return row?.id;
   },
 
   /**
@@ -202,6 +203,8 @@ export const accountRepository = {
     if (active === true) sql += ` AND a.is_active = true`;
     else if (active === false) sql += ` AND a.is_active = false`;
     const [row] = await queryRows(countRowSchema, sql, []);
+    // COUNT(*) without GROUP BY always returns exactly one row.
+    if (!row) throw new Error("account count returned no row");
     return parseInt(row.count, 10);
   },
 
@@ -252,6 +255,8 @@ export const accountRepository = {
        RETURNING ${COLUMNS}`,
       params,
     );
+    // A plain INSERT ... RETURNING yields exactly one row or throws.
+    if (!row) throw new Error("account INSERT returned no row");
     return row;
   },
 
@@ -284,11 +289,12 @@ export const accountRepository = {
    * caller turns that into a 409 (archive instead). Returns the id, or undefined.
    */
   async remove(id: number): Promise<number | undefined> {
-    const result = await query<{ id: number }>(
+    const row = await queryOne(
+      idRowSchema,
       "DELETE FROM accounts WHERE id = $1 RETURNING id",
       [id],
     );
-    return result.rows[0]?.id ?? undefined;
+    return row?.id ?? undefined;
   },
 
   /**
@@ -298,22 +304,22 @@ export const accountRepository = {
   async lockByIdForMerge(
     id: number,
   ): Promise<{ id: number; name: string } | undefined> {
-    const result = await query<{ id: number; name: string }>(
+    return queryOne(
+      accountNameRowSchema,
       "SELECT id, name FROM accounts WHERE id = $1 FOR UPDATE",
       [id],
     );
-    return result.rows[0] ?? undefined;
   },
 
   /**
    * Lock the merge sources; returns the ids that exist (caller diffs for 404s).
    */
   async lockByIdsForMerge(ids: number[]): Promise<{ id: number }[]> {
-    const result = await query<{ id: number }>(
+    return queryRows(
+      idRowSchema,
       "SELECT id FROM accounts WHERE id = ANY($1::int[]) FOR UPDATE",
       [ids],
     );
-    return result.rows;
   },
 
   /**
@@ -364,6 +370,8 @@ export const accountRepository = {
                  to_char(balance_date, 'YYYY-MM-DD') AS balance_date`,
       [accountId, currency, balance, balanceDate],
     );
+    // An upsert ... RETURNING yields exactly one row or throws.
+    if (!row) throw new Error("statement balance upsert returned no row");
     return row;
   },
 
@@ -419,17 +427,16 @@ export const accountRepository = {
     if (name == null) return undefined;
     const trimmed = sqlBtrim(name);
     if (!trimmed) return undefined;
-    const runQuery: QueryRunner["query"] = client
-      ? client.query.bind(client)
-      : query;
-    const result = await runQuery(
+    const row = await queryOne(
+      idRowSchema,
       `INSERT INTO accounts (name, display_name, multi_currency_cash) VALUES ($1, $1, $2)
        ON CONFLICT (lower(btrim(name))) DO UPDATE
          SET multi_currency_cash = accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash
        RETURNING id`,
       [trimmed, multiCurrencyCash],
+      client,
     );
-    return result.rows[0]?.id;
+    return row?.id;
   },
 };
 

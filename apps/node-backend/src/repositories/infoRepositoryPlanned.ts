@@ -3,7 +3,8 @@
  */
 
 import type { Decimal } from "decimal.js";
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { plannedTransactionListRowSchema } from "../database/rowSchemas.ts";
 import { convertRowsToEur } from "../services/currency/currencyConversionService.ts";
 import {
   todayAppDateString,
@@ -22,7 +23,6 @@ import {
 } from "../lib/money.ts";
 import { formatDateToYmd } from "../lib/dateFormat.ts";
 import { mapRowsForAmountConversion } from "./infoRepositoryHelpers.ts";
-import type { ConvertedRow } from "./infoRepositoryHelpers.ts";
 
 const MAX_OCCURRENCES = 120; // guard against infinite loops on tiny intervals
 
@@ -165,10 +165,13 @@ export const plannedRepository = {
       ORDER BY pt.planned_date ASC
     `;
 
-    const result = await query(sql, [startYmd, endYmd]);
+    const plannedRows = await queryRows(plannedTransactionListRowSchema, sql, [
+      startYmd,
+      endYmd,
+    ]);
 
     const plannedConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, "amount", false),
+      mapRowsForAmountConversion(plannedRows, "amount", false),
       targetCurrency,
     );
 
@@ -184,26 +187,20 @@ export const plannedRepository = {
      */
     const pushOccurrence = (
       dateStr: string,
-      row: ConvertedRow,
+      row: (typeof plannedConverted)[number],
       eur: number,
     ) => {
-      if (!dailyMap[dateStr]) {
-        dailyMap[dateStr] = {
-          date: dateStr,
-          total_income: toDecimal(0),
-          total_expenses: toDecimal(0),
-          transactions: [],
-        };
-      }
+      const day = (dailyMap[dateStr] ??= {
+        date: dateStr,
+        total_income: toDecimal(0),
+        total_expenses: toDecimal(0),
+        transactions: [],
+      });
       if (eur >= 0)
-        dailyMap[dateStr].total_income = toDecimal(
-          dailyMap[dateStr].total_income,
-        ).plus(toDecimal(eur));
+        day.total_income = toDecimal(day.total_income).plus(toDecimal(eur));
       else
-        dailyMap[dateStr].total_expenses = toDecimal(
-          dailyMap[dateStr].total_expenses,
-        ).plus(toDecimal(eur));
-      dailyMap[dateStr].transactions.push({
+        day.total_expenses = toDecimal(day.total_expenses).plus(toDecimal(eur));
+      day.transactions.push({
         id: row.id,
         recipient_name: row.recipient_name,
         amount: roundToCents(eur),

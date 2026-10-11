@@ -167,6 +167,17 @@ function fail(message: string): never {
     code: "INVALID_ANALYSIS_EXTENSION",
   });
 }
+
+/**
+ * A value an invariant of the caller guarantees (a key every record was built
+ * with, an element of a non-empty list). Breaking it is a bug in Vision, so
+ * this is an internal error rather than an analysis validation failure.
+ */
+function present<T>(value: T | undefined, what: string): T {
+  if (value === undefined)
+    throw new Error(`Analysis invariant broken: ${what} is missing`);
+  return value;
+}
 function bounded(rows: unknown, columns: AnalysisColumn[] = []) {
   if (
     !Array.isArray(rows) ||
@@ -818,7 +829,9 @@ export function compareAnalysisTime({
       periods.set(period, periodValues);
     }
     for (const id of valueColumns)
-      periodValues[id].push(row[id] == null ? null : cellDecimal(row[id]));
+      present(periodValues[id], "period value list").push(
+        row[id] == null ? null : cellDecimal(row[id]),
+      );
   }
   if (!partitions.size && !groupColumns.length && from && to)
     partitions.set("[]", { group: {}, periods: new Map() });
@@ -827,8 +840,13 @@ export function compareAnalysisTime({
   let missingPeriods = 0;
   for (const partition of partitions.values()) {
     const dates = [...partition.periods.keys()].sort();
-    const first = from ? bucketDate(from, bucket) : dates[0];
-    const last = to ? bucketDate(to, bucket) : dates[dates.length - 1];
+    // A partition without periods exists only when both `from` and `to` are set.
+    const first = from
+      ? bucketDate(from, bucket)
+      : present(dates[0], "first period");
+    const last = to
+      ? bucketDate(to, bucket)
+      : present(dates.at(-1), "last period");
     if (first > last) fail("Comparison start date must not exceed end date");
     const series: FormulaRow[] = [];
     for (
@@ -860,7 +878,10 @@ export function compareAnalysisTime({
               ? source[id].some((value) => value === null)
                 ? null
                 : (aggregation === "last"
-                    ? presentDecimals(source[id])[source[id].length - 1]
+                    ? present(
+                        presentDecimals(source[id]).at(-1),
+                        "last period value",
+                      )
                     : aggregation === "average"
                       ? Decimal.sum(...presentDecimals(source[id])).div(
                           source[id].length,
@@ -923,10 +944,10 @@ export function compareAnalysisTime({
               .div(window.length)
               .toFixed();
         if (current === null) incomplete.add(id);
-        else totals[id] = totals[id].plus(current);
+        else totals[id] = present(totals[id], "running total").plus(current);
         row[`${id}_cumulative`] = incomplete.has(id)
           ? null
-          : totals[id].toFixed();
+          : present(totals[id], "running total").toFixed();
       }
     output.push(...series);
     bounded(output);
@@ -1081,11 +1102,14 @@ export function buildAnalysisSensitivity({
     )
   )
     fail("Sensitivity outcome must be a summary formula");
+  // One or two variables (checked above).
+  const firstVariable = present(variables[0], "first sensitivity variable");
+  const secondVariable = variables[1];
   const combinations =
-    variables.length === 1
-      ? variables[0].values.map((value) => [value])
-      : variables[0].values.flatMap((a) =>
-          variables[1].values.map((b) => [a, b]),
+    secondVariable === undefined
+      ? firstVariable.values.map((value) => [value])
+      : firstVariable.values.flatMap((a) =>
+          secondVariable.values.map((b) => [a, b]),
         );
   if (combinations.length > 400)
     fail("Sensitivity supports at most 400 combinations");

@@ -13,11 +13,11 @@ describe("summarizeSimulationPaths", () => {
       [10, 50, 90],
     );
 
-    expect(result.bands.p10.map((point) => point.value)).toEqual([10, 10]);
-    expect(result.cumulative_bands.p10.map((point) => point.value)).toEqual([
+    expect(result.bands.p10!.map((point) => point.value)).toEqual([10, 10]);
+    expect(result.cumulative_bands.p10!.map((point) => point.value)).toEqual([
       10, 100,
     ]);
-    expect(result.cumulative_bands.p50.at(-1)!.value).toBe(100);
-    expect(result.cumulative_bands.p90.at(-1)!.value).toBe(100);
+    expect(result.cumulative_bands.p50!.at(-1)!.value).toBe(100);
+    expect(result.cumulative_bands.p90!.at(-1)!.value).toBe(100);
   });
 });

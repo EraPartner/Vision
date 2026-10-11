@@ -35,7 +35,7 @@ describe('report date labels west of UTC', () => {
       theme: { mode: 'light' },
     });
 
-    const html = renderHtmlToPdf.mock.calls[0][0];
+    const html = renderHtmlToPdf.mock.calls[0]![0];
     expect(html).toContain('Jan 1, 2025 – Mar 31, 2025');
   });
 

@@ -139,12 +139,12 @@ describe("saved analysis definitions", () => {
     });
 
     const source = definition.source as AnalysisVisualPlanSource;
-    expect(source.select[0].source).toEqual({
+    expect(source.select[0]!.source).toEqual({
       kind: "field",
       datasetId: "accounts",
       columnId: "display_name",
     });
-    expect(source.filters[0].left).toEqual({
+    expect(source.filters[0]!.left).toEqual({
       kind: "field",
       datasetId: "accounts",
       columnId: "display_name",
@@ -193,7 +193,7 @@ describe("saved analysis definitions", () => {
         },
       ],
     });
-    expect(definition.assumptions[0].id).toBe("growth");
+    expect(definition.assumptions[0]!.id).toBe("growth");
     expect(definition.calculations.at(-1)).toMatchObject({
       id: "adjusted",
       kind: "formula",

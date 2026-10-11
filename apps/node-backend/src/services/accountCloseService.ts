@@ -8,6 +8,13 @@
  */
 
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  accountActiveRowSchema,
+  balancePartsRowSchema,
+  closeAdjustmentRowSchema,
+  portfolioLotRowSchema,
+} from "../database/rows/ledger.ts";
 import { computedBalanceByCurrencyAggLateral } from "../repositories/accountBalanceSql.ts";
 import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { NotFoundError, ValidationError } from "../middleware/errorHandler.ts";
@@ -44,7 +51,8 @@ export async function previewAccountPortfolioLots(accountId: number) {
     throw new NotFoundError(`Account ${accountId} not found`);
   }
 
-  const result = await query<{ id: number; eligible_count: string }>(
+  const rows = await queryRows(
+    portfolioLotRowSchema,
     `SELECT id, COUNT(*) OVER() AS eligible_count
        FROM portfolio_transactions
       WHERE account_id = $1
@@ -53,13 +61,13 @@ export async function previewAccountPortfolioLots(accountId: number) {
       LIMIT $3`,
     [accountId, PORTFOLIO_LOT_TYPES, MAX_CLOSE_PORTFOLIO_RETAG_ROWS + 1],
   );
-  const eligibleCount = Number(result.rows[0]?.eligible_count ?? 0);
+  const eligibleCount = Number(rows[0]?.eligible_count ?? 0);
   return {
     account_id: accountId,
     eligible_count: eligibleCount,
     transaction_ids:
       eligibleCount <= MAX_CLOSE_PORTFOLIO_RETAG_ROWS
-        ? result.rows.map((row) => Number(row.id))
+        ? rows.map((row) => Number(row.id))
         : [],
     limit: MAX_CLOSE_PORTFOLIO_RETAG_ROWS,
   };
@@ -89,11 +97,11 @@ export async function closeAccount(
   const today = todayAppDateString();
 
   return withTransaction(async () => {
-    const locked = await query<{ id: number; is_active: boolean }>(
+    const account = await queryOne(
+      accountActiveRowSchema,
       `SELECT id, is_active FROM accounts WHERE id = $1 FOR UPDATE`,
       [accountId],
     );
-    const account = locked.rows[0];
     if (!account) throw new NotFoundError(`Account ${accountId} not found`);
 
     // Safe retry after a successful close: never stamp another adjustment.
@@ -108,16 +116,15 @@ export async function closeAccount(
 
     let adjustments: CloseAdjustment[] = [];
     if (balanceHandling === "adjustment") {
-      const balanceResult = await query<{
-        balance_parts: Array<{ currency: string; balance: string }> | null;
-      }>(
+      const balanceRow = await queryOne(
+        balancePartsRowSchema,
         `SELECT bp.balance_parts
            FROM accounts a
            ${computedBalanceByCurrencyAggLateral({ account: "a.id", asOfDate: "$2::date" })}
           WHERE a.id = $1`,
         [accountId, today],
       );
-      adjustments = (balanceResult.rows[0]?.balance_parts ?? [])
+      adjustments = (balanceRow?.balance_parts ?? [])
         .map((part) => ({
           currency: String(part.currency).toUpperCase(),
           // Round the canonical displayed balance first, then invert it. This
@@ -130,12 +137,8 @@ export async function closeAccount(
       if (adjustments.length > 0) {
         const systemRecipientId =
           await recipientRepository.getOrCreateSystemId();
-        const inserted = await query<{
-          id: number;
-          amount: string;
-          currency: string;
-          transfer_source: string;
-        }>(
+        const inserted = await queryRows(
+          closeAdjustmentRowSchema,
           `INSERT INTO transactions
              (date, amount, currency, memo, account_id, recipient_id, is_transfer, transfer_source, is_active)
            SELECT $1, amounts.amount, amounts.currency, $2, $3, $4, true, 'adjustment', true
@@ -150,7 +153,7 @@ export async function closeAccount(
             adjustments.map((part) => part.currency),
           ],
         );
-        adjustments = inserted.rows.map((row) => ({
+        adjustments = inserted.map((row) => ({
           id: row.id,
           amount: Number(row.amount),
           currency: row.currency,

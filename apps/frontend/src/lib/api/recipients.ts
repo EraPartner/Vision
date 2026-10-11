@@ -1,13 +1,16 @@
 import type { Recipient, RecipientCreate, RecipientsListResponse, RecipientUpdate } from '@/types/api';
 import {
+    RecipientCreatedSchema,
     RecipientListSchema,
+    RecipientMergeResultSchema,
     RecipientPatternListSchema,
+    RecipientPatternPreviewSchema,
     RecipientSchema,
 } from '@vision/types/contracts';
 import { apiRequest, checkResponseContract } from '@/lib/api/client';
 import { requestWithQuery, createWithStatus } from '@/lib/api/helpers';
 
-export async function getRecipients(params?: {
+export function getRecipients(params?: {
     limit?: number;
     offset?: number;
     name?: string;
@@ -18,11 +21,9 @@ export async function getRecipients(params?: {
     sort_by?: string;
     sort_dir?: 'asc' | 'desc';
 }): Promise<RecipientsListResponse> {
-    return checkResponseContract(
-        RecipientListSchema,
-        await requestWithQuery<RecipientsListResponse>('/api/recipients', params),
-        'GET /api/recipients',
-    );
+    return requestWithQuery<RecipientsListResponse>('/api/recipients', params, {
+        schema: RecipientListSchema,
+    });
 }
 
 export function getRecipient(id: number): Promise<Recipient> {
@@ -36,6 +37,8 @@ export async function createRecipient(
         '/api/recipients',
         recipient,
     );
+    // createWithStatus takes no schema; check the body the caller reads.
+    checkResponseContract(RecipientCreatedSchema, data, 'POST /api/recipients');
     return { recipient: data, wasCreated };
 }
 
@@ -64,6 +67,7 @@ export function mergeRecipients(
     return apiRequest(`/api/recipients/${primaryId}/merge`, {
         method: 'POST',
         body: JSON.stringify({ alias_ids: aliasIds }),
+        schema: RecipientMergeResultSchema,
     });
 }
 
@@ -128,5 +132,6 @@ export function previewRecipientPattern(recipientId: number, data: Pick<Recipien
     return apiRequest(`/api/recipients/${recipientId}/patterns/preview`, {
         method: 'POST',
         body: JSON.stringify(data),
+        schema: RecipientPatternPreviewSchema,
     });
 }

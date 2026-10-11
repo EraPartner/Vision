@@ -144,8 +144,8 @@ function parseSseFrames(rawText: string) {
     .map((frame) => {
       const [eventLine, dataLine] = frame.split("\n");
       return {
-        name: eventLine.replace(/^event: /, ""),
-        data: JSON.parse(dataLine.replace(/^data: /, "")),
+        name: eventLine!.replace(/^event: /, ""),
+        data: JSON.parse(dataLine!.replace(/^data: /, "")),
       };
     });
 }
@@ -247,15 +247,15 @@ describe("POST /api/ai/chat/stream", () => {
       "complete",
     ]);
 
-    expect(frames[0].data).toEqual({ message: userMsg });
-    expect(frames[1].data).toBe("Your ");
+    expect(frames[0]!.data).toEqual({ message: userMsg });
+    expect(frames[1]!.data).toBe("Your ");
 
-    expect(frames[4].data.name).toBe("getSpendByCategory");
-    expect(frames[4].data.args.from).toBe("2025-01-01");
+    expect(frames[4]!.data.name).toBe("getSpendByCategory");
+    expect(frames[4]!.data.args.from).toBe("2025-01-01");
 
-    expect(frames[5].data).toEqual({ message: toolMsg });
+    expect(frames[5]!.data).toEqual({ message: toolMsg });
 
-    const completePayload = frames[6].data;
+    const completePayload = frames[6]!.data;
     expect(completePayload.conversation).toEqual(conversation);
     expect(completePayload.assistantMessage).toEqual(assistantMsg);
     expect(completePayload.usage.evalCount).toBe(10);
@@ -277,7 +277,7 @@ describe("POST /api/ai/chat/stream", () => {
     await api.post(`${BASE}/chat/stream`).send({ message: "hi" }).expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0][0]!;
+    const callArgs = runChatTurn.mock.calls[0]![0]!;
     expect(callArgs.streaming).toBe(true);
     expect(callArgs.signal).toBeInstanceOf(AbortSignal);
     expect(typeof callArgs.onEvent).toBe("function");
@@ -427,7 +427,7 @@ describe("POST /api/ai/chat", () => {
       .expect(200);
 
     expect(runChatTurn).toHaveBeenCalledTimes(1);
-    const callArgs = runChatTurn.mock.calls[0][0]!;
+    const callArgs = runChatTurn.mock.calls[0]![0]!;
     expect(callArgs.streaming).toBeUndefined();
     expect(callArgs.message).toBe("hi");
     expect(res.body).toEqual(

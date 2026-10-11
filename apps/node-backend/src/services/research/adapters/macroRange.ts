@@ -25,8 +25,9 @@ export function trimToRange<P extends { time: number }>(
     return points;
   const months = RANGE_MONTHS[range as keyof typeof RANGE_MONTHS];
   if (!months) return points;
-  const lastTime = points[points.length - 1].time;
-  const d = new Date(lastTime);
+  const last = points.at(-1);
+  if (!last) return points;
+  const d = new Date(last.time);
   d.setMonth(d.getMonth() - months);
   const start = d.getTime();
   return points.filter((p) => p.time >= start);
@@ -41,14 +42,17 @@ export function periodToMs(period: string): number | undefined {
   if (!period) return undefined;
   const s = String(period).trim();
   let m;
+  // Capture group `i` as a number; every group below is mandatory.
+  const n = (match: RegExpMatchArray, i: number) => Number(match[i]);
   if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)))
-    return Date.UTC(+m[1], +m[2] - 1, +m[3]);
-  if ((m = s.match(/^(\d{4})-(\d{2})$/))) return Date.UTC(+m[1], +m[2] - 1, 1);
+    return Date.UTC(n(m, 1), n(m, 2) - 1, n(m, 3));
+  if ((m = s.match(/^(\d{4})-(\d{2})$/)))
+    return Date.UTC(n(m, 1), n(m, 2) - 1, 1);
   if ((m = s.match(/^(\d{4})-?Q([1-4])$/i)))
-    return Date.UTC(+m[1], (+m[2] - 1) * 3, 1);
+    return Date.UTC(n(m, 1), (n(m, 2) - 1) * 3, 1);
   if ((m = s.match(/^(\d{4})-?S([1-2])$/i)))
-    return Date.UTC(+m[1], (+m[2] - 1) * 6, 1);
-  if ((m = s.match(/^(\d{4})$/))) return Date.UTC(+m[1], 0, 1);
+    return Date.UTC(n(m, 1), (n(m, 2) - 1) * 6, 1);
+  if ((m = s.match(/^(\d{4})$/))) return Date.UTC(n(m, 1), 0, 1);
   const t = Date.parse(s);
   return Number.isFinite(t) ? t : undefined;
 }

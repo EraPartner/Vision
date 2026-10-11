@@ -10,7 +10,9 @@
  * is formed from the first N characters of the normalized name + category.
  */
 
-import { query } from '../database/connection.ts';
+import { queryRows } from '../database/rowContracts.ts';
+import { clusterRecipientRowSchema } from '../database/rows/catalog.ts';
+import type { z } from 'zod';
 import { suggestPatternFromNames } from './recipientPatternService.ts';
 
 const MIN_LCP_LENGTH = 8;
@@ -20,11 +22,7 @@ const MAX_CLUSTERS = 50;
 // The ordering makes the truncated window deterministic and API-documentable.
 const MAX_RECIPIENT_SCAN = 10_000;
 
-type ClusterRecipientRow = {
-  id: number;
-  name: string;
-  default_category_id: number | null;
-};
+type ClusterRecipientRow = z.output<typeof clusterRecipientRowSchema>;
 
 export interface RecipientCluster {
   lcp: string;
@@ -44,7 +42,8 @@ export interface RecipientCluster {
 export async function findRecipientClusters({
   minCount = 2,
 }: { minCount?: number } = {}): Promise<RecipientCluster[]> {
-  const { rows } = await query<ClusterRecipientRow>(
+  const rows = await queryRows(
+    clusterRecipientRowSchema,
     `SELECT id, name, default_category_id
        FROM recipients
       WHERE is_active = true
@@ -79,14 +78,15 @@ export async function findRecipientClusters({
     const matching = group.filter((r) =>
       r.name.trim().toUpperCase().startsWith(lcp),
     );
-    if (matching.length < minCount) continue;
+    const [first] = matching;
+    if (matching.length < minCount || !first) continue;
 
     clusters.push({
       lcp,
       confidence: suggestion.confidence,
       recipientIds: matching.map((r) => r.id),
       recipientNames: matching.map((r) => r.name),
-      categoryId: matching[0].default_category_id ?? null,
+      categoryId: first.default_category_id ?? null,
       suggestedPattern: lcp,
       suggestedKind: suggestion.kind,
     });

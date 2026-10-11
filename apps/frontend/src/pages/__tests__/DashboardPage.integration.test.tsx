@@ -7,6 +7,10 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { aggOk, err, ok, TRANSACTION_STUB } from "@/test/msw/handlers";
 import DashboardPage from "@/pages/DashboardPage";
+import {
+    transactionRow,
+    transactionsBody,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -156,14 +160,16 @@ describe("DashboardPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
-    it("shows the Recent transactions list with a See all link", async () => {
+    it("shows the Recent transactions list with a View all link", async () => {
         renderWithApp(<DashboardPage />);
         const matches = await screen.findAllByText(/recent transactions/i);
         expect(matches.length).toBeGreaterThan(0);
-        expect(screen.getByRole("link", { name: /see all/i })).toHaveAttribute(
-            "href",
-            "/transactions",
-        );
+        // home.recent.seeAll = "View all"; the Accounts card has its own
+        // "View all" link to /accounts, so pick the one leading to Transactions.
+        const transactionsLinks = screen
+            .getAllByRole("link", { name: /view all/i })
+            .filter((link) => link.getAttribute("href") === "/transactions");
+        expect(transactionsLinks).toHaveLength(1);
     });
 
     it("shows Total Transactions stat card once Summary cards are switched on", async () => {
@@ -184,8 +190,11 @@ describe("DashboardPage (integration)", () => {
                         {
                             year: 2026,
                             month: 2,
+                            period_start: "2026-02-01",
+                            period_end: "2026-02-28",
                             total_income: 1000,
                             total_spending: -400,
+                            net_amount: 600,
                             transaction_count: 7,
                         },
                     ],
@@ -203,7 +212,7 @@ describe("DashboardPage (integration)", () => {
                 ok({ total_transactions: 77 }),
             ),
             http.get(`${API_BASE}/api/transactions`, () =>
-                ok({
+                ok(transactionsBody({
                     items: [
                         ...Array.from({ length: 6 }, (_, index) => ({
                             ...TRANSACTION_STUB,
@@ -211,18 +220,18 @@ describe("DashboardPage (integration)", () => {
                             category_id: index + 1,
                             category_name: `GROUP:CATEGORY ${index + 1}`,
                         })),
-                        {
+                        transactionRow({
                             ...TRANSACTION_STUB,
                             id: 7,
                             category_id: null,
                             category_name: null,
-                        },
+                        }),
                     ],
                     total: 7,
                     limit: 50,
                     offset: 0,
                     links: [],
-                }),
+                })),
             ),
         );
 
@@ -288,9 +297,9 @@ describe("DashboardPage (integration)", () => {
 
         await openCustomize(user);
 
-        // widgets.showAll = "Show All"
+        // widgets.showAll = "View all"
         expect(
-            screen.getByRole("button", { name: /show all/i }),
+            screen.getByRole("button", { name: /view all/i }),
         ).toBeInTheDocument();
     });
 

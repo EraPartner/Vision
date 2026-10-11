@@ -25,7 +25,7 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("scores grounded, scoped tool use independently from model expectations", () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0];
+    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
     const score = scoreLocalAiRun(testCase, {
       completed: true,
       answer: "Rent was EUR 900 and Groceries was EUR 312.45.",
@@ -73,7 +73,7 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("compares numeric grounding across ordinary display formatting", () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0];
+    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
     const score = scoreLocalAiRun(testCase, {
       completed: true,
       answer: "Rent was EUR 900.00 and Groceries was EUR 312,45.",
@@ -91,7 +91,7 @@ describe("local AI reliability evaluation", () => {
   });
 
   it("runs the tool loop only against fixed oracle results", async () => {
-    const testCase = LOCAL_AI_EVALUATION_CASES[0];
+    const testCase = LOCAL_AI_EVALUATION_CASES[0]!;
     const ollamaClient = {
       chatStream: vi
         .fn()

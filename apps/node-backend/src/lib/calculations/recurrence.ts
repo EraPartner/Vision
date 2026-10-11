@@ -87,7 +87,8 @@ function parseRecurrenceStep(
   if (p === "quarterly") return { unit: "month", amount: 3 };
   if (p === "yearly") return { unit: "month", amount: 12 };
   const match = p.match(/^every\s+(\d+)\s+days?$/);
-  if (match) {
+  // The pattern's only capture group always participates in a match.
+  if (match?.[1] !== undefined) {
     const days = parseInt(match[1], 10);
     if (days >= 1) return { unit: "day", amount: days };
   }

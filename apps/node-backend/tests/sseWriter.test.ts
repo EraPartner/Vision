@@ -94,8 +94,8 @@ describe('createSseWriter', () => {
     createSseWriter(asReq(padReq), asRes(padRes));
     expect(padRes._written.length).toBeGreaterThan(0);
     const first = padRes._written[0];
-    expect(first.startsWith(':')).toBe(true);
-    expect(first.length).toBeGreaterThanOrEqual(2048);
+    expect(first!.startsWith(':')).toBe(true);
+    expect(first!.length).toBeGreaterThanOrEqual(2048);
   });
 
   it('writes correctly formatted SSE frame', async () => {

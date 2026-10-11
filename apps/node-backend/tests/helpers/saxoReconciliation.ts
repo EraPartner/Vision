@@ -11,7 +11,7 @@ export function syntheticSaxoPrimaryRawData(
   index = 0,
   sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
 ): string {
-  const main = sheets[0].records[index];
+  const main = sheets[0]!.records[index]!;
   return JSON.stringify({
     format: "saxo_xlsx_v1",
     sourceFileHash: "a".repeat(64),
@@ -79,11 +79,11 @@ export function syntheticSaxoCsvRecord(
   index = 0,
   sheets: SyntheticSheet[] = syntheticSaxoWorkbook(),
 ): { raw: string; headers: string[] } {
-  const { headers, records } = sheets[0];
+  const { headers, records } = sheets[0]!;
   const quote = (value: unknown) => `"${String(value).replaceAll('"', '""')}"`;
   const raw = headers
     .map((header) => {
-      const value = records[index][normalize(header)] ?? "";
+      const value = records[index]![normalize(header)] ?? "";
       return quote(
         value instanceof Date
           ? value.toISOString().slice(0, 10).replaceAll("-", "/")

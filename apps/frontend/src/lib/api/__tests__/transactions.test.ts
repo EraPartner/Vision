@@ -60,7 +60,7 @@ describe("transactions API client", () => {
         const row = {
             ...TRANSACTION_STUB,
             bank_account: null,
-            account_id: 3,
+            account_id: null,
             is_transfer: false,
             transfer_peer_id: null,
             transfer_source: null,
@@ -74,6 +74,45 @@ describe("transactions API client", () => {
             ),
         );
         expect((await getTransactions()).items).toEqual([row]);
+    });
+
+    it("getTransactions rejects a null currency (NOT NULL column)", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({
+                    items: [{ ...TRANSACTION_STUB, currency: null }],
+                    total: 1,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+        const error = await getTransactions().catch((err: unknown) => err);
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues).toEqual([
+            "items[0].currency: Invalid input: expected string, received null",
+        ]);
+    });
+
+    it("getTransactions rejects a row missing a field formatTransaction always sends", async () => {
+        const { tags: _tags, ...withoutTags } = TRANSACTION_STUB;
+        server.use(
+            http.get(`${API_BASE}/api/transactions`, () =>
+                ok({
+                    items: [withoutTags],
+                    total: 1,
+                    limit: 50,
+                    offset: 0,
+                    links: [],
+                }),
+            ),
+        );
+        const error = await getTransactions().catch((err: unknown) => err);
+        expect(error).toBeInstanceOf(ApiContractError);
+        expect((error as ApiContractError).issues).toEqual([
+            "items[0].tags: Invalid input: expected array, received undefined",
+        ]);
     });
 
     it("getTransactions rejects a NUMERIC amount string in strict mode", async () => {
@@ -97,7 +136,9 @@ describe("transactions API client", () => {
 
     it("createTransaction POSTs", async () => {
         server.use(
-            http.post(`${API_BASE}/api/transactions`, () => ok({ id: 10 })),
+            http.post(`${API_BASE}/api/transactions`, () =>
+                ok({ ...TRANSACTION_STUB, id: 10, auto_linked: null }),
+            ),
         );
         expect((await createTransaction({} as never)).id).toBe(10);
     });

@@ -527,6 +527,27 @@ describe("useInvestmentMutations — refreshPrices", () => {
         await waitFor(() => expect(successSpy).toHaveBeenCalled());
     });
 
+    it("reports zero refreshed prices when no holding has a live provider", async () => {
+        const successSpy = vi.spyOn(toast, "success");
+        // The backend omits `total` on this early return.
+        vi.spyOn(apiClient, "refreshInvestmentPrices").mockResolvedValue({
+            updated: 0,
+            message: "No investments with live price providers",
+        });
+        const { result } = renderHook(() => useInvestmentMutations(), {
+            wrapper: makeWrapper(),
+        });
+        act(() => {
+            result.current.refreshPrices();
+        });
+        await waitFor(() =>
+            expect(successSpy).toHaveBeenCalledWith(
+                "Prices refreshed for 0 investments",
+                expect.anything(),
+            ),
+        );
+    });
+
     it("shows toast.warning when some prices use historical_fallback", async () => {
         const warnSpy = vi.spyOn(toast, "warning");
         vi.spyOn(apiClient, "refreshInvestmentPrices").mockResolvedValue({

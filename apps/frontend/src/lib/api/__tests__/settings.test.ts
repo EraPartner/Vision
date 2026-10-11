@@ -9,6 +9,12 @@ beforeEach(async () => {
     settings = await import("@/lib/api/settings");
 });
 afterEach(() => server.resetHandlers());
+/** The `PUT /api/settings/:key` body (`settingsRepository.replace`). */
+const saved = (key: string, value: unknown) => ({
+    key,
+    value,
+    expected: { exists: true, value },
+});
 describe("settings conditional API client", () => {
     it("loads values and persisted baselines together", async () => {
         server.use(
@@ -24,7 +30,7 @@ describe("settings conditional API client", () => {
         server.use(
             http.put(`${API_BASE}/api/settings/:key`, async ({ request }) => {
                 body = await request.json();
-                return ok({ key: "theme", value: "light" });
+                return ok(saved("theme", "light"));
             }),
         );
         await settings.saveSetting("theme", "light");
@@ -51,7 +57,7 @@ describe("settings conditional API client", () => {
         server.use(
             http.put(`${API_BASE}/api/settings/:key`, async ({ request }) => {
                 body = await request.json();
-                return ok({ key: "a/b", value: 2 });
+                return ok(saved("a/b", 2));
             }),
         );
         await settings.saveSetting("a/b", 2);
@@ -78,7 +84,7 @@ describe("settings conditional API client", () => {
             http.put(`${API_BASE}/api/settings/:key`, async ({ request }) => {
                 const body = (await request.json()) as { value: unknown };
                 bodies.push(body);
-                return ok({ key: "x", value: body.value });
+                return ok(saved("x", body.value));
             }),
         );
         await Promise.all([
@@ -128,5 +134,16 @@ describe("settings conditional API client", () => {
             "Settings changed",
         );
         expect(calls).toBe(1);
+    });
+    it("rejects a settings read without its baselines", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok({ settings: { theme: "dark" } }),
+            ),
+        );
+        await expect(settings.getSettings()).rejects.toMatchObject({
+            name: "ApiContractError",
+            endpoint: "GET /api/settings",
+        });
     });
 });

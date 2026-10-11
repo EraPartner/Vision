@@ -172,9 +172,8 @@ describe("ChatConversationList", () => {
                     const body = (await request.json()) as { title: string };
                     patchedTitle = body.title;
                     return ok({
-                        id: baseConversation.id,
+                        ...baseConversation,
                         title: body.title,
-                        model: baseConversation.model,
                         updatedAt: "2025-01-05T10:00:00.000Z",
                     });
                 },

@@ -8,6 +8,8 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { instrumentProviderMapRowSchema } from '../database/rows/portfolio.ts';
 import type { InstrumentProviderMapRow } from '../types/rows.ts';
 
 export type { InstrumentProviderMapRow };
@@ -24,14 +26,14 @@ export async function listByInstrument(
   instrumentKey: string,
   keyType: string,
 ): Promise<InstrumentProviderMapRow[]> {
-  const result = await query<InstrumentProviderMapRow>(
+  return queryRows(
+    instrumentProviderMapRowSchema,
     `SELECT ${COLUMNS}
        FROM instrument_provider_map
       WHERE instrument_key = $1 AND key_type = $2
       ORDER BY provider ASC`,
     [instrumentKey, keyType],
   );
-  return result.rows;
 }
 
 /**
@@ -49,7 +51,8 @@ export async function upsert(m: {
   currency?: string | null;
   status?: string | null;
 }): Promise<InstrumentProviderMapRow> {
-  const result = await query<InstrumentProviderMapRow>(
+  const row = await queryOne(
+    instrumentProviderMapRowSchema,
     `INSERT INTO instrument_provider_map
         (instrument_key, key_type, provider, provider_symbol, resolved_name, exchange, currency, status, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -72,7 +75,9 @@ export async function upsert(m: {
       m.status ?? 'confirmed',
     ],
   );
-  return result.rows[0];
+  // An upsert without a DO UPDATE WHERE always returns its row or throws.
+  if (!row) throw new Error('Instrument provider map upsert returned no row');
+  return row;
 }
 
 /**

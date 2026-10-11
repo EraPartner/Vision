@@ -116,7 +116,7 @@ describe("verifyAuditHistory", () => {
       hash: f.head.hash,
       retention: {
         through: 1,
-        hash: f.entries[0].hash,
+        hash: f.entries[0]!.hash,
         domainMax: { dbEditor: 0, split: 0, retag: 0 },
         migrationHeads: [],
       },
