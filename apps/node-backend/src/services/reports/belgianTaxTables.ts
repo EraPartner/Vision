@@ -42,7 +42,7 @@ export type ResolvedTaxYearTable = TaxYearTable & {
   approximatedFrom?: number;
 };
 
-const TABLES: Record<number, TaxYearTable> = {
+const TABLES: Partial<Record<number, TaxYearTable>> = {
   2024: {
     year: 2024,
     dividendExemption: 833,
@@ -83,6 +83,11 @@ const TABLES: Record<number, TaxYearTable> = {
 };
 
 const LATEST_YEAR = 2026;
+const LATEST_TABLE: TaxYearTable = (() => {
+  const table = TABLES[LATEST_YEAR];
+  if (!table) throw new Error(`Belgian tax table for ${LATEST_YEAR} is missing`);
+  return table;
+})();
 
 /**
  * Return the tax table for a given year. For an unknown year, returns the
@@ -90,8 +95,9 @@ const LATEST_YEAR = 2026;
  * "rates approximated from <latestYear>" note instead of silently using stale numbers.
  */
 export function getTaxTable(year: number): ResolvedTaxYearTable {
-  if (TABLES[year]) return TABLES[year];
-  return { ...TABLES[LATEST_YEAR], approximated: true, approximatedFrom: LATEST_YEAR };
+  const table = TABLES[year];
+  if (table) return table;
+  return { ...LATEST_TABLE, approximated: true, approximatedFrom: LATEST_YEAR };
 }
 
 /** Return all available tax years in ascending order. */

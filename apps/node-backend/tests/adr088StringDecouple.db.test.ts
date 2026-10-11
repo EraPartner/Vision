@@ -40,7 +40,17 @@ const plannedTransactionRepository = {
 };
 const splitRepository = { ...splitPersistence, ...splitService };
 
-const fx: Record<string, number> = {};
+const fx = {} as Record<
+  | "recipientId"
+  | "KBC Current"
+  | "Wise USD"
+  | "txnKbc"
+  | "txnWise"
+  | "plannedKbc"
+  | "plannedWise"
+  | "splitId",
+  number
+>;
 
 async function seedCorpus() {
   const pool = getTestPool()!;
@@ -58,7 +68,7 @@ async function seedCorpus() {
     );
   }
   const { rows: accounts } = await pool.query("SELECT id, name FROM accounts");
-  for (const row of accounts) fx[row.name] = row.id;
+  for (const row of accounts) fx[row.name as keyof typeof fx] = row.id;
 
   // Transactions on both accounts + currencies. Canonical writes do not
   // require the retired compatibility column or its trigger.
@@ -135,7 +145,7 @@ describeDb(
       await pool.query("DELETE FROM transactions");
       await pool.query("DELETE FROM accounts");
       await pool.query("DELETE FROM recipients");
-      for (const k of Object.keys(fx)) delete fx[k];
+      for (const k of Object.keys(fx)) delete (fx as Record<string, number>)[k];
     });
 
     afterAll(async () => {
@@ -175,8 +185,8 @@ describeDb(
         await renameKbc("KBC Renamed");
         const { items } = await plannedTransactionRepository.getAll({});
         const byId = Object.fromEntries(items.map((r) => [r.id, r]));
-        expect(byId[fx.plannedKbc].bank_account).toBe("KBC Renamed");
-        expect(byId[fx.plannedWise].bank_account).toBe("Wise USD");
+        expect(byId[fx.plannedKbc]!.bank_account).toBe("KBC Renamed");
+        expect(byId[fx.plannedWise]!.bank_account).toBe("Wise USD");
         expect(
           (await plannedTransactionRepository.getById(fx.plannedKbc))!
             .bank_account,
@@ -318,13 +328,13 @@ describeDb(
         await renameKbc("KBC Renamed");
         const owed = await splitRepository.getOwedByRecipient(fx.recipientId);
         expect(owed).toHaveLength(1);
-        expect(owed[0].bank_account).toBe("KBC Renamed");
+        expect(owed[0]!.bank_account).toBe("KBC Renamed");
 
         const exportRows = await splitRepository.getOwedExportRowsByRecipient(
           fx.recipientId,
         );
         expect(exportRows).toHaveLength(1);
-        expect(exportRows[0].bank_account).toBe("KBC Renamed");
+        expect(exportRows[0]!.bank_account).toBe("KBC Renamed");
       });
     });
 

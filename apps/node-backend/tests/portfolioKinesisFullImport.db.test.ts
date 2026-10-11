@@ -29,7 +29,7 @@ async function stage(account: number, investment: number) {
       await pool.query(
         "INSERT INTO portfolio_import_batches(adapter_name,custom_config,status,rows_total,rows_error,account_id,is_brokerage) VALUES('kinesis_transaction_history',$1,'awaiting_review',$2,0,$3,true) RETURNING id",
         [
-          JSON.stringify(source.batches[0].custom_config),
+          JSON.stringify(source.batches[0]!.custom_config),
           source.rows.length,
           account,
         ],

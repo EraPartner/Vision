@@ -8,16 +8,17 @@ import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
 import type { Account } from "@/types/api";
 import { BrokerTransferDialog } from "../BrokerTransferDialog";
+import { accountListItem, accountsBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
-const source = {
+const source = accountListItem({
     id: 7,
     name: "Old Broker",
     display_name: "Old Broker",
     type: "brokerage",
     currency: "EUR",
     is_active: true,
-} as Account;
+}) as unknown as Account;
 
 describe("BrokerTransferDialog", () => {
     beforeEach(() => {
@@ -37,6 +38,7 @@ describe("BrokerTransferDialog", () => {
                         eligible_count: 1,
                         transaction_ids: [11],
                         limit: 500,
+                        links: [],
                     }),
             ),
             http.get(`${API_BASE}/api/accounts`, () => err(403, "Unavailable")),
@@ -94,22 +96,25 @@ describe("BrokerTransferDialog", () => {
                         eligible_count: 2,
                         transaction_ids: [11, 12],
                         limit: 500,
+                        links: [],
                     }),
             ),
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
-                    items: [
-                        source,
-                        {
-                            ...source,
-                            id: 8,
-                            name: "New Broker",
-                            display_name: "New Broker",
-                        },
-                    ],
-                    total: 2,
-                    links: [],
-                }),
+                ok(
+                    accountsBody({
+                        items: [
+                            source,
+                            accountListItem({
+                                ...source,
+                                id: 8,
+                                name: "New Broker",
+                                display_name: "New Broker",
+                            }),
+                        ],
+                        total: 2,
+                        links: [],
+                    }),
+                ),
             ),
             http.put(
                 `${API_BASE}/api/investments/transactions/broker`,
@@ -192,6 +197,7 @@ describe("BrokerTransferDialog", () => {
                         eligible_count: 1,
                         transaction_ids: [11],
                         limit: 500,
+                        links: [],
                     }),
             ),
             http.get(`${API_BASE}/api/accounts`, () =>
@@ -265,6 +271,7 @@ describe("BrokerTransferDialog", () => {
                         eligible_count: 0,
                         transaction_ids: [],
                         limit: 500,
+                        links: [],
                     });
                 },
             ),
@@ -299,6 +306,7 @@ describe("BrokerTransferDialog", () => {
                     eligible_count: 0,
                     transaction_ids: [],
                     limit: 500,
+                    links: [],
                 }),
             /no assigned portfolio lots/i,
         ],
@@ -333,6 +341,7 @@ describe("BrokerTransferDialog", () => {
                         eligible_count: 501,
                         transaction_ids: [],
                         limit: 500,
+                        links: [],
                     }),
             ),
         );

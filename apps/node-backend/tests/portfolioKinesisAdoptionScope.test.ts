@@ -53,8 +53,8 @@ const build = (
 async function fixture() {
   const source = await syntheticKinesisScope();
   source.history = [
-    syntheticKinesisManual(source.rows[0]),
-    syntheticKinesisManual(source.rows[5], 41),
+    syntheticKinesisManual(source.rows[0]!),
+    syntheticKinesisManual(source.rows[5]!, 41),
   ];
   return source;
 }
@@ -87,19 +87,19 @@ describe("complete Kinesis literal source proof", () => {
     "missing_row",
   ])("rejects %s complete-source binding", async (kind) => {
     const source = await fixture();
-    const config = source.batches[0].custom_config;
+    const config = source.batches[0]!.custom_config;
     if (kind === "missing_context")
       delete (config as Partial<SyntheticKinesisConfig>).kinesis_source_context;
     if (kind === "header")
       config.source_columns = config.source_columns!.slice(1);
     if (kind === "literal_hash")
-      source.rows[10].source_record_hash = "e".repeat(64);
+      source.rows[10]!.source_record_hash = "e".repeat(64);
     if (kind === "event_key")
-      config.kinesis_source_context.events[10].eventKey = "e".repeat(64);
+      config.kinesis_source_context.events[10]!.eventKey = "e".repeat(64);
     if (kind === "source_identity")
-      source.rows[10].source_transaction_id = "changed";
-    if (kind === "zero_identity") source.rows[10].source_transaction_id = "000";
-    if (kind === "source_account") source.rows[10].account_id = 8;
+      source.rows[10]!.source_transaction_id = "changed";
+    if (kind === "zero_identity") source.rows[10]!.source_transaction_id = "000";
+    if (kind === "source_account") source.rows[10]!.account_id = 8;
     if (kind === "filtered")
       (
         config as SyntheticKinesisConfig & { included_symbols?: string[] }
@@ -110,7 +110,7 @@ describe("complete Kinesis literal source proof", () => {
       ready: false,
       summary: { adopt: 0 },
     });
-    expect(build(source).plan.blockers[0].reason).toBe(
+    expect(build(source).plan.blockers[0]!.reason).toBe(
       "adoption_scope_source_unverified",
     );
   });
@@ -130,14 +130,14 @@ describe("complete Kinesis literal source proof", () => {
       expect(
         source.rows.slice(4, 6).map((row) => row.source_transaction_id),
       ).toEqual(["000:income", "000:units"]);
-      source.history = [syntheticKinesisManual(source.rows[5])];
+      source.history = [syntheticKinesisManual(source.rows[5]!)];
       const result = build(source);
       expect(result.plan).toMatchObject({
         ready: false,
         selectedRowIds: [],
         summary: { adopt: 0 },
       });
-      expect(result.plan.blockers[0].reason).toBe(
+      expect(result.plan.blockers[0]!.reason).toBe(
         "adoption_scope_source_unverified",
       );
     } finally {
@@ -151,7 +151,7 @@ describe("Kinesis adoption-only planning", () => {
     "defers an unqualified positive gift %s repeat before validating its older incomplete adoption receipt",
     async (status) => {
       const source = await fixture();
-      const row = source.rows[6];
+      const row = source.rows[6]!;
       row.status = status;
       const current = {
         ...syntheticKinesisManual(row, 42),
@@ -164,7 +164,7 @@ describe("Kinesis adoption-only planning", () => {
         dedup_fingerprint_version: row.dedup_fingerprint_version,
       };
       source.history.push(current);
-      const oldConfig = structuredClone(source.batches[0].custom_config);
+      const oldConfig = structuredClone(source.batches[0]!.custom_config);
       delete (oldConfig as Partial<SyntheticKinesisConfig>)
         .kinesis_source_context;
       const context = {
@@ -242,7 +242,7 @@ describe("Kinesis adoption-only planning", () => {
         after_data: structuredClone(adoption.after),
       })),
     };
-    delete (context.batches[0].custom_config as Partial<SyntheticKinesisConfig>)
+    delete (context.batches[0]!.custom_config as Partial<SyntheticKinesisConfig>)
       .kinesis_source_context;
     context.sources.forEach(
       (row) =>
@@ -263,7 +263,7 @@ describe("Kinesis adoption-only planning", () => {
   });
   it("defers a meaningful gift whose original currency and valuation are absent from the literal source", async () => {
     const source = await fixture();
-    const gift = syntheticKinesisManual(source.rows[6], 42);
+    const gift = syntheticKinesisManual(source.rows[6]!, 42);
     Object.assign(gift, {
       amount: "100.0000",
       price_per_unit: "12743.090000",
@@ -292,12 +292,12 @@ describe("Kinesis adoption-only planning", () => {
     "defers a buy with a known literal %s difference before provenance is attached",
     async (field) => {
       const source = await fixture();
-      if (field === "currency") source.history[0].currency = "USD";
+      if (field === "currency") source.history[0]!.currency = "USD";
       else if (field === "staged_fee_tamper") {
-        source.history[0].fees = "2.0000";
-        source.rows[0].fees = "2.0000";
+        source.history[0]!.fees = "2.0000";
+        source.rows[0]!.fees = "2.0000";
       } else
-        source.history[0][field] = toDecimal(source.history[0][field])
+        source.history[0]![field] = toDecimal(source.history[0]![field])
           .plus(1)
           .toFixed(4);
       const result = build(source);
@@ -316,7 +316,7 @@ describe("Kinesis adoption-only planning", () => {
     "defers a known-zero yield whose preserved %s is nonzero",
     async (field) => {
       const source = await fixture();
-      source.history[1][field] = "1.0000";
+      source.history[1]![field] = "1.0000";
       expect(build(source).plan).toMatchObject({
         ready: true,
         summary: { adopt: 1 },
@@ -367,7 +367,7 @@ describe("Kinesis adoption-only planning", () => {
   });
   it("classifies all candidates before selection so excluded duplicate sources cannot hide ambiguity", async () => {
     const source = await fixture();
-    source.history.push({ ...source.history[0], id: 42 });
+    source.history.push({ ...source.history[0]!, id: 42 });
     const result = build(source);
     expect(result.plan.ready).toBe(false);
     expect(
@@ -379,15 +379,15 @@ describe("Kinesis adoption-only planning", () => {
   });
   it("does not hide an unproved deferred source that competes for a selected existing transaction", async () => {
     const source = await fixture();
-    Object.assign(source.rows[10], {
+    Object.assign(source.rows[10]!, {
       status: "matched",
       route: "portfolio",
       type: "buy",
       type_raw: "Buy",
       investment_id: 1,
-      units: source.rows[0].units,
-      price_per_unit: source.rows[0].price_per_unit,
-      amount: source.history[0].amount,
+      units: source.rows[0]!.units,
+      price_per_unit: source.rows[0]!.price_per_unit,
+      amount: source.history[0]!.amount,
       currency: "EUR",
       dedup_fingerprint: "e".repeat(64),
       dedup_fingerprint_version: 1,
@@ -414,18 +414,18 @@ describe("Kinesis adoption-only planning", () => {
         batchPolicies: [{ batchId: 2, adoptPolicy: "prefer_source" }],
       }),
     ).toThrow(/requires Kinesis/);
-    source.batches[0].custom_config.format = "ibkr_transaction_history";
+    source.batches[0]!.custom_config.format = "ibkr_transaction_history";
     expect(() => build(source)).toThrow(/requires Kinesis/);
   });
   it("binds excluded rows, complete history, literal context, and selected actions in its fingerprint", async () => {
     const source = await fixture();
     const initial = build(source).plan.planFingerprint;
     for (const mutate of [
-      (copy) => (copy.rows[10].note = "Changed excluded row"),
+      (copy) => (copy.rows[10]!.note = "Changed excluded row"),
       (copy) =>
-        copy.history.push({ ...copy.history[1], id: 90, date: "2024-01-01" }),
+        copy.history.push({ ...copy.history[1]!, id: 90, date: "2024-01-01" }),
       (copy) =>
-        (copy.batches[0].custom_config.kinesis_source_context.source_file_hash =
+        (copy.batches[0]!.custom_config.kinesis_source_context.source_file_hash =
           "e".repeat(64)),
     ] satisfies Array<(copy: SyntheticKinesisScope) => unknown>) {
       const copy = structuredClone(source);
@@ -464,13 +464,13 @@ describe("Kinesis adoption-only planning", () => {
     });
     expect(repeat.adoptions).toEqual([]);
     for (const mutate of [
-      (copy) => (copy.history[0].note = "Changed manual note"),
+      (copy) => (copy.history[0]!.note = "Changed manual note"),
       (copy) =>
         copy.kinesisAdoptionContext.receipts.push({
-          ...copy.kinesisAdoptionContext.receipts[0],
+          ...copy.kinesisAdoptionContext.receipts[0]!,
           id: 3,
         }),
-      (copy) => (copy.kinesisAdoptionContext.sources[0].raw_data += " "),
+      (copy) => (copy.kinesisAdoptionContext.sources[0]!.raw_data += " "),
     ] satisfies Array<
       (
         copy: Omit<SyntheticKinesisScope, "kinesisAdoptionContext"> & {
@@ -502,7 +502,7 @@ describe("Kinesis adoption-only planning", () => {
       })),
     };
     source.history = initial.adoptions.map((item) => item.after);
-    source.batches[0].account_id = 8;
+    source.batches[0]!.account_id = 8;
     source.rows.forEach((row) => {
       row.account_id = 8;
     });

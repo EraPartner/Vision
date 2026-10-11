@@ -15,138 +15,22 @@
  * came back — matching services/marketLookupService.js.
  */
 
-import { getYahooClient } from "../../prices/yahooClient.ts";
+import {
+  getYahooClient,
+  NO_VALIDATE,
+  parseYahooPayload,
+  requireYahooPayload,
+  yahooChartResultSchema,
+  yahooDateMs,
+  yahooQuoteSchema,
+  yahooQuoteSummarySchema,
+  yahooSearchResultSchema,
+} from "../../prices/yahooClient.ts";
+import type {
+  YahooChartInterval,
+  YahooQuoteSummary,
+} from "../../prices/yahooClient.ts";
 import { makeChartRangeMap } from "@vision/types/chartRanges";
-
-const NO_VALIDATE: { validateResult: false } = {
-  validateResult: false,
-};
-
-// Raw yahoo-finance2 payload subsets this adapter reads. NO_VALIDATE means any
-// field may be absent, so every field is optional.
-interface YahooSearchQuote {
-  symbol?: string;
-  shortname?: string;
-  longname?: string;
-  quoteType?: string;
-  exchDisp?: string;
-  exchange?: string;
-}
-
-interface YahooThumbnail {
-  resolutions?: Array<{ url?: unknown } | undefined>;
-}
-
-interface YahooNewsItem {
-  title?: string;
-  link?: string;
-  publisher?: string;
-  providerPublishTime?: Date | number | string;
-  thumbnail?: YahooThumbnail;
-}
-
-interface YahooSearchResult {
-  quotes?: YahooSearchQuote[];
-  news?: YahooNewsItem[];
-}
-
-interface YahooQuote {
-  symbol?: string;
-  shortName?: string;
-  longName?: string;
-  regularMarketPrice?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
-  currency?: string;
-  fullExchangeName?: string;
-  exchange?: string;
-  quoteType?: string;
-  regularMarketOpen?: number;
-  regularMarketDayHigh?: number;
-  regularMarketDayLow?: number;
-  regularMarketPreviousClose?: number;
-  regularMarketVolume?: number;
-  averageDailyVolume3Month?: number;
-  fiftyTwoWeekHigh?: number;
-  fiftyTwoWeekLow?: number;
-}
-
-interface YahooChartQuote {
-  date: Date | number | string;
-  close?: number | null;
-  high?: number | null;
-  low?: number | null;
-  volume?: number | null;
-}
-
-interface YahooChartResult {
-  meta?: { symbol?: string; currency?: string };
-  quotes?: YahooChartQuote[];
-}
-
-interface YahooRecommendationTrend {
-  period?: string;
-  strongBuy?: number;
-  buy?: number;
-  hold?: number;
-  sell?: number;
-  strongSell?: number;
-}
-
-interface YahooGradeHistory {
-  epochGradeDate?: Date | number;
-  firm?: string;
-  toGrade?: string;
-  fromGrade?: string;
-  action?: string;
-}
-
-interface YahooQuoteSummary {
-  summaryDetail?: {
-    marketCap?: number;
-    trailingPE?: number;
-    forwardPE?: number;
-    dividendYield?: number;
-    payoutRatio?: number;
-    beta?: number;
-  };
-  defaultKeyStatistics?: {
-    trailingPE?: number;
-    forwardPE?: number;
-    pegRatio?: number;
-    trailingEps?: number;
-    beta?: number;
-    priceToBook?: number;
-  };
-  price?: {
-    marketCap?: number;
-    longName?: string;
-    shortName?: string;
-    currency?: string;
-    dividendYield?: number;
-    epsTrailingTwelveMonths?: number;
-  };
-  financialData?: {
-    freeCashflow?: number;
-    profitMargins?: number;
-    grossMargins?: number;
-    operatingMargins?: number;
-    totalRevenue?: number;
-    revenueGrowth?: number;
-    earningsGrowth?: number;
-    returnOnEquity?: number;
-    debtToEquity?: number;
-    currentRatio?: number;
-    quickRatio?: number;
-    targetMeanPrice?: number;
-    targetHighPrice?: number;
-    targetLowPrice?: number;
-    numberOfAnalystOpinions?: number;
-  };
-  assetProfile?: { sector?: string };
-  recommendationTrend?: { trend?: YahooRecommendationTrend[] };
-  upgradeDowngradeHistory?: { history?: YahooGradeHistory[] };
-}
 
 /** `Number.isFinite` as a type guard (same semantics: false for non-numbers). */
 function isFiniteNumber(value: unknown): value is number {
@@ -192,15 +76,24 @@ function normalizeThumbnailUrl(url: unknown) {
   return undefined;
 }
 
+/** The `url` of one raw thumbnail resolution entry, if it is an object. */
+function resolutionUrl(entry: unknown): unknown {
+  return entry && typeof entry === "object" && "url" in entry
+    ? entry.url
+    : undefined;
+}
+
 /**
  * @param thumbnail raw yahoo-finance2 payload (NO_VALIDATE — see file header).
  */
-function pickBestThumbnail(thumbnail: YahooThumbnail | undefined) {
-  const resolutions = Array.isArray(thumbnail?.resolutions)
-    ? thumbnail.resolutions
-    : [];
+function pickBestThumbnail(thumbnail: unknown) {
+  const raw =
+    thumbnail && typeof thumbnail === "object" && "resolutions" in thumbnail
+      ? thumbnail.resolutions
+      : undefined;
+  const resolutions: readonly unknown[] = Array.isArray(raw) ? raw : [];
   for (let i = resolutions.length - 1; i >= 0; i -= 1) {
-    const candidate = normalizeThumbnailUrl(resolutions[i]?.url);
+    const candidate = normalizeThumbnailUrl(resolutionUrl(resolutions[i]));
     if (candidate) return candidate;
   }
   return undefined;
@@ -211,10 +104,10 @@ const yahooAdapter = {
 
   async search(query: string) {
     const yahoo = await getYahooClient();
-    const results: YahooSearchResult = await yahoo.search(
-      query,
-      { quotesCount: 8, newsCount: 0 },
-      NO_VALIDATE,
+    const results = requireYahooPayload(
+      yahooSearchResultSchema,
+      await yahoo.search(query, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE),
+      "search",
     );
     const items = (results.quotes || [])
       .filter((r) => r.symbol)
@@ -229,7 +122,11 @@ const yahooAdapter = {
 
   async quote(symbol: string) {
     const yahoo = await getYahooClient();
-    const q: YahooQuote = await yahoo.quote(symbol, {}, NO_VALIDATE);
+    const q = requireYahooPayload(
+      yahooQuoteSchema,
+      await yahoo.quote(symbol, {}, NO_VALIDATE),
+      "quote",
+    );
     return {
       symbol: q.symbol,
       name: q.shortName || q.longName || q.symbol,
@@ -255,22 +152,25 @@ const yahooAdapter = {
     {
       range = "1mo",
       interval = "1d",
-    }: { range?: string; interval?: string } = {},
+    }: { range?: string; interval?: YahooChartInterval } = {},
   ) {
     const yahoo = await getYahooClient();
-    const result: YahooChartResult | undefined = await yahoo.chart(
-      symbol,
-      {
-        period1: rangeToDate(range),
-        interval,
-        includePrePost: false,
-      },
-      NO_VALIDATE,
+    const result = parseYahooPayload(
+      yahooChartResultSchema,
+      await yahoo.chart(
+        symbol,
+        {
+          period1: rangeToDate(range),
+          interval,
+          includePrePost: false,
+        },
+        NO_VALIDATE,
+      ),
     );
     const points = (result?.quotes || [])
       .filter((p) => p.close != null)
       .map((p) => ({
-        time: new Date(p.date).getTime(),
+        time: yahooDateMs(p.date),
         close: p.close,
         high: p.high,
         low: p.low,
@@ -285,18 +185,21 @@ const yahooAdapter = {
 
   async fundamentals(symbol: string) {
     const yahoo = await getYahooClient();
-    const s: YahooQuoteSummary | undefined = await yahoo.quoteSummary(
-      symbol,
-      {
-        modules: [
-          "summaryDetail",
-          "defaultKeyStatistics",
-          "price",
-          "financialData",
-          "assetProfile",
-        ],
-      },
-      NO_VALIDATE,
+    const s: YahooQuoteSummary | undefined = parseYahooPayload(
+      yahooQuoteSummarySchema,
+      await yahoo.quoteSummary(
+        symbol,
+        {
+          modules: [
+            "summaryDetail",
+            "defaultKeyStatistics",
+            "price",
+            "financialData",
+            "assetProfile",
+          ],
+        },
+        NO_VALIDATE,
+      ),
     );
     const sd = s?.summaryDetail || {};
     const ks = s?.defaultKeyStatistics || {};
@@ -343,16 +246,19 @@ const yahooAdapter = {
 
   async analyst(symbol: string) {
     const yahoo = await getYahooClient();
-    const s: YahooQuoteSummary | undefined = await yahoo.quoteSummary(
-      symbol,
-      {
-        modules: [
-          "recommendationTrend",
-          "upgradeDowngradeHistory",
-          "financialData",
-        ],
-      },
-      NO_VALIDATE,
+    const s: YahooQuoteSummary | undefined = parseYahooPayload(
+      yahooQuoteSummarySchema,
+      await yahoo.quoteSummary(
+        symbol,
+        {
+          modules: [
+            "recommendationTrend",
+            "upgradeDowngradeHistory",
+            "financialData",
+          ],
+        },
+        NO_VALIDATE,
+      ),
     );
     const trendBuckets = s?.recommendationTrend?.trend || [];
     const current =
@@ -390,10 +296,10 @@ const yahooAdapter = {
   async news(symbol: string, { count = 20 }: { count?: number } = {}) {
     const yahoo = await getYahooClient();
     const newsCount = Math.min(count, 50);
-    const results: YahooSearchResult = await yahoo.search(
-      symbol,
-      { quotesCount: 0, newsCount },
-      NO_VALIDATE,
+    const results = requireYahooPayload(
+      yahooSearchResultSchema,
+      await yahoo.search(symbol, { quotesCount: 0, newsCount }, NO_VALIDATE),
+      "search",
     );
     const articles = (results.news || []).map((n) => ({
       title: n.title,

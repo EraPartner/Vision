@@ -5,9 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, PLANNED_TRANSACTION_STUB } from "@/test/msw/handlers";
 import { RecurringDetectionPanel } from "@/features/planned/RecurringDetectionPanel";
 import { plannedKeys } from "@/lib/queryKeys";
+import { categoryNode, categoryTreeBody } from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -34,6 +35,7 @@ function patternFixture(direction: "income" | "expense") {
         categoryId: null,
         categoryName: null,
         bankAccount: "BE12",
+        accountId: 1,
         firstSeen: "2025-01-28",
         lastSeen: "2025-06-28",
         predictedNext: "2025-07-28",
@@ -56,7 +58,7 @@ function servePatternsAndCapturePost(direction: "income" | "expense") {
                     string,
                     unknown
                 >;
-                return ok({ id: 99 });
+                return ok({ ...PLANNED_TRANSACTION_STUB, id: 99 });
             },
         ),
     );
@@ -182,23 +184,26 @@ describe("RecurringDetectionPanel — detected sign carried into the planned pay
                 }),
             ),
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
-                    items: [
-                        {
-                            id: 9,
-                            name: "SPECIAL:VALUE",
-                            parentId: 1,
-                            pathIds: [1, 9],
-                            path: ["FOOD", "SPECIAL:VALUE"],
-                            category_name: "FOOD:SPECIAL:VALUE",
-                            depth: 2,
-                            is_active: true,
-                            hierarchyOnly: false,
-                            legacyCompatible: false,
-                        },
-                    ],
-                    total: 1,
-                }),
+                ok(
+                    categoryTreeBody({
+                        items: [
+                            categoryNode({
+                                id: 9,
+                                name: "SPECIAL:VALUE",
+                                parentId: 1,
+                                pathIds: [1, 9],
+                                path: ["FOOD", "SPECIAL:VALUE"],
+                                category_name: "FOOD:SPECIAL:VALUE",
+                                depth: 2,
+                                description: null,
+                                is_active: true,
+                                hierarchyOnly: false,
+                                legacyCompatible: false,
+                            }),
+                        ],
+                        total: 1,
+                    }),
+                ),
             ),
         );
         renderWithApp(<RecurringDetectionPanel />);

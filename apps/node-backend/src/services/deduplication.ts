@@ -5,6 +5,9 @@
 import crypto from "crypto";
 import { query, withSavepointIfInTransaction } from "../database/connection.ts";
 import { logger } from "../config/logger.ts";
+import { checkRows, queryRows } from "../database/rowContracts.ts";
+import { idRowSchema } from "../database/rowSchemas.ts";
+import { transactionIdRowSchema } from "../database/rows/ledger.ts";
 import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
 
 export interface FieldHashInput {
@@ -138,6 +141,9 @@ export async function isManualDuplicate({
     accountId,
   });
 
+  // Rows are checked after the try: a contract violation must fail loudly,
+  // not fall through to field matching like a missing claim table does.
+  let claimRows: unknown[] = [];
   try {
     // Only a live, active transaction blocks. The FK is ON DELETE SET NULL
     // (migration 0024), so a deleted transaction leaves its hash row behind
@@ -147,7 +153,7 @@ export async function isManualDuplicate({
     const result = await withSavepointIfInTransaction(
       "sp_manual_dedup_claim_read",
       () =>
-        query<{ transaction_id: number }>(
+        query(
           `SELECT m.transaction_id
              FROM manual_transaction_dedup_claims m
              JOIN transactions t ON t.id = m.transaction_id AND t.is_active = true
@@ -156,12 +162,7 @@ export async function isManualDuplicate({
           [hash],
         ),
     );
-    if (result.rows.length > 0) {
-      return {
-        isDuplicate: true,
-        existingTransactionId: result.rows[0].transaction_id,
-      };
-    }
+    claimRows = result.rows;
   } catch (err) {
     const pgErr = err as { code?: string; message?: string };
     if (pgErr.code !== "42P01") {
@@ -172,9 +173,14 @@ export async function isManualDuplicate({
     }
     // The expand migration may not exist yet — fall through to field matching.
   }
+  const [claim] = checkRows(transactionIdRowSchema, claimRows);
+  if (claim) {
+    return { isDuplicate: true, existingTransactionId: claim.transaction_id };
+  }
 
   // Fallback: field-based duplicate check (includes memo for accurate match).
-  const fieldResult = await query<{ id: number }>(
+  const [fieldMatch] = await queryRows(
+    idRowSchema,
     `SELECT t.id FROM transactions t
      LEFT JOIN accounts acct ON acct.id = t.account_id
      WHERE t.date = $1 AND t.amount = $2 AND t.recipient_id = $3
@@ -194,8 +200,8 @@ export async function isManualDuplicate({
       accountId ?? null,
     ],
   );
-  if (fieldResult.rows.length > 0) {
-    return { isDuplicate: true, existingTransactionId: fieldResult.rows[0].id };
+  if (fieldMatch) {
+    return { isDuplicate: true, existingTransactionId: fieldMatch.id };
   }
 
   return { isDuplicate: false, existingTransactionId: null };

@@ -77,7 +77,7 @@ async function fixture(): Promise<Fixture> {
 }
 async function storedEvidence(batchId: number, event: RetainedEvent) {
   const rows = await readReconciliationSources([batchId]);
-  const row = rows[0];
+  const row = rows[0]!;
   const reference = retainedReference([event]);
   const facts =
     row.type === "gift"
@@ -208,9 +208,9 @@ async function sourceBatch(
         "UPDATE portfolio_import_staging_rows SET dedup_fingerprint=$2,dedup_fingerprint_version=$3,dedup_occurrence=$4 WHERE id=$1",
         [
           row.id,
-          identities[index].fingerprint,
-          identities[index].version,
-          identities[index].occurrence,
+          identities[index]!.fingerprint,
+          identities[index]!.version,
+          identities[index]!.occurrence,
         ],
       );
   }
@@ -365,7 +365,7 @@ describeDb("retained JSON evidence and reviewed atomic adoption", () => {
       action: "adopt",
       existingTransactionId: old,
     });
-    expect(plan.actions[0].corrections).toEqual(
+    expect(plan.actions[0]!.corrections).toEqual(
       expect.arrayContaining(["date", "fees"]),
     );
     expect(

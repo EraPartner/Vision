@@ -11,6 +11,11 @@ import {
     type TransactionInspectorProps,
 } from "@/features/transactions/components/TransactionInspector";
 import type { TableTransaction } from "@/features/transactions/types";
+import {
+    categoryNode,
+    categoryTreeBody,
+    recipientRow,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -56,10 +61,10 @@ describe("TransactionInspector", () => {
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/attachments/transaction/:id`, () =>
-                ok({ items: [] }),
+                ok({ items: [], total: 0 }),
             ),
             http.get(`${API_BASE}/api/recipients/1`, () =>
-                ok({ id: 1, name: "Alice", is_active: true, links: [] }),
+                ok(recipientRow({ id: 1, name: "Alice", is_active: true, links: [] })),
             ),
         );
     });
@@ -109,9 +114,9 @@ describe("TransactionInspector", () => {
     it("shows the recipient and category pickers with the row's values", async () => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
+                ok(categoryTreeBody({
                     items: [
-                        {
+                        categoryNode({
                             id: 1,
                             name: "GROCERIES",
                             parentId: null,
@@ -123,11 +128,11 @@ describe("TransactionInspector", () => {
                             is_active: true,
                             hierarchyOnly: false,
                             legacyCompatible: false,
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
         );
         renderInspector();
@@ -148,9 +153,9 @@ describe("TransactionInspector", () => {
         const onSelectCategory = vi.fn();
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
+                ok(categoryTreeBody({
                     items: [
-                        {
+                        categoryNode({
                             id: 2,
                             name: "Household",
                             parentId: null,
@@ -162,11 +167,11 @@ describe("TransactionInspector", () => {
                             is_active: true,
                             hierarchyOnly: false,
                             legacyCompatible: false,
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
         );
         renderInspector({ onSelectCategory });

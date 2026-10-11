@@ -21,6 +21,7 @@ import { checkRows, queryRows } from "../database/rowContracts.ts";
 import {
   countRowSchema,
   enrichedTransactionDbRowSchema,
+  idRowSchema,
   transactionTagRowSchema,
   transferLegRowSchema,
   transferSuggestionRowSchema,
@@ -28,6 +29,19 @@ import {
   uncategorisedTotalRowSchema,
   unlinkedTransactionRowSchema,
 } from "../database/rowSchemas.ts";
+import {
+  intCountRowSchema,
+  openingAnchorRowSchema,
+  stampedDateRangeRowSchema,
+  transactionTotalRowSchema,
+  transferCandidatePairRowSchema,
+  transferPeerPointerRowSchema,
+} from "../database/rows/ledger.ts";
+import type {
+  OpeningAnchorRow,
+  StampedDateRangeRow,
+  TransferCandidatePairRow,
+} from "../database/rows/ledger.ts";
 import { sanitizeUpdateFields } from "../lib/validation.ts";
 import { buildTransactionWhere } from "../lib/filterBuilder.ts";
 import { buildSetClauses } from "../lib/sqlClauses.ts";
@@ -224,14 +238,18 @@ function getCachedTransactionCount(
     if (resolvedKey) transactionCountCache.delete(resolvedKey);
   }
 
-  const promise: Promise<number> = query<{ total: number }>(sql, params)
-    .then((result) => {
+  const promise: Promise<number> = queryRows(
+    transactionTotalRowSchema,
+    sql,
+    params,
+  )
+    .then((rows) => {
       const entry = transactionCountCache.get(key);
       if (entry?.promise === promise) {
         entry.pending = false;
         entry.expiresAt = Date.now() + COUNT_CACHE_TTL_MS;
       }
-      return result.rows[0]?.total ?? 0;
+      return rows[0]?.total ?? 0;
     })
     .catch((err) => {
       if (transactionCountCache.get(key)?.promise === promise) {
@@ -394,12 +412,14 @@ async function setTransactionTags(
     transactionId,
   ]);
   if (!slugs || slugs.length === 0) return;
-  const resolved = await client.query(
+  const resolved = await queryRows(
+    idRowSchema,
     "SELECT id FROM tags WHERE slug = ANY($1::text[]) AND is_active = true",
     [slugs],
+    client,
   );
-  if (resolved.rows.length === 0) return;
-  const tagIds = resolved.rows.map((r: { id: number }) => r.id);
+  if (resolved.length === 0) return;
+  const tagIds = resolved.map((r) => r.id);
   await client.query(
     `INSERT INTO transaction_tags (transaction_id, tag_id)
      SELECT $1, unnest($2::int[])
@@ -544,6 +564,8 @@ export const transactionRepository = {
     `;
 
     const [row] = await queryRows(countRowSchema, sql, params);
+    // COUNT(*) without GROUP BY always returns exactly one row.
+    if (!row) throw new Error("transaction count returned no row");
     return parseInt(row.count, 10);
   },
 
@@ -730,7 +752,7 @@ export const transactionRepository = {
     const total = totalRow ? parseInt(String(totalRow.total_count), 10) : 0;
     const rows = checkRows(
       uncategorisedPageRowSchema,
-      result.rows.filter((row: { id: unknown }) => row.id != null),
+      result.rows.filter((row) => (row as { id: unknown }).id != null),
     ).map(({ total_count: _total_count, _row_order, ...row }) => row);
 
     return { rows: await attachTagsToRows(rows), total };
@@ -754,7 +776,7 @@ export const transactionRepository = {
     const [row] = checkRows(enrichedTransactionDbRowSchema, result.rows);
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
-    return enriched;
+    return enriched ?? null;
   },
 
   /**
@@ -831,7 +853,7 @@ export const transactionRepository = {
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
     clearTransactionCountCache();
-    return enriched;
+    return enriched ?? null;
   },
 
   /**
@@ -934,11 +956,11 @@ export const transactionRepository = {
     const countSql = `SELECT COUNT(*)::int AS total FROM transactions t ${COUNT_JOINS} WHERE ${where}`;
 
     const dataParams = [...params, limit, offset];
-    const [result, total] = await Promise.all([
-      query<EnrichedTransactionDbRow>(dataSql, dataParams),
+    const [rows, total] = await Promise.all([
+      queryRows(enrichedTransactionDbRowSchema, dataSql, dataParams),
       getCachedTransactionCount(countSql, params),
     ]);
-    return { rows: await attachTagsToRows(result.rows), total };
+    return { rows: await attachTagsToRows(rows), total };
   },
 
   /**
@@ -1016,7 +1038,7 @@ export const transactionRepository = {
     if (!row) return null;
     const [enriched] = await attachTagsToRows([row]);
     clearTransactionCountCache();
-    return enriched;
+    return enriched ?? null;
   },
 
   /**
@@ -1085,13 +1107,8 @@ export const transactionRepository = {
    */
   async getStampedDateRangesByAccount(
     accountIds: number[],
-  ): Promise<{ account_id: number; min_date: string; max_date: string }[]> {
-    const result = await query<{
-      account_id: number;
-      min_date: string;
-      max_date: string;
-    }>(STAMP_RANGES_SQL, [accountIds]);
-    return result.rows;
+  ): Promise<StampedDateRangeRow[]> {
+    return queryRows(stampedDateRangeRowSchema, STAMP_RANGES_SQL, [accountIds]);
   },
 
   /**
@@ -1103,12 +1120,8 @@ export const transactionRepository = {
    */
   async getOpeningAnchorsByAccount(
     accountIds: number[],
-  ): Promise<{ account_id: number; currency: string }[]> {
-    const result = await query<{ account_id: number; currency: string }>(
-      OPENING_ANCHORS_SQL,
-      [accountIds],
-    );
-    return result.rows;
+  ): Promise<OpeningAnchorRow[]> {
+    return queryRows(openingAnchorRowSchema, OPENING_ANCHORS_SQL, [accountIds]);
   },
 
   /**
@@ -1156,8 +1169,9 @@ export const transactionRepository = {
    */
   async listTransferCandidatePairs(
     windowDays: number,
-  ): Promise<{ outId: number; inId: number }[]> {
-    const { rows } = await query<{ outId: number; inId: number }>(
+  ): Promise<TransferCandidatePairRow[]> {
+    return queryRows(
+      transferCandidatePairRowSchema,
       `SELECT a.id AS "outId", b.id AS "inId"
        FROM transactions a
        JOIN transactions b
@@ -1177,7 +1191,6 @@ export const transactionRepository = {
         )`,
       [windowDays],
     );
-    return rows;
   },
 
   /**
@@ -1313,7 +1326,8 @@ export const transactionRepository = {
    * @returns the peer id; `undefined` when the row is gone OR unpaired (the `?? undefined` collapses both)
    */
   async lockTransferPeerPointer(id: number): Promise<number | undefined> {
-    const { rows } = await query<{ transfer_peer_id: number | null }>(
+    const rows = await queryRows(
+      transferPeerPointerRowSchema,
       "SELECT transfer_peer_id FROM transactions WHERE id = $1 FOR UPDATE",
       [id],
     );
@@ -1354,13 +1368,14 @@ export const transactionRepository = {
     fingerprint: string | null | undefined,
   ): Promise<number | undefined> {
     if (version == null || !fingerprint) return undefined;
-    const result = await query<{ id: number }>(
+    const rows = await queryRows(
+      idRowSchema,
       `SELECT id FROM transactions
         WHERE dedup_fingerprint_version = $1 AND dedup_fingerprint = $2
         LIMIT 1`,
       [version, fingerprint],
     );
-    return result.rows[0]?.id ?? undefined;
+    return rows[0]?.id ?? undefined;
   },
 
   /**
@@ -1385,7 +1400,8 @@ export const transactionRepository = {
     accountId: number | null;
     currency: string;
   }): Promise<number> {
-    const result = await query<{ n: number }>(
+    const rows = await queryRows(
+      intCountRowSchema,
       `SELECT COUNT(*)::int AS n
          FROM transactions t
         WHERE t.dedup_fingerprint IS NULL
@@ -1398,7 +1414,7 @@ export const transactionRepository = {
           AND t.currency = $6`,
       [date, amount, recipientId, memo, accountId, currency],
     );
-    return Number(result.rows[0]?.n) || 0;
+    return Number(rows[0]?.n) || 0;
   },
 
   /**
@@ -1428,7 +1444,8 @@ export const transactionRepository = {
     dedupFingerprint,
     fingerprintVersion,
   }: ImportedTransactionInput): Promise<number | undefined> {
-    const result = await query<{ id: number }>(
+    const rows = await queryRows(
+      idRowSchema,
       `INSERT INTO transactions
                 (date, account_id, recipient_id, category_id, amount, memo, currency, balance, comment,
                  import_batch_id, matched_pattern_id, source_record_hash,
@@ -1453,7 +1470,7 @@ export const transactionRepository = {
         fingerprintVersion ?? null,
       ],
     );
-    return result.rows[0]?.id ?? undefined;
+    return rows[0]?.id ?? undefined;
   },
 };
 

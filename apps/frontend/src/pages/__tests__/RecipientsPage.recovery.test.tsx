@@ -6,6 +6,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { err, ok } from "@/test/msw/handlers";
+import { recipientRow } from "@/test/msw/rowFixtures";
 import RecipientsPage from "@/pages/RecipientsPage";
 
 vi.mock("@/components/shared/VirtualDataTable", () => ({
@@ -31,11 +32,8 @@ it("keeps loaded recipients and retries a failed next page at the same offset", 
     const user = userEvent.setup();
     const offsets: number[] = [];
     let failing = true;
-    const recipient = (id: number, name: string) => ({
-        id,
-        name,
-        is_active: true,
-    });
+    const recipient = (id: number, name: string) =>
+        recipientRow({ id, name, is_active: true });
     server.use(
         http.get("http://localhost:3002/api/recipients", ({ request }) => {
             const offset = Number(

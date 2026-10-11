@@ -82,16 +82,27 @@ export function clearMvCache(): void {
 
 // ── Aggregation helpers ────────────────────────────────────────────────────
 
-/**
- * A row as returned by `convertRowsToEur`. That module is still JavaScript and
- * types its rows loosely, so the shape is derived from its declaration rather
- * than restated here.
- */
-export type ConvertedRow = Awaited<ReturnType<typeof convertRowsToEur>>[number];
+// Row types derived from `convertRowsToEur`, the one service import the
+// repository layer is sanctioned to use.
 
-export interface PeriodPivotShape {
-  idField: string;
-  labelField: string;
+/** The columns `convertRowsToEur` reads; every other column passes through. */
+export type ConvertibleRow = Parameters<typeof convertRowsToEur>[0][number];
+
+/** A row as returned by `convertRowsToEur`: the caller's row plus `amount_eur`. */
+export type ConvertedRow<T extends ConvertibleRow = ConvertibleRow> = Awaited<
+  ReturnType<typeof convertRowsToEur<T>>
+>[number];
+
+/** A converted period-pivot row: one entity's total for a period. */
+export type PeriodPivotRow = ConvertibleRow & { period: string; cnt: string };
+
+/**
+ * `idField`/`labelField` name the row's entity columns; `idKey`/`labelKey`
+ * the keys they get in the pivot.
+ */
+export interface PeriodPivotShape<T> {
+  idField: keyof T & string;
+  labelField: keyof T & string;
   idKey: string;
   labelKey: string;
 }
@@ -120,28 +131,31 @@ export type MonthlySummaryInput = {
  * sorting each period ascending by total. Shared by the recipient and tag
  * period-pivots (SIMP-49).
  */
-export function buildPeriodPivot(
-  convertedRows: ConvertedRow[],
-  { idField, labelField, idKey, labelKey }: PeriodPivotShape,
+export function buildPeriodPivot<T extends PeriodPivotRow>(
+  convertedRows: ConvertedRow<T>[],
+  { idField, labelField, idKey, labelKey }: PeriodPivotShape<T>,
 ): Record<string, PeriodPivotEntity[]> {
   const periodMap: Record<string, Record<string, PeriodPivotEntity>> = {};
   for (const row of convertedRows) {
     const period = row.period;
-    const id = parseInt(row[idField], 10);
+    // parseInt stringifies its argument itself; String() only makes it explicit.
+    const id = parseInt(String(row[idField]), 10);
     const eur = Math.abs(row.amount_eur);
     const cnt = parseInt(row.cnt, 10) || 0;
 
-    if (!periodMap[period]) periodMap[period] = {};
-    if (!periodMap[period][id]) {
-      periodMap[period][id] = {
+    const entities = (periodMap[period] ??= {});
+    let entity = entities[id];
+    if (!entity) {
+      entity = {
         [idKey]: id,
         [labelKey]: row[labelField],
         total: 0,
         transactionCount: 0,
       };
+      entities[id] = entity;
     }
-    periodMap[period][id].total += eur;
-    periodMap[period][id].transactionCount += cnt;
+    entity.total += eur;
+    entity.transactionCount += cnt;
   }
 
   const pivot: Record<string, PeriodPivotEntity[]> = {};
@@ -220,15 +234,24 @@ export interface CategoryTotal {
   total: number;
 }
 
-export function buildCategoryFromConvertedRows(
-  convertedRows: ConvertedRow[],
+/** A converted per-category total row; `category_id` -1 is "uncategorised". */
+export type CategoryTotalRow = ConvertibleRow & {
+  category_id: number | string;
+  name: string;
+  /** BIGINT text from pg; a plain number is accepted too. */
+  count: string | number;
+};
+
+export function buildCategoryFromConvertedRows<T extends CategoryTotalRow>(
+  convertedRows: ConvertedRow<T>[],
 ): CategoryTotal[] {
   const categoryMap = new Map<string, CategoryTotal>();
 
   for (const row of convertedRows) {
     const key = getCategoryKey(row.category_id);
     const eur = row.amount_eur;
-    const count = parseInt(row.count, 10);
+    // parseInt stringifies its argument itself; String() only makes it explicit.
+    const count = parseInt(String(row.count), 10);
 
     const existing = categoryMap.get(key);
     if (existing) {
@@ -255,11 +278,13 @@ export function buildCategoryFromConvertedRows(
  * @param dateField Date field used for the historical rate lookup.
  * @returns rows with `amount_eur` merged in
  */
-export async function convertRowsWithHistoricalRateFallback(
-  rows: Array<Record<string, unknown>>,
+export async function convertRowsWithHistoricalRateFallback<
+  T extends ConvertibleRow,
+>(
+  rows: readonly T[],
   targetCurrency: string,
   dateField = "date",
-) {
+): Promise<ConvertedRow<T>[]> {
   try {
     return await convertRowsToEur(rows, targetCurrency, {
       useHistoricalRatesByDate: true,
@@ -282,11 +307,13 @@ export async function convertRowsWithHistoricalRateFallback(
  * @param dateField - Date field used for historical rate lookup
  * @returns Converted groups in the same order as input
  */
-export async function batchConvertGroupsWithHistoricalRateFallback(
-  groups: Array<Array<Record<string, unknown>>>,
+export async function batchConvertGroupsWithHistoricalRateFallback<
+  const G extends ReadonlyArray<ReadonlyArray<ConvertibleRow>>,
+>(
+  groups: G,
   targetCurrency: string,
   dateField = "date",
-) {
+): Promise<ConvertedGroups<G>> {
   const TAG = "_batchGroup";
   const tagged = groups.flatMap((group, groupIdx) =>
     group.map((row) => ({ ...row, [TAG]: groupIdx })),
@@ -302,9 +329,22 @@ export async function batchConvertGroupsWithHistoricalRateFallback(
     converted = await convertRowsToEur(tagged, targetCurrency);
   }
 
+  // One output group per input group, in order, each holding its own rows:
+  // the tuple type above.
   return groups.map((_, i) =>
     converted
       .filter((r) => r[TAG] === i)
       .map(({ [TAG]: _tag, ...rest }) => rest),
-  );
+  ) as ConvertedGroups<G>;
 }
+
+/** {@link batchConvertGroupsWithHistoricalRateFallback}'s result: each group's rows, converted. */
+export type ConvertedGroups<
+  G extends ReadonlyArray<ReadonlyArray<ConvertibleRow>>,
+> = {
+  -readonly [K in keyof G]: G[K] extends ReadonlyArray<
+    infer R extends ConvertibleRow
+  >
+    ? ConvertedRow<R>[]
+    : never;
+};

@@ -173,7 +173,13 @@ function tokenize(source: unknown): FormulaToken[] {
     else if (match[2])
       tokens.push({ type: "string", value: JSON.parse(match[2]) as string });
     else if (match[3]) tokens.push({ type: "identifier", value: match[3] });
-    else tokens.push({ type: match[4], value: match[4] });
+    else if (match[4]) tokens.push({ type: match[4], value: match[4] });
+    // The pattern has no other alternative, so one of the groups matched.
+    else
+      throw new AnalysisFormulaError(
+        "INVALID_TOKEN",
+        `Unsupported formula syntax at character ${offset + 1}`,
+      );
   }
   tokens.push({ type: "eof", value: "" });
   return tokens;
@@ -182,9 +188,17 @@ function tokenize(source: unknown): FormulaToken[] {
 function parseExpression(source: unknown): FormulaAst {
   const tokens = tokenize(source);
   let index = 0;
-  const peek = () => tokens[index];
+  // `tokenize` ends every stream with an `eof` token, which no rule but the
+  // final `take("eof")` consumes, so `index` never passes it.
+  const eof: FormulaToken = { type: "eof", value: "" };
+  const peek = () => tokens[index] ?? eof;
+  const next = () => {
+    const token = peek();
+    index += 1;
+    return token;
+  };
   const take = (type: string) => {
-    const token = tokens[index];
+    const token = peek();
     if (token.type !== type)
       throw new AnalysisFormulaError(
         "INVALID_SYNTAX",
@@ -252,7 +266,7 @@ function parseExpression(source: unknown): FormulaAst {
   function product(): FormulaAst {
     let left = primary();
     while (["*", "/"].includes(peek().type)) {
-      const op = tokens[index++].type;
+      const op = next().type;
       left = { kind: "binary", op, left, right: primary() };
     }
     return left;
@@ -260,7 +274,7 @@ function parseExpression(source: unknown): FormulaAst {
   function sum(): FormulaAst {
     let left = product();
     while (["+", "-"].includes(peek().type)) {
-      const op = tokens[index++].type;
+      const op = next().type;
       left = { kind: "binary", op, left, right: product() };
     }
     return left;
@@ -268,7 +282,7 @@ function parseExpression(source: unknown): FormulaAst {
   function comparison(): FormulaAst {
     let left = sum();
     while (["<", "<=", ">", ">=", "==", "!="].includes(peek().type)) {
-      const op = tokens[index++].type;
+      const op = next().type;
       left = { kind: "binary", op, left, right: sum() };
     }
     return left;
@@ -417,6 +431,28 @@ function resolveReference(name: string, context: FormulaContext): unknown {
     );
   return context.row[key];
 }
+/** `ast.args[index]`, or an ARITY error when the call has too few arguments. */
+function argument(
+  ast: Extract<FormulaAst, { kind: "call" }>,
+  index: number,
+): FormulaAst {
+  const arg = ast.args[index];
+  if (arg === undefined)
+    throw new AnalysisFormulaError(
+      "ARITY",
+      `${ast.name} is missing argument ${index + 1}`,
+    );
+  return arg;
+}
+
+/** `list[index]` for an index the caller has already bounded. */
+function decimalAt(list: Decimal[], index: number): Decimal {
+  const value = list[index];
+  if (value === undefined)
+    throw new Error(`Formula invariant broken: no value at ${index}`);
+  return value;
+}
+
 function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
   if (ast.kind === "literal")
     return ast.valueType === "decimal" ? new Decimal(ast.value) : ast.value;
@@ -451,9 +487,9 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
   if (ast.name === "IF") {
     if (ast.args.length !== 3)
       throw new AnalysisFormulaError("ARITY", "IF requires three arguments");
-    return condition(evaluate(ast.args[0], context))
-      ? evaluate(ast.args[1], context)
-      : evaluate(ast.args[2], context);
+    return condition(evaluate(argument(ast, 0), context))
+      ? evaluate(argument(ast, 1), context)
+      : evaluate(argument(ast, 2), context);
   }
   if (ast.name === "COALESCE")
     return (
@@ -487,11 +523,13 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
   ): FormulaEntry[] =>
     rows.map((row) => ({ row, value: evaluate(arg, { ...context, row }) }));
   if (ast.name === "COUNT")
-    return aggregateEntries(ast.args[0]).filter(({ value }) => value != null)
-      .length;
+    return aggregateEntries(argument(ast, 0)).filter(
+      ({ value }) => value != null,
+    ).length;
   if (["SUM", "AVERAGE", "MIN", "MAX"].includes(ast.name)) {
-    const entries = aggregateEntries(ast.args[0]);
-    assertAggregateUnits(ast.args[0], entries, context);
+    const arg = argument(ast, 0);
+    const entries = aggregateEntries(arg);
+    assertAggregateUnits(arg, entries, context);
     // Skip missing cells, including "" which decimal() also reads as missing.
     const list = entries
       .map(({ value }) => decimal(value))
@@ -511,19 +549,21 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
         "ARITY",
         `${ast.name} requires ${expectedArity} arguments`,
       );
-    const expected = evaluate(ast.args[2], context);
-    const operator = String(evaluate(ast.args[1], context));
+    const expected = evaluate(argument(ast, 2), context);
+    const operator = String(evaluate(argument(ast, 1), context));
     if (!["<", "<=", ">", ">=", "==", "!="].includes(operator))
       throw new AnalysisFormulaError(
         "TYPE_ERROR",
         "Conditional aggregate operator is invalid",
       );
+    const tested = argument(ast, 0);
     const selected = context.rows.filter((row) =>
-      compare(evaluate(ast.args[0], { ...context, row }), operator, expected),
+      compare(evaluate(tested, { ...context, row }), operator, expected),
     );
     if (ast.name === "COUNTIF") return selected.length;
-    const entries = aggregateEntries(ast.args[3], selected);
-    assertAggregateUnits(ast.args[3], entries, context);
+    const summed = argument(ast, 3);
+    const entries = aggregateEntries(summed, selected);
+    assertAggregateUnits(summed, entries, context);
     return Decimal.sum(
       ...entries.map(({ value }) => decimal(value) ?? new Decimal(0)),
       new Decimal(0),
@@ -535,8 +575,9 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
         "ARITY",
         `${ast.name} requires one argument`,
       );
-    const entries = aggregateEntries(ast.args[0]);
-    assertAggregateUnits(ast.args[0], entries, context);
+    const arg = argument(ast, 0);
+    const entries = aggregateEntries(arg);
+    assertAggregateUnits(arg, entries, context);
     // Skip missing cells, including "" which decimal() also reads as missing.
     const list = entries
       .map(({ value }) => decimal(value))
@@ -544,8 +585,13 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
     if (!list.length) return null;
     if (ast.name === "MEDIAN") {
       list.sort((a, b) => a.comparedTo(b));
+      // A non-empty list: mid is in range, and mid >= 1 when the length is even.
       const mid = Math.floor(list.length / 2);
-      return list.length % 2 ? list[mid] : list[mid - 1].plus(list[mid]).div(2);
+      return list.length % 2
+        ? decimalAt(list, mid)
+        : decimalAt(list, mid - 1)
+            .plus(decimalAt(list, mid))
+            .div(2);
     }
     if (list.length < 2)
       throw new AnalysisFormulaError(
@@ -569,6 +615,9 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
           "NPV requires rate and one or more end-of-period cash flows",
         );
       const [rate, ...flows] = args;
+      // args.length >= 2 (checked above).
+      if (rate === undefined)
+        throw new AnalysisFormulaError("ARITY", "NPV is missing argument 1");
       if (rate.lte(-1))
         throw new AnalysisFormulaError("TYPE_ERROR", "NPV rate must exceed -1");
       return Decimal.sum(
@@ -587,6 +636,12 @@ function evaluate(ast: FormulaAst, context: FormulaContext): unknown {
       other = new Decimal(0),
       timing = new Decimal(0),
     ] = args;
+    // args.length is 3 to 5 (checked above).
+    if (rate === undefined || periods === undefined || amount === undefined)
+      throw new AnalysisFormulaError(
+        "ARITY",
+        `${ast.name} requires rate, periods and amount`,
+      );
     if (rate.lte(-1) || !periods.gt(0) || ![0, 1].includes(timing.toNumber()))
       throw new AnalysisFormulaError(
         "TYPE_ERROR",

@@ -100,8 +100,8 @@ async function account() {
     "INSERT INTO accounts(name,type,currency) VALUES($1,'brokerage','EUR') RETURNING id",
     [tag()],
   );
-  owned.accounts.push(rows[0].id);
-  return rows[0].id;
+  owned.accounts.push(rows[0]!.id);
+  return rows[0]!.id;
 }
 
 async function batch(accountId: number, options: BatchOptions = {}) {
@@ -116,8 +116,8 @@ async function batch(accountId: number, options: BatchOptions = {}) {
       accountId,
     ],
   );
-  owned.batches.push(rows[0].id);
-  return rows[0].id;
+  owned.batches.push(rows[0]!.id);
+  return rows[0]!.id;
 }
 
 async function cash(
@@ -129,7 +129,7 @@ async function cash(
     "INSERT INTO recipients(name,normalized_name) VALUES($1,$2) RETURNING id",
     [label, label.toLowerCase()],
   );
-  owned.recipients.push(recipients[0].id);
+  owned.recipients.push(recipients[0]!.id);
   const { rows } = await pool.query<{ id: number }>(
     `INSERT INTO transactions(date,amount,currency,memo,account_id,recipient_id,
        balance,is_active,is_transfer,transfer_source,source_record_hash,
@@ -141,7 +141,7 @@ async function cash(
       options.currency ?? "EUR",
       label,
       accountId,
-      recipients[0].id,
+      recipients[0]!.id,
       options.balance ?? null,
       options.isActive ?? true,
       options.isTransfer ?? false,
@@ -150,13 +150,13 @@ async function cash(
       options.fingerprint ?? hash(`${label}:fingerprint`),
     ],
   );
-  owned.transactions.push(rows[0].id);
+  owned.transactions.push(rows[0]!.id);
   return (
     await pool.query<{ snapshot: CashTransactionSnapshot }>(
       `SELECT ${CASH_SNAPSHOT_SQL} AS snapshot FROM transactions t WHERE t.id=$1`,
-      [rows[0].id],
+      [rows[0]!.id],
     )
-  ).rows[0].snapshot;
+  ).rows[0]!.snapshot;
 }
 
 async function source(
@@ -182,7 +182,7 @@ async function source(
       current.dedup_fingerprint,
     ],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function ownedFee(accountId: number, options: OwnedFeeOptions = {}) {
@@ -202,14 +202,14 @@ async function investment(
      VALUES($1,$1,'stock','EUR',12) RETURNING id`,
     [label],
   );
-  owned.investments.push(rows[0].id);
+  owned.investments.push(rows[0]!.id);
   await pool.query(
     `INSERT INTO portfolio_transactions(investment_id,type,date,units,amount,price_per_unit,
        fees,taxes,currency,account_id,source_record_hash)
      VALUES($1,'buy','2025-01-01',10,100,10,$2,0,'EUR',$3,$4)`,
-    [rows[0].id, options.fees ?? 0, accountId, options.sourceHash ?? null],
+    [rows[0]!.id, options.fees ?? 0, accountId, options.sourceHash ?? null],
   );
-  return rows[0].id;
+  return rows[0]!.id;
 }
 
 async function recordedFundingFee(accountId: number) {
@@ -266,7 +266,7 @@ async function historicalRate(date: string, value: number) {
      VALUES('USD',$1,$2,false) RETURNING id`,
     [date, value],
   );
-  owned.rates.push(rows[0].id);
+  owned.rates.push(rows[0]!.id);
 }
 
 async function cleanup() {
@@ -410,10 +410,10 @@ describe.skipIf(!hasTestDatabase())(
         "INSERT INTO categories(general,detail,is_active) VALUES('TEST',$1,true) RETURNING id",
         [tag()],
       );
-      owned.categories.push(rows[0].id);
+      owned.categories.push(rows[0]!.id);
       await pool.query(
         "UPDATE transactions SET category_id=$1,memo='User clarified account fee' WHERE id=$2",
-        [rows[0].id, fee.id],
+        [rows[0]!.id, fee.id],
       );
       expect((await summary()).brokerageCashFees).toEqual(
         before.brokerageCashFees,

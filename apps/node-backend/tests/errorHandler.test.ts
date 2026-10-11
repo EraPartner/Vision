@@ -208,7 +208,7 @@ describe('forwarded 4xx from non-AppError errors', () => {
   const run = (err: unknown, production = false) => {
     const res = mockRes();
     createErrorHandler(() => production)(err, req, res, () => {});
-    return { status: res.status.mock.calls[0][0], body: res.json.mock.calls[0][0] };
+    return { status: res.status.mock.calls[0]![0], body: res.json.mock.calls[0]![0] };
   };
 
   it('forwards a trusted body-parser 400 with its own message, even in production', () => {

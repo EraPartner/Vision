@@ -43,12 +43,12 @@ describe("analysis scenario inputs", () => {
 
   it("rejects duplicate join keys and undeclared cells", () => {
     const duplicate = structuredClone(model);
-    duplicate.attachments[0].rows[1].plan = "A";
+    duplicate.attachments[0]!.rows[1]!.plan = "A";
     expect(() => analysisScenarioModelSchema.parse(duplicate)).toThrow(
       /unique/,
     );
     const extra = structuredClone(model);
-    extra.attachments[0].rows[0].ledgerWrite = true;
+    extra.attachments[0]!.rows[0]!.ledgerWrite = true;
     expect(() => analysisScenarioModelSchema.parse(extra)).toThrow(
       /exactly match/,
     );
@@ -56,8 +56,8 @@ describe("analysis scenario inputs", () => {
 
   it("rejects values that do not match their declared column type", () => {
     const invalid = structuredClone(model);
-    invalid.attachments[0].columns[1].type = "integer";
-    invalid.attachments[0].rows[0].monthly_cost = "40.5";
+    invalid.attachments[0]!.columns[1]!.type = "integer";
+    invalid.attachments[0]!.rows[0]!.monthly_cost = "40.5";
 
     expect(() => analysisScenarioModelSchema.parse(invalid)).toThrow(
       /Scenario value must match integer/,
@@ -66,9 +66,9 @@ describe("analysis scenario inputs", () => {
 
   it("rejects unsafe integer values", () => {
     const invalid = structuredClone(model);
-    invalid.attachments[0].columns[1].type = "integer";
-    invalid.attachments[0].rows[0].monthly_cost = 9007199254740992;
-    invalid.attachments[0].rows[1].monthly_cost = 2;
+    invalid.attachments[0]!.columns[1]!.type = "integer";
+    invalid.attachments[0]!.rows[0]!.monthly_cost = 9007199254740992;
+    invalid.attachments[0]!.rows[1]!.monthly_cost = 2;
     expect(() => analysisScenarioModelSchema.parse(invalid)).toThrow(
       /Scenario value must match integer/,
     );
@@ -100,8 +100,8 @@ describe("analysis scenario inputs", () => {
 
   it("matches PostgreSQL integer strings to typed CSV integer keys", () => {
     const integerModel = structuredClone(model);
-    integerModel.attachments[0].columns[0].type = "integer";
-    integerModel.attachments[0].rows = [{ plan: 12, monthly_cost: "40.5" }];
+    integerModel.attachments[0]!.columns[0]!.type = "integer";
+    integerModel.attachments[0]!.rows = [{ plan: 12, monthly_cost: "40.5" }];
     expect(
       applyScenarioInputs([{ plan: "12" }], integerModel, [
         { id: "plan", type: "integer" },

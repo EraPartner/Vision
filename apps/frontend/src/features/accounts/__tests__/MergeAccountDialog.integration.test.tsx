@@ -5,30 +5,30 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err, ACCOUNT_STUB } from "@/test/msw/handlers";
+import { ok, err, ACCOUNT_LIST_ITEM_STUB } from "@/test/msw/handlers";
 import { MergeAccountDialog } from "@/features/accounts/MergeAccountDialog";
 import type { Account } from "@/types/api";
 import type { AccountMergePreview } from "@/lib/api/accounts";
 
 const API_BASE = "http://localhost:3002";
 
-// ACCOUNT_STUB mirrors the wire shape (null-able optionals), so cast via the
-// same unknown hop the other account fixtures use.
+// ACCOUNT_LIST_ITEM_STUB mirrors the list wire shape (null-able optionals), so
+// cast via the same unknown hop the other account fixtures use.
 const asAccount = (o: object): Account => o as unknown as Account;
 const SOURCE = asAccount({
-    ...ACCOUNT_STUB,
+    ...ACCOUNT_LIST_ITEM_STUB,
     id: 1,
     name: "Old KBC",
     display_name: "Old KBC",
 });
 const TARGET = asAccount({
-    ...ACCOUNT_STUB,
+    ...ACCOUNT_LIST_ITEM_STUB,
     id: 2,
     name: "New KBC",
     display_name: "New KBC",
 });
 const ARCHIVED = asAccount({
-    ...ACCOUNT_STUB,
+    ...ACCOUNT_LIST_ITEM_STUB,
     id: 3,
     name: "Dusty",
     display_name: "Dusty",
@@ -70,7 +70,8 @@ function mockApi({
                     into: new URL(request.url).searchParams.get("into"),
                 });
                 if (preview === "error") return err(500, "boom");
-                return ok(preview);
+                // The route answers `{ ...result, links: [] }`.
+                return ok({ ...preview, links: [] });
             },
         ),
     );

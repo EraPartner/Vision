@@ -172,13 +172,14 @@ export function ResearchMappingDialog({
     const handleRemove = async (
         id: number,
         provider: string,
-        providerSymbol: string,
+        providerSymbol: string | null,
     ) => {
         const ok = await confirm({
             title: t("research.mapping.remove"),
             description: t("research.mapping.removeDesc", {
                 provider,
-                symbol: providerSymbol,
+                // A failed mapping has no provider symbol.
+                symbol: providerSymbol ?? "—",
             }),
             confirmLabel: t("common.delete"),
             variant: "destructive",

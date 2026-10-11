@@ -95,9 +95,9 @@ describe("export date serialization", () => {
       },
     });
 
-    expect(dbQuery.mock.calls[0][0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
-    expect(dbQuery.mock.calls[0][0]).toContain("t.amount < 0");
-    expect(dbQuery.mock.calls[0][1]).toEqual([3, 9]);
+    expect(dbQuery.mock.calls[0]![0]).toMatch(/t\.account_id IN \(\$1, \$2\)/);
+    expect(dbQuery.mock.calls[0]![0]).toContain("t.amount < 0");
+    expect(dbQuery.mock.calls[0]![1]).toEqual([3, 9]);
   });
 
   it("destroys and rejects a response when a database failure happens after headers", async () => {
@@ -128,7 +128,7 @@ describe("export date serialization", () => {
     });
 
     const dataRow = res.chunks[1]; // [0] is the header line
-    expect(dataRow.startsWith("2026-07-01,")).toBe(true);
+    expect(dataRow!.startsWith("2026-07-01,")).toBe(true);
     expect(dataRow).not.toMatch(/GMT|Jul/);
   });
 
@@ -184,7 +184,7 @@ describe("export date serialization", () => {
       nextParamIdx: 1,
     });
 
-    const parsed = JSON.parse(res.chunks[0]);
+    const parsed = JSON.parse(res.chunks[0]!);
     expect(parsed.date).toBe("2026-07-01");
   });
 });
@@ -214,7 +214,7 @@ describe("export tag aggregation", () => {
       nextParamIdx: 1,
     });
 
-    expect(JSON.parse(res.chunks[0]).tags).toEqual(["alpha", "beta", "gamma"]);
+    expect(JSON.parse(res.chunks[0]!).tags).toEqual(["alpha", "beta", "gamma"]);
   });
 
   it("fetches tags via a single pre-aggregated LEFT JOIN, not a per-row correlated subquery", async () => {
@@ -228,7 +228,7 @@ describe("export tag aggregation", () => {
     });
 
     // dbQuery calls: [0] probe, [1] first chunk.
-    const chunkSql = dbQuery.mock.calls[1][0];
+    const chunkSql = dbQuery.mock.calls[1]![0];
     // Slug ordering + active-only filter preserved …
     expect(chunkSql).toContain("array_agg(tg.slug ORDER BY tg.slug)");
     expect(chunkSql).toContain("WHERE tg.is_active = true");
@@ -273,7 +273,7 @@ describe("bulk export service snapshot", () => {
       format: "csv",
     });
 
-    expect(query.mock.calls[0][0]).toBe(
+    expect(query.mock.calls[0]![0]).toBe(
       "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
     );
     expect(query.mock.calls.at(-1)![0]).toBe("COMMIT");

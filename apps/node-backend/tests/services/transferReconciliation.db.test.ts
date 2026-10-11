@@ -427,9 +427,9 @@ describe.skipIf(!hasTestDatabase())(
         const suggestions = await getTransferSuggestions();
 
         expect(suggestions).toHaveLength(1);
-        expect(suggestions[0].outflow!.id).toBe(outId);
+        expect(suggestions[0]!.outflow!.id).toBe(outId);
         expect(
-          suggestions[0].candidates.map((c) => c!.id).sort((a, b) => a - b),
+          suggestions[0]!.candidates.map((c) => c!.id).sort((a, b) => a - b),
         ).toEqual([inA, inB].sort((a, b) => a - b));
       });
 

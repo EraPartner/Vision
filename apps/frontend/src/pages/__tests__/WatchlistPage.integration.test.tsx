@@ -16,7 +16,9 @@ describe("WatchlistPage (integration)", () => {
         let failed = true;
         server.use(
             http.get(`${API_BASE}/api/watchlist`, () =>
-                failed ? err(403, "Unavailable") : ok({ items: [], total: 0 }),
+                failed
+                    ? err(403, "Unavailable")
+                    : ok({ items: [], total: 0, limit: 100, offset: 0 }),
             ),
         );
         const user = userEvent.setup();
@@ -46,6 +48,7 @@ describe("WatchlistPage (integration)", () => {
             target_price: 100,
             notes: null,
             price_provider_id: "NVDA",
+            added_price: null,
             created_at: "2026-01-01T00:00:00Z",
             updated_at: "2026-01-01T00:00:00Z",
         };
@@ -53,10 +56,13 @@ describe("WatchlistPage (integration)", () => {
         server.use(
             http.get(`${API_BASE}/api/watchlist`, () => {
                 listReads += 1;
-                return ok({ items: [item], total: 1 });
+                return ok({ items: [item], total: 1, limit: 100, offset: 0 });
             }),
             http.get(`${API_BASE}/api/market/quote`, () =>
-                ok({ items: [{ symbol: "NVDA", price: 150 }], total: 1 }),
+                ok({
+                    items: [{ symbol: "NVDA", price: 150, currency: "USD" }],
+                    total: 1,
+                }),
             ),
             http.get(`${API_BASE}/api/market/chart`, () =>
                 ok({ symbol: "NVDA", currency: "USD", items: [], total: 0 }),

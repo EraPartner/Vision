@@ -13,7 +13,8 @@ export interface AggregationEnvelope<T> {
     data: T;
     meta: {
         computedAt: string;
-        source: "mv" | "live";
+        /** `cache` when the forecast cache served the payload. */
+        source: "mv" | "live" | "cache";
     };
 }
 
@@ -55,9 +56,10 @@ export interface ImportResult {
 export type MatchSource = "exact" | "fuzzy" | "pattern" | "new";
 
 export interface ImportStagingRow {
-    id: number;
+    /** BIGSERIAL, sent as decimal text. */
+    id: string;
     row_index: number;
-    recipient_raw: string;
+    recipient_raw: string | null;
     amount: string;
     currency: string | null;
     tx_date: string;

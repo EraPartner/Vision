@@ -107,14 +107,14 @@ describe("audit chain core", () => {
     expect(verifyAuditChain(entries, checkpoint)).toEqual({
       ok: true,
       lastSequence: 3,
-      headHash: entries[2].hash,
+      headHash: entries[2]!.hash,
     });
     expect(
       verifyAuditChain(entries.slice(1), {
         firstSequence: 2,
-        previousHash: entries[0].hash,
+        previousHash: entries[0]!.hash,
         expectedLastSequence: 3,
-        expectedHeadHash: entries[2].hash,
+        expectedHeadHash: entries[2]!.hash,
       }).ok,
     ).toBe(true);
   });
@@ -122,8 +122,8 @@ describe("audit chain core", () => {
   it("detects alteration, deletion, insertion and reordering", () => {
     const { entries, checkpoint } = segment();
     const altered = entries.map((entry) => ({ ...entry }));
-    altered[1].payload = {
-      ...(altered[1].payload as Record<string, unknown>),
+    altered[1]!.payload = {
+      ...(altered[1]!.payload as Record<string, unknown>),
       id: 999,
     };
     expect(verifyAuditChain(altered, checkpoint)).toMatchObject({
@@ -154,15 +154,15 @@ describe("audit chain core", () => {
     rewritten.push(
       createAuditEntry({
         sequence: 2,
-        previousHash: rewritten[0].hash,
+        previousHash: rewritten[0]!.hash,
         payload: { event: "other" },
       }),
     );
     rewritten.push(
       createAuditEntry({
         sequence: 3,
-        previousHash: rewritten[1].hash,
-        payload: entries[2].payload,
+        previousHash: rewritten[1]!.hash,
+        payload: entries[2]!.payload,
       }),
     );
     expect(verifyAuditChain(rewritten, checkpoint)).toMatchObject({

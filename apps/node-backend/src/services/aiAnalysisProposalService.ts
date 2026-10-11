@@ -99,30 +99,40 @@ function applyOperations<T>(
     )
       throw new Error("Proposal path contains a forbidden property");
     // A JSON-pointer walk over model-proposed paths: each hop may reach any
-    // JSON value, so the cursor is dynamically typed.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let target: any = result;
+    // JSON value.
+    let target: unknown = result;
     for (const part of parts.slice(0, -1)) {
       if (!target || typeof target !== "object" || !Object.hasOwn(target, part))
         throw new Error(`Proposal path does not exist: ${operation.path}`);
-      target = target[part];
+      target = (target as Record<string, unknown>)[part];
     }
-    const key = parts[parts.length - 1];
-    if (Array.isArray(target) && key !== "-") {
-      if (!/^\d+$/.test(key) || Number(key) >= target.length)
+    const key = parts.at(-1);
+    // `split` always yields at least one segment.
+    if (key === undefined)
+      throw new Error(`Proposal path does not exist: ${operation.path}`);
+    // The last hop is not checked above, so `container` may be any JSON value
+    // (even a primitive or null); the operations below behave on it exactly
+    // as they did on the untyped cursor.
+    const container = target as Record<string, unknown>;
+    if (Array.isArray(container) && key !== "-") {
+      if (!/^\d+$/.test(key) || Number(key) >= container.length)
         throw new Error(`Proposal array index is invalid: ${operation.path}`);
     }
     if (operation.op === "remove") {
-      if (!Array.isArray(target) && !Object.hasOwn(target, key))
+      if (!Array.isArray(container) && !Object.hasOwn(container, key))
         throw new Error(`Proposal path does not exist: ${operation.path}`);
-      if (Array.isArray(target)) target.splice(Number(key), 1);
-      else delete target[key];
-    } else if (Array.isArray(target) && operation.op === "add" && key === "-")
-      target.push(operation.value);
+      if (Array.isArray(container)) container.splice(Number(key), 1);
+      else delete container[key];
+    } else if (
+      Array.isArray(container) &&
+      operation.op === "add" &&
+      key === "-"
+    )
+      container.push(operation.value);
     else {
-      if (operation.op === "replace" && !Object.hasOwn(target, key))
+      if (operation.op === "replace" && !Object.hasOwn(container, key))
         throw new Error(`Proposal path does not exist: ${operation.path}`);
-      target[key] = operation.value;
+      container[key] = operation.value;
     }
   }
   return result;

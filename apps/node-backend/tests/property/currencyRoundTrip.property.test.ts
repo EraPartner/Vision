@@ -54,7 +54,7 @@ describe("property: currency round-trip identity", () => {
   });
 
   const CURRENCIES = Object.keys(FALLBACK_RATES).filter(
-    (c) => FALLBACK_RATES[c] > 0,
+    (c) => FALLBACK_RATES[c]! > 0,
   );
 
   it("convert(convert(x, A, B), B, A) ≈ x across 200 random (x, A, B) triples", async () => {

@@ -260,7 +260,7 @@ describe("account_id on the portfolio-transaction write bodies", () => {
       .send({ note: "only-this" })
       .expect(200);
     expect(
-      "account_id" in portfolioTransactionRepository.update.mock.calls[0][1],
+      "account_id" in portfolioTransactionRepository.update.mock.calls[0]![1],
     ).toBe(false);
   });
 

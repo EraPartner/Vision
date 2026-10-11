@@ -15,6 +15,12 @@
 
 import { logger } from "../config/logger.ts";
 import { query } from "../database/connection.ts";
+import { queryRows, RowContractError } from "../database/rowContracts.ts";
+import {
+  holdingWindowRowSchema,
+  storedPriceDateRowSchema,
+} from "../database/rows/portfolio.ts";
+import type { HoldingWindowDbRow } from "../database/rows/portfolio.ts";
 import { getDayKeyUtc } from "../lib/dateKeys.ts";
 import { madReturnStats, isRobustNeedle } from "../lib/math.ts";
 import { forEachConcurrent } from "../lib/concurrency.ts";
@@ -63,27 +69,7 @@ export interface HoldingWindowTx {
  * A raw `HOLDING_WINDOW_SELECT` row: `HoldingWindowInvestment`'s columns
  * (unconverted — pg-raw) plus the `tx_*`-prefixed transaction columns.
  */
-export interface HoldingWindowRow {
-  id: number;
-  asset_class: string;
-  currency: string;
-  price_provider: string;
-  price_provider_id: string | null;
-  symbol: string | null;
-  price_provider_url: string | null;
-  price_provider_latest_url: string | null;
-  price_provider_latest_path: string | null;
-  price_provider_history_url: string | null;
-  price_provider_history_path: string | null;
-  price_provider_history_ts_path: string | null;
-  price_provider_history_price_path: string | null;
-  tx_id: number;
-  tx_type: string;
-  /** 'YYYY-MM-DD' */
-  tx_date: string;
-  /** NUMERIC — coerced with `Number()` by `mapRowToHoldingTx`. */
-  tx_units: string;
-}
+export type HoldingWindowRow = HoldingWindowDbRow;
 
 /** A holding window: a continuous period where net units > 0. */
 export type HoldingWindow = { fromDate: string; toDate: string | null };
@@ -201,11 +187,17 @@ function sanitizeIsolatedSpikes<T extends PricePoint>(
 
   // Pass 1: Simple ratio-based detection for obvious spikes (e.g. 10× jumps)
   for (let i = 1; i < sanitized.length - 1; i += 1) {
+    const point = sanitized[i];
     const prev = sanitized[i - 1]?.price;
-    const current = sanitized[i]?.price;
+    const current = point?.price;
     const next = sanitized[i + 1]?.price;
 
-    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next))
+    if (
+      !point ||
+      !_isPositive(prev) ||
+      !_isPositive(current) ||
+      !_isPositive(next)
+    )
       continue;
 
     const jumpUp = current / prev;
@@ -219,7 +211,7 @@ function sanitizeIsolatedSpikes<T extends PricePoint>(
       dropUp >= SPIKE_RATIO_THRESHOLD && dropDown >= SPIKE_RATIO_THRESHOLD;
 
     if (isSpikeUp || isSpikeDn) {
-      sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
+      sanitized[i] = { ...point, price: Math.sqrt(prev * next) };
     }
   }
 
@@ -239,14 +231,20 @@ function sanitizeIsolatedSpikes<T extends PricePoint>(
   const stats = madReturnStats(logReturns);
 
   for (let i = 1; i < sanitized.length - 1; i += 1) {
+    const point = sanitized[i];
     const prev = sanitized[i - 1]?.price;
-    const current = sanitized[i]?.price;
+    const current = point?.price;
     const next = sanitized[i + 1]?.price;
-    if (!_isPositive(prev) || !_isPositive(current) || !_isPositive(next))
+    if (
+      !point ||
+      !_isPositive(prev) ||
+      !_isPositive(current) ||
+      !_isPositive(next)
+    )
       continue;
 
     if (isRobustNeedle(prev, current, next, stats)) {
-      sanitized[i] = { ...sanitized[i], price: Math.sqrt(prev * next) };
+      sanitized[i] = { ...point, price: Math.sqrt(prev * next) };
     }
   }
 
@@ -325,17 +323,16 @@ function mapRowToHoldingTx(row: HoldingWindowRow): HoldingWindowTx {
  *
  * Includes ALL investments with transactions, regardless of is_active flag.
  */
-export async function getInvestmentsWithHoldingWindows(): Promise<
+async function getInvestmentsWithHoldingWindows(): Promise<
   Map<number, InvestmentHoldingWindows>
 > {
-  const result = await query<HoldingWindowRow>(
+  const rows = await queryRows(
+    holdingWindowRowSchema,
     `${HOLDING_WINDOW_SELECT}
      WHERE ${HOLDING_ASSET_CLASS_FILTER}
      ORDER BY i.id, pt.date, pt.id`,
     [],
   );
-
-  const rows = result.rows || [];
   const investmentMap = new Map<
     number,
     { investment: HoldingWindowInvestment; transactions: HoldingWindowTx[] }
@@ -374,7 +371,8 @@ export async function getInvestmentsWithHoldingWindows(): Promise<
 async function getInvestmentWithHoldingWindows(
   investmentId: number,
 ): Promise<InvestmentHoldingWindows | null> {
-  const result = await query<HoldingWindowRow>(
+  const rows = await queryRows(
+    holdingWindowRowSchema,
     `${HOLDING_WINDOW_SELECT}
      WHERE i.id = $1
        AND ${HOLDING_ASSET_CLASS_FILTER}
@@ -382,10 +380,10 @@ async function getInvestmentWithHoldingWindows(
     [Number(investmentId)],
   );
 
-  const rows = result.rows || [];
-  if (rows.length === 0) return null;
+  const [first] = rows;
+  if (!first) return null;
 
-  const investment = mapRowToInvestment(rows[0]);
+  const investment = mapRowToInvestment(first);
   const transactions = rows.map(mapRowToHoldingTx);
 
   const holdingWindows = computeHoldingWindows(transactions);
@@ -398,14 +396,15 @@ async function getInvestmentWithHoldingWindows(
  * Load the sorted set of dates (YYYY-MM-DD) that already have a stored price row.
  */
 async function getStoredPriceDates(investmentId: number): Promise<string[]> {
-  const result = await query<{ d: string }>(
+  const rows = await queryRows(
+    storedPriceDateRowSchema,
     `SELECT to_char(price_date, 'YYYY-MM-DD') AS d
        FROM asset_price_history
       WHERE investment_id = $1
       ORDER BY price_date`,
     [Number(investmentId)],
   );
-  return (result.rows || []).map((row) => row.d);
+  return rows.map((row) => row.d);
 }
 
 /**
@@ -442,19 +441,18 @@ function holdingWindowsNeedBackfill(
     if (!fromDate || !toDate || fromDate > toDate) continue;
 
     const inWindow = sortedStored.filter((d) => d >= fromDate && d <= toDate);
-    const boundaries = [fromDate, ...inWindow, toDate];
-    for (let i = 1; i < boundaries.length; i += 1) {
+    // Consecutive pairs of [fromDate, ...inWindow, toDate].
+    let previous = fromDate;
+    for (const boundary of [...inWindow, toDate]) {
       try {
-        if (
-          differenceInCalendarDaysYmd(boundaries[i - 1], boundaries[i]) >
-          thresholdDays
-        ) {
+        if (differenceInCalendarDaysYmd(previous, boundary) > thresholdDays) {
           return true;
         }
       } catch {
         // Preserve the old invalid-input behavior: an unparseable boundary is
         // not treated as evidence of a missing-price gap.
       }
+      previous = boundary;
     }
   }
 
@@ -668,6 +666,8 @@ export async function backfillHoldingGaps({
         const after = (await getStoredPriceDates(invId)).length;
         if (after > before) filled += 1;
       } catch (error) {
+        // A contract violation is a data fault, not a per-investment failure.
+        if (error instanceof RowContractError) throw error;
         failed += 1;
         logger.warn("Holding-gap backfill failed for investment", {
           investmentId: invId,
@@ -798,5 +798,6 @@ export {
   computeHoldingWindows as __computeHoldingWindows,
   sanitizeIsolatedSpikes as __sanitizeIsolatedSpikes,
   holdingWindowsNeedBackfill as __holdingWindowsNeedBackfill,
+  getInvestmentsWithHoldingWindows as __getInvestmentsWithHoldingWindows,
   cleanupStaleQuotes,
 };

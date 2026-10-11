@@ -71,8 +71,7 @@ export function cleanup(filePath: string | null | undefined) {
  *   middleware; narrowed by `instanceof`/`.message` checks below.
  */
 export function csvUploadErrorTranslator(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see @param err
-  err: any,
+  err: unknown,
   req: unknown,
   res: unknown,
   next: (err?: unknown) => void,
@@ -83,7 +82,11 @@ export function csvUploadErrorTranslator(
     }
     return next(new ValidationError(`Upload error: ${err.message}`));
   }
-  if (err.message === 'File must be a CSV') {
+  const message =
+    typeof err === 'object' && err !== null && 'message' in err
+      ? err.message
+      : undefined;
+  if (message === 'File must be a CSV') {
     return next(new ValidationError('File must be a CSV'));
   }
   next(err);

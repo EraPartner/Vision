@@ -17,38 +17,37 @@ export function summarizeSimulationPaths(
 ): SimulationSummary {
   const pathCount = samples[0]?.length ?? 0;
   const cumulativeByPath: number[] = new Array(pathCount).fill(0);
-  const dailyValues: Record<string, number[]> = Object.fromEntries(
-    percentiles.map((q) => [`p${q}`, new Array<number>(forecastDates.length)]),
-  );
-  const cumulativeValues: Record<string, number[]> = Object.fromEntries(
-    percentiles.map((q) => [`p${q}`, new Array<number>(forecastDates.length)]),
-  );
-  const median = new Array<number>(forecastDates.length);
+  const bands = percentiles.map((q) => ({
+    key: `p${q}`,
+    q,
+    daily: [] as Array<{ date: string; value: number }>,
+    cumulative: [] as Array<{ date: string; value: number }>,
+  }));
+  const series: Array<{ date: string; value: number }> = [];
 
-  for (let h = 0; h < forecastDates.length; h++) {
-    const dailySorted = samples[h].slice().sort((a, b) => a - b);
+  forecastDates.forEach((date, h) => {
+    const daySamples = samples[h];
+    // One sample row per forecast day; a missing row was a TypeError before.
+    if (!daySamples)
+      throw new TypeError(`Missing simulation samples for forecast day ${h}`);
+    const dailySorted = daySamples.slice().sort((a, b) => a - b);
     for (let p = 0; p < pathCount; p++) {
-      cumulativeByPath[p] += samples[h][p];
+      // A shorter row adds NaN, exactly as reading past its end did.
+      cumulativeByPath[p] = (cumulativeByPath[p] ?? 0) + (daySamples[p] ?? NaN);
     }
     const cumulativeSorted = cumulativeByPath.slice().sort((a, b) => a - b);
-    for (const q of percentiles) {
-      dailyValues[`p${q}`][h] = quantile(dailySorted, q);
-      cumulativeValues[`p${q}`][h] = quantile(cumulativeSorted, q);
+    for (const band of bands) {
+      band.daily.push({ date, value: quantile(dailySorted, band.q) });
+      band.cumulative.push({ date, value: quantile(cumulativeSorted, band.q) });
     }
-    median[h] = quantile(dailySorted, 50);
-  }
-
-  const withDates = (values: Record<string, number[]>) =>
-    Object.fromEntries(
-      percentiles.map((q) => [
-        `p${q}`,
-        forecastDates.map((date, h) => ({ date, value: values[`p${q}`][h] })),
-      ]),
-    );
+    series.push({ date, value: quantile(dailySorted, 50) });
+  });
 
   return {
-    series: forecastDates.map((date, h) => ({ date, value: median[h] })),
-    bands: withDates(dailyValues),
-    cumulative_bands: withDates(cumulativeValues),
+    series,
+    bands: Object.fromEntries(bands.map((band) => [band.key, band.daily])),
+    cumulative_bands: Object.fromEntries(
+      bands.map((band) => [band.key, band.cumulative]),
+    ),
   };
 }

@@ -125,8 +125,8 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       encoding: "utf-8",
     });
 
-    expect(rows[0].rawData).toContain("ORDER-BUY,KAG_EUR");
-    expect(rows[0].rawData).not.toContain("|");
+    expect(rows[0]!.rawData).toContain("ORDER-BUY,KAG_EUR");
+    expect(rows[0]!.rawData).not.toContain("|");
     expect(rows).toHaveLength(12);
   });
 
@@ -167,7 +167,7 @@ describe("Kinesis Transaction History portfolio adapter", () => {
       parseKinesisSourceRecordForBasisPolicy(raw, {
         yield_basis_policy: "zero",
         sourceColumns: rows.sourceColumns,
-      })![0].typeRaw,
+      })![0]!.typeRaw,
     ).toBe("AssetAdjustment");
     expect(
       parseKinesisSourceRecordForBasisPolicy(`${raw}\n${raw}`, {

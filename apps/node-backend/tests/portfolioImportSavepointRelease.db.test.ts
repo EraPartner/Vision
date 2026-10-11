@@ -111,7 +111,7 @@ describe.skipIf(!hasTestDatabase())("real failed-row savepoint release", () => {
           ({ sql }) => sql === `ROLLBACK TO SAVEPOINT sp_prow_${id}`,
         );
         expect(rollback).toBeGreaterThanOrEqual(0);
-        expect(calls[rollback + 1].sql).toBe(`RELEASE SAVEPOINT sp_prow_${id}`);
+        expect(calls[rollback + 1]!.sql).toBe(`RELEASE SAVEPOINT sp_prow_${id}`);
         expect(
           calls.findIndex(
             ({ sql, params }) =>

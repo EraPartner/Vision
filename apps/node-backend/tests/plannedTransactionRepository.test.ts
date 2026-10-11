@@ -41,7 +41,7 @@ describe("plannedTransactionRepository.getDueSoon / getForForecast — one clock
 
     await plannedTransactionRepository.getDueSoon(30);
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(params).toEqual([30, todayAppDateString()]);
     expect(sql).toContain("pt.planned_date >= $2::date");
     expect(sql).toContain("make_interval(days => $1::int)");
@@ -56,7 +56,7 @@ describe("plannedTransactionRepository.getDueSoon / getForForecast — one clock
 
     await plannedTransactionRepository.getForForecast(3);
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(params).toEqual([3, todayAppDateString()]);
     expect(sql).toContain("$2::date + make_interval(months => $1::int)");
     expect(sql).not.toContain("CURRENT_DATE");
@@ -86,7 +86,7 @@ describe("plannedTransactionRepository.getAll", () => {
       expect.stringContaining("COUNT(*) OVER() AS total_count"),
       [25, 1000],
     );
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "COALESCE(pr.name, r.name) AS recipient_name",
     );
     expect(query).toHaveBeenNthCalledWith(
@@ -127,8 +127,8 @@ describe("plannedTransactionRepository.getAll", () => {
       expect(sql).toContain("COALESCE(pr.name, r.name) ILIKE $1");
       expect(sql).toContain("r.name ILIKE $1");
     }
-    expect(query.mock.calls[0][1]).toEqual(["%needle%", 50, 0]);
-    expect(query.mock.calls[1][1]).toEqual(["%needle%"]);
+    expect(query.mock.calls[0]![1]).toEqual(["%needle%", 50, 0]);
+    expect(query.mock.calls[1]![1]).toEqual(["%needle%"]);
   });
 
   it("uses account_id as an exact filter and ignores the fuzzy bank name", async () => {
@@ -145,8 +145,8 @@ describe("plannedTransactionRepository.getAll", () => {
       expect(sql).toContain("pt.account_id = $1");
       expect(sql).not.toContain("fa.name ILIKE");
     }
-    expect(query.mock.calls[0][1]).toEqual([7, 50, 0]);
-    expect(query.mock.calls[1][1]).toEqual([7]);
+    expect(query.mock.calls[0]![1]).toEqual([7, 50, 0]);
+    expect(query.mock.calls[1]![1]).toEqual([7]);
   });
 
   it("attaches executions and loan schedules when planned rows are returned", async () => {
@@ -209,7 +209,7 @@ describe("plannedTransactionRepository.getAll", () => {
         executed_transaction_id: 91,
       }),
     );
-    expect(result.items[1].loan_schedule).toHaveLength(1);
+    expect(result.items[1]!.loan_schedule).toHaveLength(1);
   });
 });
 
@@ -223,7 +223,7 @@ describe("plannedTransactionRepository.listActiveUnexecuted", () => {
 
     await plannedTransactionRepository.listActiveUnexecuted();
 
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("COALESCE(pr.name, r.name) AS recipient_name");
     expect(sql).toContain(
       "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
@@ -251,7 +251,7 @@ describe("plannedTransactionRepository.getById", () => {
       expect.stringContaining("WHERE pt.id = $1"),
       [404],
     );
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "COALESCE(pr.name, r.name) AS recipient_name",
     );
   });
@@ -417,7 +417,7 @@ describe("plannedTransactionService.create", () => {
     );
     // recurrence_pattern (param 11, index 10) is forced to 'monthly' for loans
     // so executeAndAdvance rolls planned_date forward instead of leaving it due.
-    expect(clientQuery.mock.calls[2][1][10]).toBe("monthly");
+    expect(clientQuery.mock.calls[2]![1][10]).toBe("monthly");
   });
 
   it("rolls back and rethrows when loan schedule insert fails", async () => {

@@ -13,7 +13,23 @@
 import { ApiErrorCode } from '@vision/types/errors';
 import { AppError } from '../middleware/errorHandler.ts';
 import { createResearchCache } from './research/researchCache.ts';
-import { getYahooClient } from './prices/yahooClient.ts';
+import {
+  getYahooClient,
+  NO_VALIDATE,
+  parseYahooPayload,
+  requireYahooPayload,
+  yahooDateMs,
+  yahooChartResultSchema,
+  yahooQuoteSchema,
+  yahooQuoteSummarySchema,
+  yahooSearchResultSchema,
+} from './prices/yahooClient.ts';
+import type {
+  YahooChartInterval,
+  YahooDateLike,
+  YahooQuote,
+  YahooQuoteSummary,
+} from './prices/yahooClient.ts';
 import { toAppTz } from '../lib/timezone.ts';
 import { forEachConcurrent } from '../lib/concurrency.ts';
 
@@ -29,116 +45,14 @@ const QUOTE_FETCH_CONCURRENCY = 6;
 const quoteCache = createResearchCache();
 const inFlightQuotes = new Map<string, Promise<MarketQuote | null>>();
 
-// The shapes below describe the subset of yahoo-finance2 output this module
-// reads. NO_VALIDATE means Yahoo controls them, so every field is optional.
-
-interface YahooQuote {
-  symbol?: string;
-  shortName?: string;
-  longName?: string;
-  regularMarketPrice?: number;
-  regularMarketChange?: number;
-  regularMarketChangePercent?: number;
-  currency?: string;
-  fullExchangeName?: string;
-  exchange?: string;
-  quoteType?: string;
-  regularMarketOpen?: number;
-  regularMarketDayHigh?: number;
-  regularMarketDayLow?: number;
-  regularMarketPreviousClose?: number;
-  regularMarketVolume?: number;
-  averageDailyVolume3Month?: number;
-  fiftyTwoWeekHigh?: number;
-  fiftyTwoWeekLow?: number;
-  marketCap?: number;
-  trailingPE?: number;
-  forwardPE?: number;
-  dividendYield?: number;
-  epsTrailingTwelveMonths?: number;
-  beta?: number;
-  priceToBook?: number;
-}
-
-interface YahooRecommendationTrend {
-  period?: string;
-  strongBuy?: number;
-  buy?: number;
-  hold?: number;
-  sell?: number;
-  strongSell?: number;
-}
-
-interface YahooGradeChange {
-  epochGradeDate?: Date | number | string;
-  firm?: string;
-  toGrade?: string;
-  fromGrade?: string;
-  action?: string;
-  currentPriceTarget?: number;
-}
-
-interface YahooQuoteSummary {
-  summaryDetail?: {
-    marketCap?: number;
-    trailingPE?: number;
-    forwardPE?: number;
-    dividendYield?: number;
-    beta?: number;
-  };
-  defaultKeyStatistics?: {
-    trailingPE?: number;
-    forwardPE?: number;
-    trailingEps?: number;
-    beta?: number;
-    priceToBook?: number;
-  };
-  price?: {
-    marketCap?: number;
-    dividendYield?: number;
-    epsTrailingTwelveMonths?: number;
-  };
-  recommendationTrend?: { trend?: YahooRecommendationTrend[] };
-  upgradeDowngradeHistory?: { history?: YahooGradeChange[] };
-}
-
-interface YahooSearchResult {
-  quotes?: Array<{
-    symbol?: string;
-    shortname?: string;
-    longname?: string;
-    quoteType?: string;
-    exchDisp?: string;
-    exchange?: string;
-  }>;
-  news?: Array<{
-    title?: string;
-    link?: string;
-    publisher?: string;
-    providerPublishTime?: Date | number | string;
-    thumbnail?: unknown;
-  }>;
-}
-
-interface YahooChartResult {
-  meta?: { symbol?: string; currency?: string };
-  quotes?: Array<{
-    date: Date | number | string;
-    close?: number | null;
-    high?: number | null;
-    low?: number | null;
-    volume?: number | null;
-  }>;
-}
-
 export type MarketQuote = ReturnType<typeof mapQuoteCore> & {
-  marketCap?: number;
-  pe?: number;
-  forwardPE?: number;
-  dividendYield?: number;
-  eps?: number;
-  beta?: number;
-  priceToBook?: number;
+  marketCap?: number | null;
+  pe?: number | null;
+  forwardPE?: number | null;
+  dividendYield?: number | null;
+  eps?: number | null;
+  beta?: number | null;
+  priceToBook?: number | null;
   analystConsensus?: {
     strongBuy: number;
     buy: number;
@@ -147,31 +61,28 @@ export type MarketQuote = ReturnType<typeof mapQuoteCore> & {
     strongSell: number;
   } | null;
   recentAnalystActions?: Array<{
-    date: YahooGradeChange['epochGradeDate'];
-    firm: string | undefined;
-    toGrade: string | undefined;
+    date: YahooDateLike | null | undefined;
+    firm: string | null | undefined;
+    toGrade: string | null | undefined;
     fromGrade: string | null;
-    action: string | undefined;
+    action: string | null | undefined;
     priceTarget: number | null;
   }>;
 };
 
 export interface MarketNewsItem {
-  title: string | undefined;
-  link: string | undefined;
-  publisher: string | undefined;
+  title: string | null | undefined;
+  link: string | null | undefined;
+  publisher: string | null | undefined;
   publishedAt: number | null;
   thumbnail: string | null;
   relatedSymbols: string[];
 }
 
-// yahoo-finance2 validates every upstream payload against its own schema and
-// THROWS on any mismatch. Yahoo's responses drift (new quoteTypes, non-Yahoo
-// entries missing fields, null meta) and vary by IP/geo, so an otherwise fine
-// request intermittently 502s — search dropdowns go empty, charts break. We only
-// read a small subset of well-known fields, so opt out of the throw: degrade to
-// whatever data came back instead of failing the whole request.
-const NO_VALIDATE: { validateResult: false } = { validateResult: false };
+// NO_VALIDATE (see services/prices/yahooClient): yahoo-finance2 throws on any
+// upstream schema drift, which intermittently 502'd otherwise fine requests.
+// We read a small subset of well-known fields, so opt out of the throw and
+// narrow whatever came back with the tolerant payload schemas instead.
 
 function upstreamError(message: string, cause?: unknown): AppError {
   return new AppError(message, { status: 502, code: ApiErrorCode.BAD_GATEWAY, cause });
@@ -261,11 +172,11 @@ function mapQuoteCore(q: YahooQuote) {
 async function buildQuote(sym: string, basic?: boolean): Promise<MarketQuote | null> {
   const yahooFinance = await getYahooClient();
   if (basic) {
-    const q: YahooQuote = await yahooFinance.quote(sym, {}, NO_VALIDATE);
-    return mapQuoteCore(q);
+    const q = parseYahooPayload(yahooQuoteSchema, await yahooFinance.quote(sym, {}, NO_VALIDATE));
+    return q ? mapQuoteCore(q) : null;
   }
 
-  const [quote, summary] = await Promise.allSettled<[Promise<YahooQuote>, Promise<YahooQuoteSummary>]>([
+  const [quote, summary] = await Promise.allSettled([
     yahooFinance.quote(sym, {}, NO_VALIDATE),
     yahooFinance.quoteSummary(sym, {
       modules: [
@@ -281,8 +192,13 @@ async function buildQuote(sym: string, basic?: boolean): Promise<MarketQuote | n
 
   if (quote.status === 'rejected') return null;
 
-  const q = quote.value;
-  const s = summary.status === 'fulfilled' ? summary.value : null;
+  const q = parseYahooPayload(yahooQuoteSchema, quote.value);
+  // No quote object for the symbol: unavailable, like a rejected quote.
+  if (!q) return null;
+  const s =
+    summary.status === 'fulfilled'
+      ? parseYahooPayload(yahooQuoteSummarySchema, summary.value)
+      : undefined;
 
   const sd: NonNullable<YahooQuoteSummary['summaryDetail']> = s?.summaryDetail || {};
   const ks: NonNullable<YahooQuoteSummary['defaultKeyStatistics']> =
@@ -375,13 +291,14 @@ export function __clearQuoteCacheForTests() {
  *
  */
 export async function searchSymbols(q: string) {
-  let results: YahooSearchResult;
+  let payload: unknown;
   try {
     const yahooFinance = await getYahooClient();
-    results = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
+    payload = await yahooFinance.search(q, { quotesCount: 8, newsCount: 0 }, NO_VALIDATE);
   } catch (err) {
     throw upstreamError('Market search unavailable', err);
   }
+  const results = requireYahooPayload(yahooSearchResultSchema, payload, 'search');
 
   const items = (results.quotes || [])
     .filter((r) => r.symbol)
@@ -430,23 +347,23 @@ export async function getQuotes(symbolList: string[], basic: boolean) {
 
 /**
  * Historical chart series. Returns the payload for GET /api/market/chart.
- * `range`/`interval` are passed through to yahoo-finance2, which validates them
- * against its own literal-union types — leave them loosely typed.
+ * `range` maps to period1 (unknown ranges fall back to one month); `interval`
+ * is the client's own interval vocabulary, which the route validates.
  *
  * The series travels in the canonical `items` key (with `total`); `symbol` and
  * `currency` ride alongside in the body.
  */
 export async function getChart(
   symbol: string,
-  { range = '1mo', interval = '1d' }: { range?: unknown; interval?: unknown } = {},
+  { range = '1mo', interval = '1d' }: { range?: unknown; interval?: YahooChartInterval } = {},
 ) {
-  let result: YahooChartResult | null | undefined;
+  let payload: unknown;
   try {
     // NO_VALIDATE: Yahoo intermittently returns an incomplete `meta` block (null
     // currency/regularMarketTime, missing regularMarketPrice); the time-series
     // `quotes` we render are still present, so degrade instead of 502-ing.
     const yahooFinance = await getYahooClient();
-    result = await yahooFinance.chart(symbol, {
+    payload = await yahooFinance.chart(symbol, {
       period1: rangeToDate(range),
       interval,
       includePrePost: false,
@@ -455,12 +372,13 @@ export async function getChart(
     throw upstreamError('Market chart unavailable', err);
   }
 
+  const result = parseYahooPayload(yahooChartResultSchema, payload);
   if (!result) return { items: [], total: 0 };
 
   const points = (result.quotes || [])
     .filter((p) => p.close != null)
     .map((p) => ({
-      time: new Date(p.date).getTime(),
+      time: yahooDateMs(p.date),
       close: p.close,
       high: p.high,
       low: p.low,
@@ -491,10 +409,11 @@ export async function getNews(symbols: string, count: string) {
     const yahooFinance = await getYahooClient();
     newsResults = await Promise.allSettled(
       querySymbols.split(',').slice(0, 10).map(async (sym): Promise<MarketNewsItem[]> => {
-        const results: YahooSearchResult = await yahooFinance.search(sym.trim(), {
-          quotesCount: 0,
-          newsCount,
-        }, NO_VALIDATE);
+        const results = requireYahooPayload(
+          yahooSearchResultSchema,
+          await yahooFinance.search(sym.trim(), { quotesCount: 0, newsCount }, NO_VALIDATE),
+          'search',
+        );
         return (results.news || []).map((n) => ({
           title: n.title,
           link: n.link,
@@ -513,7 +432,7 @@ export async function getNews(symbols: string, count: string) {
     .filter((r) => r.status === 'fulfilled')
     .flatMap((r) => r.value);
 
-  const seen = new Set<string | undefined>();
+  const seen = new Set<string | null | undefined>();
   const articles = allNews
     .filter((n) => {
       if (seen.has(n.title)) return false;

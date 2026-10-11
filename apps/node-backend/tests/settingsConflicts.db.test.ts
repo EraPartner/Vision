@@ -10,7 +10,7 @@ import { closePool } from "../src/database/connection.ts";
 import { createDailyJob } from "../src/startup/dailyJobs.ts";
 import repo from "../src/repositories/settingsRepository.ts";
 const pool = getTestPool();
-const keys = ["vision_test_conflict_a", "vision_test_conflict_b"];
+const keys = ["vision_test_conflict_a", "vision_test_conflict_b"] as const;
 describe.skipIf(!hasTestDatabase())(
   "settings conflict SQL against disposable PostgreSQL",
   () => {
@@ -60,7 +60,7 @@ describe.skipIf(!hasTestDatabase())(
       ]);
       expect(created.filter((r) => r.status === "fulfilled")).toHaveLength(1);
       expect(
-        created.filter((r) => r.status === "rejected")[0].reason.status,
+        created.filter((r) => r.status === "rejected")[0]!.reason.status,
       ).toBe(409);
       const old = (await repo.getRecord(keys[0])).expected;
       await repo.replace(keys[0], { nested: { only: true } }, old);

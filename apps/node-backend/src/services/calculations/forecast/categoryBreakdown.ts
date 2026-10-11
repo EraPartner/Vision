@@ -223,8 +223,7 @@ function buildActualByDate(
   for (const r of rows) byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.net);
   const out: ActualPoint[] = [];
   let cum = 0;
-  for (let i = 0; i < allDates.length; i++) {
-    const date = allDates[i];
+  for (const [i, date] of allDates.entries()) {
     if (i + 1 > todayDay) {
       out.push({ date, net: null, cumulative: null });
       continue;

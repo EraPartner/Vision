@@ -21,8 +21,8 @@ describe("Electron conditional settings writer", () => {
     writer.loaded("backup_settings", { expected: { exists: false } });
     await writer.save("backup_settings", { backupOnQuit: true });
     await writer.save("backup_settings", { backupOnQuit: false });
-    expect(put.mock.calls[0][1].expected).toEqual({ exists: false });
-    expect(put.mock.calls[1][1].expected).toEqual({
+    expect(put.mock.calls[0]![1].expected).toEqual({ exists: false });
+    expect(put.mock.calls[1]![1].expected).toEqual({
       exists: true,
       value: { backupOnQuit: true },
     });

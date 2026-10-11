@@ -333,7 +333,7 @@ describe.skipIf(
   it("restores populated journals, lot allocation receipts, source provenance and protection triggers from an encrypted production bundle", async () => {
     const expected = await snapshot(source);
     for (const name of tableNames)
-      expect(expected[name].length).toBeGreaterThan(0);
+      expect(expected[name]!.length).toBeGreaterThan(0);
     const bin = await postgresBin();
     const dump = path.join(directory, "db.sql");
     await run(
@@ -415,7 +415,7 @@ describe.skipIf(
       ),
     ).toBeGreaterThan(
       Math.max(
-        ...expected.portfolio_import_income_recognition_journal.map((row) =>
+        ...expected.portfolio_import_income_recognition_journal!.map((row) =>
           Number(row.id),
         ),
       ),
@@ -471,7 +471,7 @@ describe.skipIf(
         "portfolio_transactions",
         "portfolio_asset_transfers",
         "portfolio_asset_adjustments",
-      ].flatMap((name) => expected[name].map((row) => Number(row.id))),
+      ].flatMap((name) => expected[name]!.map((row) => Number(row.id))),
     );
     expect(
       Number(

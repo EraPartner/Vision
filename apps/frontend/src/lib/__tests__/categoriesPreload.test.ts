@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { http } from "msw";
 
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { CATEGORY_STUB, ok } from "@/test/msw/handlers";
 import {
     CATEGORY_FETCH_LIMIT,
     fetchCategoriesForExclusions,
@@ -21,12 +21,14 @@ function categoriesPage(items: unknown[], total = items.length) {
 
 function category(id: number, isActive: boolean) {
     return {
+        ...CATEGORY_STUB,
         id,
         general: "FOOD",
         detail: `D${id}`,
+        name: `D${id}`,
+        path_name: `FOOD:D${id}`,
+        category_name: `FOOD:D${id}`,
         is_active: isActive,
-        created_at: "2025-01-01T00:00:00.000Z",
-        links: [],
     };
 }
 

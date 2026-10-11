@@ -29,6 +29,12 @@ import { z } from "zod";
 import { parseCategoryName } from "@vision/shared-utils";
 import { logger } from "../config/logger.ts";
 import { query, withTransaction } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  categoryPairIdRowSchema,
+  recipientIdentityRowSchema,
+  recipientResolutionRowSchema,
+} from "../database/rows/imports.ts";
 import { normalizeForMatching } from "../lib/textNormalization.ts";
 import { recipientRepository } from "../repositories/recipientRepository.ts";
 import { categoryRepository } from "../repositories/categoryRepository.ts";
@@ -145,16 +151,9 @@ interface CategoryPair {
   detail: string;
 }
 
-interface CategoryIdRow extends CategoryPair {
-  id: number;
-}
+type CategoryIdRow = z.output<typeof categoryPairIdRowSchema>;
 
-interface RecipientIdentityRow {
-  id: number;
-  normalized_name: string;
-  notes: string | null;
-  default_category_id: number | null;
-}
+type RecipientIdentityRow = z.output<typeof recipientResolutionRowSchema>;
 
 interface RecipientName {
   upper: string;
@@ -210,7 +209,8 @@ async function selectCategories(
   generals: string[],
   details: string[],
 ): Promise<CategoryIdRow[]> {
-  const result = await query<CategoryIdRow>(
+  return queryRows(
+    categoryPairIdRowSchema,
     `SELECT COALESCE(c.id, a.target_category_id) AS id,
             want.general, want.detail
        FROM UNNEST($1::text[], $2::text[]) AS want(general, detail)
@@ -221,7 +221,6 @@ async function selectCategories(
        WHERE c.id IS NOT NULL OR a.target_category_id IS NOT NULL`,
     [generals, details],
   );
-  return result.rows;
 }
 
 /**
@@ -251,14 +250,15 @@ async function resolveCategories(
   const missing = pairs.filter((p) => !resolved.has(categoryKeyOf(p)));
   if (missing.length === 0) return resolved;
 
-  const inserted = await query<CategoryIdRow>(
+  const inserted = await queryRows(
+    categoryPairIdRowSchema,
     `INSERT INTO categories (general, detail, description, is_active)
      SELECT UNNEST($1::text[]), UNNEST($2::text[]), NULL, true
      ON CONFLICT (general, detail) DO NOTHING
      RETURNING id, general, detail`,
     [missing.map((p) => p.general), missing.map((p) => p.detail)],
   );
-  for (const row of inserted.rows) {
+  for (const row of inserted) {
     resolved.set(categoryKeyOf(row), { id: row.id, created: true });
   }
 
@@ -281,13 +281,13 @@ async function resolveCategories(
 async function selectRecipients(
   normalizedNames: string[],
 ): Promise<RecipientIdentityRow[]> {
-  const result = await query<RecipientIdentityRow>(
+  return queryRows(
+    recipientResolutionRowSchema,
     `SELECT id, normalized_name, notes, default_category_id
        FROM recipients
       WHERE normalized_name = ANY($1::text[])`,
     [normalizedNames],
   );
-  return result.rows;
 }
 
 /**
@@ -317,14 +317,15 @@ async function resolveRecipients(
   const missing = names.filter((n) => !resolved.has(n.normalized));
   if (missing.length === 0) return resolved;
 
-  const inserted = await query<{ id: number; normalized_name: string }>(
+  const inserted = await queryRows(
+    recipientIdentityRowSchema,
     `INSERT INTO recipients (name, normalized_name, is_active)
      SELECT UNNEST($1::text[]), UNNEST($2::text[]), true
      ON CONFLICT (normalized_name) DO NOTHING
      RETURNING id, normalized_name`,
     [missing.map((n) => n.upper), missing.map((n) => n.normalized)],
   );
-  for (const row of inserted.rows) {
+  for (const row of inserted) {
     resolved.set(row.normalized_name, {
       id: row.id,
       created: true,
@@ -448,8 +449,7 @@ async function importRecipientRowsBatched(
   }[] = [];
   const counted = new Set<number>();
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+  for (const [i, row] of rows.entries()) {
     const recipient = recipients.get(normalizeForMatching(row.name));
     if (!recipient) {
       logger.warn(
@@ -822,21 +822,26 @@ export async function importCategoriesCSV(
     skipped: 0,
     errors: 0,
   };
-  if (records.length === 0) return results;
+  const [firstRecord] = records;
+  if (firstRecord === undefined) return results;
 
   // Determine the column to read from: prefer "category", fall back to first column
-  const firstKey = Object.keys(records[0])[0];
+  const firstKey = Object.keys(firstRecord)[0];
   const categoryKey =
-    Object.keys(records[0]).find(
+    Object.keys(firstRecord).find(
       (k) => k.toLowerCase().trim() === "category",
     ) ?? firstKey;
 
   const rows: CategoryCsvRow[] = [];
   for (const record of records) {
-    const row = categoryCsvRowSchema.safeParse(record[categoryKey]);
+    // A header row without columns names no key: every cell reads as missing.
+    const row = categoryCsvRowSchema.safeParse(
+      categoryKey === undefined ? undefined : record[categoryKey],
+    );
     if (!row.success) {
+      // A failed parse always carries at least one issue.
       const [issue] = row.error.issues;
-      if (issue.code !== "too_small")
+      if (issue && issue.code !== "too_small")
         logger.warn(`Category import: ${issue.message}`);
       results.errors++;
       continue;

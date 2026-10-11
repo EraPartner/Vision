@@ -2,7 +2,7 @@
 title: Feature - CSV Import, Export, Attachments & Deduplication
 type: feature
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 last_modified: 2026-10-03
 tags:
@@ -498,8 +498,10 @@ Field-based deduplication for transactions. Uses SHA-256 hash of `date|amount|re
 - Currency cells from Belfius, KBC, ING, BNP, Revolut, Vision, and generic imports are normalized
   through the shared `normalizeIsoCurrency()` boundary: ISO-shaped values are uppercased. Blank or
   malformed values use `EUR`; Vision applies that default in its adapter, while the other six stage
-  `NULL` for the commit boundary to default. SABB derives a fixed or embedded code; Wise retains its
-  separate source/target currency parsing.
+  `NULL` for the commit boundary to default. SABB derives a fixed or embedded code. Wise keeps its
+  source/target currency choice (falling back to `USD` when both cells are blank) and passes the
+  result through `normalizeIsoCurrency()`; a row whose currency is not an ISO-4217-shaped code is
+  skipped and counted in the adapter's `skipped` total instead of failing the whole import.
 - Temporary upload-file cleanup in import routes now uses non-blocking async unlink to avoid request-path synchronous filesystem blocking while keeping ignore-on-missing behavior ([[apps/node-backend/src/routes/importRoutes.ts]]).
 
 ### 3. Deduplication

@@ -1,9 +1,19 @@
 import type { Tag, TagCreate, TagListResponse, TagUpdate, BulkTagRequest, BulkTagResult } from '@/types/api';
+import { TagListSchema } from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestWithQuery } from '@/lib/api/helpers';
 
+/**
+ * `is_active` filters on the tag's own flag; GET /api/tags reads it as
+ * `active` (`true`/`false`; omitted, the route lists active tags only).
+ */
 export function getTags(params?: { is_active?: boolean; limit?: number; offset?: number }): Promise<TagListResponse> {
-    return requestWithQuery<TagListResponse>('/api/tags', params);
+    const { is_active, ...page } = params ?? {};
+    return requestWithQuery<TagListResponse>(
+        '/api/tags',
+        { ...page, active: is_active },
+        { schema: TagListSchema },
+    );
 }
 
 export function createTag(tag: TagCreate): Promise<Tag> {

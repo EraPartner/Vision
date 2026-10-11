@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
 import { API_BASE, ok } from "./clientTestHarness";
+import { INVESTMENT_STUB } from "@/test/msw/handlers";
 
 import {
     listPortfolioParserConfigs,
@@ -102,12 +103,17 @@ describe("portfolioImports API client", () => {
                     `${API_BASE}/api/portfolio/import/csv/custom`,
                     async ({ request }) => {
                         body = await request.formData();
-                        return ok({
-                            batch_id: 2,
-                            imported: 0,
-                            duplicates: 0,
-                            errors: 0,
-                        });
+                        return ok(
+                            {
+                                batch_id: 2,
+                                total: 0,
+                                skipped: 0,
+                                imported: 0,
+                                duplicates: 0,
+                                errors: 0,
+                            },
+                            { status: 201 },
+                        );
                     },
                 ),
             );
@@ -162,12 +168,17 @@ describe("portfolioImports API client", () => {
                                       },
                                   },
                               )
-                            : ok({
-                                  batch_id: 2,
-                                  imported: 0,
-                                  duplicates: 0,
-                                  errors: 0,
-                              });
+                            : ok(
+                                  {
+                                      batch_id: 2,
+                                      total: 0,
+                                      skipped: 0,
+                                      imported: 0,
+                                      duplicates: 0,
+                                      errors: 0,
+                                  },
+                                  { status: 201 },
+                              );
                     },
                 ),
             );
@@ -224,12 +235,17 @@ describe("portfolioImports API client", () => {
                     async ({ request }) => {
                         requestedUrl = request.url;
                         requestedBody = await request.formData();
-                        return ok({
-                            batch_id: 2,
-                            imported: 1,
-                            duplicates: 0,
-                            errors: 0,
-                        });
+                        return ok(
+                            {
+                                batch_id: 2,
+                                total: 1,
+                                skipped: 0,
+                                imported: 1,
+                                duplicates: 0,
+                                errors: 0,
+                            },
+                            { status: 201 },
+                        );
                     },
                 ),
             );
@@ -281,6 +297,9 @@ describe("portfolioImports API client", () => {
             http.get(`${API_BASE}/api/portfolio/import/batches/5/preview`, () =>
                 ok({
                     batch_id: 5,
+                    account_id: null,
+                    account_name: null,
+                    account_valid: true,
                     groups: [],
                     totals: {
                         symbol: 0,
@@ -302,7 +321,7 @@ describe("portfolioImports API client", () => {
                 `${API_BASE}/api/portfolio/import/batches/5/rows/9/investment-override`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ row_id: 9, investment_id: 33 });
+                    return ok({ row_id: 9, user_override_investment_id: 33 });
                 },
             ),
         );
@@ -317,7 +336,12 @@ describe("portfolioImports API client", () => {
                 `${API_BASE}/api/portfolio/import/batches/5/rows/9/investment-override`,
                 async ({ request }) => {
                     body = await request.json();
-                    return ok({ row_id: 9, created: true });
+                    return ok({
+                        row_id: 9,
+                        investment_id: 34,
+                        created: true,
+                        investment: { ...INVESTMENT_STUB, id: 34 },
+                    });
                 },
             ),
         );
@@ -382,6 +406,7 @@ describe("portfolioImports API client", () => {
                     body = await request.json();
                     return ok({
                         batch_id: 5,
+                        total: 4,
                         imported: 4,
                         duplicates: 0,
                         errors: 0,
@@ -403,6 +428,7 @@ describe("portfolioImports API client", () => {
                     body = await request.json();
                     return ok({
                         batch_id: 5,
+                        total: 0,
                         imported: 0,
                         duplicates: 0,
                         errors: 0,

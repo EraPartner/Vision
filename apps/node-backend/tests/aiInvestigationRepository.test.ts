@@ -15,6 +15,7 @@ import {
   createJob,
 } from "../src/repositories/aiInvestigationRepository.ts";
 import { partial } from "./helpers/partial.ts";
+import { investigationJobRow } from "./helpers/aiRows.ts";
 
 const query = vi.mocked(rawQuery);
 
@@ -43,20 +44,21 @@ describe("aiInvestigationRepository", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("creates the job and claims its reference scope in one transaction", async () => {
+    const job = investigationJobRow({ id: "job-1" });
     client.query
-      .mockResolvedValueOnce({ rows: [{ id: "job-1" }] })
+      .mockResolvedValueOnce({ rows: [job] })
       .mockResolvedValueOnce({ rows: [{ id: request.referenceScopeId }] });
 
     await expect(
       createJob(request, "2026-10-14T00:00:00.000Z"),
-    ).resolves.toEqual({ id: "job-1" });
+    ).resolves.toEqual(job);
 
     expect(withTransaction).toHaveBeenCalledTimes(1);
     expect(client.query).toHaveBeenCalledTimes(2);
-    expect(client.query.mock.calls[1][0]).toContain(
+    expect(client.query.mock.calls[1]![0]).toContain(
       "WHERE id=$1 AND job_id IS NULL AND expires_at > NOW()",
     );
-    expect(client.query.mock.calls[1][1]).toEqual([
+    expect(client.query.mock.calls[1]![1]).toEqual([
       request.referenceScopeId,
       "job-1",
       "2026-10-14T00:00:00.000Z",
@@ -65,7 +67,7 @@ describe("aiInvestigationRepository", () => {
 
   it("aborts job creation when the scope cannot be claimed", async () => {
     client.query
-      .mockResolvedValueOnce({ rows: [{ id: "job-1" }] })
+      .mockResolvedValueOnce({ rows: [investigationJobRow({ id: "job-1" })] })
       .mockResolvedValueOnce({ rows: [] });
 
     await expect(
@@ -81,7 +83,7 @@ describe("aiInvestigationRepository", () => {
     await expect(clearProviderResult("job-1")).resolves.toEqual({
       id: "job-1",
     });
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "checkpoint_json=checkpoint_json - 'providerResult'",
     );
   });

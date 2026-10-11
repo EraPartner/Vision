@@ -33,6 +33,6 @@ describe("tagInsightsRepository.getTagPivot id validation", () => {
 
     await tagInsightsRepository.getTagPivot({ tagIds: [2147483647] });
 
-    expect(query.mock.calls[0][1]).toEqual([[2147483647]]);
+    expect(query.mock.calls[0]![1]).toEqual([[2147483647]]);
   });
 });

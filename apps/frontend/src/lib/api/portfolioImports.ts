@@ -4,6 +4,7 @@ import {
     generateRequestId,
     parseEnvelopeError,
     apiRequest,
+    checkResponseContract,
 } from "@/lib/api/client";
 import { postMultipartImport } from "@/lib/api/helpers";
 import { importProgressSchema, type CsvNumberFormat } from "@/lib/api/imports";
@@ -12,6 +13,16 @@ import type { ImportProgress } from "@/types/apiClient";
 import type { AssetClass } from "@vision/types/assetClasses";
 import type { PortfolioTxnType } from "@vision/types/portfolioTxnTypes";
 import { ImportCancelledError } from "@/lib/api/importCancelled";
+import {
+    PortfolioBatchCommitResultSchema,
+    PortfolioBatchRollbackResultSchema,
+    PortfolioImportResultSchema,
+    PortfolioPreviewSchema,
+    PortfolioRowOverrideResultSchema,
+    PortfolioRowsOverrideResultSchema,
+    SavedPortfolioParserConfigListSchema,
+    SavedPortfolioParserConfigSchema,
+} from "@vision/types/contracts";
 
 /**
  * Runtime guards for the portfolio import SSE stream (ZOD-10); see the
@@ -93,24 +104,28 @@ export interface SavedPortfolioParserConfig {
     updated_at: string;
 }
 
+/**
+ * A staged import row as node-postgres returns it: the BIGINT `id` and the
+ * NUMERIC amount columns arrive as decimal strings.
+ */
 export interface PortfolioPreviewRow {
-    id: number;
+    id: string;
     row_index: number;
     status: string;
     /** Brokerage routing (ADR-095): 'cash' | 'portfolio' | null (legacy/non-brokerage). */
-    route?: string | null;
-    tx_date: string;
+    route: string | null;
+    tx_date: string | null;
     type: string | null;
     type_raw: string | null;
     symbol_raw: string | null;
     name_raw: string | null;
-    units: number | null;
-    price_per_unit: number | null;
-    amount: number | null;
-    fees: number | null;
-    taxes: number | null;
+    units: string | null;
+    price_per_unit: string | null;
+    amount: string | null;
+    fees: string | null;
+    taxes: string | null;
     currency: string | null;
-    fx_rate_to_eur: number | null;
+    fx_rate_to_eur: string | null;
     note: string | null;
     match_source: string | null;
     error_message: string | null;
@@ -225,16 +240,21 @@ function appendBrokerage(
     return p;
 }
 
-export function importPortfolioCSVCustom(
+export async function importPortfolioCSVCustom(
     file: File,
     config: PortfolioCustomConfig,
     adapterName: string,
     brokerage?: BrokerageImportOptions,
 ): Promise<PortfolioImportResult> {
-    return postMultipartImport(
+    const result = await postMultipartImport<PortfolioImportResult>(
         "/api/portfolio/import/csv/custom",
         file,
         appendBrokerage(configToParams(config, adapterName), brokerage),
+    );
+    return checkResponseContract(
+        PortfolioImportResultSchema,
+        result,
+        "POST /api/portfolio/import/csv/custom",
     );
 }
 
@@ -346,7 +366,9 @@ export async function listPortfolioParserConfigs(): Promise<
     const { items } = await apiRequest<{
         items: SavedPortfolioParserConfig[];
         total: number;
-    }>("/api/portfolio/import/parsers");
+    }>("/api/portfolio/import/parsers", {
+        schema: SavedPortfolioParserConfigListSchema,
+    });
     return items;
 }
 
@@ -359,6 +381,7 @@ export function createPortfolioParserConfig(
         {
             method: "POST",
             body: JSON.stringify({ name, config }),
+            schema: SavedPortfolioParserConfigSchema,
         },
     );
 }
@@ -372,6 +395,7 @@ export function updatePortfolioParserConfig(
         {
             method: "PATCH",
             body: JSON.stringify(patch),
+            schema: SavedPortfolioParserConfigSchema,
         },
     );
 }
@@ -388,6 +412,7 @@ export function getPortfolioImportPreview(
 ): Promise<PortfolioPreviewResponse> {
     return apiRequest<PortfolioPreviewResponse>(
         `/api/portfolio/import/batches/${batchId}/preview`,
+        { schema: PortfolioPreviewSchema },
     );
 }
 
@@ -409,13 +434,15 @@ export function overridePortfolioImportRow(
         {
             method: "POST",
             body: JSON.stringify(body),
+            schema: PortfolioRowOverrideResultSchema,
         },
     );
 }
 
 export function overridePortfolioImportRows(
     batchId: number,
-    rowIds: number[],
+    /** Preview row ids; the route also accepts the BIGINT digit strings. */
+    rowIds: ReadonlyArray<number | string>,
     payload: { investmentId?: number; createNew?: boolean },
 ): Promise<{
     investment_id: number;
@@ -431,6 +458,7 @@ export function overridePortfolioImportRows(
         {
             method: "POST",
             body: JSON.stringify(body),
+            schema: PortfolioRowsOverrideResultSchema,
         },
     );
 }
@@ -449,6 +477,7 @@ export function commitPortfolioImportBatch(
         body: JSON.stringify(
             accountId != null ? { account_id: accountId } : {},
         ),
+        schema: PortfolioBatchCommitResultSchema,
     });
 }
 
@@ -457,7 +486,7 @@ export function rollbackPortfolioImportBatch(
 ): Promise<{ deleted: number }> {
     return apiRequest<{ deleted: number }>(
         `/api/portfolio/import/batches/${id}`,
-        { method: "DELETE" },
+        { method: "DELETE", schema: PortfolioBatchRollbackResultSchema },
     );
 }
 

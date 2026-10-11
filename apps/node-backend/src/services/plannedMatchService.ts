@@ -17,7 +17,9 @@
 import plannedTransactionRepository from "../repositories/plannedTransactionRepository.ts";
 import transactionRepository from "../repositories/transactionRepository.ts";
 import recipientRepository from "../repositories/recipientRepository.ts";
-import settingsRepository from "../repositories/settingsRepository.ts";
+import settingsRepository, {
+  settingField,
+} from "../repositories/settingsRepository.ts";
 import { executePlanned } from "./plannedExecutionService.ts";
 import {
   addDaysYmd,
@@ -137,7 +139,7 @@ export { matchesTolerance as __matchesTolerance };
 async function isAutoClearEnabled() {
   try {
     const settings = await settingsRepository.get("app_settings");
-    return settings?.autoClearPlannedOnMatch !== false; // default ON
+    return settingField(settings, "autoClearPlannedOnMatch") !== false; // default ON
   } catch {
     return true;
   }
@@ -197,8 +199,8 @@ export async function autoLinkTransactions(
 
   for (const tx of txs) {
     const matches = candidatesByTx.get(tx.id);
-    if (!matches || matches.length !== 1) continue;
-    const planned = matches[0];
+    const planned = matches?.length === 1 ? matches[0] : undefined;
+    if (!planned) continue;
     if ((txIdsByPlanned.get(planned.id) || []).length !== 1) continue;
 
     try {

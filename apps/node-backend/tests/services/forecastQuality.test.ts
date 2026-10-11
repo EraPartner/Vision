@@ -111,9 +111,9 @@ describe("honest percentage error around zero net cashflow", () => {
         asOfMonth: "2024-03",
         windowMonths: 1,
       });
-      expect(r.perMonth[0].mape).toBeNull();
-      expect(r.aggregate.mape).toBeNull();
-      expect(r.aggregate.mae).toBeCloseTo(10 - total / 29);
+      expect(r!.perMonth[0]!.mape).toBeNull();
+      expect(r!.aggregate.mape).toBeNull();
+      expect(r!.aggregate.mae).toBeCloseTo(10 - total / 29);
     },
   );
   it("reports a finite percentage just above the eligibility boundary", () => {
@@ -123,8 +123,8 @@ describe("honest percentage error around zero net cashflow", () => {
       asOfMonth: "2024-03",
       windowMonths: 1,
     });
-    expect(Number.isFinite(r.aggregate.mape)).toBe(true);
-    expect(r.aggregate.mape).toBeGreaterThan(0);
+    expect(Number.isFinite(r!.aggregate.mape)).toBe(true);
+    expect(r!.aggregate.mape).toBeGreaterThan(0);
   });
   it("averages percentage error over eligible months only", () => {
     const history = [
@@ -140,7 +140,7 @@ describe("honest percentage error around zero net cashflow", () => {
       asOfMonth: "2024-04",
       windowMonths: 2,
     });
-    expect(r.aggregate).toMatchObject({ mape: 0.9, months: 2 });
+    expect(r!.aggregate).toMatchObject({ mape: 0.9, months: 2 });
   });
   it("withholds percentage error for an empty backtest", () => {
     expect(
@@ -149,7 +149,7 @@ describe("honest percentage error around zero net cashflow", () => {
         methods,
         asOfMonth: "2024-03",
         windowMonths: 1,
-      })[0].aggregate,
+      })[0]!.aggregate,
     ).toMatchObject({ mape: null, months: 0 });
   });
   it("uses the same policy for rolling windows", () => {
@@ -162,6 +162,6 @@ describe("honest percentage error around zero net cashflow", () => {
       daysForward: 7,
       windowCount: 1,
     });
-    expect(r.aggregate).toMatchObject({ mape: null, mae: 10, windows: 1 });
+    expect(r!.aggregate).toMatchObject({ mape: null, mae: 10, windows: 1 });
   });
 });

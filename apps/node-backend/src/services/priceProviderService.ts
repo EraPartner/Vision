@@ -7,6 +7,7 @@
  */
 
 import { logger } from "../config/logger.ts";
+import { RowContractError } from "../database/rowContracts.ts";
 import { UpstreamError } from "../middleware/errorHandler.ts";
 import { assertPublicHttpUrl } from "../lib/urlSafety.ts";
 import { epochMsToUtcYmd } from "../lib/dateFormat.ts";
@@ -41,12 +42,6 @@ import type { InvestmentRow, PricePoint } from "../types/rows.ts";
 import type { LivePriceQuote } from "./prices/priceProviderRegistry.ts";
 
 export type { InvestmentRow, PricePoint, LivePriceQuote };
-
-/** One `chart().quotes` entry of the untyped Yahoo client response. */
-interface YahooChartQuote {
-  date?: string | number | Date | null;
-  close?: unknown;
-}
 
 /**
  * The provider configuration `fetchHistoricalPrices` reads: an investment row
@@ -215,21 +210,23 @@ export async function fetchLivePricesDetailed(
   const providerTasks: Promise<void>[] = [];
 
   for (const { key, resolveId, batchFn, label } of idBasedProviders) {
-    if (!stale[key].length) continue;
+    const bucket = stale[key];
+    if (!bucket?.length) continue;
     providerTasks.push(
       runProviderTask(key, label, async () => {
-        const ids = [...new Set(stale[key].map(resolveId).filter(Boolean))];
+        const ids = [...new Set(bucket.map(resolveId).filter(Boolean))];
         const prices = await batchFn(ids);
-        for (const inv of stale[key]) {
+        for (const inv of bucket) {
           const pid = resolveId(inv);
-          if (prices[pid]) {
+          const quote = prices[pid];
+          if (quote) {
             results[inv.id] = {
-              price: prices[pid].price,
-              source: prices[pid].source || "live",
+              price: quote.price,
+              source: quote.source || "live",
             };
             cacheSet(`${key}:${pid}`, {
-              price: prices[pid].price,
-              source: prices[pid].source || "live",
+              price: quote.price,
+              source: quote.source || "live",
             });
           }
         }
@@ -238,11 +235,12 @@ export async function fetchLivePricesDetailed(
   }
 
   for (const { key, batchFn, label } of investmentBasedProviders) {
-    if (!stale[key].length) continue;
+    const bucket = stale[key];
+    if (!bucket?.length) continue;
     providerTasks.push(
       runProviderTask(key, label, async () => {
-        const prices = await batchFn(stale[key]);
-        for (const inv of stale[key]) {
+        const prices = await batchFn(bucket);
+        for (const inv of bucket) {
           const data = prices[inv.id];
           if (data !== undefined && isValidPrice(data.price)) {
             results[inv.id] = { price: data.price, source: "live" };
@@ -296,6 +294,8 @@ export async function fetchLivePricesDetailed(
         }
       }
     } catch (err) {
+      // A contract violation is a data fault, not a transient failure: surface it.
+      if (err instanceof RowContractError) throw err;
       logger.warn("Historical price fallback failed", {
         error: (err as Error).message,
       });
@@ -482,7 +482,7 @@ export async function fetchHistoricalPrices(
         });
 
         points = normalizeHistoryPoints(
-          ((chart?.quotes || []) as YahooChartQuote[])
+          (chart?.quotes || [])
             .map((q) => ({
               timestampMs: q?.date ? new Date(q.date).getTime() : Number.NaN,
               price: toNumber(q?.close),
@@ -627,12 +627,16 @@ export async function fetchHistoricalPrices(
         amount: p.price,
         currency: "USD",
         date: epochMsToUtcYmd(p.timestampMs),
+        point: p,
       }));
       const converted = await convertRowsToEur(rows, invCurrency, {
         useHistoricalRatesByDate: true,
         dateField: "date",
       });
-      points = points.map((p, i) => ({ ...p, price: converted[i].amount_eur }));
+      points = converted.map(({ point, amount_eur }) => ({
+        ...point,
+        price: amount_eur,
+      }));
     }
 
     return _persistAndResolve(

@@ -106,7 +106,8 @@ function exportedDate(record: NexoProRecord): Date | null {
     Number(match[4]) > 59
   )
     return null;
-  return parseDateWithFormat(match[1], "%Y-%m-%d");
+  // Every group of the pattern is mandatory, so a match carries it.
+  return parseDateWithFormat(match[1]!, "%Y-%m-%d");
 }
 
 function pair(
@@ -115,7 +116,8 @@ function pair(
   const match = text(record.pair)
     .toUpperCase()
     .match(/^([A-Z0-9]{2,12})\/([A-Z0-9]{2,12})$/);
-  return match ? { base: match[1], quote: match[2] } : undefined;
+  // Both groups are mandatory, so a match carries them.
+  return match ? { base: match[1]!, quote: match[2]! } : undefined;
 }
 
 function baseRow(
@@ -283,10 +285,12 @@ export function getNexoProSpotReconciliationEvidence(
   } catch {
     return undefined;
   }
-  if (tuples.length !== 1 || tuples[0].length !== REQUIRED_COLUMNS.length)
+  const [tuple] = tuples;
+  if (tuples.length !== 1 || !tuple || tuple.length !== REQUIRED_COLUMNS.length)
     return undefined;
   const record: NexoProRecord = Object.fromEntries(
-    REQUIRED_COLUMNS.map((column, index) => [column, tuples[0][index]]),
+    // The length check above gives every column its cell.
+    REQUIRED_COLUMNS.map((column, index) => [column, tuple[index]!]),
   );
   if (!text(record.orderId) || !exportedDate(record)) return undefined;
   const parsed = parseRecord(record);

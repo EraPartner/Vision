@@ -111,8 +111,7 @@ function parseTransaction(
   if (!originalType) return null;
   const description = cleanCell(record.Description);
   if (originalType === "Forex Trade Component") {
-    const feeColumns = ["Commission", "Transaction Fees"];
-    const charges = feeColumns.map((column) => {
+    const charge = (column: string): number => {
       const text = cleanCell(record[column]);
       const value = text ? signedNumber(text) : 0;
       if (value == null || !Number.isFinite(value) || value > 0)
@@ -120,8 +119,8 @@ function parseTransaction(
           `IBKR Forex Trade Component has an unsupported ${column}`,
         );
       return -value;
-    });
-    const amount = charges[0] + charges[1];
+    };
+    const amount = charge("Commission") + charge("Transaction Fees");
     if (!amount) return null;
     return {
       date: parseDateWithFormat(cleanCell(record.Date), "%Y-%m-%d"),
@@ -222,7 +221,10 @@ export async function parseIbkrTransactionHistory(
   if (headers.length > 1) {
     throw new Error('IBKR CSV has multiple "Transaction History" headers');
   }
-  const header = headers[0];
+  const [header] = headers;
+  if (!header) {
+    throw new Error('IBKR CSV is missing the "Transaction History" header');
+  }
   const headerIndex = sourceRecords.indexOf(header);
 
   const columns = header.values.slice(2).map((column) => String(column).trim());

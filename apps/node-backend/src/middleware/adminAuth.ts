@@ -55,7 +55,7 @@ function extractAdminBearerToken(
 ): string | undefined {
   if (typeof authorizationHeader !== "string") return undefined;
   const match = authorizationHeader.match(/^Bearer\s+(.+)$/i);
-  return match ? match[1].trim() : undefined;
+  return match?.[1]?.trim();
 }
 
 export function createAdminAuthMiddleware(

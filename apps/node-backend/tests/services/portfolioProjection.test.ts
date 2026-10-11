@@ -86,7 +86,7 @@ describe('runPortfolioForecast', () => {
       deps({ aggregator: forwardAggregator }),
     );
     expect(r.usedForward).toBe(true);
-    expect(r.forwardHoldings[0].symbol).toBe('AAA');
+    expect(r.forwardHoldings[0]!.symbol).toBe('AAA');
     // Single 100%-weight holding at blend=1 → portfolio expected return ≈ 20% growth + 2% yield.
     expect(r.expectedAnnualReturn).toBeCloseTo(0.22, 2);
   });

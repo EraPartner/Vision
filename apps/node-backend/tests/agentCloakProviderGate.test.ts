@@ -80,8 +80,8 @@ describe("AgentCloak provider gate", () => {
       expect.objectContaining({ selectedSummary: request.selectedSummary }),
       expect.any(Object),
     );
-    expect(mocked.check.mock.calls[0][0]).not.toHaveProperty("question");
-    expect(mocked.check.mock.calls[0][0]).not.toHaveProperty("constraints");
+    expect(mocked.check.mock.calls[0]![0]).not.toHaveProperty("question");
+    expect(mocked.check.mock.calls[0]![0]).not.toHaveProperty("constraints");
     expect(mocked.reserve).not.toHaveBeenCalled();
     expect(mocked.broker).not.toHaveBeenCalled();
   });

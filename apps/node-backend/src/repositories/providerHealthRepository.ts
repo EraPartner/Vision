@@ -6,29 +6,24 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryOne, queryRows } from '../database/rowContracts.ts';
+import { providerHealthRowSchema } from '../database/rows/portfolio.ts';
+import type { ProviderHealthDbRow } from '../database/rows/portfolio.ts';
 
-export type ProviderHealth = {
-  provider: string;
-  /** 'price' | 'fx' | 'inflation' | 'import' */
-  kind: string;
-  last_success_at: Date | null;
-  last_error_at: Date | null;
-  last_error: string | null;
-  consecutive_failures: number;
-  updated_at: Date;
-};
+/** A `provider_health` row; `kind` is 'price' | 'fx' | 'inflation' | 'import'. */
+export type ProviderHealth = ProviderHealthDbRow;
 
 /**
  * Return all provider health rows ordered by kind, then provider.
  */
 async function listAll(): Promise<ProviderHealth[]> {
-  const result = await query<ProviderHealth>(
+  return queryRows(
+    providerHealthRowSchema,
     `SELECT provider, kind, last_success_at, last_error_at, last_error,
             consecutive_failures, updated_at
        FROM provider_health
       ORDER BY kind ASC, provider ASC`,
   );
-  return result.rows;
 }
 
 /**
@@ -37,14 +32,15 @@ async function listAll(): Promise<ProviderHealth[]> {
 async function findByProvider(
   provider: string,
 ): Promise<ProviderHealth | null> {
-  const result = await query<ProviderHealth>(
+  const row = await queryOne(
+    providerHealthRowSchema,
     `SELECT provider, kind, last_success_at, last_error_at, last_error,
             consecutive_failures, updated_at
        FROM provider_health
       WHERE provider = $1`,
     [provider],
   );
-  return result.rows[0] ?? null;
+  return row ?? null;
 }
 
 /**

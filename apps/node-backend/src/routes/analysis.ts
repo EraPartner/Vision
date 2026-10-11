@@ -505,7 +505,9 @@ router.post("/drill", async (req, res) => {
         accounts: "account_id",
         holdings: "event_id",
         "cash-flows": "cash_flow_id",
-      }[dataset.id] || dataset.fields[0].id;
+      }[dataset.id] || dataset.fields[0]?.id;
+    if (primaryKey === undefined)
+      throw new Error("Drill-through dataset has no fields");
     const groups = plan.groups || [];
     const filters = [
       ...(plan.filters || []),

@@ -35,18 +35,19 @@ function forecast({
   const H = forecastDates.length;
   if (H === 0) return { series: [], bands: {}, cumulative_bands: {} };
 
-  const samples: number[][] = Array.from(
-    { length: H },
-    () => new Array<number>(paths),
-  );
+  const rows = forecastDates.map((date) => ({
+    date,
+    values: new Array<number>(paths),
+  }));
   for (let p = 0; p < paths; p++) {
-    for (let h = 0; h < H; h++) {
-      const bucket = lookupBucket(buckets, forecastDates[h]);
+    for (const row of rows) {
+      const bucket = lookupBucket(buckets, row.date);
       const std = Number.isFinite(bucket.std) ? bucket.std : 0;
-      samples[h][p] = bucket.mean + std * gaussian(rng);
+      row.values[p] = bucket.mean + std * gaussian(rng);
     }
   }
 
+  const samples = rows.map((row) => row.values);
   return summarizeSimulationPaths(samples, forecastDates, percentiles);
 }
 

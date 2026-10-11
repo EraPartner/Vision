@@ -9,6 +9,7 @@ import { ok } from "@/test/msw/handlers";
 import en from "@/locales/en";
 import { BulkActionsBar, type BulkSelectionMode } from "../BulkActionsBar";
 import type { ExistingTransferLeg } from "@/features/transactions/hooks/useMarkTransfer";
+import { recipientCreated, transactionCreated } from "@/test/msw/rowFixtures";
 
 const labels = en as Record<string, string>;
 const API_BASE = "http://localhost:3002";
@@ -79,11 +80,11 @@ describe("pairing existing transfer records", () => {
                 ),
                 http.post(`${API_BASE}/api/transactions`, () => {
                     createRecord();
-                    return ok({});
+                    return ok(transactionCreated({}));
                 }),
                 http.post(`${API_BASE}/api/recipients`, () => {
                     createRecord();
-                    return ok({});
+                    return ok(recipientCreated({}));
                 }),
             );
             const user = userEvent.setup();

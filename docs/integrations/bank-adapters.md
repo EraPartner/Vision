@@ -2,7 +2,7 @@
 title: Integration - Bank Adapters
 type: integration
 description: Bank API integrations for CSV imports
-date: 2026-10-09
+date: 2026-10-10
 updated: 2026-10-08
 tags: [integration, bank, csv, import, ing, bnp]
 status: active
@@ -77,6 +77,10 @@ Each bank adapter:
 - **Fields**: finished_on, source_amount, target_amount, exchange_rate, fee
 - **Date Format**: ISO 8601
 - **Features**: Multi-currency with exchange rates
+- **Currency**: The booked-side currency (`USD` when both currency cells are blank) is normalized
+  with `normalizeIsoCurrency()`. A row with a malformed code is skipped like any other unparseable
+  row, so it cannot break the adapter output contract and fail the import
+  ([[docs/adr/194-runtime-contracts-completion|ADR-194]]).
 
 ### Vision (Internal)
 

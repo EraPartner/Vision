@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mockedBatchConvertGroups } from "./helpers/mockCurrencyConversion.ts";
 import type { Mock } from "vitest";
 import { mockConnection } from "./helpers/repoMocks.ts";
 
@@ -37,7 +38,7 @@ import { appDateStringToUtc, todayAppDateString } from "../src/lib/timezone.ts";
 const query = rawQuery as unknown as Mock<
   (text: string, params?: readonly unknown[]) => Promise<Partial<PgQueryResult>>
 >;
-const batchConvertGroupsWithHistoricalRateFallback = vi.mocked(
+const batchConvertGroupsWithHistoricalRateFallback = mockedBatchConvertGroups(
   rawBatchConvertGroupsWithHistoricalRateFallback,
 );
 const getIncludeTransfers = vi.mocked(rawGetIncludeTransfers);
@@ -57,13 +58,15 @@ const isLedgerStartSql = (sql: string) => /MIN\(t\.date\)/.test(sql);
 
 /**
  * query() stub. The ledger-start probe answers with `firstDate` (a 'YYYY-MM-DD'
- * string or null); every other query returns no rows. Needed because the probe
- * — not the result rows — is what sets the historical-average divisor.
+ * string or null), handed back as pg returns a DATE: a local-midnight Date.
+ * Every other query returns no rows. Needed because the probe — not the result
+ * rows — is what sets the historical-average divisor.
  */
 function stubQueries(firstDate: string | null = null) {
+  const pgFirstDate = firstDate ? new Date(`${firstDate}T00:00:00`) : null;
   query.mockImplementation(async (sql) =>
     isLedgerStartSql(sql)
-      ? { rows: [{ first_date: firstDate }] }
+      ? { rows: [{ first_date: pgFirstDate }] }
       : { rows: [] },
   );
 }
@@ -85,26 +88,26 @@ describe("getCashflowComparison", () => {
     expect(query).toHaveBeenCalledTimes(5);
     // Windows are anchored on the bound APP_TIMEZONE date ($1 here — no
     // exclusion params to allocate around), never on Postgres CURRENT_DATE.
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "date >= date_trunc('month', $1::date) - make_interval(months => $2::int)",
     );
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "date < date_trunc('month', $1::date)",
     );
-    expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 24]);
-    expect(query.mock.calls[1][0]).toContain(
+    expect(query.mock.calls[0]![1]).toEqual(["2025-04-15", 24]);
+    expect(query.mock.calls[1]![0]).toContain(
       "date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')",
     );
-    expect(query.mock.calls[1][1]).toEqual(["2025-04-15"]);
-    expect(query.mock.calls[2][0]).toContain("FROM planned_transactions");
-    expect(query.mock.calls[3][0]).toContain("month_key");
+    expect(query.mock.calls[1]![1]).toEqual(["2025-04-15"]);
+    expect(query.mock.calls[2]![0]).toContain("FROM planned_transactions");
+    expect(query.mock.calls[3]![0]).toContain("month_key");
     // Executed planned transactions must be excluded from the overlays, or an
     // executed non-recurring row double-counts against its real transaction.
-    expect(query.mock.calls[2][0]).toContain("is_executed = false");
-    expect(query.mock.calls[3][0]).toContain("is_executed = false");
+    expect(query.mock.calls[2]![0]).toContain("is_executed = false");
+    expect(query.mock.calls[3]![0]).toContain("is_executed = false");
     // The ledger-start probe is appended LAST so the four data queries keep
     // their call order, and carries no filters of any kind (see D2 below).
-    expect(query.mock.calls[4][0]).toContain("MIN(t.date)");
+    expect(query.mock.calls[4]![0]).toContain("MIN(t.date)");
   });
 
   it("returns days_in_month, current_day, month, year aligned to the system clock", async () => {
@@ -180,7 +183,7 @@ describe("getCashflowComparison", () => {
   it("binds category and recipient exclusion params with sequential numbering", async () => {
     setupEmpty();
     await getCashflowComparison([1, 2], [9], "EUR");
-    const [pastSql, params] = query.mock.calls[0];
+    const [pastSql, params] = query.mock.calls[0]!;
     expect(pastSql).toContain(
       "NOT EXISTS (SELECT 1 FROM category_ancestors excluded",
     );
@@ -194,13 +197,13 @@ describe("getCashflowComparison", () => {
     // The current-month query references $1..$4 only, so it is passed exactly
     // that contiguous prefix — Postgres counts parameters by the highest $n in
     // the text, so a gap or an unreferenced trailing slot is an error.
-    expect(query.mock.calls[1][1]).toEqual([1, 2, 9, "2025-04-15"]);
+    expect(query.mock.calls[1]![1]).toEqual([1, 2, 9, "2025-04-15"]);
   });
 
   it("skips JOIN when there are no exclusions", async () => {
     setupEmpty();
     await getCashflowComparison([], [], "EUR");
-    const [pastSql] = query.mock.calls[0];
+    const [pastSql] = query.mock.calls[0]!;
     expect(pastSql).not.toContain("LEFT JOIN recipients");
   });
 });
@@ -218,11 +221,11 @@ describe("getCashflowForecastData", () => {
     const r = await getCashflowForecastData(12, [], [], "EUR");
     expect(query).toHaveBeenCalledTimes(4);
     // historyMonths is bound, not interpolated (and 12 never appears in the text).
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain(
       "make_interval(months => $2::int)",
     );
-    expect(query.mock.calls[0][0]).not.toContain("interval '12 months'");
-    expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 12]);
+    expect(query.mock.calls[0]![0]).not.toContain("interval '12 months'");
+    expect(query.mock.calls[0]![1]).toEqual(["2025-04-15", 12]);
     expect(r).toMatchObject({ historyMonths: 12 });
   });
 
@@ -291,7 +294,7 @@ describe("getCashflowForecastData", () => {
       [],
     ]);
     const r = await getCashflowForecastData(1);
-    expect(r.history[0].date).toBe("2025-03-10");
+    expect(r.history[0]!.date).toBe("2025-03-10");
   });
 
   it("coerces non-numeric amount_eur to 0", async () => {
@@ -307,7 +310,7 @@ describe("getCashflowForecastData", () => {
       [],
     ]);
     const r = await getCashflowForecastData(1);
-    expect(r.history[0].net).toBe(5);
+    expect(r.history[0]!.net).toBe(5);
   });
 });
 
@@ -357,16 +360,16 @@ describe("getCashflowForecastDataRolling", () => {
     await getCashflowForecastDataRolling(12, 30, 60);
     expect(query).toHaveBeenCalledTimes(3);
     // daysBack / historyMonths / daysForward are all bound.
-    expect(query.mock.calls[0][0]).toContain("make_interval(days => $2::int)");
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain("make_interval(days => $2::int)");
+    expect(query.mock.calls[0]![0]).toContain(
       "make_interval(months => $3::int)",
     );
-    expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 30, 12]);
-    expect(query.mock.calls[1][0]).toContain("make_interval(days => $3::int)");
-    expect(query.mock.calls[1][1]).toEqual(["2025-04-15", 30, 60]);
-    expect(query.mock.calls[2][0]).toContain("planned_date > $1::date");
-    expect(query.mock.calls[2][0]).toContain("make_interval(days => $2::int)");
-    expect(query.mock.calls[2][1]).toEqual(["2025-04-15", 60]);
+    expect(query.mock.calls[0]![1]).toEqual(["2025-04-15", 30, 12]);
+    expect(query.mock.calls[1]![0]).toContain("make_interval(days => $3::int)");
+    expect(query.mock.calls[1]![1]).toEqual(["2025-04-15", 30, 60]);
+    expect(query.mock.calls[2]![0]).toContain("planned_date > $1::date");
+    expect(query.mock.calls[2]![0]).toContain("make_interval(days => $2::int)");
+    expect(query.mock.calls[2]![1]).toEqual(["2025-04-15", 60]);
   });
 
   it("returns ascending-date series for all three buckets", async () => {
@@ -400,12 +403,12 @@ describe("getCashflowForecastDataByCategory", () => {
 
     await getCashflowForecastDataByCategory(6);
     expect(query).toHaveBeenCalledTimes(2);
-    expect(query.mock.calls[0][0]).toContain("LEFT JOIN categories cat");
-    expect(query.mock.calls[0][0]).toContain(
+    expect(query.mock.calls[0]![0]).toContain("LEFT JOIN categories cat");
+    expect(query.mock.calls[0]![0]).toContain(
       "make_interval(months => $2::int)",
     );
-    expect(query.mock.calls[0][1]).toEqual(["2025-04-15", 6]);
-    expect(query.mock.calls[1][0]).toContain(
+    expect(query.mock.calls[0]![1]).toEqual(["2025-04-15", 6]);
+    expect(query.mock.calls[1]![0]).toContain(
       "date <= (date_trunc('month', $1::date) + interval '1 month' - interval '1 day')",
     );
   });
@@ -484,7 +487,7 @@ describe("getCashflowForecastDataByCategory", () => {
 
     const r = await getCashflowForecastDataByCategory(3);
     expect(r.currentActualByCategory).toHaveLength(1);
-    expect(r.currentActualByCategory[0].date).toBe("2025-04-15");
+    expect(r.currentActualByCategory[0]!.date).toBe("2025-04-15");
     expect(r.scheduledActualByCategory).toEqual([
       {
         date: "2025-04-20",
@@ -527,9 +530,9 @@ describe("getCashflowForecastDataByCategory", () => {
     ]);
 
     await getCashflowForecastDataByCategory(3, [10, 11], [22]);
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual([10, 11, 22, "2025-04-15", 3]);
-    expect(query.mock.calls[1][1]).toEqual([10, 11, 22, "2025-04-15"]);
+    expect(query.mock.calls[1]![1]).toEqual([10, 11, 22, "2025-04-15"]);
   });
 });
 

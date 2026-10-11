@@ -551,7 +551,7 @@ describe("Validation Middleware", () => {
       validateIdParam(req, res, next);
 
       expect(next).toHaveBeenCalledTimes(1);
-      expect(next.mock.calls[0][0]).toBeInstanceOf(ValidationError);
+      expect(next.mock.calls[0]![0]).toBeInstanceOf(ValidationError);
       expect(res.status).not.toHaveBeenCalled();
       expect(res.json).not.toHaveBeenCalled();
     });
@@ -576,7 +576,7 @@ describe("Validation Middleware", () => {
         const next = vi.fn();
         validateIdParam(req, mockResponse(), next);
         expect(
-          next.mock.calls[0][0],
+          next.mock.calls[0]![0],
           `expected ${JSON.stringify(id)} to be rejected`,
         ).toBeInstanceOf(ValidationError);
         expect(req.params.id).toBe(id);
@@ -618,10 +618,10 @@ describe("Validation Middleware", () => {
         const badNext = vi.fn();
         guard(bad, mockResponse(), badNext);
         expect(
-          badNext.mock.calls[0][0],
+          badNext.mock.calls[0]![0],
           `expected ${JSON.stringify(patternId)} to be rejected`,
         ).toBeInstanceOf(ValidationError);
-        expect(badNext.mock.calls[0][0].message).toBe(
+        expect(badNext.mock.calls[0]![0].message).toBe(
           "patternId must be a positive integer",
         );
       }
@@ -634,7 +634,7 @@ describe("Validation Middleware", () => {
         mockResponse(),
         next,
       );
-      expect(next.mock.calls[0][0]).toBeInstanceOf(ValidationError);
+      expect(next.mock.calls[0]![0]).toBeInstanceOf(ValidationError);
     });
   });
 

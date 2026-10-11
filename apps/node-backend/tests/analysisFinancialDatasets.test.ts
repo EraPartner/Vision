@@ -74,8 +74,8 @@ describe("canonical financial analysis", () => {
       },
       { deps: { query } },
     );
-    expect(scoped.rows[0].sum_total_units).toBe("10");
-    expect(scoped.declaredColumns[0].unit).toEqual({
+    expect(scoped.rows[0]!.sum_total_units).toBe("10");
+    expect(scoped.declaredColumns[0]!.unit).toEqual({
       kind: "quantity",
       instrumentId: "1",
     });
@@ -203,7 +203,7 @@ describe("canonical financial analysis", () => {
     );
     expect(result.rows).toEqual([{ currency: "EUR", sum_value: "0.2" }]);
     expect(result.window.hasMore).toBe(false);
-    expect(query.mock.calls[0][0]).toContain("LIMIT 100001");
+    expect(query.mock.calls[0]![0]).toContain("LIMIT 100001");
   });
   it("reuses an unfiltered source across pivot levels without reusing filtered results", async () => {
     const query = vi.fn().mockResolvedValue({
@@ -360,7 +360,7 @@ describe("canonical financial analysis", () => {
       },
       { deps: { fetchBenchmark } },
     );
-    expect(result.rows[1].return_pct).toBe("10");
+    expect(result.rows[1]!.return_pct).toBe("10");
     expect(result.provenance).toMatchObject({
       provider: "fixture",
       reportingCurrency: "USD",
@@ -475,7 +475,7 @@ describe("canonical financial analysis", () => {
       { datasetId: "benchmark-history", symbol: "TEST", fields: ["close"] },
       { deps: { fetchBenchmark } },
     );
-    expect(result.declaredColumns[0].unit).toEqual({
+    expect(result.declaredColumns[0]!.unit).toEqual({
       kind: "money",
       currencyColumn: "currency",
     });
@@ -494,7 +494,7 @@ describe("canonical financial analysis", () => {
       { datasetId: "portfolio-history", measures: ["sum_value"] },
       { deps: { query } },
     );
-    expect(total.rows[0].sum_value).toBeNull();
+    expect(total.rows[0]!.sum_value).toBeNull();
     const sorted = await executeFinancialAnalysis(
       {
         datasetId: "portfolio-history",

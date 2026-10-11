@@ -1,15 +1,10 @@
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import { sankeyAggregateRowSchema } from "../database/rows/info.ts";
+import type { SankeyAggregateRow } from "../database/rows/info.ts";
 import { buildExclusionClauses } from "../lib/filterBuilder.ts";
 import { getIncludeTransfers } from "./infoRepositoryHelpers.ts";
 
-export type SankeyAggregateRow = {
-  category_id: number | null;
-  category_name: string | null;
-  currency: string | null;
-  is_income: boolean;
-  /** NUMERIC sum — a string from pg. */
-  amount: string;
-};
+export type { SankeyAggregateRow };
 
 /**
  * Return Sankey-ready aggregates while preserving category identity.
@@ -38,7 +33,8 @@ export async function getSankeyAggregates({
     ? `AND ${exclusions.whereSql}`
     : "";
 
-  const result = await query<SankeyAggregateRow>(
+  return queryRows(
+    sankeyAggregateRowSchema,
     `
     SELECT
       c.id AS category_id,
@@ -60,8 +56,6 @@ export async function getSankeyAggregates({
     `,
     params,
   );
-
-  return result.rows;
 }
 
 export default { getSankeyAggregates };

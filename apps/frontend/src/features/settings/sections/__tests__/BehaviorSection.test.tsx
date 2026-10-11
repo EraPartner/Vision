@@ -8,6 +8,10 @@ import { BehaviorSection } from "@/features/settings/sections/BehaviorSection";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
+import {
+    categoryNode,
+    categoryTreeBody,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
@@ -72,26 +76,26 @@ describe("BehaviorSection — brokerage cash categories", () => {
     beforeEach(() => {
         server.use(
             http.get(`${API_BASE}/api/categories/tree`, () =>
-                ok({
+                ok(categoryTreeBody({
                     items: [
-                        {
+                        categoryNode({
                             id: 7,
                             general: "INCOME",
                             detail: "DIVIDENDS",
                             path: ["INCOME", "DIVIDENDS"],
                             is_active: true,
-                        },
-                        {
+                        }),
+                        categoryNode({
                             id: 8,
                             general: "INVESTMENTS",
                             detail: "FEES",
                             path: ["INVESTMENTS", "FEES"],
                             is_active: true,
-                        },
+                        }),
                     ],
                     total: 2,
                     links: [],
-                }),
+                })),
             ),
         );
     });

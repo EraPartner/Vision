@@ -65,14 +65,14 @@ describe("commitReviewedPortfolioImport", () => {
       accountId: 77,
     });
     expect(mocks.lockBatchForUpdate.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.setBatchAccount.mock.invocationCallOrder[0],
+      mocks.setBatchAccount.mock.invocationCallOrder[0]!,
     );
     expect(mocks.setBatchAccount.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0],
+      mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0]!,
     );
     expect(
       mocks.assertPortfolioImportReadiness.mock.invocationCallOrder[0],
-    ).toBeLessThan(mocks.commitPortfolioImport.mock.invocationCallOrder[0]);
+    ).toBeLessThan(mocks.commitPortfolioImport.mock.invocationCallOrder[0]!);
   });
 
   it("stops before canonical commit when readiness fails", async () => {

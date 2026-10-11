@@ -130,3 +130,12 @@ export async function queryOne<T>(
   const rows = await queryRows(schema, text, params, client);
   return rows[0];
 }
+
+/**
+ * The single row an INSERT ... RETURNING (or another always-one-row query)
+ * produced. A missing row is an internal fault, not a "not found".
+ */
+export function requireRow<T>(row: T | undefined, label: string): T {
+  if (row === undefined) throw new Error(`Expected a row from ${label}`);
+  return row;
+}

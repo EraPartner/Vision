@@ -57,13 +57,15 @@ export async function applyDuplicatePortfolioRepair({
   const existingCopy = await readFullRepairTransaction(imported.id);
   const originalBatchId = Number(imported.import_batch_id);
   const state = await readOriginalRepairState(originalBatchId, imported.id);
+  const [source] = state.originalStaging;
   if (
     !legacy ||
     !existingCopy ||
     !same(financialRepairImage(legacy), before) ||
     !same(financialRepairImage(existingCopy), imported) ||
     state.originalStaging.length !== 1 ||
-    state.originalStaging[0].status !== "committed" ||
+    !source ||
+    source.status !== "committed" ||
     !state.originalBatch ||
     !["complete", "complete_with_errors"].includes(
       state.originalBatch.status,
@@ -80,7 +82,6 @@ export async function applyDuplicatePortfolioRepair({
   };
   // Clear the proven staging pointer before deleting its imported copy. The
   // foreign key otherwise clears it first and makes the guarded update stale.
-  const source = state.originalStaging[0];
   const changedSource = await replaceRepairStaging(source, {
     ...source,
     status: "duplicate",
@@ -177,11 +178,11 @@ export async function restoreDuplicatePortfolioRepairs(
       throw conflict();
     if (!(await restoreExactImportedCopy(before.imported))) throw conflict();
     const restoredStaging = [];
-    for (let index = 0; index < before.originalStaging.length; index++) {
-      const restored = await replaceRepairStaging(
-        after.originalStaging[index],
-        before.originalStaging[index],
-      );
+    for (const [index, previous] of before.originalStaging.entries()) {
+      const current = after.originalStaging[index];
+      // A journal whose after-image lacks this source row cannot be replayed.
+      if (!current) throw conflict();
+      const restored = await replaceRepairStaging(current, previous);
       if (!restored) throw conflict();
       restoredStaging.push(restored);
     }

@@ -117,7 +117,7 @@ describe("accountRepository", () => {
           post_anchor_count: undefined,
         },
       ]);
-      const sql = query.mock.calls[0][0];
+      const sql = query.mock.calls[0]![0];
       expect(sql).not.toContain("a.is_active = true");
       expect(sql).not.toContain("a.is_active = false");
       expect(sql).toContain("ORDER BY a.name");
@@ -126,19 +126,19 @@ describe("accountRepository", () => {
     it("filters to active accounts", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       await listAccounts({ active: true });
-      expect(query.mock.calls[0][0]).toContain("a.is_active = true");
+      expect(query.mock.calls[0]![0]).toContain("a.is_active = true");
     });
 
     it("filters to inactive accounts", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       await listAccounts({ active: false });
-      expect(query.mock.calls[0][0]).toContain("a.is_active = false");
+      expect(query.mock.calls[0]![0]).toContain("a.is_active = false");
     });
 
     it("selects the provenance columns from the shared lateral (WP-B2)", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       await listAccounts();
-      const sql = query.mock.calls[0][0];
+      const sql = query.mock.calls[0]![0];
       expect(sql).toContain("lb.anchor_date");
       expect(sql).toContain("lb.post_anchor_count");
       // The balance no longer comes off the cross-currency lateral: it is summed
@@ -166,7 +166,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.computed_balance).toBe(150); // 100 EUR + 100 USD × 0.5
       expect(row.balance_parts).toEqual([
         { currency: "EUR", balance: 100 },
@@ -200,7 +200,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.computed_balance).toBe(150);
       expect(row.drift).toBe(20); // 120 − the EUR partition's 100, NOT 120 − 150
       // …and the base behind that subtraction is emitted, so the reconcile
@@ -209,7 +209,7 @@ describe("accountRepository", () => {
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
       expect(row.drift).toBe(
-        row.statement_balances[0].balance - row.reconcilable_balance,
+        row.statement_balances[0]!.balance - row.reconcilable_balance,
       );
     });
 
@@ -227,7 +227,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.computed_balance).toBe(100);
       expect(row.balance_incomplete).toBe(true);
       expect(row.unconverted_currencies).toEqual(["ZZZ"]);
@@ -267,11 +267,11 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.reconcilable_balance).toBe(100.02);
       expect(row.drift).toBe(-0.01);
       expect(row.drift).toBeCloseTo(
-        row.statement_balances[0].balance - row.reconcilable_balance,
+        row.statement_balances[0]!.balance - row.reconcilable_balance,
         10,
       );
     });
@@ -291,7 +291,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.computed_balance).toBe(100);
       expect(row.reconcilable_balance).toBe(100);
       expect(row.reconcilable_currency).toBe("EUR");
@@ -318,7 +318,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.reconcilable_balance).toBe(0);
       expect(row.reconcilable_currency).toBe("GBP");
       expect(row.drift).toBe(50);
@@ -340,7 +340,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.computed_balance).toBe(50); // 100 USD × 0.5, into the account's EUR
       expect(row.drift).toBe(-10); // native: 90 − the sole partition's 100
       // D3: the base carries the partition's OWN code, so the dialog can label
@@ -373,7 +373,7 @@ describe("accountRepository", () => {
           }),
         ],
       });
-      const [row] = await listAccounts();
+      const row = (await listAccounts())[0]!;
       expect(row.reconcilable_balance).toBe(100); // the USD partition, as if the noise were absent
       expect(row.reconcilable_currency).toBe("USD");
       expect(row.drift).toBe(0); // was 100 — the whole balance — before the noise was dropped
@@ -399,11 +399,11 @@ describe("accountRepository", () => {
         ],
       });
       const rows = await listAccounts();
-      expect(rows[0].anchor_date).toBe("2026-06-30");
-      expect(rows[0].post_anchor_count).toBe(2);
+      expect(rows[0]!.anchor_date).toBe("2026-06-30");
+      expect(rows[0]!.post_anchor_count).toBe(2);
       // Backend never returns null — SQL NULL maps to undefined at the boundary.
-      expect(rows[1].anchor_date).toBeUndefined();
-      expect(rows[1].post_anchor_count).toBe(3);
+      expect(rows[1]!.anchor_date).toBeUndefined();
+      expect(rows[1]!.post_anchor_count).toBe(3);
     });
 
     // Pagination is opt-in — no limit means no LIMIT clause, so the historical
@@ -413,8 +413,8 @@ describe("accountRepository", () => {
       await listAccounts({ active: true });
       // (the balance lateral has its own literal LIMIT — assert on the
       // parameterized tail this helper appends, not on the word)
-      expect(query.mock.calls[0][0]).not.toContain("LIMIT $");
-      expect(query.mock.calls[0][1]).toEqual([
+      expect(query.mock.calls[0]![0]).not.toContain("LIMIT $");
+      expect(query.mock.calls[0]![1]).toEqual([
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
       ]);
     });
@@ -422,8 +422,8 @@ describe("accountRepository", () => {
     it("appends a parameterized LIMIT/OFFSET when a limit is supplied", async () => {
       query.mockResolvedValueOnce({ rows: [] });
       await accountRepository.getAll({ active: true, limit: 25, offset: 50 });
-      expect(query.mock.calls[0][0]).toContain("LIMIT $2 OFFSET $3");
-      expect(query.mock.calls[0][1]).toEqual([
+      expect(query.mock.calls[0]![0]).toContain("LIMIT $2 OFFSET $3");
+      expect(query.mock.calls[0]![1]).toEqual([
         expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
         25,
         50,
@@ -435,7 +435,7 @@ describe("accountRepository", () => {
     it("counts with the same active filter and coerces the bigint string", async () => {
       query.mockResolvedValueOnce({ rows: [{ count: "42" }] });
       expect(await accountRepository.getCount({ active: false })).toBe(42);
-      expect(query.mock.calls[0][0]).toContain("a.is_active = false");
+      expect(query.mock.calls[0]![0]).toContain("a.is_active = false");
     });
   });
 
@@ -480,7 +480,7 @@ describe("accountRepository", () => {
         type: undefined, // skipped
       });
       expect(r.id).toBe(11);
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain("INSERT INTO accounts");
       expect(sql).toContain('"name"');
       expect(sql).toContain('"currency"');
@@ -499,7 +499,7 @@ describe("accountRepository", () => {
         nope: 1,
       });
       expect(r!.display_name).toBe("X");
-      const [sql, params] = query.mock.calls[0];
+      const [sql, params] = query.mock.calls[0]!;
       expect(sql).toContain('"display_name" = $1');
       expect(sql).toContain("updated_at = NOW()");
       expect(sql).toContain("WHERE id = $2");
@@ -513,8 +513,8 @@ describe("accountRepository", () => {
       const result = await accountRepository.update(5, { name: "Renamed" });
       expect(result!.name).toBe("Renamed");
       expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0][0]).toContain("UPDATE accounts");
-      expect(query.mock.calls[0][0]).not.toContain("bank_account");
+      expect(query.mock.calls[0]![0]).toContain("UPDATE accounts");
+      expect(query.mock.calls[0]![0]).not.toContain("bank_account");
     });
 
     it("falls back to getById when no writable fields are provided", async () => {
@@ -525,7 +525,7 @@ describe("accountRepository", () => {
       expect(r!.name).toBe("Same");
       // Only the getById SELECT runs, not an UPDATE.
       expect(query).toHaveBeenCalledTimes(1);
-      expect(query.mock.calls[0][0]).toContain("SELECT");
+      expect(query.mock.calls[0]![0]).toContain("SELECT");
     });
 
     it("returns undefined when the update affects no row", async () => {
@@ -559,10 +559,10 @@ describe("accountRepository", () => {
       );
       // The conflict arm changes only the sticky capability flag; it never
       // overwrites the existing account's display identity.
-      expect(query.mock.calls[0][0]).toContain(
+      expect(query.mock.calls[0]![0]).toContain(
         "accounts.multi_currency_cash OR EXCLUDED.multi_currency_cash",
       );
-      expect(query.mock.calls[0][0]).not.toContain("SET name =");
+      expect(query.mock.calls[0]![0]).not.toContain("SET name =");
     });
 
     it("makes the multi-currency capability sticky when an adapter observes it", async () => {
@@ -570,7 +570,7 @@ describe("accountRepository", () => {
       await accountRepository.resolveOrCreateByName("Revolut", {
         multiCurrencyCash: true,
       });
-      expect(query.mock.calls[0][1]).toEqual(["Revolut", true]);
+      expect(query.mock.calls[0]![1]).toEqual(["Revolut", true]);
     });
 
     it("returns undefined for a blank name without touching the DB", async () => {

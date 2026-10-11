@@ -77,18 +77,18 @@ describe("destination Host boundary", () => {
     "-localhost",
     "local_host",
   ])("rejects unsafe authority %s", (host) => {
-    expect(run(host).mock.calls[0][0]).toBeInstanceOf(ForbiddenError);
+    expect(run(host).mock.calls[0]![0]).toBeInstanceOf(ForbiddenError);
   });
   it("rejects duplicate wire headers despite Node retaining only the first Host", () => {
     expect(
       run("localhost", {
         rawHeaders: ["Host", "localhost", "hOsT", "evil.test"],
-      }).mock.calls[0][0],
+      }).mock.calls[0]![0],
     ).toBeInstanceOf(ForbiddenError);
     expect(
-      run("localhost", { rawHeaders: [] }).mock.calls[0][0],
+      run("localhost", { rawHeaders: [] }).mock.calls[0]![0],
     ).toBeInstanceOf(ForbiddenError);
-    expect(run(["localhost", "evil.test"]).mock.calls[0][0]).toBeInstanceOf(
+    expect(run(["localhost", "evil.test"]).mock.calls[0]![0]).toBeInstanceOf(
       ForbiddenError,
     );
   });
@@ -96,7 +96,7 @@ describe("destination Host boundary", () => {
     "does not disable validation for bind %s",
     (bindHost) => {
       expect(
-        run("evil.test", {}, createHostGuard({ bindHost })).mock.calls[0][0],
+        run("evil.test", {}, createHostGuard({ bindHost })).mock.calls[0]![0],
       ).toBeInstanceOf(ForbiddenError);
     },
   );
@@ -108,14 +108,14 @@ describe("destination Host boundary", () => {
     expect(run("vision.example.com:443", {}, deployed)).toHaveBeenCalledWith();
     expect(run("192.168.1.5", {}, deployed)).toHaveBeenCalledWith();
     expect(
-      run("child.vision.example.com", {}, deployed).mock.calls[0][0],
+      run("child.vision.example.com", {}, deployed).mock.calls[0]![0],
     ).toBeInstanceOf(ForbiddenError);
     expect(
       run(
         "evil.test",
         { headers: { host: "evil.test", "x-forwarded-host": "localhost" } },
         deployed,
-      ).mock.calls[0][0],
+      ).mock.calls[0]![0],
     ).toBeInstanceOf(ForbiddenError);
   });
   it.each([

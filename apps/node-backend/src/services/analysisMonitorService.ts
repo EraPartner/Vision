@@ -5,91 +5,45 @@ import Decimal from "decimal.js";
 import { z } from "zod";
 import type { AnalysisDefinition } from "@vision/types/analysis";
 import { query, withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  analysisMonitorRowSchema,
+  analysisMonitorWithObservationRowSchema,
+  countNRowSchema,
+  monitorDossierRowSchema,
+  monitorDossierTargetRowSchema,
+  monitorNotificationCountsRowSchema,
+  monitorNotificationRowSchema,
+  monitorObservationRowSchema,
+  monitorRunRowSchema,
+  monitorSavedAnalysisTargetRowSchema,
+  refreshModeRowSchema,
+  runStatusRowSchema,
+  savedAnalysisDefinitionRowSchema,
+  textIdRowSchema,
+} from "../database/rows/analysis.ts";
+import type {
+  AnalysisMonitorRow,
+  MonitorNotificationRow,
+  MonitorObservationJson,
+  MonitorObservationRow,
+  MonitorRunRow,
+} from "../database/rows/analysis.ts";
 import { runSavedAnalysis } from "./savedAnalysisService.ts";
 
-interface ObservationRow {
-  id: string;
-  monitor_id: string;
-  status: string;
-  previous_value: string | null;
-  current_value: string | null;
-  previous_evidence_version: number | null;
-  current_evidence_version: number | null;
-  evidence_hash?: string | null;
-  analysis_definition_version: number | null;
-  analysis_run_id: string | null;
-  historical_analysis_run_id: string | null;
-  analysis_run_status: string | null;
-  analysis_window_json: unknown;
-  coverage_json: unknown;
-  reason_code: string | null;
-  reason: string | null;
-  checked_at: Date | string;
-}
-
-interface MonitorRow {
-  id: string;
-  kind: string;
-  title: string;
-  enabled: boolean;
-  saved_analysis_id: string | null;
-  dossier_id: string | null;
-  historical_target_id: string | null;
-  target_label: string | null;
-  field_id: string | null;
-  operator: string | null;
-  threshold: string | null;
-  interval_minutes: number;
-  cooldown_minutes: number;
-  next_due_at: Date;
-  last_checked_at: Date | null;
-  last_status: string | null;
+/** A stored observation, or the latest one as `MONITOR_SELECT` embeds it. */
+type ObservationRow = MonitorObservationRow | MonitorObservationJson;
+type MonitorRow = AnalysisMonitorRow & {
   /** Present on MONITOR_SELECT rows: the latest observation as JSON. */
-  last_observation?: ObservationRow | null;
-  created_at: Date;
-  updated_at: Date;
-  lease_token: string | null;
-  lease_expires_at: Date | null;
-  condition_revision: number;
-  active_episode_key: string | null;
-  pending_signature: string | null;
-  pending_since: Date | null;
-  last_notified_at: Date | null;
-}
-
-interface NotificationRow {
+  last_observation?: MonitorObservationJson | null;
+};
+type NotificationRow = MonitorNotificationRow;
+type MonitorTargetRow = {
   id: string;
-  monitor_id: string;
-  observation_id: string;
-  kind: string;
-  title: string;
-  reason_code: string;
-  reason: string;
-  previous_value: string | null;
-  current_value: string | null;
-  created_at: Date;
-  read_at: Date | null;
-}
-
-interface MonitorRunResult {
-  window?: {
-    kind?: string;
-    offset?: number;
-    hasMore?: boolean;
-    returnedRows?: number;
-  };
-  rows?: Array<Record<string, unknown>>;
-  formulaErrors?: unknown;
-}
-
-interface MonitorRunRow {
-  id: string;
-  status: string;
-  result_json: MonitorRunResult | null;
-  definition_version: number;
-  current_version: number;
-  definition_json: AnalysisDefinition | null;
-}
+  name?: string;
+  title?: string;
+  refresh_mode?: string;
+};
 
 interface MonitorFinding {
   status: string;
@@ -105,13 +59,6 @@ interface MonitorFinding {
 }
 
 type PageInput = { limit?: unknown; offset?: unknown };
-
-interface MonitorTargetRow {
-  id: string;
-  name?: string;
-  title?: string;
-  refresh_mode?: string;
-}
 
 const DECIMAL = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
 const uuid = z.string().uuid();
@@ -282,8 +229,11 @@ const MONITOR_SELECT = `SELECT m.*, row_to_json(o.*) AS last_observation
 
 async function getMonitor(id: string) {
   monitorId(id);
-  const row = (await query<MonitorRow>(`${MONITOR_SELECT} WHERE m.id=$1`, [id]))
-    .rows[0];
+  const row = await queryOne(
+    analysisMonitorWithObservationRowSchema,
+    `${MONITOR_SELECT} WHERE m.id=$1`,
+    [id],
+  );
   if (!row) fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
   const monitor = mapMonitor(row);
   if (row.last_observation)
@@ -293,13 +243,18 @@ async function getMonitor(id: string) {
 
 export async function listAnalysisMonitors(input?: PageInput) {
   const { limit, offset } = page(input);
-  const { rows } = await query<MonitorRow>(
+  const rows = await queryRows(
+    analysisMonitorWithObservationRowSchema,
     `${MONITOR_SELECT} ORDER BY m.created_at DESC, m.id DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
   const total = Number(
-    (await query<{ n: string }>("SELECT count(*) AS n FROM analysis_monitors"))
-      .rows[0].n,
+    (
+      await queryOne(
+        countNRowSchema,
+        "SELECT count(*) AS n FROM analysis_monitors",
+      )
+    )?.n,
   );
   return {
     items: rows.map((row) => {
@@ -316,32 +271,31 @@ export async function listAnalysisMonitors(input?: PageInput) {
 
 export async function createAnalysisMonitor(input: unknown) {
   const value = parsed(createSchema, input);
-  const target =
+  const target: MonitorTargetRow | undefined =
     value.kind === "analysis-threshold"
-      ? (
-          await query<MonitorTargetRow>(
-            "SELECT id,name,refresh_mode FROM saved_analyses WHERE id=$1",
-            [value.savedAnalysisId],
-          )
-        ).rows[0]
-      : (
-          await query<MonitorTargetRow>(
-            "SELECT id,title FROM research_dossiers WHERE id=$1",
-            [value.dossierId],
-          )
-        ).rows[0];
+      ? await queryOne(
+          monitorSavedAnalysisTargetRowSchema,
+          "SELECT id,name,refresh_mode FROM saved_analyses WHERE id=$1",
+          [value.savedAnalysisId],
+        )
+      : await queryOne(
+          monitorDossierTargetRowSchema,
+          "SELECT id,title FROM research_dossiers WHERE id=$1",
+          [value.dossierId],
+        );
   if (!target)
     fail("Monitor target not found", 404, "MONITOR_TARGET_NOT_FOUND");
   if (target.refresh_mode === "frozen")
     fail("Frozen saved analyses cannot be monitored");
   if (value.kind === "analysis-threshold") {
     const definition = (
-      await query<{ definition_json: AnalysisDefinition | null }>(
+      await queryOne(
+        savedAnalysisDefinitionRowSchema,
         `SELECT v.definition_json FROM saved_analyses a JOIN saved_analysis_definition_versions v
       ON v.saved_analysis_id=a.id AND v.version=a.current_version WHERE a.id=$1`,
         [target.id],
       )
-    ).rows[0]?.definition_json;
+    )?.definition_json;
     if (
       !definition?.expectedResult?.columns?.some(
         (column) =>
@@ -378,12 +332,12 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
   monitorId(id);
   const value = parsed(patchSchema, input);
   await withTransaction(async (client) => {
-    const current: MonitorRow | undefined = (
-      await client.query(
-        "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
-        [id],
-      )
-    ).rows[0];
+    const current = await queryOne(
+      analysisMonitorRowSchema,
+      "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
+      [id],
+      client,
+    );
     if (!current) fail("Monitor not found", 404, "MONITOR_NOT_FOUND");
     if (
       current.lease_expires_at &&
@@ -402,13 +356,15 @@ export async function patchAnalysisMonitor(id: string, input: unknown) {
     )
       fail("Evidence monitors have no numeric condition");
     if (value.fieldId !== undefined && current.kind === "analysis-threshold") {
-      const definition: AnalysisDefinition | null | undefined = (
-        await client.query(
+      const definition: AnalysisDefinition | undefined = (
+        await queryOne(
+          savedAnalysisDefinitionRowSchema,
           `SELECT v.definition_json FROM saved_analyses a JOIN saved_analysis_definition_versions v
         ON v.saved_analysis_id=a.id AND v.version=a.current_version WHERE a.id=$1`,
           [current.saved_analysis_id],
+          client,
         )
-      ).rows[0]?.definition_json;
+      )?.definition_json;
       if (
         !definition?.expectedResult?.columns?.some(
           (column) =>
@@ -461,40 +417,41 @@ export async function listMonitorObservations(id: string, input?: PageInput) {
   monitorId(id);
   await getMonitor(id);
   const { limit, offset } = page(input);
-  const { rows } = await query<ObservationRow>(
+  const rows = await queryRows(
+    monitorObservationRowSchema,
     `SELECT * FROM analysis_monitor_observations WHERE monitor_id=$1
     ORDER BY checked_at DESC,id DESC LIMIT $2 OFFSET $3`,
     [id, limit, offset],
   );
   const total = Number(
     (
-      await query<{ n: string }>(
+      await queryOne(
+        countNRowSchema,
         "SELECT count(*) AS n FROM analysis_monitor_observations WHERE monitor_id=$1",
         [id],
       )
-    ).rows[0].n,
+    )?.n,
   );
   return { items: rows.map(mapObservation), total, limit, offset };
 }
 
 export async function listMonitorNotifications(input?: PageInput) {
   const { limit, offset } = page(input);
-  const { rows } = await query<NotificationRow>(
+  const rows = await queryRows(
+    monitorNotificationRowSchema,
     `SELECT * FROM analysis_monitor_notifications
     ORDER BY created_at DESC,id DESC LIMIT $1 OFFSET $2`,
     [limit, offset],
   );
-  const counts = (
-    await query<{
-      total: string;
-      unread: string;
-    }>(`SELECT count(*) AS total, count(*) FILTER (WHERE read_at IS NULL) AS unread
-    FROM analysis_monitor_notifications`)
-  ).rows[0];
+  const counts = await queryOne(
+    monitorNotificationCountsRowSchema,
+    `SELECT count(*) AS total, count(*) FILTER (WHERE read_at IS NULL) AS unread
+    FROM analysis_monitor_notifications`,
+  );
   return {
     items: rows.map(mapNotification),
-    total: Number(counts.total),
-    unreadCount: Number(counts.unread),
+    total: Number(counts?.total),
+    unreadCount: Number(counts?.unread),
     limit,
     offset,
   };
@@ -502,13 +459,12 @@ export async function listMonitorNotifications(input?: PageInput) {
 
 export async function readMonitorNotification(id: string) {
   monitorId(id);
-  const row = (
-    await query<NotificationRow>(
-      `UPDATE analysis_monitor_notifications SET read_at=coalesce(read_at,now())
+  const row = await queryOne(
+    monitorNotificationRowSchema,
+    `UPDATE analysis_monitor_notifications SET read_at=coalesce(read_at,now())
     WHERE id=$1 RETURNING *`,
-      [id],
-    )
-  ).rows[0];
+    [id],
+  );
   if (!row)
     fail("Notification not found", 404, "MONITOR_NOTIFICATION_NOT_FOUND");
   return mapNotification(row);
@@ -572,16 +528,15 @@ function finiteResultValue(value: unknown) {
 async function claimMonitor(id: string, dueOnly: boolean) {
   monitorId(id);
   const token = randomUUID();
-  const row = (
-    await query<MonitorRow>(
-      `UPDATE analysis_monitors SET lease_token=$2,
+  const row = await queryOne(
+    analysisMonitorRowSchema,
+    `UPDATE analysis_monitors SET lease_token=$2,
       lease_expires_at=now()+($3 || ' minutes')::interval
     WHERE id=$1 AND enabled AND (lease_token IS NULL OR lease_expires_at < now())
       AND ($4::boolean=false OR next_due_at <= now())
     RETURNING *`,
-      [id, token, String(LEASE_MINUTES), dueOnly],
-    )
-  ).rows[0];
+    [id, token, String(LEASE_MINUTES), dueOnly],
+  );
   if (!row && !dueOnly) {
     const exists =
       (await query("SELECT 1 FROM analysis_monitors WHERE id=$1", [id])).rows
@@ -602,12 +557,11 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
       reasonCode: "analysis-deleted",
       reason: "The saved analysis was deleted.",
     };
-  const saved = (
-    await query<{ refresh_mode: string }>(
-      "SELECT refresh_mode FROM saved_analyses WHERE id=$1",
-      [row.saved_analysis_id],
-    )
-  ).rows[0];
+  const saved = await queryOne(
+    refreshModeRowSchema,
+    "SELECT refresh_mode FROM saved_analyses WHERE id=$1",
+    [row.saved_analysis_id],
+  );
   if (!saved)
     return {
       status: "failed",
@@ -630,12 +584,11 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
     // runSavedAnalysis rethrows the execution Error tagged with its run id.
     const error = caught as Error & { monitorRunId?: string };
     const failedRun = error.monitorRunId
-      ? (
-          await query<{ status: string }>(
-            "SELECT status FROM saved_analysis_runs WHERE id=$1",
-            [error.monitorRunId],
-          )
-        ).rows[0]
+      ? await queryOne(
+          runStatusRowSchema,
+          "SELECT status FROM saved_analysis_runs WHERE id=$1",
+          [error.monitorRunId],
+        )
       : null;
     return {
       status: "failed",
@@ -645,18 +598,17 @@ async function inspectAnalysis(row: MonitorRow): Promise<MonitorFinding> {
       runStatus: failedRun?.status ?? null,
     };
   }
-  const run = (
-    await query<MonitorRunRow>(
-      `SELECT r.id,r.status,r.result_json,r.definition_version,
+  const run = await queryOne(
+    monitorRunRowSchema,
+    `SELECT r.id,r.status,r.result_json,r.definition_version,
          a.current_version,v.definition_json
        FROM saved_analysis_runs r
        JOIN saved_analyses a ON a.id=r.saved_analysis_id
        JOIN saved_analysis_definition_versions v
          ON v.saved_analysis_id=a.id AND v.version=a.current_version
        WHERE r.id=$1`,
-      [runId],
-    )
-  ).rows[0];
+    [runId],
+  );
   if (!run)
     return {
       status: "failed",
@@ -726,7 +678,8 @@ function classifyMonitorRun(
       reasonCode: "analysis-formula-incomplete",
       reason: "Analysis formulas are incomplete.",
     };
-  const value = finiteResultValue(result.rows[0][String(fieldId)]);
+  // Exactly one row (checked above).
+  const value = finiteResultValue(result.rows[0]?.[String(fieldId)]);
   if (value === null)
     return {
       status: "partial",
@@ -747,14 +700,11 @@ async function inspectDossier(row: MonitorRow): Promise<MonitorFinding> {
       reasonCode: "dossier-deleted",
       reason: "The research dossier was deleted.",
     };
-  const dossier = (
-    await query<{
-      version: number;
-      content_json: { evidence?: unknown } | null;
-    }>("SELECT version,content_json FROM research_dossiers WHERE id=$1", [
-      row.dossier_id,
-    ])
-  ).rows[0];
+  const dossier = await queryOne(
+    monitorDossierRowSchema,
+    "SELECT version,content_json FROM research_dossiers WHERE id=$1",
+    [row.dossier_id],
+  );
   if (!dossier)
     return {
       status: "failed",
@@ -781,12 +731,12 @@ async function finalizeObservation(
 ) {
   const { row, token } = claim;
   return withTransaction(async (client) => {
-    const locked: MonitorRow | undefined = (
-      await client.query(
-        "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
-        [row.id],
-      )
-    ).rows[0];
+    const locked = await queryOne(
+      analysisMonitorRowSchema,
+      "SELECT * FROM analysis_monitors WHERE id=$1 FOR UPDATE",
+      [row.id],
+      client,
+    );
     if (!locked || locked.lease_token !== token) return null;
     if (locked.condition_revision !== row.condition_revision) {
       await client.query(
@@ -796,16 +746,16 @@ async function finalizeObservation(
       );
       return null;
     }
-    const prior: ObservationRow | null =
-      (
-        await client.query(
-          `SELECT * FROM analysis_monitor_observations
+    const prior =
+      (await queryOne(
+        monitorObservationRowSchema,
+        `SELECT * FROM analysis_monitor_observations
       WHERE monitor_id=$1 AND condition_revision=$2
         AND status IN ('baseline','unchanged','triggered','cooldown-pending')
       ORDER BY checked_at DESC,id DESC LIMIT 1`,
-          [row.id, locked.condition_revision],
-        )
-      ).rows[0] ?? null;
+        [row.id, locked.condition_revision],
+        client,
+      )) ?? null;
     const now = new Date();
     let status = finding.status;
     let reasonCode = finding.reasonCode ?? "monitor-check-failed";
@@ -896,35 +846,37 @@ async function finalizeObservation(
       }
     }
     const id = randomUUID();
-    const observation: ObservationRow = (
-      await client.query(
-        `INSERT INTO analysis_monitor_observations
+    const observation = await queryOne(
+      monitorObservationRowSchema,
+      `INSERT INTO analysis_monitor_observations
       (id,monitor_id,status,previous_value,current_value,previous_evidence_version,current_evidence_version,
         evidence_hash,condition_revision,analysis_definition_version,analysis_run_id,historical_analysis_run_id,
         analysis_run_status,analysis_window_json,coverage_json,reason_code,reason)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15::jsonb,$16,$17) RETURNING *`,
-        [
-          id,
-          row.id,
-          status,
-          previousValue,
-          currentValue,
-          previousEvidenceVersion,
-          currentEvidenceVersion,
-          hash,
-          locked.condition_revision,
-          finding.definitionVersion ?? null,
-          finding.runId ?? null,
-          finding.runId ?? null,
-          finding.runStatus ?? null,
-          finding.runWindow ? JSON.stringify(finding.runWindow) : null,
-          JSON.stringify(COVERAGE),
-          reasonCode,
-          // Every valid branch above sets a reason; other findings carry one.
-          reason!.slice(0, 1000),
-        ],
-      )
-    ).rows[0];
+      [
+        id,
+        row.id,
+        status,
+        previousValue,
+        currentValue,
+        previousEvidenceVersion,
+        currentEvidenceVersion,
+        hash,
+        locked.condition_revision,
+        finding.definitionVersion ?? null,
+        finding.runId ?? null,
+        finding.runId ?? null,
+        finding.runStatus ?? null,
+        finding.runWindow ? JSON.stringify(finding.runWindow) : null,
+        JSON.stringify(COVERAGE),
+        reasonCode,
+        // Every valid branch above sets a reason; other findings carry one.
+        reason!.slice(0, 1000),
+      ],
+      client,
+    );
+    if (!observation)
+      throw new Error("analysis_monitor_observations insert returned no row");
     if (notify) {
       await client.query(
         `INSERT INTO analysis_monitor_notifications
@@ -994,12 +946,13 @@ export async function checkAnalysisMonitor(
 /** Each tick claims at most four overdue local rules, sequentially. */
 export async function checkDueAnalysisMonitors() {
   const ids = (
-    await query<{ id: string }>(
+    await queryRows(
+      textIdRowSchema,
       `SELECT id FROM analysis_monitors WHERE enabled AND next_due_at <= now()
     AND (lease_token IS NULL OR lease_expires_at < now()) ORDER BY next_due_at,id LIMIT $1`,
       [MAX_DUE_PER_TICK],
     )
-  ).rows.map((row) => row.id);
+  ).map((row) => row.id);
   for (const id of ids) await checkAnalysisMonitor(id, { dueOnly: true });
   return ids.length;
 }

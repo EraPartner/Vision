@@ -231,7 +231,9 @@ function assertRetagPreservesPortfolioEconomics(
 async function resolveCostBasisMethod(): Promise<CostBasisMethod> {
   try {
     const value = await settingsRepository.get("cost_basis_method");
-    return COST_BASIS_METHODS.has(value) ? value : "weighted_avg";
+    return typeof value === "string" && COST_BASIS_METHODS.has(value)
+      ? (value as CostBasisMethod)
+      : "weighted_avg";
   } catch {
     return "weighted_avg";
   }

@@ -1,3 +1,12 @@
+import {
+    AnalysisCatalogSchema,
+    AnalysisPivotResultSchema,
+    AnalysisProposalPreviewSchema,
+    AnalysisResultSchema,
+    SavedAnalysisListSchema,
+    SavedAnalysisSchema,
+    SavedAnalysisVersionListSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 
 export interface AnalysisUnit {
@@ -51,6 +60,7 @@ export const executeAnalysisPivot = (
     apiRequest<AnalysisPivotResult>("/api/analysis/pivot", {
         method: "POST",
         body: JSON.stringify({ plan, config, requestId }),
+        schema: AnalysisPivotResultSchema,
     });
 
 export type AnalysisWorkspace =
@@ -174,7 +184,9 @@ export interface SavedAnalysis {
 }
 
 export const getAnalysisCatalog = () =>
-    apiRequest<AnalysisCatalog>("/api/analysis/catalog");
+    apiRequest<AnalysisCatalog>("/api/analysis/catalog", {
+        schema: AnalysisCatalogSchema,
+    });
 export function executeAnalysis(input: {
     requestId: string;
     mode: "visual" | "sql";
@@ -192,6 +204,7 @@ export function executeAnalysis(input: {
     return apiRequest<AnalysisResult>("/api/analysis/execute", {
         method: "POST",
         body: JSON.stringify(input),
+        schema: AnalysisResultSchema,
     });
 }
 export const cancelAnalysis = (requestId: string) =>
@@ -207,6 +220,7 @@ export function drillAnalysis(
     return apiRequest<AnalysisResult>("/api/analysis/drill", {
         method: "POST",
         body: JSON.stringify({ plan, row, requestId }),
+        schema: AnalysisResultSchema,
     });
 }
 export async function listSavedAnalyses(workspace?: AnalysisWorkspace) {
@@ -216,6 +230,7 @@ export async function listSavedAnalyses(workspace?: AnalysisWorkspace) {
     return (
         await apiRequest<{ items: SavedAnalysis[] }>(
             `/api/analysis/saved${suffix}`,
+            { schema: SavedAnalysisListSchema },
         )
     ).items;
 }
@@ -223,6 +238,7 @@ export const createSavedAnalysis = (input: Record<string, unknown>) =>
     apiRequest<SavedAnalysis>("/api/analysis/saved", {
         method: "POST",
         body: JSON.stringify(input),
+        schema: SavedAnalysisSchema,
     });
 export const updateSavedAnalysis = (
     id: string,
@@ -231,11 +247,12 @@ export const updateSavedAnalysis = (
     apiRequest<SavedAnalysis>(`/api/analysis/saved/${encodeURIComponent(id)}`, {
         method: "PUT",
         body: JSON.stringify(input),
+        schema: SavedAnalysisSchema,
     });
 export const runSavedAnalysis = (id: string) =>
     apiRequest<SavedAnalysis>(
         `/api/analysis/saved/${encodeURIComponent(id)}/run`,
-        { method: "POST" },
+        { method: "POST", schema: SavedAnalysisSchema },
     );
 export const deleteSavedAnalysis = (id: string) =>
     apiRequest<void>(`/api/analysis/saved/${encodeURIComponent(id)}`, {
@@ -253,6 +270,7 @@ export const listSavedAnalysisVersions = async (id: string) =>
     (
         await apiRequest<{ items: SavedAnalysisVersion[] }>(
             `/api/analysis/saved/${encodeURIComponent(id)}/versions`,
+            { schema: SavedAnalysisVersionListSchema },
         )
     ).items;
 
@@ -266,6 +284,7 @@ export const restoreSavedAnalysisVersion = (
         {
             method: "POST",
             body: JSON.stringify({ version, expectedVersion }),
+            schema: SavedAnalysisSchema,
         },
     );
 
@@ -290,12 +309,14 @@ export const previewAnalysisProposal = (proposal: AnalysisEditProposal) =>
     }>("/api/analysis/ai-proposals/preview", {
         method: "POST",
         body: JSON.stringify(proposal),
+        schema: AnalysisProposalPreviewSchema,
     });
 
 export const applyAnalysisProposal = (proposal: AnalysisEditProposal) =>
     apiRequest<SavedAnalysis>("/api/analysis/ai-proposals/apply", {
         method: "POST",
         body: JSON.stringify(proposal),
+        schema: SavedAnalysisSchema,
     });
 
 export const generateAnalysisProposal = (
@@ -311,4 +332,5 @@ export const generateAnalysisProposal = (
     }>(`/api/analysis/saved/${encodeURIComponent(id)}/ai-proposal`, {
         method: "POST",
         body: JSON.stringify({ instruction, model }),
+        schema: AnalysisProposalPreviewSchema,
     });

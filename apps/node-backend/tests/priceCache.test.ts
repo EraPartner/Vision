@@ -30,6 +30,7 @@ import {
   __PRICE_CACHE_TTL_MS as PRICE_CACHE_TTL_MS,
 } from "../src/services/prices/priceCache.ts";
 import { ValidationError } from "../src/middleware/errorHandler.ts";
+import { pgLocalDate } from "./helpers/portfolioPgRows.ts";
 
 /** `query` as these tests drive it: SQL text in, a bare `{ rows }` result out. */
 const query = vi.mocked(rawQuery) as unknown as Mock<
@@ -145,7 +146,7 @@ describe("normalizeHistoryPoints", () => {
       { timestampMs: Date.UTC(2025, 3, 1, 18), price: 110 }, // same date
     ]);
     expect(r).toHaveLength(1);
-    expect(r[0].price).toBe(110);
+    expect(r[0]!.price).toBe(110);
   });
 
   it("sorts result by date ascending", () => {
@@ -253,8 +254,8 @@ describe("cacheGet / cacheSet / resetPriceCache", () => {
   afterEach(() => resetPriceCache());
 
   it("round-trips fresh entries", () => {
-    cacheSet("k", { foo: 1 });
-    expect(cacheGet("k")).toEqual({ foo: 1 });
+    cacheSet("k", { price: 1 });
+    expect(cacheGet("k")).toEqual({ price: 1 });
   });
 
   it("returns undefined for missing keys", () => {
@@ -264,18 +265,18 @@ describe("cacheGet / cacheSet / resetPriceCache", () => {
   it("expires entries past TTL", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    cacheSet("k", "v");
+    cacheSet("k", { source: "v" });
 
     vi.setSystemTime(PRICE_CACHE_TTL_MS - 1);
-    expect(cacheGet("k")).toBe("v");
+    expect(cacheGet("k")).toEqual({ source: "v" });
 
     vi.setSystemTime(PRICE_CACHE_TTL_MS + 1);
     expect(cacheGet("k")).toBeUndefined();
   });
 
   it("reset clears all entries", () => {
-    cacheSet("a", 1);
-    cacheSet("b", 2);
+    cacheSet("a", { price: 1 });
+    cacheSet("b", { price: 2 });
     resetPriceCache();
     expect(cacheGet("a")).toBeUndefined();
     expect(cacheGet("b")).toBeUndefined();
@@ -286,8 +287,8 @@ describe("sweepExpiredCacheEntries", () => {
   it("removes expired entries and returns the count removed", () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
-    cacheSet("a", 1);
-    cacheSet("b", 2);
+    cacheSet("a", { price: 1 });
+    cacheSet("b", { price: 2 });
 
     vi.setSystemTime(PRICE_CACHE_TTL_MS + 1);
     expect(sweepExpiredCacheEntries(Date.now())).toBe(2);
@@ -295,7 +296,7 @@ describe("sweepExpiredCacheEntries", () => {
   });
 
   it("returns 0 when nothing is expired", () => {
-    cacheSet("a", 1);
+    cacheSet("a", { price: 1 });
     expect(sweepExpiredCacheEntries(Date.now())).toBe(0);
   });
 });
@@ -310,7 +311,7 @@ describe("loadHistoricalPointsFromDatabase", () => {
   it("binds null date params when range is missing", async () => {
     query.mockResolvedValueOnce({ rows: [] });
     await loadHistoricalPointsFromDatabase(1);
-    expect(query.mock.calls[0][1]).toEqual([1, null, null]);
+    expect(query.mock.calls[0]![1]).toEqual([1, null, null]);
   });
 
   it("binds date strings when range provided", async () => {
@@ -319,15 +320,15 @@ describe("loadHistoricalPointsFromDatabase", () => {
       fromMs: Date.UTC(2025, 0, 1),
       toMs: Date.UTC(2025, 11, 31),
     });
-    expect(query.mock.calls[0][1]![1]).toBe("2025-01-01");
-    expect(query.mock.calls[0][1]![2]).toBe("2025-12-31");
+    expect(query.mock.calls[0]![1]![1]).toBe("2025-01-01");
+    expect(query.mock.calls[0]![1]![2]).toBe("2025-12-31");
   });
 
   it("normalizes rows from query result", async () => {
     query.mockResolvedValueOnce({
       rows: [
-        { price_date: "2025-04-02", close_price: 110 },
-        { price_date: "2025-04-01", close_price: 100 },
+        { price_date: pgLocalDate("2025-04-02"), close_price: "110.000000" },
+        { price_date: pgLocalDate("2025-04-01"), close_price: "100.000000" },
       ],
     });
     const r = await loadHistoricalPointsFromDatabase(1);
@@ -373,7 +374,7 @@ describe("saveHistoricalPointsToDatabase", () => {
       ],
       "binance",
     );
-    const [sql, args] = query.mock.calls[0];
+    const [sql, args] = query.mock.calls[0]!;
     expect(sql).toContain("ON CONFLICT (investment_id, price_date)");
     expect(args![0]).toBe(1);
     expect(args![1]).toBe("binance");
@@ -387,7 +388,7 @@ describe("saveHistoricalPointsToDatabase", () => {
     await saveHistoricalPointsToDatabase(1, [
       { timestampMs: Date.UTC(2025, 0, 1), price: 100 },
     ]);
-    expect(query.mock.calls[0][1]![1]).toBe("provider");
+    expect(query.mock.calls[0]![1]![1]).toBe("provider");
   });
 
   it("swallows undefined-relation error (42P01)", async () => {
@@ -435,13 +436,17 @@ describe("loadLatestHistoricalPointByInvestmentIds", () => {
   it("binds a deduped id list and maps rows by investment", async () => {
     query.mockResolvedValueOnce({
       rows: [
-        { investment_id: 7, price_date: "2026-01-02", close_price: "12.5" },
+        {
+          investment_id: 7,
+          price_date: pgLocalDate("2026-01-02"),
+          close_price: "12.5",
+        },
       ],
     });
 
     const byId = await loadLatestHistoricalPointByInvestmentIds([7, 7, 9]);
 
-    expect(query.mock.calls[0][1]).toEqual([[7, 9]]);
+    expect(query.mock.calls[0]![1]).toEqual([[7, 9]]);
     expect(byId.get(7)).toMatchObject({ price: 12.5 });
   });
 

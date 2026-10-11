@@ -76,7 +76,7 @@ router.get(
     }));
 
     const today = getCurrentDateString();
-    const storedDate = rates.length > 0 ? rates[0].rate_date : null;
+    const storedDate = rates[0]?.rate_date ?? null;
     const isStale = !storedDate || storedDate < today;
     const lastFetchedAt = rates.reduce((latest: number, row) => {
       const ts = row.fetched_at ? new Date(row.fetched_at).getTime() : NaN;

@@ -28,6 +28,7 @@ import {
   canonicalIban,
   readTextWithEncodingFallback,
   normalizeIsoCurrency,
+  cellAt,
 } from "./_shared.ts";
 import type {
   ParsedBankTransaction,
@@ -49,13 +50,13 @@ function isHeaderLine(line: string): boolean {
 function parseLine(parts: string[]): ParsedBankTransaction | null {
   if (!parts || parts.length < MIN_FIELDS) return null;
 
-  const accountNumber = parts[0].trim();
-  const counterpartyAccount = parts[2].trim();
-  const transactionNumber = parts[3].trim();
-  const bookingDateStr = parts[4].trim();
-  const amountStr = parts[6].trim();
+  const accountNumber = cellAt(parts, 0).trim();
+  const counterpartyAccount = cellAt(parts, 2).trim();
+  const transactionNumber = cellAt(parts, 3).trim();
+  const bookingDateStr = cellAt(parts, 4).trim();
+  const amountStr = cellAt(parts, 6).trim();
   const currency = normalizeIsoCurrency(parts[7]);
-  const description = parts[8].trim();
+  const description = cellAt(parts, 8).trim();
   const detail = parts[9] ? parts[9].trim() : "";
   const message = parts[10] ? parts[10].trim() : "";
 
@@ -106,7 +107,7 @@ export function detect(csvSample: string | null | undefined): boolean {
 export async function parse(filePath: string): Promise<ParsedBankTransactions> {
   const content = await readTextWithEncodingFallback(filePath);
   let malformed = 0;
-  const records = parseCsvText(content, {
+  const records = parseCsvText<string[]>(content, {
     delimiter: ";",
     skip_empty_lines: true,
     relax_column_count: true,

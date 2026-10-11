@@ -102,8 +102,8 @@ describe('getMonthlyCategoryBreakdown', () => {
 
     const r = await getMonthlyCategoryBreakdown.run({ from: '2025-01-01', to: '2025-01-31', topN: 3 });
     expect(r.data).toHaveLength(3);
-    expect(r.data[0].category).toBe('C0');
-    expect(r.data[2].category).toBe('C2');
+    expect(r.data[0]!.category).toBe('C0');
+    expect(r.data[2]!.category).toBe('C2');
   });
 
   it('uses Uncategorised for null category names', async () => {
@@ -111,7 +111,7 @@ describe('getMonthlyCategoryBreakdown', () => {
       { amount: '-10', category_name: null, date: '2025-01-15' },
     ]));
     const r = await getMonthlyCategoryBreakdown.run({ from: '2025-01-01', to: '2025-01-31' });
-    expect(r.data[0].category).toBe('Uncategorised');
+    expect(r.data[0]!.category).toBe('Uncategorised');
   });
 
   it('rejects invalid date order', async () => {
@@ -189,7 +189,7 @@ describe('getLargestTransactions', () => {
     transactionRepository.getAll.mockResolvedValueOnce(fixtureRows());
     const r = await getLargestTransactions.run({ from: '2025-04-01', to: '2025-04-30', direction: 'income' });
     expect(r.data).toHaveLength(1);
-    expect(r.data[0].id).toBe(3);
+    expect(r.data[0]!.id).toBe(3);
   });
 
   it('returns both directions when direction=both, sorted by abs amount', async () => {
@@ -277,7 +277,7 @@ describe('getYearOverYearComparison', () => {
     transactionRepository.getAll.mockResolvedValueOnce(loose<Resolved<typeof rawTransactionRepository.getAll>>([{ amount: '-50', category_name: 'New', date: '2025-04-01' }]));
     transactionRepository.getAll.mockResolvedValueOnce([]);
     const r = await getYearOverYearComparison.run({ year: 2025 });
-    expect(r.data[0].pctChange).toBeNull();
+    expect(r.data[0]!.pctChange).toBeNull();
   });
 
   it('sorts categories by current-year spend descending', async () => {

@@ -141,7 +141,7 @@ describe('kinesis provider concurrency', () => {
     resolvers.forEach((r) => r());
     const prices = await resultPromise;
     expect(Object.keys(prices)).toHaveLength(3);
-    expect(prices[1].price).toBe(42);
+    expect(prices[1]!.price).toBe(42);
   });
 
   it('one failing holding does not drop the others', async () => {

@@ -28,7 +28,7 @@ describe("versioned analysis datasets", () => {
       "cash-flows",
     ]);
     expect(Object.isFrozen(ANALYSIS_DATASETS_V1)).toBe(true);
-    expect(Object.isFrozen(ANALYSIS_DATASETS_V1[0].joinPaths)).toBe(true);
+    expect(Object.isFrozen(ANALYSIS_DATASETS_V1[0]!.joinPaths)).toBe(true);
     for (const dataset of ANALYSIS_DATASETS_V1) {
       expect(dataset.relation).toMatch(/^vision_analysis\.[a-z_]+_v1$/);
       expect(dataset.authorizationScope).toBe("local-user-database");

@@ -6,6 +6,11 @@
  */
 
 import { query } from "../../database/connection.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import {
+  latestPricePointDbRowSchema,
+  pricePointDbRowSchema,
+} from "../../database/rows/portfolio.ts";
 import { logger } from "../../config/logger.ts";
 import {
   epochMsToUtcYmd,
@@ -55,11 +60,19 @@ export interface LatestHistoricalPoint {
 const PRICE_CACHE_TTL_MS = 5 * 60_000;
 const HISTORY_DAY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * What the price layer caches per key: a live quote (`price`) or a history
+ * series (`points`), with the source that produced it. This module never
+ * inspects the payload; the call sites in priceProviderService read it back.
+ */
+export type PriceCachePayload = {
+  price?: number;
+  points?: PricePoint[];
+  source?: string;
+};
+
 // Key: `${provider}:${providerId}` — Value: { data, expiresAt }
-// The payload differs per call site (a live quote, a point array, a provider
-// response) and this module never inspects it, so it stays `any`.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _cache = new Map<string, { data: any; expiresAt: number }>();
+const _cache = new Map<string, { data: PriceCachePayload; expiresAt: number }>();
 
 // ─── Shared numeric helpers ───────────────────────────────────────────────────
 
@@ -160,7 +173,13 @@ export function needsHistoryRefresh(
 
   const firstTs = normalized[0]?.timestampMs;
   const lastTs = normalized[normalized.length - 1]?.timestampMs;
-  if (!Number.isFinite(firstTs) || !Number.isFinite(lastTs)) return true;
+  if (
+    firstTs === undefined ||
+    lastTs === undefined ||
+    !Number.isFinite(firstTs) ||
+    !Number.isFinite(lastTs)
+  )
+    return true;
 
   const from = Number.isFinite(Number(fromMs)) ? Number(fromMs) : undefined;
   const to = Number.isFinite(Number(toMs)) ? Number(toMs) : undefined;
@@ -196,8 +215,7 @@ export function countChangedPointPrices(
  * @param key `${provider}:${providerId}`
  * @returns the cached payload, or undefined when absent/expired
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function cacheGet(key: string): any {
+export function cacheGet(key: string): PriceCachePayload | undefined {
   const entry = _cache.get(key);
   if (!entry) return undefined;
   if (Date.now() > entry.expiresAt) {
@@ -209,9 +227,9 @@ export function cacheGet(key: string): any {
 
 /**
  * @param key `${provider}:${providerId}`
- * @param data payload shape varies per call site
+ * @param data a live quote or a history series
  */
-export function cacheSet(key: string, data: unknown): void {
+export function cacheSet(key: string, data: PriceCachePayload): void {
   _cache.set(key, { data, expiresAt: Date.now() + PRICE_CACHE_TTL_MS });
 }
 
@@ -253,9 +271,8 @@ export async function loadHistoricalPointsFromDatabase(
     : null;
 
   try {
-    const result = await query<
-      Pick<AssetPriceHistoryRow, "price_date" | "close_price">
-    >(
+    const rows = await queryRows(
+      pricePointDbRowSchema,
       `SELECT price_date, close_price
        FROM asset_price_history
        WHERE investment_id = $1
@@ -266,7 +283,7 @@ export async function loadHistoricalPointsFromDatabase(
     );
 
     return normalizeHistoryPoints(
-      result.rows.map((row) => ({
+      rows.map((row) => ({
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),
       })),
@@ -297,9 +314,8 @@ export async function loadLatestHistoricalPointByInvestmentIds(
   if (ids.length === 0) return new Map();
 
   try {
-    const result = await query<
-      Pick<AssetPriceHistoryRow, "investment_id" | "price_date" | "close_price">
-    >(
+    const rows = await queryRows(
+      latestPricePointDbRowSchema,
       `SELECT DISTINCT ON (investment_id) investment_id, price_date, close_price
        FROM asset_price_history
        WHERE investment_id = ANY($1::int[])
@@ -308,7 +324,7 @@ export async function loadLatestHistoricalPointByInvestmentIds(
     );
 
     const byId = new Map<number, LatestHistoricalPoint>();
-    for (const row of result.rows) {
+    for (const row of rows) {
       byId.set(row.investment_id, {
         timestampMs: dateOnlyToTimestampMs(row.price_date),
         price: toNumber(row.close_price),

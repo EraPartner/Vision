@@ -35,6 +35,7 @@ import { computeBankBalances } from '../src/services/calculations/aggregation/ba
 import { computeAverageVsCurrent } from '../src/services/calculations/aggregation/averageVsCurrent.ts';
 import infoRepository from '../src/repositories/infoRepository.ts';
 import { fetchFinancialData } from '../src/services/reports/dataFetcher.ts';
+import { RowContractError } from '../src/database/rowContracts.ts';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -67,5 +68,22 @@ describe('fetchFinancialData only fetches sources for requested sections', () =>
     expect(computeBankBalances).toHaveBeenCalledTimes(1);
     expect(computeAverageVsCurrent).toHaveBeenCalledTimes(1);
     expect(infoRepository.getPlannedExpensesNextMonth).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fetchFinancialData source failures', () => {
+  it('still skips a section whose source fails for another reason', async () => {
+    vi.mocked(computeBankBalances).mockRejectedValueOnce(new Error('offline'));
+    const data = await fetchFinancialData('EUR', { sections: ['bankBalances'] });
+    expect(data.banks).toBeNull();
+  });
+
+  it('surfaces a row contract mismatch instead of skipping the section', async () => {
+    vi.mocked(computeBankBalances).mockRejectedValueOnce(
+      new RowContractError('Row contract violated (bank balance row)', ['balance: expected string']),
+    );
+    await expect(fetchFinancialData('EUR', { sections: ['bankBalances'] })).rejects.toBeInstanceOf(
+      RowContractError,
+    );
   });
 });

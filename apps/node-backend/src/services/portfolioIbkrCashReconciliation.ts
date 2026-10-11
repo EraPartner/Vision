@@ -29,15 +29,13 @@ import type {
   ReconciliationSourceRow,
 } from "../repositories/portfolioImportReconciliationRepository.ts";
 
-/* eslint-disable @typescript-eslint/no-explicit-any -- staged rows, batch
-   config and journal JSON arrive from several readers; every field read here
-   is re-validated before it proves anything. */
-/** A staged cash row from any reader (reconciliation sources or commit chunks). */
-type StagedCashRow = Record<string, any>;
-/** A batch row carrying at least its id, account and config. */
-type CashBatchRow = Record<string, any>;
-/* eslint-enable @typescript-eslint/no-explicit-any */
-type DecimalLike = Parameters<typeof toDecimal>[0];
+/**
+ * A staged cash row from any reader (reconciliation sources, commit chunks).
+ * Every field read here is re-validated before it proves anything.
+ */
+type StagedCashRow = Readonly<Partial<Record<string, unknown>>>;
+/** A batch row carrying at least its id, account, status and config. */
+type CashBatchRow = Pick<ReconciliationBatchScopeRow, "id" | "account_id" | "status" | "custom_config">;
 type CashReceiptLike = { before_data: unknown; after_data: unknown };
 type IbkrCashReceiptOf<T> = T & {
   id: string | number;
@@ -72,12 +70,21 @@ const clean = (value: unknown): string => String(value ?? "").trim().replace(/^-
 const canonical = (value: unknown): unknown => Array.isArray(value) ? value.map(canonical)
   : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical((value as Record<string, unknown>)[key])])) : value;
 const fingerprint = (value: unknown): string => hash(JSON.stringify(canonical(value)));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- parsed batch config
-const json = (value: unknown): any => typeof value === "string" ? JSON.parse(value) : value;
+/** Batch config as stored; a legacy reader may still hand over its JSON text. */
+const json = (value: unknown): unknown => typeof value === "string" ? JSON.parse(value) : value;
+/** `value?.[key]` on parsed JSON: a member of an object, else undefined. */
+const field = (value: unknown, key: string): unknown =>
+  typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
+const isString = (value: unknown): value is string => typeof value === "string";
+// toDecimal on a staged value; any other JSON type throws, as toDecimal did.
+const decimal = (value: unknown): Decimal => {
+  if (value == null || typeof value === "string" || typeof value === "number" || value instanceof Decimal) return toDecimal(value);
+  throw new TypeError("Expected a decimal value");
+};
 const date = (value: unknown): string => value instanceof Date ? value.toISOString().slice(0, 10) : String(value ?? "");
-const amount = (value: DecimalLike): string => toDecimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
-const zero = (value: DecimalLike | null | undefined): boolean => value == null || toDecimal(value).eq(0);
-const equal4 = (left: DecimalLike, right: DecimalLike): boolean => amount(left) === amount(right);
+const amount = (value: unknown): string => decimal(value).toDecimalPlaces(4, Decimal.ROUND_HALF_UP).toFixed(4);
+const zero = (value: unknown): boolean => value == null || decimal(value).eq(0);
+const equal4 = (left: unknown, right: unknown): boolean => amount(left) === amount(right);
 const stale = () => new ConflictError("IBKR cash source or ledger image changed", { details: { reason: "cash_receipt_changed" } });
 
 /** Full account equality, or a masked account with at least four literal digits. */
@@ -112,21 +119,27 @@ function getIbkrBaseCashEvidence(
 ): IbkrBaseCashEvidence | undefined {
   try {
     const config = json(batch?.custom_config ?? row.custom_config);
-    const context = config?.ibkr_source_context;
-    if (config?.format !== "ibkr_transaction_history" || context?.version !== 1 ||
-      !/^[a-f0-9]{64}$/.test(context.source_file_hash || "") || !Array.isArray(context.source_columns) ||
-      !Array.isArray(context.record_hashes) || !/^[A-Z]{3}$/.test(context.base_currency)) return undefined;
-    const header = record(context.header_record);
-    const summary = record(context.summary_base_currency_record);
+    const context = field(config, "ibkr_source_context");
+    const sourceFileHash = field(context, "source_file_hash");
+    const sourceColumns = field(context, "source_columns");
+    const recordHashes = field(context, "record_hashes");
+    const baseCurrency = field(context, "base_currency");
+    if (field(config, "format") !== "ibkr_transaction_history" || field(context, "version") !== 1 ||
+      !isString(sourceFileHash) || !/^[a-f0-9]{64}$/.test(sourceFileHash) || !Array.isArray(sourceColumns) ||
+      !Array.isArray(recordHashes) || !isString(baseCurrency) || !/^[A-Z]{3}$/.test(baseCurrency)) return undefined;
+    const header = record(field(context, "header_record"));
+    const summary = record(field(context, "summary_base_currency_record"));
     if (header?.[0] !== "Transaction History" || header[1] !== "Header" || summary?.[0] !== "Summary" ||
-      summary[1] !== "Data" || clean(summary[2]) !== "Base Currency" || clean(summary[3]) !== context.base_currency ||
-      JSON.stringify(header.slice(2).map(clean)) !== JSON.stringify(context.source_columns) ||
-      new Set(context.source_columns).size !== context.source_columns.length) return undefined;
+      summary[1] !== "Data" || clean(summary[2]) !== "Base Currency" || clean(summary[3]) !== baseCurrency ||
+      JSON.stringify(header.slice(2).map(clean)) !== JSON.stringify(sourceColumns) ||
+      // Equal to the cleaned header text, so every column name is a string.
+      !sourceColumns.every(isString) ||
+      new Set(sourceColumns).size !== sourceColumns.length) return undefined;
     const raw = row.raw_data;
-    if (typeof raw !== "string" || hash(raw) !== row.source_record_hash || !context.record_hashes.includes(hash(raw))) return undefined;
+    if (typeof raw !== "string" || hash(raw) !== row.source_record_hash || !recordHashes.includes(hash(raw))) return undefined;
     const values = record(raw);
-    if (values?.[0] !== "Transaction History" || values[1] !== "Data" || values.length !== context.source_columns.length + 2) return undefined;
-    const literal: Record<string, string> = Object.fromEntries(context.source_columns.map((key: string, index: number) => [key, clean(values[index + 2])]));
+    if (values?.[0] !== "Transaction History" || values[1] !== "Data" || values.length !== sourceColumns.length + 2) return undefined;
+    const literal: Record<string, string> = Object.fromEntries(sourceColumns.map((key, index) => [key, clean(values[index + 2])]));
     const transactionType = literal["Transaction Type"];
     const type = transactionType === "Deposit" ? "deposit" : transactionType === "Withdrawal" ? "withdrawal" : undefined;
     const gross = number(literal["Gross Amount"]);
@@ -139,15 +152,16 @@ function getIbkrBaseCashEvidence(
       row.type_raw !== literal["Transaction Type"] || row.investment_id != null || clean(row.symbol_raw) || clean(row.name_raw) ||
       row.units != null || row.price_per_unit != null || !zero(row.fees) || !zero(row.taxes) || !zero(row.fx_rate_to_eur) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(literal.Date ?? "") || literal.Date !== date(row.tx_date) || !literal.Account ||
-      literal.Account !== row.source_account_identity || row.currency !== context.base_currency || literal["Price Currency"] ||
+      literal.Account !== row.source_account_identity || row.currency !== baseCurrency || literal["Price Currency"] ||
       !equal4(gross.abs(), row.amount) || clean(row.note) !== literal.Description ||
       !Number.isInteger(Number(row.account_id ?? batch?.account_id)) || Number(row.account_id ?? batch?.account_id) <= 0 ||
       (batch && Number(row.batch_id) !== Number(batch.id))) return undefined;
     return {
       version: 1, batchId: Number(row.batch_id), stagingRowId: Number(row.id), type, date: literal.Date!,
-      baseCurrency: context.base_currency, baseAmount: gross.toFixed(), fxRate: fx.toFixed(),
-      sourceAccount: literal.Account, sourceRecordHash: row.source_record_hash,
-      sourceFileHash: context.source_file_hash, rawData: raw,
+      baseCurrency, baseAmount: gross.toFixed(), fxRate: fx.toFixed(),
+      // Equal to the staged source_record_hash, checked above.
+      sourceAccount: literal.Account, sourceRecordHash: hash(raw),
+      sourceFileHash, rawData: raw,
     };
   } catch { return undefined; }
 }
@@ -188,12 +202,13 @@ function sameNative(left: IbkrFundingEvidence, right: IbkrFundingEvidence): bool
 }
 function oldLedgerEqualsSource(
   current: CashTransactionSnapshot | undefined,
-  source: StagedCashRow,
+  source: ReconciliationSourceRow,
   proof: IbkrBaseCashEvidence,
 ): boolean {
+  // The original's proof authenticated its Deposit/Withdrawal type_raw.
   return !!current && current.is_active === true && Number(current.id) === Number(source.committed_txn_id) &&
     Number(current.account_id) === Number(source.account_id) && current.date === proof.date && current.currency === proof.baseCurrency &&
-    equal4(current.amount, proof.baseAmount) && current.memo === (source.note || source.type_raw.toUpperCase()) &&
+    equal4(current.amount, proof.baseAmount) && current.memo === (source.note || source.type_raw!.toUpperCase()) &&
     current.balance == null && (current.import_batch_id == null || Number(current.import_batch_id) === Number(source.batch_id)) &&
     current.source_record_hash === source.source_record_hash && current.dedup_fingerprint === source.dedup_fingerprint &&
     Number(current.dedup_fingerprint_version) === Number(source.dedup_fingerprint_version);
@@ -204,7 +219,7 @@ const ownerReferenceKeys = ["route", "type", "type_raw", "tx_date", "investment_
   "source_transaction_id", "source_account_identity", "dedup_fingerprint", "dedup_fingerprint_version", "dedup_occurrence"];
 function ownerReferenceImage(row: StagedCashRow): Record<string, unknown> {
   return Object.fromEntries(ownerReferenceKeys.map((key) => [key, key === "tx_date" ? date(row[key])
-    : numericBindingKeys.has(key) && row[key] != null ? toDecimal(row[key]).toFixed() : row[key] ?? null]));
+    : numericBindingKeys.has(key) && row[key] != null ? decimal(row[key]).toFixed() : row[key] ?? null]));
 }
 /** Missing legacy context is bridged only through a literal-identical retained source. */
 export function getIbkrCashOwnerEvidence(
@@ -217,11 +232,11 @@ export function getIbkrCashOwnerEvidence(
   if (direct) return { proof: direct };
   try {
     const ownerConfig = json(batch?.custom_config ?? row.custom_config);
-    if (ownerConfig?.format !== "ibkr_transaction_history" || ownerConfig.ibkr_source_context != null ||
+    if (field(ownerConfig, "format") !== "ibkr_transaction_history" || field(ownerConfig, "ibkr_source_context") != null ||
       typeof row.raw_data !== "string" || hash(row.raw_data) !== row.source_record_hash) return undefined;
     const references = sources.filter((candidate) => Number(candidate.batch_id) !== Number(row.batch_id) && candidate.raw_data === row.raw_data)
       .map((candidate) => ({ row: candidate, batch: batches.find((item) => Number(item.id) === Number(candidate.batch_id)) }))
-      .filter((candidate) => json(candidate.batch?.custom_config ?? candidate.row.custom_config)?.ibkr_source_context != null);
+      .filter((candidate) => field(json(candidate.batch?.custom_config ?? candidate.row.custom_config), "ibkr_source_context") != null);
     if (!references.length) return undefined;
     const authenticated = references.map((reference) => ({ ...reference,
       proof: getIbkrBaseCashEvidence(reference.row, reference.batch) }));
@@ -239,7 +254,7 @@ function receiptOriginalSourcesEqual(
   receipt: { after_data: IbkrCashEnvelope },
   context: IbkrCashCorrectionContext,
 ): boolean {
-  const bindings = receipt.after_data.proof?.sourceBindings?.filter((binding) => binding.custom_config?.format === "ibkr_transaction_history");
+  const bindings = receipt.after_data.proof?.sourceBindings?.filter((binding) => field(binding.custom_config, "format") === "ibkr_transaction_history");
   if (!bindings?.length) return false;
   return bindings.every((binding) => {
     const row = context.sources.find((source) => Number(source.id) === Number(binding.id) && Number(source.batch_id) === Number(binding.batch_id));

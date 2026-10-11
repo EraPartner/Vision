@@ -12,23 +12,19 @@ import type { Options as CsvParseOptions } from "csv-parse/sync";
 import { z } from "zod";
 import { toDecimal } from "../../../lib/money.ts";
 import { ValidationError } from "../../../middleware/errorHandler.ts";
+import {
+  normalizeCsvEncoding,
+  normalizeCsvNumberFormat,
+} from "../../../lib/csvFormatOptions.ts";
 
-/**
- * Normalize the CSV encodings offered by the import forms and their aliases.
- */
-export function normalizeCsvEncoding(
-  value: unknown,
-): "utf-8" | "latin1" | "windows-1252" {
-  if (value === undefined || value === null || value === "") return "utf-8";
-  if (typeof value !== "string") {
-    throw new ValidationError("Unsupported CSV encoding");
-  }
-  const encoding = value.trim().toLowerCase();
-  if (!encoding || encoding === "utf-8" || encoding === "utf8") return "utf-8";
-  if (["latin1", "latin-1", "iso-8859-1"].includes(encoding)) return "latin1";
-  if (encoding === "windows-1252") return "windows-1252";
-  throw new ValidationError(`Unsupported CSV encoding "${value}"`);
-}
+// The format options live in lib/ so lib/parserConfigSchema.ts can use them
+// without importing a service; re-exported for the adapters' callers.
+export {
+  CSV_NUMBER_FORMATS,
+  normalizeCsvEncoding,
+  normalizeCsvNumberFormat,
+} from "../../../lib/csvFormatOptions.ts";
+export type { CsvNumberFormat } from "../../../lib/csvFormatOptions.ts";
 
 /**
  * Decode CSV bytes once for all importers. Explicit Latin-1 keeps ISO byte
@@ -176,15 +172,35 @@ export async function readTextWithEncodingFallback(
 }
 
 /**
+ * Cell `index` of a parsed tuple the caller has already checked holds at
+ * least `index + 1` cells (each adapter's MIN_FIELDS guard). Throws rather
+ * than returning undefined should that invariant ever break.
+ */
+export function cellAt(parts: readonly string[], index: number): string {
+  const cell = parts[index];
+  if (cell === undefined) {
+    throw new Error(`CSV record has no field ${index}`);
+  }
+  return cell;
+}
+
+/**
  * Parse a `DD/MM/YYYY` cell into a UTC-midnight Date, rejecting out-of-range
  * components rather than letting Date.UTC roll them over.
  */
 export function parseDayMonthYear(dateStr: string): Date | null {
   const dateParts = String(dateStr).split("/");
-  if (dateParts.length !== 3) return null;
-  const day = parseInt(dateParts[0], 10);
-  const month = parseInt(dateParts[1], 10);
-  const year = parseInt(dateParts[2], 10);
+  const [dayStr, monthStr, yearStr] = dateParts;
+  if (
+    dateParts.length !== 3 ||
+    dayStr === undefined ||
+    monthStr === undefined ||
+    yearStr === undefined
+  )
+    return null;
+  const day = parseInt(dayStr, 10);
+  const month = parseInt(monthStr, 10);
+  const year = parseInt(yearStr, 10);
   if (
     !Number.isFinite(day) ||
     !Number.isFinite(month) ||
@@ -259,7 +275,13 @@ export function parseDateWithFormat(dateStr: string, fmt: string): Date | null {
   // and a 2-digit year like "24" becomes 1924. Reject instead of importing a
   // wrong day — matches parseDayMonthYear's validation.
   /** @param m 1-based month */
-  const build = (y: number, m: number, d: number): Date | null => {
+  // A part the separator split did not produce is undefined: no date.
+  const build = (
+    y: number | undefined,
+    m: number | undefined,
+    d: number | undefined,
+  ): Date | null => {
+    if (y === undefined || m === undefined || d === undefined) return null;
     if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d))
       return null;
     if (y < 100) return null; // 2-digit-year misparse (e.g. "24" → 1924)
@@ -359,28 +381,6 @@ export function parseAmountField(raw: unknown): number {
   const n = parseDecimalSafe(s);
   if (isNaN(n)) return NaN;
   return negative ? -n : n;
-}
-
-export const CSV_NUMBER_FORMATS = [
-  "auto",
-  "decimal_dot",
-  "decimal_comma",
-] as const;
-export type CsvNumberFormat = (typeof CSV_NUMBER_FORMATS)[number];
-
-function isCsvNumberFormat(value: string): value is CsvNumberFormat {
-  const formats: readonly string[] = CSV_NUMBER_FORMATS;
-  return formats.includes(value);
-}
-
-export function normalizeCsvNumberFormat(value: unknown): CsvNumberFormat {
-  if (value === undefined) return "auto";
-  if (typeof value !== "string" || !isCsvNumberFormat(value)) {
-    throw new ValidationError(
-      "number_format must be auto, decimal_dot or decimal_comma",
-    );
-  }
-  return value;
 }
 
 /**
@@ -483,7 +483,7 @@ function splitDelimitedRecord(line: string, delimiter = ";"): string[] | null {
       relax_column_count: true,
       relax_quotes: true,
     });
-    return rows.length > 0 ? rows[0] : null;
+    return rows[0] ?? null;
   } catch {
     return null;
   }
@@ -509,23 +509,30 @@ export function canonicalIban(value: string | null | undefined): string {
 }
 
 /**
+ * One csv-parse record: an object keyed by column name when `columns` is set
+ * (`true`, a header list or a header function), otherwise a tuple of cells.
+ */
+export type CsvRecord = Record<string, string> | string[];
+
+/**
  * Read and parse a CSV file with csv-parse.
  *
- * The element type genuinely depends on `options`: with `columns: true` (what
- * every record-based adapter passes) csv-parse yields `Record<string, string>`
+ * The element type genuinely depends on `options`: with `columns` (what every
+ * record-based adapter passes) csv-parse yields `Record<string, string>`
  * objects, otherwise `string[]` tuples. csv-parse's own signature only models
- * the tuple case, so this is typed `any[]` and each adapter states the shape it
- * asked for on its own row handler.
+ * the tuple case, so the caller names the shape it asked for through `T`
+ * (inferred from an annotated result); it defaults to the object form.
  */
-export async function parseCsvFile(
+export async function parseCsvFile<
+  T extends CsvRecord = Record<string, string>,
+>(
   filePath: string,
   options: CsvParseOptions,
   encoding: unknown = "utf-8",
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above
-): Promise<any[]> {
+): Promise<T[]> {
   const buffer = await fs.promises.readFile(filePath);
   const content = decodeCsvBuffer(buffer, encoding);
-  return parseCsvText(content, options);
+  return parseCsvText<T>(content, options);
 }
 
 const RAW_CSV_RECORD = Symbol("vision.rawCsvRecord");
@@ -553,13 +560,12 @@ export function stripTerminalRecordDelimiter(raw: unknown): string {
 /**
  * Parse decoded CSV text and attach its literal source record to each parsed
  * tuple/object without changing the public record shape adapters consume.
- * Typed `any[]` for the same reason as parseCsvFile.
+ * `T` names the record shape `options` asks for, as for parseCsvFile.
  */
-export function parseCsvText(
+export function parseCsvText<T extends CsvRecord = Record<string, string>>(
   content: string,
   options: CsvParseOptions,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see parseCsvFile
-): any[] {
+): T[] {
   const parsed: unknown[] = parse(String(content).replace(UTF8_BOM_RE, ""), {
     ...options,
     info: true,
@@ -580,7 +586,8 @@ export function parseCsvText(
         writable: false,
       });
     }
-    return record;
+    // csv-parse produced the shape `options` asked for; see CsvRecord.
+    return record as T;
   });
 }
 

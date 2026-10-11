@@ -419,7 +419,7 @@ describe("getMonthlyCategoryBreakdown", () => {
       to: "2026-06-30",
     });
 
-    expect(result.data[0].month).toBe("2026-06"); // not 2026-05
+    expect(result.data[0]!.month).toBe("2026-06"); // not 2026-05
   });
 });
 
@@ -819,8 +819,8 @@ describe("getAssetAllocation", () => {
       marketValue: 1500,
       positions: 2,
     });
-    const cryptoPct = result.data[0].percent;
-    const etfPct = result.data[1].percent;
+    const cryptoPct = result.data[0]!.percent;
+    const etfPct = result.data[1]!.percent;
     expect(cryptoPct + etfPct).toBeCloseTo(100, 1);
     expect(result.meta.renderAs).toBe("pie");
   });
@@ -945,7 +945,7 @@ describe("getSubscriptionTotal", () => {
 
     const result = await getSubscriptionTotal.run({ period: "yearly" });
 
-    expect(result.data[0].normalizedAmount).toBe(120);
+    expect(result.data[0]!.normalizedAmount).toBe(120);
     expect(result.meta.period).toBe("yearly");
   });
 

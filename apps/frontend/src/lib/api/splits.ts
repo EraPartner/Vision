@@ -1,3 +1,10 @@
+import {
+    BulkSplitResultSchema,
+    OwedDetailListSchema,
+    OwedSummaryListSchema,
+    SettleAllResultSchema,
+    SplitListSchema,
+} from '@vision/types/contracts';
 import { apiRequest } from '@/lib/api/client';
 import { requestBlob } from '@/lib/api/helpers';
 
@@ -83,11 +90,11 @@ export interface SplitPayment {
 }
 
 export function getOwedSummary(): Promise<{ items: OwedSummaryItem[] }> {
-    return apiRequest('/api/splits/owed');
+    return apiRequest('/api/splits/owed', { schema: OwedSummaryListSchema });
 }
 
 export function getOwedByRecipient(recipientId: number): Promise<{ items: OwedDetailItem[] }> {
-    return apiRequest(`/api/splits/owed/${recipientId}`);
+    return apiRequest(`/api/splits/owed/${recipientId}`, { schema: OwedDetailListSchema });
 }
 
 export async function exportOwedByRecipientCsv(recipientId: number): Promise<Blob> {
@@ -95,7 +102,7 @@ export async function exportOwedByRecipientCsv(recipientId: number): Promise<Blo
 }
 
 export function getSplitsByTransaction(transactionId: number): Promise<{ items: SplitItem[] }> {
-    return apiRequest(`/api/splits/transaction/${transactionId}`);
+    return apiRequest(`/api/splits/transaction/${transactionId}`, { schema: SplitListSchema });
 }
 
 export function createSplitsBatch(
@@ -112,6 +119,7 @@ export function createBulkSplits(request: BulkSplitRequest): Promise<BulkSplitRe
     return apiRequest('/api/splits/bulk', {
         method: 'POST',
         body: JSON.stringify(request),
+        schema: BulkSplitResultSchema,
     });
 }
 
@@ -132,7 +140,10 @@ export function settleSplit(splitId: number): Promise<SplitItem> {
 }
 
 export function settleAllSplitsByRecipient(recipientId: number): Promise<{ settled_count: number }> {
-    return apiRequest(`/api/splits/owed/${recipientId}/settle-all`, { method: 'POST' });
+    return apiRequest(`/api/splits/owed/${recipientId}/settle-all`, {
+        method: 'POST',
+        schema: SettleAllResultSchema,
+    });
 }
 
 export async function deleteSplit(splitId: number): Promise<void> {

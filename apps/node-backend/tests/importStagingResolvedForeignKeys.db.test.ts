@@ -33,7 +33,7 @@ const FOREIGN_KEYS = [
     "resolved_bank_account_id",
     "recipient_bank_accounts",
   ],
-];
+] as const;
 const CURRENT_FOREIGN_KEYS = [FOREIGN_KEYS[0]];
 
 const REPO_ROOT = path.resolve(

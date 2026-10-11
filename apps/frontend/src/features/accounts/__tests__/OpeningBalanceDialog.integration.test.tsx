@@ -72,13 +72,16 @@ function mockOpeningBalanceApi() {
                     id: String(params.id),
                     body: (await request.json()) as Record<string, unknown>,
                 });
+                // The anchor is a raw `RETURNING *` row: its NUMERIC(18,4)
+                // balance arrives as a decimal string.
                 return ok({
                     transaction: {
                         id: 1,
-                        balance: 0,
+                        balance: "0.0000",
                         transfer_source: "opening",
                     },
                     warning: null,
+                    links: [],
                 });
             },
         ),

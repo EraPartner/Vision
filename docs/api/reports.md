@@ -2,7 +2,7 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-08
+date: 2026-10-10
 updated: 2026-10-08
 tags:
   - api
@@ -53,7 +53,7 @@ Server-side PDF generation via **Puppeteer headless Chrome** (Phase 3 redesign).
 - **Paginated footers** (Phase 5): "Vision | Confidential | page X / Y" on all content pages; theme colors interpolated as HSL literals
 - **Enhanced print breaks** (Phase 5): `break-inside: avoid` prevents card/row orphaning; `display: table-header-group` repeats table headers across pages
 - **Full i18n support** (Phase 6): 32 translation keys for dialog UI, period labels, section toggles, and actions (en/nl)
-- **Graceful degradation**: Promise.allSettled ensures one failed data source doesn't crash report
+- **Graceful degradation**: Promise.allSettled ensures one failed data source doesn't crash report (a row contract violation still fails it; see [[#Performance]])
 - **Three report types**: Financial (complete), Portfolio (Phase 8 — 6 sections), Tax (Phase 8 — 7 sections + Belgian tax pass-through)
 
 ## Phase Updates
@@ -425,7 +425,11 @@ All fetched in parallel via Promise.allSettled:
 ### Performance
 
 - **Parallel data loading**: All sources fetched concurrently
-- **Graceful degradation**: Failed sources return null; sections skip silently
+- **Graceful degradation**: Failed sources return null; sections skip silently. The exception is a
+  `RowContractError` (a database row that no longer matches its schema): the financial, portfolio
+  and tax data fetchers rethrow it, so the export fails with a 500 instead of rendering an empty
+  section over data the code no longer understands
+  ([[docs/adr/194-runtime-contracts-completion|ADR-194]])
 - **PDF buffering**: Entire report is generated before the route sends it to the client
 - **Typical size**: 2–10 MB depending on transaction volume
 

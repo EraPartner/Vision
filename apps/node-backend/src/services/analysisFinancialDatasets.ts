@@ -735,7 +735,10 @@ export async function executeFinancialAnalysis(
           const values = contributors.map((r) => r[field]);
           if (!values.length || values.some((v) => v == null)) return [m, null];
           const decimals = values.map((v) => toDecimal(v as DecimalInput));
-          let value = decimals[0];
+          const [firstDecimal] = decimals;
+          // `values` is non-empty here (checked above).
+          if (firstDecimal === undefined) return [m, null];
+          let value = firstDecimal;
           if (op === "sum" || op === "avg")
             value = decimals.reduce((sum, v) => sum.plus(v), toDecimal(0));
           if (op === "avg") value = value.div(decimals.length);

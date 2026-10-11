@@ -2,6 +2,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { http } from "msw";
 import { server } from "@/test/msw/server";
+import {
+    IMPORT_CSV_RESULT_STUB,
+    IMPORT_CSV_REVIEW_REQUIRED_STUB,
+} from "@/test/msw/handlers";
 import { API_BASE, ok } from "./clientTestHarness";
 import {
     importCSV,
@@ -15,21 +19,29 @@ afterEach(() => server.resetHandlers());
 describe("multipart import request fields", () => {
     const file = new File(["fixture"], "fixture.csv", { type: "text/csv" });
 
-    async function capture(path: string, run: () => Promise<unknown>) {
+    /** `importRecipientsCSV` / `importCategoriesCSV` plus the route's `status`. */
+    const SIMPLE_RESULT = {
+        total_processed: 0,
+        imported: 0,
+        skipped: 0,
+        errors: 0,
+        status: "completed",
+    };
+
+    async function capture(
+        path: string,
+        run: () => Promise<unknown>,
+        response: unknown = path.startsWith("/api/import/csv")
+            ? IMPORT_CSV_RESULT_STUB
+            : SIMPLE_RESULT,
+    ) {
         let url = "";
         let body: FormData | undefined;
         server.use(
             http.post(`${API_BASE}${path}`, async ({ request }) => {
                 url = request.url;
                 body = await request.formData();
-                return ok({
-                    total_processed: 0,
-                    imported: 0,
-                    skipped: 0,
-                    duplicates: 0,
-                    errors: 0,
-                    status: "completed",
-                });
+                return ok(response);
             }),
         );
         await run();
@@ -97,5 +109,29 @@ describe("multipart import request fields", () => {
         );
         expect(body.get("separator")).toBe(";");
         expect(body.get("encoding")).toBe("latin1");
+    });
+
+    it("accepts the 202 review-required arm of the CSV import", async () => {
+        let result: unknown;
+        await capture(
+            "/api/import/csv",
+            async () => {
+                result = await importCSV(file, "kbc");
+            },
+            IMPORT_CSV_REVIEW_REQUIRED_STUB,
+        );
+        expect(result).toEqual(IMPORT_CSV_REVIEW_REQUIRED_STUB);
+    });
+
+    it("rejects a CSV import result whose counts are missing", async () => {
+        server.use(
+            http.post(`${API_BASE}/api/import/csv`, () =>
+                ok({ batch_id: 1, status: "completed" }),
+            ),
+        );
+        await expect(importCSV(file, "kbc")).rejects.toMatchObject({
+            name: "ApiContractError",
+            endpoint: "POST /api/import/csv",
+        });
     });
 });

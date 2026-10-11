@@ -1,14 +1,15 @@
-import { query, withTransaction } from "../database/connection.ts";
+import { withTransaction } from "../database/connection.ts";
+import { queryOne, queryRows } from "../database/rowContracts.ts";
+import {
+  auditDomainMaxRowSchema,
+  auditEntryHashRowSchema,
+  auditFirstRecentRowSchema,
+  auditMigrationHeadsRowSchema,
+  auditPruneRowSchema,
+} from "../database/rows/audit.ts";
 import { readAuditHead } from "../repositories/auditChainRepository.ts";
 import { verifyAuditHistory } from "./auditVerificationService.ts";
 import type { TrustedAuditCheckpoint } from "./auditVerificationService.ts";
-
-/** BIGINT aggregates arrive from pg as strings (NULL when no row matched). */
-type DomainMaxRow = {
-  db_editor_max: string | null;
-  split_max: string | null;
-  retag_max: string | null;
-};
 
 function safeSequence(value: string | number): number {
   const parsed = Number(value);
@@ -33,26 +34,33 @@ export async function planAuditRetention(
       return { eligible: false, reason: "history_not_fully_anchored" };
     }
     const floor = trustedCheckpoint.retention?.through ?? 0;
-    const candidateResult = await query<{ first_recent: string | null }>(
+    const candidate = await queryOne(
+      auditFirstRecentRowSchema,
       `SELECT min(sequence) AS first_recent
          FROM audit_chain_entries
         WHERE created_at >= now() - interval '1 year'`,
     );
+    // An aggregate without GROUP BY always returns exactly one row.
+    if (!candidate)
+      throw new Error("Audit retention candidate query returned no row");
     const firstRecent =
-      candidateResult.rows[0].first_recent === null
+      candidate.first_recent === null
         ? verified.sequence + 1
-        : safeSequence(candidateResult.rows[0].first_recent);
+        : safeSequence(candidate.first_recent);
     const through = Math.min(firstRecent - 1, trustedCheckpoint.sequence - 1);
     if (through <= floor) return { eligible: false, reason: "nothing_due" };
-    const boundary = await query<{ entry_hash: string }>(
+    const boundary = await queryRows(
+      auditEntryHashRowSchema,
       `SELECT entry_hash FROM audit_chain_entries WHERE sequence = $1`,
       [through],
     );
-    if (boundary.rows.length !== 1) {
+    const [boundaryEntry] = boundary;
+    if (!boundaryEntry || boundary.length !== 1) {
       return { eligible: false, reason: "boundary_missing" };
     }
     const head = await readAuditHead();
-    const aggregate = await query<DomainMaxRow>(
+    const max = await queryOne(
+      auditDomainMaxRowSchema,
       `SELECT
          max((payload->>'auditRowId')::bigint) FILTER
            (WHERE payload->>'stream' = 'db_editor') AS db_editor_max,
@@ -64,13 +72,14 @@ export async function planAuditRetention(
        WHERE sequence > $1 AND sequence <= $2`,
       [floor, through],
     );
-    const max = aggregate.rows[0];
+    if (!max) throw new Error("Audit retention aggregate returned no row");
     const previous = trustedCheckpoint.retention?.domainMax ?? {
       dbEditor: head.legacyCutover.dbEditorMaxId,
       split: head.legacyCutover.splitMaxId,
       retag: head.legacyCutover.retagMaxId,
     };
-    const migration = await query<{ heads: string[] | null }>(
+    const migration = await queryOne(
+      auditMigrationHeadsRowSchema,
       `SELECT payload->'heads' AS heads
          FROM audit_chain_entries
         WHERE sequence > $1 AND sequence <= $2
@@ -79,13 +88,11 @@ export async function planAuditRetention(
       [floor, through],
     );
     const migrationHeads =
-      migration.rows[0]?.heads ??
-      trustedCheckpoint.retention?.migrationHeads ??
-      [];
+      migration?.heads ?? trustedCheckpoint.retention?.migrationHeads ?? [];
     return {
       eligible: true,
       through,
-      hash: boundary.rows[0].entry_hash,
+      hash: boundaryEntry.entry_hash,
       domainMax: {
         dbEditor: Math.max(
           previous.dbEditor,
@@ -109,9 +116,11 @@ export async function pruneAuditRetention(
   if (!["verified", "partially_verified"].includes(verified.status)) {
     throw new Error("Audit history is not fully verified for retention");
   }
-  const result = await query<{ removed: string }>(
+  const result = await queryOne(
+    auditPruneRowSchema,
     "SELECT audit_chain_prune_prefix($1::bigint, $2::char(64)) AS removed",
     [retention.through, retention.hash],
   );
-  return { removed: safeSequence(result.rows[0].removed) };
+  if (!result) throw new Error("Audit retention prune returned no row");
+  return { removed: safeSequence(result.removed) };
 }

@@ -1,5 +1,19 @@
 import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery, buildExclusionQuery } from "@/lib/api/helpers";
+import {
+    AverageVsCurrentSchema,
+    BankBalancesSchema,
+    CashflowForecastAccuracySchema,
+    CashflowForecastMethodsSchema,
+    CashflowForecastRollingSchema,
+    CategoryPivotSchema,
+    MonthlySummarySchema,
+    RecipientByYearSchema,
+    RecipientInsightsSchema,
+    RecipientPivotSchema,
+    SankeyFlowSchema,
+    TagPivotSchema,
+} from "@vision/types/contracts";
 import type { AggregationEnvelope } from "@/types/apiClient";
 
 export function getAggregationMonthlySummary(params?: {
@@ -47,7 +61,9 @@ export function getAggregationMonthlySummary(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`);
+    return apiRequest(`/api/aggregations/monthly-summary${q ? `?${q}` : ""}`, {
+        schema: MonthlySummarySchema,
+    });
 }
 
 export function getAggregationRecipientInsights(params?: {
@@ -79,6 +95,7 @@ export function getAggregationRecipientInsights(params?: {
     const q = buildExclusionQuery(params);
     return apiRequest(
         `/api/aggregations/recipient-insights${q ? `?${q}` : ""}`,
+        { schema: RecipientInsightsSchema },
     );
 }
 
@@ -107,7 +124,9 @@ export interface AverageVsCurrentData {
 export function getAggregationAverageVsCurrent(params?: {
     currency?: string;
 }): Promise<AggregationEnvelope<AverageVsCurrentData>> {
-    return requestWithQuery("/api/aggregations/average-vs-current", params);
+    return requestWithQuery("/api/aggregations/average-vs-current", params, {
+        schema: AverageVsCurrentSchema,
+    });
 }
 
 export function getAggregationBankBalances(params?: {
@@ -132,7 +151,9 @@ export function getAggregationBankBalances(params?: {
         total_history: Array<{ date: string; balance: number }>;
     }>
 > {
-    return requestWithQuery("/api/aggregations/bank-balances", params);
+    return requestWithQuery("/api/aggregations/bank-balances", params, {
+        schema: BankBalancesSchema,
+    });
 }
 
 export interface CategoryPivotItem {
@@ -182,7 +203,9 @@ export function getAggregationCategoryPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`);
+    return apiRequest(`/api/aggregations/category-pivot${q ? `?${q}` : ""}`, {
+        schema: CategoryPivotSchema,
+    });
 }
 
 export function getAggregationRecipientByYear(params?: {
@@ -211,7 +234,12 @@ export function getAggregationRecipientByYear(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/recipient-by-year${q ? `?${q}` : ""}`);
+    return apiRequest(
+        `/api/aggregations/recipient-by-year${q ? `?${q}` : ""}`,
+        {
+            schema: RecipientByYearSchema,
+        },
+    );
 }
 
 export interface RecipientPivotItem {
@@ -250,7 +278,9 @@ export function getAggregationRecipientPivot(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`);
+    return apiRequest(`/api/aggregations/recipient-pivot${q ? `?${q}` : ""}`, {
+        schema: RecipientPivotSchema,
+    });
 }
 
 export interface TagPivotItem {
@@ -280,7 +310,9 @@ export function getAggregationTagPivot(params?: {
         params.tag_ids.forEach((id) => qp.append("tag_ids", String(id)));
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`);
+    return apiRequest(`/api/aggregations/tag-pivot${q ? `?${q}` : ""}`, {
+        schema: TagPivotSchema,
+    });
 }
 
 export interface SankeyNode {
@@ -404,6 +436,7 @@ export function getCashflowForecastMethods(params?: {
     const q = qp.toString();
     return apiRequest(
         `/api/aggregations/cashflow-forecast-methods${q ? `?${q}` : ""}`,
+        { schema: CashflowForecastMethodsSchema },
     );
 }
 
@@ -468,6 +501,7 @@ export function getCashflowForecastRolling(params?: {
     const q = qp.toString();
     return apiRequest(
         `/api/aggregations/cashflow-forecast-rolling${q ? `?${q}` : ""}`,
+        { schema: CashflowForecastRollingSchema },
     );
 }
 
@@ -503,6 +537,7 @@ export function getCashflowForecastAccuracy(params?: {
     const q = qp.toString();
     return apiRequest(
         `/api/aggregations/cashflow-forecast-accuracy${q ? `?${q}` : ""}`,
+        { schema: CashflowForecastAccuracySchema },
     );
 }
 
@@ -526,5 +561,7 @@ export function getSankeyFlow(params?: {
         );
     }
     const q = qp.toString();
-    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ""}`);
+    return apiRequest(`/api/aggregations/sankey${q ? `?${q}` : ""}`, {
+        schema: SankeyFlowSchema,
+    });
 }

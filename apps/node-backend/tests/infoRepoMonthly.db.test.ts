@@ -52,8 +52,8 @@ import { todayAppDateString, appDateStringToUtc } from "../src/lib/timezone.ts";
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];
 
-const cat: Record<string, number> = {};
-const rec: Record<string, number> = {};
+const cat = {} as Record<"Food" | "Bills", number>;
+const rec = {} as Record<"electrabel" | "electrabelAlias" | "misc", number>;
 
 /** Day N of the month `monthsBack` months before the current one. */
 const monthDay = (monthsBack: number, day: number) =>
@@ -108,7 +108,7 @@ async function seedBase() {
       "INSERT INTO categories (general, detail) VALUES ($1, $2) RETURNING id",
       [general, detail],
     );
-    cat[key] = rows[0].id;
+    cat[key as keyof typeof cat] = rows[0].id;
   }
   const addRecipient = async (
     name: string,
@@ -217,7 +217,7 @@ describe.skipIf(!hasTestDatabase())(
       await pool.query(
         `DELETE FROM user_settings WHERE key = 'includeTransfers'`,
       );
-      for (const bag of [cat, rec])
+      for (const bag of [cat, rec] as Record<string, number>[])
         for (const k of Object.keys(bag)) delete bag[k];
       clearMemoryCache();
     });
@@ -262,7 +262,7 @@ describe.skipIf(!hasTestDatabase())(
       it("emits period_start/period_end as calendar-day strings covering the whole month", async () => {
         await seedBase();
         const r = await getMonthlyFinancialSummary([], "EUR", [], false);
-        const current = byMonth(r)[await monthKey(0)];
+        const current = byMonth(r)[await monthKey(0)]!;
         expect(current.period_start).toBe(
           await ymd(`date_trunc('month', CURRENT_DATE)`),
         );
@@ -361,7 +361,7 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const all = await getMonthlyFinancialSummary([], "EUR", [], false);
-        expect(byMonth(all)[await monthKey(1)].total_spending).toBe(-307);
+        expect(byMonth(all)[await monthKey(1)]!.total_spending).toBe(-307);
 
         const exclBills = await getMonthlyFinancialSummary(
           [cat.Bills],
@@ -421,8 +421,8 @@ describe.skipIf(!hasTestDatabase())(
         });
 
         const r = await getMonthlyFinancialSummary([], "EUR", [], false);
-        expect(byMonth(r)[await monthKey(1)].total_spending).toBe(-50);
-        expect(byMonth(r)[await monthKey(2)].total_spending).toBe(-25);
+        expect(byMonth(r)[await monthKey(1)]!.total_spending).toBe(-50);
+        expect(byMonth(r)[await monthKey(2)]!.total_spending).toBe(-25);
       });
     });
 
@@ -508,8 +508,8 @@ describe.skipIf(!hasTestDatabase())(
           [],
           false,
         );
-        expect(byMonth(refreshed)[await monthKey(0)].total_spending).toBe(
-          byMonth(before)[await monthKey(0)].total_spending - 77,
+        expect(byMonth(refreshed)[await monthKey(0)]!.total_spending).toBe(
+          byMonth(before)[await monthKey(0)]!.total_spending - 77,
         );
       });
 
@@ -538,7 +538,7 @@ describe.skipIf(!hasTestDatabase())(
         // Mixed currencies ⇒ the homogeneity probe rejects the MV, so the
         // per-(date,currency) live conversion is used and the answer is unchanged.
         expect(withMv.months).toEqual(live.months);
-        expect(byMonth(withMv)[await monthKey(1)].total_spending).toBe(-60);
+        expect(byMonth(withMv)[await monthKey(1)]!.total_spending).toBe(-60);
       });
 
       it("never takes the MV path when an exclusion or allTime is requested", async () => {
@@ -555,7 +555,7 @@ describe.skipIf(!hasTestDatabase())(
         });
         const allTime = await getMonthlyFinancialSummary([], "EUR", [], true);
         expect(allTime.months.length).toBeGreaterThan(6);
-        expect(byMonth(allTime)[await monthKey(8)].total_spending).toBe(-11);
+        expect(byMonth(allTime)[await monthKey(8)]!.total_spending).toBe(-11);
 
         // An exclusion likewise forces the live path — and is honoured.
         const excluded = await getMonthlyFinancialSummary(
@@ -564,7 +564,7 @@ describe.skipIf(!hasTestDatabase())(
           [],
           false,
         );
-        expect(byMonth(excluded)[await monthKey(1)].total_spending).toBe(-200);
+        expect(byMonth(excluded)[await monthKey(1)]!.total_spending).toBe(-200);
       });
     });
 

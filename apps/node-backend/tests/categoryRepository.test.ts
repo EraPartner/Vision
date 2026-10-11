@@ -7,6 +7,34 @@ import { query as rawQuery } from "../src/database/connection.ts";
 import type { PgQueryResult } from "../src/database/connection.ts";
 import categoryRepository from "../src/repositories/categoryRepository.ts";
 import { partial } from "./helpers/partial.ts";
+import type { CategoryRow } from "../src/types/rows.ts";
+
+const STAMP = new Date("2026-01-01T00:00:00Z");
+
+/**
+ * A complete `categories` row (`SELECT *`), as the checked repository reads
+ * require. `path_name` follows the trigger-maintained `GENERAL:DETAIL` form.
+ */
+function categoryRow(
+  fields: Partial<CategoryRow> & { id: number },
+): CategoryRow {
+  const general = fields.general ?? "GENERAL";
+  const detail = fields.detail ?? "DETAIL";
+  return {
+    general,
+    detail,
+    description: null,
+    is_active: true,
+    created_at: STAMP,
+    updated_at: STAMP,
+    parent_id: null,
+    name: detail,
+    hierarchy_only: false,
+    legacy_compatible: true,
+    path_name: `${general}:${detail}`,
+    ...fields,
+  };
+}
 
 const query = vi.mocked(rawQuery);
 
@@ -23,25 +51,25 @@ describe("categoryRepository.createOrGet", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            categoryRow({
               id: 10,
               general: "FOOD",
               detail: "GROCERIES",
               description: "Weekly groceries",
               is_active: true,
-            },
+            }),
           ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            categoryRow({
               id: 10,
               general: "FOOD",
               detail: "GROCERIES",
               path_name: "FOOD:GROCERIES",
-            },
+            }),
           ],
         }),
       );
@@ -76,13 +104,13 @@ describe("categoryRepository.createOrGet", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            categoryRow({
               id: 3,
               general: "UTILITIES",
               detail: "ELECTRICITY",
               description: "Power bill",
               is_active: true,
-            },
+            }),
           ],
         }),
       );
@@ -120,7 +148,9 @@ describe("categoryRepository.createOrGet", () => {
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }))
       .mockResolvedValueOnce(partial<PgQueryResult>({ rows: [{ id: 42 }] }))
       .mockResolvedValueOnce(
-        partial<PgQueryResult>({ rows: [{ id: 42, path_name: "FOOD:HOME" }] }),
+        partial<PgQueryResult>({
+          rows: [categoryRow({ id: 42, path_name: "FOOD:HOME" })],
+        }),
       );
 
     const result = await categoryRepository.createOrGet({
@@ -145,7 +175,12 @@ describe("categoryRepository query helpers", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          { id: 4, general: "INCOME", detail: "DIVIDENDS", is_active: true },
+          categoryRow({
+            id: 4,
+            general: "INCOME",
+            detail: "DIVIDENDS",
+            is_active: true,
+          }),
         ],
       }),
     );
@@ -168,13 +203,13 @@ describe("categoryRepository query helpers", () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
         rows: [
-          {
+          categoryRow({
             id: 7,
             general: "HOME",
             detail: "RENT",
             description: "Monthly rent",
             is_active: true,
-          },
+          }),
         ],
       }),
     );
@@ -208,7 +243,7 @@ describe("categoryRepository query helpers", () => {
 
     await categoryRepository.getAll({ active: true });
 
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).not.toContain("LIMIT");
     expect(params).toEqual([]);
   });
@@ -254,7 +289,14 @@ describe("categoryRepository mutations", () => {
   it("returns current row when update has no patchable fields", async () => {
     query.mockResolvedValueOnce(
       partial<PgQueryResult>({
-        rows: [{ id: 9, general: "FOOD", detail: "DINING", description: null }],
+        rows: [
+          categoryRow({
+            id: 9,
+            general: "FOOD",
+            detail: "DINING",
+            description: null,
+          }),
+        ],
       }),
     );
 
@@ -278,25 +320,25 @@ describe("categoryRepository mutations", () => {
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            categoryRow({
               id: 5,
               general: "UTILITIES",
               detail: "WATER",
               description: "Water bill",
               is_active: true,
-            },
+            }),
           ],
         }),
       )
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            {
+            categoryRow({
               id: 5,
               general: "UTILITIES",
               detail: "WATER",
               path_name: "UTILITIES:WATER",
-            },
+            }),
           ],
         }),
       );
@@ -325,7 +367,7 @@ describe("categoryRepository mutations", () => {
     query.mockResolvedValueOnce(partial<PgQueryResult>({ rows: [] }));
     const result = await categoryRepository.update(42, { general: "OTHER" });
     expect(result).toBeNull();
-    expect(query.mock.calls[0][0]).toContain("AND legacy_compatible = true");
+    expect(query.mock.calls[0]![0]).toContain("AND legacy_compatible = true");
   });
 
   it("returns true from hardDelete when rowCount > 0", async () => {

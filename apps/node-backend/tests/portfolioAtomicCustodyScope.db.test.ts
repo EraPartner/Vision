@@ -342,7 +342,7 @@ describe.skipIf(!hasTestDatabase())(
         batchIds: [batch.id],
       });
       expect(preview.ready).toBe(false);
-      expect(preview.blockers[0].reason).toBe("projected_history_conflict");
+      expect(preview.blockers[0]!.reason).toBe("projected_history_conflict");
       await expect(
         commitReviewedPortfolioImports({ batchIds: [batch.id] }),
       ).rejects.toThrow(/oversell/);
@@ -401,7 +401,7 @@ describe.skipIf(!hasTestDatabase())(
             // A stand-in for some other transaction's client.
             portfolioCustodyWriteHistory(
               [],
-              events[0],
+              events[0]!,
               loose<PgPoolClient>({}),
             );
           },

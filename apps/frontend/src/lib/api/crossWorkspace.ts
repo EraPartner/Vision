@@ -2,6 +2,10 @@
  * Cross-workspace API (ADR-098) — cash-aware rebalancing composing Budgeting
  * + Portfolio data. (The unified-tax surface was removed in ADR-102.)
  */
+import {
+    CommitmentAwareCashResponseSchema,
+    RebalanceResponseSchema,
+} from "@vision/types/contracts";
 import { apiRequest } from "@/lib/api/client";
 
 export type ModelPortfolio =
@@ -79,6 +83,7 @@ export function computeCommitmentAwareCash(req: {
     return apiRequest("/api/cross-workspace/commitment-aware-cash", {
         method: "POST",
         body: JSON.stringify(req),
+        schema: CommitmentAwareCashResponseSchema,
     });
 }
 
@@ -88,5 +93,6 @@ export function computeRebalance(
     return apiRequest("/api/cross-workspace/rebalance", {
         method: "POST",
         body: JSON.stringify(req),
+        schema: RebalanceResponseSchema,
     });
 }

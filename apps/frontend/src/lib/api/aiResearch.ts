@@ -1,10 +1,25 @@
 import {
     API_BASE_URL,
     apiRequest,
+    checkResponseContract,
     parseEnvelopeError,
     rawFetch,
     unwrapEnvelope,
 } from "@/lib/api/client";
+import {
+    AgentCloakDesktopStatusSchema,
+    AiDisclosureDeleteSchema,
+    AiDisclosureGrantListSchema,
+    AiDisclosureGrantSchema,
+    AiDisclosurePreviewSchema,
+    AiDisclosureRecordListSchema,
+    AiDisclosureRevokeSchema,
+    AiInvestigationDetailSchema,
+    AiInvestigationSchema,
+    AiResearchStatusSchema,
+    ResearchDocumentListSchema,
+    ResearchDocumentSchema,
+} from "@vision/types/contracts";
 
 export interface ResearchDocument {
     id: string;
@@ -114,25 +129,32 @@ export interface InvestigationInput {
 }
 
 export const getAiResearchStatus = () =>
-    apiRequest<AiResearchStatus>("/api/ai-research/status");
+    apiRequest<AiResearchStatus>("/api/ai-research/status", {
+        schema: AiResearchStatusSchema,
+    });
 
 export const getAgentCloakDesktopStatus = () =>
-    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop");
+    apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop", {
+        schema: AgentCloakDesktopStatusSchema,
+    });
 
 export const setAgentCloakDesktopEnabled = (enabled: boolean) =>
     apiRequest<AgentCloakDesktopStatus>("/api/ai-research/agentcloak-desktop", {
         method: "PUT",
         body: JSON.stringify({ enabled }),
+        schema: AgentCloakDesktopStatusSchema,
     });
 
 export const createInvestigation = (body: InvestigationInput) =>
     apiRequest<AiInvestigation>("/api/ai-research/investigations", {
         method: "POST",
         body: JSON.stringify(body),
+        schema: AiInvestigationSchema,
     });
 export const getInvestigation = (id: string) =>
     apiRequest<AiInvestigation>(
         `/api/ai-research/investigations/${encodeURIComponent(id)}`,
+        { schema: AiInvestigationDetailSchema },
     );
 export const deleteInvestigation = (id: string) =>
     apiRequest<void>(
@@ -142,7 +164,7 @@ export const deleteInvestigation = (id: string) =>
 export const cancelInvestigation = (id: string) =>
     apiRequest<AiInvestigation>(
         `/api/ai-research/investigations/${encodeURIComponent(id)}/cancel`,
-        { method: "POST" },
+        { method: "POST", schema: AiInvestigationSchema },
     );
 export const resumeInvestigation = (
     id: string,
@@ -151,7 +173,11 @@ export const resumeInvestigation = (
 ) =>
     apiRequest<AiInvestigation>(
         `/api/ai-research/investigations/${encodeURIComponent(id)}/resume`,
-        { method: "POST", body: JSON.stringify({ clarification, scope }) },
+        {
+            method: "POST",
+            body: JSON.stringify({ clarification, scope }),
+            schema: AiInvestigationSchema,
+        },
     );
 export const previewDisclosure = (body: InvestigationInput) =>
     apiRequest<{
@@ -170,35 +196,40 @@ export const previewDisclosure = (body: InvestigationInput) =>
     }>("/api/ai-research/disclosures/preview", {
         method: "POST",
         body: JSON.stringify(body),
+        schema: AiDisclosurePreviewSchema,
     });
 export const createDisclosureGrant = (body: Record<string, unknown>) =>
     apiRequest<{ id: string }>("/api/ai-research/disclosures/grants", {
         method: "POST",
         body: JSON.stringify(body),
+        schema: AiDisclosureGrantSchema,
     });
 export const listDisclosureGrants = () =>
     apiRequest<{ items: Array<Record<string, unknown>>; total: number }>(
         "/api/ai-research/disclosures/grants",
+        { schema: AiDisclosureGrantListSchema },
     );
 export const revokeDisclosureGrant = (id: string) =>
     apiRequest<{ revoked: boolean }>(
         `/api/ai-research/disclosures/grants/${encodeURIComponent(id)}/revoke`,
-        { method: "POST" },
+        { method: "POST", schema: AiDisclosureRevokeSchema },
     );
 export const listDisclosureRecords = () =>
     apiRequest<{ items: Array<Record<string, unknown>>; total: number }>(
         "/api/ai-research/disclosures/records",
+        { schema: AiDisclosureRecordListSchema },
     );
 export const deleteDisclosureRecords = () =>
     apiRequest<{ deleted: { records: number; grants: number } }>(
         "/api/ai-research/disclosures/records",
-        { method: "DELETE" },
+        { method: "DELETE", schema: AiDisclosureDeleteSchema },
     );
 
 export const listResearchDocuments = async () =>
     (
         await apiRequest<{ items: ResearchDocument[] }>(
             "/api/ai-research/documents",
+            { schema: ResearchDocumentListSchema },
         )
     ).items;
 
@@ -214,7 +245,11 @@ export async function uploadResearchDocument(file: File) {
     );
     if (!response.ok)
         throw await parseEnvelopeError(response, "Document upload failed");
-    return unwrapEnvelope<ResearchDocument>(await response.json());
+    return checkResponseContract(
+        ResearchDocumentSchema,
+        unwrapEnvelope<ResearchDocument>(await response.json()),
+        "POST /api/ai-research/documents",
+    );
 }
 
 export const deleteResearchDocument = (id: string) =>

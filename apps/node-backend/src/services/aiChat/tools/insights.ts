@@ -308,7 +308,8 @@ export const getWatchlist = {
     if (symbols.length > 0) {
       try {
         const { items } = await getQuotes(symbols, true);
-        const quotes: Array<{ symbol?: string; price?: number | null }> = items;
+        const quotes: Array<{ symbol?: string | null; price?: number | null }> =
+          items;
         for (const quote of quotes) {
           if (quote.symbol != null && quote.price != null) {
             priceBySymbol.set(quote.symbol, quote.price);

@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const yahoo = vi.hoisted(() => ({ quote: vi.fn(), quoteSummary: vi.fn() }));
-vi.mock("../src/services/prices/yahooClient.ts", () => ({
+// Keep the real payload schemas/helpers; only the client itself is faked.
+vi.mock("../src/services/prices/yahooClient.ts", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../src/services/prices/yahooClient.ts")
+  >()),
   getYahooClient: vi.fn(async () => yahoo),
 }));
 

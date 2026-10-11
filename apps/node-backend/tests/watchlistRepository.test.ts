@@ -7,6 +7,7 @@ import { query as rawQuery } from '../src/database/connection.ts';
 import type { PgQueryResult } from '../src/database/connection.ts';
 import watchlistRepository from '../src/repositories/watchlistRepository.ts';
 import { loose, partial } from './helpers/partial.ts';
+import { watchlistDbRow } from './helpers/portfolioPgRows.ts';
 
 const query = vi.mocked(rawQuery);
 
@@ -40,7 +41,7 @@ describe('watchlistRepository.getAll', () => {
   it('uses default pagination (limit=50, offset=0) when none given', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await watchlistRepository.getAll();
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('SELECT * FROM watchlist');
     expect(sql).toContain('ORDER BY created_at DESC');
     expect(params).toEqual([50, 0]);
@@ -49,22 +50,24 @@ describe('watchlistRepository.getAll', () => {
   it('passes limit/offset to SQL params', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await watchlistRepository.getAll({ limit: 10, offset: 20 });
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual([10, 20]);
   });
 
   it('appends asset_class filter when provided', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await watchlistRepository.getAll({ assetClass: 'crypto', limit: 5, offset: 0 });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('asset_class = $1');
     expect(params).toEqual(['crypto', 5, 0]);
   });
 
   it('returns rows from the query result', async () => {
-    const rows = [{ id: 1, name: 'Apple', symbol: 'AAPL' }];
+    const rows = [watchlistDbRow({ id: 1, name: 'Apple', symbol: 'AAPL' })];
     query.mockResolvedValue(partial<PgQueryResult>({ rows }));
-    expect(await watchlistRepository.getAll()).toEqual(rows);
+    expect(await watchlistRepository.getAll()).toEqual([
+      { ...rows[0], target_price: 0 },
+    ]);
   });
 });
 
@@ -80,22 +83,22 @@ describe('watchlistRepository.getAllWithCount', () => {
   it('parses total_count from window aggregate and strips it from rows', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({
       rows: [
-        { id: 1, name: 'A', total_count: '7' },
-        { id: 2, name: 'B', total_count: '7' },
+        { ...watchlistDbRow({ id: 1, name: 'A' }), total_count: '7' },
+        { ...watchlistDbRow({ id: 2, name: 'B' }), total_count: '7' },
       ],
     }));
     const { rows, total } = await watchlistRepository.getAllWithCount();
     expect(total).toBe(7);
     expect(rows).toEqual([
-      { id: 1, name: 'A' },
-      { id: 2, name: 'B' },
+      { ...watchlistDbRow({ id: 1, name: 'A' }), target_price: 0 },
+      { ...watchlistDbRow({ id: 2, name: 'B' }), target_price: 0 },
     ]);
   });
 
   it('rewrites bare asset_class column reference to w.asset_class for the join-friendly query', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [] }));
     await watchlistRepository.getAllWithCount({ assetClass: 'bond' });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain('w.asset_class = $1');
     expect(sql).toContain('COUNT(*) OVER ()');
   });
@@ -112,7 +115,7 @@ describe('watchlistRepository.getCount', () => {
   it('uses asset_class filter in count query when provided', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ count: '3' }] }));
     await watchlistRepository.getCount({ assetClass: 'etf' });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('count(*)');
     expect(sql).toContain('asset_class = $1');
     expect(params).toEqual(['etf']);
@@ -123,8 +126,8 @@ describe('watchlistRepository.getById', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns the matching row', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 5, name: 'X' }] }));
-    expect(await watchlistRepository.getById(5)).toEqual({ id: 5, name: 'X' });
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 5, name: 'X' })] }));
+    expect(await watchlistRepository.getById(5)).toMatchObject({ id: 5, name: 'X' });
   });
 
   it('returns null when no row matches', async () => {
@@ -137,14 +140,14 @@ describe('watchlistRepository.create', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('defaults currency to EUR and nullifies optional fields', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1 }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1 })] }));
     await watchlistRepository.create({ name: 'Tesla', asset_class: 'stock', target_price: 100 });
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual(['Tesla', null, 'stock', 100, 'EUR', null, null, null]);
   });
 
   it('passes through provided symbol, currency, notes, price_provider_id', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1 }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1 })] }));
     // A numeric provider id: create passes the value through untouched.
     await watchlistRepository.create(loose<WatchlistCreateInput>({
       name: 'BTC',
@@ -156,14 +159,14 @@ describe('watchlistRepository.create', () => {
       price_provider_id: 7,
       added_price: 48000,
     }));
-    const [, params] = query.mock.calls[0];
+    const [, params] = query.mock.calls[0]!;
     expect(params).toEqual(['BTC', 'BTC-EUR', 'crypto', 50000, 'USD', 'wait for dip', 7, 48000]);
   });
 
   it('returns the inserted row', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 99, name: 'Z' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 99, name: 'Z' })] }));
     const created = await watchlistRepository.create({ name: 'Z', asset_class: 's', target_price: 1 });
-    expect(created).toEqual({ id: 99, name: 'Z' });
+    expect(created).toMatchObject({ id: 99, name: 'Z' });
   });
 });
 
@@ -171,9 +174,9 @@ describe('watchlistRepository.update', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('builds dynamic SET clause and binds id last', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, name: 'New' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1, name: 'New' })] }));
     await watchlistRepository.update(1, { name: 'New', target_price: 5 });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain('UPDATE watchlist SET');
     expect(sql).toContain('name = $1');
     expect(sql).toContain('target_price = $2');
@@ -182,28 +185,28 @@ describe('watchlistRepository.update', () => {
   });
 
   it('ignores fields not in the allowlist', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, name: 'A' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1, name: 'A' })] }));
     await watchlistRepository.update(1, { name: 'A', forbidden: 'evil', id: 999 });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).not.toContain('forbidden');
     expect(sql).not.toContain('$3 WHERE id'); // only one set + id binding
     expect(params).toEqual(['A', 1]);
   });
 
   it('skips undefined values', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1 }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1 })] }));
     await watchlistRepository.update(1, { name: 'A', notes: undefined });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).not.toContain('notes');
     expect(params).toEqual(['A', 1]);
   });
 
   it('falls back to getById when no allowed fields present', async () => {
-    query.mockResolvedValue(partial<PgQueryResult>({ rows: [{ id: 1, name: 'unchanged' }] }));
+    query.mockResolvedValue(partial<PgQueryResult>({ rows: [watchlistDbRow({ id: 1, name: 'unchanged' })] }));
     const result = await watchlistRepository.update(1, { forbidden: 'x' });
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query.mock.calls[0][0]).toContain('SELECT * FROM watchlist WHERE id = $1');
-    expect(result).toEqual({ id: 1, name: 'unchanged' });
+    expect(query.mock.calls[0]![0]).toContain('SELECT * FROM watchlist WHERE id = $1');
+    expect(result).toMatchObject({ id: 1, name: 'unchanged' });
   });
 
   it('returns null when row is missing', async () => {
@@ -228,7 +231,7 @@ describe('watchlistRepository.delete', () => {
   it('passes id as a single param', async () => {
     query.mockResolvedValue(partial<PgQueryResult>({ rowCount: 1 }));
     await watchlistRepository.delete(7);
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toBe('DELETE FROM watchlist WHERE id = $1');
     expect(params).toEqual([7]);
   });

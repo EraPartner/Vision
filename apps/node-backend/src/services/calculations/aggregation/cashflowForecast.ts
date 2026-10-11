@@ -135,7 +135,10 @@ export async function computeCashflowForecast({
   const windowStart = appDateStringToUtc(`${monthKeys[0]}-01`);
   // Last day of the final window month = day 0 of the month after it.
   const lastKey = monthKeys[monthKeys.length - 1];
-  const [lastYear, lastMonth] = lastKey.split('-').map(Number);
+  // safeMonths >= 1, so buildMonthKeys always returns at least one month.
+  if (lastKey === undefined) throw new Error('Cashflow forecast window has no months');
+  // A missing part is NaN, as it was when read past the end of the split.
+  const [lastYear = NaN, lastMonth = NaN] = lastKey.split('-').map(Number);
   const lastDay = new Date(Date.UTC(lastYear, lastMonth, 0)).getUTCDate();
   const windowEnd = appDateStringToUtc(`${lastKey}-${String(lastDay).padStart(2, '0')}`);
 

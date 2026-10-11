@@ -65,7 +65,11 @@ describe("useOnboarding", () => {
     it("starts complete while loading and accepts only a strict true setting", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings/onboarding_complete`, () =>
-                ok({ key: "onboarding_complete", value: "true" }),
+                ok({
+                    key: "onboarding_complete",
+                    value: "true",
+                    expected: { exists: true, value: "true" },
+                }),
             ),
         );
 
@@ -81,7 +85,11 @@ describe("useOnboarding", () => {
     it("loads a persisted boolean true", async () => {
         server.use(
             http.get(`${API_BASE}/api/settings/onboarding_complete`, () =>
-                ok({ key: "onboarding_complete", value: true }),
+                ok({
+                    key: "onboarding_complete",
+                    value: true,
+                    expected: { exists: true, value: true },
+                }),
             ),
         );
 
@@ -118,6 +126,7 @@ describe("useOnboarding", () => {
                     return ok({
                         key: "onboarding_complete",
                         value: body.value,
+                        expected: { exists: true, value: body.value },
                     });
                 },
             ),

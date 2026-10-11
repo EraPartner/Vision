@@ -73,7 +73,7 @@ describe("analysis workbench integration", () => {
       ],
     });
     expect(result.summaries.total).toBeNull();
-    expect(result.errors[0].code).toBe("INCOMPLETE_INPUT");
+    expect(result.errors[0]!.code).toBe("INCOMPLETE_INPUT");
   });
   it("preparation refresh repeats against original source rather than appending twice", () => {
     const config: AnalysisWorkbench = {
@@ -139,7 +139,7 @@ describe("analysis workbench integration", () => {
       scenarioModel: model,
       formulaModel: formulas,
     }).result;
-    expect(fresh.rows[0].scaled).toBe("20");
+    expect(fresh.rows[0]!.scaled).toBe("20");
     expect(saved.rows).toEqual(fresh.rows);
     expect(saved.declaredColumns!.find((c) => c.id === "scaled")!.unit).toEqual(
       fresh.declaredColumns.find((c) => c.id === "scaled")!.unit,
@@ -220,7 +220,7 @@ describe("analysis workbench integration", () => {
       ],
     });
     expect(result.summaries.total).toBeNull();
-    expect(result.errors[0].code).toBe("CURRENCY_PROVENANCE_REQUIRED");
+    expect(result.errors[0]!.code).toBe("CURRENCY_PROVENANCE_REQUIRED");
   });
   it("saved runs keep unavailable financial coverage partial even without formulas", () => {
     const result = finalize(
@@ -283,7 +283,7 @@ describe("workbench schema and coverage propagation", () => {
     expect(
       result.columns.find((column) => column.id === "amount")!.unit,
     ).toEqual({ kind: "money", currency: "EUR" });
-    expect(result.rows[0].scaled).toBe("20");
+    expect(result.rows[0]!.scaled).toBe("20");
     expect(result.window).toMatchObject({
       kind: "page",
       returnedRows: 1,
@@ -322,7 +322,7 @@ describe("workbench schema and coverage propagation", () => {
     expect(transformed.window.hasMore).toBe(false);
     const fresh = applyAnalysisFormulaModel(transformed, { formulas });
     expect(fresh.formulaSummaries.total).toBeNull();
-    expect(fresh.formulaErrors[0].code).toBe("INCOMPLETE_INPUT");
+    expect(fresh.formulaErrors[0]!.code).toBe("INCOMPLETE_INPUT");
     const preview = evaluateAnalysisExtension({
       operation: "formulas",
       rows: source.rows,
@@ -334,14 +334,14 @@ describe("workbench schema and coverage propagation", () => {
     });
     expect(preview.complete).toBe(false);
     expect(preview.summaries.total).toBeNull();
-    expect(preview.errors[0].code).toBe("INCOMPLETE_INPUT");
+    expect(preview.errors[0]!.code).toBe("INCOMPLETE_INPUT");
     expect(preview.columns.find((column) => column.id === "value")!.type).toBe(
       "decimal",
     );
     const saved = finalize(source, { workbench, formulaModel: { formulas } });
     expect(saved.complete).toBe(false);
     expect(saved.result.formulaSummaries.total).toBeNull();
-    expect(saved.result.formulaErrors[0].code).toBe("INCOMPLETE_INPUT");
+    expect(saved.result.formulaErrors[0]!.code).toBe("INCOMPLETE_INPUT");
   });
   it("source financial coverage prevents population formulas and scenario calculations", () => {
     // Financial datasets report unavailableRows; AnalysisResultCoverage omits it.
@@ -358,7 +358,7 @@ describe("workbench schema and coverage propagation", () => {
         formulas: [
           { id: "total", scope: "summary", expression: "SUM(amount)" },
         ],
-      }).formulaErrors[0].code,
+      }).formulaErrors[0]!.code,
     ).toBe("INCOMPLETE_INPUT");
     expect(() =>
       evaluateAnalysisExtension({
@@ -379,7 +379,7 @@ it("prepares calendar previews once in the full-run order", () => {
   const preview = evaluateAnalysisExtension({ ...source, operation: "time", ...time, workbench: { steps, time } });
   expect(preview.rows).toEqual(full.rows);
   expect(preview.columns).toEqual(full.columns);
-  expect(preview.rows[0].double).toBe("20");
+  expect(preview.rows[0]!.double).toBe("20");
 });
 
 it.each(["constructor", "toString", "__proto__"])(

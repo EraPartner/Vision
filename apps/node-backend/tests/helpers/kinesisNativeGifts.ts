@@ -180,9 +180,9 @@ export async function nativeGiftFixture({
     );
     rows.forEach((row, index) =>
       Object.assign(row, {
-        dedup_fingerprint: identities[index].fingerprint,
+        dedup_fingerprint: identities[index]!.fingerprint,
         dedup_fingerprint_version: 1,
-        dedup_occurrence: identities[index].occurrence,
+        dedup_occurrence: identities[index]!.occurrence,
       }),
     );
     return {
@@ -199,7 +199,7 @@ export async function nativeGiftFixture({
       ],
       history: [
         {
-          ...syntheticKinesisManual(rows[0]),
+          ...syntheticKinesisManual(rows[0]!),
           account_id: account,
           fx_rate_to_eur: "0.9200000000",
         },

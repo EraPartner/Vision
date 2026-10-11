@@ -110,14 +110,27 @@ function projection(row: WireRow) {
     "dedup_occurrence",
     "investment_id",
   ];
-  return Object.fromEntries(keys.map((key) => [key, row[key]]));
+  // The commit read as pg returns it: BIGINT id as text, JSON details and
+  // the LEFT JOIN investment columns NULL for a cash row.
+  return {
+    ...Object.fromEntries(keys.map((key) => [key, row[key]])),
+    id: String(row.id),
+    asset_transfer_details: row.asset_transfer_details ?? null,
+    asset_adjustment_details: row.asset_adjustment_details ?? null,
+    asset_class: null,
+    investment_currency: null,
+  };
 }
 function dispatch(sql: string, params?: readonly unknown[]) {
   if (/SELECT b\.account_id, b\.is_brokerage/.test(sql))
     return {
       rows: [
         {
-          id: selected.batch_id,
+          // BIGINT id as pg returns it.
+          id: String(selected.batch_id),
+          rows_total: 1,
+          status: "committing",
+          adapter_name: "portfolio_generic",
           account_id: 7,
           is_brokerage: true,
           account_institution: "IBKR",
@@ -186,12 +199,12 @@ describe("IBKR native funding commit protection", () => {
     await expect(
       commitBatch({ batchId: selected.batch_id }),
     ).resolves.toMatchObject({ imported: 0, duplicates: 1, errors: 0 });
-    expect(marks).toEqual([{ id: selected.id, status: "duplicate" }]);
+    expect(marks).toEqual([{ id: String(selected.id), status: "duplicate" }]);
     expect(inserts()).toEqual([]);
   });
 
   it("resolves a repeated original source through its intact corrected after-image before ordinary dedup", async () => {
-    const action = prove().actions[0];
+    const action = prove().actions[0]!;
     source.context.ledger[0] = {
       ...action.after.snapshot,
       category_id: 58,
@@ -214,12 +227,12 @@ describe("IBKR native funding commit protection", () => {
         /WHERE dedup_fingerprint_version/.test(sql),
       ),
     ).toBe(false);
-    expect(marks).toEqual([{ id: selected.id, status: "duplicate" }]);
+    expect(marks).toEqual([{ id: String(selected.id), status: "duplicate" }]);
     expect(inserts()).toEqual([]);
   });
 
   it("fails closed when an aliased corrected cash after-image has changed", async () => {
-    const action = prove().actions[0];
+    const action = prove().actions[0]!;
     source.context.ledger[0] = { ...action.after.snapshot, amount: "101.0000" };
     source.context.receipts.push({
       id: 90,
@@ -235,7 +248,7 @@ describe("IBKR native funding commit protection", () => {
   });
 
   it("does not alias an altered retained source record", async () => {
-    const action = prove().actions[0];
+    const action = prove().actions[0]!;
     source.context.ledger[0] = action.after.snapshot;
     source.context.receipts.push({
       id: 90,
@@ -264,7 +277,7 @@ describe("IBKR native funding commit protection", () => {
       commitBatch({ batchId: selected.batch_id }),
     ).resolves.toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
     expect(inserts()).toHaveLength(1);
-    expect(inserts()[0][1]!.slice(0, 3)).toEqual(["2026-01-01", 100, "USD"]);
+    expect(inserts()[0]![1]!.slice(0, 3)).toEqual(["2026-01-01", 100, "USD"]);
   });
 
   it("rejects native proof tampering even if an ordinary fingerprint exists", async () => {

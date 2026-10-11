@@ -7,21 +7,21 @@
  */
 
 import { query } from '../database/connection.ts';
+import { queryRows } from '../database/rowContracts.ts';
+import { providerApiKeyRowSchema } from '../database/rows/portfolio.ts';
+import type { ProviderApiKeyDbRow } from '../database/rows/portfolio.ts';
 
-export type ProviderApiKeyRow = {
-  provider: string;
-  api_key: string;
-  updated_at: Date;
-};
+/** A `provider_api_keys` row. Derived from the checked row schema. */
+export type ProviderApiKeyRow = ProviderApiKeyDbRow;
 
 /**
  * All stored provider keys.
  */
 export async function listAll(): Promise<ProviderApiKeyRow[]> {
-  const result = await query<ProviderApiKeyRow>(
+  return queryRows(
+    providerApiKeyRowSchema,
     'SELECT provider, api_key, updated_at FROM provider_api_keys ORDER BY provider ASC',
   );
-  return result.rows;
 }
 
 /**

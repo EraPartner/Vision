@@ -2,7 +2,8 @@
 import { createHash } from "node:crypto";
 import { readIbkrFundingWorkbook } from "../../lib/portfolioUpload.ts";
 import type { FundingWorkbookCell } from "../../lib/portfolioUpload.ts";
-import { toDecimal } from "../../lib/money.ts";
+import { Decimal, toDecimal } from "../../lib/money.ts";
+import type { DecimalInput } from "../../lib/money.ts";
 import { ValidationError } from "../../middleware/errorHandler.ts";
 import type { IbkrFundingEvidence } from "../../repositories/portfolioImportCashRepository.ts";
 import type { ParsedPortfolioRows } from "./portfolioGenericAdapter.ts";
@@ -303,21 +304,54 @@ export async function parseIbkrFundingHistory(
   return Object.assign(rows, { ibkrFundingSourceContext: context });
 }
 
+/**
+ * The staged fields the primary proof reads. Staged rows from several readers
+ * reach it, so every value is re-validated rather than trusted.
+ */
+export interface IbkrFundingStagedRow {
+  custom_config?: unknown;
+  raw_data?: unknown;
+  source_record_hash?: unknown;
+  route?: unknown;
+  type?: unknown;
+  type_raw?: unknown;
+  tx_date?: unknown;
+  currency?: unknown;
+  source_account_identity?: unknown;
+  source_transaction_id?: unknown;
+  investment_id?: unknown;
+  symbol_raw?: unknown;
+  name_raw?: unknown;
+  amount?: unknown;
+  units?: unknown;
+  price_per_unit?: unknown;
+  fees?: unknown;
+  taxes?: unknown;
+}
+
+// A value toDecimal accepts; anything else made the original proof throw.
+const isDecimalInput = (value: unknown): value is DecimalInput =>
+  value == null ||
+  typeof value === "string" ||
+  typeof value === "number" ||
+  value instanceof Decimal;
+
 /** Validate retained source context and the literal workbook row against staging. */
 export function getIbkrFundingPrimaryEvidence(
-  // Staged rows from several readers reach here; every field is re-validated.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  row: any,
+  row: IbkrFundingStagedRow,
 ): IbkrFundingEvidence | undefined {
   try {
-    const config =
+    const config: unknown =
       typeof row.custom_config === "string"
         ? JSON.parse(row.custom_config)
         : row.custom_config;
-    const context: IbkrFundingSourceContext | undefined =
-      config?.ibkr_funding_source_context;
+    const configRecord: Partial<Record<string, unknown>> =
+      typeof config === "object" && config !== null ? config : {};
+    // Every context field is checked below before it is used.
+    const context = configRecord.ibkr_funding_source_context as
+      IbkrFundingSourceContext | undefined;
     if (
-      config?.format !== "ibkr_funding_history" ||
+      configRecord.format !== "ibkr_funding_history" ||
       context?.version !== 1 ||
       !validHash(context.source_file_hash) ||
       !["xls", "xlsx"].includes(context.source_format) ||
@@ -413,10 +447,12 @@ export function getIbkrFundingPrimaryEvidence(
       String(row.symbol_raw || "") ||
       String(row.name_raw || "") ||
       row.amount == null ||
+      !isDecimalInput(row.amount) ||
       !toDecimal(row.amount).eq(proof.amount) ||
       [row.units, row.price_per_unit].some((value) => value != null) ||
       [row.fees, row.taxes].some(
-        (value) => value != null && !toDecimal(value).eq(0),
+        (value) =>
+          value != null && (!isDecimalInput(value) || !toDecimal(value).eq(0)),
       )
     )
       return undefined;

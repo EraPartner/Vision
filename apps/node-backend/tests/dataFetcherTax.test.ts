@@ -23,27 +23,39 @@ import {
   __clearHistoricalIndexCache as clearHistoricalIndexCache,
 } from "../src/services/currency/currencyConversionService.ts";
 import { fetchTaxData } from "../src/services/reports/dataFetcherTax.ts";
+import { RowContractError } from "../src/database/rowContracts.ts";
 
 const query = vi.mocked(rawQuery);
 const loadCurrentRates = vi.mocked(rawLoadCurrentRates);
 
-const dividendRow = (over: Record<string, unknown> = {}) => ({
-  id: 1,
-  investment_id: 10,
-  investment_name: "Acme",
-  symbol: "ACME",
-  asset_class: "stock",
-  type: "dividend",
-  dividend_amount_convention: "net",
-  amount: 1000,
-  taxes: 150,
-  fees: 0,
-  currency: "USD",
-  rate_date: "2024-03-15",
-  year: 2024,
-  month: 3,
-  ...over,
-});
+// pg returns the COALESCEd NUMERIC money columns as strings, so cases may pass
+// numbers for readability and the builder stringifies them.
+const dividendRow = (over: Record<string, unknown> = {}) => {
+  const row: Record<string, unknown> = {
+    id: 1,
+    investment_id: 10,
+    investment_name: "Acme",
+    symbol: "ACME",
+    asset_class: "stock",
+    type: "dividend",
+    dividend_amount_convention: "net",
+    income_recognition_role: "standard",
+    amount: 1000,
+    taxes: 150,
+    fees: 0,
+    currency: "USD",
+    rate_date: "2024-03-15",
+    year: 2024,
+    month: 3,
+    ...over,
+  };
+  return {
+    ...row,
+    amount: String(row.amount),
+    taxes: String(row.taxes),
+    fees: String(row.fees),
+  };
+};
 
 describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)", () => {
   beforeEach(() => {
@@ -62,7 +74,11 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            { currency_code: "USD", rate_date: "2024-03-15", rate_to_eur: 0.9 },
+            {
+              currency_code: "USD",
+              rate_date: "2024-03-15",
+              rate_to_eur: "0.9",
+            },
           ],
         }),
       );
@@ -85,7 +101,11 @@ describe("fetchTaxData — Belgian tax FX uses transaction-date rates (ADR-085)"
       .mockResolvedValueOnce(
         partial<PgQueryResult>({
           rows: [
-            { currency_code: "USD", rate_date: "2024-03-15", rate_to_eur: 0.9 },
+            {
+              currency_code: "USD",
+              rate_date: "2024-03-15",
+              rate_to_eur: "0.9",
+            },
           ],
         }),
       );
@@ -289,4 +309,17 @@ it("keeps paired in-kind source amount and costs separate from ordinary dividend
     feesTotal: 1,
     unknownDividendConventionCount: 0,
   });
+});
+
+it("surfaces a row contract mismatch instead of skipping the tax sections", async () => {
+  vi.clearAllMocks();
+  clearHistoricalIndexCache();
+  query.mockResolvedValueOnce(
+    partial<PgQueryResult>({
+      rows: [{ ...dividendRow({ currency: "EUR" }), amount: 10 }],
+    }),
+  );
+  await expect(
+    fetchTaxData("EUR", { kind: "year", year: 2024 }, {}),
+  ).rejects.toBeInstanceOf(RowContractError);
 });

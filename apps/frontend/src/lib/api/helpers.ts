@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import {
     API_BASE_URL,
     type QueryParams,
@@ -20,16 +21,27 @@ export function buildQuery(params?: QueryParams): string {
     return queryParams.toString();
 }
 
+/** Options for {@link requestWithQuery}: an abort signal and/or a response contract. */
+export interface RequestWithQueryOptions {
+    signal?: AbortSignal;
+    /** Response contract for the unwrapped `data` (ADR-193); see `apiRequest`. */
+    schema?: z.ZodType;
+}
+
 export function requestWithQuery<T>(
     endpoint: string,
     params?: QueryParams,
-    signal?: AbortSignal,
+    options?: AbortSignal | RequestWithQueryOptions,
 ): Promise<T> {
     const query = buildQuery(params);
-    return apiRequest<T>(
-        `${endpoint}${query ? `?${query}` : ""}`,
-        signal ? { signal } : {},
-    );
+    const { signal, schema } =
+        options instanceof AbortSignal
+            ? { signal: options, schema: undefined }
+            : (options ?? {});
+    return apiRequest<T>(`${endpoint}${query ? `?${query}` : ""}`, {
+        ...(signal ? { signal } : {}),
+        ...(schema ? { schema } : {}),
+    });
 }
 
 export function buildExclusionQuery(params?: {

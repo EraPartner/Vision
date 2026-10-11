@@ -24,6 +24,19 @@ import NotFound from "@/pages/NotFound";
 
 const API_BASE = "http://localhost:3002";
 
+/** `GET /api/ai/status` with Ollama reachable: every key `getStatus` sends. */
+const AI_READY_STATUS = {
+    ok: true,
+    baseUrl: "http://localhost:11434",
+    displayUrl: "http://localhost:11434",
+    modelCount: 1,
+    error: null,
+    code: null,
+    hint: null,
+    defaultModel: "llama3",
+    enabled: true,
+};
+
 beforeEach(() => {
     server.use(
         http.get(`${API_BASE}/api/import/parsers`, () =>
@@ -94,17 +107,17 @@ describe("Language switch (integration)", () => {
     it("ImportPage renders English heading by default", async () => {
         renderWithApp(<ImportPage />);
         expect(
-            await screen.findByRole("heading", { name: /^import$/i }),
+            await screen.findByRole("heading", { name: /^import & export$/i }),
         ).toBeInTheDocument();
     });
 
     it("ImportPage renders Dutch heading when language is nl", async () => {
         useDutch();
         renderWithApp(<ImportPage />);
-        // Dutch: "Importeren"
+        // Dutch: importPage.title = "Importeren en exporteren"
         expect(
             await screen.findByRole("heading", {
-                name: /^importeren$/i,
+                name: /^importeren en exporteren$/i,
             }),
         ).toBeInTheDocument();
     });
@@ -231,13 +244,17 @@ describe("Language switch (integration)", () => {
 
     it("AIChatPage renders Dutch heading when language is nl", async () => {
         useDutch();
+        // The empty-state digest button only renders while local AI is reachable.
+        server.use(
+            http.get(`${API_BASE}/api/ai/status`, () => ok(AI_READY_STATUS)),
+        );
         renderWithApp(<AIChatPage />);
         // Dutch: aiChat.title = "AI-chat"
         expect(
             await screen.findByRole("heading", { name: /^ai-chat$/i }),
         ).toBeInTheDocument();
         expect(
-            screen.getByRole("button", { name: "Tonen mijn inzichten" }),
+            await screen.findByRole("button", { name: "Tonen mijn inzichten" }),
         ).toBeInTheDocument();
     });
 

@@ -76,8 +76,8 @@ describe("accuracyStore DB path returns camelCase records", () => {
   it("getAccuracyHistory normalizes snake_case repository rows", async () => {
     const rows = await getAccuracyHistory({ userId: "u1", methodId: "ewma" });
     expect(rows).toHaveLength(1);
-    expect(rows[0].methodId).toBe("ewma");
-    expect(rows[0].rmse).toBe(60.3);
+    expect(rows[0]!.methodId).toBe("ewma");
+    expect(rows[0]!.rmse).toBe(60.3);
     expect(rows[0]).not.toHaveProperty("method_id");
   });
 

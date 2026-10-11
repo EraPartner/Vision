@@ -81,8 +81,6 @@ import {
 } from "./portfolioImportDetection";
 import { PortfolioImportSession } from "./PortfolioImportSession";
 
-const PortfolioImportIcon = PAGE_ICONS["/portfolio/import"];
-
 export function PortfolioImportPage() {
     const { t } = useLanguage();
     const navigate = useNavigate();
@@ -382,7 +380,7 @@ export function PortfolioImportPage() {
 
     return (
         <PageShell>
-            <PageHeader title={t("portfolioImport.title")} subtitle={t("portfolioImport.desc")} icon={PortfolioImportIcon} />
+            <PageHeader title={t("portfolioImport.title")} subtitle={t("portfolioImport.desc")} icon={PAGE_ICONS["/portfolio/import"]} />
             <PortfolioImportSession accounts={brokerAccounts} />
             <Disclosure variant="card">
                 <DisclosureSummary padded>

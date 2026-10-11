@@ -57,7 +57,7 @@ describe("tag attachment", () => {
     query.mockResolvedValueOnce({ rows: [] });
     await transactionRepository.getAll({});
 
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain("LEFT JOIN recipients pr");
     expect(sql).toContain("LEFT JOIN categories c");
     expect(sql).toContain("LEFT JOIN accounts acct");
@@ -86,16 +86,16 @@ describe("tag attachment", () => {
         ],
       });
     const rows = await transactionRepository.getAll({ limit: 10, offset: 0 });
-    expect(rows[0].tags).toHaveLength(2);
-    expect(rows[0].tags[0]).toEqual({
+    expect(rows[0]!.tags).toHaveLength(2);
+    expect(rows[0]!.tags[0]).toEqual({
       id: 10,
       slug: "food",
       color: "#fff",
       is_active: true,
     });
-    expect(rows[1].tags).toEqual([]); // no tags for tx 2
+    expect(rows[1]!.tags).toEqual([]); // no tags for tx 2
     // tag lookup queried against the row ids
-    expect(query.mock.calls[1][1]).toEqual([[1, 2]]);
+    expect(query.mock.calls[1]![1]).toEqual([[1, 2]]);
   });
 
   it("skips the tag query entirely when there are no rows", async () => {
@@ -116,7 +116,7 @@ describe("getCount", () => {
     query.mockResolvedValueOnce({ rows: [{ count: "1" }] });
     await transactionRepository.getCount({ recipientName: "shop" });
 
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     expect(sql).toContain("LEFT JOIN recipients r ON t.recipient_id = r.id");
     expect(sql).not.toContain("LEFT JOIN recipients pr");
     expect(sql).not.toContain("LEFT JOIN categories");
@@ -132,7 +132,7 @@ describe("getCount", () => {
       amountMax: 100,
       amountSigned: true,
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain(
       "t.category_id IN (SELECT category_id FROM category_ancestors WHERE ancestor_id IN ($1, $2))",
     );
@@ -159,7 +159,7 @@ describe("getUncategorised", () => {
       limit: 25,
       offset: 5,
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     // Uncategorised = full 3-level effective category is NULL (own, recipient
     // default, and primary-recipient default), so the primary is joined too.
     expect(sql).toContain(
@@ -199,7 +199,7 @@ describe("getUncategorised", () => {
       amountMax: 100,
       tagSlugs: ["groceries"],
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain("t.id = $1");
     expect(sql).toContain("t.id IN (");
     expect(sql).toContain("t.amount < 0");
@@ -217,7 +217,7 @@ describe("getUncategorised", () => {
     // alias-recipient rows with a categorised primary leaked into the queue.
     query.mockResolvedValueOnce({ rows: [] });
     await transactionRepository.getUncategorised({});
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     // The effective-category predicate now spans all three levels, so a row
     // whose primary carries a default category is NOT NULL → excluded.
     expect(sql).toContain(
@@ -237,7 +237,7 @@ describe("getUncategorisedWithCount", () => {
   it("joins the primary recipient and filters on the full effective category", async () => {
     query.mockResolvedValueOnce({ rows: [{ id: null, total_count: 0 }] });
     await transactionRepository.getUncategorisedWithCount({});
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     // The uncategorised_rows CTE must join pr and use the 3-level predicate.
     expect(sql).toContain(
       "LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id",
@@ -252,7 +252,7 @@ describe("getUncategorisedWithCount", () => {
     await transactionRepository.getUncategorisedWithCount({
       recipientName: "delh",
     });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     const totalCte = sql.slice(
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
@@ -291,7 +291,7 @@ describe("getUncategorisedWithCount", () => {
       search: "coffee",
       active: true,
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     const totalCte = sql.slice(
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
@@ -313,7 +313,7 @@ describe("getUncategorisedWithCount", () => {
       amountMax: 100,
       tagSlugs: ["groceries"],
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     const totalCte = sql.slice(
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
@@ -340,7 +340,7 @@ describe("getUncategorisedWithCount", () => {
       transactionId: 5,
       active: false,
     });
-    const [sql] = query.mock.calls[0];
+    const [sql] = query.mock.calls[0]!;
     const totalCte = sql.slice(
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
@@ -366,7 +366,7 @@ describe("getUncategorisedWithCount", () => {
       limit: 2,
       offset: 4,
     });
-    const [sql, params] = query.mock.calls[0];
+    const [sql, params] = query.mock.calls[0]!;
     const totalCte = sql.slice(
       sql.indexOf("WITH total_cte AS ("),
       sql.indexOf("uncategorised_rows AS ("),
@@ -452,7 +452,7 @@ describe("create", () => {
       "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
       [7],
     ]);
-    expect(client.query.mock.calls[1][1][1]).toBe(7);
+    expect(client.query.mock.calls[1]![1][1]).toBe(7);
     expect(
       client.query.mock.calls.some(([sql]) =>
         String(sql).includes("INSERT INTO accounts"),
@@ -485,7 +485,7 @@ describe("create", () => {
       "SELECT id FROM accounts WHERE id = $1 AND is_active = true",
       [7],
     ]);
-    const [sql, params] = client.query.mock.calls[1];
+    const [sql, params] = client.query.mock.calls[1]!;
     expect(sql).toContain("INSERT INTO transactions (date, account_id");
     expect(sql).not.toContain("date, bank_account");
     expect(params[1]).toBe(7);
@@ -507,7 +507,7 @@ describe("create", () => {
       category_id: null,
       comment: null,
     } as TransactionCreateInput);
-    const params = client.query.mock.calls[0][1];
+    const params = client.query.mock.calls[0]![1];
     expect(params[1]).toBeNull(); // account_id
     expect(params[4]).toBeNull(); // memo
     expect(params[5]).toBe("EUR");
@@ -592,7 +592,7 @@ describe("update", () => {
       amount: 9,
     });
     expect(row!.id).toBe(2);
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain('"date" = $1');
     expect(sql).toContain("updated_at = NOW()");
   });
@@ -679,7 +679,7 @@ describe("listRecentUnlinked", () => {
       sinceDate: "2024-01-01",
     });
     expect(rows).toEqual([unlinked]);
-    expect(query.mock.calls[0][1]).toEqual(["2024-01-01"]);
-    expect(query.mock.calls[0][0]).toContain("NOT EXISTS");
+    expect(query.mock.calls[0]![1]).toEqual(["2024-01-01"]);
+    expect(query.mock.calls[0]![0]).toContain("NOT EXISTS");
   });
 });

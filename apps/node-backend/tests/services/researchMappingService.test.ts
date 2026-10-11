@@ -44,7 +44,7 @@ const makeRepo = (seed: FakeMapSeed[] = []) => {
         (r) => r.instrument_key === m.instrumentKey && r.key_type === m.keyType && r.provider === m.provider,
       );
       const row: FakeMapRow = {
-        id: idx >= 0 ? rows[idx].id : rows.length + 1,
+        id: idx >= 0 ? rows[idx]!.id : rows.length + 1,
         instrument_key: m.instrumentKey,
         key_type: m.keyType,
         provider: m.provider,

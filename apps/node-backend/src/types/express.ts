@@ -49,36 +49,51 @@ export interface ExpressRequest {
   cookies?: Record<string, string>;
 }
 
+/** A body chunk for `write`/`end`. */
+export type ResponseChunk = string | Uint8Array;
+/** Completion callback for `write`/`end`. */
+export type ResponseCallback = (error?: Error | null) => void;
+
 export interface ExpressResponse {
-  json: (body?: any) => ExpressResponse;
+  json: (body?: unknown) => ExpressResponse;
   status: (code: number) => ExpressResponse;
-  send: (body?: any) => ExpressResponse;
+  send: (body?: unknown) => ExpressResponse;
   setHeader: (name: string, value: string | number) => void;
   /** Express's `res.set` — an alias for `setHeader` that returns `this` for chaining. */
   set?: (name: string, value: string | number) => ExpressResponse;
-  on: (event: string, listener: (...args: any[]) => void) => void;
-  once?: (event: string, listener: (...args: any[]) => void) => void;
+  // Method syntax so Node's overloaded `on`/`once` stay assignable.
+  on(event: string, listener: (...args: unknown[]) => void): void;
+  once?(event: string, listener: (...args: unknown[]) => void): void;
   statusCode: number;
   headersSent: boolean;
   writableEnded: boolean;
   /** Node's `http.ServerResponse#write` (overloaded `(chunk, cb?) | (chunk, encoding, cb?)` upstream — loosely typed to cover both). Used by the streaming CSV/NDJSON export pipeline (services/transactionExport.ts) and, reassigned wholesale, by middleware/compression.ts's gzip wrapper. */
-  write: (chunk?: any, encoding?: any, cb?: any) => boolean;
+  // Method syntax so Node's overloaded `write`/`end` stay assignable.
+  write(
+    chunk: ResponseChunk,
+    encoding?: BufferEncoding | ResponseCallback,
+    cb?: ResponseCallback,
+  ): boolean;
   /** Same overload shape as `write` above; middleware/compression.ts's gzip wrapper reassigns this too. */
-  end: (chunk?: any, encoding?: any, cb?: any) => ExpressResponse | void;
+  end(
+    chunk?: ResponseChunk | ResponseCallback,
+    encoding?: BufferEncoding | ResponseCallback,
+    cb?: ResponseCallback,
+  ): ExpressResponse | void;
   /** Express's `res.sendFile`, used by routes/attachments.js's download endpoint. */
-  sendFile?: (path: string, callback?: (err: any) => void) => void;
+  sendFile?: (path: string, callback?: (err?: Error) => void) => void;
   /** Node's `http.ServerResponse#writeHead`, used by middleware/cors.ts's CORS preflight short-circuit. */
   writeHead?: (statusCode: number) => ExpressResponse;
-  getHeader?: (name: string) => any;
+  getHeader?: (name: string) => number | string | string[] | undefined;
   removeHeader?: (name: string) => void;
   /** Express's `res.type`, used by main.ts's SPA fallback. */
   type?: (contentType: string) => ExpressResponse;
   /** Node's `EventEmitter#emit` (`ExpressResponse` is a `http.ServerResponse`, which is one) — used by middleware/compression.ts's gzip wrapper to re-surface `gz`'s `'drain'` event on `res`. */
-  emit?: (event: string, ...args: any[]) => boolean;
+  emit?: (event: string, ...args: unknown[]) => boolean;
   destroy?: (err?: Error) => void;
   /** Attached by middleware/envelope.ts's `wrapResponse`. */
-  ok?: (data: any, meta?: ResponseMeta) => ExpressResponse;
-  locals?: Record<string, any>;
+  ok?: (data: unknown, meta?: ResponseMeta) => ExpressResponse;
+  locals?: Record<string, unknown>;
 }
 
 /**
@@ -93,7 +108,7 @@ export type ExpressHandler = (
   req: ExpressRequest,
   res: ExpressResponse,
   next: ExpressNextFunction,
-) => any;
+) => unknown;
 
 export interface ExpressRouter {
   get: (path: string, ...handlers: ExpressHandler[]) => ExpressRouter;

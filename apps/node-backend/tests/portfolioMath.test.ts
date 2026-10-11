@@ -255,7 +255,7 @@ describe("sanitizeSnapshotSpikes", () => {
   it("leaves non-spike sequences untouched", () => {
     const snapshots = [{ value: 100 }, { value: 110 }, { value: 120 }];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].value).toBe(110);
+    expect(result[1]!.value).toBe(110);
   });
 
   it("replaces a high needle spike (localNeedlePeak) with geo mean of neighbors", () => {
@@ -263,14 +263,14 @@ describe("sanitizeSnapshotSpikes", () => {
     // cents (shared implementation with sanitizeIsolatedValueSpikes).
     const snapshots = [{ value: 100 }, { value: 500 }, { value: 102 }];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2);
+    expect(result[1]!.value).toBeCloseTo(Math.sqrt(100 * 102), 2);
   });
 
   it("replaces a low needle spike (localNeedleTrough) with geo mean of neighbors", () => {
     // 20 * 1.8 = 36 <= min(100, 102) = 100 → trough spike
     const snapshots = [{ value: 100 }, { value: 20 }, { value: 102 }];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2);
+    expect(result[1]!.value).toBeCloseTo(Math.sqrt(100 * 102), 2);
   });
 
   it("does not smooth a needle when the neighbors disagree (abnormal bridge)", () => {
@@ -279,13 +279,13 @@ describe("sanitizeSnapshotSpikes", () => {
     // copy smoothed this; the shared bridge-guarded rule must keep it.
     const snapshots = [{ value: 100 }, { value: 400 }, { value: 200 }];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].value).toBe(400);
+    expect(result[1]!.value).toBe(400);
   });
 
   it("does not mutate the input array or its elements", () => {
     const snapshots = [{ value: 100 }, { value: 500 }, { value: 102 }];
     sanitizeSnapshotSpikes(snapshots);
-    expect(snapshots[1].value).toBe(500);
+    expect(snapshots[1]!.value).toBe(500);
   });
 });
 
@@ -340,11 +340,11 @@ describe("sanitizeSnapshotSpikes decomposition invariant", () => {
     const result = sanitizeSnapshotSpikes(snapshots);
 
     // The needle is gone from the market legs...
-    expect(result[1].crypto_value).toBeCloseTo(Math.sqrt(2000 * 2040), 2);
+    expect(result[1]!.crypto_value).toBeCloseTo(Math.sqrt(2000 * 2040), 2);
     // ...cash is never invented — the real balance survives...
-    expect(result[1].cash_value).toBe(25000);
+    expect(result[1]!.cash_value).toBe(25000);
     // ...and the row still decomposes.
-    expect(decompositionError(result[1])).toBeCloseTo(0, 2);
+    expect(decompositionError(result[1]!)).toBeCloseTo(0, 2);
   });
 
   it("does not fabricate a loss day when a one-day cash transit trips needle detection", () => {
@@ -380,9 +380,9 @@ describe("sanitizeSnapshotSpikes decomposition invariant", () => {
 
     const result = sanitizeSnapshotSpikes(snapshots);
 
-    expect(result[1].cash_value).toBe(60000);
-    expect(result[1].value).toBeCloseTo(68000, 2);
-    expect(result[1].value - result[1].invested).toBeCloseTo(0, 2);
+    expect(result[1]!.cash_value).toBe(60000);
+    expect(result[1]!.value).toBeCloseTo(68000, 2);
+    expect(result[1]!.value - result[1]!.invested).toBeCloseTo(0, 2);
   });
 
   it("keeps value_fx_neutral == value for an all-EUR portfolio across a needle", () => {
@@ -456,7 +456,7 @@ describe("sanitizeSnapshotSpikes decomposition invariant", () => {
 
     const result = sanitizeSnapshotSpikes(snapshots);
 
-    const smoothed = result[1];
+    const smoothed = result[1]!;
     const recoveredRatio =
       (smoothed.value_fx_neutral - smoothed.cash_value) /
       (smoothed.value - smoothed.cash_value);
@@ -469,7 +469,7 @@ describe("sanitizeSnapshotSpikes decomposition invariant", () => {
     // needle rule must stand rather than invent a total from partial legs.
     const snapshots = [{ value: 100 }, { value: 500 }, { value: 102 }];
     const result = sanitizeSnapshotSpikes(snapshots);
-    expect(result[1].value).toBeCloseTo(Math.sqrt(100 * 102), 2);
+    expect(result[1]!.value).toBeCloseTo(Math.sqrt(100 * 102), 2);
   });
 });
 

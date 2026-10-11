@@ -36,7 +36,7 @@ function planned(overrides: Record<string, unknown> = {}) {
 
 function advancedFields() {
   // executeAndAdvance(id, txnId, execDate, updateFields, tagIds)
-  return plannedTransactionService.executeAndAdvance.mock.calls[0][3]!;
+  return plannedTransactionService.executeAndAdvance.mock.calls[0]![3]!;
 }
 
 beforeEach(() => {
@@ -57,7 +57,7 @@ describe("executePlanned — recurrence bounds (migration 0071)", () => {
     expect(
       plannedTransactionService.lockForExecution.mock.invocationCallOrder[0],
     ).toBeLessThan(
-      plannedTransactionService.getById.mock.invocationCallOrder[0],
+      plannedTransactionService.getById.mock.invocationCallOrder[0]!,
     );
     expect(plannedTransactionService.executeAndAdvance).not.toHaveBeenCalled();
   });

@@ -101,7 +101,7 @@ const sameImage = (a: Record<string, unknown>, b: Record<string, unknown>) =>
 const identityMatches = (row: KinesisSourceRow) => {
   const identity = assignImportIdentities([row], (source: KinesisSourceRow) =>
     portfolioIdentityBase(source, { accountIdentity: "UNASSIGNED" }),
-  )[0];
+  )[0]!; // one identity per input row
   return (
     row.dedup_fingerprint === identity.fingerprint &&
     row.dedup_fingerprint_version === identity.version &&
@@ -176,10 +176,11 @@ export function proveKinesisIncomePairs({
         unit.source_record_hash === row.source_record_hash &&
         Number(unit.batch_id) === Number(row.batch_id),
     );
-    const unit = paired[0],
+    const [unit] = paired,
       unitProof = evidence.proofs.get(Number(unit?.id));
     if (
       paired.length !== 1 ||
+      !unit ||
       !unitProof ||
       unitProof.parsed.assetAdjustment?.kind !== "yield_acquisition" ||
       unitProof.parsed.assetAdjustment.basisPolicy !== "zero"
@@ -244,8 +245,9 @@ export function proveKinesisIncomePairs({
       );
       continue;
     }
-    const plannedUnit = planned[0];
-    const current = units[0] ?? plannedUnit.after;
+    const [plannedUnit] = planned;
+    // Exactly one of `units` and `planned` holds one entry (checked above).
+    const current = units[0] ?? plannedUnit!.after;
     if (
       current.type !== "gift" ||
       !zero(current) ||
@@ -283,6 +285,7 @@ export function proveKinesisIncomePairs({
       const priorProof = retained.proofs.get(Number(prior?.id));
       if (
         receipts.length !== 1 ||
+        !receipt ||
         !prior ||
         !priorProof ||
         retained.issues.some(
@@ -354,6 +357,7 @@ export function proveKinesisIncomePairs({
       if (
         existing.length !== 1 ||
         active.length !== 1 ||
+        !receipt ||
         !income ||
         income.income_recognition_role !== "included_in_units" ||
         Number(receipt.income_transaction_id) !== Number(income.id) ||

@@ -84,6 +84,11 @@ function dispatch(sql: string, params: unknown[]) {
     return {
       rows: [
         {
+          // BIGINT id as pg returns it.
+          id: String(params[0]),
+          rows_total: matchedRows.length,
+          status: "committing",
+          adapter_name: "portfolio_generic",
           account_id: batchAccountId,
           is_brokerage: isBrokerage,
           account_institution: accountInstitution,
@@ -94,7 +99,7 @@ function dispatch(sql: string, params: unknown[]) {
     };
   }
   if (/FROM portfolio_import_staging_rows isr/.test(sql))
-    return { rows: matchedRows };
+    return { rows: matchedRows.map(matchedWireRow) };
   if (
     /WHERE dedup_fingerprint_version = \$1 AND dedup_fingerprint = \$2/.test(
       sql,
@@ -113,6 +118,38 @@ function dispatch(sql: string, params: unknown[]) {
     return { rows: [] };
   }
   return { rows: [] };
+}
+
+const MATCHED_NUMERIC = [
+  "units",
+  "price_per_unit",
+  "amount",
+  "fees",
+  "taxes",
+  "fx_rate_to_eur",
+] as const;
+const MATCHED_NULLABLE = [
+  "route",
+  "source_record_hash",
+  "source_transaction_id",
+  "dedup_fingerprint",
+  "dedup_fingerprint_version",
+  "dedup_occurrence",
+  "asset_transfer_details",
+  "asset_adjustment_details",
+] as const;
+
+/**
+ * The commit read as pg returns it: BIGINT id and NUMERIC columns as text,
+ * and every selected column present (NULL when the fixture leaves it out).
+ */
+function matchedWireRow(fixture: object) {
+  const wire: Record<string, unknown> = { ...fixture };
+  wire.id = String(wire.id);
+  for (const key of MATCHED_NUMERIC)
+    if (typeof wire[key] === "number") wire[key] = String(wire[key]);
+  for (const key of MATCHED_NULLABLE) wire[key] ??= null;
+  return wire;
 }
 
 function row(overrides = {}) {
@@ -206,8 +243,9 @@ describe("commitBatch (portfolio)", () => {
       row({ type: "dividend", units: null, price_per_unit: null, amount: 100 }),
     ];
     await commitBatch({ batchId: 5 });
-    expect(portfolioTransactionRepository.create.mock.calls[0][0])
-      .not.toMatchObject({ dividend_amount_convention: "gross" });
+    expect(
+      portfolioTransactionRepository.create.mock.calls[0]![0],
+    ).not.toMatchObject({ dividend_amount_convention: "gross" });
   });
 
   it("commits a matched row via the repo", async () => {
@@ -216,7 +254,7 @@ describe("commitBatch (portfolio)", () => {
     expect(res).toMatchObject({ imported: 1, duplicates: 0, errors: 0 });
     expect(portfolioTransactionRepository.create).toHaveBeenCalledTimes(1);
     expect(
-      portfolioTransactionRepository.create.mock.calls[0][0],
+      portfolioTransactionRepository.create.mock.calls[0]![0],
     ).toMatchObject({
       investment_id: 1,
       type: "buy",
@@ -228,7 +266,8 @@ describe("commitBatch (portfolio)", () => {
     const committedRow = query.mock.calls.find(([sql]) =>
       /SET status = 'committed'/.test(sql),
     )!;
-    expect(committedRow[1]).toEqual([1, 100]);
+    // The staging id is BIGINT text as pg returns it.
+    expect(committedRow[1]).toEqual(["1", 100]);
     const checkpoint = query.mock.calls.find(([sql]) =>
       /SET rows_imported = COALESCE/.test(sql),
     )!;
@@ -302,7 +341,7 @@ describe("commitBatch (portfolio)", () => {
     expect(res).toMatchObject({ imported: 1, errors: 1 });
     expect(marked).toContainEqual(
       expect.objectContaining({
-        id: 1,
+        id: "1",
         status: "error",
         message: expect.stringMatching(/exceed/),
       }),
@@ -359,7 +398,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
     expect(autoResolveFxRateToEur).toHaveBeenCalledWith("USD", "2026-01-05");
     expect(
-      portfolioTransactionRepository.create.mock.calls[0][0].fx_rate_to_eur,
+      portfolioTransactionRepository.create.mock.calls[0]![0].fx_rate_to_eur,
     ).toBe(0.92);
   });
 
@@ -368,7 +407,7 @@ describe("commitBatch (portfolio)", () => {
     await commitBatch({ batchId: 5 });
     expect(autoResolveFxRateToEur).not.toHaveBeenCalled();
     expect(
-      portfolioTransactionRepository.create.mock.calls[0][0].fx_rate_to_eur,
+      portfolioTransactionRepository.create.mock.calls[0]![0].fx_rate_to_eur,
     ).toBe(0.9);
   });
 
@@ -478,7 +517,7 @@ describe("commitBatch (portfolio)", () => {
     matchedRows = [row()];
     await commitBatch({ batchId: 5 });
     expect(
-      portfolioTransactionRepository.create.mock.calls[0][0].account_id,
+      portfolioTransactionRepository.create.mock.calls[0]![0].account_id,
     ).toBe(7);
   });
 
@@ -487,7 +526,7 @@ describe("commitBatch (portfolio)", () => {
     matchedRows = [row()];
     await commitBatch({ batchId: 5 });
     expect(
-      portfolioTransactionRepository.create.mock.calls[0][0].account_id,
+      portfolioTransactionRepository.create.mock.calls[0]![0].account_id,
     ).toBeUndefined();
   });
 

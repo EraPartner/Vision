@@ -77,8 +77,8 @@ describe.skipIf(!hasTestDatabase())(
         await waitForBlockedMerges(2);
         await gate.query("COMMIT");
         const [first, second] = await Promise.all(outcomes);
-        expect(first.error).toBeUndefined();
-        expect(second.error).toMatchObject({ status: 409 });
+        expect(first!.error).toBeUndefined();
+        expect(second!.error).toMatchObject({ status: 409 });
         const result = await getTestPool()!.query(
           "SELECT id, primary_recipient_id FROM recipients WHERE id = ANY($1::int[]) ORDER BY id",
           [[a, b, c]],

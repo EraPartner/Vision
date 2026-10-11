@@ -16,7 +16,7 @@ describe('generateLoanRepaymentSchedule — first installment never precedes the
       loan_payment_day: 5,
     });
     // Without the shift the first due date was 2026-06-05 — before the loan exists.
-    expect(r.schedule[0].due_date).toBe('2026-07-05');
+    expect(r.schedule[0]!.due_date).toBe('2026-07-05');
     expect(r.first_due_date).toBe('2026-07-05');
     expect(r.schedule).toHaveLength(12);
   });
@@ -27,7 +27,7 @@ describe('generateLoanRepaymentSchedule — first installment never precedes the
       loan_start_date: '2026-06-03',
       loan_payment_day: 5,
     });
-    expect(r.schedule[0].due_date).toBe('2026-06-05');
+    expect(r.schedule[0]!.due_date).toBe('2026-06-05');
     expect(r.first_due_date).toBe('2026-06-05');
   });
 });

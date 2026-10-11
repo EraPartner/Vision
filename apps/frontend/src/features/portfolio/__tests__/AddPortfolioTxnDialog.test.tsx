@@ -6,13 +6,23 @@ import userEvent from "@testing-library/user-event";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok, err } from "@/test/msw/handlers";
+import {
+    ok,
+    err,
+    INVESTMENT_STUB,
+    PORTFOLIO_TRANSACTION_STUB,
+} from "@/test/msw/handlers";
 import { AddPortfolioTxnDialog } from "@/features/portfolio/AddPortfolioTxnDialog";
 import type { InvestmentSummary } from "@/types/portfolio";
+import {
+    accountListItem,
+    accountsBody,
+} from "@/test/msw/rowFixtures";
 
 const API_BASE = "http://localhost:3002";
 
 const PORTFOLIO_TXN_STUB = {
+    ...PORTFOLIO_TRANSACTION_STUB,
     id: 101,
     investment_id: 1,
     type: "buy",
@@ -25,10 +35,10 @@ const PORTFOLIO_TXN_STUB = {
     currency: "EUR",
     note: null,
     is_recurring: false,
-    recurrence_interval: undefined,
-    recurrence_end_date: undefined,
+    recurrence_interval: null,
+    recurrence_end_date: null,
     created_at: "2025-01-10T10:00:00Z",
-    updated_at: null,
+    updated_at: "2025-01-10T10:00:00Z",
 };
 
 const INVESTMENT: InvestmentSummary = {
@@ -257,9 +267,9 @@ describe("AddPortfolioTxnDialog", () => {
         let capturedBody: Record<string, unknown> | undefined;
         server.use(
             http.get(`${API_BASE}/api/accounts`, () =>
-                ok({
+                ok(accountsBody({
                     items: [
-                        {
+                        accountListItem({
                             id: 7,
                             name: "Degiro",
                             currency: "EUR",
@@ -273,14 +283,20 @@ describe("AddPortfolioTxnDialog", () => {
                             has_cash_sleeve: false,
                             is_active: true,
                             created_at: "2025-01-01T00:00:00Z",
-                        },
+                        }),
                     ],
                     total: 1,
                     links: [],
-                }),
+                })),
             ),
             http.get(`${API_BASE}/api/investments`, () =>
-                ok({ items: [INVESTMENT], total: 1, limit: 500, offset: 0 }),
+                ok({
+                    items: [{ ...INVESTMENT_STUB, ...INVESTMENT }],
+                    total: 1,
+                    limit: 500,
+                    offset: 0,
+                    links: [],
+                }),
             ),
             http.get(`${API_BASE}/api/investments/transactions`, () =>
                 ok({
@@ -334,8 +350,8 @@ describe("AddPortfolioTxnDialog", () => {
                     ...PORTFOLIO_TXN_STUB,
                     id: 102,
                     type: "dividend",
-                    units: undefined,
-                    price_per_unit: undefined,
+                    units: null,
+                    price_per_unit: null,
                     amount: 50,
                 }),
             ),

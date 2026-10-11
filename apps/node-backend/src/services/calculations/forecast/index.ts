@@ -28,6 +28,7 @@ import type {
   ForecastPoint,
 } from "./backtest.ts";
 import { recordAccuracy, getLatestAccuracyByMethod } from "./accuracyStore.ts";
+import { RowContractError } from "../../../database/rowContracts.ts";
 import type { AccuracyRecord } from "./accuracyStore.ts";
 import mcCacheRepo from "../../../repositories/cashflowForecastMcRepository.ts";
 import mcRollingCacheRepo from "../../../repositories/cashflowForecastMcRollingRepository.ts";
@@ -154,6 +155,15 @@ const MC_METHODS: McMethodModule[] = [
   monteCarloBlockBootstrap,
 ];
 
+/** Date at a window position the caller guarantees is inside the window. */
+function dateAt(dates: readonly string[], index: number): string {
+  const date = dates[index];
+  if (date === undefined) {
+    throw new RangeError(`forecast: date index ${index} outside window`);
+  }
+  return date;
+}
+
 function currentMonthDates() {
   // App-timezone today (ADR-009) — the UTC calendar day put the actuals /
   // forecast split on yesterday between local midnight and 01:00/02:00.
@@ -188,8 +198,7 @@ function actualCumulativeDaily(
   const byDate = new Map(currentActual.map((r) => [r.date, r.net]));
   const out: ActualPoint[] = [];
   let cum = 0;
-  for (let i = 0; i < allDates.length; i++) {
-    const date = allDates[i];
+  for (const [i, date] of allDates.entries()) {
     if (i + 1 > todayIndex) {
       out.push({ date, net: null, cumulative: null });
       continue;
@@ -205,7 +214,7 @@ function rollingWindowDates(daysBack: number, daysForward: number) {
   // Builds a date list spanning [today - daysBack ... today + daysForward].
   // Anchored on the app-timezone today (ADR-009); pure calendar math after.
   const todayYmd = todayAppDateString();
-  const [ty, tm, td] = todayYmd.split("-").map(Number);
+  const [ty = NaN, tm = NaN, td = NaN] = todayYmd.split("-").map(Number);
   const todayMs = Date.UTC(ty, tm - 1, td);
   const all: string[] = [];
   for (let offset = -daysBack; offset <= daysForward; offset++) {
@@ -214,7 +223,7 @@ function rollingWindowDates(daysBack: number, daysForward: number) {
   }
   const todayIndex = daysBack + 1;
   const future = all.slice(todayIndex);
-  const todayIso = all[todayIndex - 1];
+  const todayIso = dateAt(all, todayIndex - 1);
   return { all, future, todayIndex, todayIso };
 }
 
@@ -296,13 +305,15 @@ async function runForecastEngine({
   }
 
   // Ensemble: inverse-MSE weighted combination of point methods.
+  let accuracyRows: AccuracyRecord[] = [];
   try {
-    let accuracyRows: AccuracyRecord[] = [];
-    try {
-      accuracyRows = await getLatestAccuracyByMethod({ userId });
-    } catch {
-      // DB unavailable — equal-weight fallback
-    }
+    accuracyRows = await getLatestAccuracyByMethod({ userId });
+  } catch (err) {
+    // A contract violation is a data fault, not an unavailable DB: surface it.
+    if (err instanceof RowContractError) throw err;
+    // DB unavailable — equal-weight fallback
+  }
+  try {
     const weights = ensemble.computeWeights(
       accuracyRows,
       POINT_METHODS.map((m) => m.id),
@@ -357,15 +368,17 @@ async function runForecastEngine({
   for (const r of actualDaily) {
     if (r.cumulative !== null) actualCumByDate.set(r.date, r.cumulative);
   }
+  const lastActualDate = todayIndex > 0 ? all[todayIndex - 1] : undefined;
   const lastActualCum =
-    todayIndex > 0 ? (actualCumByDate.get(all[todayIndex - 1]) ?? 0) : 0;
+    lastActualDate === undefined
+      ? 0
+      : (actualCumByDate.get(lastActualDate) ?? 0);
 
   const cumulativeFor = (dailySeries: ForecastPoint[]): CumulativePoint[] => {
     const out: CumulativePoint[] = [];
     let cum = lastActualCum;
     const byDate = new Map(dailySeries.map((p) => [p.date, p.value]));
-    for (let i = 0; i < all.length; i++) {
-      const date = all[i];
+    for (const [i, date] of all.entries()) {
       if (i + 1 <= todayIndex) {
         out.push({ date, value: actualCumByDate.get(date) ?? 0 });
         continue;
@@ -530,7 +543,7 @@ export async function computeCashflowForecast({
     includePlanned,
     historyMonths,
     includeTransfers,
-    effectiveDate: all[todayDay - 1],
+    effectiveDate: dateAt(all, todayDay - 1),
   });
 
   // Try cache when not forcing a refresh and using default MC params.
@@ -603,7 +616,8 @@ export async function computeCashflowForecast({
   // When no current-month data imported, forecast the full month instead of only remaining days.
   const effectiveTodayDay = currentActual.length > 0 ? todayDay : 0;
   const effectiveFuture = effectiveTodayDay === 0 ? all : future;
-  const todayIso = effectiveTodayDay > 0 ? all[effectiveTodayDay - 1] : "";
+  const todayIso =
+    effectiveTodayDay > 0 ? dateAt(all, effectiveTodayDay - 1) : "";
 
   const {
     actualDaily,

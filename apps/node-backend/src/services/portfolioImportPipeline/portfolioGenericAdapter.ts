@@ -273,7 +273,10 @@ function rowToParsed(
   };
   if (["asset_fee", "asset_transfer_witness"].includes(parsed.typeRaw)) {
     try {
-      const receipt = JSON.parse(row.Receipt_JSON) as KinesisNetworkReceipt;
+      const receiptJson = row.Receipt_JSON;
+      // An absent cell fails like unparseable JSON (reported below).
+      if (receiptJson === undefined) throw new Error("missing receipt");
+      const receipt = JSON.parse(receiptJson) as KinesisNetworkReceipt;
       const proof = verifyKinesisNetworkReceipt(receipt, parsed.typeRaw);
       if (
         parsed.currency !== proof.asset ||

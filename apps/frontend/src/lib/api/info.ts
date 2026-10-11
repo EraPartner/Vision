@@ -1,7 +1,22 @@
 import logger from "@/lib/logger";
-import { apiRequest } from "@/lib/api/client";
+import { ApiContractError, apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 import type { NetWorthResponse } from "@/types/apiClient";
+import {
+    BankNameListSchema,
+    BrokerPortfolioPerformanceSchema,
+    DeductionCandidatesSchema,
+    ExchangeRatesSchema,
+    InfoMessageSchema,
+    InfoTransactionCountSchema,
+    InsightsCountSchema,
+    InsightsDigestSchema,
+    NetWorthSchema,
+    PortfolioPerformanceSchema,
+    PortfolioSummarySchema,
+    RecurringPatternListSchema,
+    SupportedAdapterListSchema,
+} from "@vision/types/contracts";
 
 // (Removed getStatistics — legacy GET /api/info was deleted in the Phase 9
 // cutover; it had no callers. Use the aggregations endpoints instead.)
@@ -17,7 +32,7 @@ export async function getSupportedParsers(): Promise<SupportedAdapter[]> {
     const { items } = await apiRequest<{
         items: SupportedAdapter[];
         total: number;
-    }>("/api/info/supported-adapters");
+    }>("/api/info/supported-adapters", { schema: SupportedAdapterListSchema });
     return items;
 }
 
@@ -25,6 +40,7 @@ export async function getSupportedParsers(): Promise<SupportedAdapter[]> {
 export async function getDistinctBankAccounts(): Promise<string[]> {
     const { items } = await apiRequest<{ items: string[]; total: number }>(
         "/api/info/banks",
+        { schema: BankNameListSchema },
     );
     return items;
 }
@@ -33,7 +49,9 @@ export async function getDistinctBankAccounts(): Promise<string[]> {
 // deleted in the Phase 9 cutover; it had no callers.)
 
 export function getTransactionCount(): Promise<{ total_transactions: number }> {
-    return apiRequest("/api/info/transaction-count");
+    return apiRequest("/api/info/transaction-count", {
+        schema: InfoTransactionCountSchema,
+    });
 }
 
 export async function getRecurringPatterns(): Promise<{
@@ -69,8 +87,12 @@ export async function getRecurringPatterns(): Promise<{
     total: number;
 }> {
     try {
-        return await apiRequest("/api/info/recurring-patterns");
+        return await apiRequest("/api/info/recurring-patterns", {
+            schema: RecurringPatternListSchema,
+        });
     } catch (err) {
+        // A contract mismatch is a defect, not an outage: surface it.
+        if (err instanceof ApiContractError) throw err;
         // Fail-soft: recurrence detection is optional UI enrichment.
         logger.warn("Recurring patterns unavailable; using empty result", err);
         return { patterns: [], total: 0 };
@@ -139,8 +161,12 @@ export interface InsightsDigestResponse {
 /** Pre-computed detection-layer findings for the Statistics insights panel (no LLM). */
 export async function getInsightsDigest(): Promise<InsightsDigestResponse> {
     try {
-        return await apiRequest("/api/info/insights-digest");
+        return await apiRequest("/api/info/insights-digest", {
+            schema: InsightsDigestSchema,
+        });
     } catch (err) {
+        // A contract mismatch is a defect, not an outage: surface it.
+        if (err instanceof ApiContractError) throw err;
         // Fail-soft: the insights digest is optional UI enrichment.
         logger.warn("Insights digest unavailable; using empty result", err);
         return {
@@ -158,7 +184,9 @@ export interface InsightsCountResponse {
 }
 
 export function getInsightsCount(): Promise<InsightsCountResponse> {
-    return apiRequest("/api/info/insights-count");
+    return apiRequest("/api/info/insights-count", {
+        schema: InsightsCountSchema,
+    });
 }
 
 export type InsightDismissalRequest =
@@ -206,7 +234,9 @@ export interface DeductionCandidatesResponse {
 export function getDeductionCandidates(
     year: number,
 ): Promise<DeductionCandidatesResponse> {
-    return apiRequest("/api/info/deduction-candidates?year=" + year);
+    return apiRequest("/api/info/deduction-candidates?year=" + year, {
+        schema: DeductionCandidatesSchema,
+    });
 }
 
 export function getPortfolioPerformance(params?: {
@@ -265,7 +295,9 @@ export function getPortfolioPerformance(params?: {
     }>;
     totals?: PortfolioSummaryTotals;
 }> {
-    return requestWithQuery("/api/info/portfolio-performance", params);
+    return requestWithQuery("/api/info/portfolio-performance", params, {
+        schema: PortfolioPerformanceSchema,
+    });
 }
 
 export interface BrokerPerformanceRow {
@@ -301,6 +333,7 @@ export function getBrokerPortfolioPerformance(params?: {
     return requestWithQuery(
         "/api/info/portfolio-performance/by-broker",
         params,
+        { schema: BrokerPortfolioPerformanceSchema },
     );
 }
 
@@ -337,10 +370,14 @@ export interface PortfolioSummaryItem {
     notes?: string;
     location?: string;
     municipality?: string;
-    cadastral_income?: number;
-    municipality_tax_rate?: number;
-    maturity_date?: string;
-    maturityDate?: string;
+    /** NUMERIC passthrough from `SELECT i.*`: a decimal string. */
+    cadastral_income: string | null;
+    /** NUMERIC passthrough from `SELECT i.*`: a decimal string. */
+    municipality_tax_rate: string | null;
+    /** A serialized local-midnight Date (ISO timestamp), not a calendar day. */
+    maturity_date: string | null;
+    /** Same value as `maturity_date`. */
+    maturityDate: string | null;
     price_provider?: string;
     price_provider_id?: string;
     price_updated_at?: string;
@@ -417,7 +454,9 @@ export interface PortfolioSummaryResponse {
 export function getPortfolioSummary(params?: {
     currency?: string;
 }): Promise<PortfolioSummaryResponse> {
-    return requestWithQuery("/api/info/portfolio-summary", params);
+    return requestWithQuery("/api/info/portfolio-summary", params, {
+        schema: PortfolioSummarySchema,
+    });
 }
 
 export function getNetWorth(params?: {
@@ -425,7 +464,9 @@ export function getNetWorth(params?: {
     limit?: number;
     offset?: number;
 }): Promise<NetWorthResponse> {
-    return requestWithQuery("/api/info/net-worth", params);
+    return requestWithQuery("/api/info/net-worth", params, {
+        schema: NetWorthSchema,
+    });
 }
 
 export interface ExchangeRate {
@@ -448,9 +489,14 @@ export function getExchangeRates(
     options: { dbOnly?: boolean } = {},
 ): Promise<ExchangeRatesData> {
     const qs = options.dbOnly ? "?db_only=true" : "";
-    return apiRequest(`/api/info/exchange-rates${qs}`);
+    return apiRequest(`/api/info/exchange-rates${qs}`, {
+        schema: ExchangeRatesSchema,
+    });
 }
 
 export function refreshExchangeRates(): Promise<{ message: string }> {
-    return apiRequest("/api/info/exchange-rates/refresh", { method: "POST" });
+    return apiRequest("/api/info/exchange-rates/refresh", {
+        method: "POST",
+        schema: InfoMessageSchema,
+    });
 }

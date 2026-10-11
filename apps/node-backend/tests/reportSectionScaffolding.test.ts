@@ -507,7 +507,7 @@ describe("report section scaffolding", () => {
   it("gives every empty renderer exactly one canonical title, subtitle, and divider", () => {
     expect(EMPTY_RENDERERS).toHaveLength(20);
     for (const [index, render] of EMPTY_RENDERERS.entries()) {
-      const name = EMPTY_RENDERER_NAMES[index];
+      const name = EMPTY_RENDERER_NAMES[index]!;
       const html = render();
       expect(html.match(/class="section-title"/g), name).toHaveLength(1);
       expect(html.match(/class="section-subtitle"/g), name).toHaveLength(1);
@@ -723,7 +723,7 @@ describe("portfolio report view models", () => {
       returnPct: 98,
     });
     expect(trend.tablePoints).toHaveLength(12);
-    expect(trend.tablePoints[0].month).toBe(3);
+    expect(trend.tablePoints[0]!.month).toBe(3);
   });
 
   it("builds portfolio KPIs and top holdings at the data boundary", () => {

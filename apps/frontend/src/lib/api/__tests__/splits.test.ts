@@ -2,25 +2,41 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
+import { SPLIT_STUB } from "@/test/msw/handlers";
 import { API_BASE, ok } from "./clientTestHarness";
 
 import { getOwedSummary, getOwedByRecipient, getSplitsByTransaction, createSplitsBatch, recordSplitPayment, settleSplit, settleAllSplitsByRecipient, deleteSplit } from "@/lib/api/splits";
 
 afterEach(() => server.resetHandlers());
 
+/** One `splitService.getOwedByRecipient` row: the split plus its transaction. */
+const OWED_DETAIL = {
+  ...SPLIT_STUB,
+  recipient_id: 4,
+  recipient_name: "Alex",
+  amount_paid: 5,
+  transaction_date: "2025-01-14T23:00:00.000Z",
+  transaction_memo: null,
+  transaction_amount: -50,
+  transaction_currency: "EUR",
+  bank_account: null,
+  transaction_recipient_name: "Restaurant",
+  remaining: 20,
+};
+
 describe("splits API client", () => {
   it("getOwedSummary fetches the owed summary", async () => {
-    server.use(http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [] })));
+    server.use(http.get(`${API_BASE}/api/splits/owed`, () => ok({ items: [], total: 0 })));
     expect((await getOwedSummary()).items).toEqual([]);
   });
 
   it("getOwedByRecipient fetches by recipient id", async () => {
-    server.use(http.get(`${API_BASE}/api/splits/owed/4`, () => ok({ items: [{ id: 1 }] })));
+    server.use(http.get(`${API_BASE}/api/splits/owed/4`, () => ok({ items: [OWED_DETAIL], total: 1 })));
     expect((await getOwedByRecipient(4)).items).toHaveLength(1);
   });
 
   it("getSplitsByTransaction fetches by transaction id", async () => {
-    server.use(http.get(`${API_BASE}/api/splits/transaction/8`, () => ok({ items: [] })));
+    server.use(http.get(`${API_BASE}/api/splits/transaction/8`, () => ok({ items: [], total: 0 })));
     expect((await getSplitsByTransaction(8)).items).toEqual([]);
   });
 
@@ -63,5 +79,17 @@ describe("splits API client", () => {
   it("deleteSplit resolves on void", async () => {
     server.use(http.delete(`${API_BASE}/api/splits/3`, () => new HttpResponse(null, { status: 204 })));
     await expect(deleteSplit(3)).resolves.toBeUndefined();
+  });
+
+  it("rejects an owed detail row whose NUMERIC remaining arrives as a string", async () => {
+    server.use(
+      http.get(`${API_BASE}/api/splits/owed/4`, () =>
+        ok({ items: [{ ...OWED_DETAIL, remaining: "20.0000" }], total: 1 }),
+      ),
+    );
+    await expect(getOwedByRecipient(4)).rejects.toMatchObject({
+      name: "ApiContractError",
+      endpoint: "GET /api/splits/owed/4",
+    });
   });
 });

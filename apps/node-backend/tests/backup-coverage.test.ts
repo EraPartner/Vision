@@ -89,7 +89,7 @@ function deriveMigrationTableSet() {
     // Step 1: apply pre-upgrade creates (module-level SQL constants).
     CREATE_RE.lastIndex = 0;
     for (const m of preUpgrade.matchAll(CREATE_RE)) {
-      schema.add(m[1].toLowerCase());
+      schema.add(m[1]!.toLowerCase());
     }
 
     // Step 2: process upgrade body tokens IN SEQUENCE so that drop+re-create
@@ -103,7 +103,7 @@ function deriveMigrationTableSet() {
       // m[3]: op.create_table | op.drop_table (alembic API)
       // m[4]: ALTER keyword (raw SQL rename) — m[5] is the old table name
       // m[6]: table name (created / dropped / rename target)
-      const table = m[6].toLowerCase();
+      const table = m[6]!.toLowerCase();
       const isCreate = !!(m[1] || m[3] === "create_table");
       const isDrop = !!(m[2] || m[3] === "drop_table");
       const isRename = !!m[4];
@@ -111,7 +111,7 @@ function deriveMigrationTableSet() {
       if (isCreate) schema.add(table);
       else if (isDrop) schema.delete(table);
       else if (isRename) {
-        schema.delete(m[5].toLowerCase());
+        schema.delete(m[5]!.toLowerCase());
         schema.add(table);
       }
     }

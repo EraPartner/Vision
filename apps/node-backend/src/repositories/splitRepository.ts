@@ -17,6 +17,12 @@ import {
   splitTotalsRowSchema,
   transactionSplitRowSchema,
 } from "../database/rowSchemas.ts";
+import {
+  splitAuditRowSchema,
+  splitPaidRowSchema,
+  splitPaymentLockRowSchema,
+} from "../database/rows/ledger.ts";
+import type { SplitAuditRow } from "../database/rows/ledger.ts";
 import { buildLimitOffset } from "../lib/sqlClauses.ts";
 import { toWireDate } from "../lib/dateFormat.ts";
 import { toDecimal, toNumber } from "../lib/money.ts";
@@ -126,8 +132,15 @@ export async function lockAndGetTotals(
     [transactionId],
   );
   if (lockResult.rows.length === 0) return null;
-  const totalsResult = await client.query(SPLIT_TOTALS_SQL, [transactionId]);
-  return mapSplitTotals(totalsResult.rows[0]);
+  const [totals] = await queryRows(
+    splitTotalsRowSchema,
+    SPLIT_TOTALS_SQL,
+    [transactionId],
+    client,
+  );
+  // GROUP BY t.id over the row just locked: exactly one row.
+  if (!totals) throw new Error("split totals returned no row");
+  return mapSplitTotals(totals);
 }
 
 /**
@@ -161,17 +174,23 @@ export async function insertSplitInTransaction(
     note?: string | null;
   },
 ): Promise<FormattedSplit> {
-  const result = await client.query(
+  // `0::numeric`: a fresh split has no payments, and NUMERIC keeps
+  // `amount_paid` the same pg string type as on every read path.
+  const [created] = await queryRows(
+    transactionSplitRowSchema,
     `WITH created AS (
        INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
        VALUES ($1, $2, $3, $4) RETURNING *
      )
-     SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+     SELECT created.*, r.name AS recipient_name, 0::numeric AS amount_paid
      FROM created
      LEFT JOIN recipients r ON r.id = created.recipient_id`,
     [transaction_id, recipient_id, amount, note || null],
+    client,
   );
-  return formatSplit(result.rows[0]);
+  // A plain INSERT ... RETURNING yields exactly one row or throws.
+  if (!created) throw new Error("split INSERT returned no row");
+  return formatSplit(created);
 }
 
 export async function insertSplitsBatchInTransaction(
@@ -182,31 +201,35 @@ export async function insertSplitsBatchInTransaction(
   const recipientIds = splits.map((split) => split.recipient_id);
   const amounts = splits.map((split) => split.amount);
   const notes = splits.map((split) => split.note || null);
-  const result = await client.query(
+  const rows = await queryRows(
+    transactionSplitRowSchema,
     `WITH created AS (
        INSERT INTO transaction_splits (transaction_id, recipient_id, amount, note)
        SELECT $1, s.recipient_id, s.amount, s.note
        FROM UNNEST($2::int[], $3::numeric[], $4::text[]) AS s(recipient_id, amount, note)
        RETURNING *
      )
-     SELECT created.*, r.name AS recipient_name, 0 AS amount_paid
+     SELECT created.*, r.name AS recipient_name, 0::numeric AS amount_paid
      FROM created
      LEFT JOIN recipients r ON r.id = created.recipient_id
      ORDER BY created.id`,
     [transactionId, recipientIds, amounts, notes],
+    client,
   );
-  return result.rows.map(formatSplit);
+  return rows.map(formatSplit);
 }
 
 export async function lockSplitForPayment(
   client: QueryRunner,
   splitId: number,
 ): Promise<{ id: number; amount: string; is_settled: boolean } | null> {
-  const result = await client.query(
+  const [row] = await queryRows(
+    splitPaymentLockRowSchema,
     "SELECT id, amount, is_settled FROM transaction_splits WHERE id = $1 FOR UPDATE",
     [splitId],
+    client,
   );
-  return result.rows[0] || null;
+  return row ?? null;
 }
 
 /** @returns NUMERIC sum — a pg string. */
@@ -214,11 +237,15 @@ export async function getPaidAmountInTransaction(
   client: QueryRunner,
   splitId: number,
 ): Promise<string> {
-  const result = await client.query(
+  const [row] = await queryRows(
+    splitPaidRowSchema,
     "SELECT COALESCE(SUM(amount), 0) AS paid FROM split_payments WHERE split_id = $1",
     [splitId],
+    client,
   );
-  return result.rows[0].paid;
+  // An aggregate without GROUP BY always returns exactly one row.
+  if (!row) throw new Error("split paid sum returned no row");
+  return row.paid;
 }
 
 export async function insertPaymentInTransaction(
@@ -235,13 +262,17 @@ export async function insertPaymentInTransaction(
     paid_at: string;
   },
 ): Promise<FormattedSplitPayment> {
-  const result = await client.query(
+  const [payment] = await queryRows(
+    splitPaymentRowSchema,
     `INSERT INTO split_payments (split_id, amount, note, paid_at)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
     [split_id, amount, note || null, paid_at],
+    client,
   );
-  return formatPayment(result.rows[0]);
+  // A plain INSERT ... RETURNING yields exactly one row or throws.
+  if (!payment) throw new Error("split payment INSERT returned no row");
+  return formatPayment(payment);
 }
 
 export async function markSettledIfCovered(
@@ -276,8 +307,9 @@ export const splitRepository = {
     const rows = await queryRows(splitTotalsRowSchema, SPLIT_TOTALS_SQL, [
       transactionId,
     ]);
-    if (rows.length === 0) return null;
-    return mapSplitTotals(rows[0]);
+    const [row] = rows;
+    if (!row) return null;
+    return mapSplitTotals(row);
   },
 
   /**
@@ -314,6 +346,7 @@ export const splitRepository = {
       "SELECT COUNT(*) FROM transaction_splits WHERE transaction_id = $1",
       [transactionId],
     );
+    if (!row) throw new Error("split count returned no row");
     return parseInt(row.count, 10);
   },
 
@@ -407,6 +440,7 @@ export const splitRepository = {
       WHERE ts.recipient_id IN (SELECT id FROM recipient_group) AND ts.is_settled = false
     `;
     const [row] = await queryRows(countRowSchema, sql, [recipientId]);
+    if (!row) throw new Error("owed split count returned no row");
     return parseInt(row.count, 10);
   },
 
@@ -496,6 +530,7 @@ export const splitRepository = {
       "SELECT COUNT(*) FROM split_payments WHERE split_id = $1",
       [splitId],
     );
+    if (!row) throw new Error("split payment count returned no row");
     return parseInt(row.count, 10);
   },
 
@@ -606,8 +641,10 @@ export const splitRepository = {
       FROM split_payments
       WHERE split_id = $1
     `;
-    const result = await query<{ paid: string }>(sql, [splitId]);
-    return toNumber(toDecimal(result.rows[0].paid));
+    const [row] = await queryRows(splitPaidRowSchema, sql, [splitId]);
+    // An aggregate without GROUP BY always returns exactly one row.
+    if (!row) throw new Error("split paid sum returned no row");
+    return toNumber(toDecimal(row.paid));
   },
 
   /**
@@ -628,11 +665,7 @@ export const splitRepository = {
     actor?: string | null;
     payload?: object | null;
     client?: QueryRunner | null;
-  }): Promise<{
-    id: string;
-    payload_text: string | null;
-    occurred_at: string;
-  }> {
+  }): Promise<SplitAuditRow> {
     const sql = `
       INSERT INTO split_audit (split_id, action, actor, payload)
       VALUES ($1, $2, $3, $4)
@@ -645,9 +678,15 @@ export const splitRepository = {
       actor,
       payload ? JSON.stringify(payload) : null,
     ];
-    const runner: QueryRunner = client || { query };
-    const result = await runner.query(sql, params);
-    return result.rows[0];
+    const [row] = await queryRows(
+      splitAuditRowSchema,
+      sql,
+      params,
+      client ?? undefined,
+    );
+    // A plain INSERT ... RETURNING yields exactly one row or throws.
+    if (!row) throw new Error("split audit INSERT returned no row");
+    return row;
   },
 
   /**

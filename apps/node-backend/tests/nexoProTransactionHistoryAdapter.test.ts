@@ -99,7 +99,7 @@ describe("Nexo Pro Spot portfolio adapter", () => {
   });
   it("keeps base-fee buy cash principal plus fees equal to source gross, and holdings equal to net units", async () => {
     const rows = await parseNexoProSpotHistory(fixture);
-    const buy = rows[0];
+    const buy = rows[0]!;
     expect(toDecimal(buy.amount!).plus(buy.fees!).eq("20")).toBe(true);
     expect(toDecimal(buy.units!).plus("0.03").eq("10")).toBe(true);
     expect(toDecimal(buy.units!).times(buy.pricePerUnit!).eq(buy.amount!)).toBe(
@@ -110,7 +110,7 @@ describe("Nexo Pro Spot portfolio adapter", () => {
   });
   it("consumes base fees on sells without reducing source quote proceeds twice", async () => {
     const rows = await parseNexoProSpotHistory(fixture);
-    const sell = rows[1];
+    const sell = rows[1]!;
     expect(sell).toMatchObject({
       typeRaw: "Sell",
       units: 4.01,
@@ -142,8 +142,10 @@ describe("Nexo Pro Spot portfolio adapter", () => {
       fees: 0.2,
       currency: "EUR",
     });
-    expect(toDecimal(rows[2].amount!).plus(rows[2].fees!).eq("6.1")).toBe(true);
-    expect(toDecimal(rows[3].amount!).minus(rows[3].fees!).eq("7.8")).toBe(
+    expect(toDecimal(rows[2]!.amount!).plus(rows[2]!.fees!).eq("6.1")).toBe(
+      true,
+    );
+    expect(toDecimal(rows[3]!.amount!).minus(rows[3]!.fees!).eq("7.8")).toBe(
       true,
     );
   });
@@ -169,7 +171,7 @@ describe("Nexo Pro Spot portfolio adapter", () => {
       amount: 12,
       fees: 0.1,
     });
-    expect(toDecimal(sell.amount!).minus(sell.fees!).eq("11.9")).toBe(true);
+    expect(toDecimal(sell!.amount!).minus(sell!.fees!).eq("11.9")).toBe(true);
   });
   it("preserves literal records, quoted fields and fractional timestamp text", async () => {
     const source = record({
@@ -178,9 +180,9 @@ describe("Nexo Pro Spot portfolio adapter", () => {
       requestedAmount: '"100"',
     });
     const [parsed] = await parseNexoProSpotHistory(await csv([source]));
-    expect(parsed.rawData).toBe(source);
-    expect(parsed.date).toEqual(new Date("2025-02-10T00:00:00.000Z"));
-    expect(parsed.note).toContain("source timestamp retained");
+    expect(parsed!.rawData).toBe(source);
+    expect(parsed!.date).toEqual(new Date("2025-02-10T00:00:00.000Z"));
+    expect(parsed!.note).toContain("source timestamp retained");
   });
   it("uses immutable order IDs for reimports even if export id or formatting changes", async () => {
     const [a] = await parseNexoProSpotHistory(await csv([record()]));
@@ -204,10 +206,12 @@ describe("Nexo Pro Spot portfolio adapter", () => {
           portfolioIdentityBase(staged, {
             accountIdentity: "synthetic-account-uuid",
           }),
-      )[0];
-    expect(identity(a).fingerprint).toBe(identity(b).fingerprint);
-    expect(identity(a).sourceRecordHash).not.toBe(identity(b).sourceRecordHash);
-    expect(a.sourceId).toBe(b.sourceId);
+      )[0]!;
+    expect(identity(a!).fingerprint).toBe(identity(b!).fingerprint);
+    expect(identity(a!).sourceRecordHash).not.toBe(
+      identity(b!).sourceRecordHash,
+    );
+    expect(a!.sourceId).toBe(b!.sourceId);
   });
   it("allows a valid empty export without inventing transactions", async () => {
     const rows = await parseNexoProSpotHistory(await csv([]));
@@ -268,9 +272,9 @@ describe("Nexo Pro Spot portfolio adapter", () => {
       const [parsed] = await parseNexoProSpotHistory(
         await csv([record(overrides)]),
       );
-      expect(parsed.typeRaw).toBe("Unsupported Nexo Pro Spot order");
-      expect(parsed.note).toContain(diagnostic);
-      expect(parsed.rawData).toBe(record(overrides));
+      expect(parsed!.typeRaw).toBe("Unsupported Nexo Pro Spot order");
+      expect(parsed!.note).toContain(diagnostic);
+      expect(parsed!.rawData).toBe(record(overrides));
     },
   );
   it("accepts an explicit zero fee with no fee currency", async () => {

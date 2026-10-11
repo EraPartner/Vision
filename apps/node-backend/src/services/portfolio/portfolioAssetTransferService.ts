@@ -13,6 +13,8 @@ import {
   ValidationError,
 } from "../../middleware/errorHandler.ts";
 import { query, withTransaction } from "../../database/connection.ts";
+import { queryRows } from "../../database/rowContracts.ts";
+import { custodyAccountLockRowSchema } from "../../database/rows/portfolio.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import { getUnitEventsForInvestment } from "../../repositories/portfolioTxRepo.reads.ts";
@@ -260,12 +262,11 @@ export async function commitPortfolioAssetTransfer({
     );
   const event = prepared.event;
   return withTransaction(async (client) => {
-    const accounts = (
-      await query<{ id: number; is_active: boolean; type: string }>(
-        "SELECT id,is_active,type FROM accounts WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
-        [[event.source_account_id, event.destination_account_id]],
-      )
-    ).rows;
+    const accounts = await queryRows(
+      custodyAccountLockRowSchema,
+      "SELECT id,is_active,type FROM accounts WHERE id=ANY($1::int[]) ORDER BY id FOR UPDATE",
+      [[event.source_account_id, event.destination_account_id]],
+    );
     if (
       accounts.length !== 2 ||
       accounts.some(

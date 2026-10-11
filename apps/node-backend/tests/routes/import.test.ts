@@ -222,8 +222,8 @@ function parseSseFrames(rawText: string) {
     .map((frame) => {
       const [eventLine, dataLine] = frame.split("\n");
       return {
-        name: eventLine.replace(/^event: /, ""),
-        data: JSON.parse(dataLine.replace(/^data: /, "")),
+        name: eventLine!.replace(/^event: /, ""),
+        data: JSON.parse(dataLine!.replace(/^data: /, "")),
       };
     });
 }
@@ -1081,8 +1081,11 @@ describe("Import Routes", () => {
       getBatch.mockResolvedValue(loose({ id: 1, status: "awaiting_review" }));
       getPreviewRows.mockResolvedValueOnce([
         {
-          id: 100,
+          id: "100",
           row_index: 0,
+          bank_account: null,
+          recipient_default_category_path: null,
+          override_category_path: null,
           recipient_raw: "SUPERMARKET",
           amount: "-12.50",
           currency: "EUR",
@@ -1121,8 +1124,11 @@ describe("Import Routes", () => {
       getBatch.mockResolvedValue(loose({ id: 1, status: "awaiting_review" }));
       getPreviewRows.mockResolvedValueOnce([
         {
-          id: 101,
+          id: "101",
           row_index: 0,
+          bank_account: null,
+          recipient_default_category_path: null,
+          override_category_path: null,
           recipient_raw: "SUPERMARKET",
           amount: "-99.99",
           currency: "EUR",

@@ -20,7 +20,9 @@ function research<T>(
 describe("ResearchHomePage", () => {
     it("renders the research heading and search box", async () => {
         server.use(
-            http.get(`${API_BASE}/api/watchlist`, () => ok({ items: [] })),
+            http.get(`${API_BASE}/api/watchlist`, () =>
+                ok({ items: [], total: 0, limit: 100, offset: 0 }),
+            ),
         );
         renderWithApp(<ResearchHomePage />);
         expect(
@@ -45,7 +47,9 @@ describe("ResearchHomePage", () => {
 
     it("shows search results from the research API", async () => {
         server.use(
-            http.get(`${API_BASE}/api/watchlist`, () => ok({ items: [] })),
+            http.get(`${API_BASE}/api/watchlist`, () =>
+                ok({ items: [], total: 0, limit: 100, offset: 0 }),
+            ),
             http.get(`${API_BASE}/api/research/search`, () =>
                 research(
                     {
@@ -74,7 +78,9 @@ describe("ResearchHomePage", () => {
 
     it("surfaces 'live data unavailable' when the search source is unavailable", async () => {
         server.use(
-            http.get(`${API_BASE}/api/watchlist`, () => ok({ items: [] })),
+            http.get(`${API_BASE}/api/watchlist`, () =>
+                ok({ items: [], total: 0, limit: 100, offset: 0 }),
+            ),
             http.get(`${API_BASE}/api/research/search`, () =>
                 research(
                     { items: [] },

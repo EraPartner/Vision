@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { server } from "@/test/msw/server";
+import { PORTFOLIO_SUMMARY_STUB } from "@/test/msw/handlers";
+import { ApiContractError } from "@/lib/api/client";
 
 import {
     getSupportedParsers,
@@ -24,6 +26,30 @@ function ok<T>(data: T, init?: ResponseInit) {
 }
 
 afterEach(() => server.resetHandlers());
+
+/** recurringDetectionService.RecurringPattern (synthetic). */
+const RECURRING_PATTERN = {
+    recipientId: 1,
+    recipientName: "Streaming Co",
+    direction: "expense",
+    detectedPattern: "monthly",
+    intervalDays: 30,
+    consistency: 0.9,
+    occurrences: 6,
+    averageAmount: -9.99,
+    latestAmount: -9.99,
+    currency: "EUR",
+    categoryId: null,
+    categoryName: null,
+    bankAccount: null,
+    accountId: null,
+    firstSeen: "2024-07-01",
+    lastSeen: "2024-12-01",
+    predictedNext: "2025-01-01",
+    amountChanges: [],
+    isAlreadyPlanned: false,
+    confidence: 0.8,
+};
 
 describe("info API client", () => {
     it("getSupportedParsers unwraps the adapter rows from { items, total }", async () => {
@@ -58,7 +84,7 @@ describe("info API client", () => {
     it("getRecurringPatterns returns the patterns on success", async () => {
         server.use(
             http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
-                ok({ patterns: [{ recipientId: 1 }], total: 1 }),
+                ok({ patterns: [RECURRING_PATTERN], total: 1 }),
             ),
         );
         const res = await getRecurringPatterns();
@@ -78,10 +104,47 @@ describe("info API client", () => {
         expect(res).toEqual({ patterns: [], total: 0 });
     });
 
+    it("getRecurringPatterns rethrows a contract mismatch instead of hiding it", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/info/recurring-patterns`, () =>
+                ok({ patterns: [{ unexpected: true }], total: 1 }),
+            ),
+        );
+        await expect(getRecurringPatterns()).rejects.toBeInstanceOf(
+            ApiContractError,
+        );
+    });
+
     it("getInsightsDigest returns the digest on success", async () => {
         const digest = {
-            subscriptionCreep: { new: [{ recipientId: 1 }], priceChanges: [] },
-            categoryOutliers: [{ categoryId: 7 }],
+            subscriptionCreep: {
+                new: [
+                    {
+                        recipientId: 1,
+                        recipientName: "Streaming Co",
+                        findingType: "new",
+                        latestAmount: -9.99,
+                        currency: "EUR",
+                        detectedPattern: "monthly",
+                        intervalDays: 30,
+                        predictedNext: "2025-01-01",
+                        confidence: 0.8,
+                    },
+                ],
+                priceChanges: [],
+            },
+            categoryOutliers: [
+                {
+                    categoryId: 7,
+                    categoryName: "Dining",
+                    monthKey: "2025-01",
+                    comparisonEndDay: 15,
+                    currentAmount: 300,
+                    baselineMedian: 100,
+                    deviation: 2,
+                    direction: "above",
+                },
+            ],
             cashForecast: null,
         };
         server.use(
@@ -108,6 +171,17 @@ describe("info API client", () => {
             categoryOutliers: [],
             cashForecast: null,
         });
+    });
+
+    it("getInsightsDigest rethrows a contract mismatch instead of hiding it", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/info/insights-digest`, () =>
+                ok({ unexpected: true }),
+            ),
+        );
+        await expect(getInsightsDigest()).rejects.toBeInstanceOf(
+            ApiContractError,
+        );
     });
 
     it("getDeductionCandidates forwards the year and returns candidates on success", async () => {
@@ -168,12 +242,13 @@ describe("info API client", () => {
                     url = request.url;
                     return ok({
                         currency: "EUR",
-                        start_date: "",
-                        end_date: "",
+                        start_date: "2024-01-01",
+                        end_date: "2025-01-01",
                         snapshots: [],
                         metrics: null,
                         heatmap: { years: [], data: {}, maxAbsPct: 0 },
                         breakdownSummary: [],
+                        totals: PORTFOLIO_SUMMARY_STUB.totals,
                     });
                 },
             ),
@@ -186,12 +261,7 @@ describe("info API client", () => {
     it("getPortfolioSummary fetches the summary", async () => {
         server.use(
             http.get(`${API_BASE}/api/info/portfolio-summary`, () =>
-                ok({
-                    currency: "EUR",
-                    computed_at: "",
-                    totals: {},
-                    summaries: [],
-                }),
+                ok(PORTFOLIO_SUMMARY_STUB),
             ),
         );
         expect((await getPortfolioSummary({ currency: "EUR" })).currency).toBe(
@@ -204,7 +274,20 @@ describe("info API client", () => {
         server.use(
             http.get(`${API_BASE}/api/info/net-worth`, ({ request }) => {
                 url = request.url;
-                return ok({ items: [], total: 0 });
+                return ok({
+                    current: {
+                        liquid: 0,
+                        liabilities: 0,
+                        investments: 0,
+                        netWorth: 0,
+                    },
+                    monthlyChange: 0,
+                    monthlyChangePercent: 0,
+                    snapshots: [],
+                    snapshotsTotal: 0,
+                    snapshotsLimit: 10,
+                    snapshotsOffset: 5,
+                });
             }),
         );
         await getNetWorth({ currency: "EUR", limit: 10, offset: 5 });
@@ -217,7 +300,14 @@ describe("info API client", () => {
         server.use(
             http.get(`${API_BASE}/api/info/exchange-rates`, ({ request }) => {
                 urls.push(request.url);
-                return ok({ total_rates: 0, rates: [], fallback_rates: {} });
+                return ok({
+                    total_rates: 0,
+                    rates: [],
+                    fallback_rates: {},
+                    source: "fallback",
+                    is_stale: true,
+                    last_fetched_at: null,
+                });
             }),
         );
 

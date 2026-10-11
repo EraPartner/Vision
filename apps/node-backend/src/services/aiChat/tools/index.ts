@@ -174,11 +174,9 @@ function coerceArguments(rawArgs: unknown): Record<string, unknown> {
   throw new ToolValidationError("arguments must be an object or JSON string");
 }
 
-// Errors are of genuinely arbitrary shape here — anything a tool's `run()` can
-// throw, not just ToolValidationError — so `err` stays `any` (dbEditor
-// pg-error precedent).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- see above
-function formatError(err: any) {
+// Errors are of genuinely arbitrary shape here: anything a tool's `run()` can
+// throw, not just ToolValidationError.
+function formatError(err: unknown) {
   if (err instanceof ToolValidationError) {
     return {
       ok: false,
@@ -193,7 +191,12 @@ function formatError(err: any) {
     ok: false,
     error: {
       code: "TOOL_ERROR",
-      message: err?.message || "Tool execution failed",
+      // `err?.message`, boxing primitives exactly like optional chaining.
+      message:
+        (err == null
+          ? undefined
+          : (Object(err) as { message?: unknown }).message) ||
+        "Tool execution failed",
     },
   };
 }

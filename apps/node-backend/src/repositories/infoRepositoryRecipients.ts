@@ -8,7 +8,15 @@
  * income/spending cash-flow aggregates) deliberately does not apply.
  */
 
-import { query } from "../database/connection.ts";
+import { queryRows } from "../database/rowContracts.ts";
+import {
+  periodKeysRowSchema,
+  recipientMemberRowSchema,
+  recipientMomRawRowSchema,
+  recipientPivotRowSchema,
+  recipientTopRawRowSchema,
+  recipientYearRowSchema,
+} from "../database/rows/info.ts";
 import {
   toDecimal,
   toNumber,
@@ -114,7 +122,8 @@ export const recipientInsightsRepository = {
     // amount < 0 is pinned, so ABS distributes over the same-sign SUM and
     // SUM-then-convert per date is identical to converting each row; tx_count
     // and the MIN/MAX date bounds are re-reduced per recipient in JS below.
-    const topRawResult = await query(
+    const topRawRows = await queryRows(
+      recipientTopRawRowSchema,
       `
       SELECT
         COALESCE(pr.name, r.name)   AS recipient_name,
@@ -142,7 +151,7 @@ export const recipientInsightsRepository = {
     // Converting at the LATEST rate here made one 2024 USD purchase read 90 in
     // Top merchants and 25 in the by-year / pivot views of the same recipient.
     const topConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(topRawResult.rows, "total_abs_amount", false),
+      mapRowsForAmountConversion(topRawRows, "total_abs_amount", false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: "date" },
     );
@@ -219,7 +228,8 @@ export const recipientInsightsRepository = {
     const todayYmd = todayAppDateString();
     const momParams = [...params, todayYmd];
     const today = `$${momParams.length}::date`;
-    const momRawResult = await query(
+    const momRawRows = await queryRows(
+      recipientMomRawRowSchema,
       `
       SELECT
         COALESCE(pr.id, r.id)       AS recipient_id,
@@ -252,7 +262,7 @@ export const recipientInsightsRepository = {
 
     // Historical per-date rates, matching top merchants / by-year / pivot.
     const momConverted = await convertRowsToEur(
-      mapRowsForAmountConversion(momRawResult.rows, "abs_amount", false),
+      mapRowsForAmountConversion(momRawRows, "abs_amount", false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: "date" },
     );
@@ -260,15 +270,18 @@ export const recipientInsightsRepository = {
     // Derive the current / previous month keys in the database from the same
     // bound day as the window above, so they match the
     // `TO_CHAR(t.date, 'YYYY-MM')` buckets even at a month boundary.
-    const periodResult = await query(
+    const [periodRow] = await queryRows(
+      periodKeysRowSchema,
       `
       SELECT TO_CHAR($1::date, 'YYYY-MM') AS current_period,
              TO_CHAR($1::date - INTERVAL '1 month', 'YYYY-MM') AS prev_period
     `,
       [todayYmd],
     );
-    const currentPeriod = periodResult.rows[0].current_period;
-    const prevPeriod = periodResult.rows[0].prev_period;
+    // A FROM-less SELECT always returns exactly one row.
+    if (!periodRow) throw new Error("period keys query returned no row");
+    const currentPeriod = periodRow.current_period;
+    const prevPeriod = periodRow.prev_period;
 
     const momAgg: Record<
       string,
@@ -364,10 +377,10 @@ export const recipientInsightsRepository = {
       GROUP BY EXTRACT(YEAR FROM t.date)::int, COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), t.date, t.currency
     `;
 
-    const result = await query(sql, params);
+    const rows = await queryRows(recipientYearRowSchema, sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, "abs_amount", false),
+      mapRowsForAmountConversion(rows, "abs_amount", false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: "date" },
     );
@@ -379,19 +392,19 @@ export const recipientInsightsRepository = {
       const eur = Math.abs(row.amount_eur);
       const cnt = parseInt(row.cnt, 10) || 0;
 
-      if (!yearRecMap[year]) yearRecMap[year] = {};
-      if (!yearRecMap[year][rid]) {
-        yearRecMap[year][rid] = {
+      const yearRecipients = (yearRecMap[year] ??= {});
+      let rec = yearRecipients[rid];
+      if (!rec) {
+        rec = {
           recipientId: rid,
           name: row.name,
           totalSpend: 0,
           transactionCount: 0,
         };
+        yearRecipients[rid] = rec;
       }
-      yearRecMap[year][rid].totalSpend = toNumber(
-        toDecimal(yearRecMap[year][rid].totalSpend).plus(toDecimal(eur)),
-      );
-      yearRecMap[year][rid].transactionCount += cnt;
+      rec.totalSpend = toNumber(toDecimal(rec.totalSpend).plus(toDecimal(eur)));
+      rec.transactionCount += cnt;
     }
 
     const recipientsByYear: Record<string, RecipientTotal[]> = {};
@@ -441,7 +454,8 @@ export const recipientInsightsRepository = {
     let recipientInclude = "";
     const validIncludeIds = validateInt4Ids(recipientIds, "recipientIds");
     if (validIncludeIds.length > 0) {
-      const memberRes = await query<{ id: number }>(
+      const memberRows = await queryRows(
+        recipientMemberRowSchema,
         `WITH selected_roots AS (
            SELECT DISTINCT COALESCE(primary_recipient_id, id) AS id
            FROM recipients
@@ -454,9 +468,7 @@ export const recipientInsightsRepository = {
          JOIN selected_roots sr ON r.primary_recipient_id = sr.id`,
         [validIncludeIds],
       );
-      const memberIds = [
-        ...new Set(memberRes.rows.map((row) => Number(row.id))),
-      ];
+      const memberIds = [...new Set(memberRows.map((row) => Number(row.id)))];
       if (memberIds.length === 0) {
         return {
           recipientPivot: {},
@@ -494,10 +506,10 @@ export const recipientInsightsRepository = {
       GROUP BY COALESCE(pr.id, r.id), COALESCE(pr.name, r.name), ${periodExpr}, t.date, t.currency
     `;
 
-    const result = await query(sql, params);
+    const rows = await queryRows(recipientPivotRowSchema, sql, params);
 
     const converted = await convertRowsToEur(
-      mapRowsForAmountConversion(result.rows, "abs_amount", false),
+      mapRowsForAmountConversion(rows, "abs_amount", false),
       targetCurrency,
       { useHistoricalRatesByDate: true, dateField: "date" },
     );

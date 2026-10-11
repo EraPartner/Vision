@@ -2,7 +2,7 @@
 title: Input Validation
 type: security
 status: active
-date: 2026-10-09
+date: 2026-10-10
 updated: 2026-10-08
 tags:
   [
@@ -82,8 +82,9 @@ types also reject values that were coerced before, for example a string `"false"
 field.
 
 Data Vision produced itself is checked separately: bank and portfolio adapter output, saved parser
-configs read back from the database, and PostgreSQL rows in the checked repositories. A mismatch
-there is a Vision bug, never a 400. It throws in every environment: tests and development always, and production through
+configs read back from the database, and the PostgreSQL rows of almost every repository and
+service read ([[docs/adr/194-runtime-contracts-completion|ADR-194]]). A mismatch there is a Vision
+bug, never a 400, and fallback paths rethrow it rather than hide it. It throws in every environment: tests and development always, and production through
 `PRODUCTION_DATA_CONTRACT_MODE` in `lib/dataContract.ts`, which is `"throw"` (the owner chose to
 block, 2026-10-09). Messages and logs carry issue paths and codes only, never values, because the
 values are personal financial data.

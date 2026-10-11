@@ -25,6 +25,15 @@ const { query } = connection as unknown as TxConnectionMock<
 
 const splitRepository = { ...splitPersistence, ...splitService };
 
+/** A `split_audit` INSERT ... RETURNING row (BIGSERIAL id is a string). */
+function auditRow(id: string) {
+  return {
+    id,
+    payload_text: "{}",
+    occurred_at: "2026-03-04T00:00:00.000000Z",
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -55,14 +64,14 @@ describe("splitRepository owed aggregates use a per-split LATERAL sum", () => {
 
     const rows = await splitRepository.getOwedByRecipient(7);
 
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("LEFT JOIN LATERAL");
     expect(sql).toContain("WHERE split_id = ts.id");
     expect(sql).not.toContain("GROUP BY split_id");
 
     // Numeric shape preserved: amount_paid summed, remaining = amount - paid.
-    expect(rows[0].amount_paid).toBe(12);
-    expect(rows[0].remaining).toBe(18);
+    expect(rows[0]!.amount_paid).toBe(12);
+    expect(rows[0]!.remaining).toBe(18);
   });
 
   it("getOwedExportRowsByRecipient correlates SUM(amount) to the split, not the whole table", async () => {
@@ -84,14 +93,14 @@ describe("splitRepository owed aggregates use a per-split LATERAL sum", () => {
 
     const rows = await splitRepository.getOwedExportRowsByRecipient(7);
 
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("LEFT JOIN LATERAL");
     expect(sql).toContain("WHERE split_id = ts.id");
     expect(sql).not.toContain("GROUP BY split_id");
 
     // amount (split remaining) coerced to a number, rest passed through.
-    expect(rows[0].amount).toBe(18);
-    expect(rows[0].category_name).toBe("FOOD:DINNER");
+    expect(rows[0]!.amount).toBe(18);
+    expect(rows[0]!.category_name).toBe("FOOD:DINNER");
   });
 });
 
@@ -100,7 +109,9 @@ describe("splitRepository emits coerced money on every write path", () => {
     // 1) lock the split, 2) sum existing payments, 3) INSERT the payment,
     // 4) auto-settle probe, 5) audit insert.
     query
-      .mockResolvedValueOnce({ rows: [{ id: 7, amount: "30.00" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 7, amount: "30.00", is_settled: false }],
+      })
       .mockResolvedValueOnce({ rows: [{ paid: "0" }] })
       .mockResolvedValueOnce({
         rows: [
@@ -110,12 +121,12 @@ describe("splitRepository emits coerced money on every write path", () => {
             amount: "12.50",
             note: null,
             paid_at: new Date(Date.UTC(2026, 2, 4)),
-            created_at: "2026-03-04T00:00:00.000Z",
+            created_at: new Date("2026-03-04T00:00:00.000Z"),
           },
         ],
       })
       .mockResolvedValueOnce({ rowCount: 0, rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
+      .mockResolvedValueOnce({ rows: [auditRow("1")] });
 
     const payment = await splitRepository.addPayment({
       split_id: 7,
@@ -141,11 +152,13 @@ describe("splitRepository emits coerced money on every write path", () => {
     };
 
     query
-      .mockResolvedValueOnce({ rows: [{ id: 7, amount: "30.00" }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 7, amount: "30.00", is_settled: false }],
+      })
       .mockResolvedValueOnce({ rows: [{ paid: "0" }] })
       .mockResolvedValueOnce({ rows: [{ ...stored }] })
       .mockResolvedValueOnce({ rowCount: 0, rows: [] })
-      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
+      .mockResolvedValueOnce({ rows: [auditRow("1")] });
     const posted = await splitRepository.addPayment({
       split_id: 7,
       amount: 12.5,
@@ -173,14 +186,14 @@ describe("splitRepository emits coerced money on every write path", () => {
             amount: "30.00",
             note: null,
             is_settled: false,
-            created_at: "2026-03-01",
-            updated_at: "2026-03-01",
+            created_at: new Date("2026-03-01T00:00:00.000Z"),
+            updated_at: new Date("2026-03-01T00:00:00.000Z"),
             recipient_name: "Alice",
-            amount_paid: 0,
+            amount_paid: "0",
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] });
+      .mockResolvedValueOnce({ rows: [auditRow("1")] });
 
     const split = await splitRepository.createSplitAtomic({
       transaction_id: 1,
@@ -191,7 +204,7 @@ describe("splitRepository emits coerced money on every write path", () => {
 
     // The INSERT re-selects through recipients so the created row carries the
     // same fields every other split-reading endpoint emits.
-    const insertSql = query.mock.calls[2][0];
+    const insertSql = query.mock.calls[2]![0];
     expect(insertSql).toContain("WITH created AS");
     expect(insertSql).toContain("LEFT JOIN recipients");
 
@@ -216,10 +229,10 @@ describe("splitRepository emits coerced money on every write path", () => {
             amount: "20.00",
             note: null,
             is_settled: false,
-            created_at: "2026-03-01",
-            updated_at: "2026-03-01",
+            created_at: new Date("2026-03-01T00:00:00.000Z"),
+            updated_at: new Date("2026-03-01T00:00:00.000Z"),
             recipient_name: "Alice",
-            amount_paid: 0,
+            amount_paid: "0",
           },
           {
             id: 6,
@@ -228,15 +241,15 @@ describe("splitRepository emits coerced money on every write path", () => {
             amount: "10.00",
             note: "half",
             is_settled: false,
-            created_at: "2026-03-01",
-            updated_at: "2026-03-01",
+            created_at: new Date("2026-03-01T00:00:00.000Z"),
+            updated_at: new Date("2026-03-01T00:00:00.000Z"),
             recipient_name: "Bob",
-            amount_paid: 0,
+            amount_paid: "0",
           },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ id: "1", payload_text: "{}" }] })
-      .mockResolvedValueOnce({ rows: [{ id: "2", payload_text: "{}" }] });
+      .mockResolvedValueOnce({ rows: [auditRow("1")] })
+      .mockResolvedValueOnce({ rows: [auditRow("2")] });
 
     const splits = await splitRepository.createSplitsBatchAtomic({
       transaction_id: 1,
@@ -285,7 +298,7 @@ describe("splitRepository settle/getById carry the real amount_paid and recipien
 
     const split = (await splitPersistence.settleSplit(7))!;
 
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("WITH settled AS");
     expect(sql).toContain("LEFT JOIN recipients");
     expect(sql).toContain("split_payments");
@@ -302,7 +315,7 @@ describe("splitRepository settle/getById carry the real amount_paid and recipien
 
     const split = (await splitRepository.getSplitById(7))!;
 
-    const sql = query.mock.calls[0][0];
+    const sql = query.mock.calls[0]![0];
     expect(sql).toContain("LEFT JOIN recipients");
     expect(sql).toContain("split_payments");
 
@@ -336,8 +349,8 @@ describe("splitRepository opt-in LIMIT/OFFSET", () => {
   it.each(cases)("%s emits no LIMIT when unpaginated", async (_name, call) => {
     query.mockResolvedValueOnce({ rows: [] });
     await call(undefined);
-    expect(query.mock.calls[0][0]).not.toContain("LIMIT");
-    expect(query.mock.calls[0][1]).toHaveLength(1);
+    expect(query.mock.calls[0]![0]).not.toContain("LIMIT");
+    expect(query.mock.calls[0]![1]).toHaveLength(1);
   });
 
   it.each(cases)(
@@ -345,8 +358,8 @@ describe("splitRepository opt-in LIMIT/OFFSET", () => {
     async (_name, call) => {
       query.mockResolvedValueOnce({ rows: [] });
       await call({ limit: 10, offset: 20 });
-      expect(query.mock.calls[0][0]).toContain("LIMIT $2 OFFSET $3");
-      expect(query.mock.calls[0][1].slice(1)).toEqual([10, 20]);
+      expect(query.mock.calls[0]![0]).toContain("LIMIT $2 OFFSET $3");
+      expect(query.mock.calls[0]![1].slice(1)).toEqual([10, 20]);
     },
   );
 

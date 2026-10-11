@@ -8,9 +8,24 @@ import { getWatchlist, createWatchlistItem, updateWatchlistItem, deleteWatchlist
 
 afterEach(() => server.resetHandlers());
 
+/** A watchlistRepository.mapWatchlistRow row. */
+const WATCHLIST_ITEM = {
+  id: 1,
+  name: "Apple",
+  symbol: "AAPL",
+  asset_class: "stock",
+  target_price: 150,
+  added_price: null,
+  currency: "USD",
+  notes: null,
+  price_provider_id: "AAPL",
+  created_at: "2025-01-01T00:00:00.000Z",
+  updated_at: "2025-01-01T00:00:00.000Z",
+};
+
 describe("market API client", () => {
   it("getWatchlist fetches the watchlist", async () => {
-    server.use(http.get(`${API_BASE}/api/watchlist`, () => ok({ items: [], total: 0 })));
+    server.use(http.get(`${API_BASE}/api/watchlist`, () => ok({ items: [], total: 0, limit: 50, offset: 0 })));
     const res = await getWatchlist();
     expect(res.items).toEqual([]);
   });
@@ -20,7 +35,7 @@ describe("market API client", () => {
     server.use(
       http.post(`${API_BASE}/api/watchlist`, async ({ request }) => {
         body = await request.json();
-        return ok({ id: 1, symbol: "AAPL" });
+        return ok(WATCHLIST_ITEM, { status: 201 });
       }),
     );
     await createWatchlistItem({ symbol: "AAPL" } as never);
@@ -28,7 +43,7 @@ describe("market API client", () => {
   });
 
   it("updateWatchlistItem PATCHes by id", async () => {
-    server.use(http.patch(`${API_BASE}/api/watchlist/1`, () => ok({ id: 1 })));
+    server.use(http.patch(`${API_BASE}/api/watchlist/1`, () => ok(WATCHLIST_ITEM)));
     expect((await updateWatchlistItem(1, {} as never)).id).toBe(1);
   });
 

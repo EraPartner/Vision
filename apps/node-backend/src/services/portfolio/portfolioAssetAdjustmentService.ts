@@ -2,6 +2,8 @@
 import { projectAssetTransferPartitions } from "@vision/shared-utils/portfolio";
 import type { CostBasisMethod } from "@vision/shared-utils/portfolio";
 import { query, withTransaction } from "../../database/connection.ts";
+import { queryOne } from "../../database/rowContracts.ts";
+import { custodyAccountLockRowSchema } from "../../database/rows/portfolio.ts";
 import { toDecimal } from "../../lib/money.ts";
 import { toYmd } from "../../lib/dateFormat.ts";
 import {
@@ -199,12 +201,11 @@ export async function commitPortfolioAssetAdjustment({
     );
   const event = prepared.event;
   return withTransaction(async (client) => {
-    const account = (
-      await query<{ id: number; is_active: boolean; type: string }>(
-        "SELECT id,is_active,type FROM accounts WHERE id=$1 FOR UPDATE",
-        [event.account_id],
-      )
-    ).rows[0];
+    const account = await queryOne(
+      custodyAccountLockRowSchema,
+      "SELECT id,is_active,type FROM accounts WHERE id=$1 FOR UPDATE",
+      [event.account_id],
+    );
     if (
       !account?.is_active ||
       !["brokerage", "crypto_exchange", "wallet"].includes(account.type)

@@ -306,8 +306,9 @@ export async function readIbkrFundingWorkbook(
   let cellCount = 0;
   return workbook.SheetNames.map((sheet) => {
     const source = workbook.Sheets[sheet];
-    const reference = source["!ref"];
+    const reference = source?.["!ref"];
     if (
+      !source ||
       !reference ||
       (source["!type"] && source["!type"] !== "sheet") ||
       source["!merges"]?.length

@@ -107,7 +107,7 @@ describeDb('portfolio import group resolution (real Postgres)', () => {
 
     await expect(resolveInvestmentRows({
       batchId,
-      rowIds: [rowIds[0], foreignRowId],
+      rowIds: [rowIds[0]!, foreignRowId!],
       investmentId: created.investmentId,
     })).rejects.toMatchObject({ code: 'NOT_FOUND' });
 

@@ -295,9 +295,12 @@ function _removeStaleRuns(points: readonly PricePoint[], minRunLength = 8): Pric
   const result: PricePoint[] = [];
   let i = 0;
   while (i < points.length) {
-    result.push(points[i]);
+    const point = points[i];
+    // i < points.length; the guard only narrows the type.
+    if (point === undefined) break;
+    result.push(point);
     let j = i + 1;
-    while (j < points.length && points[j].price === points[i].price) j++;
+    while (j < points.length && points[j]?.price === point.price) j++;
     if (j - i >= minRunLength) {
       i = j;
     } else {
@@ -324,21 +327,23 @@ export function sanitizeKinesisIsolatedSpikes(points: PricePoint[] | null | unde
   const localNeedleRatio = 1.8;
 
   // Edge: first point — check against its single neighbor
-  const firstCurr = toNumber(sanitized[0]?.price);
+  const first = sanitized[0];
+  const firstCurr = toNumber(first?.price);
   const firstNext = toNumber(sanitized[1]?.price);
-  if (isValidPrice(firstCurr) && isValidPrice(firstNext)) {
+  if (first && isValidPrice(firstCurr) && isValidPrice(firstNext)) {
     if (firstCurr * localNeedleRatio <= firstNext || firstCurr >= firstNext * localNeedleRatio) {
-      sanitized[0].price = firstNext;
+      first.price = firstNext;
     }
   }
 
   // Edge: last point — check against its single neighbor
   const lastIdx = sanitized.length - 1;
+  const last = sanitized[lastIdx];
   const lastPrev = toNumber(sanitized[lastIdx - 1]?.price);
-  const lastCurr = toNumber(sanitized[lastIdx]?.price);
-  if (isValidPrice(lastPrev) && isValidPrice(lastCurr)) {
+  const lastCurr = toNumber(last?.price);
+  if (last && isValidPrice(lastPrev) && isValidPrice(lastCurr)) {
     if (lastCurr * localNeedleRatio <= lastPrev || lastCurr >= lastPrev * localNeedleRatio) {
-      sanitized[lastIdx].price = lastPrev;
+      last.price = lastPrev;
     }
   }
 
@@ -358,10 +363,11 @@ export function sanitizeKinesisIsolatedSpikes(points: PricePoint[] | null | unde
   const localNeedleNeighborTolerance = Math.log(1.12);
 
   for (let i = 1; i < sanitized.length - 1; i += 1) {
+    const point = sanitized[i];
     const prev = toNumber(sanitized[i - 1]?.price);
-    const current = toNumber(sanitized[i]?.price);
+    const current = toNumber(point?.price);
     const next = toNumber(sanitized[i + 1]?.price);
-    if (!isValidPrice(prev) || !isValidPrice(current) || !isValidPrice(next)) continue;
+    if (!point || !isValidPrice(prev) || !isValidPrice(current) || !isValidPrice(next)) continue;
 
     const bridge = Math.log(next / prev);
     const robustNeedle = isRobustNeedle(prev, current, next, stats);
@@ -374,7 +380,7 @@ export function sanitizeKinesisIsolatedSpikes(points: PricePoint[] | null | unde
       && Math.abs(bridge) <= localNeedleNeighborTolerance;
 
     if (robustNeedle || localNeedlePeak || localNeedleTrough) {
-      sanitized[i].price = Math.sqrt(prev * next);
+      point.price = Math.sqrt(prev * next);
     }
   }
 

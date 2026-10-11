@@ -77,7 +77,7 @@ describe('createAdminAuthMiddleware — token set', () => {
   it('rejects missing token even from loopback', () => {
     const next = vi.fn();
     mw(mkReq({ ip: '127.0.0.1' }), mkRes(), next);
-    const err = next.mock.calls[0][0];
+    const err = next.mock.calls[0]![0];
     expect(err).toBeInstanceOf(UnauthorizedError);
     expect(err.message).toBe('Unauthorized');
   });
@@ -85,14 +85,14 @@ describe('createAdminAuthMiddleware — token set', () => {
   it('rejects mismatched token', () => {
     const next = vi.fn();
     mw(mkReq({ ip: '127.0.0.1', headers: { authorization: 'Bearer wrong' } }), mkRes(), next);
-    const err = next.mock.calls[0][0];
+    const err = next.mock.calls[0]![0];
     expect(err).toBeInstanceOf(UnauthorizedError);
   });
 
   it('rejects token of different length without throwing (timing-safe compare)', () => {
     const next = vi.fn();
     mw(mkReq({ headers: { authorization: 'Bearer shorter' } }), mkRes(), next);
-    const err = next.mock.calls[0][0];
+    const err = next.mock.calls[0]![0];
     expect(err).toBeInstanceOf(UnauthorizedError);
   });
 });
