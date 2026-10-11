@@ -259,11 +259,11 @@ describe("ExportDialog", () => {
             );
             if (type === "financial") {
                 expect(
-                    screen.getByText(/statistics exclusions/i),
+                    screen.getByText(/insights exclusions/i),
                 ).toHaveTextContent(/2.*1/);
             } else {
                 expect(
-                    screen.queryByText(/statistics exclusions/i),
+                    screen.queryByText(/insights exclusions/i),
                 ).not.toBeInTheDocument();
             }
             await user.click(

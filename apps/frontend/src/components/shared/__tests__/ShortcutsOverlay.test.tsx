@@ -17,11 +17,12 @@ describe("ShortcutsOverlay", () => {
     });
     it("shows current destination names with their updated keys", async () => {
         renderWithApp(<ShortcutsOverlay open onOpenChange={() => {}} />);
-        for (const [label, key] of [
+        const destinations: ReadonlyArray<readonly [string, string]> = [
             ["Insights", "I"],
             ["Payees", "Y"],
             ["Import & Export", "E"],
-        ]) {
+        ];
+        for (const [label, key] of destinations) {
             const name = await screen.findByText(label);
             const row = name.closest("div")!;
             expect(within(row).getByText("G")).toBeInTheDocument();

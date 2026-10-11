@@ -7,6 +7,7 @@ import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
 import { ok } from "@/test/msw/handlers";
+import { transactionRow, transactionsBody } from "@/test/msw/rowFixtures";
 import TransactionsPage from "@/pages/TransactionsPage";
 
 vi.mock("@/hooks/useMediaQuery", () => ({
@@ -51,23 +52,19 @@ describe("Transaction inspector dismissal (integration)", () => {
         async (dismissal) => {
             server.use(
                 http.get(`${API_BASE}/api/transactions`, () =>
-                    ok({
-                        items: [
-                            {
-                                id: 42,
-                                transaction_date: "2026-10-10",
-                                recipient_name: "Close test payee",
-                                amount: -25,
-                                currency: "EUR",
-                                is_active: true,
-                                bank_account: "Test account",
-                            },
-                        ],
-                        total: 1,
-                        limit: 50,
-                        offset: 0,
-                        links: [],
-                    }),
+                    ok(
+                        transactionsBody({
+                            items: [
+                                transactionRow({
+                                    id: 42,
+                                    transaction_date: "2026-10-10",
+                                    recipient_name: "Close test payee",
+                                    amount: -25,
+                                    bank_account: "Test account",
+                                }),
+                            ],
+                        }),
+                    ),
                 ),
             );
             const user = userEvent.setup();

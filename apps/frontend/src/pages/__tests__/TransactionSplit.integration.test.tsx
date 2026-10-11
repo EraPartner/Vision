@@ -12,7 +12,13 @@ import { Route, Routes } from "react-router";
 import { http } from "msw";
 import { renderWithApp } from "@/test/renderWithApp";
 import { server } from "@/test/msw/server";
-import { ok } from "@/test/msw/handlers";
+import { ok, SPLIT_STUB } from "@/test/msw/handlers";
+import {
+    recipientRow,
+    recipientsBody,
+    transactionRow,
+    transactionsBody,
+} from "@/test/msw/rowFixtures";
 import TransactionsPage from "@/pages/TransactionsPage";
 
 vi.mock("@/hooks/useMediaQuery", () => ({
@@ -59,47 +65,45 @@ describe("Single transaction split entry points", () => {
             const requests: unknown[] = [];
             server.use(
                 http.get(`${API_BASE}/api/transactions`, () =>
-                    ok({
-                        items: [
-                            {
-                                id: 42,
-                                transaction_date: "2026-10-10",
-                                recipient_name: "Dinner",
-                                amount: -100,
-                                currency: "EUR",
-                                is_active: true,
-                                bank_account: "Test account",
-                            },
-                        ],
-                        total: 1,
-                        limit: 50,
-                        offset: 0,
-                        links: [],
-                    }),
+                    ok(
+                        transactionsBody({
+                            items: [
+                                transactionRow({
+                                    id: 42,
+                                    transaction_date: "2026-10-10",
+                                    recipient_name: "Dinner",
+                                    amount: -100,
+                                    bank_account: "Test account",
+                                }),
+                            ],
+                        }),
+                    ),
                 ),
                 http.get(`${API_BASE}/api/recipients`, () =>
-                    ok({
-                        items: [
-                            { id: 1, name: "Split guest", is_active: true },
-                        ],
-                        total: 1,
-                        limit: 1000,
-                        offset: 0,
-                        links: [],
-                    }),
+                    ok(
+                        recipientsBody({
+                            items: [
+                                recipientRow({ id: 1, name: "Split guest" }),
+                            ],
+                            limit: 1000,
+                        }),
+                    ),
                 ),
                 http.get(`${API_BASE}/api/splits/transaction/42`, () =>
                     ok({
                         items: saved
                             ? [
                                   {
+                                      ...SPLIT_STUB,
                                       id: 5,
+                                      transaction_id: 42,
                                       recipient_id: 1,
                                       recipient_name: "Split guest",
                                       amount: 100,
                                   },
                               ]
                             : [],
+                        total: saved ? 1 : 0,
                     }),
                 ),
                 http.post(
