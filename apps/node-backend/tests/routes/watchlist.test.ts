@@ -4,6 +4,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -68,7 +69,7 @@ describe("Watchlist Routes", () => {
         offset: 0,
         assetClass: "stocks",
       });
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         items: [{ id: 1 }],
         total: 1,
         limit: 5000,
@@ -82,7 +83,7 @@ describe("Watchlist Routes", () => {
       );
 
       const res = await api.get(BASE).expect(500);
-      expect(res.body.error.message).toBe("db exploded");
+      expect(bodyAt(res, "error", "message")).toBe("db exploded");
     });
   });
 
@@ -138,7 +139,7 @@ describe("Watchlist Routes", () => {
         price_provider_id: "yahoo",
         added_price: undefined,
       });
-      expect(res.body.data).toEqual({ id: 9, name: "ETF Idea" });
+      expect(bodyAt(res, "data")).toEqual({ id: 9, name: "ETF Idea" });
     });
   });
 

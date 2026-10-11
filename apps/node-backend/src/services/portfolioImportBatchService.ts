@@ -351,8 +351,8 @@ export async function resolveInvestmentRows({
 }: {
   batchId: number;
   rowIds: number[];
-  investmentId?: number;
-  createNew?: boolean;
+  investmentId?: number | undefined;
+  createNew?: boolean | undefined;
 }): Promise<{
   investmentId: number;
   created: boolean;

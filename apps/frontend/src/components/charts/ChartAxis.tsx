@@ -7,14 +7,15 @@ import type { AxisScale } from "@visx/axis";
 
 export interface ChartAxisProps<Scale extends AxisScale> {
     readonly scale: Scale;
-    readonly top?: number;
-    readonly left?: number;
-    readonly numTicks?: number;
-    readonly tickValues?: ReadonlyArray<number | string | Date>;
-    readonly tickFormat?: (value: unknown, index: number) => string;
-    readonly hideAxisLine?: boolean;
-    readonly hideTicks?: boolean;
-    readonly label?: string;
+    readonly top?: number | undefined;
+    readonly left?: number | undefined;
+    readonly numTicks?: number | undefined;
+    readonly tickValues?: ReadonlyArray<number | string | Date> | undefined;
+    readonly tickFormat?:
+        ((value: unknown, index: number) => string) | undefined;
+    readonly hideAxisLine?: boolean | undefined;
+    readonly hideTicks?: boolean | undefined;
+    readonly label?: string | undefined;
 }
 
 const TICK_COLOR = "hsl(var(--muted-foreground))";
@@ -38,6 +39,24 @@ const tickLabelPropsSide = (anchor: "start" | "end") =>
         textAnchor: anchor,
         dy: "0.33em",
     }) as const;
+
+/** Forward only the optional axis props that were provided (visx applies its own defaults). */
+function optionalAxisProps({
+    numTicks,
+    hideAxisLine,
+    hideTicks,
+    label,
+}: Pick<
+    ChartAxisProps<AxisScale>,
+    "numTicks" | "hideAxisLine" | "hideTicks" | "label"
+>) {
+    return {
+        ...(numTicks === undefined ? {} : { numTicks }),
+        ...(hideAxisLine === undefined ? {} : { hideAxisLine }),
+        ...(hideTicks === undefined ? {} : { hideTicks }),
+        ...(label === undefined ? {} : { label }),
+    };
+}
 
 export function BottomAxis<Scale extends AxisScale>({
     scale,
@@ -70,16 +89,13 @@ export function BottomAxis<Scale extends AxisScale>({
     return (
         <AxisBottom
             scale={scale}
-            top={top}
-            numTicks={numTicks}
+            {...(top === undefined ? {} : { top })}
+            {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
             tickValues={readableTicks as never}
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
-            hideAxisLine={hideAxisLine}
-            hideTicks={hideTicks}
             tickLabelProps={tickLabelProps}
-            label={label}
             labelProps={{
                 fill: TICK_COLOR,
                 fontSize: 11,
@@ -102,16 +118,13 @@ export function LeftAxis<Scale extends AxisScale>({
     return (
         <AxisLeft
             scale={scale}
-            left={left}
-            numTicks={numTicks}
+            {...(left === undefined ? {} : { left })}
+            {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
             tickValues={tickValues as never}
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
-            hideAxisLine={hideAxisLine}
-            hideTicks={hideTicks}
             tickLabelProps={() => tickLabelPropsSide("end")}
-            label={label}
             labelProps={{
                 fill: TICK_COLOR,
                 fontSize: 11,
@@ -134,16 +147,13 @@ export function RightAxis<Scale extends AxisScale>({
     return (
         <AxisRight
             scale={scale}
-            left={left}
-            numTicks={numTicks}
+            {...(left === undefined ? {} : { left })}
+            {...optionalAxisProps({ numTicks, hideAxisLine, hideTicks, label })}
             tickValues={tickValues as never}
             tickFormat={tickFormat as never}
             stroke={AXIS_COLOR}
             tickStroke={AXIS_COLOR}
-            hideAxisLine={hideAxisLine}
-            hideTicks={hideTicks}
             tickLabelProps={() => tickLabelPropsSide("start")}
-            label={label}
             labelProps={{
                 fill: TICK_COLOR,
                 fontSize: 11,

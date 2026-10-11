@@ -60,6 +60,13 @@ const TXN = {
     updated_at: "2025-01-10T10:00:00Z",
 };
 
+/** TXN without its unit fields, as stored for amount-only types. */
+const {
+    units: _units,
+    price_per_unit: _pricePerUnit,
+    ...TXN_WITHOUT_UNITS
+} = TXN;
+
 const INVESTMENT: InvestmentSummary = {
     id: 1,
     name: "MSCI World ETF",
@@ -131,11 +138,9 @@ describe("InvestmentDetailDialog", () => {
                     totalInKindIncome: 7,
                     transactions: [
                         {
-                            ...TXN,
+                            ...TXN_WITHOUT_UNITS,
                             id: 102,
                             type: "dividend",
-                            units: undefined,
-                            price_per_unit: undefined,
                             amount: 7,
                             note: "Literal source income",
                             income_recognition_role: "included_in_units",

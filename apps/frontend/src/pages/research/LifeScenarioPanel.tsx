@@ -61,7 +61,7 @@ interface ScenarioDraft {
 interface Comparison {
     baseline: PortfolioForecast;
     interrupted: PortfolioForecast;
-    goalMonth?: number;
+    goalMonth?: number | undefined;
     reducedContribution: number;
     monthlyDeficit: number;
     signature: string;

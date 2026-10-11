@@ -145,13 +145,13 @@ export async function bulkUpdateTransactions({
   fields,
   expectedCount,
 }: {
-  ids?: number[];
-  filter?: BulkFilterInput | null;
-  expectedCount?: number;
+  ids?: number[] | undefined;
+  filter?: BulkFilterInput | null | undefined;
+  expectedCount?: number | undefined;
   fields: {
-    category_id?: number | null;
-    recipient_id?: number;
-    is_active?: boolean;
+    category_id?: number | null | undefined;
+    recipient_id?: number | undefined;
+    is_active?: boolean | undefined;
   };
 }): Promise<{ updated: number; requested: number; matched: number }> {
   if (fields.category_id != null) {
@@ -230,9 +230,9 @@ export async function bulkDeleteTransactions({
   filter,
   expectedCount,
 }: {
-  ids?: number[];
-  filter?: BulkFilterInput | null;
-  expectedCount?: number;
+  ids?: number[] | undefined;
+  filter?: BulkFilterInput | null | undefined;
+  expectedCount?: number | undefined;
 }): Promise<{ deleted: number; requested: number; matched: number }> {
   const txIds = await resolveBulkSelection(
     { ids, filter },

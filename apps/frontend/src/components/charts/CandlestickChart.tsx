@@ -14,12 +14,12 @@ export interface CandlePoint {
 
 export interface CandlestickChartProps<Datum extends CandlePoint> {
   readonly data: ReadonlyArray<Datum>;
-  readonly height?: number;
-  readonly label?: string;
-  readonly xTickFormat?: (v: Date | number) => string;
-  readonly yTickFormat?: (v: number) => string;
-  readonly tooltipTitle?: (d: Datum) => string;
-  readonly tooltipValueFormat?: (v: number, seriesKey: string) => string;
+  readonly height?: number | undefined;
+  readonly label?: string | undefined;
+  readonly xTickFormat?: ((v: Date | number) => string) | undefined;
+  readonly yTickFormat?: ((v: number) => string) | undefined;
+  readonly tooltipTitle?: ((d: Datum) => string) | undefined;
+  readonly tooltipValueFormat?: ((v: number, seriesKey: string) => string) | undefined;
 }
 
 export function CandlestickChart<Datum extends CandlePoint>({

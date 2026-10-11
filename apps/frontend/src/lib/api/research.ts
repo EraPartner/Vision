@@ -243,11 +243,11 @@ export function getResearchMappings(
 
 export function resolveResearchMappings(input: {
     instrument_key: string;
-    key_type?: MappingKeyType;
-    asset_class?: ResearchAssetClass;
+    key_type?: MappingKeyType | undefined;
+    asset_class?: ResearchAssetClass | undefined;
     query: string;
     /** When set, the held investment's configured provider is pre-seeded as confirmed. */
-    investment_id?: number;
+    investment_id?: number | undefined;
 }): Promise<ResearchResult<MappingResolveResponse>> {
     return researchSend<MappingResolveResponse>(
         '/api/research/mappings/resolve',
@@ -259,7 +259,7 @@ export function resolveResearchMappings(input: {
 
 export function saveResearchMappings(input: {
     instrument_key: string;
-    key_type?: MappingKeyType;
+    key_type?: MappingKeyType | undefined;
     mappings: MappingSaveInput[];
 }): Promise<ResearchResult<MappingsResponse>> {
     return researchSend<MappingsResponse>(
@@ -280,7 +280,7 @@ export async function deleteResearchMapping(id: number): Promise<void> {
 
 export function auditResearchMappings(input: {
     instrument_key: string;
-    key_type?: MappingKeyType;
+    key_type?: MappingKeyType | undefined;
 }): Promise<ResearchResult<MappingAuditResponse>> {
     return researchSend<MappingAuditResponse>(
         '/api/research/mappings/audit',

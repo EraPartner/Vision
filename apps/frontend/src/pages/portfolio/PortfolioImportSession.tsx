@@ -110,25 +110,25 @@ const storedSessionSchema = z
 interface Statement {
     id: string;
     name: string;
-    kind?: "reference" | "existing";
-    originalBatchId?: number;
-    originalSourceName?: string;
-    file?: File;
-    detected?: DetectedPortfolioImport;
-    accountId?: number;
-    accountChosenManually?: boolean;
-    adoptPolicy?: PortfolioReconciliationPolicy;
-    transferDestinationAccountId?: number;
-    transferOriginAccountId?: number;
-    includedSymbols?: string;
-    batchId?: number;
-    previousBatchIds?: number[];
+    kind?: "reference" | "existing" | undefined;
+    originalBatchId?: number | undefined;
+    originalSourceName?: string | undefined;
+    file?: File | undefined;
+    detected?: DetectedPortfolioImport | undefined;
+    accountId?: number | undefined;
+    accountChosenManually?: boolean | undefined;
+    adoptPolicy?: PortfolioReconciliationPolicy | undefined;
+    transferDestinationAccountId?: number | undefined;
+    transferOriginAccountId?: number | undefined;
+    includedSymbols?: string | undefined;
+    batchId?: number | undefined;
+    previousBatchIds?: number[] | undefined;
     status:
         "detecting" | "ready" | "staging" | "staged" | "error" | "completed";
-    skipped?: number;
-    rows?: number;
-    sourceErrors?: number;
-    error?: string;
+    skipped?: number | undefined;
+    rows?: number | undefined;
+    sourceErrors?: number | undefined;
+    error?: string | undefined;
 }
 
 function readSession(): Statement[] {

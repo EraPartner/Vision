@@ -4,6 +4,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts).
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -77,7 +78,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(BASE).expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         app_settings: { defaultCurrency: "EUR" },
       });
     });
@@ -86,7 +87,7 @@ describe("Settings Routes", () => {
       settingsRepository.getAll.mockRejectedValue(new Error("boom"));
 
       const res = await api.get(BASE).expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 
@@ -114,7 +115,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(`${BASE}/app_settings`).expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         key: "app_settings",
         value: { defaultCurrency: "USD" },
         expected: { exists: true, value: { defaultCurrency: "USD" } },
@@ -126,7 +127,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(`${BASE}/onboarding_complete`).expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         key: "onboarding_complete",
         value: false,
         expected: { exists: false },
@@ -138,7 +139,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(`${BASE}/app_settings`).expect(200);
 
-      const { value } = res.body.data;
+      const value = bodyAt(res, "data", "value");
       // Keys that had drifted from DEFAULT_APP_SETTINGS.
       expect(value).toMatchObject({
         costBasisMethod: "weighted_avg",
@@ -155,7 +156,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(`${BASE}/dashboard_settings`).expect(200);
 
-      expect(res.body.data.value.exclusionScope).toBe("everywhere");
+      expect(bodyAt(res, "data", "value", "exclusionScope")).toBe("everywhere");
     });
 
     it("returns false default for includeTransfers when unset", async () => {
@@ -164,7 +165,7 @@ describe("Settings Routes", () => {
 
       const res = await api.get(`${BASE}/includeTransfers`).expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         key: "includeTransfers",
         value: false,
         expected: { exists: false },
@@ -182,7 +183,7 @@ describe("Settings Routes", () => {
       settingsRepository.getRecord.mockRejectedValue(new Error("boom"));
 
       const res = await api.get(`${BASE}/app_settings`).expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 
@@ -362,7 +363,7 @@ describe("Settings Routes", () => {
         },
         { exists: false },
       );
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         key: "theme_settings",
         value: { theme: "dark" },
       });
@@ -438,7 +439,7 @@ describe("Settings Routes", () => {
         .send(singleBody({ value: { any: "json" } }))
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(res.body.error.message).toMatch(
+      expect(bodyAt(res, "error", "message")).toMatch(
         /Unknown setting key 'totally_unknown_key'.*Known keys:/,
       );
       expect(settingsRepository.replace).not.toHaveBeenCalled();
@@ -500,7 +501,7 @@ describe("Settings Routes", () => {
         .put(`${BASE}/theme_settings`)
         .send(singleBody({ value: { theme: "dark" } }))
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 
@@ -626,7 +627,7 @@ describe("Settings Routes", () => {
           dashboard_settings: { excludedCategoryIds: [1, 2] },
         }).expected,
       );
-      expect(res.body.data).toEqual({ saved: 2 });
+      expect(bodyAt(res, "data")).toEqual({ saved: 2 });
     });
 
     it("answers a 500 when bulk save fails", async () => {
@@ -636,7 +637,7 @@ describe("Settings Routes", () => {
         .put(BASE)
         .send(bulkBody({ onboarding_complete: true }))
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
 
     it("rejects an unknown key via bulk (no unknown-key bypass)", async () => {
@@ -706,7 +707,7 @@ describe("Settings Routes", () => {
         .delete(`${BASE}/theme_settings`)
         .send({ expected: { exists: true, value: {} } })
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
   describe("request validation (ADR-193)", () => {
@@ -748,7 +749,9 @@ describe("Settings Routes", () => {
         .put(`${BASE}/cost_basis_method`)
         .send(singleBody({ value: "average" }))
         .expect(400);
-      expect(res.body.error.message).toMatch(/^Invalid cost_basis_method: /);
+      expect(bodyAt(res, "error", "message")).toMatch(
+        /^Invalid cost_basis_method: /,
+      );
     });
 
     it("rejects a single-key write without its baseline", async () => {

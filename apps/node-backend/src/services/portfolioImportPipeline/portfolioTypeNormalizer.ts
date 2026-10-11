@@ -28,7 +28,10 @@ export function normalizeType(
   {
     typeMapping = {},
     defaultType,
-  }: { typeMapping?: Record<string, string>; defaultType?: string } = {},
+  }: {
+    typeMapping?: Record<string, string> | undefined;
+    defaultType?: string | undefined;
+  } = {},
 ): { type?: string; error?: string } {
   const trimmed = String(raw ?? '').trim();
 

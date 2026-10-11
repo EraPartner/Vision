@@ -43,29 +43,29 @@ const BASE_PAGE = { limit: 100, active: false, search: undefined } as const;
 
 interface RecipientComboboxProps extends FieldErrorAria {
     /** Put on the trigger, so a <Label htmlFor> can reach it. */
-    id?: string;
+    id?: string | undefined;
     /**
      * Accessible name for the trigger. role="combobox" is not name-from-content,
      * so a picker with no visible <Label htmlFor> (a per-row picker in a list,
      * say) is nameless to assistive tech unless this is set.
      */
-    "aria-label"?: string;
-    value?: number | null;
+    "aria-label"?: string | undefined;
+    value?: number | null | undefined;
     onSelect: (
         recipientId: number | null,
         recipientName: string | null,
     ) => void;
-    disabled?: boolean;
+    disabled?: boolean | undefined;
     /** Filter to active recipients. Defaults to existing include-inactive behavior. */
-    active?: boolean;
-    className?: string;
-    portalContainer?: HTMLElement | null;
+    active?: boolean | undefined;
+    className?: string | undefined;
+    portalContainer?: HTMLElement | null | undefined;
     /**
      * Offers "Add “name”" for a typed name that matches no recipient; the
      * combobox creates (or reuses, when the server already has it) the
      * recipient and selects it.
      */
-    allowCreate?: boolean;
+    allowCreate?: boolean | undefined;
 }
 
 interface RecipientComboboxTriggerProps extends ComponentPropsWithoutRef<"button"> {
@@ -95,14 +95,14 @@ const RecipientComboboxTrigger = forwardRef<
 RecipientComboboxTrigger.displayName = "RecipientComboboxTrigger";
 
 interface RecipientComboboxItemsProps {
-    value?: number | null;
+    value?: number | null | undefined;
     recipients: Recipient[];
     search: string;
     onSearchChange: (next: string) => void;
     /** Fires for both a recipient row and the "no recipient" row (null, null). */
     onPick: (recipientId: number | null, recipientName: string | null) => void;
     /** When set, a typed name with no exact match offers to be created. */
-    onCreate?: (name: string) => void;
+    onCreate?: ((name: string) => void) | undefined;
 }
 
 /**

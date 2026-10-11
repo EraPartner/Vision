@@ -477,7 +477,8 @@ describe("InfoRepository", () => {
       fallbackRows?: Record<string, unknown>[];
     }) => {
       query.mockImplementation(async (sql) => {
-        if (sql.includes("balance_parts")) return { rows: currentRows };
+        if (sql.includes("balance_parts"))
+          return currentRows === undefined ? {} : { rows: currentRows };
         if (sql.includes("SELECT 1 FROM mv_")) return { rows: [] };
         if (sql.includes("first_data_date"))
           return { rows: [{ first_data_date: pgDay(firstDataDate) }] };
@@ -1071,7 +1072,8 @@ describe("InfoRepository", () => {
     });
 
     it("limits the live path to the given accounts and skips the account-less MV", async () => {
-      const calls: { sql: string; params?: readonly unknown[] }[] = [];
+      const calls: { sql: string; params?: readonly unknown[] | undefined }[] =
+        [];
       query.mockImplementation(async (sql, params) => {
         if (typeof sql !== "string") return { rows: [] };
         calls.push({ sql, params });

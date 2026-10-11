@@ -46,7 +46,7 @@ export type BulkFilterInput = Record<string, unknown>;
 /** A `{ ids } | { filter }` request selector, exactly as received. */
 export interface BulkSelector {
   ids?: unknown;
-  filter?: BulkFilterInput | null;
+  filter?: BulkFilterInput | null | undefined;
 }
 
 /**

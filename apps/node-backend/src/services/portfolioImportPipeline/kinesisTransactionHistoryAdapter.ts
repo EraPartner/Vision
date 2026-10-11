@@ -32,7 +32,7 @@ import type {
 type KinesisRecord = Record<string, string>;
 
 /** The parser-config fields the Kinesis event mapping reads. */
-type KinesisEventConfig = { yield_basis_policy?: "zero" };
+type KinesisEventConfig = { yield_basis_policy?: "zero" | undefined };
 
 const REQUIRED_COLUMNS = [
   "DateTime",
@@ -432,7 +432,10 @@ function parseNonTrade(
  */
 export function parseKinesisSourceRecordForBasisPolicy(
   rawData: string,
-  config: { sourceColumns?: string[]; yield_basis_policy?: "zero" },
+  config: {
+    sourceColumns?: string[] | undefined;
+    yield_basis_policy?: "zero" | undefined;
+  },
 ): ParsedPortfolioRow[] | null | undefined {
   const columns = config.sourceColumns;
   if (
@@ -466,7 +469,7 @@ export function parseKinesisSourceRecordForBasisPolicy(
 /** Reparse a complete retained statement event set with its actual header. */
 export function reparseKinesisSourceEvents(
   rawRecords: string[],
-  config: { sourceColumns: string[]; yield_basis_policy?: "zero" },
+  config: { sourceColumns: string[]; yield_basis_policy?: "zero" | undefined },
 ): ParsedPortfolioRow[] | undefined {
   const columns = config.sourceColumns;
   if (

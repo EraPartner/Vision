@@ -45,11 +45,11 @@ export async function upsert(m: {
   instrumentKey: string;
   keyType: string;
   provider: string;
-  providerSymbol?: string | null;
-  resolvedName?: string | null;
-  exchange?: string | null;
-  currency?: string | null;
-  status?: string | null;
+  providerSymbol?: string | null | undefined;
+  resolvedName?: string | null | undefined;
+  exchange?: string | null | undefined;
+  currency?: string | null | undefined;
+  status?: string | null | undefined;
 }): Promise<InstrumentProviderMapRow> {
   const row = await queryOne(
     instrumentProviderMapRowSchema,

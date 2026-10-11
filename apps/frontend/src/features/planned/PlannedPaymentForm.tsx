@@ -45,7 +45,7 @@ import {
 } from "@/hooks/useFieldErrors";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
 
-type Frequency = PlannedPayment["frequency"];
+type Frequency = NonNullable<PlannedPayment["frequency"]>;
 type LoanType = NonNullable<PlannedPayment["loan_type"]>;
 
 /**
@@ -79,7 +79,7 @@ interface Props {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSubmit: (data: Omit<PlannedPayment, "id" | "created_at">) => void;
-    initial?: PlannedPayment;
+    initial?: PlannedPayment | undefined;
     /** True while the caller's add/update mutation is in flight — disables submit. */
     loading?: boolean;
 }

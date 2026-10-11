@@ -136,7 +136,7 @@ function parseBrokerageParams(data: unknown) {
  */
 function assertPortfolioFormatBrokerage(
   customConfig: { format?: string },
-  brokerage: { isBrokerage: boolean; accountId?: number },
+  brokerage: { isBrokerage: boolean; accountId?: number | undefined },
 ) {
   const formatNames: Record<string, string> = {
     ibkr_transaction_history: "IBKR",
@@ -176,7 +176,7 @@ async function assertTransferDestination(
     transfer_destination_account_id?: number;
     transfer_origin_account_id?: number;
   },
-  brokerage: { accountId?: number },
+  brokerage: { accountId?: number | undefined },
 ) {
   for (const accountId of [
     config.transfer_destination_account_id,

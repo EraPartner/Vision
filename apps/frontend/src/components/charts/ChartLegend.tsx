@@ -6,13 +6,13 @@ import { cn } from "@/lib/utils";
 export interface ChartLegendItem {
     readonly label: string;
     readonly color: string;
-    readonly dashed?: boolean;
+    readonly dashed?: boolean | undefined;
 }
 
 export interface ChartLegendProps {
     readonly items: ReadonlyArray<ChartLegendItem>;
-    readonly className?: string;
-    readonly align?: "start" | "center" | "end";
+    readonly className?: string | undefined;
+    readonly align?: "start" | "center" | "end" | undefined;
 }
 
 export function ChartLegend({ items, className, align = "start" }: ChartLegendProps) {

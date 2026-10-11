@@ -5,6 +5,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
@@ -74,8 +75,8 @@ describe("Category Routes", () => {
 
       const res = await api.get(BASE).expect(200);
 
-      expect(res.body.data.total).toBe(2);
-      expect(res.body.data.items.length).toBe(2);
+      expect(bodyAt(res, "data", "total")).toBe(2);
+      expect(bodyAt(res, "data", "items", "length")).toBe(2);
     });
 
     it("should respect pagination parameters", async () => {
@@ -84,8 +85,8 @@ describe("Category Routes", () => {
 
       const res = await api.get(`${BASE}?limit=2&offset=1`).expect(200);
 
-      expect(res.body.data.limit).toBe(2);
-      expect(res.body.data.offset).toBe(1);
+      expect(bodyAt(res, "data", "limit")).toBe(2);
+      expect(bodyAt(res, "data", "offset")).toBe(1);
     });
 
     // Pagination is opt-in (parseOptionalPagination): category pickers/pages
@@ -107,10 +108,10 @@ describe("Category Routes", () => {
         expect.not.objectContaining({ limit: expect.anything() }),
       );
       expect(categoryRepository.getCount).not.toHaveBeenCalled();
-      expect(res.body.data.items).toHaveLength(60);
-      expect(res.body.data.total).toBe(60);
-      expect(res.body.data.limit).toBeUndefined();
-      expect(res.body.data.offset).toBeUndefined();
+      expect(bodyAt(res, "data", "items")).toHaveLength(60);
+      expect(bodyAt(res, "data", "total")).toBe(60);
+      expect(bodyAt(res, "data", "limit")).toBeUndefined();
+      expect(bodyAt(res, "data", "offset")).toBeUndefined();
     });
 
     it("treats an empty limit param as absent", async () => {
@@ -119,7 +120,7 @@ describe("Category Routes", () => {
       const res = await api.get(`${BASE}?limit=`).expect(200);
 
       expect(categoryRepository.getCount).not.toHaveBeenCalled();
-      expect(res.body.data.limit).toBeUndefined();
+      expect(bodyAt(res, "data", "limit")).toBeUndefined();
     });
 
     it("pages and reports the full total when limit/offset are supplied", async () => {
@@ -133,9 +134,9 @@ describe("Category Routes", () => {
       expect(categoryRepository.getAll).toHaveBeenCalledWith(
         expect.objectContaining({ limit: 1, offset: 2 }),
       );
-      expect(res.body.data.total).toBe(12);
-      expect(res.body.data.limit).toBe(1);
-      expect(res.body.data.offset).toBe(2);
+      expect(bodyAt(res, "data", "total")).toBe(12);
+      expect(bodyAt(res, "data", "limit")).toBe(1);
+      expect(bodyAt(res, "data", "offset")).toBe(2);
     });
 
     it("clamps limit to the per-resource cap", async () => {
@@ -161,7 +162,7 @@ describe("Category Routes", () => {
         .post(BASE)
         .send({ general: "groceries", detail: "food" })
         .expect(201);
-      expect(res.body.data.created).toBe(true);
+      expect(bodyAt(res, "data", "created")).toBe(true);
     });
 
     it("should return 200 for duplicate", async () => {
@@ -174,7 +175,7 @@ describe("Category Routes", () => {
         .post(BASE)
         .send({ general: "groceries", detail: "food" })
         .expect(200);
-      expect(res.body.data.created).toBe(false);
+      expect(bodyAt(res, "data", "created")).toBe(false);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope for missing fields", async () => {
@@ -197,7 +198,7 @@ describe("Category Routes", () => {
       );
 
       const res = await api.get(`${BASE}/1`).expect(200);
-      expect(res.body.data.id).toBe(1);
+      expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
     it("should return a 404 NOT_FOUND envelope for non-existent", async () => {
@@ -229,7 +230,7 @@ describe("Category Routes", () => {
         .patch(`${BASE}/1`)
         .send({ general: "updated" })
         .expect(200);
-      expect(res.body.data.general).toBe("UPDATED");
+      expect(bodyAt(res, "data", "general")).toBe("UPDATED");
     });
 
     it("should return a 404 NOT_FOUND envelope for non-existent", async () => {
@@ -267,7 +268,7 @@ describe("Category Routes", () => {
         .post(`${BASE}/1/assign`)
         .send({ recipient_ids: [1, 2] })
         .expect(200);
-      expect(res.body.data.updated_recipients).toBe(2);
+      expect(bodyAt(res, "data", "updated_recipients")).toBe(2);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope for missing recipient_ids", async () => {
@@ -298,7 +299,7 @@ describe("Category Routes", () => {
       categoryRepository.getAll.mockRejectedValue(new Error("DB error"));
 
       const res = await api.get(BASE).expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
 
     it("POST / should answer a 500 when the DB throws", async () => {
@@ -308,14 +309,14 @@ describe("Category Routes", () => {
         .post(BASE)
         .send({ general: "TEST", detail: "TEST" })
         .expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
 
     it("GET /:id should answer a 500 when the DB throws", async () => {
       categoryRepository.getById.mockRejectedValue(new Error("DB error"));
 
       const res = await api.get(`${BASE}/1`).expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
 
     it("PATCH /:id should answer a 500 when the DB throws", async () => {
@@ -325,14 +326,14 @@ describe("Category Routes", () => {
         .patch(`${BASE}/1`)
         .send({ general: "test" })
         .expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
 
     it("DELETE /:id should answer a 500 when the DB throws", async () => {
       categoryRepository.hardDelete.mockRejectedValue(new Error("DB error"));
 
       const res = await api.delete(`${BASE}/1`).expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
 
     it("POST /:id/assign should answer a 500 when the DB throws", async () => {
@@ -344,7 +345,7 @@ describe("Category Routes", () => {
         .post(`${BASE}/1/assign`)
         .send({ recipient_ids: [1] })
         .expect(500);
-      expect(res.body.error.message).toBe("DB error");
+      expect(bodyAt(res, "error", "message")).toBe("DB error");
     });
   });
 });
@@ -404,7 +405,7 @@ describe("Category request schemas (ADR-193)", () => {
       .post(`${BASE}/1/assign`)
       .send({ recipient_ids: [1, "abc"] })
       .expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "recipient_ids contains invalid value: abc",
     );
     expect(categoryRepository.assignToRecipients).not.toHaveBeenCalled();
@@ -412,7 +413,7 @@ describe("Category request schemas (ADR-193)", () => {
 
   it("POST /:id/assign keeps the missing-ids message and wraps a scalar", async () => {
     const missing = await api.post(`${BASE}/1/assign`).send({}).expect(400);
-    expect(missing.body.error.message).toBe("Missing recipient_ids");
+    expect(bodyAt(missing, "error", "message")).toBe("Missing recipient_ids");
 
     categoryRepository.assignToRecipients.mockResolvedValue(1);
     await api.post(`${BASE}/1/assign`).send({ recipient_ids: "7" }).expect(200);
@@ -421,6 +422,6 @@ describe("Category request schemas (ADR-193)", () => {
 
   it("POST /tree reports zod issues with their field path", async () => {
     const res = await api.post(`${BASE}/tree`).send({ name: "" }).expect(400);
-    expect(res.body.error.message).toMatch(/^name: /);
+    expect(bodyAt(res, "error", "message")).toMatch(/^name: /);
   });
 });

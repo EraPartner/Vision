@@ -46,20 +46,20 @@ const quoteCache = createResearchCache();
 const inFlightQuotes = new Map<string, Promise<MarketQuote | null>>();
 
 export type MarketQuote = ReturnType<typeof mapQuoteCore> & {
-  marketCap?: number | null;
-  pe?: number | null;
-  forwardPE?: number | null;
-  dividendYield?: number | null;
-  eps?: number | null;
-  beta?: number | null;
-  priceToBook?: number | null;
+  marketCap?: number | null | undefined;
+  pe?: number | null | undefined;
+  forwardPE?: number | null | undefined;
+  dividendYield?: number | null | undefined;
+  eps?: number | null | undefined;
+  beta?: number | null | undefined;
+  priceToBook?: number | null | undefined;
   analystConsensus?: {
     strongBuy: number;
     buy: number;
     hold: number;
     sell: number;
     strongSell: number;
-  } | null;
+  } | null | undefined;
   recentAnalystActions?: Array<{
     date: YahooDateLike | null | undefined;
     firm: string | null | undefined;
@@ -67,7 +67,7 @@ export type MarketQuote = ReturnType<typeof mapQuoteCore> & {
     fromGrade: string | null;
     action: string | null | undefined;
     priceTarget: number | null;
-  }>;
+  }> | undefined;
 };
 
 export interface MarketNewsItem {
@@ -355,7 +355,7 @@ export async function getQuotes(symbolList: string[], basic: boolean) {
  */
 export async function getChart(
   symbol: string,
-  { range = '1mo', interval = '1d' }: { range?: unknown; interval?: YahooChartInterval } = {},
+  { range = '1mo', interval = '1d' }: { range?: unknown; interval?: YahooChartInterval | undefined } = {},
 ) {
   let payload: unknown;
   try {

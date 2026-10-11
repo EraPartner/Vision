@@ -75,10 +75,10 @@ async function prepareImport({
   batchId: ImportBatchId;
   filePath: string;
   adapterName: string;
-  customConfig?: CustomTransactionParserConfig;
-  filename?: string;
-  sizeBytes?: number;
-  onProgress?: ImportProgressCallback;
+  customConfig?: CustomTransactionParserConfig | undefined;
+  filename?: string | undefined;
+  sizeBytes?: number | undefined;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{
   batchId: ImportBatchId;
   rowsTotal: number;
@@ -145,7 +145,7 @@ export async function commitImport({
   onProgress,
 }: {
   batchId: ImportBatchId;
-  onProgress?: ImportProgressCallback;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{
   imported: number;
   duplicates: number;
@@ -214,10 +214,10 @@ export async function runImportPipeline({
 }: {
   filePath: string;
   adapterName: string;
-  customConfig?: CustomTransactionParserConfig;
-  filename?: string;
-  sizeBytes?: number;
-  onProgress?: ImportProgressCallback;
+  customConfig?: CustomTransactionParserConfig | undefined;
+  filename?: string | undefined;
+  sizeBytes?: number | undefined;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{
   batchId: ImportBatchId;
   total: number;

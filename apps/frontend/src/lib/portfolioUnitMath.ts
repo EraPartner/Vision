@@ -47,22 +47,22 @@ export function roundUnitMath(value: number, decimals: number): number {
 }
 
 export interface UnitMathInput {
-    amount?: number;
-    units?: number;
-    price?: number;
+    amount?: number | undefined;
+    units?: number | undefined;
+    price?: number | undefined;
     /** When false, skip derivation and consistency (effective = inputs as-is). Default true. */
-    derive?: boolean;
+    derive?: boolean | undefined;
 }
 
 export interface UnitMathResult {
     /** The field that was computed because it was omitted (undefined if it was provided). */
-    derivedAmount?: number;
-    derivedUnits?: number;
-    derivedPrice?: number;
+    derivedAmount?: number | undefined;
+    derivedUnits?: number | undefined;
+    derivedPrice?: number | undefined;
     /** input value if provided, otherwise the derived value. */
-    effectiveAmount?: number;
-    effectiveUnits?: number;
-    effectivePrice?: number;
+    effectiveAmount?: number | undefined;
+    effectiveUnits?: number | undefined;
+    effectivePrice?: number | undefined;
     /** How many of amount/units/price were provided. */
     providedCount: number;
     /** True when ≥2 provided and amount ≈ units × price within tolerance. */

@@ -38,7 +38,7 @@ export interface ChartKeyboardNavOptions {
     /** Clear the highlight and any scrub (Escape and blur) — reuse the chart's pointer-leave path. */
     readonly onClear: () => void;
     /** Range-compare scrub state; pass only when the chart is scrubbable. */
-    readonly scrub?: ChartKeyboardScrub;
+    readonly scrub?: ChartKeyboardScrub | undefined;
 }
 
 export function useChartKeyboardNav({

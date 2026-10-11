@@ -5,7 +5,9 @@ import {toast, Toaster as Sonner, useSonner, type ToastT} from "sonner";
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({...props}: ToasterProps) => {
-    const {mode = "system"} = useTheme();
+    const {mode = "system", theme} = useTheme();
+    // Sonner knows light, dark and system; a scheduled mode passes the theme it resolved to.
+    const toasterTheme = mode === "schedule" ? theme : mode;
     const disableBuiltInAnnouncements = useCallback((node: HTMLElement | null) => {
         node?.setAttribute("aria-live", "off");
     }, []);
@@ -15,7 +17,7 @@ const Toaster = ({...props}: ToasterProps) => {
             <ToastAnnouncements />
             <Sonner
                 ref={disableBuiltInAnnouncements}
-                theme={mode as ToasterProps["theme"]}
+                theme={toasterTheme}
                 className="toaster group"
                 closeButton
                 offset={18}

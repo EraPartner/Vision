@@ -1,7 +1,10 @@
 /** Closed original-document intervals bind a whole payment without a date window. */
 import { createHash } from "node:crypto";
 import { toDecimal } from "../lib/money.ts";
-import { parseCsvText } from "./importPipeline/adapters/_shared.ts";
+import {
+  parseCsvText,
+  sourceColumnsOption,
+} from "./importPipeline/adapters/_shared.ts";
 import {
   portfolioPrimaryRawData,
   requiredStagedValue,
@@ -409,7 +412,9 @@ export function buildKinesisYieldGroups({
     try {
       records = parseCsvText(raw, {
         // A literal proof exists only for rows of a batch in `batches`.
-        columns: batchConfigFields(batch!.custom_config)!.source_columns,
+        ...sourceColumnsOption(
+          batchConfigFields(batch!.custom_config)!.source_columns,
+        ),
         relax_column_count: false,
       });
     } catch {

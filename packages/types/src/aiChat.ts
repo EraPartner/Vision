@@ -84,4 +84,4 @@ export type AiChatStreamEvent<
       type: "complete";
       payload: AiChatCompletePayload<TMessage, TConversation, TUsage>;
     }
-  | { type: "error"; detail: string; code?: string };
+  | { type: "error"; detail: string; code?: string | undefined };

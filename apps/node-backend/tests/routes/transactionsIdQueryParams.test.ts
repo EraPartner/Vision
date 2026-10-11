@@ -30,6 +30,7 @@
  * never reached, which is the difference between "answered differently" and
  * "answered with an unrequested row set".
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import {
@@ -227,7 +228,7 @@ describe("GET /api/transactions — category_ids rejects instead of retargeting 
   // IN list, so the answer covered a category the caller never named.
   it("rejects the whole list when one element is bad — no partial filter set", async () => {
     const res = await list("category_ids=5,12abc,9").expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "category_ids contains invalid value: 12abc",
     );
     expect(transactionRepository.getAllWithCount).not.toHaveBeenCalled();
@@ -293,7 +294,7 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
 
   it("400s on a partly-bad account_ids instead of exporting the wrong accounts", async () => {
     const res = await exportCsv("account_ids=3,12abc,9").expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "account_ids contains invalid value: 12abc",
     );
     expect(dbQuery).not.toHaveBeenCalled();
@@ -310,7 +311,7 @@ describe("GET /api/transactions/export/* — account_ids no longer widens the ex
     const res = await api
       .get("/api/transactions/export/json?account_ids=12abc")
       .expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "account_ids contains invalid value: 12abc",
     );
     expect(dbQuery).not.toHaveBeenCalled();
@@ -374,7 +375,7 @@ describe("POST /api/transactions/transfers — body ids reject instead of trunca
       .post("/api/transactions/transfers")
       .send({ aId: "12abc", bId: 7 })
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(markTransfer).not.toHaveBeenCalled();
   });
 

@@ -79,70 +79,70 @@ export function parseAmountFilter(
 }
 
 export interface TransactionWhereOptions {
-  transactionId?: number | null;
+  transactionId?: number | null | undefined;
   /** inclusive */
-  startDate?: string | null;
+  startDate?: string | null | undefined;
   /** inclusive */
-  endDate?: string | null;
+  endDate?: string | null | undefined;
   /**
    * exact match on t.account_id — the preferred account filter (ADR-088; the
    * bank_account string is being retired)
    */
-  accountId?: number | null;
+  accountId?: number | null | undefined;
   /** multiple account ids (IN clause); ignored when accountId is set */
-  accountIds?: number[] | null;
+  accountIds?: number[] | null | undefined;
   /**
    * substring, ILIKE on the account's canonical name (accounts.name via
    * t.account_id — ADR-088 contract: the SQL no longer touches the retired
    * bank_account string) — legacy escape hatch; prefer accountId
    */
-  bankAccount?: string | null;
+  bankAccount?: string | null | undefined;
   /**
    * exact match on accounts.name (resolved through t.account_id); ignored
    * when bankAccount is set; capped at MAX_LIST_SIZE
    */
-  bankAccounts?: string[] | null;
+  bankAccounts?: string[] | null | undefined;
   /** matches transaction, recipient-default or primary-default */
-  categoryId?: number | null;
+  categoryId?: number | null | undefined;
   /** multiple category IDs (IN clause); ignored when categoryId is set */
-  categoryIds?: number[] | null;
+  categoryIds?: number[] | null | undefined;
   /** matches the txn recipient or any sub-recipient under it */
-  recipientId?: number | null;
+  recipientId?: number | null | undefined;
   /**
    * like recipientId but resolves the full primary group: includes the
    * recipient's own primary (if it is an alias) and all other aliases sharing
    * that primary
    */
-  recipientGroupId?: number | null;
+  recipientGroupId?: number | null | undefined;
   /** substring, ILIKE on r.name */
-  recipientName?: string | null;
+  recipientName?: string | null | undefined;
   /**
    * multi-column substring (memo, comment, bank, currency, amount, recipients,
    * categories, date text and tag slugs); ignored when shorter than
    * MIN_SEARCH_LENGTH after trimming
    */
-  search?: string | null;
+  search?: string | null | undefined;
   /** require t.is_active = true (default true) */
-  active?: boolean;
+  active?: boolean | undefined;
   /** filter by amount sign */
-  transactionType?: "income" | "expense" | null;
+  transactionType?: "income" | "expense" | null | undefined;
   /**
    * inclusive lower bound on the amount. By default compares |amount|
    * (magnitude, sign-agnostic); when amountSigned is true compares the signed
    * amount.
    */
-  amountMin?: number | null;
+  amountMin?: number | null | undefined;
   /** inclusive upper bound (see amountMin) */
-  amountMax?: number | null;
+  amountMax?: number | null | undefined;
   /**
    * when true, amountMin/amountMax are compared against the signed t.amount
    * (so -50/+50 are distinct); when false they compare against ABS(t.amount)
    */
-  amountSigned?: boolean;
+  amountSigned?: boolean | undefined;
   /** OR-match: row must have at least one of these active tags */
-  tagSlugs?: string[] | null;
+  tagSlugs?: string[] | null | undefined;
   /** first $-index to allocate (default 1) */
-  startParamIdx?: number;
+  startParamIdx?: number | undefined;
 }
 
 export interface ExclusionClauseOptions {

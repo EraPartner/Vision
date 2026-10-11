@@ -6,6 +6,7 @@
  * Runs against the REAL router on a throwaway Express app; only the calc
  * modules are mocked.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent } from "../helpers/routeApp.ts";
 
@@ -65,7 +66,7 @@ describe("aggregation query schemas — rejected inputs", () => {
       const res = await get(
         `/category-breakdown?ancestor_category_id=${raw}`,
       ).expect(400);
-      expect(res.body.error).toMatchObject({
+      expect(bodyAt(res, "error")).toMatchObject({
         code: "VALIDATION_ERROR",
         message: "ancestor_category_id: must be a positive integer",
       });
@@ -75,13 +76,15 @@ describe("aggregation query schemas — rejected inputs", () => {
 
   it("sankey rejects a repeated year", async () => {
     const res = await get("/sankey?year=2024&year=2025").expect(400);
-    expect(res.body.error.message).toBe("year: must be a single value");
+    expect(bodyAt(res, "error", "message")).toBe(
+      "year: must be a single value",
+    );
     expect(sankeySpy).not.toHaveBeenCalled();
   });
 
   it("monthly-summary reports a malformed date with its pinned message", async () => {
     const res = await get("/monthly-summary?start_date=2025-1-1").expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "start_date must be in YYYY-MM-DD format",
     );
     expect(monthlySpy).not.toHaveBeenCalled();
@@ -91,7 +94,7 @@ describe("aggregation query schemas — rejected inputs", () => {
     const res = await get(
       "/monthly-summary?start_date=2025-02-01&end_date=2025-01-01&excluded_recipient_ids=x",
     ).expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "start_date must not be after end_date; excluded_recipient_ids contains invalid value: x",
     );
   });

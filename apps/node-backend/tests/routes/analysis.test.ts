@@ -6,6 +6,7 @@
  * executor, saved-analysis persistence, AI proposals and pivot service are
  * mocked so each case only exercises the HTTP boundary.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -128,8 +129,8 @@ describe("Analysis routes request validation", () => {
         .post(`${BASE}/compile`)
         .send({ ...PLAN, chartHint: "bar" })
         .expect(200);
-      expect(res.body.data.datasetIds).toEqual(["cash-flows"]);
-      expect(res.body.data.visualPlan.chartHint).toBe("bar");
+      expect(bodyAt(res, "data", "datasetIds")).toEqual(["cash-flows"]);
+      expect(bodyAt(res, "data", "visualPlan", "chartHint")).toBe("bar");
     });
 
     it("rejects a missing dataset and malformed plan lists", async () => {
@@ -295,7 +296,9 @@ describe("Analysis routes request validation", () => {
         .post(`${BASE}/execute`)
         .send({ requestId: REQUEST_ID, sql: "SELECT 1" })
         .expect(408);
-      expect(cancelled.body.error.code).toBe("ANALYSIS_CANCELLED_OR_TIMED_OUT");
+      expect(bodyAt(cancelled, "error", "code")).toBe(
+        "ANALYSIS_CANCELLED_OR_TIMED_OUT",
+      );
     });
 
     it("reports a database outage as a server fault, not a rejected query", async () => {
@@ -308,7 +311,9 @@ describe("Analysis routes request validation", () => {
         .post(`${BASE}/execute`)
         .send({ requestId: REQUEST_ID, sql: "SELECT 1" })
         .expect(500);
-      expect(res.body.error.code).not.toBe("ANALYSIS_EXECUTION_REJECTED");
+      expect(bodyAt(res, "error", "code")).not.toBe(
+        "ANALYSIS_EXECUTION_REJECTED",
+      );
     });
   });
 
@@ -362,7 +367,7 @@ describe("Analysis routes request validation", () => {
           formulas: [{ id: "double", scope: "row", expression: "amount * 2" }],
         })
         .expect(200);
-      expect(res.body.data.rows[0].double).toBe("4");
+      expect(bodyAt(res, "data", "rows", 0, "double")).toBe("4");
     });
 
     it("rejects an unknown operation and non-array rows", async () => {
@@ -392,7 +397,7 @@ describe("Analysis routes request validation", () => {
           formulas: [{ id: "triple", scope: "row", expression: "amount * 3" }],
         })
         .expect(200);
-      expect(res.body.data.rows[0].triple).toBe("9");
+      expect(bodyAt(res, "data", "rows", 0, "triple")).toBe("9");
     });
 
     it("rejects a missing row set and non-object formulas", async () => {
@@ -518,7 +523,7 @@ describe("Analysis routes request validation", () => {
         .post(`${BASE}/saved/saved-1/ai-proposal`)
         .send({ instruction: "add a filter" })
         .expect(502);
-      expect(res.body.error.code).toBe("BAD_GATEWAY");
+      expect(bodyAt(res, "error", "code")).toBe("BAD_GATEWAY");
     });
 
     it("passes a trimmed instruction and model to the generator", async () => {

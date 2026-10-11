@@ -2,6 +2,7 @@
  * Analysis monitor route request validation (ADR-193). The service is mocked;
  * these cases pin what the HTTP boundary accepts before delegating.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -128,11 +129,11 @@ describe("Analysis monitor routes request validation", () => {
     expect(createAnalysisMonitor).toHaveBeenCalledWith(body);
 
     expect(
-      (await api.post(BASE).send([body]).expect(400)).body.error.code,
+      bodyAt(await api.post(BASE).send([body]).expect(400), "error", "code"),
     ).toBe("VALIDATION_ERROR");
-    expect((await api.patch(`${BASE}/${ID}`).expect(400)).body.error.code).toBe(
-      "VALIDATION_ERROR",
-    );
+    expect(
+      bodyAt(await api.patch(`${BASE}/${ID}`).expect(400), "error", "code"),
+    ).toBe("VALIDATION_ERROR");
     expect(createAnalysisMonitor).toHaveBeenCalledTimes(1);
     expect(patchAnalysisMonitor).not.toHaveBeenCalled();
   });

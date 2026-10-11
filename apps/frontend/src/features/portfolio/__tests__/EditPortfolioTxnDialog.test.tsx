@@ -99,6 +99,23 @@ const TRANSACTION: PortfolioTransaction = {
     updated_at: "2025-01-10T10:00:00Z",
 };
 
+/** TRANSACTION without its unit fields, as stored for amount-only types. */
+function withoutUnitFields({
+    units: _units,
+    price_per_unit: _pricePerUnit,
+    ...rest
+}: PortfolioTransaction): PortfolioTransaction {
+    return rest;
+}
+
+/** TRANSACTION without its unit fields or note. */
+function withoutUnitFieldsOrNote({
+    note: _note,
+    ...rest
+}: PortfolioTransaction): PortfolioTransaction {
+    return withoutUnitFields(rest);
+}
+
 describe("EditPortfolioTxnDialog", () => {
     it("labels a native USD transaction in USD for a EUR investment and preserves its currency on save", async () => {
         const user = userEvent.setup();
@@ -142,10 +159,8 @@ describe("EditPortfolioTxnDialog", () => {
             <EditPortfolioTxnDialog
                 investment={INVESTMENT}
                 transaction={{
-                    ...TRANSACTION,
+                    ...withoutUnitFields(TRANSACTION),
                     type: "dividend",
-                    units: undefined,
-                    price_per_unit: undefined,
                     amount: 7,
                     income_recognition_role: "included_in_units",
                 }}
@@ -200,9 +215,7 @@ describe("EditPortfolioTxnDialog", () => {
                         asset_class: assetClass,
                     }}
                     transaction={{
-                        ...TRANSACTION,
-                        units: undefined,
-                        price_per_unit: undefined,
+                        ...withoutUnitFields(TRANSACTION),
                     }}
                 />,
             );
@@ -235,10 +248,8 @@ describe("EditPortfolioTxnDialog", () => {
                     asset_class: "real_estate",
                 }}
                 transaction={{
-                    ...TRANSACTION,
+                    ...withoutUnitFields(TRANSACTION),
                     type: "appreciation",
-                    units: undefined,
-                    price_per_unit: undefined,
                 }}
             />,
         );
@@ -442,15 +453,12 @@ describe("EditPortfolioTxnDialog", () => {
         // failing schema rule; it is now the money forms' inline field error.
         const toastSpy = vi.spyOn(toast, "error");
         const dividendTxn: PortfolioTransaction = {
-            ...TRANSACTION,
+            ...withoutUnitFieldsOrNote(TRANSACTION),
             id: 103,
             type: "dividend",
             amount: 25,
-            units: undefined,
-            price_per_unit: undefined,
             fees: 0,
             taxes: 0,
-            note: undefined,
         };
         let patched = false;
         server.use(
@@ -595,15 +603,12 @@ describe("EditPortfolioTxnDialog", () => {
     it("submits dividend transaction with amount-only fields populated", async () => {
         // Arrange
         const dividendTxn: PortfolioTransaction = {
-            ...TRANSACTION,
+            ...withoutUnitFieldsOrNote(TRANSACTION),
             id: 102,
             type: "dividend",
             amount: 25,
-            units: undefined,
-            price_per_unit: undefined,
             fees: 0,
             taxes: 0,
-            note: undefined,
         };
         server.use(
             http.patch(`${API_BASE}/api/investments/transactions/102`, () =>

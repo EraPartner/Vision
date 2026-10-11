@@ -401,11 +401,11 @@ export async function commitReviewedPortfolioImports({
   cashFundingPolicy = undefined,
 }: {
   batchIds: number[];
-  adoptPolicy?: string;
-  expectedPlanFingerprint?: string;
-  batchPolicies?: BatchPolicy[];
-  reconciliationScope?: string;
-  cashFundingPolicy?: CashFundingPolicy;
+  adoptPolicy?: string | undefined;
+  expectedPlanFingerprint?: string | undefined;
+  batchPolicies?: BatchPolicy[] | undefined;
+  reconciliationScope?: string | undefined;
+  cashFundingPolicy?: CashFundingPolicy | undefined;
 }) {
   if (
     !Array.isArray(batchIds) ||
@@ -467,9 +467,9 @@ export async function commitReviewedPortfolioImport({
   expectedPlanFingerprint,
 }: {
   batchId: number;
-  accountId?: number;
-  adoptPolicy?: string;
-  expectedPlanFingerprint?: string;
+  accountId?: number | undefined;
+  adoptPolicy?: string | undefined;
+  expectedPlanFingerprint?: string | undefined;
 }) {
   return withTransaction(async () => {
     const batch = await lockBatchForUpdate(batchId);

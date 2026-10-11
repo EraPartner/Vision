@@ -24,19 +24,19 @@ interface MultiComboboxProps<T, V extends string | number> {
     /** Stable identity of an item; also used as the React key. */
     getValue: (item: T) => V;
     /** Text the Command palette filters on. Defaults to `String(getValue(item))`. */
-    getSearchValue?: (item: T) => string;
+    getSearchValue?: ((item: T) => string) | undefined;
     renderItem: (item: T) => ReactNode;
     /** Already-translated trigger label ("All" / "N selected"). */
     displayLabel: string;
     searchPlaceholder: string;
     emptyText: string;
     /** Width class for the popover panel. */
-    popoverClassName?: string;
-    disabled?: boolean;
-    className?: string;
-    id?: string;
-    "aria-label"?: string;
-    "aria-labelledby"?: string;
+    popoverClassName?: string | undefined;
+    disabled?: boolean | undefined;
+    className?: string | undefined;
+    id?: string | undefined;
+    "aria-label"?: string | undefined;
+    "aria-labelledby"?: string | undefined;
 }
 
 export function MultiCombobox<T, V extends string | number>({

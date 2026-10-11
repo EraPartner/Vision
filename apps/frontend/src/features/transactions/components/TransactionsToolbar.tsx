@@ -54,7 +54,7 @@ export function FilterChip({
 }
 
 interface CategoryFilterChipProps {
-    value?: number;
+    value?: number | undefined;
     onChange: (selection: { id: number; label: string } | null) => void;
 }
 
@@ -133,18 +133,18 @@ function CategoryFilterChip({ value, onChange }: CategoryFilterChipProps) {
 }
 
 export interface TransactionsToolbarProps {
-    accountIdFilter?: number;
+    accountIdFilter?: number | undefined;
     onAccountChange: (selection: { id: number; label: string } | null) => void;
-    categoryIdFilter?: number;
+    categoryIdFilter?: number | undefined;
     onCategoryChange: (selection: { id: number; label: string } | null) => void;
     /** undefined = a custom start/end range not matching a preset. */
     datePreset: DatePreset | undefined;
-    customDateLabel?: string;
+    customDateLabel?: string | undefined;
     onDatePresetChange: (preset: DatePreset) => void;
-    transactionTypeFilter?: "income" | "expense";
+    transactionTypeFilter?: "income" | "expense" | undefined;
     onTypeChange: (type: "income" | "expense" | undefined) => void;
     needsCategory: boolean;
-    needsCategoryCount?: number;
+    needsCategoryCount?: number | undefined;
     onNeedsCategoryChange: (on: boolean) => void;
     showAll: boolean;
     onShowAllChange: (showAll: boolean) => void;

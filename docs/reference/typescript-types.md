@@ -100,6 +100,15 @@ indexed-access rule as the backend and type-only imports use `import type`. The 
 `apps/frontend/scripts/check-bundle-size.ts` is TypeScript run with Bun and checked by
 `tsconfig.node.json`. See [[docs/adr/197-stricter-frontend-compiler-flags|ADR-197]].
 
+Every TypeScript project (frontend, backend source, tests and scripts, both shared packages, the
+Electron shell and `scripts/`) also turns on `exactOptionalPropertyTypes`: `prop?: T` accepts
+omission only, so an optional property that callers may pass as `undefined` is declared
+`prop?: T | undefined`, and a field is cleared by sending `null` where the API allows it. No
+explicit `any` remains in source or tests; backend tests read supertest bodies (typed `unknown`)
+through `tests/helpers/responseBody.ts`, and the backend lint rule
+`@typescript-eslint/no-explicit-any` is an error. See
+[[docs/adr/198-exact-optional-property-types|ADR-198]].
+
 > [!info] generated.ts is now load-bearing
 > The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.
 

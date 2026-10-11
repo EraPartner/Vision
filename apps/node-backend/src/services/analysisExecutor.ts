@@ -14,12 +14,12 @@ const DEFAULT_ROWS = 500;
 const MAX_RESULT_BYTES = 2 * 1024 * 1024;
 const MAX_SQL_BYTES = 100_000;
 export interface AnalysisSqlRequest {
-  requestId?: string;
+  requestId?: string | undefined;
   sql: string;
-  values?: unknown[];
-  datasetIds?: string[];
-  limit?: number;
-  offset?: number;
+  values?: unknown[] | undefined;
+  datasetIds?: string[] | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }
 
 export type AnalysisSqlWindow =

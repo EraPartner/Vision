@@ -6,6 +6,7 @@
  * response stays snake_case per the existing API contract. Pins both sides
  * of that boundary.
  */
+import { bodyAt, valueAt, listAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi } from 'vitest';
 import { routeAgent } from '../helpers/routeApp.ts';
 
@@ -29,12 +30,14 @@ describe('GET /api/aggregations/cashflow-forecast-accuracy', () => {
       .set('x-actor', 'u1')
       .expect(200);
 
-    expect(res.body.ok).toBe(true);
-    const { methods, limit_months } = res.body.data.data;
+    expect(bodyAt(res, 'ok')).toBe(true);
+    const forecast = bodyAt(res, 'data', 'data');
+    const methods = listAt(forecast, 'methods');
+    const limit_months = valueAt(forecast, 'limit_months');
     expect(limit_months).toBe(24);
     expect(methods).toHaveLength(2);
 
-    const ewma = methods.find((m: { method_id: string }) => m.method_id === 'ewma');
+    const ewma = methods.find((m) => valueAt(m, 'method_id') === 'ewma');
     expect(ewma).toEqual({
       method_id: 'ewma',
       as_of_month: '2026-03',
@@ -48,8 +51,10 @@ describe('GET /api/aggregations/cashflow-forecast-accuracy', () => {
       ],
     });
 
-    const simple = methods.find((m: { method_id: string }) => m.method_id === 'simple_avg');
-    expect(simple.sample_days).toBe(90);
-    expect(simple.as_of_month).toBe('2026-03');
+    const simple = methods.find(
+      (m) => valueAt(m, 'method_id') === 'simple_avg',
+    );
+    expect(valueAt(simple, 'sample_days')).toBe(90);
+    expect(valueAt(simple, 'as_of_month')).toBe('2026-03');
   });
 });

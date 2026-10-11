@@ -45,11 +45,11 @@ export function requestWithQuery<T>(
 }
 
 export function buildExclusionQuery(params?: {
-    excluded_category_ids?: number[];
-    excluded_recipient_ids?: number[];
-    currency?: string;
-    start_date?: string;
-    end_date?: string;
+    excluded_category_ids?: number[] | undefined;
+    excluded_recipient_ids?: number[] | undefined;
+    currency?: string | undefined;
+    start_date?: string | undefined;
+    end_date?: string | undefined;
 }): string {
     const queryParams = new URLSearchParams();
 

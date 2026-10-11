@@ -29,7 +29,7 @@ export type DisclosureRecordPatch = {
   inputTokens?: number | null;
   outputTokens?: number | null;
   costMicros?: number | null;
-  providerRequestId?: string | null;
+  providerRequestId?: string | null | undefined;
   errorCode?: string | null;
 };
 

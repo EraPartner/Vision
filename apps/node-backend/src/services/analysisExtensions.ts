@@ -12,15 +12,15 @@ import type {
 /** A result column as carried through analysis pipelines. */
 export interface AnalysisColumn {
   id: string;
-  label?: string;
+  label?: string | undefined;
   type: string;
-  nullable?: boolean;
-  unit?: FormulaUnit;
-  temporalKind?: string;
-  aggregation?: string;
-  requiredTimeGroups?: string[];
-  calculationId?: string;
-  calculationVersion?: string;
+  nullable?: boolean | undefined;
+  unit?: FormulaUnit | undefined;
+  temporalKind?: string | undefined;
+  aggregation?: string | undefined;
+  requiredTimeGroups?: string[] | undefined;
+  calculationId?: string | undefined;
+  calculationVersion?: string | undefined;
 }
 
 export interface AnalysisExtensionError {
@@ -100,46 +100,48 @@ export type PreparationStep =
 
 export interface PrepareAnalysisDataInput {
   rows: FormulaRow[];
-  columns?: AnalysisColumn[];
-  complete?: boolean;
-  steps?: PreparationStep[];
+  columns?: AnalysisColumn[] | undefined;
+  complete?: boolean | undefined;
+  steps?: PreparationStep[] | undefined;
 }
 
 export interface CompareAnalysisTimeInput {
   rows: FormulaRow[];
-  columns?: AnalysisColumn[];
-  complete?: boolean;
+  columns?: AnalysisColumn[] | undefined;
+  complete?: boolean | undefined;
   dateColumn: string;
   valueColumns: string[];
-  groupColumns?: string[];
-  bucket?: string;
-  missing?: string;
-  rollingWindow?: number;
-  aggregation?: string;
-  from?: string;
-  to?: string;
+  groupColumns?: string[] | undefined;
+  bucket?: string | undefined;
+  missing?: string | undefined;
+  rollingWindow?: number | undefined;
+  aggregation?: string | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
 }
 
 interface FormulaModelInput {
   rows: FormulaRow[];
-  columns?: AnalysisColumn[];
-  complete?: boolean;
-  formulas?: AnalysisFormulaInput[];
-  assumptions?: Record<string, unknown>;
-  assumptionUnits?: Record<string, FormulaUnitInput>;
+  columns?: AnalysisColumn[] | undefined;
+  complete?: boolean | undefined;
+  formulas?: AnalysisFormulaInput[] | undefined;
+  assumptions?: Record<string, unknown> | undefined;
+  assumptionUnits?: Record<string, FormulaUnitInput> | undefined;
 }
 
 export interface RunAnalysisScenariosInput extends FormulaModelInput {
-  scenarios?: Array<{
-    id: string;
-    name?: string;
-    assumptions?: Record<string, unknown>;
-  }>;
+  scenarios?:
+    | Array<{
+        id: string;
+        name?: string | undefined;
+        assumptions?: Record<string, unknown> | undefined;
+      }>
+    | undefined;
 }
 
 export interface BuildAnalysisSensitivityInput extends FormulaModelInput {
   outcomeId: string;
-  variables?: Array<{ id: string; values: unknown[] }>;
+  variables?: Array<{ id: string; values: unknown[] }> | undefined;
 }
 
 export interface SeekAnalysisGoalInput extends FormulaModelInput {
@@ -148,8 +150,8 @@ export interface SeekAnalysisGoalInput extends FormulaModelInput {
   target: Decimal.Value;
   lower: Decimal.Value;
   upper: Decimal.Value;
-  tolerance?: Decimal.Value;
-  maxIterations?: number;
+  tolerance?: Decimal.Value | undefined;
+  maxIterations?: number | undefined;
 }
 
 /** Untyped result cells go straight to Decimal, which rejects non-numeric input. */

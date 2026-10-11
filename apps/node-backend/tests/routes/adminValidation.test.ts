@@ -3,6 +3,7 @@
  * editor and provider probes. Runs the REAL admin router; the database,
  * dbEditor service and provider health service are mocked.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -90,7 +91,7 @@ describe("Admin route request validation", () => {
         .post(`${BASE}/database/vacuum`)
         .send({ table: null })
         .expect(200);
-      expect(all.body.data).toEqual({ vacuumed: "all" });
+      expect(bodyAt(all, "data")).toEqual({ vacuumed: "all" });
     });
 
     it("rejects a non-string table and keeps the unknown-table message", async () => {

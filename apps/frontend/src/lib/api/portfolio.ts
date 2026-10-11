@@ -57,10 +57,10 @@ function rejectManualIncomeRole(
 }
 
 export function getInvestments(params?: {
-    limit?: number;
-    offset?: number;
-    asset_class?: string;
-    active?: boolean;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    asset_class?: string | undefined;
+    active?: boolean | undefined;
 }): Promise<InvestmentsListResponse> {
     return requestWithQuery<InvestmentsListResponse>(
         "/api/investments",
@@ -158,10 +158,10 @@ export async function getPortfolioTransactions(
 
 export async function getPortfolioTransactionsBulk(params: {
     investment_ids: string;
-    type?: string;
-    per_investment_limit?: number;
-    limit?: number;
-    offset?: number;
+    type?: string | undefined;
+    per_investment_limit?: number | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
 }): Promise<PortfolioTransactionsListResponse> {
     const res = await requestWithQuery<PortfolioTransactionsListResponse>(
         "/api/investments/transactions",

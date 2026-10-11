@@ -19,7 +19,7 @@ export interface RecentTransactionRow {
     amount: number;
     currency: string;
     category: string;
-    categoryId?: number | null;
+    categoryId?: number | null | undefined;
     recipient: string;
 }
 

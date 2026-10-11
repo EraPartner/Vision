@@ -23,7 +23,7 @@ export type CartesianXScale =
 
 interface ResponsiveCartesianFrameProps {
     readonly height: number;
-    readonly width?: number;
+    readonly width?: number | undefined;
     readonly children: (size: { width: number; height: number }) => ReactNode;
 }
 

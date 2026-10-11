@@ -3,8 +3,13 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { Toaster, toast } from "@/components/ui/sonner";
 
+const themeState = vi.hoisted(() => ({
+    mode: "system" as string,
+    theme: "light" as string,
+}));
+
 vi.mock("@/stores/hydration/ThemeHydration", () => ({
-    useTheme: () => ({ mode: "system" }),
+    useTheme: () => ({ ...themeState }),
 }));
 
 beforeAll(() => {
@@ -23,9 +28,26 @@ beforeAll(() => {
     });
 });
 
-afterEach(() => toast.dismiss());
+afterEach(() => {
+    toast.dismiss();
+    themeState.mode = "system";
+    themeState.theme = "light";
+});
 
 describe("Toaster", () => {
+    it("styles toasts with the resolved theme while the mode follows a schedule", async () => {
+        themeState.mode = "schedule";
+        themeState.theme = "dark";
+        render(<Toaster />);
+
+        act(() => {
+            toast("Saved");
+        });
+
+        const title = await screen.findByText("Saved", {selector: "[data-title]"});
+        expect(title.closest("[data-sonner-theme]")).toHaveAttribute("data-sonner-theme", "dark");
+    });
+
     it("pins the documented Alt+T focus hotkey", () => {
         const {container} = render(<Toaster />);
 

@@ -5,6 +5,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -92,9 +93,9 @@ describe("Recipient Routes", () => {
 
       const res = await api.get(BASE).expect(200);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.items).toEqual([]);
-      expect(res.body.data.total).toBe(0);
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "items")).toEqual([]);
+      expect(bodyAt(res, "data", "total")).toBe(0);
     });
 
     it("should return recipients with data", async () => {
@@ -106,7 +107,7 @@ describe("Recipient Routes", () => {
 
       const res = await api.get(BASE).expect(200);
 
-      expect(res.body.data.total).toBe(2);
+      expect(bodyAt(res, "data", "total")).toBe(2);
     });
 
     // Same id-parser set as the planned-transactions and transactions list
@@ -131,7 +132,7 @@ describe("Recipient Routes", () => {
         const res = await api
           .get(`${BASE}?default_category_id=${encodeURIComponent(raw)}`)
           .expect(400);
-        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+        expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       }
       expect(recipientRepository.getAll).not.toHaveBeenCalled();
     });
@@ -165,7 +166,7 @@ describe("Recipient Routes", () => {
       });
 
       const res = await api.post(BASE).send({ name: "John Doe" }).expect(201);
-      expect(res.body.data.created).toBe(true);
+      expect(bodyAt(res, "data", "created")).toBe(true);
     });
 
     it("should return 200 for duplicate", async () => {
@@ -175,7 +176,7 @@ describe("Recipient Routes", () => {
       });
 
       const res = await api.post(BASE).send({ name: "John Doe" }).expect(200);
-      expect(res.body.data.created).toBe(false);
+      expect(bodyAt(res, "data", "created")).toBe(false);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope for missing name", async () => {
@@ -194,7 +195,7 @@ describe("Recipient Routes", () => {
       );
 
       const res = await api.get(`${BASE}/1`).expect(200);
-      expect(res.body.data.id).toBe(1);
+      expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
     it("should return a 404 NOT_FOUND envelope for non-existent", async () => {
@@ -223,7 +224,7 @@ describe("Recipient Routes", () => {
         .patch(`${BASE}/1`)
         .send({ notes: "new" })
         .expect(200);
-      expect(res.body.data.name).toBe("UPDATED");
+      expect(bodyAt(res, "data", "name")).toBe("UPDATED");
     });
 
     it("should return a 404 NOT_FOUND envelope for non-existent", async () => {
@@ -305,7 +306,7 @@ describe("Recipient Routes", () => {
         .expect(200);
 
       expect(mergeRecipientsAtomic).toHaveBeenCalledWith(1, [3, 4]);
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         primary: {
           id: 1,
           name: "PRIMARY",
@@ -375,7 +376,7 @@ describe("Recipient Routes", () => {
 
       expect(recipientRepository.unmergeRecipient).toHaveBeenCalledWith(44);
       expect(recipientRepository.getById).toHaveBeenCalledWith(44);
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         id: 44,
         name: "UNMERGED",
         primary_recipient_id: null,
@@ -394,7 +395,7 @@ describe("Recipient Routes", () => {
       const res = await api.get(`${BASE}/1/aliases`).expect(200);
 
       expect(recipientRepository.getAliases).toHaveBeenCalledWith(1);
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         items: [
           { id: 10, name: "Alias One", primary_recipient_id: 1, links: [] },
           { id: 11, name: "Alias Two", primary_recipient_id: 1, links: [] },
@@ -440,7 +441,7 @@ describe("Recipient Routes", () => {
       "rejects a repeated or bracketed single-value query (%s)",
       async (query, path) => {
         const res = await api.get(`${BASE}${path}${query}`).expect(400);
-        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+        expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
         expect(findRecipientClusters).not.toHaveBeenCalled();
         expect(recipientRepository.getAll).not.toHaveBeenCalled();
       },
@@ -462,8 +463,8 @@ describe("Recipient Routes", () => {
       [{ name: "A", notes: 42 }, "notes"],
     ])("POST / rejects %j", async (body, message) => {
       const res = await api.post(BASE).send(body).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
-      expect(res.body.error.message).toContain(message);
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "message")).toContain(message);
       expect(recipientRepository.createOrGet).not.toHaveBeenCalled();
       expect(recipientRepository.update).not.toHaveBeenCalled();
     });
@@ -492,7 +493,7 @@ describe("Recipient Routes", () => {
       { is_active: "yes" },
     ])("PATCH /:id rejects %j", async (body) => {
       const res = await api.patch(`${BASE}/1`).send(body).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(recipientRepository.update).not.toHaveBeenCalled();
     });
 
@@ -516,7 +517,7 @@ describe("Recipient Routes", () => {
       "POST /:id/merge rejects %j",
       async (body) => {
         const res = await api.post(`${BASE}/1/merge`).send(body).expect(400);
-        expect(res.body.error.message).toContain(
+        expect(bodyAt(res, "error", "message")).toContain(
           "Missing required field: alias_ids",
         );
         expect(mergeRecipientsAtomic).not.toHaveBeenCalled();
@@ -534,7 +535,7 @@ describe("Recipient Routes", () => {
       { pattern: "ACME", notes: 7 },
     ])("POST /:id/patterns rejects %j", async (body) => {
       const res = await api.post(`${BASE}/1/patterns`).send(body).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(createPattern).not.toHaveBeenCalled();
     });
 

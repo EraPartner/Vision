@@ -53,7 +53,7 @@ interface PriceProviderFieldsProps<F extends PriceProviderFormShape> {
     /** Whether the manual current-price input may appear (gated on unit-based). */
     showManualPrice: boolean;
     t: TranslateFn;
-    currentPriceError?: string;
+    currentPriceError?: string | undefined;
 }
 
 export function PriceProviderFields<F extends PriceProviderFormShape>({

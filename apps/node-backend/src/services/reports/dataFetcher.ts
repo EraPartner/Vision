@@ -75,7 +75,9 @@ export type RecipientData = { topMerchants: TopMerchantRow[]; monthOverMonth: Mo
  */
 export type BankAccountRow = {
   bank_account: string; display_name: string; balance: number;
-  drift?: number; anchor_date?: string; post_anchor_count?: number;
+  drift?: number | undefined;
+  anchor_date?: string | undefined;
+  post_anchor_count?: number | undefined;
   transaction_count: number;
   first_transaction: string | null; last_transaction: string | null;
 };

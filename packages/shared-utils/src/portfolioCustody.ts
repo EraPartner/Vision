@@ -27,7 +27,7 @@ const acquisitionOrder = (a: CustodyLot, b: CustodyLot): number =>
 export function projectAssetTransferPartitions(
   txns: readonly PartitionedTxnLike[],
   method: CostBasisMethod = "weighted_avg",
-  opts: { defaultFxMultiplier?: number | string | Decimal } = {},
+  opts: { defaultFxMultiplier?: number | string | Decimal | undefined } = {},
 ): Map<PartitionKey, ProjectedCustodyTxn[]> {
   const partitions = new Map<PartitionKey, ProjectedCustodyTxn[]>();
   const custody = new Map<PartitionKey, CustodyLot[]>();

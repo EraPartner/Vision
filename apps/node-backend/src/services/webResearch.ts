@@ -101,7 +101,7 @@ export async function searchPublicWeb(
     now?: () => number;
     enabled?: boolean;
     apiKey?: string;
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
   } = {},
 ): Promise<{
   results: PublicWebSearchResult[];
@@ -273,7 +273,7 @@ export async function fetchPublicWebPage(
     fetchImpl?: typeof fetch;
     assertUrl?: (rawUrl: string) => Promise<URL>;
     enabled?: boolean;
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
   } = {},
 ): Promise<PublicWebPage> {
   if (!enabled)

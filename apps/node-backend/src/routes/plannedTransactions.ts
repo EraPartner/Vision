@@ -126,7 +126,9 @@ async function resolveCategoryIdFromName(
 /* ── Zod schemas ─────────────────────────────────────────────────────────── */
 
 const tagsField = z
-  .array(z.unknown(), { error: "tags must be an array of strings" })
+  .array(z.string({ error: "tags must be an array of strings" }), {
+    error: "tags must be an array of strings",
+  })
   .optional();
 
 // reminder_days_before is a small non-negative integer lead time (bill-reminder
@@ -219,6 +221,8 @@ const currencyField = ({ rejectEmpty = false } = {}) =>
 const createPlannedSchema = z
   .looseObject({
     tags: tagsField,
+    // create upper-cases the memo, so a non-string used to 500 there.
+    memo: z.string({ error: "memo must be a string" }).nullable().optional(),
     reminder_days_before: reminderDaysBeforeField,
     currency: currencyField(),
     account_id: z.number().int().positive(),

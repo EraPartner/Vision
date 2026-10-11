@@ -254,7 +254,10 @@ export function streamChat(
 
             let terminal: (ChatStreamEvent & { type: "complete" }) | null =
                 null;
-            let terminalError: { detail: string; code?: string } | null = null;
+            let terminalError: {
+                detail: string;
+                code?: string | undefined;
+            } | null = null;
 
             for await (const frame of readSseFrames(response)) {
                 armWatchdog();

@@ -18,13 +18,13 @@ type DonutDatum = PieDatum & { readonly to?: string };
 
 export interface DonutChartProps {
     readonly data: ReadonlyArray<DonutDatum>;
-    readonly height?: number;
-    readonly innerRadiusRatio?: number;
-    readonly padAngle?: number;
-    readonly center?: ReactNode;
-    readonly tooltipValueFormat?: (value: number) => string;
-    readonly ariaLabel?: string;
-    readonly onNavigate?: (to: string) => void;
+    readonly height?: number | undefined;
+    readonly innerRadiusRatio?: number | undefined;
+    readonly padAngle?: number | undefined;
+    readonly center?: ReactNode | undefined;
+    readonly tooltipValueFormat?: ((value: number) => string) | undefined;
+    readonly ariaLabel?: string | undefined;
+    readonly onNavigate?: ((to: string) => void) | undefined;
 }
 
 export function DonutChart(props: DonutChartProps) {
@@ -126,11 +126,9 @@ function Inner({
                                                 : { opacity: 0, scale: 0.92 }
                                         }
                                         animate={{ opacity: 1, scale: 1 }}
-                                        whileHover={
-                                            reduce
-                                                ? undefined
-                                                : { scale: 1.045 }
-                                        }
+                                        {...(reduce
+                                            ? {}
+                                            : { whileHover: { scale: 1.045 } })}
                                         transition={{
                                             duration: reduce
                                                 ? 0

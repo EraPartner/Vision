@@ -58,7 +58,7 @@ export function resolveDeployableCash({
   cap,
 }: {
   availableCash: number;
-  cap?: number | null;
+  cap?: number | null | undefined;
 }): number {
   const avail = toDecimal(availableCash ?? 0);
   const base = avail.lt(0) ? toDecimal(0) : avail;

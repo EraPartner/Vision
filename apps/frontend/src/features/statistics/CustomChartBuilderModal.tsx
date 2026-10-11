@@ -113,7 +113,7 @@ interface CustomChartBuilderModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     data: StatisticsData;
-    editChart?: SavedChart;
+    editChart?: SavedChart | undefined;
     onCloseAutoFocus?: () => void;
 }
 

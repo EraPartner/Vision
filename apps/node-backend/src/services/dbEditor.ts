@@ -69,7 +69,7 @@ export interface TableMeta {
 export interface Filter {
   column: string;
   /** one of FILTER_OPS; defaults to 'eq'. */
-  op?: string;
+  op?: string | undefined;
   value?: unknown;
 }
 
@@ -81,11 +81,11 @@ export interface Filter {
 export interface Change {
   op: "insert" | "update" | "delete";
   /** insert only. */
-  values?: Record<string, unknown>;
+  values?: Record<string, unknown> | undefined;
   /** update only — changed columns. */
-  set?: Record<string, unknown>;
+  set?: Record<string, unknown> | undefined;
   /** update/delete — primary-key column values identifying the row. */
-  pk?: Record<string, unknown>;
+  pk?: Record<string, unknown> | undefined;
   /** optimistic-concurrency token (the row's `xmin`) from the row the client loaded. */
   xmin?: unknown;
 }
@@ -125,13 +125,13 @@ export type RawColumnRow = {
 
 /** Options accepted by `readRows`. */
 export interface ReadRowsOptions {
-  limit?: number;
-  cursor?: string;
-  orderBy?: string;
-  dir?: string;
-  filters?: Filter[];
+  limit?: number | undefined;
+  cursor?: string | undefined;
+  orderBy?: string | undefined;
+  dir?: string | undefined;
+  filters?: Filter[] | undefined;
   /** accepted only to be rejected (400) — the raw-WHERE escape hatch was removed. */
-  where?: string;
+  where?: string | undefined;
 }
 
 /** A decoded pagination cursor, before it is checked against the request. */
@@ -746,7 +746,7 @@ async function applyOne(
   ctx: MutationCtx,
 ): Promise<{
   op: string;
-  after?: Record<string, unknown>;
+  after?: Record<string, unknown> | undefined;
   audit: AuditEntry;
 }> {
   // INSERT: no row to lock; structural constraints enforced by Postgres.

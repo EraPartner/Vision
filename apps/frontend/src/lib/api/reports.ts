@@ -26,7 +26,7 @@ export interface TaxReportProfile {
 
 export interface TaxReportPITBracket {
   label?: string;
-  rate?: number;
+  rate?: number | undefined;
   taxableIncome?: number;
   taxAmount?: number;
 }
@@ -44,8 +44,8 @@ export interface ReportOptions {
   theme?: ReportThemeTokens;
   excludedCategoryIds?: number[];
   excludedRecipientIds?: number[];
-  taxProfile?: TaxReportProfile;
-  precomputedPIT?: TaxReportPIT;
+  taxProfile?: TaxReportProfile | undefined;
+  precomputedPIT?: TaxReportPIT | undefined;
 }
 
 async function postReportDownload(

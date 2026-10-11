@@ -25,6 +25,7 @@
  * dedicated POST /refresh-views and POST /inflation-rates/refresh tests
  * below, which already prove the routes exist and work.
  */
+import { bodyAt, valueAt, listAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
@@ -172,7 +173,7 @@ describe("Info Routes", () => {
   describe("insight persistence", () => {
     it("serves the cheap count projection", async () => {
       const res = await api.get(`${BASE}/insights-count`).expect(200);
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         count: 2,
         status: "ready",
         computed_at: "2026-09-08T00:00:00Z",
@@ -242,27 +243,28 @@ describe("Info Routes", () => {
   describe("GET /supported-adapters", () => {
     it("serves the registry-derived adapter list (no hardcoded drift)", async () => {
       const res = await api.get(`${BASE}/supported-adapters`).expect(200);
-      const { data } = res.body;
+      const data = bodyAt(res, "data");
+      const items = listAt(data, "items");
 
       // Registry-derived: one entry per non-generic adapter, keyed by name with
       // the adapter's bankName label. Adding an adapter exposes it automatically.
-      const keys = data.items.map((a: { key: string }) => a.key);
+      const keys = items.map((a) => valueAt(a, "key"));
       expect(keys).toContain("bnp");
       expect(keys).toContain("wise");
       expect(keys).not.toContain("generic");
-      expect(data.total).toBe(data.items.length);
+      expect(valueAt(data, "total")).toBe(items.length);
       // bankName label, not a hardcoded display string / nonexistent class name.
-      const bnp = data.items.find((a: { key: string }) => a.key === "bnp");
-      expect(bnp.name).toBe("BNP Paribas Fortis");
-      expect(bnp.adapter_class).toBeUndefined();
+      const bnp = items.find((a) => valueAt(a, "key") === "bnp");
+      expect(valueAt(bnp, "name")).toBe("BNP Paribas Fortis");
+      expect(valueAt(bnp, "adapter_class")).toBeUndefined();
     });
 
     it("should return supported adapters", async () => {
       const res = await api.get(`${BASE}/supported-adapters`).expect(200);
 
-      const result = res.body.data;
-      expect(result.items).toBeDefined();
-      expect(result.total).toBeGreaterThan(0);
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "items")).toBeDefined();
+      expect(valueAt(result, "total")).toBeGreaterThan(0);
     });
   });
 
@@ -272,7 +274,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/banks`).expect(200);
 
-      expect(res.body.data.items).toHaveLength(2);
+      expect(bodyAt(res, "data", "items")).toHaveLength(2);
     });
 
     it("should return empty for no banks", async () => {
@@ -280,7 +282,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/banks`).expect(200);
 
-      expect(res.body.data).toEqual({ items: [], total: 0 });
+      expect(bodyAt(res, "data")).toEqual({ items: [], total: 0 });
     });
 
     it("should handle database errors", async () => {
@@ -299,7 +301,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/transaction-count`).expect(200);
 
-      expect(res.body.data.total_transactions).toBe(42);
+      expect(bodyAt(res, "data", "total_transactions")).toBe(42);
     });
 
     it("should return 0 for empty", async () => {
@@ -307,7 +309,7 @@ describe("Info Routes", () => {
 
       const res = await api.get(`${BASE}/transaction-count`).expect(200);
 
-      expect(res.body.data.total_transactions).toBe(0);
+      expect(bodyAt(res, "data", "total_transactions")).toBe(0);
     });
 
     it("should handle errors", async () => {
@@ -333,7 +335,7 @@ describe("Info Routes", () => {
       const res = await api
         .get(`${BASE}/planned-expenses-next-month`)
         .expect(200);
-      expect(res.body.ok).toBe(true);
+      expect(bodyAt(res, "ok")).toBe(true);
     });
 
     it("should handle errors", async () => {
@@ -385,10 +387,10 @@ describe("Info Routes", () => {
         .query({ currency: "EUR" })
         .expect(200);
 
-      const result = res.body.data;
-      expect(result.current.netWorth).toBe(15000);
-      expect(result.monthlyChange).toBe(500);
-      expect(result.snapshots).toHaveLength(3);
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "current", "netWorth")).toBe(15000);
+      expect(valueAt(result, "monthlyChange")).toBe(500);
+      expect(valueAt(result, "snapshots")).toHaveLength(3);
     });
 
     it("should return empty data when no assets", async () => {
@@ -406,9 +408,9 @@ describe("Info Routes", () => {
         .query({ currency: "USD" })
         .expect(200);
 
-      const result = res.body.data;
-      expect(result.current.netWorth).toBe(0);
-      expect(result.snapshots).toHaveLength(0);
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "current", "netWorth")).toBe(0);
+      expect(valueAt(result, "snapshots")).toHaveLength(0);
     });
 
     it("should handle errors", async () => {
@@ -444,16 +446,16 @@ describe("Info Routes", () => {
         .query({ currency: "AUD", limit: "2", offset: "0" })
         .expect(200);
 
-      const result = res.body.data;
-      expect(result.snapshots).toHaveLength(2);
-      expect(result.snapshots[0].date).toBe("2026-03-05");
-      expect(result.snapshots[1].date).toBe("2026-03-04");
-      expect(result.snapshotsTotal).toBe(5);
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "snapshots")).toHaveLength(2);
+      expect(valueAt(result, "snapshots", 0, "date")).toBe("2026-03-05");
+      expect(valueAt(result, "snapshots", 1, "date")).toBe("2026-03-04");
+      expect(valueAt(result, "snapshotsTotal")).toBe(5);
       // Pagination facts live in the body, not in envelope meta — the
       // meta.pagination convention is retired (packages/types/src/api.ts).
-      expect(result.snapshotsLimit).toBe(2);
-      expect(result.snapshotsOffset).toBe(0);
-      expect(res.body.meta.requestId).toEqual(expect.any(String));
+      expect(valueAt(result, "snapshotsLimit")).toBe(2);
+      expect(valueAt(result, "snapshotsOffset")).toBe(0);
+      expect(bodyAt(res, "meta", "requestId")).toEqual(expect.any(String));
     });
 
     it("should honor offset for pagination", async () => {
@@ -476,12 +478,12 @@ describe("Info Routes", () => {
         .query({ currency: "CAD", limit: "2", offset: "2" })
         .expect(200);
 
-      const result = res.body.data;
-      expect(result.snapshots).toHaveLength(2);
-      expect(result.snapshots[0].date).toBe("2026-03-02");
-      expect(result.snapshots[1].date).toBe("2026-03-01");
-      expect(result.snapshotsTotal).toBe(4);
-      expect(result.snapshotsOffset).toBe(2);
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "snapshots")).toHaveLength(2);
+      expect(valueAt(result, "snapshots", 0, "date")).toBe("2026-03-02");
+      expect(valueAt(result, "snapshots", 1, "date")).toBe("2026-03-01");
+      expect(valueAt(result, "snapshotsTotal")).toBe(4);
+      expect(valueAt(result, "snapshotsOffset")).toBe(2);
     });
 
     it("should return full unpaginated history when no limit/offset params", async () => {
@@ -502,13 +504,13 @@ describe("Info Routes", () => {
         .query({ currency: "CHF" })
         .expect(200);
 
-      const result = res.body.data;
-      expect(result.snapshots).toHaveLength(2);
-      expect(result.snapshots[0].date).toBe("2026-03-01");
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "snapshots")).toHaveLength(2);
+      expect(valueAt(result, "snapshots", 0, "date")).toBe("2026-03-01");
       // Unpaginated: no pagination fields at all — the body IS the whole series.
-      expect(result.snapshotsTotal).toBeUndefined();
-      expect(result.snapshotsLimit).toBeUndefined();
-      expect(result.snapshotsOffset).toBeUndefined();
+      expect(valueAt(result, "snapshotsTotal")).toBeUndefined();
+      expect(valueAt(result, "snapshotsLimit")).toBeUndefined();
+      expect(valueAt(result, "snapshotsOffset")).toBeUndefined();
     });
   });
 
@@ -953,9 +955,9 @@ describe("Info Routes", () => {
         dbOnly: true,
         scheduleBackgroundRefresh: true,
       });
-      const payload = res.body.data;
-      expect(payload.total_rates).toBe(2);
-      expect(payload.source).toBe("database");
+      const payload = bodyAt(res, "data");
+      expect(valueAt(payload, "total_rates")).toBe(2);
+      expect(valueAt(payload, "source")).toBe("database");
     });
 
     it("should ignore invalid month params", async () => {
@@ -1060,9 +1062,9 @@ describe("Info Routes", () => {
       expect(mockInflationService.getInflationRates).toHaveBeenCalledWith({
         forceRefresh: true,
       });
-      const payload = res.body.data;
-      expect(payload.total_rates).toBe(1);
-      expect(payload.source).toBe("statbel");
+      const payload = bodyAt(res, "data");
+      expect(valueAt(payload, "total_rates")).toBe(1);
+      expect(valueAt(payload, "source")).toBe("statbel");
     });
 
     it("should handle refresh errors", async () => {
@@ -1170,7 +1172,7 @@ describe("Info Routes", () => {
           "2024-12-31",
           "EUR",
         );
-        expect(res.body.data).toMatchObject({
+        expect(bodyAt(res, "data")).toMatchObject({
           startDate: "2024-02-29",
           endDate: "2024-12-31",
         });

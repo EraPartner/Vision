@@ -37,7 +37,7 @@ function transaction(
         date: `2026-01-${String(id).padStart(2, "0")}`,
         amount: 100,
         currency: "EUR",
-        account_id: accountId,
+        ...(accountId === undefined ? {} : { account_id: accountId }),
         import_batch_id: null,
         is_recurring: false,
         created_at: `2026-01-${String(id).padStart(2, "0")}T12:00:00Z`,

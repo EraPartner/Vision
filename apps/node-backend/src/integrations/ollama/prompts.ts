@@ -34,8 +34,8 @@ export interface OllamaToolCall {
 export type OllamaMessage = {
   role: string;
   content: string;
-  tool_calls?: OllamaToolCall[];
-  name?: string;
+  tool_calls?: OllamaToolCall[] | undefined;
+  name?: string | undefined;
 };
 
 const SYSTEM_PROMPT_TEMPLATE = `You are Vision's built-in financial assistant. You help a single user reason about their personal finances, budget, portfolio, planned transactions, and Belgian tax situation.

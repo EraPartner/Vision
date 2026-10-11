@@ -65,7 +65,7 @@ function parseBrokerOutput(output: string): OpenAiBrokerResponse {
 
 export interface OpenAiBrokerOptions {
   spawnImpl?: typeof spawn;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   platform?: string;
   sandboxExec?: string;
 }

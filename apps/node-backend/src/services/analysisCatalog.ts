@@ -29,10 +29,10 @@ export interface VisualAnalysisPlan extends Omit<
   FinancialAnalysisPlan,
   "joins" | "filters" | "orderBy"
 > {
-  joins?: string[];
-  filters?: VisualAnalysisFilter[];
-  orderBy?: Array<{ id: string; direction: string }>;
-  generatedSql?: string;
+  joins?: string[] | undefined;
+  filters?: VisualAnalysisFilter[] | undefined;
+  orderBy?: Array<{ id: string; direction: string }> | undefined;
+  generatedSql?: string | undefined;
 }
 
 export interface CompiledAnalysisColumn {
@@ -40,10 +40,10 @@ export interface CompiledAnalysisColumn {
   label: string;
   type: string;
   nullable: boolean;
-  unit?: FormulaUnit;
-  temporalKind?: string;
-  aggregation?: string;
-  requiredTimeGroups?: string[];
+  unit?: FormulaUnit | undefined;
+  temporalKind?: string | undefined;
+  aggregation?: string | undefined;
+  requiredTimeGroups?: string[] | undefined;
 }
 
 export interface CompiledVisualAnalysis {

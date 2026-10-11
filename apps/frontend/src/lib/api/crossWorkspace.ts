@@ -77,7 +77,7 @@ export interface CommitmentAwareCashResponse {
 }
 
 export function computeCommitmentAwareCash(req: {
-    currency?: string;
+    currency?: string | undefined;
     reserveFloor: number;
 }): Promise<CommitmentAwareCashResponse> {
     return apiRequest("/api/cross-workspace/commitment-aware-cash", {

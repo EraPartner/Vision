@@ -21,7 +21,11 @@ export interface PageParams {
 
 export function parseIntClamped(
   raw: unknown,
-  { min = 1, max, fallback }: { min?: number; max?: number; fallback: number },
+  {
+    min = 1,
+    max,
+    fallback,
+  }: { min?: number | undefined; max?: number | undefined; fallback: number },
 ): number {
   // parseInt applies ToString itself; String() only makes that explicit.
   const parsed = parseInt(String(raw), 10);
@@ -31,7 +35,10 @@ export function parseIntClamped(
 
 export function parsePagination(
   query: Record<string, unknown> = {},
-  { defaultLimit = 50, maxLimit }: { defaultLimit?: number; maxLimit?: number } = {},
+  {
+    defaultLimit = 50,
+    maxLimit,
+  }: { defaultLimit?: number | undefined; maxLimit?: number | undefined } = {},
 ): PageParams {
   return {
     limit: parseIntClamped(query.limit, { min: 1, max: maxLimit, fallback: defaultLimit }),

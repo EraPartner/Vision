@@ -148,8 +148,8 @@ export async function commitBatch({
   rowIds,
 }: {
   batchId: PortfolioImportBatchId;
-  onProgress?: PortfolioImportProgressCallback;
-  rowIds?: number[];
+  onProgress?: PortfolioImportProgressCallback | undefined;
+  rowIds?: number[] | undefined;
 }): Promise<{ imported: number; duplicates: number; errors: number }> {
   // Batch-level brokerage account (ADR-095): every lot from this batch lands on it,
   // giving imported holdings a real per-account position (ADR-091). NULL = unassigned.

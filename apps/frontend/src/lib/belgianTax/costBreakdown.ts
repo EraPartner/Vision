@@ -1,10 +1,10 @@
 interface CostTransaction {
     type: string;
-    date?: string;
-    amount?: number;
-    taxes?: number;
-    fees?: number;
-    currency?: string;
+    date?: string | undefined;
+    amount?: number | undefined;
+    taxes?: number | undefined;
+    fees?: number | undefined;
+    currency?: string | undefined;
 }
 
 interface CostSummary {

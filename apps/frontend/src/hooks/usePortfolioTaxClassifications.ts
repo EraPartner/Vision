@@ -8,7 +8,7 @@ const SETTINGS_KEY = 'portfolio_tax_classifications_v1';
 export type EtfStructure = 'accumulating' | 'distributing';
 
 export interface TaxClassificationEntry {
-    etfStructure?: EtfStructure;
+    etfStructure?: EtfStructure | undefined;
     /**
      * Whether realised gains on this investment are subject to Reynders tax (30%
      * on the bond-attributable portion). `true` → bond / mixed-bond fund.
@@ -16,14 +16,14 @@ export interface TaxClassificationEntry {
      * to the 10% CGT from IY 2026 onwards). `undefined` → fall back to
      * assetClass-based default.
      */
-    subjectToReynders?: boolean;
+    subjectToReynders?: boolean | undefined;
     /**
      * Share of the realised gain attributable to interest, taxed at 30% under
      * Reynders. Range [0, 1]; default 1.0. Remainder (1 - share) flows to the
      * 10% CGT pool from IY 2026 onwards. Only meaningful when
      * `subjectToReynders` is true (or auto-resolves to true).
      */
-    reyndersInterestPortion?: number;
+    reyndersInterestPortion?: number | undefined;
 }
 
 export type PortfolioTaxClassificationMap = Record<string, TaxClassificationEntry>;

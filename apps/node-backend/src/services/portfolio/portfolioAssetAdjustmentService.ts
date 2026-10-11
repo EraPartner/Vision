@@ -192,7 +192,7 @@ export async function commitPortfolioAssetAdjustment({
   batch,
 }: {
   row: Parameters<typeof previewPortfolioAssetAdjustment>[0];
-  batch?: CustodyBatch;
+  batch?: CustodyBatch | undefined;
 }): Promise<{ id: number; duplicate: boolean }> {
   const prepared = previewPortfolioAssetAdjustment(row, batch);
   if (prepared.error)

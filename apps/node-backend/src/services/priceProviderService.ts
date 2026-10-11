@@ -370,7 +370,10 @@ async function _persistAndResolve(
   points: PricePoint[],
   source: string,
   cachedDbPoints: PricePoint[],
-  { fromMs, toMs }: { fromMs?: number; toMs?: number } = {},
+  {
+    fromMs,
+    toMs,
+  }: { fromMs?: number | undefined; toMs?: number | undefined } = {},
 ) {
   const { saveHistoricalPointsToDatabase } =
     await import("./prices/priceCache.ts");
@@ -407,10 +410,10 @@ export async function fetchHistoricalPrices(
     dbOnly = false,
     force = false,
   }: {
-    fromMs?: number;
-    toMs?: number;
-    dbOnly?: boolean | string | number;
-    force?: boolean;
+    fromMs?: number | undefined;
+    toMs?: number | undefined;
+    dbOnly?: boolean | string | number | undefined;
+    force?: boolean | undefined;
   } = {},
 ): Promise<PricePoint[]> {
   if (!investment) return [];

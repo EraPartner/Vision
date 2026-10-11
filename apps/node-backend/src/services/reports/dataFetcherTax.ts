@@ -34,9 +34,9 @@ export type Period = { kind: 'ytd' }
  * client may omit any of them.
  */
 export type TaxProfile = {
-  filingStatus?: string;
-  region?: string;
-  taxYear?: number;
+  filingStatus?: string | undefined;
+  region?: string | undefined;
+  taxYear?: number | undefined;
 };
 
 /**
@@ -45,14 +45,16 @@ export type TaxProfile = {
  * so the report doesn't have to re-derive the bracket math.
  */
 export type PrecomputedPIT = {
-  taxableIncome?: number;
-  totalTax?: number;
-  brackets?: Array<{
-    label?: string;
-    rate?: number;
-    taxableIncome?: number;
-    taxAmount?: number;
-  }>;
+  taxableIncome?: number | undefined;
+  totalTax?: number | undefined;
+  brackets?:
+    | Array<{
+        label?: string | undefined;
+        rate?: number | undefined;
+        taxableIncome?: number | undefined;
+        taxAmount?: number | undefined;
+      }>
+    | undefined;
 };
 
 /**
@@ -507,7 +509,10 @@ export async function fetchTaxData(
   {
     taxProfile,
     precomputedPIT,
-  }: { taxProfile?: TaxProfile; precomputedPIT?: PrecomputedPIT } = {},
+  }: {
+    taxProfile?: TaxProfile | undefined;
+    precomputedPIT?: PrecomputedPIT | undefined;
+  } = {},
 ): Promise<TaxReportData> {
   const { taxYear, startDate, endDate, periodNote } =
     periodToTaxContext(period);

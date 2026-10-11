@@ -24,8 +24,8 @@ export interface PivotConfig<
     fetchPivot: (params: {
         currency: string;
         bucket: SavedChart["time_bucket"];
-        start?: string;
-        end?: string;
+        start?: string | undefined;
+        end?: string | undefined;
         all: boolean;
         ids: number[];
     }) => Promise<{

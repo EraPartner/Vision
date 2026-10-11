@@ -26,8 +26,8 @@ const Tabs = React.forwardRef<
             <TabsActiveValueContext.Provider value={active}>
                 <TabsPrimitive.Root
                     ref={ref}
-                    value={value}
-                    defaultValue={defaultValue}
+                    {...(value === undefined ? {} : {value})}
+                    {...(defaultValue === undefined ? {} : {defaultValue})}
                     onValueChange={(v) => {
                         setActive(v);
                         onValueChange?.(v);

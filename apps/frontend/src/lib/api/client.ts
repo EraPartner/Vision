@@ -83,14 +83,14 @@ export class ApiClientError extends Error {
     public readonly status: number;
     public readonly code: ApiErrorCodeValue;
     public readonly details?: unknown;
-    public readonly requestId?: string;
+    public readonly requestId?: string | undefined;
 
     constructor(opts: {
         status: number;
         code: ApiErrorCodeValue;
         message: string;
         details?: unknown;
-        requestId?: string;
+        requestId?: string | undefined;
     }) {
         super(opts.message);
         this.name = "ApiClientError";

@@ -3,8 +3,8 @@ import { useLanguage } from '@/stores/hydration/LanguageHydration';
 import { cn } from '@/lib/utils';
 
 interface TaxYearStatusIconProps {
-    isFiled?: boolean;
-    hasFrozenCalculation?: boolean;
+    isFiled?: boolean | undefined;
+    hasFrozenCalculation?: boolean | undefined;
     className?: string;
 }
 

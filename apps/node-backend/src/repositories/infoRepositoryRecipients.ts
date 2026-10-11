@@ -36,23 +36,23 @@ import {
 import type { PeriodPivotEntity } from "./infoRepositoryHelpers.ts";
 
 export interface RecipientInsightsOptions {
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
-  startDate?: string;
-  endDate?: string;
+  excludedCategoryIds?: number[] | undefined;
+  excludedRecipientIds?: number[] | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
 }
 
 export interface RecipientByYearOptions extends RecipientInsightsOptions {
-  targetCurrency?: string;
+  targetCurrency?: string | undefined;
 }
 
 export interface RecipientPivotOptions {
-  excludedRecipientIds?: number[];
-  targetCurrency?: string;
-  bucket?: string;
-  startDate?: string | null;
-  endDate?: string | null;
-  recipientIds?: number[] | null;
+  excludedRecipientIds?: number[] | undefined;
+  targetCurrency?: string | undefined;
+  bucket?: string | undefined;
+  startDate?: string | null | undefined;
+  endDate?: string | null | undefined;
+  recipientIds?: number[] | null | undefined;
 }
 
 interface RecipientTotal {

@@ -55,7 +55,7 @@ function choiceFromReynders(v: boolean | undefined): ReyndersChoice {
 }
 
 type ClassDraftRow = {
-    etfStructure?: EtfStructure;
+    etfStructure?: EtfStructure | undefined;
     reynders: ReyndersChoice;
     interestPortion: string;
 };

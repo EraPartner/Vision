@@ -16,7 +16,7 @@ import { useResearchAnalystQuery } from "./useResearchQueries";
 
 interface ResearchAnalystTabProps {
     symbol: string;
-    currency?: string;
+    currency?: string | undefined;
     enabled: boolean;
 }
 
@@ -245,7 +245,7 @@ function TargetCell({
 }: {
     label: string;
     value: number | null;
-    currency?: string;
+    currency?: string | undefined;
 }) {
     const formatCurrency = useCurrencyFormatter();
     const { locale, decimals } = useCurrencyFormatSettings();

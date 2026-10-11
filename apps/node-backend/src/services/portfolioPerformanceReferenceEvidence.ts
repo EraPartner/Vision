@@ -77,7 +77,7 @@ export type VerifiedPortfolioPerformanceBasisReference =
   PortfolioPerformanceReferenceProof & {
     amount: string;
     currency: string | null;
-    fxRateToEur?: string;
+    fxRateToEur?: string | undefined;
     meaningful: boolean;
   };
 /** Legacy transaction facts compared against a staged row. */

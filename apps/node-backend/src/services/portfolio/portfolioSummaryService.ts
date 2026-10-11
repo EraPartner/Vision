@@ -94,8 +94,8 @@ type ArchivedIncomeRow = ArchivedIncomeDbRow & FxAnnotation;
 
 export interface PortfolioSummaryOptions {
   /** 'YYYY-MM-DD' — only transactions on or before this day are replayed. */
-  throughDate?: string;
-  activeInvestmentsOnly?: boolean;
+  throughDate?: string | undefined;
+  activeInvestmentsOnly?: boolean | undefined;
   includeBrokerSnapshotParity?: boolean;
 }
 

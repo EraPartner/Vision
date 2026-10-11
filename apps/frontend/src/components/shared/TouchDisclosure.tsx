@@ -10,7 +10,7 @@ interface TouchDisclosureProps {
     label: string;
     content: ReactNode;
     children: ReactNode;
-    className?: string;
+    className?: string | undefined;
 }
 
 /**
@@ -51,8 +51,8 @@ export function TouchDisclosure({
 
 interface CompactValueDisclosureProps {
     display: ReactNode;
-    fullValue?: string;
-    className?: string;
+    fullValue?: string | undefined;
+    className?: string | undefined;
 }
 
 export function CompactValueDisclosure({

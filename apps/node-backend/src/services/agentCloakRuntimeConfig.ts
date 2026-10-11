@@ -6,8 +6,8 @@ const DESKTOP_PREFERENCE_KEY = "agentcloak_desktop_enabled";
 export interface AgentCloakConfig {
   enabled: boolean;
   mode: "mcp" | "desktop";
-  url?: string;
-  apiKey?: string;
+  url?: string | undefined;
+  apiKey?: string | undefined;
   desktopUrl: string;
   timeoutMs: number;
 }

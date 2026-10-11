@@ -323,7 +323,7 @@ export default function DashboardPage() {
             {
                 name: string;
                 count: number;
-                categoryId?: number;
+                categoryId?: number | undefined;
                 uncategorised?: boolean;
             }
         >();

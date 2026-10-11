@@ -23,30 +23,32 @@ export interface ExpressRequest {
   body: unknown;
   headers: Record<string, string | string[] | undefined>;
   /** Node wire headers, before duplicate-field normalization. */
-  rawHeaders?: string[];
+  rawHeaders?: string[] | undefined;
   /** Request id stamped by middleware/requestId.ts. */
-  id?: string;
+  id?: string | undefined;
   method: string;
   path: string;
   baseUrl: string;
   originalUrl: string;
   url: string;
-  route?: { path?: string };
+  route?: { path?: string | undefined } | undefined;
   /** Deprecated Node alias for `socket`; still read defensively. */
-  connection?: { remoteAddress?: string };
-  socket?: { remoteAddress?: string };
-  ip?: string;
+  connection?: { remoteAddress?: string | undefined } | undefined;
+  socket?: { remoteAddress?: string | undefined } | undefined;
+  ip?: string | undefined;
   get: (name: string) => string | undefined;
   /** Attached by multer's `.single(...)`. `buffer` is populated only under multer's memoryStorage (routes/attachments.js); `path`/`filename` only under diskStorage (routes/importRoutes.js, portfolioImportRoutes.js) — the two configurations are mutually exclusive per route, never both populated on the same request. */
-  file?: {
-    path?: string;
-    filename?: string;
-    originalname?: string;
-    mimetype?: string;
-    size?: number;
-    buffer?: Buffer;
-  };
-  cookies?: Record<string, string>;
+  file?:
+    | {
+        path?: string | undefined;
+        filename?: string | undefined;
+        originalname?: string | undefined;
+        mimetype?: string | undefined;
+        size?: number | undefined;
+        buffer?: Buffer | undefined;
+      }
+    | undefined;
+  cookies?: Record<string, string> | undefined;
 }
 
 /** A body chunk for `write`/`end`. */

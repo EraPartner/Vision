@@ -77,7 +77,7 @@ async function prepareImport({
   batchId: PortfolioImportBatchId;
   filePath: string;
   customConfig: PortfolioParserConfig;
-  onProgress?: PortfolioImportProgressCallback;
+  onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{
   batchId: PortfolioImportBatchId;
   rowsTotal: number;
@@ -176,8 +176,8 @@ export async function commitPortfolioImport({
   rowIds,
 }: {
   batchId: PortfolioImportBatchId;
-  onProgress?: PortfolioImportProgressCallback;
-  rowIds?: number[];
+  onProgress?: PortfolioImportProgressCallback | undefined;
+  rowIds?: number[] | undefined;
 }): Promise<{ imported: number; duplicates: number; errors: number }> {
   const { imported, duplicates, errors } = await commitBatch({
     batchId,
@@ -245,13 +245,13 @@ export async function runPortfolioImportPipeline({
   filePath: string;
   adapterName: string;
   customConfig: PortfolioParserConfig;
-  defaultAssetClass?: string;
-  defaultType?: string;
-  filename?: string;
-  sizeBytes?: number;
-  isBrokerage?: boolean;
-  accountId?: number;
-  onProgress?: PortfolioImportProgressCallback;
+  defaultAssetClass?: string | undefined;
+  defaultType?: string | undefined;
+  filename?: string | undefined;
+  sizeBytes?: number | undefined;
+  isBrokerage?: boolean | undefined;
+  accountId?: number | undefined;
+  onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{
   batchId: PortfolioImportBatchId;
   total: number;

@@ -16,7 +16,7 @@ export interface EnsureAnalysisRoleOptions {
   /** Undefined when config could not derive one; reported as degraded. */
   analysisUrl: string | undefined;
   /** Privileged owner URL; falls back to `databaseUrl`. */
-  migrationsUrl?: string;
+  migrationsUrl?: string | undefined;
   log?: Pick<typeof logger, "warn">;
 }
 

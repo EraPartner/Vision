@@ -52,7 +52,7 @@ export function resolveManualTradeBrokerId({
     transactions,
     accounts,
 }: {
-    investmentId?: number;
+    investmentId?: number | undefined;
     transactions: readonly PortfolioTransaction[];
     accounts: readonly Account[];
 }): number | undefined {

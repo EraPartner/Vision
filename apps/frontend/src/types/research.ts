@@ -14,7 +14,7 @@ export type ResearchSource = "cache" | "live" | "unavailable";
 export interface ResearchMeta {
     provider: string | null;
     source: ResearchSource;
-    requestId?: string;
+    requestId?: string | undefined;
 }
 
 /** A research response paired with its provenance. */
@@ -79,8 +79,8 @@ export type MarketChartPoint = ResearchChartPoint;
 
 /** Market chart client shape after `{items}` is renamed to the domain `points`. */
 export interface MarketChartResponse<P = MarketChartPoint> {
-    symbol?: string;
-    currency?: string;
+    symbol?: string | undefined;
+    currency?: string | undefined;
     points: P[];
 }
 
@@ -258,9 +258,9 @@ export interface MappingResolveResponse {
 export interface MappingSaveInput {
     provider: string;
     providerSymbol: string;
-    resolvedName?: string;
-    exchange?: string;
-    currency?: string;
+    resolvedName?: string | undefined;
+    exchange?: string | undefined;
+    currency?: string | undefined;
 }
 
 /** Canonical `{items, total}` collection body (GET and POST /api/research/mappings). */
@@ -363,8 +363,8 @@ export interface PortfolioForecastInput {
     /** 0 = pure historical drift, 1 = pure forward. */
     forwardBlend?: number;
     method?: ForecastMethod;
-    targetValue?: number;
-    goalMonth?: number;
+    targetValue?: number | undefined;
+    goalMonth?: number | undefined;
     currency?: string;
     seed?: string;
 }

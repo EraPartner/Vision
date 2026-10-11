@@ -50,19 +50,19 @@ export interface FinancialAnalysisFilter {
 
 export interface FinancialAnalysisPlan {
   datasetId: string;
-  fields?: string[];
-  groups?: string[];
-  measures?: string[];
-  joins?: unknown[];
-  filters?: FinancialAnalysisFilter[];
-  orderBy?: Array<{ id: string; direction: string }>;
-  limit?: number;
-  reportingCurrency?: string;
-  from?: string;
-  to?: string;
-  symbol?: string;
-  range?: string;
-  costBasisMethod?: string;
+  fields?: string[] | undefined;
+  groups?: string[] | undefined;
+  measures?: string[] | undefined;
+  joins?: unknown[] | undefined;
+  filters?: FinancialAnalysisFilter[] | undefined;
+  orderBy?: Array<{ id: string; direction: string }> | undefined;
+  limit?: number | undefined;
+  reportingCurrency?: string | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  symbol?: string | undefined;
+  range?: string | undefined;
+  costBasisMethod?: string | undefined;
 }
 
 /** Query seam; defaults to the shared pg `query`. */
@@ -83,14 +83,14 @@ export interface BenchmarkFetchResult {
 
 interface FinancialSourceCacheEntry {
   source: FinancialRow[];
-  provider?: string;
-  benchmarkCurrency?: string;
+  provider?: string | undefined;
+  benchmarkCurrency?: string | undefined;
 }
 
 export interface FinancialAnalysisDeps {
   query?: FinancialQuery;
   fetchBenchmark?: (params: {
-    symbol?: string;
+    symbol?: string | undefined;
     assetClass: string;
     range: string;
   }) => Promise<BenchmarkFetchResult>;
@@ -98,10 +98,10 @@ export interface FinancialAnalysisDeps {
 }
 
 export interface FinancialAnalysisOptions {
-  requestId?: string;
-  offset?: number;
-  limit?: number;
-  deps?: FinancialAnalysisDeps;
+  requestId?: string | undefined;
+  offset?: number | undefined;
+  limit?: number | undefined;
+  deps?: FinancialAnalysisDeps | undefined;
 }
 
 interface RateRow {
@@ -603,7 +603,7 @@ export async function executeFinancialAnalysis(
       const fetch =
         deps.fetchBenchmark ??
         (async (params: {
-          symbol?: string;
+          symbol?: string | undefined;
           assetClass: string;
           range: string;
         }) =>

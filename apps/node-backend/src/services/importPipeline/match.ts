@@ -51,7 +51,7 @@ export async function matchBatch({
   onProgress,
 }: {
   batchId: ImportBatchId;
-  onProgress?: ImportProgressCallback;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{
   matched: number;
   unresolved: number;

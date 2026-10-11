@@ -20,7 +20,7 @@ export function FieldError({
 }: {
     /** The described control's DOM `id`. */
     field: string;
-    message?: string;
+    message?: string | undefined;
     className?: string;
 }) {
     if (!message) return null;

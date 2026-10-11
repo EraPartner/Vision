@@ -15,6 +15,7 @@
  * `adminMutateLimiter`, declared INSIDE admin.js on individual mutate routes,
  * is exercised for free since the real router is mounted.
  */
+import { bodyAt, valueAt } from "../helpers/responseBody.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Mock } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -158,10 +159,10 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      const result = res.body.data;
-      expect(result.is_initialised).toBe(true);
-      expect(result.table_count).toBe(5);
-      expect(result.timestamp).toBeDefined();
+      const result = bodyAt(res, "data");
+      expect(valueAt(result, "is_initialised")).toBe(true);
+      expect(valueAt(result, "table_count")).toBe(5);
+      expect(valueAt(result, "timestamp")).toBeDefined();
     });
 
     it("should report uninitialised with no tables", async () => {
@@ -170,7 +171,7 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.data.is_initialised).toBe(false);
+      expect(bodyAt(res, "data", "is_initialised")).toBe(false);
     });
 
     it("should report uninitialised when disconnected", async () => {
@@ -178,15 +179,15 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.data.is_initialised).toBe(false);
-      expect(res.body.data.table_count).toBe(0);
+      expect(bodyAt(res, "data", "is_initialised")).toBe(false);
+      expect(bodyAt(res, "data", "table_count")).toBe(0);
     });
 
     it("should propagate errors when connection fails", async () => {
       checkConnection.mockRejectedValue(new Error("Connection failed"));
 
       const res = await api.get(`${BASE}/`).expect(500);
-      expect(res.body.error.message).toBe("Connection failed");
+      expect(bodyAt(res, "error", "message")).toBe("Connection failed");
     });
   });
 
@@ -215,7 +216,7 @@ describe("Admin Routes", () => {
       checkConnection.mockRejectedValue(new Error("driver stack trace"));
 
       const res = await api.post(`${BASE}/database/init`).expect(500);
-      expect(res.body.error.message).toBe("driver stack trace");
+      expect(bodyAt(res, "error", "message")).toBe("driver stack trace");
     });
   });
 
@@ -290,11 +291,11 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/update/check`).expect(200);
 
-      const payload = res.body.data;
-      expect(payload.latest_version).toBe("v1.2.3");
-      expect(payload.published_at).toBe("2026-04-01T12:00:00Z");
-      expect(payload.release_notes).toBe("Release notes");
-      expect(payload.html_url).toBe(
+      const payload = bodyAt(res, "data");
+      expect(valueAt(payload, "latest_version")).toBe("v1.2.3");
+      expect(valueAt(payload, "published_at")).toBe("2026-04-01T12:00:00Z");
+      expect(valueAt(payload, "release_notes")).toBe("Release notes");
+      expect(valueAt(payload, "html_url")).toBe(
         "https://github.com/EraPartner/Vision/releases/tag/v1.2.3",
       );
       expect(payload).toHaveProperty("up_to_date");
@@ -308,7 +309,7 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/update/check`).expect(200);
 
-      expect(res.body.data.update_mode).toBe("source");
+      expect(bodyAt(res, "data", "update_mode")).toBe("source");
     });
 
     it("should include version metadata in update check response", async () => {
@@ -316,8 +317,8 @@ describe("Admin Routes", () => {
 
       const res = await api.get(`${BASE}/update/check`).expect(200);
 
-      const payload = res.body.data;
-      expect(payload.latest_version).toBe("v2.1.0");
+      const payload = bodyAt(res, "data");
+      expect(valueAt(payload, "latest_version")).toBe("v2.1.0");
       expect(payload).toHaveProperty("current_version");
       expect(payload).toHaveProperty("up_to_date");
     });
@@ -358,7 +359,7 @@ describe("Admin Routes", () => {
       mockGitHubReleaseBody("{ invalid-json");
 
       const res = await api.get(`${BASE}/update/check`).expect(500);
-      expect(res.body.error.code).toBe("INTERNAL_SERVER_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("INTERNAL_SERVER_ERROR");
     });
   });
 
@@ -420,7 +421,7 @@ describe("Admin Routes", () => {
       const res = await api
         .post(`${BASE}/investments/kinesis/sanitize-history`)
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 

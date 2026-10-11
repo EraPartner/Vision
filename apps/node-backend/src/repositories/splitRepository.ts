@@ -171,7 +171,7 @@ export async function insertSplitInTransaction(
     transaction_id: number;
     recipient_id: number;
     amount: number;
-    note?: string | null;
+    note?: string | null | undefined;
   },
 ): Promise<FormattedSplit> {
   // `0::numeric`: a fresh split has no payments, and NUMERIC keeps
@@ -196,7 +196,11 @@ export async function insertSplitInTransaction(
 export async function insertSplitsBatchInTransaction(
   client: QueryRunner,
   transactionId: number,
-  splits: Array<{ recipient_id: number; amount: number; note?: string | null }>,
+  splits: Array<{
+    recipient_id: number;
+    amount: number;
+    note?: string | null | undefined;
+  }>,
 ): Promise<FormattedSplit[]> {
   const recipientIds = splits.map((split) => split.recipient_id);
   const amounts = splits.map((split) => split.amount);
@@ -258,7 +262,7 @@ export async function insertPaymentInTransaction(
   }: {
     split_id: number;
     amount: number;
-    note?: string | null;
+    note?: string | null | undefined;
     paid_at: string;
   },
 ): Promise<FormattedSplitPayment> {

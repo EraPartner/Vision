@@ -63,9 +63,9 @@ export interface DbFilter {
 
 export interface ReadParams {
     limit?: number;
-    cursor?: string;
-    orderBy?: string;
-    dir?: "asc" | "desc";
+    cursor?: string | undefined;
+    orderBy?: string | undefined;
+    dir?: "asc" | "desc" | undefined;
     filters?: DbFilter[];
 }
 
@@ -74,10 +74,10 @@ export type DbChange =
     | {
           op: "update";
           pk: Record<string, unknown>;
-          xmin?: string;
+          xmin?: string | undefined;
           set: Record<string, unknown>;
       }
-    | { op: "delete"; pk: Record<string, unknown>; xmin?: string };
+    | { op: "delete"; pk: Record<string, unknown>; xmin?: string | undefined };
 
 export interface PreviewStatement {
     op: string;

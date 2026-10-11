@@ -42,7 +42,7 @@ export interface CodexProtocolEvent {
 }
 
 export interface ExperimentalCodexSessionOptions {
-  binary?: string;
+  binary?: string | undefined;
   tempParent?: string;
   prepare?: typeof __prepareSyntheticCodexProbe;
   startProxy?: typeof startCodexConnectProxy;

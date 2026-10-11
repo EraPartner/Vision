@@ -24,12 +24,12 @@ import {
 import type { PeriodPivotEntity } from './infoRepositoryHelpers.ts';
 
 export interface TagPivotOptions {
-  targetCurrency?: string;
-  bucket?: string;
-  startDate?: string | null;
-  endDate?: string | null;
-  tagIds?: number[] | null;
-  allTags?: boolean;
+  targetCurrency?: string | undefined;
+  bucket?: string | undefined;
+  startDate?: string | null | undefined;
+  endDate?: string | null | undefined;
+  tagIds?: number[] | null | undefined;
+  allTags?: boolean | undefined;
 }
 
 export const tagInsightsRepository = {

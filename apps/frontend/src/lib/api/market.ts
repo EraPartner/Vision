@@ -100,8 +100,8 @@ export function searchMarket(
 }
 
 export function getWatchlist(params?: {
-    limit?: number;
-    offset?: number;
+    limit?: number | undefined;
+    offset?: number | undefined;
 }): Promise<WatchlistListResponse> {
     const query = params
         ? `?${new URLSearchParams(

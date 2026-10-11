@@ -41,7 +41,7 @@ import type { EnrichedTransactionRow } from "../types/rows.ts";
 export type ManualTransactionInput = {
   transaction_date?: string;
   date?: string;
-  account_id?: number | null;
+  account_id?: number | null | undefined;
   recipient_id?: number | null;
   amount: number | string;
   memo?: string | null;

@@ -254,8 +254,8 @@ export async function launchPreparedNativeInstaller({
 }: {
   installerPath: string;
   installerArgs: readonly string[];
-  stopRuntime?: () => Promise<unknown>;
-  startRuntime?: () => Promise<unknown>;
+  stopRuntime?: (() => Promise<unknown>) | undefined;
+  startRuntime?: (() => Promise<unknown>) | undefined;
   spawnProcess?: (
     command: string,
     args: string[],

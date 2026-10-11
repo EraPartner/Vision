@@ -17,7 +17,8 @@ import { logger } from "../config/logger.ts";
  */
 export interface PgPoolClient {
   query: (
-    text: string | { name: string; text: string; values?: unknown[] },
+    text:
+      string | { name: string; text: string; values?: unknown[] | undefined },
     params?: unknown[],
   ) => Promise<PgQueryResult>;
   release: (err?: Error | boolean) => void;
@@ -199,7 +200,9 @@ export async function queryPrepared(
   if (ambient) {
     return ambient.query({ name, text, values });
   }
-  return pool.query({ name, text, values });
+  return pool.query(
+    values === undefined ? { name, text } : { name, text, values },
+  );
 }
 
 /**

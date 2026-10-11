@@ -8,8 +8,8 @@ interface ConvertibleAmount {
 interface MonthlyConvertibleAmount extends ConvertibleAmount {
     is_active: boolean;
     is_recurring: boolean;
-    frequency?: string | null;
-    custom_interval_days?: number | null;
+    frequency?: string | null | undefined;
+    custom_interval_days?: number | null | undefined;
 }
 
 type AvailableConverter = (

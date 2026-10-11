@@ -23,8 +23,8 @@ export type FieldErrorMap = Record<string, string | undefined>;
 
 /** ARIA a control accepts so it can be associated with its `<FieldError>`. */
 export type FieldErrorAria = {
-    "aria-invalid"?: true;
-    "aria-describedby"?: string;
+    "aria-invalid"?: true | undefined;
+    "aria-describedby"?: string | undefined;
 };
 
 /** Id of the message element describing the control `field`. */

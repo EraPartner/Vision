@@ -187,7 +187,7 @@ export async function prepareReferencePreview(
     createId?: () => string;
     createScope?: typeof repository.createScope;
     cleanup?: typeof repository.deleteExpiredUnclaimed;
-    detectSensitiveSpans?: DetectSensitiveSpans;
+    detectSensitiveSpans?: DetectSensitiveSpans | undefined;
   } = {},
 ) {
   if (

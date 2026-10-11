@@ -14,16 +14,16 @@ import type {
 export type ExposureIdentifier = {
   type: string;
   value: string;
-  exchange?: string | null;
+  exchange?: string | null | undefined;
 };
 
 export type ExposureClassificationInput = {
-  investmentId?: number;
-  identifier?: ExposureIdentifier;
+  investmentId?: number | undefined;
+  identifier?: ExposureIdentifier | undefined;
   issuerId: string;
   issuerName: string;
-  sector?: string;
-  issuerCountryCode?: string;
+  sector?: string | undefined;
+  issuerCountryCode?: string | undefined;
   sourceLabel: string;
 };
 

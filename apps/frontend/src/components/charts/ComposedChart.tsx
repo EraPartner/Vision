@@ -30,36 +30,37 @@ export type ComposedSeriesType = "line" | "area" | "bar" | "candlestick";
 
 export interface ComposedSeries<Datum> {
     readonly key: string;
-    readonly label?: string;
+    readonly label?: string | undefined;
     readonly type: ComposedSeriesType;
-    readonly axis?: "left" | "right";
-    readonly color?: string;
-    readonly dashed?: boolean;
-    readonly strokeWidth?: number;
-    readonly fillOpacity?: number;
+    readonly axis?: "left" | "right" | undefined;
+    readonly color?: string | undefined;
+    readonly dashed?: boolean | undefined;
+    readonly strokeWidth?: number | undefined;
+    readonly fillOpacity?: number | undefined;
     /** Value accessor for line / area / bar series. */
-    readonly accessor?: (d: Datum) => number | null | undefined;
+    readonly accessor?: ((d: Datum) => number | null | undefined) | undefined;
     /** OHLC accessors for candlestick series. */
-    readonly open?: (d: Datum) => number | null | undefined;
-    readonly high?: (d: Datum) => number | null | undefined;
-    readonly low?: (d: Datum) => number | null | undefined;
-    readonly close?: (d: Datum) => number | null | undefined;
+    readonly open?: ((d: Datum) => number | null | undefined) | undefined;
+    readonly high?: ((d: Datum) => number | null | undefined) | undefined;
+    readonly low?: ((d: Datum) => number | null | undefined) | undefined;
+    readonly close?: ((d: Datum) => number | null | undefined) | undefined;
 }
 
 export interface ComposedChartProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
     readonly xAccessor: (d: Datum) => Date | number;
     readonly series: ReadonlyArray<ComposedSeries<Datum>>;
-    readonly height?: number;
-    readonly xIsDate?: boolean;
+    readonly height?: number | undefined;
+    readonly xIsDate?: boolean | undefined;
     /** Log-scale the left axis (falls back to linear if the domain is non-positive). */
-    readonly logLeft?: boolean;
-    readonly xTickFormat?: (v: Date | number) => string;
-    readonly leftTickFormat?: (v: number) => string;
-    readonly rightTickFormat?: (v: number) => string;
-    readonly tooltipTitle?: (d: Datum) => string;
-    readonly tooltipValueFormat?: (v: number, seriesKey: string) => string;
-    readonly ariaLabel?: string;
+    readonly logLeft?: boolean | undefined;
+    readonly xTickFormat?: ((v: Date | number) => string) | undefined;
+    readonly leftTickFormat?: ((v: number) => string) | undefined;
+    readonly rightTickFormat?: ((v: number) => string) | undefined;
+    readonly tooltipTitle?: ((d: Datum) => string) | undefined;
+    readonly tooltipValueFormat?:
+        ((v: number, seriesKey: string) => string) | undefined;
+    readonly ariaLabel?: string | undefined;
 }
 
 const MARGIN = { top: 16, right: 64, bottom: 28, left: 72 };

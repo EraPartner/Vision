@@ -14,18 +14,18 @@ import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery } from "@/lib/api/helpers";
 
 export function getPlannedTransactions(params?: {
-    limit?: number;
-    offset?: number;
-    start_date?: string;
-    end_date?: string;
-    bank_account?: string;
-    account_id?: number;
-    category_id?: number;
-    recipient_id?: number;
-    is_recurring?: boolean;
-    is_executed?: boolean;
-    active?: boolean;
-    search?: string;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    start_date?: string | undefined;
+    end_date?: string | undefined;
+    bank_account?: string | undefined;
+    account_id?: number | undefined;
+    category_id?: number | undefined;
+    recipient_id?: number | undefined;
+    is_recurring?: boolean | undefined;
+    is_executed?: boolean | undefined;
+    active?: boolean | undefined;
+    search?: string | undefined;
 }): Promise<PlannedTransactionsListResponse> {
     return requestWithQuery<PlannedTransactionsListResponse>(
         "/api/planned-transactions",

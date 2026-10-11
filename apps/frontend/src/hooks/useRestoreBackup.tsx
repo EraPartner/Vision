@@ -22,7 +22,7 @@ const ERR_INVALID_PASSPHRASE = "INVALID_PASSPHRASE";
 
 type RestoreOptions = {
     /** Called once a successful restore is confirmed, before the page reloads. */
-    onSuccess?: () => void;
+    onSuccess?: (() => void) | undefined;
 };
 
 type StartFn = (filePath: string) => Promise<void>;

@@ -23,24 +23,24 @@ export interface PortfolioTransactionInput {
   type: string;
   /** 'YYYY-MM-DD' */
   date: string;
-  amount?: number | string;
-  units?: number | string | null;
-  price_per_unit?: number | string | null;
-  fees?: number | string | null;
-  taxes?: number | string | null;
-  dividend_amount_convention?: "gross" | "net" | "unknown";
-  currency?: string;
-  note?: string | null;
-  is_recurring?: boolean;
-  recurrence_interval?: string | null;
-  recurrence_end_date?: string | null;
-  fx_rate_to_eur?: number | string | null;
-  account_id?: number | null;
+  amount?: number | string | undefined;
+  units?: number | string | null | undefined;
+  price_per_unit?: number | string | null | undefined;
+  fees?: number | string | null | undefined;
+  taxes?: number | string | null | undefined;
+  dividend_amount_convention?: "gross" | "net" | "unknown" | undefined;
+  currency?: string | undefined;
+  note?: string | null | undefined;
+  is_recurring?: boolean | undefined;
+  recurrence_interval?: string | null | undefined;
+  recurrence_end_date?: string | null | undefined;
+  fx_rate_to_eur?: number | string | null | undefined;
+  account_id?: number | null | undefined;
   /** Set only by the import commit path; NULL for manual entry. */
-  import_batch_id?: number | string | null;
-  source_record_hash?: string | null;
-  dedup_fingerprint?: string | null;
-  dedup_fingerprint_version?: number | null;
+  import_batch_id?: number | string | null | undefined;
+  source_record_hash?: string | null | undefined;
+  dedup_fingerprint?: string | null | undefined;
+  dedup_fingerprint_version?: number | null | undefined;
 }
 
 export async function insert(

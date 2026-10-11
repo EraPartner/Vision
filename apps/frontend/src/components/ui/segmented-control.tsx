@@ -43,16 +43,16 @@ export interface SegmentedControlProps
             "type" | "value" | "defaultValue" | "onValueChange"
         >,
         VariantProps<typeof segmentedControlVariants> {
-    value?: string;
-    defaultValue?: string;
-    onValueChange?: (value: string) => void;
+    value?: string | undefined;
+    defaultValue?: string | undefined;
+    onValueChange?: ((value: string) => void) | undefined;
     /**
      * Renders a Label above the control and wires `aria-labelledby`, so the
      * radiogroup is reachable by its visible name without a hand-rolled id.
      */
-    label?: React.ReactNode;
+    label?: React.ReactNode | undefined;
     /** Classes for the wrapper rendered when `label` is set. */
-    wrapperClassName?: string;
+    wrapperClassName?: string | undefined;
 }
 
 const SegmentedControl = React.forwardRef<
@@ -88,8 +88,10 @@ const SegmentedControl = React.forwardRef<
                     <ToggleGroupPrimitive.Root
                         ref={ref}
                         type="single"
-                        value={value}
-                        defaultValue={defaultValue}
+                        {...(value === undefined ? {} : { value })}
+                        {...(defaultValue === undefined
+                            ? {}
+                            : { defaultValue })}
                         onValueChange={(next) => {
                             // Radix reports "" when the pressed item is clicked
                             // again; a segmented control always has a choice.

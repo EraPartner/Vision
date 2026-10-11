@@ -52,9 +52,9 @@ export function resolveAnalysisPreferences({
     saved = {},
     appSettings,
 }: {
-    run?: AnalysisPreferenceLayer;
-    saved?: AnalysisPreferenceLayer;
-    appSettings?: Partial<AppSettings>;
+    run?: AnalysisPreferenceLayer | undefined;
+    saved?: AnalysisPreferenceLayer | undefined;
+    appSettings?: Partial<AppSettings> | undefined;
 }): EffectiveAnalysisPreferences {
     const app: AnalysisPreferenceLayer = {
         currency: appSettings?.defaultCurrency,

@@ -102,7 +102,7 @@ export interface DriftBadgeContent {
     /** Tooltip text; the stale case explains that age, not breakage. */
     tooltip: string;
     /** Statement as-of date (YYYY-MM-DD) when one is stamped. */
-    statementDate?: string;
+    statementDate?: string | undefined;
 }
 
 /**

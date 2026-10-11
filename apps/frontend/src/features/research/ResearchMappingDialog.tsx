@@ -54,7 +54,7 @@ interface ResearchMappingDialogProps {
      * When this mapping is for a held investment, its id — the holding's
      * already-configured provider is pre-seeded as a confirmed proposal.
      */
-    investmentId?: number;
+    investmentId?: number | undefined;
 }
 
 /** A proposal that was pre-seeded from the held investment is already known-good. */

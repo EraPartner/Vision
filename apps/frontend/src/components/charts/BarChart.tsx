@@ -19,39 +19,43 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface BarSeries<Datum> {
     readonly key: string;
-    readonly label?: string;
+    readonly label?: string | undefined;
     readonly accessor: (datum: Datum) => number;
-    readonly color?: string;
+    readonly color?: string | undefined;
 }
 
 /** A line overlay drawn on top of the bars (e.g. rolling average). */
 export interface BarOverlay<Datum> {
     readonly key: string;
-    readonly label?: string;
+    readonly label?: string | undefined;
     /** Return null to skip a point (gap in the line). */
     readonly accessor: (datum: Datum) => number | null;
-    readonly color?: string;
-    readonly strokeWidth?: number;
-    readonly strokeDasharray?: string;
+    readonly color?: string | undefined;
+    readonly strokeWidth?: number | undefined;
+    readonly strokeDasharray?: string | undefined;
 }
 
 export interface BarChartProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
     readonly categoryAccessor: (datum: Datum) => string;
     readonly series: ReadonlyArray<BarSeries<Datum>>;
-    readonly overlays?: ReadonlyArray<BarOverlay<Datum>>;
-    readonly height?: number;
-    readonly layout?: "vertical" | "horizontal";
-    readonly barRadius?: number;
-    readonly maxBarSize?: number;
-    readonly categoryTickFormat?: (label: string) => string;
-    readonly valueTickFormat?: (value: number) => string;
-    readonly tooltipTitle?: (datum: Datum) => string;
-    readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly colorForIndex?: (index: number, datum: Datum) => string;
-    readonly margin?: { top: number; right: number; bottom: number; left: number };
-    readonly yDomain?: readonly [number, number];
-    readonly ariaLabel?: string;
+    readonly overlays?: ReadonlyArray<BarOverlay<Datum>> | undefined;
+    readonly height?: number | undefined;
+    readonly layout?: "vertical" | "horizontal" | undefined;
+    readonly barRadius?: number | undefined;
+    readonly maxBarSize?: number | undefined;
+    readonly categoryTickFormat?: ((label: string) => string) | undefined;
+    readonly valueTickFormat?: ((value: number) => string) | undefined;
+    readonly tooltipTitle?: ((datum: Datum) => string) | undefined;
+    readonly tooltipValueFormat?:
+        | ((value: number, seriesKey: string) => string)
+        | undefined;
+    readonly colorForIndex?: ((index: number, datum: Datum) => string) | undefined;
+    readonly margin?:
+        | { top: number; right: number; bottom: number; left: number }
+        | undefined;
+    readonly yDomain?: readonly [number, number] | undefined;
+    readonly ariaLabel?: string | undefined;
 }
 
 const DEFAULT_MARGIN_V = { top: 16, right: 16, bottom: 36, left: 90 };

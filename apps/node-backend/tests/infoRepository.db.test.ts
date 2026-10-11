@@ -203,7 +203,7 @@ async function insertPlanned({
   date: string;
   amount: string;
   currency?: string;
-  categoryId?: number | null;
+  categoryId?: number | null | undefined;
   recurring?: boolean;
   pattern?: string | null;
   isActive?: boolean;

@@ -53,17 +53,17 @@ export type { Period, PrecomputedPIT, TaxProfile };
 export type PeriodKind = Period['kind'];
 
 export type ThemeTokens = {
-  primary?: string;
-  accent?: string;
-  success?: string;
-  expense?: string;
-  surface?: string;
-  text?: string;
-  muted?: string;
-  border?: string;
-  chart1?: string; chart2?: string; chart3?: string; chart4?: string;
-  chart5?: string; chart6?: string; chart7?: string; chart8?: string;
-  mode?: 'light' | 'dark';
+  primary?: string | undefined;
+  accent?: string | undefined;
+  success?: string | undefined;
+  expense?: string | undefined;
+  surface?: string | undefined;
+  text?: string | undefined;
+  muted?: string | undefined;
+  border?: string | undefined;
+  chart1?: string | undefined; chart2?: string | undefined; chart3?: string | undefined; chart4?: string | undefined;
+  chart5?: string | undefined; chart6?: string | undefined; chart7?: string | undefined; chart8?: string | undefined;
+  mode?: 'light' | 'dark' | undefined;
 };
 
 export type GenerateReportOpts = {
@@ -72,10 +72,10 @@ export type GenerateReportOpts = {
   period: Period;
   sections: string[];
   theme: ThemeTokens;
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
-  taxProfile?: TaxProfile;
-  precomputedPIT?: PrecomputedPIT;
+  excludedCategoryIds?: number[] | undefined;
+  excludedRecipientIds?: number[] | undefined;
+  taxProfile?: TaxProfile | undefined;
+  precomputedPIT?: PrecomputedPIT | undefined;
 };
 
 const REPORT_TITLES: Record<string, string> = {
@@ -595,8 +595,8 @@ function buildTaxBody({
   currency: string;
   period: Period;
   sections: string[];
-  taxProfile?: TaxProfile;
-  precomputedPIT?: PrecomputedPIT;
+  taxProfile?: TaxProfile | undefined;
+  precomputedPIT?: PrecomputedPIT | undefined;
 }): Promise<string> {
   return buildBody({
     currency,

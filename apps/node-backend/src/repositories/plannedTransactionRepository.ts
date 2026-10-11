@@ -55,20 +55,20 @@ export type PlannedCommitmentRow = z.output<typeof plannedCommitmentRowSchema>;
 
 /** Filters shared by getAll and the count fallback. */
 export interface PlannedTransactionFilters {
-  limit?: number;
-  offset?: number;
+  limit?: number | undefined;
+  offset?: number | undefined;
   /** 'YYYY-MM-DD' */
-  startDate?: string | null;
+  startDate?: string | null | undefined;
   /** 'YYYY-MM-DD' */
-  endDate?: string | null;
-  bankAccount?: string | null;
-  accountId?: number | null;
-  categoryId?: number | null;
-  recipientId?: number | null;
-  isRecurring?: boolean | null;
-  isExecuted?: boolean | null;
-  search?: string | null;
-  active?: boolean;
+  endDate?: string | null | undefined;
+  bankAccount?: string | null | undefined;
+  accountId?: number | null | undefined;
+  categoryId?: number | null | undefined;
+  recipientId?: number | null | undefined;
+  isRecurring?: boolean | null | undefined;
+  isExecuted?: boolean | null | undefined;
+  search?: string | null | undefined;
+  active?: boolean | undefined;
 }
 
 // Shared projection + joins for planned_transaction reads. getAll, getById,

@@ -15,10 +15,10 @@ export interface ChartPeriodSelectorProps<P extends string> {
     readonly value: P;
     readonly onChange: (period: P) => void;
     readonly labels: Readonly<Record<P, string>>;
-    readonly className?: string;
-    readonly size?: "sm" | "md";
-    readonly "aria-label"?: string;
-    readonly "aria-labelledby"?: string;
+    readonly className?: string | undefined;
+    readonly size?: "sm" | "md" | undefined;
+    readonly "aria-label"?: string | undefined;
+    readonly "aria-labelledby"?: string | undefined;
 }
 
 export function ChartPeriodSelector<P extends string>({

@@ -30,10 +30,10 @@ function experimentalAccessDecision({
   token,
   peer,
 }: {
-  flag?: string;
-  binary?: string;
-  token?: string;
-  peer?: string;
+  flag?: string | undefined;
+  binary?: string | undefined;
+  token?: string | undefined;
+  peer?: string | undefined;
 }): ExperimentalAccessDecision {
   if (flag !== "1" || typeof binary !== "string" || !isAbsolute(binary))
     return "disabled";

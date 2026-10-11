@@ -34,26 +34,26 @@ export type { InvestmentRow };
 export interface InvestmentCreateFields {
   name: string;
   asset_class: string;
-  symbol?: string | null;
-  currency?: string;
-  current_price?: number | string | null;
-  interest_rate?: number | string | null;
+  symbol?: string | null | undefined;
+  currency?: string | undefined;
+  current_price?: number | string | null | undefined;
+  interest_rate?: number | string | null | undefined;
   /** 'YYYY-MM-DD' */
-  maturity_date?: string | null;
-  location?: string | null;
-  municipality?: string | null;
-  cadastral_income?: number | string | null;
-  municipality_tax_rate?: number | string | null;
-  notes?: string | null;
-  price_provider?: string | null;
-  price_provider_id?: string | null;
-  price_provider_url?: string | null;
-  price_provider_latest_url?: string | null;
-  price_provider_latest_path?: string | null;
-  price_provider_history_url?: string | null;
-  price_provider_history_path?: string | null;
-  price_provider_history_ts_path?: string | null;
-  price_provider_history_price_path?: string | null;
+  maturity_date?: string | null | undefined;
+  location?: string | null | undefined;
+  municipality?: string | null | undefined;
+  cadastral_income?: number | string | null | undefined;
+  municipality_tax_rate?: number | string | null | undefined;
+  notes?: string | null | undefined;
+  price_provider?: string | null | undefined;
+  price_provider_id?: string | null | undefined;
+  price_provider_url?: string | null | undefined;
+  price_provider_latest_url?: string | null | undefined;
+  price_provider_latest_path?: string | null | undefined;
+  price_provider_history_url?: string | null | undefined;
+  price_provider_history_path?: string | null | undefined;
+  price_provider_history_ts_path?: string | null | undefined;
+  price_provider_history_price_path?: string | null | undefined;
 }
 
 /** List filters shared by getAll / getAllWithCount (and getCount). */

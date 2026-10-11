@@ -71,7 +71,7 @@ interface Scenario {
     assumptions: Record<string, AnalysisValue>;
 }
 export interface AnalysisWorkbenchConfig {
-    steps?: Record<string, unknown>[];
+    steps?: Record<string, unknown>[] | undefined;
     time?: {
         bucket: string;
         dateColumn: string;
@@ -81,7 +81,7 @@ export interface AnalysisWorkbenchConfig {
         rollingWindow: number;
         aggregation?: "sum" | "last" | "average";
     };
-    scenarios?: Scenario[];
+    scenarios?: Scenario[] | undefined;
 }
 interface Props {
     result: AnalysisResult | null;

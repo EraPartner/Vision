@@ -138,7 +138,11 @@ async function respond(
   // The envelope middleware always installs `ok`; ExpressResponse marks it optional.
   res: Required<Pick<ExpressResponse, "ok">>,
   dataType: string,
-  params: { symbol?: string; assetClass?: string; range?: string },
+  params: {
+    symbol?: string | undefined;
+    assetClass?: string | undefined;
+    range?: string | undefined;
+  },
 ): Promise<void> {
   const result = await researchAggregator.fetch(dataType, params);
   const data =

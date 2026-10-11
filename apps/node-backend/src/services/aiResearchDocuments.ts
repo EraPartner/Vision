@@ -253,11 +253,18 @@ export async function searchResearchDocuments(
     query: search,
     mode = "hybrid",
     limit = 8,
-  }: { query?: string; mode?: string; limit?: number },
+  }: {
+    query?: string | undefined;
+    mode?: string | undefined;
+    limit?: number | undefined;
+  },
   {
     ollamaClient = getOllamaClient(),
     signal,
-  }: { ollamaClient?: OllamaClient; signal?: AbortSignal } = {},
+  }: {
+    ollamaClient?: OllamaClient | undefined;
+    signal?: AbortSignal | undefined;
+  } = {},
 ) {
   const normalized = String(search || "").trim();
   if (!normalized) throw new Error("Search query is required");

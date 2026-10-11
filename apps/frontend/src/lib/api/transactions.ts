@@ -22,33 +22,33 @@ import { requestWithQuery } from "@/lib/api/helpers";
 
 export async function getTransactions(
     params?: {
-        transaction_id?: number;
-        limit?: number;
-        offset?: number;
-        start_date?: string;
-        end_date?: string;
+        transaction_id?: number | undefined;
+        limit?: number | undefined;
+        offset?: number | undefined;
+        start_date?: string | undefined;
+        end_date?: string | undefined;
         /** Preferred account filter (exact FK match, ADR-088); bank_account is the legacy substring escape hatch. */
-        account_id?: number;
-        bank_account?: string;
-        category_id?: number;
-        category_ids?: number[];
-        recipient_id?: number;
-        recipient_group_id?: number;
-        recipient_name?: string;
-        uncategorised?: boolean;
-        active?: boolean;
-        search?: string;
-        normalize_to_eur?: boolean;
-        target_currency?: string;
-        sort_by?: string;
-        sort_dir?: "asc" | "desc";
+        account_id?: number | undefined;
+        bank_account?: string | undefined;
+        category_id?: number | undefined;
+        category_ids?: number[] | undefined;
+        recipient_id?: number | undefined;
+        recipient_group_id?: number | undefined;
+        recipient_name?: string | undefined;
+        uncategorised?: boolean | undefined;
+        active?: boolean | undefined;
+        search?: string | undefined;
+        normalize_to_eur?: boolean | undefined;
+        target_currency?: string | undefined;
+        sort_by?: string | undefined;
+        sort_dir?: "asc" | "desc" | undefined;
         /** Adds a per-account, per-currency `running_balance` to each row. */
-        include_balance?: boolean;
-        transaction_type?: "income" | "expense";
-        amount_min?: number;
-        amount_max?: number;
-        amount_signed?: boolean;
-        tags?: string;
+        include_balance?: boolean | undefined;
+        transaction_type?: "income" | "expense" | undefined;
+        amount_min?: number | undefined;
+        amount_max?: number | undefined;
+        amount_signed?: boolean | undefined;
+        tags?: string | undefined;
     },
     signal?: AbortSignal,
 ): Promise<TransactionsListResponse> {

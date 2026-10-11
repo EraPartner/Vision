@@ -152,7 +152,7 @@ export interface CreateConversationBody {
 export interface SendChatBody {
     conversationId: string | null;
     message: string;
-    model?: string;
+    model?: string | undefined;
     useTools?: boolean;
     insightsPreCall?: boolean;
     /** Regenerate the latest incomplete turn without persisting the user row again. */

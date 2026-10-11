@@ -311,7 +311,11 @@ export async function prepareNativeDemo(
 export async function finalizeNativeDemo(
   runtime: NativeDemoRuntime,
   prepared: PreparedNativeDemo | null | undefined,
-): Promise<{ status: "ready"; seed: string; resetCleanupWarning?: string }> {
+): Promise<{
+  status: "ready";
+  seed: string;
+  resetCleanupWarning?: string | undefined;
+}> {
   if (!prepared || !prepared.manifest) {
     throw new Error("Native Demo preparation result is missing");
   }

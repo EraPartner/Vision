@@ -33,7 +33,7 @@ export function rangeToFromMs(range: string, now = Date.now()): number {
 
 interface ProviderInvestment {
     id: number;
-    symbol?: string;
+    symbol?: string | undefined;
     currency: string;
 }
 

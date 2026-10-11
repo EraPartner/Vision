@@ -7,6 +7,7 @@
  * the guard that the old mock-router harness dropped from the chain now runs on
  * every `/:id` route here.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -148,10 +149,10 @@ describe("Planned Transaction Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.items).toEqual([]);
-      expect(res.body.data.total).toBe(0);
-      expect(res.body.meta.requestId).toEqual(expect.any(String));
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "items")).toEqual([]);
+      expect(bodyAt(res, "data", "total")).toBe(0);
+      expect(bodyAt(res, "meta", "requestId")).toEqual(expect.any(String));
     });
 
     it("should return planned transactions", async () => {
@@ -172,7 +173,7 @@ describe("Planned Transaction Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.data.total).toBe(1);
+      expect(bodyAt(res, "data", "total")).toBe(1);
     });
 
     // Sixth set of the id-parser convergence. `category_id` / `recipient_id`
@@ -200,7 +201,7 @@ describe("Planned Transaction Routes", () => {
         "recipient_id=1e3",
       ]) {
         const res = await api.get(`${BASE}/?${query}`).expect(400);
-        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+        expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       }
       expect(plannedTransactionRepository.getAll).not.toHaveBeenCalled();
     });
@@ -251,8 +252,8 @@ describe("Planned Transaction Routes", () => {
 
       const res = await api.get(`${BASE}/?limit=5&offset=2`).expect(200);
 
-      expect(res.body.data.limit).toBe(5);
-      expect(res.body.data.offset).toBe(2);
+      expect(bodyAt(res, "data", "limit")).toBe(5);
+      expect(bodyAt(res, "data", "offset")).toBe(2);
     });
 
     it("should filter by is_recurring", async () => {
@@ -305,13 +306,13 @@ describe("Planned Transaction Routes", () => {
         amount: 50,
       }).expect(201);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.id).toBe(1);
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope for missing fields", async () => {
       const res = await post({ amount: 50 }).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     });
 
     it("rejects a zero amount (meaningless, never auto-matches)", async () => {
@@ -490,10 +491,12 @@ describe("Planned Transaction Routes", () => {
         loan_payment_day: 1,
       }).expect(400);
 
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "Invalid loan configuration: loan_principal must be a positive number",
       );
-      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(bodyAt(res, "error", "message")).not.toMatch(
+        /Invalid loan parameters/,
+      );
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
@@ -513,7 +516,9 @@ describe("Planned Transaction Routes", () => {
         loan_payment_day: 1,
       }).expect(500);
 
-      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(bodyAt(res, "error", "message")).not.toMatch(
+        /Invalid loan parameters/,
+      );
       expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
     });
 
@@ -536,7 +541,9 @@ describe("Planned Transaction Routes", () => {
 
       const res = await patch(1, { loan_principal: 10000 }).expect(500);
 
-      expect(res.body.error.message).not.toMatch(/Invalid loan parameters/);
+      expect(bodyAt(res, "error", "message")).not.toMatch(
+        /Invalid loan parameters/,
+      );
       expect(
         plannedTransactionRepository.updateWithLoanSchedule,
       ).not.toHaveBeenCalled();
@@ -579,6 +586,17 @@ describe("Planned Transaction Routes", () => {
     it("rejects non-array tags (including null)", async () => {
       await post({ ...validBody, tags: "groceries" }).expect(400);
       await post({ ...validBody, tags: null }).expect(400);
+    });
+
+    it("rejects tags that are not all strings", async () => {
+      await post({ ...validBody, tags: ["groceries", 5] }).expect(400);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("rejects a non-string memo with 400 instead of crashing", async () => {
+      await post({ ...validBody, memo: 5 }).expect(400);
+      expect(plannedTransactionRepository.create).not.toHaveBeenCalled();
+      await post({ ...validBody, memo: null }).expect(201);
     });
 
     it("coerces reminder_days_before and accepts the 0/365 boundaries", async () => {
@@ -848,7 +866,7 @@ describe("Planned Transaction Routes", () => {
 
       const res = await api.get(`${BASE}/1`).expect(200);
 
-      expect(res.body.data.id).toBe(1);
+      expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
     it("should return a 404 envelope for non-existent", async () => {
@@ -856,7 +874,7 @@ describe("Planned Transaction Routes", () => {
 
       const res = await api.get(`${BASE}/99999`).expect(404);
 
-      expect(res.body.error.code).toBe("NOT_FOUND");
+      expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     });
 
     it("rejects a non-integer :id via the real validateIdParam guard", async () => {
@@ -864,7 +882,7 @@ describe("Planned Transaction Routes", () => {
       // validateIdParam with a pass-through, so this guard was never tested.
       const res = await api.get(`${BASE}/abc`).expect(400);
 
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(plannedTransactionRepository.getById).not.toHaveBeenCalled();
     });
   });
@@ -883,7 +901,7 @@ describe("Planned Transaction Routes", () => {
 
       const res = await patch(1, { amount: 75 }).expect(200);
 
-      expect(res.body.ok).toBe(true);
+      expect(bodyAt(res, "ok")).toBe(true);
     });
 
     it("should return 404 for non-existent", async () => {
@@ -1105,7 +1123,7 @@ describe("Planned Transaction Routes", () => {
         execution_date: "2026-03-15",
       }).expect(200);
 
-      expect(res.body.ok).toBe(true);
+      expect(bodyAt(res, "ok")).toBe(true);
     });
 
     it("should execute recurring and advance date", async () => {
@@ -1195,7 +1213,7 @@ describe("Planned Transaction Routes", () => {
 
     it("should return 400 without executed_transaction_id", async () => {
       const res = await execute(1, {}).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     });
 
     it("should return 404 for non-existent", async () => {
@@ -1204,7 +1222,7 @@ describe("Planned Transaction Routes", () => {
       const res = await execute(99999, { executed_transaction_id: 10 }).expect(
         404,
       );
-      expect(res.body.error.code).toBe("NOT_FOUND");
+      expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     });
   });
 
@@ -1221,7 +1239,7 @@ describe("Planned Transaction Routes", () => {
       plannedTransactionRepository.hardDelete.mockResolvedValue(false);
 
       const res = await api.delete(`${BASE}/99999`).expect(404);
-      expect(res.body.error.code).toBe("NOT_FOUND");
+      expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     });
   });
 });
@@ -1231,7 +1249,7 @@ describe("Planned transaction request schemas (ADR-193)", () => {
 
   it("POST /:id/execute without a JSON body answers 400 instead of a destructuring 500", async () => {
     const res = await api.post(`${BASE}/1/execute`).expect(400);
-    expect(res.body.error).toMatchObject({
+    expect(bodyAt(res, "error")).toMatchObject({
       code: "VALIDATION_ERROR",
       message: "Missing required field: executed_transaction_id",
     });
@@ -1251,7 +1269,10 @@ describe("Planned transaction request schemas (ADR-193)", () => {
     ],
   ])("POST /:id/execute rejects %j", async (body, message) => {
     const res = await execute(1, body).expect(400);
-    expect(res.body.error).toMatchObject({ code: "VALIDATION_ERROR", message });
+    expect(bodyAt(res, "error")).toMatchObject({
+      code: "VALIDATION_ERROR",
+      message,
+    });
     expect(
       plannedTransactionRepository.executeAndAdvance,
     ).not.toHaveBeenCalled();
@@ -1282,7 +1303,7 @@ describe("Planned transaction request schemas (ADR-193)", () => {
       partial({ id: 1, is_loan: false }),
     );
     const res = await api.patch(`${BASE}/1`).expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(plannedTransactionRepository.update).not.toHaveBeenCalled();
   });
 
@@ -1296,7 +1317,7 @@ describe("Planned transaction request schemas (ADR-193)", () => {
       ["14", 14],
     ] as const) {
       const res = await api.get(`${BASE}/due-soon`).query({ days }).expect(200);
-      expect(res.body.data.days).toBe(expected);
+      expect(bodyAt(res, "data", "days")).toBe(expected);
     }
   });
 });

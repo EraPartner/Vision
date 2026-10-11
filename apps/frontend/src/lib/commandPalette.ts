@@ -12,7 +12,7 @@ const MAX_RECENTS = 5;
 export interface ParsedFxQuery {
     amount: number;
     from: string;
-    to?: string;
+    to?: string | undefined;
 }
 
 export function parseFxQuery(

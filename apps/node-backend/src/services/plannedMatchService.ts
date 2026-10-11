@@ -55,7 +55,7 @@ export type PlannedLike = {
 export type TxLike = {
   recipient_cluster_id?: number | string | null;
   amount: number | string;
-  transaction_date?: Date | string | null;
+  transaction_date?: Date | string | null | undefined;
 };
 
 /** An ingested transaction offered to `autoLinkTransactions`. */

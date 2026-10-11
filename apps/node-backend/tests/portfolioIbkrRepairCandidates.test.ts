@@ -114,7 +114,7 @@ describe("contested imported IBKR repair identities", () => {
     (kind) => {
       const first = item(1);
       const second = item(2, "120");
-      if (kind === "unimported") second.imported = undefined;
+      if (kind === "unimported") delete second.imported;
       if (kind === "other provider")
         batchConfigFields(second.row.custom_config)!.format =
           "saxo_transaction_history";

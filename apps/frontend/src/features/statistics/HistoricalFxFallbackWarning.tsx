@@ -6,7 +6,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 export function HistoricalFxFallbackWarning({
     conversion,
 }: {
-    conversion?: RecipientPivotConversion;
+    conversion?: RecipientPivotConversion | undefined;
 }) {
     const { t } = useLanguage();
 

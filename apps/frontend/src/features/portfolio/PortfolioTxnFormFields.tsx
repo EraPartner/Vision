@@ -88,7 +88,7 @@ interface PortfolioTxnFormFieldsProps<F extends PortfolioTxnFieldsForm> {
     showFeesTaxes: boolean;
     showDividendConvention: boolean;
     showRecurring: boolean;
-    derivedAmount?: number;
+    derivedAmount?: number | undefined;
     isBuySell: boolean;
     buySellIsValid: boolean;
     isGift: boolean;

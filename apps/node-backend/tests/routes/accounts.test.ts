@@ -9,6 +9,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -272,7 +273,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
       .post(`${BASE}/1/merge`)
       .send({ source_ids: [2, "abc", 3] })
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(mergeAccounts).not.toHaveBeenCalled();
     expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
   });
@@ -282,7 +283,9 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
       .post(`${BASE}/1/merge`)
       .send({ source_ids: [2, 1] })
       .expect(400);
-    expect(res.body.error.message).toMatch(/must not include the survivor/);
+    expect(bodyAt(res, "error", "message")).toMatch(
+      /must not include the survivor/,
+    );
     expect(mergeAccounts).not.toHaveBeenCalled();
     expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
   });
@@ -293,7 +296,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
       .post(`${BASE}/1/merge`)
       .send({ source_ids: sourceIds })
       .expect(400);
-    expect(res.body.error.message).toMatch(/at most 500/);
+    expect(bodyAt(res, "error", "message")).toMatch(/at most 500/);
     expect(mergeAccounts).not.toHaveBeenCalled();
     expect(invalidatePortfolioCaches).not.toHaveBeenCalled();
   });
@@ -303,7 +306,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
       .post(`${BASE}/1/merge`)
       .send({ source_ids: [2, "abc", null] })
       .expect(400);
-    expect(res.body.error.message).toMatch(
+    expect(bodyAt(res, "error", "message")).toMatch(
       /source_ids\[1\] \("abc"\).*source_ids\[2\] \(null\)/s,
     );
     expect(mergeAccounts).not.toHaveBeenCalled();
@@ -349,7 +352,7 @@ describe("POST /:id/merge — source_ids are rejected, not filtered", () => {
         .post(`${BASE}/1/merge`)
         .send({ source_ids: [2, bad] })
         .expect(400);
-      expect(res.body.error.message).toMatch(/source_ids\[1\]/);
+      expect(bodyAt(res, "error", "message")).toMatch(/source_ids\[1\]/);
     }
     expect(mergeAccounts).not.toHaveBeenCalled();
   });
@@ -378,7 +381,7 @@ describe("GET /:id/merge-preview — ?into= is a strict id", () => {
       const res = await api
         .get(`${BASE}/1/merge-preview?into=${encodeURIComponent(raw)}`)
         .expect(400);
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "into must be a positive integer account id",
       );
     }
@@ -419,7 +422,7 @@ describe("Account Routes — GET / pagination is opt-in", () => {
     const res = await api.get(`${BASE}?limit=`).expect(200);
 
     expect(accountService.list).toHaveBeenCalledWith({ active: true });
-    expect(res.body.data.limit).toBeUndefined();
+    expect(bodyAt(res, "data", "limit")).toBeUndefined();
   });
 
   it("pages and reports the full total when limit/offset are supplied", async () => {
@@ -485,7 +488,7 @@ describe("Account Routes — params and query schemas (zod)", () => {
     "%s %s rejects a malformed :id before any service",
     async (method, path) => {
       const res = await api[method](path).send({}).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(accountService.setStatementBalance).not.toHaveBeenCalled();
       expect(accountService.removeStatementBalance).not.toHaveBeenCalled();
       expect(closeAccount).not.toHaveBeenCalled();

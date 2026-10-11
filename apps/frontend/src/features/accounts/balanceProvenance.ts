@@ -23,9 +23,9 @@ import { formatDateStringWithAppSettings } from "@/lib/dateUtils";
 
 export interface BalanceProvenanceFields {
     /** YYYY-MM-DD date of the stamped statement anchor; absent when unstamped. */
-    anchor_date?: string;
+    anchor_date?: string | undefined;
     /** Entries after the anchor, or all active entries when unstamped. */
-    post_anchor_count?: number;
+    post_anchor_count?: number | undefined;
 }
 
 /**

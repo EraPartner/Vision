@@ -104,7 +104,7 @@ const nameField = (message: string) =>
 // so on POST the resolved defaults participate in the combination check, while
 // on PATCH it only fires when both fields are present in the body.
 const assertValidCombination = (
-  data: { chartType?: string; chartVariant?: string },
+  data: { chartType?: string | undefined; chartVariant?: string | undefined },
   ctx: z.RefinementCtx,
 ) => {
   const { chartType, chartVariant } = data;

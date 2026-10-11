@@ -109,11 +109,11 @@ function createResearchAggregator({
   async function fetch(
     dataType: string,
     params: {
-      symbol?: string;
-      assetClass?: string;
-      range?: string;
-      count?: number;
-      cacheKey?: string;
+      symbol?: string | undefined;
+      assetClass?: string | undefined;
+      range?: string | undefined;
+      count?: number | undefined;
+      cacheKey?: string | undefined;
     } = {},
   ): Promise<ResearchFetchResult> {
     const method = METHOD_BY_TYPE[dataType as keyof typeof METHOD_BY_TYPE];
@@ -197,8 +197,8 @@ function createResearchAggregator({
     symbol,
     assetClass,
   }: {
-    symbol?: string;
-    assetClass?: string;
+    symbol?: string | undefined;
+    assetClass?: string | undefined;
   } = {}): Promise<ResearchFetchResult> {
     const key = `fundamentals:merged:${assetClass ?? ""}:${symbol ?? ""}`;
     const cached = cache.get(key) as CachedFetch | undefined;

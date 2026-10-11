@@ -377,9 +377,7 @@ export default [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      // Shared Express shim types still carry `any` at the request/response
-      // boundary until runtime schemas replace them; warn so each one stays visible.
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "error",
     },
   },
 

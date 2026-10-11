@@ -80,8 +80,10 @@ async function fixture() {
       fx_rate_to_eur: "1.0000000000",
     },
   ];
+  const giftDate = gift.tx_date;
+  if (giftDate === undefined) throw new Error("fixture gift needs tx_date");
   const event = retainedEvent({
-    date: gift.tx_date,
+    date: giftDate,
     shares: gift.units!,
     amount: "200",
     currency: "USD",

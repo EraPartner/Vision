@@ -125,6 +125,8 @@ function makeDispatch(
       );
     }
     if (/SET\s+status = 'matched'/.test(sql)) {
+      if (params === undefined)
+        throw new Error("matched update must carry params");
       capture.update = params;
       return { rows: [] };
     }

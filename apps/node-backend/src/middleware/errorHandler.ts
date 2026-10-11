@@ -33,7 +33,7 @@ export interface AppErrorOptions {
   /** Native Error cause (preserved for logs). */
   cause?: unknown;
   /** Non-sensitive debug info. */
-  details?: Record<string, unknown>;
+  details?: Record<string, unknown> | undefined;
 }
 
 /**

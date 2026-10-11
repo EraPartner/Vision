@@ -16,12 +16,15 @@ import { vi } from "vitest";
 import type { Mock } from "vitest";
 
 /**
- * Any callable, as vitest's own (unexported) `Procedure`. Override slots use
- * it so inline implementations such as `withTransaction: (fn) => fn()` stay
- * contextually typed in the consuming test.
+ * Any callable. `never[]` parameters accept every function signature, so an
+ * override slot takes a typed spy or implementation as it is.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type MockProcedure = (...args: any[]) => any;
+export type MockProcedure = (...args: never[]) => unknown;
+
+/** Calls an override with the arguments its stand-in spy received. */
+function callProcedure(fn: MockProcedure, args: readonly unknown[]): unknown {
+  return Reflect.apply(fn, undefined, args);
+}
 
 /** Every export of `src/database/connection.ts`, as a spy. */
 export interface ConnectionMockSurface {
@@ -189,7 +192,7 @@ export function mockTxConnection(
 
   const query: Mock = vi.fn((...args: unknown[]) => {
     const active = ambient();
-    return active ? active.query(...args) : poolQuery(...args);
+    return active ? active.query(...args) : callProcedure(poolQuery, args);
   });
 
   const queryPrepared = vi.fn(
@@ -198,7 +201,7 @@ export function mockTxConnection(
       // pg's object form, exactly as connection.js:151 passes it.
       return active
         ? active.query({ name, text, values })
-        : poolQuery(text, values);
+        : callProcedure(poolQuery, [text, values]);
     },
   );
 

@@ -47,7 +47,7 @@ export interface InvestmentForm {
     initialUnits: string;
     initialDate: string;
     initialFees: string;
-    initialAccountId?: string;
+    initialAccountId?: string | undefined;
 }
 
 interface InvestmentFormFieldsProps {

@@ -72,9 +72,9 @@ export const watchlistRepository = {
     offset = 0,
     assetClass = null,
   }: {
-    limit?: number;
-    offset?: number;
-    assetClass?: string | null;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    assetClass?: string | null | undefined;
   } = {}): Promise<{ rows: FormattedWatchlistRow[]; total: number }> {
     const { where, params, nextParam } = this.buildWhereClause({ assetClass });
     const idx = nextParam;
@@ -125,13 +125,13 @@ export const watchlistRepository = {
     added_price,
   }: {
     name: string;
-    symbol?: string | null;
+    symbol?: string | null | undefined;
     asset_class: string;
     target_price: number | string;
-    currency?: string;
-    notes?: string | null;
-    price_provider_id?: string | null;
-    added_price?: number | string | null;
+    currency?: string | undefined;
+    notes?: string | null | undefined;
+    price_provider_id?: string | null | undefined;
+    added_price?: number | string | null | undefined;
   }): Promise<FormattedWatchlistRow> {
     const row = await queryOne(
       watchlistRowSchema,

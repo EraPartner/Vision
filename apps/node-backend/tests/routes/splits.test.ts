@@ -8,6 +8,7 @@
  * every id-bearing route — every test here already used a valid numeric id,
  * so nothing was fake-passing under the old bypass.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
@@ -355,7 +356,7 @@ describe("Splits Routes", () => {
         })
         .expect(400);
 
-      expect(res.body.error.message).toMatch(/splits\[1\]/);
+      expect(bodyAt(res, "error", "message")).toMatch(/splits\[1\]/);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
       expect(splitService.createSplitsBatchAtomic).not.toHaveBeenCalled();
     });
@@ -373,7 +374,7 @@ describe("Splits Routes", () => {
         })
         .expect(400);
 
-      expect(res.body.error.message).toMatch(
+      expect(bodyAt(res, "error", "message")).toMatch(
         /splits\[1\].*recipient_id.*splits\[2\].*amount/s,
       );
       expect(splitService.createSplitsBatchAtomic).not.toHaveBeenCalled();
@@ -494,7 +495,7 @@ describe("Splits Routes", () => {
         .expect(400);
 
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(res.body.error.message).toMatch(
+      expect(bodyAt(res, "error", "message")).toMatch(
         /mode must be one of: equal, full/,
       );
       expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
@@ -517,7 +518,7 @@ describe("Splits Routes", () => {
         .expect(400);
 
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(res.body.error.message).toMatch(/transaction_ids\[1\]/);
+      expect(bodyAt(res, "error", "message")).toMatch(/transaction_ids\[1\]/);
       expect(splitService.createBulkSplitsAtomic).not.toHaveBeenCalled();
     });
 
@@ -941,7 +942,7 @@ describe("Splits Routes", () => {
         .post(`${BASE}/batch`)
         .send({ transaction_id: 1, splits: [{ amount: 5 }] })
         .expect(400);
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "Invalid splits, no splits were created: " +
           "splits[0] (recipient_id: recipient_id must be a positive integer)",
       );
@@ -960,7 +961,7 @@ describe("Splits Routes", () => {
     it("keeps lenient opt-in pagination on the owed summary", async () => {
       splitService.getOwedSummary.mockResolvedValue([]);
       const res = await api.get(`${BASE}/owed?limit=abc`).expect(200);
-      expect(res.body.data).toMatchObject({ total: 0, offset: 0 });
+      expect(bodyAt(res, "data")).toMatchObject({ total: 0, offset: 0 });
     });
   });
 });

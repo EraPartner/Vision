@@ -19,10 +19,10 @@ export interface WatchlistCreate {
   asset_class: 'stock' | 'etf' | 'crypto' | 'metals';
   target_price: number;
   currency?: string;
-  notes?: string;
+  notes?: string | undefined;
   price_provider_id?: string;
   /** Live price at add time, for the what-if backtest (ADR-097). */
-  added_price?: number;
+  added_price?: number | undefined;
 }
 
 export interface WatchlistUpdate {

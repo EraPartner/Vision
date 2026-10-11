@@ -16,15 +16,15 @@ import { cn } from "@/lib/utils";
 export interface RowMenuProps {
     /** Accessible name of the trigger, for example "Actions for Groceries". */
     label: string;
-    align?: "start" | "center" | "end";
+    align?: "start" | "center" | "end" | undefined;
     /** Trigger square: 32px by default, 36px for header rows, 28px for dense tables. */
-    size?: "icon" | "icon-sm" | "icon-xs";
+    size?: "icon" | "icon-sm" | "icon-xs" | undefined;
     /** `ghost` for rows and cards; `outline` for the page-header ••• menu. */
-    variant?: "ghost" | "outline";
-    className?: string;
-    contentClassName?: string;
+    variant?: "ghost" | "outline" | undefined;
+    className?: string | undefined;
+    contentClassName?: string | undefined;
     /** Disables the trigger, for example while a row action is in flight. */
-    disabled?: boolean;
+    disabled?: boolean | undefined;
     children: ReactNode;
 }
 

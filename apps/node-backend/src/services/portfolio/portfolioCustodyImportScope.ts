@@ -18,8 +18,8 @@ export type CustodyEventLike = {
   type: string;
   investment_id: number | string;
   account_id?: number | string | null;
-  source_account_id?: number | string | null;
-  destination_account_id?: number | string | null;
+  source_account_id?: number | string | null | undefined;
+  destination_account_id?: number | string | null | undefined;
   /** 'YYYY-MM-DD' */
   date: string;
   units: DecimalInput;

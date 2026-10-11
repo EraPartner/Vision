@@ -16,21 +16,21 @@ export interface UseTransactionListDataOptions {
     showAll: boolean;
     search: string;
     pageSize: number;
-    transactionIdFilter?: number;
-    recipientIdFilter?: number;
-    categoryIdFilter?: number;
-    categoryIdsFilter?: number[];
-    uncategorisedFilter?: boolean;
-    startDateFilter?: string;
-    endDateFilter?: string;
-    transactionTypeFilter?: "income" | "expense";
-    amountMinFilter?: number;
-    amountMaxFilter?: number;
-    amountSignedFilter?: boolean;
-    tagsFilter?: string[];
+    transactionIdFilter?: number | undefined;
+    recipientIdFilter?: number | undefined;
+    categoryIdFilter?: number | undefined;
+    categoryIdsFilter?: number[] | undefined;
+    uncategorisedFilter?: boolean | undefined;
+    startDateFilter?: string | undefined;
+    endDateFilter?: string | undefined;
+    transactionTypeFilter?: "income" | "expense" | undefined;
+    amountMinFilter?: number | undefined;
+    amountMaxFilter?: number | undefined;
+    amountSignedFilter?: boolean | undefined;
+    tagsFilter?: string[] | undefined;
     /** Preferred account filter (exact FK match, ADR-088). */
-    accountIdFilter?: number;
-    bankAccountFilter?: string;
+    accountIdFilter?: number | undefined;
+    bankAccountFilter?: string | undefined;
 }
 
 export interface UseTransactionListDataResult {

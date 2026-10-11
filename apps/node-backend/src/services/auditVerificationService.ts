@@ -31,7 +31,7 @@ export interface AuditRetentionBoundary {
 export interface TrustedAuditCheckpoint {
   sequence: number;
   hash: string;
-  retention?: AuditRetentionBoundary;
+  retention?: AuditRetentionBoundary | undefined;
 }
 
 export interface AuditLegacyCutover {
@@ -78,11 +78,11 @@ export type AuditVerificationResult =
   | AuditVerificationSuccess;
 
 export interface VerifyAuditHistoryOptions {
-  trustedCheckpoint?: TrustedAuditCheckpoint;
-  pageSize?: number;
-  readSegment?: typeof readAuditSegment;
-  readHead?: typeof readAuditHead;
-  runQuery?: typeof query;
+  trustedCheckpoint?: TrustedAuditCheckpoint | undefined;
+  pageSize?: number | undefined;
+  readSegment?: typeof readAuditSegment | undefined;
+  readHead?: typeof readAuditHead | undefined;
+  runQuery?: typeof query | undefined;
 }
 
 const HASH = /^[0-9a-f]{64}$/;

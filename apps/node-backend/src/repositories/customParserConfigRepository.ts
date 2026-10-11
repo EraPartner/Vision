@@ -88,7 +88,7 @@ const customParserConfigRepository = {
 
   async update(
     id: number,
-    { name, config }: { name?: string; config?: unknown },
+    { name, config }: { name?: string | undefined; config?: unknown },
   ): Promise<FormattedCustomParserConfig | undefined> {
     // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.
     const { clauses: fields, params: values, nextIdx: idx } = buildSetClauses({

@@ -154,7 +154,7 @@ interface FieldSpec {
     value?: ReactNode;
     editable?: boolean;
     editField?: InfoEditableField;
-    editValue?: string;
+    editValue?: string | undefined;
     editType?: "text" | "number" | "date";
     multiline?: boolean;
 }

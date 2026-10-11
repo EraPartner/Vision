@@ -20,17 +20,17 @@ import { cn } from "@/lib/utils";
 export interface ChartTooltipDatum {
     readonly label: string;
     readonly value: string | number;
-    readonly color?: string;
+    readonly color?: string | undefined;
 }
 
 export interface ChartTooltipProps {
     readonly open: boolean;
     readonly left: number;
     readonly top: number;
-    readonly title?: string;
-    readonly items?: ReadonlyArray<ChartTooltipDatum>;
-    readonly children?: ReactNode;
-    readonly className?: string;
+    readonly title?: string | undefined;
+    readonly items?: ReadonlyArray<ChartTooltipDatum> | undefined;
+    readonly children?: ReactNode | undefined;
+    readonly className?: string | undefined;
 }
 
 const GAP = 12;

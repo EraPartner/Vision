@@ -147,7 +147,7 @@ interface HoldingActionsMenuProps {
     onAddTransaction: (holding: InvestmentSummary) => void;
     onArchive: (holding: InvestmentSummary) => void;
     onDelete: (holding: InvestmentSummary) => void;
-    className?: string;
+    className?: string | undefined;
 }
 
 /** Row ••• menu: details, add transaction, archive, delete. */

@@ -8,7 +8,7 @@ interface Props {
     onClose: () => void;
 }
 
-function StatusBadge({ status }: { status?: number }) {
+function StatusBadge({ status }: { status?: number | undefined }) {
     if (!status) return <span className="text-label-tertiary">—</span>;
     const cls =
         status < 300

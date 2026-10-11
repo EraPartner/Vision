@@ -54,15 +54,15 @@ const PORTFOLIO_STREAM_SCHEMAS: Record<string, z.ZodType> = {
 
 export interface PortfolioCustomConfig {
     /** Optional file-level destination for every trade staged with this parser. */
-    accountId?: number;
+    accountId?: number | undefined;
     /** Destination of dated asset withdrawals, when the statement contains them. */
-    transferDestinationAccountId?: number;
+    transferDestinationAccountId?: number | undefined;
     /** Origin of dated asset returns, when source evidence identifies prior custody. */
-    transferOriginAccountId?: number;
+    transferOriginAccountId?: number | undefined;
     /** Explicit zero basis for proved existing yield-unit receipts in a bounded scope. */
     yieldBasisPolicy?: "zero";
     /** Explicit comma-separated asset symbols for a partial statement import. */
-    includedSymbols?: string;
+    includedSymbols?: string | undefined;
     /** Format-specific parser. Omit for the generic column mapper. */
     format?:
         | "ibkr_transaction_history"
@@ -161,15 +161,15 @@ export interface PortfolioPreviewResponse {
 
 export interface PortfolioImportResult {
     batch_id: number;
-    total_processed?: number;
-    total?: number;
+    total_processed?: number | undefined;
+    total?: number | undefined;
     /** Rows the adapter could not parse (bad column mapping / date format). */
-    skipped?: number;
+    skipped?: number | undefined;
     imported: number;
     duplicates: number;
     errors: number;
-    status?: string;
-    requires_review?: boolean;
+    status?: string | undefined;
+    requires_review?: boolean | undefined;
 }
 
 // Flatten the camelCase config into the snake_case form the backend route reads.
@@ -225,7 +225,7 @@ function configToParams(
 /** Brokerage fan-out (ADR-095): mark the import and the sleeve account its rows land on. */
 export interface BrokerageImportOptions {
     isBrokerage: boolean;
-    accountId?: number;
+    accountId?: number | undefined;
 }
 
 function appendBrokerage(
@@ -1169,10 +1169,10 @@ export type ReviewedPortfolioImportResult = z.infer<
 
 export interface PortfolioReconciliationScope {
     batchIds: number[];
-    adoptPolicy?: PortfolioReconciliationPolicy;
-    batchPolicies?: PortfolioBatchPolicy[];
-    reconciliationScope?: PortfolioReconciliationMode;
-    cashFundingPolicy?: "own_account_transfer";
+    adoptPolicy?: PortfolioReconciliationPolicy | undefined;
+    batchPolicies?: PortfolioBatchPolicy[] | undefined;
+    reconciliationScope?: PortfolioReconciliationMode | undefined;
+    cashFundingPolicy?: "own_account_transfer" | undefined;
 }
 
 function reconciliationRequest(scope: PortfolioReconciliationScope) {
@@ -1262,10 +1262,10 @@ function reconciliationRequest(scope: PortfolioReconciliationScope) {
 
 function verifiedReconciliationScope(
     result: {
-        reconciliationScope?: PortfolioReconciliationMode;
-        pending?: number;
-        complete?: boolean;
-        deferredCounts?: Record<string, number>;
+        reconciliationScope?: PortfolioReconciliationMode | undefined;
+        pending?: number | undefined;
+        complete?: boolean | undefined;
+        deferredCounts?: Record<string, number> | undefined;
     },
     expectedScope: PortfolioReconciliationMode,
 ) {

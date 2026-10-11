@@ -61,7 +61,7 @@ type ImportPipelineResult = Awaited<ReturnType<typeof runImportPipeline>>;
 // resolves `express` to an untyped shim that has no type exports.
 interface CsvOptionsRequest {
   body?: unknown;
-  file?: { path: string };
+  file?: { path: string } | undefined;
 }
 interface EnvelopeResponse {
   status(code: number): unknown;
@@ -70,9 +70,9 @@ interface EnvelopeResponse {
 
 /** The fields buildImportResult reads; every other key passes through. */
 interface ImportResultInput {
-  status?: string;
-  errors?: number;
-  error_message?: string | null;
+  status?: string | undefined;
+  errors?: number | undefined;
+  error_message?: string | null | undefined;
   [key: string]: unknown;
 }
 

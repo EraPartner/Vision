@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils";
 import { ShimmerLayer } from '@/components/ui/shimmer-layer';
 
 interface ChartSkeletonProps {
-    height?: number;
-    className?: string;
+    height?: number | undefined;
+    className?: string | undefined;
 }
 
 /**

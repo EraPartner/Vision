@@ -211,7 +211,9 @@ export function ExemptionsStep({ profile, updateProfile }: StepProps) {
                     />
                     <div className="flex flex-wrap items-center gap-3">
                         <Select
-                            value={profile.pensionScheme}
+                            {...(profile.pensionScheme === undefined
+                                ? {}
+                                : { value: profile.pensionScheme })}
                             onValueChange={(v) =>
                                 updateProfile({
                                     pensionScheme: v as "1050" | "1350",

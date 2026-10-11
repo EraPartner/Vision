@@ -272,6 +272,46 @@ describe("RecipientPatternsDialog", () => {
         await waitFor(() => expect(patched).toBe(true));
     });
 
+    it("emptying the notes of an edited pattern clears them on PATCH", async () => {
+        // Arrange — the backend clears a note only when PATCH sends null
+        let patchBody: unknown;
+        server.use(
+            http.get(`${API_BASE}/api/recipients/:id/patterns`, () =>
+                ok({
+                    items: [{ ...PATTERN_STUB, notes: "Old note" }],
+                    total: 1,
+                }),
+            ),
+            http.patch(
+                `${API_BASE}/api/recipients/:id/patterns/:patternId`,
+                async ({ request }) => {
+                    patchBody = await request.json();
+                    return ok({ patternId: 1 });
+                },
+            ),
+        );
+        const user = userEvent.setup();
+        renderDialog();
+
+        // Act — open edit form, empty the notes, save
+        await screen.findByText("RENT*");
+        await user.click(
+            screen.getByRole("button", { name: "Actions for rule RENT*" }),
+        );
+        await user.click(
+            await screen.findByRole("menuitem", { name: /^edit$/i }),
+        );
+        const notesInput = await screen.findByRole("textbox", {
+            name: /^notes$/i,
+        });
+        expect(notesInput).toHaveValue("Old note");
+        await user.clear(notesInput);
+        await user.click(await screen.findByRole("button", { name: /save/i }));
+
+        // Assert
+        await waitFor(() => expect(patchBody).toMatchObject({ notes: null }));
+    });
+
     it("clicking delete shows confirmation dialog, confirm calls DELETE", async () => {
         // Arrange
         let deleted = false;
