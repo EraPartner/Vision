@@ -30,7 +30,7 @@ describe("tags API client", () => {
     const res = await getTags({ is_active: true, limit: 25 });
 
     expect(url).toContain("limit=25");
-    expect(res.items[0].slug).toBe("groceries");
+    expect(res.items[0]?.slug).toBe("groceries");
   });
 
   // Regression: GET /api/tags reads `?active=` (routes/tags.ts, activeOrAllQuery)

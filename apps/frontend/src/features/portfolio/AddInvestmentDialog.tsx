@@ -341,8 +341,11 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
                     return;
                 }
                 reset();
-                if (allowedAssetClasses && allowedAssetClasses.length === 1) {
-                    const key = allowedAssetClasses[0];
+                const key =
+                    allowedAssetClasses?.length === 1
+                        ? allowedAssetClasses[0]
+                        : undefined;
+                if (key !== undefined) {
                     setForm((f) => ({
                         ...f,
                         assetClass: key,

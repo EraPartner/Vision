@@ -7,6 +7,7 @@ const eslint = new ESLint({ cwd: frontendRoot });
 
 async function i18nWarnings(source: string, filePath: string) {
     const [result] = await eslint.lintText(source, { filePath });
+    if (!result) throw new Error(`ESLint returned no result for ${filePath}`);
     return result.messages.filter(
         ({ ruleId }) =>
             ruleId === "vision-i18n/no-hardcoded-user-facing-string",
@@ -15,6 +16,7 @@ async function i18nWarnings(source: string, filePath: string) {
 
 async function inlineQueryErrors(source: string, filePath: string) {
     const [result] = await eslint.lintText(source, { filePath });
+    if (!result) throw new Error(`ESLint returned no result for ${filePath}`);
     return result.messages.filter(
         ({ ruleId }) => ruleId === "vision-query/no-inline-server-query",
     );

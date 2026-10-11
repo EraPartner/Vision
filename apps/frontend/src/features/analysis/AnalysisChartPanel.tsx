@@ -315,7 +315,7 @@ export function AnalysisChartPanel({
                                       segment = false;
                                   data.rows.forEach((r) => {
                                       const v = r.values[s];
-                                      if (v === null) {
+                                      if (v == null) {
                                           segment = false;
                                           return;
                                       }
@@ -338,8 +338,10 @@ export function AnalysisChartPanel({
                                   return (
                                       <g key={r.index}>
                                           {r.values.map((v, s) => {
+                                              const seriesId = spec.y[s];
                                               if (
                                                   v === null ||
+                                                  seriesId === undefined ||
                                                   (spec.kind === "waterfall" &&
                                                       s > 0)
                                               )
@@ -367,7 +369,7 @@ export function AnalysisChartPanel({
                                                               ]
                                                           }
                                                       >
-                                                          <title>{`${displayValue(r.label, spec.x)}: ${seriesLabel(spec.y[s])} ${displayValue(r.rawValues[s], spec.y[s])}`}</title>
+                                                          <title>{`${displayValue(r.label, spec.x)}: ${seriesLabel(seriesId)} ${displayValue(r.rawValues[s], seriesId)}`}</title>
                                                       </circle>
                                                   ) : null;
                                               let start = 0,
@@ -379,9 +381,12 @@ export function AnalysisChartPanel({
                                                   else neg = end;
                                               }
                                               if (spec.kind === "waterfall") {
-                                                  start =
-                                                      waterfalls[r.index].start;
-                                                  end = waterfalls[r.index].end;
+                                                  const waterfall =
+                                                      waterfalls[r.index];
+                                                  if (waterfall) {
+                                                      start = waterfall.start;
+                                                      end = waterfall.end;
+                                                  }
                                               }
                                               const width =
                                                   spec.kind === "bar"
@@ -422,7 +427,7 @@ export function AnalysisChartPanel({
                                                                 ]
                                                       }
                                                   >
-                                                      <title>{`${displayValue(r.label, spec.x)}: ${seriesLabel(spec.y[s])} ${displayValue(r.rawValues[s], spec.y[s])}`}</title>
+                                                      <title>{`${displayValue(r.label, spec.x)}: ${seriesLabel(seriesId)} ${displayValue(r.rawValues[s], seriesId)}`}</title>
                                                   </rect>
                                               );
                                           })}
@@ -500,14 +505,14 @@ export function AnalysisChartPanel({
                                         <TableCell className="py-2">
                                             {displayValue(r.label, spec.x)}
                                         </TableCell>
-                                        {r.values.map((_v, s) => (
+                                        {spec.y.map((seriesId, s) => (
                                             <TableCell
                                                 key={s}
                                                 className="py-2 text-right tabular-nums"
                                             >
                                                 {displayValue(
                                                     r.rawValues[s],
-                                                    spec.y[s],
+                                                    seriesId,
                                                 )}
                                             </TableCell>
                                         ))}

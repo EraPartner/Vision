@@ -49,6 +49,8 @@ import { formatMarketChartTick } from "@/features/research/marketChartTicks";
 import { useMarketLookupData } from "@/features/research/useMarketLookupData";
 
 const MARKET_TABS = ["fundamentals", "analyst", "news"] as const;
+// 1M default: index 2 of the static LOOKUP_RANGES ladder (1D, 5D, 1M, ...).
+const DEFAULT_RANGE = RANGES[2]!;
 
 interface AnalystConsensus {
     strongBuy: number;
@@ -151,12 +153,12 @@ export default function MarketLookupPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const selectedRange =
         RANGES.find((option) => option.range === searchParams.get("range")) ??
-        RANGES[2]; // 1M default
+        DEFAULT_RANGE;
     const setSelectedRange = (option: (typeof RANGES)[number]) => {
         setSearchParams(
             (previous) => {
                 const next = new URLSearchParams(previous);
-                if (option.range === RANGES[2].range) next.delete("range");
+                if (option.range === DEFAULT_RANGE.range) next.delete("range");
                 else next.set("range", option.range);
                 return next;
             },
@@ -232,9 +234,11 @@ export default function MarketLookupPage() {
     const providerQuote = useMemo<Quote | null>(() => {
         if (!isProviderAsset || !providerInvestment) return null;
         const pts = providerChartData?.points ?? [];
-        if (pts.length === 0) return null;
-        const last = pts[pts.length - 1].close;
-        const first = pts[0].close;
+        const firstPoint = pts[0];
+        const lastPoint = pts.at(-1);
+        if (!firstPoint || !lastPoint) return null;
+        const last = lastPoint.close;
+        const first = firstPoint.close;
         const change = last - first;
         const changePercent = first ? (change / first) * 100 : 0;
         return {

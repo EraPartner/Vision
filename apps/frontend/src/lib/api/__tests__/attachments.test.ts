@@ -27,7 +27,7 @@ describe("attachments API client", () => {
       ),
     );
     const res = await listAttachments(8);
-    expect(res.items[0].filename).toBe("r.pdf");
+    expect(res.items[0]?.filename).toBe("r.pdf");
   });
 
   it("listAttachments rejects a row without its stored file metadata", async () => {

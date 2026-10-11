@@ -72,7 +72,7 @@ function readSource(file: string): string {
 
 function literalClassNames(source: string): string[] {
     return [...source.matchAll(/className="([^"]+)"/g)].map(
-        (match) => match[1],
+        (match) => match[1]!,
     );
 }
 

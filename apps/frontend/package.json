@@ -10,7 +10,7 @@
     "build": "bun ../../scripts/generate-locales.ts && vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
-    "size:check": "node scripts/check-bundle-size.mjs",
+    "size:check": "bun scripts/check-bundle-size.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run --exclude src/test/live-contracts/live-contracts.test.ts",

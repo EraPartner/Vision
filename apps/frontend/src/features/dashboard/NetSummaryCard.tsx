@@ -247,7 +247,7 @@ export function NetSummaryCard({
                             )}
                         >
                             {scrubPoint && scrubIndex !== undefined
-                                ? chartData[scrubIndex].label
+                                ? chartData[scrubIndex]?.label
                                 : t("dashboard.stat.netTrend", {
                                       n: chartData.length,
                                   })}

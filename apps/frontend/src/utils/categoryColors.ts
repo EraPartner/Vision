@@ -25,6 +25,8 @@ const BADGE_CLASSES = [
     "bg-chart-8/15 text-chart-8 border-chart-8/30",
 ] as const;
 
+const MUTED_BADGE_CLASSES = "bg-muted/15 text-muted-foreground border-muted/30";
+
 type CategoryColorIdentity = string | readonly string[];
 
 function categoryRoot(category: CategoryColorIdentity): string {
@@ -53,7 +55,6 @@ export function getCategoryChartColor(category: CategoryColorIdentity): string {
 
 /** Badge chip classes for a category; muted for uncategorized. */
 export const getCategoryColor = (category: CategoryColorIdentity): string => {
-    if (!categoryRoot(category))
-        return "bg-muted/15 text-muted-foreground border-muted/30";
-    return BADGE_CLASSES[categoryColorIndex(category)];
+    if (!categoryRoot(category)) return MUTED_BADGE_CLASSES;
+    return BADGE_CLASSES[categoryColorIndex(category)] ?? MUTED_BADGE_CLASSES;
 };

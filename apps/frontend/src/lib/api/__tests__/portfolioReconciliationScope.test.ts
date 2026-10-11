@@ -263,32 +263,32 @@ const correctionScope = {
 };
 function correctionPreview() {
     const base = preview();
+    const action = {
+        ...base.actions[0],
+        policy: "prefer_source",
+        existingTransactionId: 99,
+        source: {
+            date: "2025-01-01",
+            units: "1",
+            amount: "5",
+            currency: "USD",
+            fx_rate_to_eur: null,
+        },
+        existing: {
+            date: "2025-01-01",
+            units: "1",
+            amount: "5",
+            currency: "EUR",
+            fx_rate_to_eur: "1",
+        },
+        corrections: ["currency", "fx_rate_to_eur"],
+    };
+    const actions: [typeof action] = [action];
     return {
         ...base,
         reconciliationScope: "correct_existing_only",
         adoptPolicy: "prefer_source",
-        actions: [
-            {
-                ...base.actions[0],
-                policy: "prefer_source",
-                existingTransactionId: 99,
-                source: {
-                    date: "2025-01-01",
-                    units: "1",
-                    amount: "5",
-                    currency: "USD",
-                    fx_rate_to_eur: null,
-                },
-                existing: {
-                    date: "2025-01-01",
-                    units: "1",
-                    amount: "5",
-                    currency: "EUR",
-                    fx_rate_to_eur: "1",
-                },
-                corrections: ["currency", "fx_rate_to_eur"],
-            },
-        ],
+        actions,
     };
 }
 function correctionCommit() {
@@ -302,42 +302,52 @@ function correctionCommit() {
         })),
     };
 }
+function pair<T>(items: T[]): [T, T] {
+    const [first, second] = items;
+    if (items.length !== 2 || first === undefined || second === undefined)
+        throw new Error(
+            "grouped date fixture must contain exactly two actions",
+        );
+    return [first, second];
+}
 function groupedDatePreview() {
     const base = correctionPreview();
     return {
         ...base,
         selectedRowIds: [1, 2],
         summary: { adopt: 2 },
-        actions: ["2025-01-01", "2025-02-01"].map((date, index) => {
-            const existing = {
-                type: "gift",
-                date,
-                units: String(index + 1),
-                amount: "0",
-                price_per_unit: "0",
-                fees: "0",
-                taxes: "0",
-                currency: "USD",
-                fx_rate_to_eur: null,
-                dividend_amount_convention: null,
-            };
-            return {
-                ...base.actions[0],
-                rowId: index + 1,
-                rowOrdinal: index + 1,
-                existingTransactionId: 99 + index,
-                existing,
-                source: { ...existing, date: "2025-03-01" },
-                corrections: ["date"],
-                dateProof: {
-                    kind: "closed_kinesis_yield_group",
-                    groupKey: "a".repeat(64),
-                    recordedDate: date,
-                    paymentDate: "2025-03-01",
-                    memberCount: 3,
-                },
-            };
-        }),
+        actions: pair(
+            ["2025-01-01", "2025-02-01"].map((date, index) => {
+                const existing = {
+                    type: "gift",
+                    date,
+                    units: String(index + 1),
+                    amount: "0",
+                    price_per_unit: "0",
+                    fees: "0",
+                    taxes: "0",
+                    currency: "USD",
+                    fx_rate_to_eur: null,
+                    dividend_amount_convention: null,
+                };
+                return {
+                    ...base.actions[0],
+                    rowId: index + 1,
+                    rowOrdinal: index + 1,
+                    existingTransactionId: 99 + index,
+                    existing,
+                    source: { ...existing, date: "2025-03-01" },
+                    corrections: ["date"],
+                    dateProof: {
+                        kind: "closed_kinesis_yield_group",
+                        groupKey: "a".repeat(64),
+                        recordedDate: date,
+                        paymentDate: "2025-03-01",
+                        memberCount: 3,
+                    },
+                };
+            }),
+        ),
     };
 }
 

@@ -119,10 +119,11 @@ export function criticalFontPreloadHrefs(
             return basename === `${stem}.woff2`
                 || (basename.startsWith(`${stem}-`) && basename.endsWith('.woff2'));
         });
-        if (matches.length !== 1) {
+        const [match] = matches;
+        if (matches.length !== 1 || match === undefined) {
             throw new Error(`Expected one ${stem} WOFF2 build asset, found ${matches.length}`);
         }
-        return withBase(base, matches[0]);
+        return withBase(base, match);
     }).filter((href) => !htmlHasHref(html, href));
 }
 

@@ -131,10 +131,13 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         );
 
         await vi.waitFor(() => expect(calls).toHaveLength(1));
-        expect(calls[0].id).toBe("10");
+        expect(calls[0]?.id).toBe("10");
         // The stamped figure and its currency are one native pair: 1000 US$,
         // never 500 (the same money converted into the declared EUR).
-        expect(calls[0].body).toMatchObject({ balance: 1000, currency: "USD" });
+        expect(calls[0]?.body).toMatchObject({
+            balance: 1000,
+            currency: "USD",
+        });
     });
 
     it("falls back to the computed balance and the account currency without the reconcilable fields", async () => {
@@ -152,7 +155,7 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         );
 
         await vi.waitFor(() => expect(calls).toHaveLength(1));
-        expect(calls[0].body).toMatchObject({
+        expect(calls[0]?.body).toMatchObject({
             balance: 2450.75,
             currency: "EUR",
         });

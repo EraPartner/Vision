@@ -93,6 +93,8 @@ describe("TransactionSearchSuggestions", () => {
         );
         await user.click(screen.getByRole("button", { name: /Amount from/i }));
         const [minimum, maximum] = screen.getAllByRole("textbox");
+        if (!minimum || !maximum)
+            throw new Error("expected the minimum and maximum amount inputs");
         await user.type(minimum, "abc");
         await user.type(maximum, "100");
         expect(screen.getByRole("alert")).toBeVisible();

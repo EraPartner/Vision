@@ -842,7 +842,7 @@ export default function AnalysisWorkspacePage() {
                 x: ids.includes(current.x) ? current.x : (ids[0] ?? ""),
                 y: current.y.some((id) => numericIds.includes(id))
                     ? current.y.filter((id) => numericIds.includes(id))
-                    : [numericIds[0]].filter(Boolean),
+                    : numericIds.slice(0, 1).filter(Boolean),
             }));
         } catch (cause) {
             if (runRequest.current !== id) return;
@@ -1007,7 +1007,7 @@ export default function AnalysisWorkspacePage() {
                               (id) =>
                                   !saved.lastResult || numericIds.includes(id),
                           )
-                        : [numericIds[0]].filter(Boolean),
+                        : numericIds.slice(0, 1).filter(Boolean),
             });
             setWorkbench(
                 (saved.parameters.workbench as AnalysisWorkbenchConfig) || {},
@@ -1840,7 +1840,12 @@ export default function AnalysisWorkspacePage() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() =>
+                                                        onClick={() => {
+                                                            const firstField =
+                                                                dataset
+                                                                    .fields[0];
+                                                            if (!firstField)
+                                                                return;
                                                             setPlan(
                                                                 (current) => ({
                                                                     ...current,
@@ -1848,17 +1853,15 @@ export default function AnalysisWorkspacePage() {
                                                                         ...current.filters,
                                                                         {
                                                                             fieldId:
-                                                                                dataset
-                                                                                    .fields[0]
-                                                                                    .id,
+                                                                                firstField.id,
                                                                             operator:
                                                                                 "eq",
                                                                             value: "",
                                                                         },
                                                                     ],
                                                                 }),
-                                                            )
-                                                        }
+                                                            );
+                                                        }}
                                                     >
                                                         {t(
                                                             "analysis.addFilter",

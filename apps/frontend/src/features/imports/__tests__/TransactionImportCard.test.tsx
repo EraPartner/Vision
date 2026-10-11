@@ -117,7 +117,7 @@ describe("TransactionImportCard — custom-mapping import", () => {
         await waitFor(() => expect(toast.success).toHaveBeenCalled());
 
         // IMPORT_CSV_RESULT_STUB: total 3, imported 2, duplicates 1.
-        const message = vi.mocked(toast.success).mock.calls[0][0] as string;
+        const message = vi.mocked(toast.success).mock.calls[0]![0] as string;
         expect(message).toBe(
             "Imported 2 transactions (1 duplicates skipped, 3 total processed)",
         );

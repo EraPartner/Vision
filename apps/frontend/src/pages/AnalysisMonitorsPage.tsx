@@ -114,13 +114,16 @@ function reasonLabel(
 function numericColumns(analysis: SavedAnalysis) {
     const result = analysis.lastResult;
     if (!result || result.rows.length !== 1) return [];
-    return result.columns.filter(
-        (column) =>
+    const row = result.rows[0];
+    if (row === undefined) return [];
+    return result.columns.filter((column) => {
+        const value = row[column.id];
+        return (
             numericType.test(column.type) &&
-            (typeof result.rows[0][column.id] === "number" ||
-                (typeof result.rows[0][column.id] === "string" &&
-                    decimal.test(result.rows[0][column.id] as string))),
-    );
+            (typeof value === "number" ||
+                (typeof value === "string" && decimal.test(value)))
+        );
+    });
 }
 
 function revealInvalidSchedule(event: FormEvent<HTMLDetailsElement>) {

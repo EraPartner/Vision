@@ -80,8 +80,12 @@ export function analysisColumnLabel(
             ? analysisCatalogLabel(declared, t)
             : declared;
     }
-    const labels = [...new Set(matches.map((field) => field.label))];
-    return labels.length === 1 ? analysisCatalogLabel(labels[0], t) : id;
+    const [label, ...otherLabels] = new Set(
+        matches.map((field) => field.label),
+    );
+    return label !== undefined && otherLabels.length === 0
+        ? analysisCatalogLabel(label, t)
+        : id;
 }
 
 export function formatAnalysisValue(
@@ -102,7 +106,7 @@ export function formatAnalysisValue(
     // Group the integer separately to preserve database decimals and large integers exactly.
     if (decimal) {
         const integer = new Intl.NumberFormat(locale).format(
-            BigInt(decimal[2]),
+            BigInt(decimal[2]!),
         );
         const separator =
             new Intl.NumberFormat(locale)

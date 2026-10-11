@@ -78,7 +78,7 @@ describe("native cash correction review responses", () => {
         "rejects %s evidence instead of exposing a commit-ready cash preview",
         async (defect) => {
             const body = response();
-            const action = body.actions[0];
+            const action = body.actions[0]!;
             if (defect === "investment") action.investmentId = 1;
             if (defect === "date") action.source.date = "2025-01-03";
             if (defect === "zero") action.source.amount = "0";

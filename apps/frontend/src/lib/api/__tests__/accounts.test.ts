@@ -53,10 +53,10 @@ describe("accounts API client", () => {
         const res = await getAccounts({ active: "all" });
         const a = res.items[0];
 
-        expect(a.statement_balances?.[0].balance).toBe(100.5);
-        expect(a.computed_balance).toBe(99);
-        expect(a.drift).toBe(1.5);
-        expect(typeof a.drift).toBe("number");
+        expect(a?.statement_balances?.[0]?.balance).toBe(100.5);
+        expect(a?.computed_balance).toBe(99);
+        expect(a?.drift).toBe(1.5);
+        expect(typeof a?.drift).toBe("number");
     });
 
     it("getAccounts maps a null drift (no statement reading) to undefined", async () => {
@@ -80,9 +80,10 @@ describe("accounts API client", () => {
         );
 
         const res = await getAccounts();
-        expect(res.items[0].statement_balances).toEqual([]);
-        expect(res.items[0].computed_balance).toBe(0);
-        expect(res.items[0].drift).toBeUndefined();
+        const item = res.items[0];
+        expect(item?.statement_balances).toEqual([]);
+        expect(item?.computed_balance).toBe(0);
+        expect(item?.drift).toBeUndefined();
     });
 
     it("getAccounts rejects a NUMERIC string where the service emits a number", async () => {

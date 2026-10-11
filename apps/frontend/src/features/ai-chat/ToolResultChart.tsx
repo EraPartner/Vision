@@ -27,14 +27,18 @@ export interface ToolResultChartProps {
 }
 
 function pickNumericKeys(rows: Row[], exclude: string): string[] {
-    if (rows.length === 0) return [];
-    return Object.keys(rows[0]).filter(
-        (key) => key !== exclude && typeof rows[0][key] === "number",
+    const firstRow = rows[0];
+    if (firstRow === undefined) return [];
+    return Object.keys(firstRow).filter(
+        (key) => key !== exclude && typeof firstRow[key] === "number",
     );
 }
 
 function resolveAxes(rows: Row[], xKey?: string, yKeys?: string[]) {
-    const xk = xKey ?? (rows.length > 0 ? Object.keys(rows[0])[0] : "");
+    const firstRow = rows[0];
+    const xk =
+        xKey ??
+        (firstRow === undefined ? "" : (Object.keys(firstRow)[0] ?? ""));
     const yk = yKeys && yKeys.length > 0 ? yKeys : pickNumericKeys(rows, xk);
     return { xk, yk };
 }

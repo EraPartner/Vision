@@ -305,7 +305,7 @@ describe("OnboardingWizard", () => {
         const header = visionBrand.closest("div")?.parentElement as HTMLElement;
         const buttons = within(header).getAllByRole("button");
         // Header has just one button — the close (X) icon-only button
-        await user.click(buttons[buttons.length - 1]);
+        await user.click(buttons.at(-1)!);
         expect(onComplete).toHaveBeenCalled();
     });
 

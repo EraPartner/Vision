@@ -96,8 +96,7 @@ export default function NetWorthPage() {
     const snapshots = useMemo(() => {
         const raw = data?.snapshots ?? EMPTY_SNAPSHOTS;
         const result: typeof EMPTY_SNAPSHOTS = [];
-        for (let i = 0; i < raw.length; i++) {
-            const s = raw[i];
+        for (const s of raw) {
             const date = normalizeYmd(s.date);
             if (
                 date &&

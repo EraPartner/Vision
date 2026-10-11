@@ -139,17 +139,19 @@ describe("pairing existing transfer records", () => {
         "zero",
         "paired",
     ] as const)("does not offer linking for %s selection", async (defect) => {
-        let rows = [{ ...outflow }, { ...inflow }];
+        const out = { ...outflow };
+        const into = { ...inflow };
+        let rows = [out, into];
         let mode: BulkSelectionMode = "ids";
         if (defect === "filter") mode = "filter";
-        if (defect === "one") rows = [rows[0]];
+        if (defect === "one") rows = [out];
         if (defect === "three") rows.push({ ...inflow, id: 3 });
-        if (defect === "same_account") rows[1].accountId = rows[0].accountId;
-        if (defect === "missing_account") rows[1].accountId = undefined;
-        if (defect === "same_sign") rows[1].amount = -9.8;
-        if (defect === "inactive") rows[1].is_active = false;
-        if (defect === "zero") rows[1].amount = 0;
-        if (defect === "paired") rows[1].transferPeerId = 99;
+        if (defect === "same_account") into.accountId = out.accountId;
+        if (defect === "missing_account") into.accountId = undefined;
+        if (defect === "same_sign") into.amount = -9.8;
+        if (defect === "inactive") into.is_active = false;
+        if (defect === "zero") into.amount = 0;
+        if (defect === "paired") into.transferPeerId = 99;
         const ids = rows.map((row) => row.id);
         if (defect === "missing") rows.pop();
         const user = userEvent.setup();

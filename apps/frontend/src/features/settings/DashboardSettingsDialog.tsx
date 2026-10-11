@@ -36,7 +36,7 @@ interface SectionDef {
     icon: LucideIcon;
 }
 
-const SECTIONS: SectionDef[] = [
+const SECTIONS: readonly [SectionDef, ...SectionDef[]] = [
     {
         id: "general",
         labelKey: "settings.tab.general",
@@ -115,6 +115,7 @@ export function DashboardSettingsDialog({
         if (nextIndex === undefined) return;
         event.preventDefault();
         const nextSection = SECTIONS[nextIndex];
+        if (!nextSection) return;
         selectSection(nextSection.id);
         tablistRef.current
             ?.querySelector<HTMLButtonElement>(

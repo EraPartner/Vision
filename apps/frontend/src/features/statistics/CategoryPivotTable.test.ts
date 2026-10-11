@@ -3,7 +3,7 @@ import { isExpandableGroup, computeMasterToggleState } from './statisticsUtils';
 
 // Extracted helper — mirror the implementation so tests stay pure (no DOM).
 function lastDayOfMonth(period: string): string {
-  const [year, month] = period.split('-').map(Number);
+  const [year = NaN, month = NaN] = period.split('-').map(Number);
   const day = new Date(year, month, 0).getDate();
   return `${period}-${String(day).padStart(2, '0')}`;
 }

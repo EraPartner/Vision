@@ -612,13 +612,11 @@ describe("ImportReviewPage (integration)", () => {
                             row_count: 2,
                             rows: [
                                 {
-                                    ...groupWithRecipient(1, "Amazon", 10)
-                                        .rows[0],
+                                    ...recipientRowFixture(10),
                                     tx_date: "2026-05-20",
                                 },
                                 {
-                                    ...groupWithRecipient(1, "Amazon", 11)
-                                        .rows[0],
+                                    ...recipientRowFixture(11),
                                     tx_date: "2026-05-03",
                                 },
                             ],
@@ -1028,6 +1026,17 @@ describe("ImportReviewPage (integration)", () => {
     // and read exactly like a live combobox, and the per-group cost must stay
     // off until a popover actually opens.
 
+    const recipientRowFixture = (rowId: number) => ({
+        id: rowId,
+        tx_date: "2026-05-01",
+        amount: "-5.00",
+        currency: "EUR",
+        recipient_raw: `RAW ${rowId}`,
+        memo: null,
+        match_source: "exact",
+        match_similarity: null,
+    });
+
     const groupWithRecipient = (
         recipientId: number,
         name: string,
@@ -1036,18 +1045,7 @@ describe("ImportReviewPage (integration)", () => {
         recipient_id: recipientId,
         recipient_name: name,
         row_count: 1,
-        rows: [
-            {
-                id: rowId,
-                tx_date: "2026-05-01",
-                amount: "-5.00",
-                currency: "EUR",
-                recipient_raw: `RAW ${rowId}`,
-                memo: null,
-                match_source: "exact",
-                match_similarity: null,
-            },
-        ],
+        rows: [recipientRowFixture(rowId)],
         matched_pattern_text: null,
     });
 
@@ -1092,7 +1090,9 @@ describe("ImportReviewPage (integration)", () => {
         await vi.waitFor(() =>
             expect(screen.getAllByRole("combobox").length).toBeGreaterThan(0),
         );
-        return screen.getAllByRole("combobox");
+        const [first, ...rest] = screen.getAllByRole("combobox");
+        if (!first) throw new Error("expected at least one recipient picker");
+        return [first, ...rest] as const;
     }
 
     it("names each group's current recipient in its trigger combobox", async () => {
@@ -1210,8 +1210,8 @@ describe("ImportReviewPage (integration)", () => {
                             ...groupWithRecipient(1, "Amazon", 10),
                             row_count: 2,
                             rows: [
-                                groupWithRecipient(1, "Amazon", 10).rows[0],
-                                groupWithRecipient(1, "Amazon", 20).rows[0],
+                                recipientRowFixture(10),
+                                recipientRowFixture(20),
                             ],
                         },
                     ],

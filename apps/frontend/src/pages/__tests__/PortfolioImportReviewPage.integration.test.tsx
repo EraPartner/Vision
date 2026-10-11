@@ -74,46 +74,48 @@ vi.mock("@/hooks/useAccounts", () => ({
 
 const API_BASE = "http://localhost:3002";
 
+// node-postgres returns the BIGINT id and NUMERIC columns as strings.
+const previewRow = (id: number, index: number) => ({
+    id: String(id),
+    row_index: index,
+    status: "matched",
+    route: "portfolio",
+    tx_date: "2026-01-01",
+    type: "buy",
+    type_raw: "Buy",
+    symbol_raw: "VWCE",
+    name_raw: "Vanguard FTSE All-World",
+    units: "1",
+    price_per_unit: "100",
+    amount: "100",
+    fees: "0",
+    taxes: "0",
+    currency: "EUR",
+    fx_rate_to_eur: "1",
+    note: null,
+    match_source: "unresolved",
+    error_message: null,
+    user_override_investment_id: null,
+});
+
+const previewGroup = {
+    is_cash: false,
+    investment_id: null,
+    investment_name: null,
+    investment_symbol: null,
+    investment_asset_class: null,
+    raw_symbol: "VWCE",
+    raw_name: "Vanguard FTSE All-World",
+    row_count: 3,
+    rows: [10, 11, 12].map((id, index) => previewRow(id, index)),
+};
+
 const preview = {
     batch_id: 5,
     account_id: 7,
     account_name: "Degiro",
     account_valid: true,
-    groups: [
-        {
-            is_cash: false,
-            investment_id: null,
-            investment_name: null,
-            investment_symbol: null,
-            investment_asset_class: null,
-            raw_symbol: "VWCE",
-            raw_name: "Vanguard FTSE All-World",
-            row_count: 3,
-            // node-postgres returns the BIGINT id and NUMERIC columns as strings.
-            rows: [10, 11, 12].map((id, index) => ({
-                id: String(id),
-                row_index: index,
-                status: "matched",
-                route: "portfolio",
-                tx_date: "2026-01-01",
-                type: "buy",
-                type_raw: "Buy",
-                symbol_raw: "VWCE",
-                name_raw: "Vanguard FTSE All-World",
-                units: "1",
-                price_per_unit: "100",
-                amount: "100",
-                fees: "0",
-                taxes: "0",
-                currency: "EUR",
-                fx_rate_to_eur: "1",
-                note: null,
-                match_source: "unresolved",
-                error_message: null,
-                user_override_investment_id: null,
-            })),
-        },
-    ],
+    groups: [previewGroup],
     totals: { symbol: 0, name_exact: 0, unresolved: 3, error: 0 },
 };
 
@@ -147,7 +149,7 @@ beforeEach(() => {
 
 describe("PortfolioImportReviewPage group resolution", () => {
     it("renders only the preview rows selected by the window virtualizer", async () => {
-        const rows = preview.groups[0].rows.map((row, index) => ({
+        const rows = previewGroup.rows.map((row, index) => ({
             ...row,
             tx_date: `2026-01-0${index + 1}`,
         }));
@@ -155,7 +157,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
             http.get(`${API_BASE}/api/portfolio/import/batches/5/preview`, () =>
                 ok({
                     ...preview,
-                    groups: [{ ...preview.groups[0], rows }],
+                    groups: [{ ...previewGroup, rows }],
                 }),
             ),
         );
@@ -181,10 +183,10 @@ describe("PortfolioImportReviewPage group resolution", () => {
             ...preview,
             groups: [
                 {
-                    ...preview.groups[0],
+                    ...previewGroup,
                     row_count: rowIds.length,
                     rows: rowIds.map((id, index) => ({
-                        ...preview.groups[0].rows[0],
+                        ...previewRow(10, 0),
                         id: String(id),
                         row_index: index,
                     })),
@@ -300,7 +302,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
         const user = userEvent.setup();
         let body: unknown = null;
         const cashRow = {
-            ...preview.groups[0].rows[0],
+            ...previewRow(10, 0),
             id: "90",
             status: "error",
             route: "cash",
@@ -312,7 +314,7 @@ describe("PortfolioImportReviewPage group resolution", () => {
                     ...preview,
                     groups: [
                         {
-                            ...preview.groups[0],
+                            ...previewGroup,
                             is_cash: true,
                             investment_id: null,
                             row_count: 1,

@@ -209,7 +209,7 @@ describe("AnalysisWorkspacePage", () => {
         await user.click(
             screen.getByRole("tab", { name: nl["analysis.chart"] }),
         );
-        await user.click(screen.getByLabelText(nl["analysis.ext.chart.x"]));
+        await user.click(screen.getByLabelText(nl["analysis.ext.chart.x"]!));
         expect(
             await screen.findByRole("option", { name: "Uitgaven" }),
         ).toBeInTheDocument();
@@ -369,9 +369,9 @@ describe("AnalysisWorkspacePage", () => {
                 .at(-1)
                 ?.getAttribute("y1"),
         );
-        expect(Number(bars[0].getAttribute("y"))).toBe(zero);
-        expect(Number(bars[1].getAttribute("y"))).toBeLessThan(zero);
-        expect(bars[0].querySelector("title")).toHaveTextContent("-12,3");
+        expect(Number(bars[0]?.getAttribute("y"))).toBe(zero);
+        expect(Number(bars[1]?.getAttribute("y"))).toBeLessThan(zero);
+        expect(bars[0]?.querySelector("title")).toHaveTextContent("-12,3");
     });
 
     it("blocks mixed-currency charts and requests explicit complete-result pivot dimensions", async () => {
@@ -523,9 +523,8 @@ describe("AnalysisWorkspacePage", () => {
     );
 
     it("preserves a saved chart binding without cached results through the next run and save", async () => {
-        const charts = [
-            { kind: "bar", x: "category_general", y: "sum_spending" },
-        ];
+        const chart = { kind: "bar", x: "category_general", y: "sum_spending" };
+        const charts = [chart];
         const saved = { ...savedChartAnalysis, charts, lastResult: null };
         vi.mocked(apiClient.listSavedAnalyses).mockResolvedValue([
             saved,
@@ -555,7 +554,7 @@ describe("AnalysisWorkspacePage", () => {
             expect(update).toHaveBeenCalledWith(
                 saved.id,
                 expect.objectContaining({
-                    charts: [{ ...charts[0], y: [charts[0].y] }],
+                    charts: [{ ...chart, y: [chart.y] }],
                 }),
             ),
         );
@@ -795,7 +794,7 @@ describe("AnalysisWorkspacePage", () => {
             screen.getByRole("button", { name: "Save new version" }),
         );
         await waitFor(() => expect(update).toHaveBeenCalledTimes(2));
-        expect(update.mock.calls[1][0]).toBe("other");
+        expect(update.mock.calls[1]?.[0]).toBe("other");
     });
 
     it("preserves a name edited while its saved refresh is pending", async () => {

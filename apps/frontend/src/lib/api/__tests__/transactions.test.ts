@@ -41,7 +41,7 @@ describe("transactions API client", () => {
         });
 
         expect(url).toContain("category_ids=4%2C5"); // "4,5" encoded
-        expect(res.items[0].transaction_date).toBe("2026-01-01");
+        expect(res.items[0]?.transaction_date).toBe("2026-01-01");
     });
 
     it("rejects a response without the canonical transaction_date", async () => {

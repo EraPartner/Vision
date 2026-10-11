@@ -6,7 +6,7 @@ import { RollingNumber } from "@/components/shared/RollingNumber";
 import { DeltaPill } from "@/components/shared/DeltaPill";
 import { CompactValueDisclosure } from "@/components/shared/TouchDisclosure";
 import { cn } from "@/lib/utils";
-import { LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router";
 
 /** Shared supporting metric tile. Primary emphasis is reserved for a page's

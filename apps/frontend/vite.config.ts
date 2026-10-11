@@ -182,6 +182,8 @@ export default defineConfig(({ mode }) => ({
           if (norm.includes("/decimal.js") || norm.includes("+decimal.js")) {
             return "decimal";
           }
+          // Anything else: let Rollup choose the chunk.
+          return undefined;
         },
       },
     },

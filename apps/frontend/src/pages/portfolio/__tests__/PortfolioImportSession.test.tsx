@@ -51,12 +51,13 @@ function kinesisStatement(name = "kinesis.csv") {
 const nativeHeader =
     "Date,Type,Symbol,Units,Amount,Currency,Source_ID,Source_Account,Note,Receipt_JSON";
 function nativeReceiptStatement(name = "native-receipts.csv") {
-    const rows = [
+    const receipts: Array<[type: string, identity: string]> = [
         ["gift", "SYNTHETIC-SENDER-ONE"],
         ["gift", "SYNTHETIC-SENDER-TWO"],
         ["asset_fee", "SYNTHETIC-WALLET"],
         ["asset_transfer_witness", "SYNTHETIC-WALLET"],
-    ].map(([type, identity], index) =>
+    ];
+    const rows = receipts.map(([type, identity], index) =>
         [
             "2025-01-01",
             type,
@@ -129,20 +130,22 @@ function plan(
 }
 function repairPlan() {
     const original = plan();
+    const [originalAction] = original.actions;
+    if (!originalAction) throw new Error("plan fixture has no action");
     return {
         ...original,
         actions: [
             {
-                ...original.actions[0],
+                ...originalAction,
                 action: "repair_duplicate",
                 importedTransactionId: 100,
                 originalBatchId: 4,
                 source: {
-                    ...original.actions[0].source,
+                    ...originalAction.source,
                     dividend_amount_convention: "gross",
                 },
                 existing: {
-                    ...original.actions[0].existing,
+                    ...originalAction.existing,
                     dividend_amount_convention: "gross",
                 },
                 importedExisting: {
@@ -300,7 +303,9 @@ beforeEach(() => {
                 body,
                 sourceUploads: uploads.length,
             });
-            const encoded = /name="batch_ids"\r\n\r\n([^\r\n]+)/.exec(body)![1];
+            const encoded = /name="batch_ids"\r\n\r\n([^\r\n]+)/.exec(
+                body,
+            )![1]!;
             return ok(
                 referenceResult(JSON.parse(encoded), 89 + references.length),
             );
@@ -901,10 +906,12 @@ describe("reviewed portfolio import sessions", () => {
                     "0 new cash source events; 0 new cash ledger records; 0 new holdings or income records. 2 source events remain pending.",
                 ),
             ).toBeVisible();
+            const commit = commits[0];
+            if (!commit) throw new Error("expected a reconciliation commit");
             const {
                 expected_plan_fingerprint: _fingerprint,
                 ...expectedScope
-            } = commits[0];
+            } = commit;
             expect(previews[1]).toEqual(expectedScope);
         },
         15000,
@@ -1881,13 +1888,13 @@ describe("reviewed portfolio import sessions", () => {
         "invalid_convention",
     ] as const)("rejects duplicate repair preview with %s", async (defect) => {
         const invalid = repairPlan();
+        const [action] = invalid.actions;
+        if (!action) throw new Error("repair plan fixture has no action");
         if (defect === "missing_evidence")
-            delete (invalid.actions[0] as { importedTransactionId?: number })
+            delete (action as { importedTransactionId?: number })
                 .importedTransactionId;
-        else if (defect === "foreign_scope") invalid.actions[0].batchId = 99;
-        else
-            invalid.actions[0].importedExisting.dividend_amount_convention =
-                "unproved";
+        else if (defect === "foreign_scope") action.batchId = 99;
+        else action.importedExisting.dividend_amount_convention = "unproved";
         server.use(
             http.post(`${api}/reconciliation/preview`, () => ok(invalid)),
         );
@@ -2163,12 +2170,14 @@ describe("reviewed portfolio import sessions", () => {
         );
         await selectAndStage(user, [kinesisStatement(), native]);
         expect(forms).toHaveLength(2);
-        expect(field(forms[0], "portfolio_format")).toBe(
+        const [kinesis, wallet] = forms;
+        if (kinesis === undefined || wallet === undefined)
+            throw new Error("expected two staged upload forms");
+        expect(field(kinesis, "portfolio_format")).toBe(
             "kinesis_transaction_history",
         );
-        expect(field(forms[0], "yield_basis_policy")).toBe("zero");
-        expect(field(forms[0], "account_id")).toBe("1");
-        const wallet = forms[1];
+        expect(field(kinesis, "yield_basis_policy")).toBe("zero");
+        expect(field(kinesis, "account_id")).toBe("1");
         expect(field(wallet, "adapter_name")).toBe("portfolio_generic");
         expect(field(wallet, "portfolio_format")).toBeUndefined();
         expect(field(wallet, "account_id")).toBe("2");
@@ -2183,7 +2192,7 @@ describe("reviewed portfolio import sessions", () => {
         // Inspect the browser body actually handed to fetch; node API tests
         // separately assert byte-exact serialization on the Node transport.
         expect(browserForms).toHaveLength(2);
-        const sourceFile = browserForms[1].get("file") as File;
+        const sourceFile = browserForms[1]?.get("file") as File;
         expect(sourceFile.name).toBe(native.name);
         const sourceText = await new Promise<string>((resolve, reject) => {
             const reader = new FileReader();

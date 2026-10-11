@@ -12,7 +12,8 @@ export const EMPTY_SNAPSHOTS: NetWorthSnapshot[] = [];
 
 export function normalizeYmd(value: string): string {
   if (!value) return value;
-  if (value.includes('T')) return value.split('T')[0];
+  const timeSeparator = value.indexOf('T');
+  if (timeSeparator !== -1) return value.slice(0, timeSeparator);
   if (value.length > 10) return value.slice(0, 10);
   return value;
 }

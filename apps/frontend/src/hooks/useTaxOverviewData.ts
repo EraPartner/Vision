@@ -235,11 +235,12 @@ export function useTaxOverviewData() {
             .filter((m) => m.income > 0);
 
         const yearlyTaxable = series.reduce((sum, m) => sum + m.income, 0);
-        if (yearlyTaxable <= 0) return [];
+        const latest = series.at(-1);
+        if (yearlyTaxable <= 0 || latest === undefined) return [];
 
         const referenceYear = isViewingHistorical
             ? viewedYear
-            : Number.parseInt(series[series.length - 1].period.slice(0, 4), 10);
+            : Number.parseInt(latest.period.slice(0, 4), 10);
         const annualPIT = pitForGross(yearlyTaxable, referenceYear);
 
         return series.map((m) => ({

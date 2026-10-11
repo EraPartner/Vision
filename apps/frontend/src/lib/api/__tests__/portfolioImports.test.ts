@@ -65,7 +65,7 @@ describe("portfolioImports API client", () => {
             ),
         );
         const res = await listPortfolioParserConfigs();
-        expect(res[0].name).toBe("Degiro");
+        expect(res[0]?.name).toBe("Degiro");
     });
 
     it("createPortfolioParserConfig POSTs name + config", async () => {

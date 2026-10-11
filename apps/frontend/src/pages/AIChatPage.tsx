@@ -90,8 +90,9 @@ export default function AIChatPage() {
     // If the user returns to the page with no selection but a stream is in
     // flight in the background, jump to that conversation so they can see it.
     useEffect(() => {
-        if (!selectedId && streamingIds.length > 0) {
-            setSelectedId(streamingIds[0]);
+        const firstStreamingId = streamingIds[0];
+        if (!selectedId && firstStreamingId !== undefined) {
+            setSelectedId(firstStreamingId);
         }
     }, [selectedId, streamingIds, setSelectedId]);
 

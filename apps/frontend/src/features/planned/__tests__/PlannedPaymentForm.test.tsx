@@ -126,7 +126,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.click(submitButton());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: -150 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: -150 });
     });
 
     it("keeps the amount positive when income is selected", async () => {
@@ -139,7 +139,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.click(submitButton());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: 150 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: 150 });
     });
 
     it("ignores a typed minus sign — the toggle owns the sign", async () => {
@@ -152,7 +152,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.click(submitButton());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: 150 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: 150 });
     });
 
     it("shows a stored expense as its absolute value with expense selected", async () => {
@@ -182,7 +182,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.click(submitButton());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: -1200 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: -1200 });
     });
 
     it("round-trips an edited income without flipping its sign", async () => {
@@ -192,7 +192,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.click(submitButton());
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: 2500 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: 2500 });
     });
 
     it("submits exactly once on Enter in the amount field", async () => {
@@ -207,7 +207,7 @@ describe("PlannedPaymentForm — amount direction", () => {
         await user.type(amountInput(), "150{Enter}");
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: -150 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: -150 });
     });
 
     it("does not submit on Enter inside the currency Select", async () => {
@@ -291,6 +291,6 @@ describe("PlannedPaymentForm — amount direction", () => {
         // Not -(-450.5): the magnitude/direction split reproduces the stored
         // value, so the server's own -Math.abs() is never applied twice.
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-        expect(onSubmit.mock.calls[0][0]).toMatchObject({ amount: -450.5 });
+        expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ amount: -450.5 });
     });
 });

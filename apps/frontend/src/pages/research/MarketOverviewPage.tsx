@@ -78,11 +78,11 @@ export default function MarketOverviewPage() {
         if (sector === "overview") {
             const rv =
                 REGION_VIEWS.find((v) => v.key === region) ?? REGION_VIEWS[0];
-            return rv.groups;
+            return rv?.groups ?? [];
         }
         const sv =
             SECTOR_VIEWS.find((v) => v.key === sector) ?? SECTOR_VIEWS[0];
-        const all = sv.groups[0]?.entries ?? [];
+        const all = sv?.groups[0]?.entries ?? [];
         const entries =
             region === "worldwide"
                 ? all

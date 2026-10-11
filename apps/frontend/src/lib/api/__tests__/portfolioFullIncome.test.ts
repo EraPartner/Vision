@@ -31,6 +31,8 @@ const income = {
     currency: "USD",
     income_recognition_role: "included_in_units",
 };
+type PreviewAction = Record<string, unknown>;
+type PreviewActions = [PreviewAction, PreviewAction, ...PreviewAction[]];
 function preview(unitAction = "insert", incomeAction = "record_income") {
     const existingUnit = unitAction !== "insert";
     return {
@@ -76,7 +78,7 @@ function preview(unitAction = "insert", incomeAction = "record_income") {
                     ? { source: { ...income } }
                     : { existingTransactionId: 101 }),
             },
-        ] as Array<Record<string, unknown>>,
+        ] as PreviewActions,
     };
 }
 function respond(value: unknown) {
@@ -97,7 +99,9 @@ function committed() {
         repaired: 0,
         errors: 0,
     };
-    return { ...counts, batches: [{ ...counts, batch_id: 11 }] };
+    const batch = { ...counts, batch_id: 11 };
+    const batches: [typeof batch] = [batch];
+    return { ...counts, batches };
 }
 
 describe("full history paired income contract", () => {
@@ -118,7 +122,7 @@ describe("full history paired income contract", () => {
             expect(requests).toEqual([
                 { batch_ids: [11], adopt_policy: "prefer_source" },
             ]);
-            expect(result.actions[1].incomeProof).toEqual({
+            expect(result.actions[1]?.incomeProof).toEqual({
                 kind: "paired_kinesis_income",
                 unitRowId: 1,
                 ...(unitAction !== "insert" ? { unitTransactionId: 99 } : {}),
@@ -133,9 +137,11 @@ describe("full history paired income contract", () => {
             delete plan.actions[0].source;
             respond(plan);
             const result = await previewPortfolioImportReconciliation(scope);
-            expect(result.actions[1].existingTransactionId).toBe(101);
-            expect(result.actions[0].source).toBeUndefined();
-            expect(result.actions[1].source).toBeUndefined();
+            expect(result.actions).toHaveLength(2);
+            const [unitRow, incomeRow] = result.actions;
+            expect(incomeRow?.existingTransactionId).toBe(101);
+            expect(unitRow?.source).toBeUndefined();
+            expect(incomeRow?.source).toBeUndefined();
             expect(result.summary[action]).toBe(2);
         },
     );

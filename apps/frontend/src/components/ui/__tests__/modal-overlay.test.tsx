@@ -142,7 +142,7 @@ describe("modal overlay — index.css tier rules", () => {
         while ((match = ruleRe.exec(indexCss)) !== null) {
             count += 1;
             const [, selector, body] = match;
-            if (body.includes("backdrop-filter")) {
+            if (body!.includes("backdrop-filter")) {
                 expect(selector).toContain(":root.fx-enhanced");
             }
         }

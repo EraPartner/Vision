@@ -138,8 +138,7 @@ function AreaSeriesLayerInner<Datum>({
                 >
                     {({ stacks, path }) =>
                         stacks.map((stack, i) => {
-                            const s = series[i];
-                            const color = s.color ?? getChartColor(i);
+                            const color = series[i]?.color ?? getChartColor(i);
                             return (
                                 <m.path
                                     key={`stack-${stack.key}`}
@@ -353,8 +352,10 @@ function AreaChartInner<Datum>({
         (event: React.PointerEvent<SVGRectElement>) => {
             const idx = indexAtClientX(event);
             if (idx == null) return;
+            const datum = data[idx];
+            if (datum === undefined) return;
             setHoverIndex(idx);
-            publishHover(Number(stableXAccessor(data[idx])));
+            publishHover(Number(stableXAccessor(datum)));
             if (scrub.scrubbing) scrub.move(idx);
         },
         [indexAtClientX, publishHover, stableXAccessor, data, scrub],
@@ -384,8 +385,10 @@ function AreaChartInner<Datum>({
     // hover/scrub state as the pointer, so tooltip/crosshair render unchanged.
     const stepToIndex = useCallback(
         (idx: number) => {
+            const datum = data[idx];
+            if (datum === undefined) return;
             setHoverIndex(idx);
-            publishHover(Number(stableXAccessor(data[idx])));
+            publishHover(Number(stableXAccessor(datum)));
         },
         [publishHover, stableXAccessor, data],
     );
@@ -400,23 +403,25 @@ function AreaChartInner<Datum>({
 
     // Mirror a sibling chart's hover when not hovered locally (nearest point).
     const syncedIndex = useMemo(() => {
-        if (hoverIndex != null || syncedX == null || data.length === 0)
-            return null;
+        if (hoverIndex != null || syncedX == null) return null;
+        const firstDatum = data[0];
+        const lastDatum = data.at(-1);
+        if (firstDatum === undefined || lastDatum === undefined) return null;
         // Only mirror when the synced x falls inside this chart's domain —
         // disjoint timelines (history vs forecast) must not pin to an edge.
-        const lo = Number(stableXAccessor(data[0]));
-        const hi = Number(stableXAccessor(data[data.length - 1]));
+        const lo = Number(stableXAccessor(firstDatum));
+        const hi = Number(stableXAccessor(lastDatum));
         if (syncedX < Math.min(lo, hi) || syncedX > Math.max(lo, hi))
             return null;
         let best = 0;
         let bestDist = Infinity;
-        for (let i = 0; i < data.length; i++) {
-            const dist = Math.abs(Number(stableXAccessor(data[i])) - syncedX);
+        data.forEach((datum, i) => {
+            const dist = Math.abs(Number(stableXAccessor(datum)) - syncedX);
             if (dist < bestDist) {
                 bestDist = dist;
                 best = i;
             }
-        }
+        });
         return best;
     }, [hoverIndex, syncedX, data, stableXAccessor]);
 
@@ -566,18 +571,20 @@ function AreaChartInner<Datum>({
                     {/* Scrub range band */}
                     {scrub.range
                         ? (() => {
+                              const startDatum = data[scrub.range.startIndex];
+                              const endDatum = data[scrub.range.endIndex];
+                              if (
+                                  startDatum === undefined ||
+                                  endDatum === undefined
+                              )
+                                  return null;
                               const xA =
                                   xScale(
-                                      stableXAccessor(
-                                          data[scrub.range.startIndex],
-                                      ) as never,
+                                      stableXAccessor(startDatum) as never,
                                   ) ?? 0;
                               const xB =
-                                  xScale(
-                                      stableXAccessor(
-                                          data[scrub.range.endIndex],
-                                      ) as never,
-                                  ) ?? 0;
+                                  xScale(stableXAccessor(endDatum) as never) ??
+                                  0;
                               return (
                                   <rect
                                       x={Math.min(xA, xB)}
@@ -672,8 +679,16 @@ function AreaChartInner<Datum>({
             {scrub.range
                 ? (() => {
                       const first = series[0];
-                      const a = first?.accessor(data[scrub.range.startIndex]);
-                      const b = first?.accessor(data[scrub.range.endIndex]);
+                      const startDatum = data[scrub.range.startIndex];
+                      const endDatum = data[scrub.range.endIndex];
+                      if (
+                          !first ||
+                          startDatum === undefined ||
+                          endDatum === undefined
+                      )
+                          return null;
+                      const a = first.accessor(startDatum);
+                      const b = first.accessor(endDatum);
                       if (
                           a == null ||
                           b == null ||
@@ -687,18 +702,10 @@ function AreaChartInner<Datum>({
                               : String(Math.round(v * 100) / 100);
                       const xA =
                           margin.left +
-                          (xScale(
-                              stableXAccessor(
-                                  data[scrub.range.startIndex],
-                              ) as never,
-                          ) ?? 0);
+                          (xScale(stableXAccessor(startDatum) as never) ?? 0);
                       const xB =
                           margin.left +
-                          (xScale(
-                              stableXAccessor(
-                                  data[scrub.range.endIndex],
-                              ) as never,
-                          ) ?? 0);
+                          (xScale(stableXAccessor(endDatum) as never) ?? 0);
                       const mid = (xA + xB) / 2;
                       const rising = b - a > 0;
                       return (

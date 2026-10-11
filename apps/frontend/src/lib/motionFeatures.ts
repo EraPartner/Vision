@@ -24,7 +24,7 @@
  *
  * This is deliberately NOT a `<link rel="modulepreload">` in index.html — that
  * would put the bytes straight back into the blocking boot graph the
- * check-bundle-size.mjs guard measures.
+ * check-bundle-size.ts guard measures.
  */
 import type { FeatureBundle } from "framer-motion";
 

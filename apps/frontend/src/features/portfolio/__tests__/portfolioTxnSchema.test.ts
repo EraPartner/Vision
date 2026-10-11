@@ -29,7 +29,7 @@ function firstIssue(result: {
     success: boolean;
     error?: { issues: { message: string }[] };
 }) {
-    return result.success ? undefined : result.error!.issues[0].message;
+    return result.success ? undefined : result.error!.issues[0]?.message;
 }
 
 describe("parseNonNegative", () => {

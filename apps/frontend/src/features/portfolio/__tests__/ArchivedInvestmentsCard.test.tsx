@@ -78,7 +78,7 @@ it("uses count-neutral history wording for one entry", async () => {
             investments={[
                 {
                     ...ARCHIVED_INVESTMENT,
-                    transactions: [ARCHIVED_INVESTMENT.transactions[0]],
+                    transactions: ARCHIVED_INVESTMENT.transactions.slice(0, 1),
                 },
             ]}
             onRestore={vi.fn()}

@@ -321,6 +321,7 @@ export function OnboardingWizard({
             icon: HardDrive,
         },
     ];
+    const currentStep = STEPS[stepIdx];
 
     const FEATURES = [
         {
@@ -531,10 +532,12 @@ export function OnboardingWizard({
     ]);
 
     const goNext = () => {
-        if (stepIdx < STEP_KEYS.length - 1) setStep(STEP_KEYS[stepIdx + 1]);
+        const nextStep = STEP_KEYS[stepIdx + 1];
+        if (nextStep) setStep(nextStep);
     };
     const goBack = () => {
-        if (stepIdx > 0) setStep(STEP_KEYS[stepIdx - 1]);
+        const previousStep = stepIdx > 0 ? STEP_KEYS[stepIdx - 1] : undefined;
+        if (previousStep) setStep(previousStep);
     };
 
     // Move focus to the current step's heading when the step changes so keyboard
@@ -595,12 +598,16 @@ export function OnboardingWizard({
         setCreatingCategories(true);
         try {
             const results = await Promise.allSettled(
-                Array.from(selectedCategories).map((idx) => {
+                Array.from(selectedCategories).flatMap((idx) => {
                     const cat = SUGGESTED_CATEGORIES[idx];
-                    return apiClient.createCategory({
-                        general: cat.general,
-                        detail: cat.detail,
-                    });
+                    return cat
+                        ? [
+                              apiClient.createCategory({
+                                  general: cat.general,
+                                  detail: cat.detail,
+                              }),
+                          ]
+                        : [];
                 }),
             );
             const rejected = results.find(
@@ -721,7 +728,8 @@ export function OnboardingWizard({
                         </div>
                         <div className="flex items-center gap-2 mt-3">
                             {(() => {
-                                const StepIcon = STEPS[stepIdx].icon;
+                                const StepIcon = currentStep?.icon;
+                                if (!StepIcon) return null;
                                 return (
                                     <StepIcon
                                         aria-hidden="true"
@@ -736,7 +744,7 @@ export function OnboardingWizard({
                                 {t("onboarding.stepOf", {
                                     n: String(stepIdx + 1),
                                     total: String(STEPS.length),
-                                    label: STEPS[stepIdx].label,
+                                    label: currentStep?.label ?? "",
                                 })}
                             </span>
                         </div>

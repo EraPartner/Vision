@@ -131,7 +131,7 @@ describe("preloadRoute", () => {
         const importSpy = vi.fn(() => Promise.resolve({}));
         // Replace one loader with a spy to observe the warm-once behaviour without
         // pulling a real page chunk into the test bundle.
-        const original = routeLoaders["/owes"];
+        const original = routeLoaders["/owes"]!;
         (routeLoaders as Record<string, () => Promise<unknown>>)["/owes"] =
             importSpy;
         try {
@@ -150,7 +150,7 @@ describe("preloadRoute", () => {
             .fn<(typeof routeLoaders)[string]>()
             .mockRejectedValueOnce(new Error("network"))
             .mockResolvedValueOnce({ default: () => null });
-        const original = routeLoaders["/tax"];
+        const original = routeLoaders["/tax"]!;
         routeLoaders["/tax"] = importSpy;
         try {
             preloadRoute("/tax");

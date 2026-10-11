@@ -93,6 +93,13 @@ in backend source. Backend `tsconfig.json` and `tsconfig.tests.json` turn on
 sandbox) and is type-checked through `// @ts-check` and JSDoc as part of the backend
 `tsconfig.json`. See [[docs/adr/194-runtime-contracts-completion|ADR-194]].
 
+The frontend (`apps/frontend/tsconfig.json`, inherited by `tsconfig.app.json` and
+`tsconfig.node.json`) adds `noUncheckedIndexedAccess`, `noImplicitOverride`, `noImplicitReturns`,
+`erasableSyntaxOnly` and `verbatimModuleSyntax` to `strict`, so source and tests follow the same
+indexed-access rule as the backend and type-only imports use `import type`. The bundle-size guard
+`apps/frontend/scripts/check-bundle-size.ts` is TypeScript run with Bun and checked by
+`tsconfig.node.json`. See [[docs/adr/197-stricter-frontend-compiler-flags|ADR-197]].
+
 > [!info] generated.ts is now load-bearing
 > The authoritative contract is `openapi.yaml`. From it, `bun run generate:types` produces [[apps/frontend/src/types/generated.ts|generated.ts]] (CI drift-checked). The hand-written, ergonomic types consumed by the ~36 app modules live in [[apps/frontend/src/types/api.ts|api.ts]]. Prior to June 2026, `generated.ts` was imported by **zero** modules — so drift between the two sources was invisible.
 

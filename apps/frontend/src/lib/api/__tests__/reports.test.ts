@@ -45,7 +45,7 @@ describe("report download helpers", () => {
     await downloadFinancialReport();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/reports/financial");
     expect(init.method).toBe("POST");
     const body = JSON.parse(init.body as string);
@@ -75,7 +75,7 @@ describe("report download helpers", () => {
       precomputedPIT: { totalTax: 100 },
     });
 
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("/api/reports/portfolio");
     const body = JSON.parse(init.body as string);
     expect(body.currency).toBe("USD");

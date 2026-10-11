@@ -67,7 +67,7 @@ describe("SymbolSearchBox", () => {
         expect(input).toHaveFocus();
         expect(input).toHaveAttribute(
             "aria-activedescendant",
-            screen.getAllByRole("option")[1].id,
+            screen.getAllByRole("option")[1]!.id,
         );
         expect(screen.getAllByRole("option")[1]).toHaveAttribute(
             "aria-selected",

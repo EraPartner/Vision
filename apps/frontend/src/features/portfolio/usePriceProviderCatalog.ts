@@ -34,13 +34,14 @@ const HINT_KEYS: Record<string, string> = {
 };
 
 function toOption(provider: SupportedPriceProvider, t: TranslateFn): PriceProviderOption {
+  const hintKey = HINT_KEYS[provider.key];
   return {
     // The generated PriceProvider union changes with the backend/OpenAPI enum.
     // The cast also lets a newer local backend expose a freshly-added provider
     // before the desktop shell has regenerated its compile-time union.
     key: provider.key as PriceProvider,
     name: provider.key === 'manual' ? t('addInv.provider.manual') : provider.name,
-    hint: HINT_KEYS[provider.key] ? t(HINT_KEYS[provider.key]) : provider.description,
+    hint: hintKey ? t(hintKey) : provider.description,
   };
 }
 

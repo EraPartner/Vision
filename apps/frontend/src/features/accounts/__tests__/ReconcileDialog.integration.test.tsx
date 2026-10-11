@@ -333,8 +333,8 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         await user.click(screen.getByRole("button", { name: /save reading/i }));
 
         await waitFor(() => expect(calls.patch).toHaveLength(1));
-        expect(calls.patch[0].id).toBe("7");
-        expect(calls.patch[0].body).toEqual({
+        expect(calls.patch[0]?.id).toBe("7");
+        expect(calls.patch[0]?.body).toEqual({
             balance: 1042.75,
             date: "2026-07-20",
         });
@@ -391,8 +391,8 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(1);
-        expect(calls.patch[0].body.balance).toBe(1042.75);
-        expect(calls.reconcile[0].body).toEqual({
+        expect(calls.patch[0]?.body.balance).toBe(1042.75);
+        expect(calls.reconcile[0]?.body).toEqual({
             mode: "adjustment",
             currency: "EUR",
         });
@@ -409,7 +409,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
         expect(calls.patch).toHaveLength(0);
-        expect(calls.reconcile[0].body).toEqual({
+        expect(calls.reconcile[0]?.body).toEqual({
             mode: "accept",
             currency: "EUR",
         });
@@ -447,7 +447,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         );
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
-        expect(calls.opening[0].body).toEqual({
+        expect(calls.opening[0]?.body).toEqual({
             balance: 980,
             date: "2026-06-03",
             currency: "EUR",
@@ -668,7 +668,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         );
         await waitFor(() => expect(calls.patch).toHaveLength(1));
         // The PATCH carries the ROUNDED figure, so stored == previewed.
-        expect(calls.patch[0].body.balance).toBe(1000.01);
+        expect(calls.patch[0]?.body.balance).toBe(1000.01);
         // 0,01 > the half-cent epsilon, so it is a real reconcile, not a no-op.
         expect(calls.reconcile).toHaveLength(1);
     });
@@ -689,7 +689,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
             screen.getByRole("button", { name: /add adjustment transaction/i }),
         );
         await waitFor(() => expect(calls.patch).toHaveLength(1));
-        expect(calls.patch[0].body.balance).toBe(1000);
+        expect(calls.patch[0]?.body.balance).toBe(1000);
         expect(calls.reconcile).toHaveLength(0);
     });
 
@@ -711,11 +711,11 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         // Order matters: the statement lands first so the server's drift (and so
         // the resolution) is computed against the figure the user just typed.
         expect(calls.patch).toHaveLength(1);
-        expect(calls.patch[0].body).toEqual({
+        expect(calls.patch[0]?.body).toEqual({
             balance: 1042.75,
             date: TODAY,
         });
-        expect(calls.reconcile[0].body).toEqual({
+        expect(calls.reconcile[0]?.body).toEqual({
             mode: "accept",
             currency: "EUR",
         });
@@ -878,7 +878,7 @@ describe("ReconcileDialog (integration, WP-B5 §3 F1 fresh reading + exits)", ()
         );
 
         await waitFor(() => expect(calls.reconcile).toHaveLength(1));
-        expect(calls.reconcile[0].body).toEqual({
+        expect(calls.reconcile[0]?.body).toEqual({
             mode: "accept",
             currency: "GBP",
         });

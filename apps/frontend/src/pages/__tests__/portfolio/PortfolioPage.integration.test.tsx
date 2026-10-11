@@ -306,7 +306,7 @@ describe("PortfolioPage (integration)", () => {
         const [button] = await screen.findAllByRole("button", {
             name: /add investment/i,
         });
-        await user.click(button);
+        await user.click(button!);
         expect(
             await screen.findByRole("heading", { name: /choose asset type/i }),
         ).toBeInTheDocument();

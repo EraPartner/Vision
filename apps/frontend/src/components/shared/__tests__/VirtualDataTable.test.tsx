@@ -659,7 +659,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: null, dir: null },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
+        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
         expect(onSortChange).toHaveBeenCalledWith("name", "asc");
     });
 
@@ -671,7 +671,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: "name", dir: "asc" },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
+        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
         expect(onSortChange).toHaveBeenCalledWith("name", "desc");
     });
 
@@ -683,7 +683,7 @@ describe("VirtualDataTable — server-side sort", () => {
                 sort: { onChange: onSortChange, key: "name", dir: "desc" },
             },
         });
-        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]);
+        await user.click(screen.getAllByRole("button", { name: /Name/ })[0]!);
         expect(onSortChange).toHaveBeenCalledWith(null, null);
     });
 });
@@ -726,7 +726,7 @@ describe("VirtualDataTable — inline editing", () => {
         renderTable({ columns: EDITABLE_COLUMNS });
         await user.dblClick(screen.getByText("Alpha"));
         // Focus the name edit input (index 1; index 0 is the search input) before pressing Escape
-        const nameInput = screen.getAllByRole("textbox")[1];
+        const nameInput = screen.getAllByRole("textbox")[1]!;
         await user.click(nameInput);
         await user.keyboard("{Escape}");
         // 1 textbox remains: the always-visible search input
@@ -742,7 +742,7 @@ describe("VirtualDataTable — inline editing", () => {
 
         await user.dblClick(screen.getByText("Alpha"));
         // index 0 = search input; index 1 = name column edit input
-        const nameInput = screen.getAllByRole("textbox")[1];
+        const nameInput = screen.getAllByRole("textbox")[1]!;
         await user.clear(nameInput);
         await user.type(nameInput, "Updated");
         await user.keyboard("{Enter}");

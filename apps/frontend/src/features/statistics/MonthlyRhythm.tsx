@@ -69,8 +69,10 @@ export function MonthlyRhythm({ data, currentPeriod }: MonthlyRhythmProps) {
         // can only drop out when there is at least one complete month.
         const complete = months.filter((m) => m.period !== partialPeriod);
         const pool = complete.length > 0 ? complete : months;
-        let best = pool[0];
-        let worst = pool[0];
+        const [first] = pool;
+        if (first === undefined) return undefined;
+        let best = first;
+        let worst = first;
         for (const m of pool) {
             if (m.net > best.net) best = m;
             if (m.net < worst.net) worst = m;
@@ -80,10 +82,17 @@ export function MonthlyRhythm({ data, currentPeriod }: MonthlyRhythmProps) {
         return { best, worst, positive };
     }, [months, partialPeriod]);
 
-    if (months.length === 0 || !extremes) return null;
+    const firstMonth = months[0];
+    const latestMonth = months[lastIndex];
+    if (!firstMonth || !latestMonth || !extremes) return null;
 
-    const shownIndex = activeIndex ?? lastIndex;
-    const shown = months[shownIndex];
+    // A scrub index can outlive a refetch that returns fewer months; it then
+    // snaps back to the latest month instead of pointing past the series.
+    const shownIndex =
+        activeIndex !== null && activeIndex <= lastIndex
+            ? activeIndex
+            : lastIndex;
+    const shown = months[shownIndex] ?? latestMonth;
     const previous = shownIndex > 0 ? months[shownIndex - 1] : undefined;
     const delta = previous ? shown.net - previous.net : undefined;
 
@@ -234,7 +243,7 @@ export function MonthlyRhythm({ data, currentPeriod }: MonthlyRhythmProps) {
                         </div>
 
                         <div className="mt-2 flex items-center justify-between type-caption tabular-nums text-label-tertiary">
-                            <span>{labelFor(months[0].period)}</span>
+                            <span>{labelFor(firstMonth.period)}</span>
                             <span
                                 className={cn(
                                     "font-medium",
@@ -247,7 +256,7 @@ export function MonthlyRhythm({ data, currentPeriod }: MonthlyRhythmProps) {
                                     ? shownLabel
                                     : t("statsPage.rhythm.scrubHint")}
                             </span>
-                            <span>{labelFor(months[lastIndex].period)}</span>
+                            <span>{labelFor(latestMonth.period)}</span>
                         </div>
                     </div>
                 </div>

@@ -84,16 +84,23 @@ export function NextSevenDaysStrip({
         [locale],
     );
 
-    const rangeLabel = t("plannedPage.next7.range", {
-        from: formatDateStringWithAppSettings(
-            toYmd(buckets[0].date),
-            appSettings.dateFormat,
-        ),
-        to: formatDateStringWithAppSettings(
-            toYmd(buckets[WINDOW_DAYS - 1].date),
-            appSettings.dateFormat,
-        ),
-    });
+    // bucketNextSevenDays always yields WINDOW_DAYS columns; the guard only
+    // keeps the indexing honest for the type checker.
+    const firstBucket = buckets[0];
+    const lastBucket = buckets[WINDOW_DAYS - 1];
+    const rangeLabel =
+        firstBucket && lastBucket
+            ? t("plannedPage.next7.range", {
+                  from: formatDateStringWithAppSettings(
+                      toYmd(firstBucket.date),
+                      appSettings.dateFormat,
+                  ),
+                  to: formatDateStringWithAppSettings(
+                      toYmd(lastBucket.date),
+                      appSettings.dateFormat,
+                  ),
+              })
+            : undefined;
 
     return (
         <Card className="relative overflow-hidden">

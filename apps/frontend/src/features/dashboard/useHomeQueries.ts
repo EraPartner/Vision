@@ -28,7 +28,8 @@ export function useMonthToDate(currency: string) {
 
 /** Last calendar day of the month `ymd` falls in, as YYYY-MM-DD. */
 export function endOfMonthYmd(ymd: string): string {
-    const [year, month] = ymd.split("-").map(Number);
+    // Missing parts stay NaN so a malformed input still yields an Invalid Date.
+    const [year = NaN, month = NaN] = ymd.split("-").map(Number);
     return toYmd(new Date(year, month, 0));
 }
 

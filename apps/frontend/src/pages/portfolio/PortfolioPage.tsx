@@ -365,9 +365,9 @@ export default function PortfolioPage() {
                 pct: totalReturnPct as number | undefined,
             };
         }
-        if (snapshots.length < 2) return undefined;
         const first = snapshots[0];
-        const last = snapshots[snapshots.length - 1];
+        const last = snapshots.at(-1);
+        if (snapshots.length < 2 || !first || !last) return undefined;
         const contributions = last.invested - first.invested;
         const amount = last.value - first.value - contributions;
         const base = first.value + Math.max(contributions, 0);

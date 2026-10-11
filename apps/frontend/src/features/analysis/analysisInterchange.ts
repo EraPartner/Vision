@@ -88,16 +88,21 @@ export async function parseScenarioCsv(
     if (records.length < 2)
         throw new Error("Scenario CSV needs a header and at least one row");
     const headers = records[0];
-    if (!headers.length || headers.length > 32)
+    if (!headers?.length || headers.length > 32)
         throw new Error("Scenario CSV must contain 1 to 32 columns");
     if (records.length - 1 > 1_000)
         throw new Error("Scenario CSV exceeds the 1,000 row limit");
-    const ids = headers.map(columnId);
-    if (new Set(ids).size !== ids.length)
+    const headerColumns = headers.map((label, index) => ({
+        label,
+        id: columnId(label, index),
+    }));
+    if (new Set(headerColumns.map(({ id }) => id)).size !== headers.length)
         throw new Error("Scenario CSV column names must be unique");
-    const types = headers.map((_, index) =>
-        inferType(records.slice(1).map((row) => row[index] ?? "")),
-    );
+    const columns = headerColumns.map(({ label, id }, index) => ({
+        id,
+        label: label.trim() || id,
+        type: inferType(records.slice(1).map((row) => row[index] ?? "")),
+    }));
     const digest = await crypto.subtle.digest(
         "SHA-256",
         new TextEncoder().encode(text),
@@ -111,18 +116,14 @@ export async function parseScenarioCsv(
         fileName: file.name,
         importedAt: new Date().toISOString(),
         sha256,
-        columns: headers.map((label, index) => ({
-            id: ids[index],
-            label: label.trim() || ids[index],
-            type: types[index],
-        })),
+        columns,
         rows: records
             .slice(1)
             .map((record) =>
                 Object.fromEntries(
-                    ids.map((key, index) => [
+                    columns.map(({ id: key, type }, index) => [
                         key,
-                        normalize(record[index] ?? "", types[index]),
+                        normalize(record[index] ?? "", type),
                     ]),
                 ),
             ),

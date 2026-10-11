@@ -217,7 +217,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
             accounts: [usdAccount],
             rows: [
                 {
-                    ...LEDGER_ROWS[0],
+                    ...LEDGER_ROWS[0]!,
                     id: 41,
                     recipient_name: "Legacy null row",
                     currency: null as never,
@@ -225,7 +225,7 @@ describe("AccountDetailPage (integration, WP-B4 ledger route)", () => {
                     running_balance: 25,
                 },
                 {
-                    ...LEDGER_ROWS[1],
+                    ...LEDGER_ROWS[1]!,
                     id: 42,
                     recipient_name: "Dollar row",
                     currency: "USD",

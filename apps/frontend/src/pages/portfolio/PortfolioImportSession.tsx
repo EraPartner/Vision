@@ -369,7 +369,7 @@ export function PortfolioImportSession({ accounts }: Props) {
         if (
             next.some(
                 (item, index) =>
-                    item.accountId !== statementsRef.current[index].accountId,
+                    item.accountId !== statementsRef.current[index]?.accountId,
             )
         ) {
             invalidate();
@@ -1749,7 +1749,8 @@ export function PortfolioImportSession({ accounts }: Props) {
                         <dl className="grid grid-cols-2 gap-3 type-body sm:grid-cols-3">
                             {actions
                                 .filter(
-                                    (action) => review.plan.summary[action] > 0,
+                                    (action) =>
+                                        (review.plan.summary[action] ?? 0) > 0,
                                 )
                                 .map((action) => (
                                     <div key={action}>

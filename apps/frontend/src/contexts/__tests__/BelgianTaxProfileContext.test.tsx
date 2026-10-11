@@ -196,10 +196,12 @@ describe("BelgianTaxProfileContext", () => {
             );
             act(() => result.current.updateProfile({ taxYear: startYear + 1 }));
             expect(result.current.snapshots[startYear]).toBeDefined();
-            expect(result.current.snapshots[startYear].grossAnnualIncome).toBe(
+            expect(result.current.snapshots[startYear]?.grossAnnualIncome).toBe(
                 50000,
             );
-            expect(result.current.snapshots[startYear].taxYear).toBe(startYear);
+            expect(result.current.snapshots[startYear]?.taxYear).toBe(
+                startYear,
+            );
             // The live profile carries the new year and existing values.
             expect(result.current.profile.taxYear).toBe(startYear + 1);
             expect(result.current.profile.grossAnnualIncome).toBe(50000);
@@ -223,7 +225,7 @@ describe("BelgianTaxProfileContext", () => {
             );
             act(() => result.current.updateProfile({ taxYear: startYear }));
             act(() => result.current.updateProfile({ taxYear: startYear + 1 }));
-            expect(result.current.snapshots[startYear].grossAnnualIncome).toBe(
+            expect(result.current.snapshots[startYear]?.grossAnnualIncome).toBe(
                 50000,
             );
         });
@@ -293,8 +295,8 @@ describe("BelgianTaxProfileContext", () => {
             );
             act(() => result.current.createSnapshotFromLive(2023));
             expect(result.current.snapshots[2023]).toBeDefined();
-            expect(result.current.snapshots[2023].taxYear).toBe(2023);
-            expect(result.current.snapshots[2023].grossAnnualIncome).toBe(
+            expect(result.current.snapshots[2023]?.taxYear).toBe(2023);
+            expect(result.current.snapshots[2023]?.grossAnnualIncome).toBe(
                 55000,
             );
             // Re-seeding is a no-op.
@@ -302,7 +304,7 @@ describe("BelgianTaxProfileContext", () => {
                 result.current.updateProfile({ grossAnnualIncome: 99999 }),
             );
             act(() => result.current.createSnapshotFromLive(2023));
-            expect(result.current.snapshots[2023].grossAnnualIncome).toBe(
+            expect(result.current.snapshots[2023]?.grossAnnualIncome).toBe(
                 55000,
             );
         });
@@ -320,10 +322,10 @@ describe("BelgianTaxProfileContext", () => {
                     taxYear: 2099,
                 }),
             );
-            expect(result.current.snapshots[2024].grossAnnualIncome).toBe(
+            expect(result.current.snapshots[2024]?.grossAnnualIncome).toBe(
                 33000,
             );
-            expect(result.current.snapshots[2024].taxYear).toBe(2024);
+            expect(result.current.snapshots[2024]?.taxYear).toBe(2024);
         });
 
         it("updateSnapshot is a no-op when the snapshot does not exist", async () => {
@@ -370,8 +372,8 @@ describe("BelgianTaxProfileContext", () => {
             act(() => result.current.createSnapshotFromLive(2023));
             const history = result.current.getSnapshotHistory(2023);
             expect(history).toHaveLength(1);
-            expect(history[0].kind).toBe("created");
-            expect(typeof history[0].at).toBe("string");
+            expect(history[0]?.kind).toBe("created");
+            expect(typeof history[0]?.at).toBe("string");
         });
 
         it("appends a 'created' entry on auto-rollover", async () => {
@@ -386,7 +388,7 @@ describe("BelgianTaxProfileContext", () => {
             act(() => result.current.updateProfile({ taxYear: startYear + 1 }));
             const history = result.current.getSnapshotHistory(startYear);
             expect(history).toHaveLength(1);
-            expect(history[0].kind).toBe("created");
+            expect(history[0]?.kind).toBe("created");
         });
 
         it("appends a 'patched' entry with the diff when a snapshot is updated", async () => {
@@ -403,8 +405,8 @@ describe("BelgianTaxProfileContext", () => {
             );
             const history = result.current.getSnapshotHistory(2023);
             expect(history).toHaveLength(2);
-            expect(history[1].kind).toBe("patched");
-            expect(history[1].changes).toEqual({
+            expect(history[1]?.kind).toBe("patched");
+            expect(history[1]?.changes).toEqual({
                 grossAnnualIncome: 55555,
                 region: "brussels",
             });

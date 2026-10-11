@@ -115,9 +115,9 @@ describe("YearComparisonCard", () => {
         expect(taxRow).not.toBeNull();
 
         const grossPill = within(grossRow!).getAllByRole("cell")[3]
-            .firstElementChild;
+            ?.firstElementChild;
         const taxPill = within(taxRow!).getAllByRole("cell")[3]
-            .firstElementChild;
+            ?.firstElementChild;
         expect(grossPill).toHaveClass("text-gain", "bg-gain/12");
         expect(taxPill).toHaveClass("text-loss", "bg-loss/12");
         expect(grossPill).toHaveTextContent("+€5000 (+9.1%)");

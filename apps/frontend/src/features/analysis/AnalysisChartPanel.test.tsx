@@ -80,7 +80,7 @@ describe("analysis chart rendering", () => {
         );
         expect(screen.getByRole("img")).toBeTruthy();
         expect(container.querySelectorAll("rect")).toHaveLength(2);
-        expect(container.querySelectorAll("title")[0].textContent).toContain(
+        expect(container.querySelectorAll("title")[0]?.textContent).toContain(
             "-2",
         );
         expect(screen.getByText("analysis.ext.chart.table")).toBeTruthy();

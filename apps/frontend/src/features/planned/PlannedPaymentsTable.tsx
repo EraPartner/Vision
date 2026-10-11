@@ -27,7 +27,10 @@ import type { PlannedPayment } from "@/hooks/usePlannedPayments";
 import { cn } from "@/lib/utils";
 import { safeHref } from "@/utils/safeHref";
 
-const FREQUENCY_LABEL_KEYS: Record<string, string> = {
+const FREQUENCY_LABEL_KEYS: Record<
+    NonNullable<PlannedPayment["frequency"]>,
+    string
+> = {
     daily: "plannedPage.freq.daily",
     weekly: "plannedPage.freq.weekly",
     biweekly: "plannedPage.freq.biweekly",

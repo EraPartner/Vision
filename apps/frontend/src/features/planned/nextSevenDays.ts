@@ -44,7 +44,9 @@ export function bucketNextSevenDays(payments: PlannedPayment[], today: Date): Da
     if (dueDate.kind !== "date") continue;
     const days = differenceInDays(dueDate.date, normalizedToday);
     if (days < 0 || days > WINDOW_DAYS - 1) continue;
-    buckets[days].items.push(p);
+    const bucket = buckets[days];
+    if (bucket === undefined) continue;
+    bucket.items.push(p);
   }
 
   for (const bucket of buckets) {

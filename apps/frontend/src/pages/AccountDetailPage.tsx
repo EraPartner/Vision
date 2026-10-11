@@ -249,8 +249,11 @@ export default function AccountDetailPage() {
     }, [rows, account?.currency]);
 
     const sparkColor = useMemo(() => {
-        if (sparkPoints.length < 2) return SPARK_COLOR_NEUTRAL;
-        const delta = sparkPoints[sparkPoints.length - 1] - sparkPoints[0];
+        const first = sparkPoints[0];
+        const last = sparkPoints.at(-1);
+        if (sparkPoints.length < 2 || first === undefined || last === undefined)
+            return SPARK_COLOR_NEUTRAL;
+        const delta = last - first;
         return delta > 0
             ? SPARK_COLOR_POSITIVE
             : delta < 0

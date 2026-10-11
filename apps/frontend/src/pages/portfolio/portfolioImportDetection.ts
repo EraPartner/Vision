@@ -118,12 +118,12 @@ export function detectPortfolioImportRecords(
     records: readonly (readonly unknown[])[],
 ): DetectedPortfolioImport | undefined {
     const matches: DetectedPortfolioImport[] = [];
-    for (let index = 0; index < records.length; index++) {
-        const header = records[index].map(cell);
+    for (const [index, row] of records.entries()) {
+        const header = row.map(cell);
         if (
             index === 0 &&
             header.length === NATIVE_RECEIPT_COLUMNS.length &&
-            records[index].every((value, field) => value === header[field]) &&
+            row.every((value, field) => value === header[field]) &&
             new Set(header).size === header.length &&
             NATIVE_RECEIPT_COLUMNS.every((field) => header.includes(field)) &&
             records.length > 1 &&
@@ -208,7 +208,7 @@ export function resolveDetectedPortfolioAccount(
                 (value) => value?.trim().toLowerCase() === "coolwallet",
             ),
         );
-        return wallets.length === 1 ? wallets[0].id : undefined;
+        return wallets.length === 1 ? wallets[0]?.id : undefined;
     }
     const source = detected.source;
     const sourceIds = new Set(
@@ -221,7 +221,7 @@ export function resolveDetectedPortfolioAccount(
             (value) => value && sourceIds.has(value.trim().toLowerCase()),
         ),
     );
-    if (exact.length) return exact.length === 1 ? exact[0].id : undefined;
+    if (exact.length) return exact.length === 1 ? exact[0]?.id : undefined;
     const aliases: Record<
         Exclude<PortfolioImportSource, "native_receipts">,
         string[]
@@ -238,7 +238,7 @@ export function resolveDetectedPortfolioAccount(
                 value && aliases[source].includes(value.trim().toLowerCase()),
         ),
     );
-    return byBroker.length === 1 ? byBroker[0].id : undefined;
+    return byBroker.length === 1 ? byBroker[0]?.id : undefined;
 }
 
 export async function detectPortfolioImportFile(
@@ -291,8 +291,9 @@ export async function detectPortfolioImportFile(
         const matches = sheets
             .map((sheet) => detectPortfolioImportRecords(sheet.data))
             .filter((match) => match !== undefined);
-        return matches.length === 1 && matches[0].source === "saxo"
-            ? matches[0]
+        const [match] = matches;
+        return matches.length === 1 && match?.source === "saxo"
+            ? match
             : undefined;
     }
     let text: string;
@@ -331,6 +332,7 @@ function detectIbkrFundingWorkbook(
         if (!Object.hasOwn(IBKR_FUNDING_HEADERS, sheetName)) return undefined;
         const sheet = workbook.Sheets[sheetName];
         if (
+            !sheet ||
             !sheet["!ref"] ||
             sheet["!merges"]?.length ||
             (sheet["!type"] && sheet["!type"] !== "sheet")

@@ -23,6 +23,11 @@ const headers = [
     "Amount",
     "Status",
 ];
+function depositSheet(workbook: XLSX.WorkBook): XLSX.WorkSheet {
+    const sheet = workbook.Sheets.Deposit;
+    if (!sheet) throw new Error("fixture workbook has no Deposit sheet");
+    return sheet;
+}
 const record = () => [
     "2025-01-02",
     "SYNTHETIC-REF-1",
@@ -162,13 +167,13 @@ describe("IBKR native funding workbook detection", () => {
     it("does not select altered workbook layouts, formulas or numeric account identifiers", async () => {
         for (const mutate of [
             (workbook: XLSX.WorkBook) => {
-                workbook.Sheets.Deposit.N1.v = "Amount";
+                depositSheet(workbook).N1.v = "Amount";
             },
             (workbook: XLSX.WorkBook) => {
-                workbook.Sheets.Deposit.M2.f = '"USD 123.45"';
+                depositSheet(workbook).M2.f = '"USD 123.45"';
             },
             (workbook: XLSX.WorkBook) => {
-                workbook.Sheets.Deposit.D2 = { t: "n", v: 123456 };
+                depositSheet(workbook).D2 = { t: "n", v: 123456 };
             },
             (workbook: XLSX.WorkBook) => {
                 XLSX.utils.book_append_sheet(

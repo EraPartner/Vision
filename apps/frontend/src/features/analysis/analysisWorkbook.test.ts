@@ -78,7 +78,7 @@ describe("typed XLSX interchange", () => {
             note: '=HYPERLINK("x") & <tag>',
             active: true,
         });
-        expect(imported.rows[1].amount).toBeNull();
+        expect(imported.rows[1]?.amount).toBeNull();
         expect(imported.formulaCells).toBe(0);
     });
     it("rejects oversized or malformed import", () => {

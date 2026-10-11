@@ -95,7 +95,7 @@ describe("importCSVWithProgress SSE handling", () => {
             progressPayload,
             { ...completePayload, phase: "complete", percent: 100 },
         ]);
-        const [url, init] = vi.mocked(fetch).mock.calls[0];
+        const [url, init] = vi.mocked(fetch).mock.calls[0]!;
         expect(String(url)).not.toContain("?");
         expect((init?.body as FormData).get("bank_name")).toBe("test-bank");
     });
@@ -112,7 +112,7 @@ describe("importCSVWithProgress SSE handling", () => {
         );
         await result;
 
-        const [url, init] = vi.mocked(fetch).mock.calls[0];
+        const [url, init] = vi.mocked(fetch).mock.calls[0]!;
         expect(String(url)).not.toContain("?");
         const body = init?.body as FormData;
         expect(body.get("adapter_name")).toBe("saved-parser");

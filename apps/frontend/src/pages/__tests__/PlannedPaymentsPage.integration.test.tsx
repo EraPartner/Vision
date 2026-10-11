@@ -98,6 +98,7 @@ async function addButton() {
     const [button] = await screen.findAllByRole("button", {
         name: /add payment/i,
     });
+    if (!button) throw new Error("expected an add payment button");
     return button;
 }
 
@@ -717,7 +718,7 @@ describe("PlannedPaymentForm (inline validation)", () => {
         await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
         // Recurrence fields are deleted for loans, and the selected account is
         // sent by ID.
-        expect(JSON.stringify(onSubmit.mock.calls[0][0])).toBe(
+        expect(JSON.stringify(onSubmit.mock.calls[0]?.[0])).toBe(
             JSON.stringify({
                 name: "Mortgage",
                 // Typed as "100" with the Direction toggle on its "Expense"

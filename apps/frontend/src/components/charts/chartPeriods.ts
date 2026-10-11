@@ -28,9 +28,10 @@ export function filterByPeriod<T>(
     getYmd: (item: T) => string,
     period: ChartPeriod,
 ): T[] {
-    if (period === "all" || items.length === 0) return items.slice();
+    const lastItem = items.at(-1);
+    if (period === "all" || lastItem === undefined) return items.slice();
     const days = CHART_PERIOD_OFFSET_DAYS[period];
-    const lastYmd = getYmd(items[items.length - 1]);
+    const lastYmd = getYmd(lastItem);
     const anchor = parseLocalDateFromYmd(lastYmd);
     if (Number.isNaN(anchor.getTime())) return items.slice();
     // subDays is local-calendar day arithmetic on the midnight anchor —

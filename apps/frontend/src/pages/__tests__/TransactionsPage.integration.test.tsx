@@ -266,7 +266,7 @@ describe("TransactionsPage (integration)", () => {
         );
         await waitFor(() => {
             const last = captured[captured.length - 1];
-            expect(last.get("account_id")).toBeNull();
+            expect(last?.get("account_id")).toBeNull();
         });
     });
 

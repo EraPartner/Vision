@@ -20,7 +20,32 @@ const progress = {
     complete: false,
     deferredCounts: { gift: 1, asset_transfer: 1 },
 };
+function incomeAction() {
+    return {
+        batchId: 11,
+        rowId: 1,
+        rowOrdinal: 1,
+        action: "record_income",
+        incomeProof: {
+            kind: "paired_kinesis_income",
+            unitTransactionId: 99,
+        },
+        source: {
+            type: "dividend",
+            date: "2025-01-01",
+            amount: "5",
+            units: null,
+            price_per_unit: null,
+            fees: "0",
+            taxes: "0",
+            currency: "USD",
+            income_recognition_role: "included_in_units",
+        },
+    };
+}
+type IncomeAction = ReturnType<typeof incomeAction>;
 function preview() {
+    const actions: [IncomeAction, ...IncomeAction[]] = [incomeAction()];
     return {
         ...progress,
         batchIds: [11],
@@ -31,29 +56,7 @@ function preview() {
         selectedRowIds: [1],
         blockers: [],
         summary: { record_income: 1 },
-        actions: [
-            {
-                batchId: 11,
-                rowId: 1,
-                rowOrdinal: 1,
-                action: "record_income",
-                incomeProof: {
-                    kind: "paired_kinesis_income",
-                    unitTransactionId: 99,
-                },
-                source: {
-                    type: "dividend",
-                    date: "2025-01-01",
-                    amount: "5",
-                    units: null,
-                    price_per_unit: null,
-                    fees: "0",
-                    taxes: "0",
-                    currency: "USD",
-                    income_recognition_role: "included_in_units",
-                },
-            },
-        ],
+        actions,
     };
 }
 function committed(recordedIncome = 1) {
@@ -140,7 +143,7 @@ describe("paired Kinesis income scope", () => {
                 expected_plan_fingerprint: "income-review",
             },
         ]);
-        expect(plan.actions[0].incomeProof?.unitTransactionId).toBe(99);
+        expect(plan.actions[0]?.incomeProof?.unitTransactionId).toBe(99);
         expect(result).toMatchObject({
             imported: 1,
             recordedIncome: 1,
@@ -162,7 +165,7 @@ describe("paired Kinesis income scope", () => {
         );
         expect(
             (await previewPortfolioImportReconciliation(scope)).actions[0]
-                .source?.amount,
+                ?.source?.amount,
         ).toBe("0.0000");
     });
 
@@ -220,12 +223,12 @@ describe("paired Kinesis income scope", () => {
                     unitTransactionId: 99,
                 },
             });
-            expect(plan.actions[0].existing).toBeUndefined();
+            expect(plan.actions[0]?.existing).toBeUndefined();
             if (action === "settled")
-                expect(plan.actions[0].source).toBeUndefined();
+                expect(plan.actions[0]?.source).toBeUndefined();
             else
                 expect(
-                    plan.actions[0].source?.income_recognition_role,
+                    plan.actions[0]?.source?.income_recognition_role,
                 ).toBeUndefined();
             expect(plan).toMatchObject({
                 selectedRowIds: [1],

@@ -48,7 +48,7 @@ function gainLossOf(
             wrapper: makeWrapper(),
         },
     );
-    return result.current.summaries[0].gainLoss;
+    return result.current.summaries[0]!.gainLoss;
 }
 
 describe("usePortfolioSummaries — canonical identity columns", () => {
@@ -81,7 +81,7 @@ describe("usePortfolioSummaries — canonical identity columns", () => {
                 }),
             { wrapper: makeWrapper() },
         );
-        const [summary] = result.current.summaries;
+        const summary = result.current.summaries[0]!;
         expect(summary.cadastral_income).toBe(1250);
         expect(summary.municipality_tax_rate).toBe(7.5);
         expect(summary.maturity_date).toBe("2030-06-15");
@@ -137,8 +137,8 @@ describe("usePortfolioSummaries — gainLoss does not double-count (FE mirror of
                 }),
             { wrapper: makeWrapper() },
         );
-        expect(result.current.summaries[0].totalUnits).toBe(2);
-        expect(result.current.summaries[0].gainLoss).toBe(30);
+        expect(result.current.summaries[0]?.totalUnits).toBe(2);
+        expect(result.current.summaries[0]?.gainLoss).toBe(30);
     });
 
     it("keeps archived history discoverable but excludes it from current totals", () => {
@@ -166,7 +166,7 @@ describe("usePortfolioSummaries — gainLoss does not double-count (FE mirror of
         expect(
             result.current.allSummaries.map((summary) => summary.id),
         ).toEqual([1, 2]);
-        expect(result.current.inactiveSummaries[0].transactions).toHaveLength(
+        expect(result.current.inactiveSummaries[0]?.transactions).toHaveLength(
             1,
         );
         expect(result.current.totals.totalPortfolioValue).toBe(20);

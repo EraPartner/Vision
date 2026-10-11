@@ -36,7 +36,7 @@ describe("useAccounts", () => {
             wrapper: makeFullWrapper(),
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data?.items[0].id).toBe(1);
+        expect(result.current.data?.items[0]?.id).toBe(1);
     });
 
     it("surfaces an error", async () => {
@@ -229,7 +229,7 @@ describe("useTags", () => {
             wrapper: makeFullWrapper(),
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data?.items[0].slug).toBe("t");
+        expect(result.current.data?.items[0]?.slug).toBe("t");
     });
 });
 

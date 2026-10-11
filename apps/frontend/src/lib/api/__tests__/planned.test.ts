@@ -85,7 +85,7 @@ describe("planned-transactions API client", () => {
     );
     const res = await getPlannedMatchSuggestions();
     expect(res).toHaveLength(1);
-    expect(res[0].planned.id).toBe(1);
+    expect(res[0]?.planned.id).toBe(1);
   });
 
   it("rejects a planned row whose NUMERIC amount arrives as a string", async () => {

@@ -177,7 +177,7 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                         ...(profile.additionalResidences || []),
                                     ];
                                     copy[idx] = {
-                                        ...copy[idx],
+                                        ...r,
                                         label: e.target.value,
                                     };
                                     updateProfile({
@@ -225,7 +225,7 @@ export function IncomeStep({ profile, updateProfile }: StepProps) {
                                         ...(profile.additionalResidences || []),
                                     ];
                                     copy[idx] = {
-                                        ...copy[idx],
+                                        ...r,
                                         region: v,
                                     };
                                     updateProfile({

@@ -34,6 +34,7 @@ import {
     roundMoney,
 } from "@vision/shared-utils/money";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import type { SplitCreateInput } from "@/lib/api/splits";
 import { allocateEvenly } from "./splitShares";
 
 type SplitType = "equal" | "full" | "custom";
@@ -173,16 +174,23 @@ export function SplitTransactionDialog({
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
-        const splits = validEntries.map((e, index) => ({
-            recipient_id: e.recipient_id!,
-            amount:
+        const splits: SplitCreateInput[] = [];
+        for (const [index, e] of validEntries.entries()) {
+            const amount =
                 splitType === "equal"
                     ? equalShare
                     : splitType === "full"
                       ? fullShares[index]
-                      : parseDecimal(e.amount, appSettings.numberFormat),
-            note: e.note || undefined,
-        }));
+                      : parseDecimal(e.amount, appSettings.numberFormat);
+            // allocateEvenly yields one share per valid entry while the dialog
+            // is open, so a missing share means the form is not submittable.
+            if (amount === undefined) return;
+            splits.push({
+                recipient_id: e.recipient_id!,
+                amount,
+                note: e.note || undefined,
+            });
+        }
 
         if (splits.length === 0) return;
 

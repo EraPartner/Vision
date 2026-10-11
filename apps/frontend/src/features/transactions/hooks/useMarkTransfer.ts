@@ -19,8 +19,9 @@ export interface ExistingTransferLeg {
 export function eligibleExistingTransferPair(
     legs: readonly ExistingTransferLeg[],
 ): legs is readonly [ExistingTransferLeg, ExistingTransferLeg] {
-    if (legs.length !== 2) return false;
     const [first, second] = legs;
+    if (legs.length !== 2 || first === undefined || second === undefined)
+        return false;
     return (
         first.id !== second.id &&
         legs.every(

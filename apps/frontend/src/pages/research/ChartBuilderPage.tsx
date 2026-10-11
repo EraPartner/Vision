@@ -524,7 +524,7 @@ export default function ChartBuilderPage() {
             if (s.type !== "candlestick") continue;
             let prev: number | null = null;
             for (const row of rows) {
-                const close = row[`${s.id}`];
+                const close = row[`${s.id}`] ?? null;
                 row[`${s.id}_o`] = prev ?? close;
                 prev = close ?? prev;
             }

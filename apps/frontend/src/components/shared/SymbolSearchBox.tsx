@@ -80,6 +80,7 @@ export function SymbolSearchBox({
         const currentIndex = resultOptions.findIndex(
             (option) => option.id === activeOptionId,
         );
+        const currentOption = resultOptions[currentIndex];
         let nextIndex: number | undefined;
 
         if (event.key === "ArrowDown") {
@@ -88,9 +89,9 @@ export function SymbolSearchBox({
         } else if (event.key === "ArrowUp") {
             nextIndex =
                 currentIndex > 0 ? currentIndex - 1 : resultOptions.length - 1;
-        } else if (event.key === "Enter" && currentIndex >= 0) {
+        } else if (event.key === "Enter" && currentOption) {
             event.preventDefault();
-            resultOptions[currentIndex].click();
+            currentOption.click();
             return;
         } else {
             return;
@@ -98,6 +99,7 @@ export function SymbolSearchBox({
 
         event.preventDefault();
         const nextOption = resultOptions[nextIndex];
+        if (!nextOption) return;
         setActiveOptionId(nextOption.id);
         nextOption.scrollIntoView?.({ block: "nearest" });
     };

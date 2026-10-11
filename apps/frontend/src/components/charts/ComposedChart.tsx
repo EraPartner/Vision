@@ -117,7 +117,7 @@ function ComposedSeriesLayerInner<Datum>({
                 const yS = scaleFor(s);
                 const color = s.color ?? getChartColor(i);
                 const base =
-                    yS(Math.max(0, (yS.domain() as number[])[0])) ??
+                    yS(Math.max(0, (yS.domain() as number[])[0] ?? 0)) ??
                     innerHeight;
                 return (
                     <g key={s.key} opacity={s.fillOpacity ?? 0.5}>

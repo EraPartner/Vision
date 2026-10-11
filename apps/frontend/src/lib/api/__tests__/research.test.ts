@@ -27,7 +27,7 @@ describe("research API client", () => {
     const result = await searchResearch("apple");
 
     expect(result.data.items).toHaveLength(1);
-    expect(result.data.items[0].symbol).toBe("AAPL");
+    expect(result.data.items[0]?.symbol).toBe("AAPL");
     expect(result.meta.provider).toBe("yahoo");
     expect(result.meta.source).toBe("live");
   });
@@ -83,6 +83,6 @@ describe("research API client", () => {
     });
 
     expect(captured).toMatchObject({ instrument_key: "US0378331005", query: "apple" });
-    expect(result.data.proposals[0].providerSymbol).toBe("AAPL");
+    expect(result.data.proposals[0]?.providerSymbol).toBe("AAPL");
   });
 });

@@ -35,11 +35,12 @@ const ELECTRON_MAIN = readFileSync(
 
 /** The `#root` element's inner markup, as authored in index.html. */
 function rootMarkup(): string {
-    const match = INDEX_HTML.match(
+    const markup = INDEX_HTML.match(
         /<div id="root">([\s\S]*?)<\/div>\s*<script/,
-    );
-    if (!match) throw new Error("Could not find #root in index.html");
-    return match[1];
+    )?.[1];
+    if (markup === undefined)
+        throw new Error("Could not find #root in index.html");
+    return markup;
 }
 
 describe("boot placeholder markup", () => {

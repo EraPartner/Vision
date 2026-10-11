@@ -14,7 +14,10 @@ export const CHART_TOKEN_COLORS = [
 ] as const;
 
 export function getChartColor(index: number): string {
-    return CHART_TOKEN_COLORS[index % CHART_TOKEN_COLORS.length];
+    return (
+        CHART_TOKEN_COLORS[index % CHART_TOKEN_COLORS.length] ??
+        CHART_TOKEN_COLORS[0]
+    );
 }
 
 export const CHART_NEUTRAL = {

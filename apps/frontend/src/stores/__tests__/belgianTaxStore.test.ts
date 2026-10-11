@@ -29,9 +29,9 @@ describe("Belgian tax settings slice", () => {
             .updateProfile({ grossAnnualIncome: 50_000 });
         useSettingsStore.getState().updateProfile({ taxYear: year + 1 });
         const state = useSettingsStore.getState();
-        expect(state.snapshots[year].grossAnnualIncome).toBe(50_000);
+        expect(state.snapshots[year]?.grossAnnualIncome).toBe(50_000);
         expect(
-            state.snapshotMetas[year].history?.map((entry) => entry.kind),
+            state.snapshotMetas[year]?.history?.map((entry) => entry.kind),
         ).toEqual(["created"]);
     });
 
@@ -57,7 +57,7 @@ describe("Belgian tax settings slice", () => {
             resolveBelgianTaxProfile(state, historicalYear).grossAnnualIncome,
         ).toBe(45_000);
         expect(resolveBelgianTaxCalculation(state, historicalYear)).toBe(
-            state.snapshotMetas[historicalYear].frozenCalculation,
+            state.snapshotMetas[historicalYear]!.frozenCalculation,
         );
     });
 });

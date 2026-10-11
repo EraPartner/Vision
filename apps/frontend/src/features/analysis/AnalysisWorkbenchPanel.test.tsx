@@ -219,7 +219,7 @@ it("applies partial formula coverage and prepared schema while retaining complet
     );
     fireEvent.click(screen.getByText("analysis.ext.workbench.applyFormulas"));
     await waitFor(() => expect(applied).toHaveBeenCalled());
-    expect(applied.mock.calls[0][0]).toMatchObject({
+    expect(applied.mock.calls[0]?.[0]).toMatchObject({
         complete: false,
         coverage: {
             complete: false,
@@ -405,7 +405,7 @@ it("queues unpivot with a new value column name and retains the pivot source sel
         within(
             screen.getAllByRole("group", {
                 name: "analysis.ext.workbench.values",
-            })[0],
+            })[0]!,
         ).getByRole("checkbox", { name: "amount" }),
     );
     const valueName = screen.getByRole("textbox", {
