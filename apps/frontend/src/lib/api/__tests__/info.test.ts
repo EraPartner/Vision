@@ -60,7 +60,7 @@ describe("info API client", () => {
         );
         const res = await getSupportedParsers();
         expect(res).toHaveLength(1);
-        expect(res[0].key).toBe("kbc");
+        expect(res[0]?.key).toBe("kbc");
     });
 
     it("getDistinctBankAccounts unwraps the rows from { items, total }", async () => {
@@ -214,7 +214,7 @@ describe("info API client", () => {
         const res = await getDeductionCandidates(2025);
         expect(url).toContain("year=2025");
         expect(res.byDeductionType).toHaveLength(1);
-        expect(res.byDeductionType[0].categories[0].category).toBe(
+        expect(res.byDeductionType[0]?.categories[0]?.category).toBe(
             "PENSION:SAVINGS",
         );
     });

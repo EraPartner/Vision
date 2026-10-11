@@ -14,22 +14,22 @@ function LocationProbe() {
 
 // One group (FOOD) with one child (GROCERIES): spend in 2026-01, nothing in
 // 2026-02 — the zero cell must NOT be keyboard-focusable.
+const GROCERIES: StatisticsData["categoryPivot"][number] = {
+    categoryName: "FOOD:GROCERIES",
+    categoryId: 5,
+    months: { "2026-01": 100 },
+    incomeMonths: {},
+    expenseMonths: {},
+    netMonths: { "2026-01": -100 },
+    total: 100,
+    incomeTotal: 0,
+    expenseTotal: 100,
+    netTotal: -100,
+};
+
 const DATA: StatisticsData = {
     monthlyData: [],
-    categoryPivot: [
-        {
-            categoryName: "FOOD:GROCERIES",
-            categoryId: 5,
-            months: { "2026-01": 100 },
-            incomeMonths: {},
-            expenseMonths: {},
-            netMonths: { "2026-01": -100 },
-            total: 100,
-            incomeTotal: 0,
-            expenseTotal: 100,
-            netTotal: -100,
-        },
-    ],
+    categoryPivot: [GROCERIES],
     topRecipients: [],
     topRecipientsByYear: {},
     yearlyComparison: [],
@@ -161,7 +161,7 @@ describe("CategoryPivotTable keyboard drill-down", () => {
             categoryPivot: [
                 ...DATA.categoryPivot,
                 {
-                    ...DATA.categoryPivot[0],
+                    ...GROCERIES,
                     categoryName: "FOOD:DINING",
                     categoryId: 6,
                     months: { "2026-01": 50 },

@@ -919,6 +919,7 @@ function verifiedIncomeProofActions(
             const incomeDate = action.source?.date ?? action.existing?.date;
             if (
                 units.length !== 1 ||
+                unit === undefined ||
                 unit === action ||
                 unit.batchId !== action.batchId ||
                 !["insert", "adopt", "duplicate", "settled"].includes(

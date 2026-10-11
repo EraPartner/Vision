@@ -331,6 +331,8 @@ export function RecurringDetectionPanel({ onCreatePlanned }: Props) {
                                         pattern.amountChanges[
                                             pattern.amountChanges.length - 1
                                         ];
+                                    // amountAlerts only keeps patterns with at least one change.
+                                    if (lastChange === undefined) return null;
                                     return (
                                         <li
                                             key={`alert-${pattern.recipientId}-${pattern.direction}`}

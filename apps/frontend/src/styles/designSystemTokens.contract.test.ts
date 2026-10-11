@@ -28,13 +28,16 @@ function block(selector: ":root" | ".dark"): string {
 }
 
 function token(css: string, name: string): string | undefined {
-    return css.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1].trim();
+    return css.match(new RegExp(`--${name}:\\s*([^;]+);`))?.[1]?.trim();
 }
 
 type Rgb = [number, number, number];
 
 function hslToRgb(components: string): Rgb {
     const [h, s, l] = components.replace(/%/g, "").split(/\s+/).map(Number);
+    if (h === undefined || s === undefined || l === undefined) {
+        throw new Error(`Malformed HSL components: ${components}`);
+    }
     const sat = s / 100;
     const light = l / 100;
     const k = (n: number) => (n + h / 30) % 12;
@@ -52,8 +55,14 @@ function luminance([r, g, b]: Rgb): number {
 
 /** Contrast of `fg` composited onto `bg` at `alpha`, against `bg`. */
 function contrast(fg: Rgb, bg: Rgb, alpha: number): number {
-    const mixed = fg.map((c, i) => c * alpha + bg[i] * (1 - alpha)) as Rgb;
-    const [hi, lo] = [luminance(mixed), luminance(bg)].sort((x, y) => y - x);
+    const mix = (f: number, b: number) => f * alpha + b * (1 - alpha);
+    const mixed: Rgb = [
+        mix(fg[0], bg[0]),
+        mix(fg[1], bg[1]),
+        mix(fg[2], bg[2]),
+    ];
+    const hi = Math.max(luminance(mixed), luminance(bg));
+    const lo = Math.min(luminance(mixed), luminance(bg));
     return (hi + 0.05) / (lo + 0.05);
 }
 

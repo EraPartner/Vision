@@ -135,12 +135,15 @@ export const StatisticsSection = memo(function StatisticsSection() {
         }
         return Array.from(grouped.entries())
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([general, items]) => ({
-                general,
-                items: [...items].sort((a, b) =>
+            .flatMap(([general, items]) => {
+                const sorted = [...items].sort((a, b) =>
                     a.path.join(" / ").localeCompare(b.path.join(" / ")),
-                ),
-            }));
+                );
+                const [first] = sorted;
+                return first
+                    ? [{ general, items: sorted, firstId: first.id }]
+                    : [];
+            });
     }, [categories, categorySearch]);
 
     const toggleCategoryGroup = (items: CategoryOption[]) => {
@@ -286,7 +289,7 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                         </p>
                                     ) : (
                                         categoryGroups.map(
-                                            ({ general, items }) => {
+                                            ({ general, items, firstId }) => {
                                                 const allExcluded =
                                                     items.every((c) =>
                                                         excludedCategories.includes(
@@ -305,11 +308,11 @@ export const StatisticsSection = memo(function StatisticsSection() {
                                                         className="space-y-0.5"
                                                     >
                                                         <Label
-                                                            htmlFor={`category-group-${items[0].id}`}
+                                                            htmlFor={`category-group-${firstId}`}
                                                             className={`${checkRowClass} cursor-pointer bg-foreground/[0.04]`}
                                                         >
                                                             <Checkbox
-                                                                id={`category-group-${items[0].id}`}
+                                                                id={`category-group-${firstId}`}
                                                                 aria-label={
                                                                     general
                                                                 }

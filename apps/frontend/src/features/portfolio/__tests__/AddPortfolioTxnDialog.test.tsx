@@ -150,7 +150,7 @@ describe("AddPortfolioTxnDialog", () => {
         await user.click(
             await screen.findByRole("button", { name: /add transaction/i }),
         );
-        await user.click(screen.getAllByRole("combobox")[0]);
+        await user.click(screen.getAllByRole("combobox")[0]!);
         await user.click(
             await screen.findByRole("option", { name: /appreciation/i }),
         );
@@ -366,7 +366,7 @@ describe("AddPortfolioTxnDialog", () => {
         await screen.findByRole("dialog");
 
         // Change transaction type to dividend via Select
-        const typeTrigger = screen.getAllByRole("combobox")[0];
+        const typeTrigger = screen.getAllByRole("combobox")[0]!;
         await user.click(typeTrigger);
         const dividendOption = await screen.findByRole("option", {
             name: /dividend/i,
@@ -522,7 +522,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0];
+        const typeTrigger = screen.getAllByRole("combobox")[0]!;
         await user.click(typeTrigger);
         await user.click(
             await screen.findByRole("option", { name: /dividend/i }),
@@ -603,7 +603,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0];
+        const typeTrigger = screen.getAllByRole("combobox")[0]!;
         await user.click(typeTrigger);
 
         // Assert — ETF allows buy, sell, gift, dividend, fee, tax
@@ -644,7 +644,7 @@ describe("AddPortfolioTxnDialog", () => {
         );
         await screen.findByRole("dialog");
 
-        const typeTrigger = screen.getAllByRole("combobox")[0];
+        const typeTrigger = screen.getAllByRole("combobox")[0]!;
         await user.click(typeTrigger);
 
         // Assert — savings shows buy/sell/fee/tax but not gift/dividend

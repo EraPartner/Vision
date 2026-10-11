@@ -38,7 +38,7 @@ describe("bucketNextSevenDays", () => {
         // The date-shift regression: a UTC-midnight parse pushes 2026-08-16 into
         // the 15th for any timezone east of UTC.
         const [, , sixteenth] = bucketNextSevenDays([payment({ id: 1, due_date: "2026-08-16" })], TODAY);
-        expect(sixteenth.items.map((p) => p.id)).toEqual([1]);
+        expect(sixteenth?.items.map((p) => p.id)).toEqual([1]);
     });
 
     it("accepts an ISO timestamp due date by taking its calendar day", () => {
@@ -46,7 +46,7 @@ describe("bucketNextSevenDays", () => {
             [payment({ id: 2, due_date: "2026-08-17T00:00:00.000Z" })],
             TODAY,
         );
-        expect(buckets[3].items.map((p) => p.id)).toEqual([2]);
+        expect(buckets[3]?.items.map((p) => p.id)).toEqual([2]);
     });
 
     it("keeps the tile's window: today (0) and +7 are in, −1 and +8 are out", () => {
@@ -71,7 +71,7 @@ describe("bucketNextSevenDays", () => {
             ],
             TODAY,
         );
-        expect(buckets[1].items.map((p) => p.id)).toEqual([21]);
+        expect(buckets[1]?.items.map((p) => p.id)).toEqual([21]);
     });
 
     it("keeps executed rows in the window (the tile counted them too)", () => {
@@ -79,7 +79,7 @@ describe("bucketNextSevenDays", () => {
             [payment({ id: 30, due_date: "2026-08-14", is_executed: true })],
             TODAY,
         );
-        expect(buckets[0].items.map((p) => p.id)).toEqual([30]);
+        expect(buckets[0]?.items.map((p) => p.id)).toEqual([30]);
     });
 
     it("drops rows with a missing or unparseable due date instead of throwing", () => {
@@ -103,13 +103,13 @@ describe("bucketNextSevenDays", () => {
             ],
             TODAY,
         );
-        expect(buckets[1].items.map((p) => p.id)).toEqual([52, 50, 51]);
+        expect(buckets[1]?.items.map((p) => p.id)).toEqual([52, 50, 51]);
     });
 
     it("spans a month boundary without losing a day", () => {
         const endOfMonth = new Date(2026, 7, 28, 9, 0, 0, 0);
         const buckets = bucketNextSevenDays([payment({ id: 60, due_date: "2026-09-02" })], endOfMonth);
         expect(buckets.map((b) => b.date.getDate())).toEqual([28, 29, 30, 31, 1, 2, 3, 4]);
-        expect(buckets[5].items.map((p) => p.id)).toEqual([60]);
+        expect(buckets[5]?.items.map((p) => p.id)).toEqual([60]);
     });
 });

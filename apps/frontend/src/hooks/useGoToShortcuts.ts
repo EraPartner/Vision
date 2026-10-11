@@ -68,7 +68,9 @@ export function useSectionCycleShortcuts(): void {
             const current = currentSectionIndex(location.pathname);
             const delta = e.key === "]" ? 1 : -1;
             const next = (current + delta + SECTION_CYCLE.length) % SECTION_CYCLE.length;
-            navigate(SECTION_CYCLE[next].url);
+            const target = SECTION_CYCLE[next];
+            if (target === undefined) return;
+            navigate(target.url);
         };
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);

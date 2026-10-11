@@ -152,7 +152,7 @@ describe("useRecipientInsights window", () => {
     it("keys and requests the selected 24-month window", async () => {
         renderHook(() => useRecipientInsights("USD", [7], [8], "24m"));
         const options = vi.mocked(useQuery).mock
-            .calls[0][0] as unknown as CapturedQueryOptions;
+            .calls[0]![0] as unknown as CapturedQueryOptions;
 
         expect(options.queryKey).toEqual(
             aggregationKeys.recipientInsightsWithExclusions(

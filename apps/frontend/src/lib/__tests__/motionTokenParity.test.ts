@@ -38,7 +38,7 @@ function parseCssEasings(): Record<string, number[]> {
     const re =
         /(--ease-[a-z-]+)\s*:\s*cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/g;
     for (const m of tokensCss.matchAll(re)) {
-        out[tokenNameToKey(m[1])] = [
+        out[tokenNameToKey(m[1]!)] = [
             Number(m[2]),
             Number(m[3]),
             Number(m[4]),
@@ -53,7 +53,7 @@ function parseCssDurations(): Record<string, number> {
     const re = /--duration-([a-z]+)\s*:\s*(\d+)ms/g;
     for (const m of tokensCss.matchAll(re)) {
         // CSS declares ms; Framer takes seconds.
-        out[m[1]] = Number(m[2]) / 1000;
+        out[m[1]!] = Number(m[2]) / 1000;
     }
     return out;
 }
@@ -105,7 +105,7 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
         for (const m of tokensCss.matchAll(
             /(--(?:ease|duration)-[a-z-]+)\s*:/g,
         )) {
-            declared.add(m[1]);
+            declared.add(m[1]!);
         }
 
         const roots = [join(process.cwd(), "src")];
@@ -128,7 +128,7 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
             for (const m of src.matchAll(
                 /var\(\s*(--(?:ease|duration)-[a-z-]+)\s*[,)]/g,
             )) {
-                if (!declared.has(m[1])) {
+                if (!declared.has(m[1]!)) {
                     dangling.push(`${file.replace(process.cwd(), ".")}: ${m[1]}`);
                 }
             }
@@ -202,9 +202,9 @@ describe("motion token parity (tokens.css <-> lib/motion.ts)", () => {
 
     it("keeps the shared durations in step (CSS ms <-> Framer seconds)", () => {
         const css = parseCssDurations();
-        for (const key of Object.keys(css)) {
+        for (const [key, seconds] of Object.entries(css)) {
             expect(durations[key as keyof typeof durations], `--duration-${key}`)
-                .toBeCloseTo(css[key], 5);
+                .toBeCloseTo(seconds, 5);
         }
         // `page` is Framer-only: the route entrance has no CSS counterpart
         // now that PageTransition solely owns the page-level move.

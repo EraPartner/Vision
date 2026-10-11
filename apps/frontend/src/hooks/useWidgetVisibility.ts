@@ -69,7 +69,8 @@ export function useWidgetVisibility(pageKey: string, widgets: WidgetDefinition[]
     const pageVisibility = useMemo(() => visibility[pageKey] || {}, [visibility, pageKey]);
     const isVisible = useCallback(
         (widgetId: string): boolean => {
-            if (widgetId in pageVisibility) return pageVisibility[widgetId];
+            const stored = pageVisibility[widgetId];
+            if (stored !== undefined) return stored;
             const def = widgets.find((w) => w.id === widgetId);
             return def?.defaultVisible !== false;
         },

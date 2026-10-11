@@ -528,7 +528,14 @@ export function TransactionsTable({
                     </div>
                 ),
             };
-            return [core[0], summary, amount, ...optional, ...trailing];
+            // core.slice(0, 1) is the selection checkbox column.
+            return [
+                ...core.slice(0, 1),
+                summary,
+                amount,
+                ...optional,
+                ...trailing,
+            ];
         }
         return [...core, ...optional, amount, ...trailing];
     }, [

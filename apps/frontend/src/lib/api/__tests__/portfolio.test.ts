@@ -267,7 +267,7 @@ describe("portfolio API client", () => {
             ),
         );
         const res = await getPortfolioTransactions(4);
-        expect(res.items[0].date).toBe("2026-03-03");
+        expect(res.items[0]?.date).toBe("2026-03-03");
     });
 
     it("getPortfolioTransactionsBulk forwards investment_ids", async () => {
@@ -285,7 +285,7 @@ describe("portfolio API client", () => {
             investment_ids: "1,2",
         });
         expect(url).toContain("investment_ids=1%2C2");
-        expect(res.items[0].date).toBe("2025-01-01");
+        expect(res.items[0]?.date).toBe("2025-01-01");
     });
 
     it("createPortfolioTransaction POSTs to the investment sub-route", async () => {

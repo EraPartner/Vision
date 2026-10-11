@@ -87,7 +87,7 @@ describe('mapToStatisticsData', () => {
       recipientInsights([]),
       recipientByYear({}),
     );
-    const m = result.monthlyData[0];
+    const m = result.monthlyData[0]!;
     expect(m.income).toBe(1000);
     expect(m.spending).toBe(400);
     expect(m.net).toBe(600);
@@ -230,8 +230,8 @@ describe('mapToStatisticsData', () => {
         recipientInsights([]),
         recipientByYear({}),
       );
-      expect(result.categoryPivot[0].categoryId).toBe(2);
-      expect(result.categoryPivot[1].categoryId).toBe(1);
+      expect(result.categoryPivot[0]?.categoryId).toBe(2);
+      expect(result.categoryPivot[1]?.categoryId).toBe(1);
     });
   });
 
@@ -280,8 +280,8 @@ describe('mapToStatisticsData', () => {
         }),
       );
       expect(result.topRecipientsByYear['2026']).toHaveLength(1);
-      expect(result.topRecipientsByYear['2026'][0]).toEqual({ name: 'Store A', total: 400, count: 5 });
-      expect(result.topRecipientsByYear['2025'][0]).toEqual({ name: 'Store B', total: 200, count: 3 });
+      expect(result.topRecipientsByYear['2026']?.[0]).toEqual({ name: 'Store A', total: 400, count: 5 });
+      expect(result.topRecipientsByYear['2025']?.[0]).toEqual({ name: 'Store B', total: 200, count: 3 });
     });
   });
 

@@ -75,7 +75,9 @@ describe("Analysis import matching", () => {
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.updateScenarioJoin" }),
         );
-        expect(onChange.mock.calls[0][0].joins[0].resultColumn).toBe("amount");
+        expect(onChange.mock.calls[0]?.[0].joins[0].resultColumn).toBe(
+            "amount",
+        );
         fireEvent.click(
             screen.getByRole("button", { name: "analysis.removeScenario" }),
         );

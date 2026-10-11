@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { renderWithApp } from "@/test/renderWithApp";
 import { MonthlyRhythm } from "../MonthlyRhythm";
 import type { StatisticsData } from "@/hooks/useStatistics";
@@ -63,5 +63,32 @@ describe("MonthlyRhythm", () => {
         const best = await screen.findByText("Best month");
         expect(best.parentElement).toHaveTextContent(/75,00/);
         expect(best.parentElement).toHaveTextContent(/so far/i);
+    });
+
+    it("snaps a scrub index past a shrunken series back to the latest month", async () => {
+        const { rerender } = renderWithApp(
+            <MonthlyRhythm
+                currentPeriod="2026-04"
+                data={data([
+                    month("2026-01", 200),
+                    month("2026-02", -150),
+                    month("2026-03", 90),
+                ])}
+            />,
+        );
+        const strip = await screen.findByRole("group");
+        const bars = strip.querySelectorAll(".flex-1");
+        expect(bars).toHaveLength(3);
+        fireEvent.pointerEnter(bars[2]!);
+        expect(screen.getByText(/net in mar 2026/i)).toBeInTheDocument();
+
+        // A refetch returns fewer months while the pointer still rests on the strip.
+        rerender(
+            <MonthlyRhythm
+                currentPeriod="2026-04"
+                data={data([month("2026-01", 200)])}
+            />,
+        );
+        expect(screen.getByText(/net in jan 2026/i)).toBeInTheDocument();
     });
 });

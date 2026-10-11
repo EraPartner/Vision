@@ -243,7 +243,7 @@ describe("RestoreFromBackupCard", () => {
             expect(toast.error).toHaveBeenCalled();
         });
         const [, opts] = (toast.error as unknown as ReturnType<typeof vi.fn>)
-            .mock.calls[0];
+            .mock.calls[0]!;
         expect(opts).toMatchObject({ description: "Disk write failure" });
     });
 

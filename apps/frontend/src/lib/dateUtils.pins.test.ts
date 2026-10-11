@@ -88,8 +88,8 @@ describe("filterByPeriod day-subtraction cutoff (PKG-09 pins)", () => {
     // The cutoff is anchor(last row) minus `days`, compared as YMD strings
     // (inclusive). Pin both the count and the boundary element.
     expect(out.length).toBe(days + 1);
-    expect(out[0].d).toBe(rows[rows.length - 1 - days].d);
-    expect(out[out.length - 1].d).toBe("2026-01-30");
+    expect(out[0]?.d).toBe(rows[rows.length - 1 - days]!.d);
+    expect(out[out.length - 1]?.d).toBe("2026-01-30");
   });
 
   test("period 'all' and invalid anchors return a copy of the input", () => {

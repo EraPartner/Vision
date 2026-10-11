@@ -65,7 +65,7 @@ export function statementYmd(
 
 /** Midnight-UTC epoch ms for a YYYY-MM-DD calendar day (no timezone shift). */
 function ymdToUtcMs(ymd: string): number {
-    const [y, m, d] = ymd.split("-").map(Number);
+    const [y = NaN, m = NaN, d = NaN] = ymd.split("-").map(Number);
     return Date.UTC(y, m - 1, d);
 }
 

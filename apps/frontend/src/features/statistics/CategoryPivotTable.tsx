@@ -214,7 +214,9 @@ export function CategoryPivotTable({
                 group.categoryIds.push(cat.categoryId);
             group.total += cat.filteredTotal;
             for (const period of filteredPeriods) {
-                group.months[period] += getPeriodValue(cat, period, valueMode);
+                group.months[period] =
+                    (group.months[period] ?? 0) +
+                    getPeriodValue(cat, period, valueMode);
             }
             const childMap = childMaps.get(general)!;
             for (let depth = 2; depth <= segments.length; depth += 1) {
@@ -313,7 +315,9 @@ export function CategoryPivotTable({
         for (const period of filteredPeriods) totals[period] = 0;
         for (const cat of filteredCategories) {
             for (const period of filteredPeriods) {
-                totals[period] += getPeriodValue(cat, period, valueMode);
+                totals[period] =
+                    (totals[period] ?? 0) +
+                    getPeriodValue(cat, period, valueMode);
             }
         }
         return totals;

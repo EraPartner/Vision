@@ -82,8 +82,8 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         await user.click(screen.getByRole("button", { name: /^add account$/i }));
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
-        expect(calls.opening[0].id).toBe("77");
-        expect(calls.opening[0].body).toEqual({
+        expect(calls.opening[0]?.id).toBe("77");
+        expect(calls.opening[0]?.body).toEqual({
             balance: 123.45,
             date: toYmd(new Date()),
             currency: "EUR",
@@ -349,7 +349,7 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             expect(screen.queryByRole("alert")).not.toBeInTheDocument();
             await user.click(screen.getByRole("button", { name: /^add account$/i }));
             await waitFor(() => expect(calls.opening).toHaveLength(1));
-            expect(calls.opening[0].body).toEqual({
+            expect(calls.opening[0]?.body).toEqual({
                 balance: value === "0" ? 0 : -125.5,
                 date: toYmd(new Date()),
                 currency: "EUR",

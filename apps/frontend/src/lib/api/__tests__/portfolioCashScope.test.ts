@@ -21,6 +21,17 @@ const progress = {
     complete: false,
     deferredCounts: { gift: 1, dividend: 1 },
 };
+function triple<T>(items: T[]): [T, T, T] {
+    const [first, second, third] = items;
+    if (
+        items.length !== 3 ||
+        first === undefined ||
+        second === undefined ||
+        third === undefined
+    )
+        throw new Error("cash fixture must contain exactly three actions");
+    return [first, second, third];
+}
 function preview(
     action: "cash" | "duplicate" | "settled" = "cash",
     batchId = 11,
@@ -35,48 +46,50 @@ function preview(
         selectedRowIds: [1, 2, 3],
         blockers: [],
         summary: { [action]: 3 },
-        actions: (
-            ["trade_quote", "own_account_funding", "card_expense"] as const
-        ).map((eventKind, index) => ({
-            batchId,
-            rowId: index + 1,
-            rowOrdinal: index + 1,
-            action,
-            existingTransactionId: undefined as number | undefined,
-            cashValues: undefined as
-                | {
-                      date: string;
-                      amount: string;
-                      currency: string;
-                      accountId: number;
-                      isTransfer: boolean;
-                      transferSource: string;
-                      transferPeerId: null;
-                  }
-                | undefined,
-            cashProof: {
-                kind: "closed_kinesis_cash",
-                groupKey: "a".repeat(64),
-                eventKey: String(index + 1).repeat(64),
-                eventKind,
-                fileHash: "b".repeat(64),
-                memberCount: 3,
-                componentCount: 1,
-            },
-            ...(action === "cash"
-                ? {
-                      cashValues: {
-                          date: "2025-01-01",
-                          amount: index === 1 ? "20.0000" : "-5.0000",
-                          currency: "USD",
-                          accountId: 7,
-                          isTransfer: eventKind !== "card_expense",
-                          transferSource: "brokerage",
-                          transferPeerId: null,
-                      },
-                  }
-                : { existingTransactionId: index + 100 }),
-        })),
+        actions: triple(
+            (
+                ["trade_quote", "own_account_funding", "card_expense"] as const
+            ).map((eventKind, index) => ({
+                batchId,
+                rowId: index + 1,
+                rowOrdinal: index + 1,
+                action,
+                existingTransactionId: undefined as number | undefined,
+                cashValues: undefined as
+                    | {
+                          date: string;
+                          amount: string;
+                          currency: string;
+                          accountId: number;
+                          isTransfer: boolean;
+                          transferSource: string;
+                          transferPeerId: null;
+                      }
+                    | undefined,
+                cashProof: {
+                    kind: "closed_kinesis_cash",
+                    groupKey: "a".repeat(64),
+                    eventKey: String(index + 1).repeat(64),
+                    eventKind,
+                    fileHash: "b".repeat(64),
+                    memberCount: 3,
+                    componentCount: 1,
+                },
+                ...(action === "cash"
+                    ? {
+                          cashValues: {
+                              date: "2025-01-01",
+                              amount: index === 1 ? "20.0000" : "-5.0000",
+                              currency: "USD",
+                              accountId: 7,
+                              isTransfer: eventKind !== "card_expense",
+                              transferSource: "brokerage",
+                              transferPeerId: null,
+                          },
+                      }
+                    : { existingTransactionId: index + 100 }),
+            })),
+        ),
     };
 }
 function committed(recordedCash = 3, duplicates = 0, batchId = 11) {
@@ -193,7 +206,7 @@ describe("complete Kinesis cash-only scope", () => {
         respond(repeated);
         expect(
             (await previewPortfolioImportReconciliation(scope)).actions[1]
-                .existingCashFeeTransactionId,
+                ?.existingCashFeeTransactionId,
         ).toBe(200);
         Object.assign(repeated.actions[1], {
             existingCashFeeTransactionId: 100,

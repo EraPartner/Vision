@@ -18,7 +18,7 @@ describe("requiredString / ymdDateString", () => {
         const result = schema.safeParse("");
         expect(result.success).toBe(false);
         if (!result.success) {
-            expect(result.error.issues[0].message).toBe("validation.required");
+            expect(result.error.issues[0]?.message).toBe("validation.required");
         }
         expect(schema.safeParse("7").success).toBe(true);
 
@@ -34,7 +34,7 @@ describe("requiredTrimmedString", () => {
         const result = schema.safeParse("   ");
         expect(result.success).toBe(false);
         if (!result.success) {
-            expect(result.error.issues[0].message).toBe(
+            expect(result.error.issues[0]?.message).toBe(
                 "portfolio.move.selectAccount",
             );
         }
@@ -70,7 +70,7 @@ describe("moneyAmount", () => {
             expect(result.success).toBe(false);
             if (!result.success) {
                 expect(result.error.issues).toHaveLength(1);
-                expect(result.error.issues[0].message).toBe(key);
+                expect(result.error.issues[0]?.message).toBe(key);
             }
         }
     });
@@ -88,7 +88,7 @@ describe("moneyAmount", () => {
         const result = schema.safeParse("1e999");
         expect(result.success).toBe(false);
         if (!result.success)
-            expect(result.error.issues[0].message).toBe("k.invalid");
+            expect(result.error.issues[0]?.message).toBe("k.invalid");
     });
 });
 

@@ -75,10 +75,10 @@ export function mapFromAPI(
         else if (pattern === "yearly") frequency = "yearly";
         else {
             // Try to parse custom pattern like "every 10 days" or just a number
-            const match = pattern.match(/(\d+)/);
-            if (match) {
+            const digits = pattern.match(/(\d+)/)?.[1];
+            if (digits !== undefined) {
                 frequency = "custom";
-                custom_interval_days = parseInt(match[1]);
+                custom_interval_days = parseInt(digits);
             }
         }
     }
@@ -86,7 +86,7 @@ export function mapFromAPI(
     // Normalize planned_date to YYYY-MM-DD format (strip time portion if present)
     let normalizedDate = pt.planned_date;
     if (normalizedDate && normalizedDate.includes("T")) {
-        normalizedDate = normalizedDate.split("T")[0];
+        normalizedDate = normalizedDate.slice(0, normalizedDate.indexOf("T"));
     }
 
     return {

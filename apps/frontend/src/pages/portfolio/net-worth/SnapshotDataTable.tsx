@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { VirtualDataTable } from "@/components/shared/VirtualDataTable";
 import { cn } from "@/lib/utils";
-import { NetWorthSnapshot, fmtDay } from "./netWorthChartUtils";
+import { type NetWorthSnapshot, fmtDay } from "./netWorthChartUtils";
 import { Money } from "@/components/shared/Money";
 
 interface SnapshotDataTableProps {
@@ -38,9 +38,8 @@ export function SnapshotDataTable({
   // compares to the snapshot immediately older (next in the array).
   const rows = useMemo<BreakdownRow[]>(() => {
     const result: BreakdownRow[] = [];
-    for (let idx = 0; idx < snapshots.length; idx += 1) {
-      const s = snapshots[idx];
-      const older = idx < snapshots.length - 1 ? snapshots[idx + 1] : undefined;
+    for (const [idx, s] of snapshots.entries()) {
+      const older = snapshots[idx + 1];
       result.push({
         date: s.date,
         liquid: s.liquid,

@@ -52,11 +52,11 @@ describe("mergeForView", () => {
             dayNum: 1,
             actual: 10,
         });
-        expect(rows[2].actual).toBeNull();
-        expect(rows[2].simple_avg).toBe(45);
+        expect(rows[2]?.actual).toBeNull();
+        expect(rows[2]?.simple_avg).toBe(45);
 
         // Series always starts with the actual line, then visible methods.
-        expect(series[0].key).toBe("actual");
+        expect(series[0]?.key).toBe("actual");
         expect(series.map((s) => s.key)).toContain("simple_avg");
     });
 
@@ -68,9 +68,9 @@ describe("mergeForView", () => {
             visible,
             "Actual",
         );
-        expect(rows[0].actual).toBe(10);
-        expect(rows[1].actual).toBe(20);
-        expect(rows[2].simple_avg).toBe(15);
+        expect(rows[0]?.actual).toBe(10);
+        expect(rows[1]?.actual).toBe(20);
+        expect(rows[2]?.simple_avg).toBe(15);
     });
 
     test("hidden methods are not added to rows or series", () => {
@@ -80,7 +80,7 @@ describe("mergeForView", () => {
             new Set<string>(),
             "Actual",
         );
-        expect(rows[2].simple_avg).toBeUndefined();
+        expect(rows[2]!.simple_avg).toBeUndefined();
         expect(series.map((s) => s.key)).toEqual(["actual"]);
     });
 
@@ -104,8 +104,8 @@ describe("mergeForView", () => {
             new Set(["ewma"]),
             "Actual",
         );
-        expect(rows[2].ewma__pLo).toBe(35);
-        expect(rows[2].ewma__pHi).toBe(55);
+        expect(rows[2]?.ewma__pLo).toBe(35);
+        expect(rows[2]?.ewma__pHi).toBe(55);
         const keys = series.map((s) => s.key);
         expect(keys).toContain("ewma__pLo");
         expect(keys).toContain("ewma__pHi");
@@ -135,7 +135,7 @@ describe("mergeForView", () => {
             new Set(["ewma"]),
             "Actual",
         );
-        expect(rows[2].ewma__pLo).toBe(29);
-        expect(rows[2].ewma__pHi).toBe(49);
+        expect(rows[2]?.ewma__pLo).toBe(29);
+        expect(rows[2]?.ewma__pHi).toBe(49);
     });
 });

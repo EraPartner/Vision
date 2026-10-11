@@ -48,8 +48,8 @@ export function MonthlyIncomeTaxCard({
     const formatMonthTick = useCallback(
         (period: string, firstPeriod: string): string => {
             const [yearStr, monthStr] = period.split("-");
-            const year = Number.parseInt(yearStr, 10);
-            const month = Number.parseInt(monthStr, 10);
+            const year = Number.parseInt(yearStr ?? "", 10);
+            const month = Number.parseInt(monthStr ?? "", 10);
             if (Number.isNaN(year) || Number.isNaN(month)) return period;
             const monthName = monthTickFormatter.format(
                 new Date(year, month - 1, 1),

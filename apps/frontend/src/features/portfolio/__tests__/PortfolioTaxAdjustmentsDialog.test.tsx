@@ -266,7 +266,7 @@ describe("PortfolioTaxAdjustmentsDialog", () => {
         // Taxes inputs come first (one per investment row); grab the first one.
         // The zero placeholder follows the default European number format.
         const taxInputs = screen.getAllByPlaceholderText("0,00");
-        const firstTaxInput = taxInputs[0];
+        const firstTaxInput = taxInputs[0]!;
         await user.clear(firstTaxInput);
         await user.type(firstTaxInput, "12.50");
 

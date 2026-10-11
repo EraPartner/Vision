@@ -27,8 +27,8 @@ describe("analysis chart coverage", () => {
         });
         expect(spec.y).toEqual(["amount"]);
         const d = analysisChartData(fixture, spec);
-        expect(d.rows[0].values).toEqual([-12.3]);
-        expect(d.rows[1].values).toEqual([null]);
+        expect(d.rows[0]?.values).toEqual([-12.3]);
+        expect(d.rows[1]?.values).toEqual([null]);
         expect(d.omitted).toBe(1);
         expect(d.complete).toBe(true);
     });
@@ -64,7 +64,7 @@ describe("analysis chart coverage", () => {
             { kind: "scatter", x: "month", y: ["amount"] },
         );
         expect(d.omitted).toBe(1);
-        expect(d.rows[0].values[0]).toBeNull();
+        expect(d.rows[0]?.values[0]).toBeNull();
     });
 });
 it("compares dimensional unit values and rejects missing currency provenance", () => {

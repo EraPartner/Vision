@@ -218,9 +218,10 @@ describe("canonical portfolio holdings", () => {
                         requireCanonical: true,
                     });
                     const computePnl = useFxAwarePnl(currency);
+                    const [holding] = portfolio.summaries;
                     return {
                         portfolio,
-                        pnl: computePnl(portfolio.summaries[0]),
+                        pnl: holding ? computePnl(holding) : undefined,
                     };
                 },
                 { wrapper: createQueryWrapper() },

@@ -73,13 +73,21 @@ interface TaxComputationFlowProps {
     viewedYear: number;
 }
 
-/** A step written as prose (no amount) rather than a signed line item. */
-function isProse(group: FlowOperationGroup): boolean {
-    return (
-        !group.heading &&
-        group.items.length === 1 &&
-        group.items[0].value === undefined
-    );
+/**
+ * The sentence of a step written as prose (no amount) rather than a signed
+ * line item, or undefined when the group is a list of line items.
+ */
+function proseLine(group: FlowOperationGroup): string | undefined {
+    const [only] = group.items;
+    if (
+        group.heading ||
+        group.items.length !== 1 ||
+        only === undefined ||
+        only.value !== undefined
+    ) {
+        return undefined;
+    }
+    return only.label;
 }
 
 const FIGURE_TYPE: Record<0 | 1 | 2, string> = {
@@ -236,6 +244,9 @@ export function TaxComputationFlow({
                     {stages.map((stage, index) => {
                         const isLast = index === stages.length - 1;
                         const weight = stage.weight ?? 0;
+                        const thenProse = stage.then
+                            ? proseLine(stage.then)
+                            : undefined;
                         return (
                             <li
                                 key={stage.id}
@@ -315,9 +326,9 @@ export function TaxComputationFlow({
                                         A step that is prose rather than a signed
                                         amount stays unboxed — it is the document's
                                         connective tissue, not a line item. */}
-                                    {stage.then && isProse(stage.then) ? (
+                                    {thenProse !== undefined ? (
                                         <p className="mt-2.5 type-footnote italic leading-relaxed text-label-secondary">
-                                            {stage.then.items[0].label}
+                                            {thenProse}
                                         </p>
                                     ) : stage.then ? (
                                         <div className="mt-3 rounded-card corner-continuous bg-foreground/[0.04] px-3 py-2">

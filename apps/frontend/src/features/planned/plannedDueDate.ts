@@ -18,9 +18,16 @@ export function toLocalMidnight(date: Date): Date {
 export function parsePlannedDueDate(value?: string | null): PlannedDueDate {
   if (!value || typeof value !== "string") return { kind: "missing" };
 
-  const datePart = value.includes("T") ? value.split("T")[0] : value;
+  const datePart = value.split("T")[0] ?? value;
   const [year, month, day] = datePart.split("-").map(Number);
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
     return { kind: "invalid" };
   }
 

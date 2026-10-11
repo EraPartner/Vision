@@ -41,6 +41,14 @@ function yearOf(date?: string): number {
     return Number.parseInt(date?.slice(0, 4) ?? "", 10);
 }
 
+function addTo(
+    values: Record<string, number>,
+    key: string,
+    amount: number,
+): void {
+    values[key] = (values[key] ?? 0) + amount;
+}
+
 function nonEmptyEntries(values: Record<string, number>): CostBreakdownEntry[] {
     return Object.entries(values)
         .map(([name, value]) => ({ name, value }))
@@ -81,18 +89,22 @@ export function buildPortfolioCostBreakdowns({
                 transaction.currency,
             );
             if (transaction.type === "sell" && convertedTaxes > 0) {
-                taxes[labels.capitalGainsTax] += convertedTaxes;
+                addTo(taxes, labels.capitalGainsTax, convertedTaxes);
             } else if (transaction.type === "dividend" && convertedTaxes > 0) {
-                taxes[labels.dividendWithholding] += convertedTaxes;
+                addTo(taxes, labels.dividendWithholding, convertedTaxes);
             } else if (transaction.type === "buy" && convertedTaxes > 0) {
-                taxes[labels.transactionTax] += convertedTaxes;
+                addTo(taxes, labels.transactionTax, convertedTaxes);
             } else if (transaction.type === "tax") {
-                taxes[labels.otherTaxes] += convert(
-                    Number(transaction.amount) || 0,
-                    transaction.currency,
+                addTo(
+                    taxes,
+                    labels.otherTaxes,
+                    convert(
+                        Number(transaction.amount) || 0,
+                        transaction.currency,
+                    ),
                 );
             } else if (convertedTaxes > 0) {
-                taxes[labels.otherTaxes] += convertedTaxes;
+                addTo(taxes, labels.otherTaxes, convertedTaxes);
             }
 
             const convertedFees = convert(
@@ -103,14 +115,18 @@ export function buildPortfolioCostBreakdowns({
                 ["buy", "sell"].includes(transaction.type) &&
                 convertedFees > 0
             ) {
-                fees[labels.brokerFees] += convertedFees;
+                addTo(fees, labels.brokerFees, convertedFees);
             } else if (transaction.type === "fee") {
-                fees[labels.managementFees] += convert(
-                    Number(transaction.amount) || 0,
-                    transaction.currency,
+                addTo(
+                    fees,
+                    labels.managementFees,
+                    convert(
+                        Number(transaction.amount) || 0,
+                        transaction.currency,
+                    ),
                 );
             } else if (convertedFees > 0) {
-                fees[labels.otherFees] += convertedFees;
+                addTo(fees, labels.otherFees, convertedFees);
             }
         }
     }

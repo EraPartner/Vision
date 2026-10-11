@@ -100,8 +100,8 @@ describe("in-kind income frontend summary parity", () => {
                         transactions: [...transactions(sold), included],
                     }),
                 );
-                const baseline = before.result.current.allSummaries[0];
-                const summary = after.result.current.allSummaries[0];
+                const baseline = before.result.current.allSummaries[0]!;
+                const summary = after.result.current.allSummaries[0]!;
                 expect(baseline.gainLoss).toBe(sold ? 22 : 27);
                 for (const key of [
                     "totalUnits",
@@ -216,7 +216,7 @@ describe("in-kind income frontend summary parity", () => {
                     ],
                 }),
             );
-            const archived = result.current.inactiveSummaries[0];
+            const archived = result.current.inactiveSummaries[0]!;
             expect(archived.totalInKindIncome).toBe(expected);
             expect(archived.currency).toBe(currency);
             for (const key of [
@@ -231,7 +231,7 @@ describe("in-kind income frontend summary parity", () => {
                 "totalIncome",
             ] as const)
                 expect(archived[key]).toBe(
-                    baseline.result.current.inactiveSummaries[0][key],
+                    baseline.result.current.inactiveSummaries[0]![key],
                 );
             expect(archived.transactions).toContain(literal);
             expect(result.current.summaries).toHaveLength(0);
@@ -267,7 +267,7 @@ describe("in-kind income frontend summary parity", () => {
             gainLoss: 22,
         });
         expect(
-            result.current.inactiveSummaries[0].totalInKindIncome,
+            result.current.inactiveSummaries[0]!.totalInKindIncome,
         ).toBeUndefined();
     });
 
@@ -316,6 +316,6 @@ describe("in-kind income frontend summary parity", () => {
                 requireCanonical: true,
             }),
         );
-        expect(result.current.summaries[0].totalInKindIncome).toBe(0);
+        expect(result.current.summaries[0]?.totalInKindIncome).toBe(0);
     });
 });

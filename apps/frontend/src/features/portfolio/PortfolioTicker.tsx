@@ -92,6 +92,7 @@ export function PortfolioTicker({ items }: PortfolioTickerProps) {
         const sync = () => setActive(inView && !document.hidden);
         const io = new IntersectionObserver(
             ([entry]) => {
+                if (entry === undefined) return;
                 inView = entry.isIntersecting;
                 sync();
             },

@@ -304,6 +304,7 @@ export default function PerformanceBreakdown({
                                 <tbody>
                                     {heatmapData.years.map((year) => {
                                         const months = heatmapData.data[year];
+                                        if (months === undefined) return null;
                                         const validMonths = months.filter(
                                             (v): v is number => v !== null,
                                         );

@@ -346,9 +346,10 @@ export default function PortfolioForecastPage() {
                                             min={0}
                                             max={100}
                                             step={5}
-                                            onValueChange={(v) =>
-                                                setBlendPct(v[0])
-                                            }
+                                            onValueChange={([next]) => {
+                                                if (next !== undefined)
+                                                    setBlendPct(next);
+                                            }}
                                         />
                                     </div>
                                 )}

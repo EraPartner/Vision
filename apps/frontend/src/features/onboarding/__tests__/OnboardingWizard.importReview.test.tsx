@@ -76,7 +76,7 @@ async function runOnboardingImport(user: ReturnType<typeof userEvent.setup>) {
     const inputs = document.querySelectorAll<HTMLInputElement>('input[type="file"]');
     expect(inputs).toHaveLength(1);
     await user.upload(
-        inputs[0],
+        inputs[0]!,
         new File(["date,desc,amount\n"], "statement.csv", { type: "text/csv" }),
     );
 

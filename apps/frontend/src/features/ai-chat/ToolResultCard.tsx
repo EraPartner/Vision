@@ -73,8 +73,8 @@ function formatCell(value: unknown, locale: string): string {
 
 function inferColumns(rows: Row[], preferred?: string[]): string[] {
     if (preferred && preferred.length > 0) return preferred;
-    if (rows.length === 0) return [];
-    return Object.keys(rows[0]);
+    const firstRow = rows[0];
+    return firstRow === undefined ? [] : Object.keys(firstRow);
 }
 
 function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {

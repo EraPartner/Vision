@@ -88,7 +88,7 @@ describe("usePlannedPayments", () => {
         const { result } = renderHook(() => usePlannedPayments(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
         expect(result.current.payments).toHaveLength(1);
-        const p = result.current.payments[0];
+        const p = result.current.payments[0]!;
         expect(p.name).toBe("Monthly rent");
         expect(p.amount).toBe(1200);
         expect(p.currency).toBe("EUR");
@@ -186,9 +186,9 @@ describe("usePlannedPayments", () => {
             await result.current.updatePayment(1, { amount: 1500 });
         });
         await waitFor(() =>
-            expect(result.current.payments[0].amount).toBe(1500),
+            expect(result.current.payments[0]?.amount).toBe(1500),
         );
-        expect(result.current.payments[0].name).toBe("Updated rent");
+        expect(result.current.payments[0]?.name).toBe("Updated rent");
     });
 
     it("updatePayment forwards cleared recurrence bounds as explicit null", async () => {

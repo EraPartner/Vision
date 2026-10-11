@@ -54,7 +54,7 @@ describe("page icon identity", () => {
                 /<PageHeader\b(?:(?!\/>)[\s\S])*?\bicon=\{([^}]+)\}/g,
             )) {
                 if (
-                    !match[1].includes("PAGE_ICONS") &&
+                    !match[1]!.includes("PAGE_ICONS") &&
                     match[1] !== "PageIcon"
                 ) {
                     failures.push(`${relative(pagesRoot, file)}: ${match[1]}`);

@@ -19,14 +19,14 @@ export function parseFxQuery(
     query: string,
     numberFormat: NumberFormat,
 ): ParsedFxQuery | null {
-    const match = query.match(FX_QUERY);
-    if (!match) return null;
-    const amount = parseLocaleNumber(match[1], numberFormat);
+    const [, rawAmount, from, to] = query.match(FX_QUERY) ?? [];
+    if (rawAmount === undefined || from === undefined) return null;
+    const amount = parseLocaleNumber(rawAmount, numberFormat);
     if (!Number.isFinite(amount)) return null;
     return {
         amount,
-        from: match[2].toUpperCase(),
-        to: match[3]?.toUpperCase(),
+        from: from.toUpperCase(),
+        to: to?.toUpperCase(),
     };
 }
 
@@ -60,8 +60,8 @@ export function evaluateArithmetic(
 }
 
 export function parseTickerQuery(query: string): string | null {
-    const cashtag = query.match(CASHTAG_QUERY);
-    if (cashtag) return cashtag[1].toUpperCase();
+    const cashtag = query.match(CASHTAG_QUERY)?.[1];
+    if (cashtag !== undefined) return cashtag.toUpperCase();
     if (/[A-Z]/.test(query) && BARE_TICKER_QUERY.test(query))
         return query.toUpperCase();
     return null;

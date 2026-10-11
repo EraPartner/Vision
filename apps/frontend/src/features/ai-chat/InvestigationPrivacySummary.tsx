@@ -19,7 +19,7 @@ export function InvestigationPrivacySummary({
 }: InvestigationPrivacySummaryProps) {
     const { t } = useLanguage();
     const local = route === "local";
-    const modelCopy = {
+    const modelCopies = {
         local: [
             "aiResearch.summary.localTitle",
             "aiResearch.summary.localBody",
@@ -40,7 +40,8 @@ export function InvestigationPrivacySummary({
             "aiResearch.summary.evidenceBody",
             "aiResearch.modeCloudSynthesisProfile",
         ],
-    }[local ? "local" : disclosureMode];
+    } as const;
+    const modelCopy = modelCopies[local ? "local" : disclosureMode];
     const researchProfiles = {
         "local-only": [
             "aiResearch.localOnly",
@@ -57,14 +58,14 @@ export function InvestigationPrivacySummary({
             "aiResearch.summary.researchWeb",
             "aiResearch.researchWebProfile",
         ],
-    };
+    } as const;
     const researchCopy =
         !local && disclosureMode === "cloud-synthesis-selected"
-            ? [
+            ? ([
                   "aiResearch.summary.selectedOnlyTitle",
                   "aiResearch.summary.selectedOnlyBody",
                   "aiResearch.modeCloudSynthesisProfile",
-              ]
+              ] as const)
             : researchProfiles[researchMode];
     const ModelIcon = local ? ShieldCheck : Cloud;
     return (

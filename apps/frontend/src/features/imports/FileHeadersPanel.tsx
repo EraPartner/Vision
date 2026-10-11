@@ -130,6 +130,7 @@ export function FileHeadersPanel({
     const headers = preview!.headers;
     const rows = preview!.rows.slice(0, maxRows);
     const highlighted = new Set(highlightedHeaders.filter(Boolean));
+    const highlightedColumns = headers.map((h) => highlighted.has(h));
     const sepLabel = SEPARATOR_LABELS[effectiveSep] ?? effectiveSep;
 
     return (
@@ -198,9 +199,7 @@ export function FileHeadersPanel({
                                                 <TableCell
                                                     key={ci}
                                                     className={
-                                                        highlighted.has(
-                                                            headers[ci],
-                                                        )
+                                                        highlightedColumns[ci]
                                                             ? "text-foreground"
                                                             : "text-muted-foreground"
                                                     }

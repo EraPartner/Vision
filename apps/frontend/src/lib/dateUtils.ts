@@ -120,6 +120,12 @@ export function formatDistanceToNow(
     return rtf.format(Math.round(diffMs / (86_400_000 * 365.25)), "year");
 }
 
+/** The calendar-date part of an ISO timestamp ("2026-07-01T…" → "2026-07-01"). */
+function stripTimePart(value: string): string {
+    const timeStart = value.indexOf("T");
+    return timeStart === -1 ? value : value.slice(0, timeStart);
+}
+
 export function parseLocalDateFromYmd(dateStr: string): Date {
     if (typeof dateStr !== "string" || dateStr.length === 0) {
         return new Date(NaN);
@@ -129,8 +135,10 @@ export function parseLocalDateFromYmd(dateStr: string): Date {
     // Date → consumers silently skipped every row (flat-zero sparkline,
     // "NaN days remaining"). The backend now sends plain Y-M-D for date-only
     // columns, but a raw timestamp must degrade to its calendar day, not NaN.
-    const ymdPart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
-    const [year, month, day] = ymdPart.split("-").map(Number);
+    const [year, month, day] = stripTimePart(dateStr).split("-").map(Number);
+    if (year === undefined || month === undefined || day === undefined) {
+        return new Date(NaN);
+    }
     return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
@@ -228,7 +236,7 @@ export function formatDateStringWithAppSettings(
     if (!dateStr) return "";
 
     try {
-        const ymdPart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+        const ymdPart = stripTimePart(dateStr);
         if (/^\d{4}-\d{2}-\d{2}$/.test(ymdPart)) {
             return formatDateWithAppSettings(
                 parseLocalDateFromYmd(ymdPart),
@@ -290,7 +298,7 @@ export function formatDateTimeStringWithAppSettings(
     }
 
     const dateOnly = formatDateStringWithAppSettings(dateStr, appDateFormat);
-    const ymdPart = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
+    const ymdPart = stripTimePart(dateStr);
     const parsed = /^\d{4}-\d{2}-\d{2}$/.test(ymdPart)
         ? parseLocalDateFromYmd(ymdPart)
         : new Date(dateStr);

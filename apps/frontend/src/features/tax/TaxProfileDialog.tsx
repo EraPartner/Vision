@@ -128,15 +128,16 @@ export function TaxProfileDialog({
 
     const liveYear = liveProfile.taxYear;
     const effectiveTargetYear = targetYear ?? liveYear;
-    const editingHistorical =
-        effectiveTargetYear !== liveYear && !!snapshots[effectiveTargetYear];
+    const historicalSnapshot =
+        effectiveTargetYear !== liveYear
+            ? snapshots[effectiveTargetYear]
+            : undefined;
+    const editingHistorical = !!historicalSnapshot;
     const isFiled =
         editingHistorical &&
         Boolean(snapshotMetas[effectiveTargetYear]?.filing);
     const isLockedByFiling = isFiled && !filedOverride;
-    const profile: BelgianTaxProfile = editingHistorical
-        ? snapshots[effectiveTargetYear]
-        : liveProfile;
+    const profile: BelgianTaxProfile = historicalSnapshot ?? liveProfile;
 
     const updateProfile = useCallback(
         (updates: Partial<BelgianTaxProfile>) => {
@@ -172,21 +173,26 @@ export function TaxProfileDialog({
         (s: Step): string | null => {
             if (s === "income") {
                 const result = taxProfileIncomeStepSchema.safeParse(profile);
-                if (!result.success) return t(result.error.issues[0].message);
+                const issue = result.success
+                    ? undefined
+                    : result.error.issues[0];
+                if (issue) return t(issue.message);
             }
             return null;
         },
         [profile, t],
     );
 
-    // Index of the earliest invalid step strictly before `targetIdx`, or -1 if all
-    // are valid. Used to block forward navigation past an incomplete step.
+    // The earliest invalid step strictly before `targetIdx` with its error, or
+    // undefined if all are valid. Used to block forward navigation past an
+    // incomplete step.
     const firstInvalidStepBefore = useCallback(
-        (targetIdx: number): number => {
-            for (let i = 0; i < targetIdx; i++) {
-                if (stepError(STEPS[i])) return i;
+        (targetIdx: number): { step: Step; error: string } | undefined => {
+            for (const s of STEPS.slice(0, targetIdx)) {
+                const error = stepError(s);
+                if (error) return { step: s, error };
             }
-            return -1;
+            return undefined;
         },
         [stepError],
     );
@@ -203,16 +209,17 @@ export function TaxProfileDialog({
             toast.error(err);
             return;
         }
-        if (!isLast) {
-            setStep(STEPS[stepIdx + 1]);
+        const nextStep = isLast ? undefined : STEPS[stepIdx + 1];
+        if (nextStep !== undefined) {
+            setStep(nextStep);
             return;
         }
         // Final step → save. Guard against reaching here (e.g. via initialStep or
         // tab jumps) with an earlier step still incomplete.
         const bad = firstInvalidStepBefore(STEPS.length - 1);
-        if (bad !== -1) {
-            toast.error(stepError(STEPS[bad])!);
-            setStep(STEPS[bad]);
+        if (bad) {
+            toast.error(bad.error);
+            setStep(bad.step);
             return;
         }
         // For historical edits, the snapshot is already "configured" by definition —
@@ -221,7 +228,8 @@ export function TaxProfileDialog({
         setOpen(false);
     }
     function prev() {
-        if (!isFirst) setStep(STEPS[stepIdx - 1]);
+        const prevStep = isFirst ? undefined : STEPS[stepIdx - 1];
+        if (prevStep !== undefined) setStep(prevStep);
     }
 
     // Step picker: going back to an earlier/current step is always free; jumping
@@ -233,10 +241,10 @@ export function TaxProfileDialog({
             return;
         }
         const bad = firstInvalidStepBefore(targetIdx);
-        if (bad !== -1) {
-            toast.error(stepError(STEPS[bad])!);
-            if (STEPS[bad] === step) resetPicker();
-            setStep(STEPS[bad]);
+        if (bad) {
+            toast.error(bad.error);
+            if (bad.step === step) resetPicker();
+            setStep(bad.step);
             return;
         }
         setStep(target);

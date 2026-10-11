@@ -249,6 +249,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-11: The frontend compiles with the backend's stricter TypeScript flags
+
+[[docs/adr/197-stricter-frontend-compiler-flags|ADR-197]] turns on `noUncheckedIndexedAccess`,
+`noImplicitOverride`, `noImplicitReturns`, `erasableSyntaxOnly` and `verbatimModuleSyntax` for the
+frontend's source and tests, and converts the bundle-size guard to TypeScript.
+
 ### 2026-10-11: The Electron shell is strict TypeScript compiled into out/
 
 [[docs/adr/196-electron-shell-typescript|ADR-196]] converts the Electron shell to strict

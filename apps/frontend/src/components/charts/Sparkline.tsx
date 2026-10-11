@@ -65,6 +65,8 @@ function Inner({
         });
     }, [data, height]);
 
+    const activeValue = activeIndex === undefined ? undefined : data[activeIndex];
+
     return (
         <svg width={width} height={height} role="img" aria-label={ariaLabel ?? summarizeSparkline(t, data)}>
             {fillArea ? (
@@ -105,7 +107,7 @@ function Inner({
                     fill="none"
                 />
             </m.g>
-            {activeIndex !== undefined && activeIndex >= 0 && activeIndex < data.length && (
+            {activeIndex !== undefined && activeValue !== undefined && (
                 <g aria-hidden="true">
                     <line
                         x1={xScale(activeIndex)}
@@ -118,7 +120,7 @@ function Inner({
                     />
                     <circle
                         cx={xScale(activeIndex)}
-                        cy={yScale(data[activeIndex])}
+                        cy={yScale(activeValue)}
                         r={3.5}
                         fill={color}
                         stroke="hsl(var(--background))"

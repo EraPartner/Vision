@@ -189,7 +189,7 @@ describe("ChatConversationList", () => {
         const actionBtns = screen.getAllByRole("button", {
             name: /conversation actions/i,
         });
-        await user.click(actionBtns[0]);
+        await user.click(actionBtns[0]!);
 
         const renameItem = await screen.findByRole("menuitem", {
             name: /rename/i,
@@ -222,7 +222,7 @@ describe("ChatConversationList", () => {
 
         const actionBtn = screen.getAllByRole("button", {
             name: /conversation actions/i,
-        })[0];
+        })[0]!;
         await user.click(actionBtn);
         const renameItem = await screen.findByRole("menuitem", {
             name: /rename/i,
@@ -261,7 +261,7 @@ describe("ChatConversationList", () => {
 
         const actionBtn = screen.getAllByRole("button", {
             name: /conversation actions/i,
-        })[0];
+        })[0]!;
         await user.click(actionBtn);
 
         const deleteItem = await screen.findByRole("menuitem", {
@@ -306,7 +306,7 @@ describe("ChatConversationList", () => {
 
         const actionBtn = screen.getAllByRole("button", {
             name: /conversation actions/i,
-        })[0];
+        })[0]!;
         await user.click(actionBtn);
         const deleteItem = await screen.findByRole("menuitem", {
             name: /delete/i,
@@ -345,7 +345,7 @@ describe("ChatConversationList", () => {
 
         const actionBtn = screen.getAllByRole("button", {
             name: /conversation actions/i,
-        })[0];
+        })[0]!;
         await user.click(actionBtn);
         const deleteItem = await screen.findByRole("menuitem", {
             name: /delete/i,

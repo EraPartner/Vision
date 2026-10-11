@@ -76,11 +76,17 @@ export interface ExemptionBracket {
     rate: number;
 }
 
+interface PitBracket {
+    from: number;
+    to: number;
+    rate: number;
+}
+
 export interface BelgianTaxYearTable {
     year: number;
 
     // ── Federal personal income tax brackets ────────────────────────────────
-    brackets: ReadonlyArray<{ from: number; to: number; rate: number }>;
+    brackets: readonly [PitBracket, PitBracket, PitBracket, PitBracket];
 
     /**
      * Bracket rates used to value the personal exemption ("quotité exemptée").
@@ -566,6 +572,15 @@ export const SUPPORTED_TAX_YEARS = Object.keys(TABLES).map(Number).sort((a, b) =
 export const LATEST_TAX_YEAR = Math.max(...SUPPORTED_TAX_YEARS);
 export const EARLIEST_TAX_YEAR = Math.min(...SUPPORTED_TAX_YEARS);
 
+function requireTable(year: number): BelgianTaxYearTable {
+    const table = TABLES[year];
+    if (!table) throw new Error(`Missing Belgian tax table for ${year}`);
+    return table;
+}
+
+const EARLIEST_TABLE = requireTable(EARLIEST_TAX_YEAR);
+const LATEST_TABLE = requireTable(LATEST_TAX_YEAR);
+
 /**
  * Resolve the tax table for a given income year.
  *
@@ -575,9 +590,10 @@ export const EARLIEST_TAX_YEAR = Math.min(...SUPPORTED_TAX_YEARS);
  * pre-EARLIEST values are approximated.
  */
 export function getTaxTable(year: number): BelgianTaxYearTable {
-    if (TABLES[year]) return TABLES[year];
-    if (year < EARLIEST_TAX_YEAR) return TABLES[EARLIEST_TAX_YEAR];
-    return TABLES[LATEST_TAX_YEAR];
+    const exact = TABLES[year];
+    if (exact) return exact;
+    if (year < EARLIEST_TAX_YEAR) return EARLIEST_TABLE;
+    return LATEST_TABLE;
 }
 
 /** True when the table for `year` is an approximation (no exact match in TABLES). */
@@ -585,4 +601,4 @@ export function isApproximatedTaxYear(year: number): boolean {
     return !TABLES[year];
 }
 
-export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = TABLES[LATEST_TAX_YEAR].defaultCommunalSurcharge;
+export const DEFAULT_COMMUNAL_SURCHARGE: Record<BelgianRegion, number> = LATEST_TABLE.defaultCommunalSurcharge;

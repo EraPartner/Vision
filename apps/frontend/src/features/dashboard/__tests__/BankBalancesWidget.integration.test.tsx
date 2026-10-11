@@ -24,14 +24,15 @@ function ymdDaysAgo(n: number): string {
 // exactly these rows (non-liability, in_net_worth, with ledger activity) —
 // including one whose CURRENT balance nets to zero, which is precisely why the
 // widget's card list is not the same population.
+const CHECKING_PAYLOAD_ACCOUNT = {
+    account_id: 1,
+    bank_account: "KBC Checking",
+    display_name: "KBC Checking",
+    balance: 2450.75,
+    transaction_count: 120,
+};
 const PAYLOAD_ACCOUNTS = [
-    {
-        account_id: 1,
-        bank_account: "KBC Checking",
-        display_name: "KBC Checking",
-        balance: 2450.75,
-        transaction_count: 120,
-    },
+    CHECKING_PAYLOAD_ACCOUNT,
     {
         account_id: 2,
         bank_account: "Argenta Savings",
@@ -155,7 +156,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         // history; its entity query still returns their real partial fiat rows.
         mockWidgetApi({
             payloadAccounts: [
-                PAYLOAD_ACCOUNTS[0],
+                CHECKING_PAYLOAD_ACCOUNT,
                 {
                     account_id: 4,
                     bank_account: broker.name,
@@ -269,7 +270,7 @@ describe("BankBalancesWidget (integration, WP-B2/B3 §3 F3)", () => {
         mockWidgetApi({
             payloadAccounts: [
                 {
-                    ...PAYLOAD_ACCOUNTS[0],
+                    ...CHECKING_PAYLOAD_ACCOUNT,
                     bank_account: "STALE IMPORT LABEL",
                     transaction_count: 73,
                 },

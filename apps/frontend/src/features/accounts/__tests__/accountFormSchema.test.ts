@@ -37,8 +37,8 @@ describe("accountFormSchema", () => {
         const result = accountFormSchema().safeParse({ ...base, name: "   " });
         expect(result.success).toBe(false);
         if (!result.success) {
-            expect(result.error.issues[0].path[0]).toBe("name");
-            expect(result.error.issues[0].message).toBe("validation.required");
+            expect(result.error.issues[0]?.path[0]).toBe("name");
+            expect(result.error.issues[0]?.message).toBe("validation.required");
         }
     });
 });

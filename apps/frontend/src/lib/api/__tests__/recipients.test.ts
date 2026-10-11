@@ -137,7 +137,7 @@ describe("recipients API client", () => {
         ok({ items: [{ ...pattern, pattern_kind: "glob" }], total: 1 }),
       ),
     );
-    expect((await listRecipientPatterns(5)).items[0].pattern_kind).toBe("glob");
+    expect((await listRecipientPatterns(5)).items[0]?.pattern_kind).toBe("glob");
   });
 
   it("createRecipientPattern posts the pattern body", async () => {

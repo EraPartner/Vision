@@ -36,15 +36,15 @@ function position(
 function cssSpring(name: string): { points: number[]; durationMs: number } {
     const easing = tokensCss.match(
         new RegExp(`--spring-${name}:\\s*linear\\(([^)]*)\\)`),
-    );
+    )?.[1];
     const duration = tokensCss.match(
         new RegExp(`--spring-${name}-duration:\\s*(\\d+)ms`),
-    );
-    expect(easing, `--spring-${name} in tokens.css`).not.toBeNull();
-    expect(duration, `--spring-${name}-duration in tokens.css`).not.toBeNull();
+    )?.[1];
+    expect(easing, `--spring-${name} in tokens.css`).toBeDefined();
+    expect(duration, `--spring-${name}-duration in tokens.css`).toBeDefined();
     return {
-        points: easing![1].split(",").map((p) => Number(p.trim())),
-        durationMs: Number(duration![1]),
+        points: easing!.split(",").map((p) => Number(p.trim())),
+        durationMs: Number(duration!),
     };
 }
 

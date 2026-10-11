@@ -58,10 +58,11 @@ const FIELD_ORDER = [
 function normalizeYmdInput(value?: string): string {
     if (!value) return "";
     const trimmed = value.trim();
+    // split() always yields at least one element; the fallback is unreachable.
     const datePart = trimmed.includes("T")
-        ? trimmed.split("T")[0]
+        ? (trimmed.split("T")[0] ?? trimmed)
         : trimmed.includes(" ")
-          ? trimmed.split(" ")[0]
+          ? (trimmed.split(" ")[0] ?? trimmed)
           : trimmed;
 
     if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {

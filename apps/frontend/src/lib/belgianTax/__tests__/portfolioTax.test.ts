@@ -134,23 +134,21 @@ describe("yearOf", () => {
 
 describe("recorded taxes/fees for a year", () => {
     it("sums per-txn taxes + explicit tax txns, scoped to the year", () => {
-        expect(recordedTaxesForYear(investments[0], 2025, convert)).toBeCloseTo(
-            95,
-            8,
-        ); // 35 + 60 + 0
-        expect(recordedFeesForYear(investments[0], 2025, convert)).toBeCloseTo(
+        expect(
+            recordedTaxesForYear(investments[0]!, 2025, convert),
+        ).toBeCloseTo(95, 8); // 35 + 60 + 0
+        expect(recordedFeesForYear(investments[0]!, 2025, convert)).toBeCloseTo(
             5,
             8,
         );
         // inv 4: 2024 buy excluded; only the 2025 dividend's 15 USD → 13.5 EUR counts.
-        expect(recordedTaxesForYear(investments[3], 2025, convert)).toBeCloseTo(
-            13.5,
-            8,
-        );
+        expect(
+            recordedTaxesForYear(investments[3]!, 2025, convert),
+        ).toBeCloseTo(13.5, 8);
     });
 
     it("enriches with manual adjustments", () => {
-        const costs = enrichInvestmentCosts(investments[0], 2025, convert, {
+        const costs = enrichInvestmentCosts(investments[0]!, 2025, convert, {
             taxes: 10,
             fees: 5,
         });
@@ -420,7 +418,7 @@ describe("in-kind income tax boundaries", () => {
             grossDividendBase: 10,
             unknownDividendConventionCount: 0,
         });
-        expect(recordedTaxesForYear(source[0], 2025, convert)).toBe(3.7);
-        expect(recordedFeesForYear(source[0], 2025, convert)).toBe(1.8);
+        expect(recordedTaxesForYear(source[0]!, 2025, convert)).toBe(3.7);
+        expect(recordedFeesForYear(source[0]!, 2025, convert)).toBe(1.8);
     });
 });

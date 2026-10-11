@@ -34,7 +34,7 @@ describe("TaxOverviewPage (integration)", () => {
 
         // Take the first trigger (empty-state CTA); both open the same sheet
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
-        await user.click(setupBtn);
+        await user.click(setupBtn!);
 
         // Sheet header title "Belgian Tax Profile" appears
         expect(
@@ -47,7 +47,7 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
 
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
-        await user.click(setupBtn);
+        await user.click(setupBtn!);
 
         // The first step is Employment; it renders radio items for each employment type.
         // Use role-based selectors anchored to start — civil_servant desc also contains "employee".
@@ -60,7 +60,7 @@ describe("TaxOverviewPage (integration)", () => {
         renderWithApp(<TaxOverviewPage />);
 
         const [setupBtn] = await screen.findAllByRole("button", { name: /set up tax profile/i });
-        await user.click(setupBtn);
+        await user.click(setupBtn!);
 
         await screen.findByText(/^tax profile$/i);
         await user.keyboard("{Escape}");

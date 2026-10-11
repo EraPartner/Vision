@@ -89,8 +89,11 @@ function dailyReturnsByTime(points: ResearchChartPoint[]): Map<number, number> {
         )
         .sort((a, b) => a.time - b.time);
     const out = new Map<number, number>();
-    for (let i = 1; i < valid.length; i++) {
-        out.set(valid[i].time, Math.log(valid[i].close / valid[i - 1].close));
+    let previous: ResearchChartPoint | undefined;
+    for (const point of valid) {
+        if (previous)
+            out.set(point.time, Math.log(point.close / previous.close));
+        previous = point;
     }
     return out;
 }
@@ -103,7 +106,9 @@ function computeStats(
     const closes = points
         .map((p) => p.close)
         .filter((c) => Number.isFinite(c) && c > 0);
-    if (closes.length < 2)
+    const first = closes[0];
+    const last = closes.at(-1);
+    if (closes.length < 2 || first === undefined || last === undefined)
         return {
             symbol,
             totalReturn: null,
@@ -111,17 +116,20 @@ function computeStats(
             maxDrawdown: null,
         };
 
-    const totalReturn = (closes[closes.length - 1] - closes[0]) / closes[0];
+    const totalReturn = (last - first) / first;
 
     const rets: number[] = [];
-    for (let i = 1; i < closes.length; i++)
-        rets.push(Math.log(closes[i] / closes[i - 1]));
+    let previous = first;
+    for (const close of closes.slice(1)) {
+        rets.push(Math.log(close / previous));
+        previous = close;
+    }
     const mean = rets.reduce((s, r) => s + r, 0) / rets.length;
     const variance =
         rets.reduce((s, r) => s + (r - mean) ** 2, 0) / rets.length;
     const volatility = Math.sqrt(variance) * Math.sqrt(252);
 
-    let peak = closes[0];
+    let peak = first;
     let maxDrawdown = 0;
     for (const c of closes) {
         if (c > peak) peak = c;
@@ -145,26 +153,22 @@ function pearsonOnTime(
     a: Map<number, number>,
     b: Map<number, number>,
 ): number | null {
-    const xs: number[] = [];
-    const ys: number[] = [];
+    const pairs: Array<[x: number, y: number]> = [];
     for (const [time, av] of a) {
         const bv = b.get(time);
-        if (bv !== undefined) {
-            xs.push(av);
-            ys.push(bv);
-        }
+        if (bv !== undefined) pairs.push([av, bv]);
     }
-    const n = xs.length;
+    const n = pairs.length;
     if (n < 2) return null;
 
-    const meanX = xs.reduce((s, v) => s + v, 0) / n;
-    const meanY = ys.reduce((s, v) => s + v, 0) / n;
+    const meanX = pairs.reduce((s, [x]) => s + x, 0) / n;
+    const meanY = pairs.reduce((s, [, y]) => s + y, 0) / n;
     let cov = 0;
     let varX = 0;
     let varY = 0;
-    for (let i = 0; i < n; i++) {
-        const dx = xs[i] - meanX;
-        const dy = ys[i] - meanY;
+    for (const [x, y] of pairs) {
+        const dx = x - meanX;
+        const dy = y - meanY;
         cov += dx * dy;
         varX += dx * dx;
         varY += dy * dy;
@@ -305,8 +309,8 @@ function rebaseTo100(
     points: ResearchChartPoint[],
 ): { time: number; value: number }[] {
     const valid = points.filter((p) => Number.isFinite(p.close) && p.close > 0);
-    if (valid.length === 0) return [];
-    const base = valid[0].close;
+    const base = valid[0]?.close;
+    if (base === undefined) return [];
     return valid.map((p) => ({ time: p.time, value: (p.close / base) * 100 }));
 }
 
@@ -429,7 +433,7 @@ export default function ResearchComparePage() {
                 time,
             };
             perSymbol.forEach((s, i) => {
-                row[s.symbol] = lookup[i].get(time) ?? null;
+                row[s.symbol] = lookup[i]?.get(time) ?? null;
             });
             return row;
         });
@@ -873,9 +877,12 @@ export default function ResearchComparePage() {
                                                                         {rowSym}
                                                                     </span>
                                                                 </th>
-                                                                {correlation.matrix[
-                                                                    i
-                                                                ].map(
+                                                                {(
+                                                                    correlation
+                                                                        .matrix[
+                                                                        i
+                                                                    ] ?? []
+                                                                ).map(
                                                                     (
                                                                         value,
                                                                         j,

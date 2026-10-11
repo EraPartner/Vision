@@ -6,7 +6,7 @@ import {
     type ChartLegendItem,
 } from "@/components/charts";
 import { parseLocalDateFromYmd } from "@/lib/dateUtils";
-import { NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
+import { type NetWorthSnapshot, normalizeYmd } from "./netWorthChartUtils";
 
 interface NetWorthChartProps {
     snapshots: NetWorthSnapshot[];

@@ -13,7 +13,10 @@ export interface TransactionDrillParams {
 }
 
 function lastDayOfMonth(period: string): string {
-    const [year, month] = period.split("-").map(Number);
+    // A malformed period degrades to an invalid date ("…-NaN"), as before.
+    const [year = Number.NaN, month = Number.NaN] = period
+        .split("-")
+        .map(Number);
     const day = getDaysInMonth(new Date(year, month - 1));
     return `${period}-${String(day).padStart(2, "0")}`;
 }

@@ -51,11 +51,13 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
             const day = Number(point.date.slice(8, 10));
             byDay.set(day, (byDay.get(day) ?? 0) + point.spending);
         }
-        const points: Array<[number, number]> = [[0, 0]];
+        let last: [number, number] = [0, 0];
+        const points: Array<[number, number]> = [last];
         let running = 0;
         for (let day = 1; day <= Math.max(1, days_elapsed); day++) {
             running += byDay.get(day) ?? 0;
-            points.push([day, running]);
+            last = [day, running];
+            points.push(last);
         }
         const yMax = Math.max(total_spending, typical, projected, 1) * 1.08;
         const x = (day: number) =>
@@ -65,7 +67,6 @@ export function MonthToDateHero({ currency, className }: MonthToDateHeroProps) {
         const spendPath = points
             .map(([d, v], i) => `${i === 0 ? "M" : "L"}${x(d).toFixed(1)},${y(v).toFixed(1)}`)
             .join(" ");
-        const last = points[points.length - 1];
         const projectedPath =
             projected > 0 && days_elapsed < days_in_month
                 ? `M${x(last[0]).toFixed(1)},${y(last[1]).toFixed(1)} L${x(days_in_month).toFixed(1)},${y(projected).toFixed(1)}`

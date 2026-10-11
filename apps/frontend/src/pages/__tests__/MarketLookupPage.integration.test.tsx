@@ -312,10 +312,10 @@ describe("MarketLookupPage (integration)", () => {
 
         expect(await screen.findByText("Bitcoin")).toBeInTheDocument();
         await waitFor(() => expect(historyUrls).toHaveLength(1));
-        expect(historyUrls[0].searchParams.get("from_ms")).toBe(
+        expect(historyUrls[0]?.searchParams.get("from_ms")).toBe(
             String(now - 30 * 24 * 60 * 60 * 1000),
         );
-        expect(historyUrls[0].searchParams.get("db_only")).toBe("false");
+        expect(historyUrls[0]?.searchParams.get("db_only")).toBe("false");
         expect(await screen.findByText(/125,00/)).toBeInTheDocument();
 
         await user.click(screen.getByRole("radio", { name: /^1y$/i }));

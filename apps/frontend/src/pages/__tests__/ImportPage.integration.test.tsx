@@ -460,7 +460,7 @@ describe("ImportPage (integration)", () => {
 
         // Open the bank source selector (first combobox on the page)
         const comboboxes = await screen.findAllByRole("combobox");
-        await user.click(comboboxes[0]);
+        await user.click(comboboxes[0]!);
 
         // Select "Custom / Other"
         await user.click(

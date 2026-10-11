@@ -9,6 +9,10 @@ interface MatchSuggestionsBannerProps {
     onReview: (plannedId: number) => void;
 }
 
+function hasSuggestions<T>(items: T[]): items is [T, ...T[]] {
+    return items.length > 0;
+}
+
 /**
  * Surfaces planned payments with likely matching transactions that were not
  * auto-cleared. Hidden entirely when there are no suggestions. Confirming runs
@@ -20,7 +24,7 @@ export function MatchSuggestionsBanner({
     const { t, tc } = useLanguage();
     const { suggestions } = usePlannedMatchSuggestions();
 
-    if (suggestions.length === 0) return null;
+    if (!hasSuggestions(suggestions)) return null;
 
     return (
         <Card>

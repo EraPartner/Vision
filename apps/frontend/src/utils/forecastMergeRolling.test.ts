@@ -100,9 +100,10 @@ describe("mergeForViewRolling", () => {
         const visible = new Set(["simple_avg"]);
         const { rows } = mergeForViewRolling(data, "daily", visible, "Actual");
         expect(rows.every((r) => r.t instanceof Date)).toBe(true);
-        const t = rows[0].t;
+        const first = rows[0]!;
+        const t = first.t;
         const localDate = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-        expect(localDate).toBe(rows[0].date);
+        expect(localDate).toBe(first.date);
     });
 
     test("daily view: actual is null for future entries", () => {
@@ -123,19 +124,22 @@ describe("mergeForViewRolling", () => {
             visible,
             "Actual",
         );
-        const futureRow = rows[4];
+        const futureRow = rows[4]!;
         expect(futureRow.monte_carlo_parametric__pLo).toBe(42);
         expect(futureRow.monte_carlo_parametric__pHi).toBe(48);
     });
 
     test("cumulative bands apply scheduled ledger rows", () => {
         const data = buildData(3, 3);
-        data.scheduled_actual.push({ date: data.actual[4].date, net: -12 });
+        data.scheduled_actual.push({ date: data.actual[4]!.date, net: -12 });
         const mc = data.methods.find(
             (method) => method.id === "monte_carlo_parametric",
         );
-        Object.assign(mc!.cumulative_bands!.p25[0], { value: 30 });
-        Object.assign(mc!.cumulative_bands!.p75[0], { value: 36 });
+        const p25 = mc?.cumulative_bands?.p25?.[0];
+        const p75 = mc?.cumulative_bands?.p75?.[0];
+        if (!p25 || !p75) throw new Error("fixture lacks cumulative bands");
+        Object.assign(p25, { value: 30 });
+        Object.assign(p75, { value: 36 });
         const { rows } = mergeForViewRolling(
             data,
             "cumulative",
@@ -143,8 +147,8 @@ describe("mergeForViewRolling", () => {
             "Actual",
         );
 
-        expect(rows[4].monte_carlo_parametric__pLo).toBe(30);
-        expect(rows[4].monte_carlo_parametric__pHi).toBe(36);
+        expect(rows[4]?.monte_carlo_parametric__pLo).toBe(30);
+        expect(rows[4]?.monte_carlo_parametric__pHi).toBe(36);
     });
 
     test("malformed dates are filtered out instead of producing Invalid Date rows", () => {
@@ -170,9 +174,9 @@ describe("mergeForViewRolling", () => {
             visible,
             "Actual",
         );
-        expect(rows[0].simple_avg).toBeUndefined();
+        expect(rows[0]!.simple_avg).toBeUndefined();
         // Only the actual series remains.
         expect(series).toHaveLength(1);
-        expect(series[0].key).toBe("actual");
+        expect(series[0]?.key).toBe("actual");
     });
 });

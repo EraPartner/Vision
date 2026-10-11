@@ -5,7 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router";
 import { toast } from "sonner";
 import ChartBuilderPage from "@/pages/research/ChartBuilderPage";
-import type { BuilderState } from "@/pages/research/chartBuilderState";
+import type {
+    BuilderSeries,
+    BuilderState,
+} from "@/pages/research/chartBuilderState";
 import {
     createChartBuilderLibrary,
     encodeSharedChart,
@@ -75,20 +78,20 @@ vi.mock("@/components/charts", () => ({
     getChartColor: () => "currentColor",
 }));
 
+const STORED_SERIES: BuilderSeries = {
+    id: "series-1",
+    symbol: "TEST",
+    field: "price",
+    type: "line",
+    axis: "left",
+    provider: "",
+};
+
 const STORED_STATE: BuilderState = {
     range: "1y",
     logLeft: false,
     rebase: false,
-    series: [
-        {
-            id: "series-1",
-            symbol: "TEST",
-            field: "price",
-            type: "line",
-            axis: "left",
-            provider: "",
-        },
-    ],
+    series: [STORED_SERIES],
     indicators: [],
     oscillator: "rsi",
     oscillatorSeriesId: "series-1",
@@ -237,7 +240,7 @@ describe("ChartBuilderPage oscillator state", () => {
             ...STORED_STATE,
             series: [
                 {
-                    ...STORED_STATE.series[0],
+                    ...STORED_SERIES,
                     id: "shared-series",
                     symbol: "SHARED",
                 },

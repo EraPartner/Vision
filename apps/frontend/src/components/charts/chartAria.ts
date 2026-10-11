@@ -43,8 +43,8 @@ export function summarizeProportionChart(t: TFn, kindKey: string, names: Readonl
 export function summarizeSparkline(t: TFn, values: ReadonlyArray<number>): string {
   const finite = values.filter((v) => Number.isFinite(v));
   if (!finite.length) return t('chart.aria.sparklineEmpty');
-  let min = finite[0];
-  let max = finite[0];
+  let min = Infinity;
+  let max = -Infinity;
   for (const v of finite) {
     if (v < min) min = v;
     if (v > max) max = v;

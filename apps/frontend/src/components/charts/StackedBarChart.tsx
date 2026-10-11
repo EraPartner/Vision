@@ -260,7 +260,9 @@ function Inner<Datum>({
     const hoverDatum = hoverIndex == null ? null : data[hoverIndex];
     const handleKeyboardIndex = useCallback(
         (index: number) => {
-            const x = categoryScale(categories[index]) ?? 0;
+            const category = categories[index];
+            if (category === undefined) return;
+            const x = categoryScale(category) ?? 0;
             setHover({ index, x: x + categoryScale.bandwidth() / 2, y: 0 });
         },
         [categories, categoryScale, data],

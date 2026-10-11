@@ -515,6 +515,10 @@ export function ResearchMappingDialog({
 
 function ProposalStatus({ status }: { status: MappingProposal["status"] }) {
     const { t } = useLanguage();
+    const none: { label: string; variant: BadgeProps["variant"] } = {
+        label: t("research.mapping.status.none"),
+        variant: "muted",
+    };
     const map: Record<
         string,
         { label: string; variant: BadgeProps["variant"] }
@@ -531,10 +535,7 @@ function ProposalStatus({ status }: { status: MappingProposal["status"] }) {
             label: t("research.mapping.status.skipped"),
             variant: "muted",
         },
-        none: {
-            label: t("research.mapping.status.none"),
-            variant: "muted",
-        },
+        none,
         unavailable: {
             label: t("research.mapping.status.unavailable"),
             variant: "muted",
@@ -548,7 +549,7 @@ function ProposalStatus({ status }: { status: MappingProposal["status"] }) {
             variant: "destructive",
         },
     };
-    const entry = map[status] ?? map.none;
+    const entry = map[status] ?? none;
     return (
         <Badge variant={entry.variant} size="sm">
             {entry.label}

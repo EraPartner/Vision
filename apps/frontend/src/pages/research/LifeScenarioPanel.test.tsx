@@ -92,8 +92,8 @@ describe("LifeScenarioPanel", () => {
         await waitFor(() =>
             expect(getPortfolioForecast).toHaveBeenCalledTimes(2),
         );
-        const baseline = getPortfolioForecast.mock.calls[0][0];
-        const interruption = getPortfolioForecast.mock.calls[1][0];
+        const baseline = getPortfolioForecast.mock.calls[0]?.[0];
+        const interruption = getPortfolioForecast.mock.calls[1]?.[0];
         expect(baseline).toMatchObject({
             monthlyContribution: 500,
             horizonMonths: 12,
@@ -159,11 +159,11 @@ describe("LifeScenarioPanel", () => {
         await waitFor(() =>
             expect(getPortfolioForecast).toHaveBeenCalledTimes(2),
         );
-        expect(getPortfolioForecast.mock.calls[0][0]).toMatchObject({
+        expect(getPortfolioForecast.mock.calls[0]?.[0]).toMatchObject({
             targetValue: 10000,
             goalMonth: 6,
         });
-        expect(getPortfolioForecast.mock.calls[1][0]).toMatchObject({
+        expect(getPortfolioForecast.mock.calls[1]?.[0]).toMatchObject({
             targetValue: 10000,
             goalMonth: 6,
         });
@@ -189,7 +189,7 @@ describe("LifeScenarioPanel", () => {
             ["Monthly income lost", "700,25"],
             ["Planned monthly portfolio contribution", "500,5"],
             ["Savings goal amount", "10000,25"],
-        ]) {
+        ] as const) {
             await user.type(screen.getByLabelText(label), value);
         }
         const date = new Date();
@@ -207,7 +207,7 @@ describe("LifeScenarioPanel", () => {
         expect(screen.getByLabelText("Baseline monthly surplus")).toHaveValue(
             "900,75",
         );
-        const saved = saveSetting.mock.calls[0][1][0];
+        const saved = saveSetting.mock.calls[0]?.[1][0];
         expect(saved).toMatchObject({
             monthlySurplus: 900.75,
             monthlyIncomeLoss: 700.25,
@@ -248,12 +248,12 @@ describe("LifeScenarioPanel", () => {
         await waitFor(() =>
             expect(getPortfolioForecast).toHaveBeenCalledTimes(2),
         );
-        expect(getPortfolioForecast.mock.calls[0][0]).toMatchObject({
+        expect(getPortfolioForecast.mock.calls[0]?.[0]).toMatchObject({
             monthlyContribution: 500.5,
             targetValue: 10000.25,
         });
         expect(
-            getPortfolioForecast.mock.calls[1][0].monthlyContributionSchedule,
+            getPortfolioForecast.mock.calls[1]?.[0].monthlyContributionSchedule,
         ).toEqual([200.5, 200.5, 200.5]);
     });
 
@@ -356,7 +356,9 @@ describe("LifeScenarioPanel", () => {
             }),
         );
 
-        await undoToast.mock.calls[0][0].undo();
+        const undoCall = undoToast.mock.calls[0];
+        if (!undoCall) throw new Error("expected an undo toast");
+        await undoCall[0].undo();
         expect(saveSetting).toHaveBeenLastCalledWith("life_scenarios", [saved]);
         await waitFor(() =>
             expect(screen.getByLabelText("Scenario name")).toHaveValue(

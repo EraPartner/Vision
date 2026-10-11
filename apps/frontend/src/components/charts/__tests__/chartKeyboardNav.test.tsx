@@ -456,7 +456,7 @@ describe("remaining chart primitive keyboard access", () => {
             <DonutChart data={PROPORTIONS} tooltipValueFormat={fmt} />,
         );
         const paths = container.querySelectorAll("path");
-        fireEvent.pointerEnter(paths[1]);
+        fireEvent.pointerEnter(paths[1]!);
         expect(await screen.findByText("Rent")).toBeInTheDocument();
 
         rerender(
@@ -487,9 +487,9 @@ describe("remaining chart primitive keyboard access", () => {
             />,
         );
         const stackedBars = stacked.container.querySelectorAll("rect[fill]");
-        fireEvent.pointerEnter(stackedBars[1]);
+        fireEvent.pointerEnter(stackedBars[1]!);
         await expectTooltipValue(15);
-        fireEvent.pointerLeave(stackedBars[1]);
+        fireEvent.pointerLeave(stackedBars[1]!);
         await expectNoTooltipValues();
         stacked.unmount();
 
@@ -499,9 +499,9 @@ describe("remaining chart primitive keyboard access", () => {
         const pieSlices = pie.container.querySelectorAll(
             'path[style*="cursor"]',
         );
-        fireEvent.pointerEnter(pieSlices[1]);
+        fireEvent.pointerEnter(pieSlices[1]!);
         await expectTooltipValue(15);
-        fireEvent.pointerLeave(pieSlices[1]);
+        fireEvent.pointerLeave(pieSlices[1]!);
         await expectNoTooltipValues();
         pie.unmount();
 

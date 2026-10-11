@@ -3,7 +3,7 @@ import { taxProfileIncomeStepSchema } from "../taxProfileSchema";
 
 function firstIssue(profile: Record<string, unknown>): string | undefined {
   const result = taxProfileIncomeStepSchema.safeParse(profile);
-  return result.success ? undefined : result.error.issues[0].message;
+  return result.success ? undefined : result.error.issues[0]?.message;
 }
 
 describe("taxProfileIncomeStepSchema", () => {
@@ -44,7 +44,7 @@ describe("taxProfileIncomeStepSchema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.issues).toHaveLength(1);
-      expect(result.error.issues[0].message).toBe("tax.profile.validation.grossIncomeRequired");
+      expect(result.error.issues[0]?.message).toBe("tax.profile.validation.grossIncomeRequired");
     }
   });
 });

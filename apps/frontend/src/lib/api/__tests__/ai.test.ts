@@ -77,7 +77,7 @@ describe("ai conversation API client", () => {
         );
         const models = await getOllamaModels();
         expect(models).toHaveLength(1);
-        expect(models[0].name).toBe("llama3");
+        expect(models[0]?.name).toBe("llama3");
     });
 
     it("getOllamaModels rejects a body without the `{ items, total }` collection", async () => {
@@ -102,7 +102,7 @@ describe("ai conversation API client", () => {
             }),
         );
         const page = await getConversations({ limit: 25, offset: 50 });
-        expect(page.items[0].id).toBe("a");
+        expect(page.items[0]?.id).toBe("a");
         expect(page.total).toBe(75);
         expect(requestUrl).toContain("limit=25&offset=50");
     });

@@ -147,7 +147,7 @@ describe("groupAccounts", () => {
             makeAccount({ id: 3, name: "KBC Checking" }),
         ]);
         expect(groups).toHaveLength(1);
-        expect(groups[0].accounts.map(accountLabel)).toEqual([
+        expect(groups[0]?.accounts.map(accountLabel)).toEqual([
             "argenta savings", // case-insensitive: lowercase a before B/K
             "Bunq",
             "KBC Checking",
@@ -159,7 +159,7 @@ describe("groupAccounts", () => {
             makeAccount({ id: 9, name: "Twin" }),
             makeAccount({ id: 2, name: "Twin" }),
         ]);
-        expect(groups[0].accounts.map((a) => a.id)).toEqual([2, 9]);
+        expect(groups[0]?.accounts.map((a) => a.id)).toEqual([2, 9]);
     });
 
     it("routes every inactive account to archived regardless of type, sorted by label", () => {
@@ -179,7 +179,7 @@ describe("groupAccounts", () => {
             makeAccount({ id: 3, name: "C checking", is_active: false }),
         ]);
         expect(groups.map((g) => g.id)).toEqual(["archived"]);
-        expect(groups[0].accounts.map((a) => a.name)).toEqual([
+        expect(groups[0]?.accounts.map((a) => a.name)).toEqual([
             "A broker",
             "B liability",
             "C checking",

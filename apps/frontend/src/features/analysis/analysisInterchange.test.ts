@@ -97,8 +97,8 @@ describe("analysis CSV interchange", () => {
                 type: "text/csv",
             }),
         );
-        expect(attachment.columns[0].type).toBe("string");
-        expect(attachment.rows[0].account).toBe("9007199254740993");
+        expect(attachment.columns[0]?.type).toBe("string");
+        expect(attachment.rows[0]?.account).toBe("9007199254740993");
         vi.unstubAllGlobals();
     });
 });

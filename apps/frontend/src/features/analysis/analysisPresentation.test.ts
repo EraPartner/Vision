@@ -28,17 +28,13 @@ describe("analysis presentation", () => {
         expect(analysisColumnLabel(result, "my_total", datasets, t)).toBe(
             "my_total",
         );
-        const custom = {
-            ...result,
-            declaredColumns: [
-                {
-                    id: "sum_spending",
-                    label: "My household spending",
-                    type: "decimal",
-                    nullable: false,
-                },
-            ],
+        const customColumn = {
+            id: "sum_spending",
+            label: "My household spending",
+            type: "decimal",
+            nullable: false,
         };
+        const custom = { ...result, declaredColumns: [customColumn] };
         expect(analysisColumnLabel(custom, "sum_spending", datasets, t)).toBe(
             "My household spending",
         );
@@ -46,9 +42,7 @@ describe("analysis presentation", () => {
             analysisColumnLabel(
                 {
                     ...custom,
-                    declaredColumns: [
-                        { ...custom.declaredColumns[0], label: "Spending" },
-                    ],
+                    declaredColumns: [{ ...customColumn, label: "Spending" }],
                 },
                 "sum_spending",
                 datasets,

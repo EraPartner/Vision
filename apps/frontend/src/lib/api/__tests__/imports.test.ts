@@ -59,7 +59,7 @@ const PREVIEW = {
 describe("imports API client", () => {
   it("listCustomParserConfigs fetches configs", async () => {
     server.use(http.get(`${API_BASE}/api/import/parsers`, () => ok({ items: [PARSER_CONFIG], total: 1 })));
-    expect((await listCustomParserConfigs())[0].name).toBe("C");
+    expect((await listCustomParserConfigs())[0]?.name).toBe("C");
   });
 
   it("createCustomParserConfig posts name + config", async () => {

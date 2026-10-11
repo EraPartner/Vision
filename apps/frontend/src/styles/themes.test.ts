@@ -13,6 +13,9 @@ const tokensCss = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8')
 
 function hslToRgb(value: string): [number, number, number] {
   const [h, saturation, lightness] = value.split(/\s+/).map((part) => Number.parseFloat(part));
+  if (h === undefined || saturation === undefined || lightness === undefined) {
+    throw new Error(`Malformed HSL components: ${value}`);
+  }
   const s = saturation / 100;
   const l = lightness / 100;
   const chroma = (1 - Math.abs(2 * l - 1)) * s;
@@ -28,14 +31,16 @@ function hslToRgb(value: string): [number, number, number] {
 }
 
 function relativeLuminance(value: string): number {
-  const channels = hslToRgb(value).map((channel) => (
+  const linear = (channel: number) => (
     channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  ));
-  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  );
+  const [r, g, b] = hslToRgb(value);
+  return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722;
 }
 
 function contrastRatio(a: string, b: string): number {
-  const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  const lighter = Math.max(relativeLuminance(a), relativeLuminance(b));
+  const darker = Math.min(relativeLuminance(a), relativeLuminance(b));
   return (lighter + 0.05) / (darker + 0.05);
 }
 

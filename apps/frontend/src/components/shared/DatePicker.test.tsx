@@ -101,7 +101,7 @@ describe("DatePicker calendar locale", () => {
 
         expect(onSubmit).not.toHaveBeenCalled();
         expect(onChange).toHaveBeenCalledTimes(1);
-        expect(onChange.mock.calls[0][0]).toEqual(new Date(2024, 1, 29));
+        expect(onChange.mock.calls[0]?.[0]).toEqual(new Date(2024, 1, 29));
     });
 
     it("applies valid typed input on blur", () => {

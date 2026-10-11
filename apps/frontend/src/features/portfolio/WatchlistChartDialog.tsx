@@ -39,10 +39,21 @@ import type { WatchlistItem } from "@/types/watchlist";
 
 import { apiClient } from "@/lib/api";
 import { watchlistKeys } from "@/lib/queryKeys";
-import { RESEARCH_RANGES as RANGES } from "@/lib/research/ranges";
+import {
+    RESEARCH_RANGES as RANGES,
+    type ChartRangeOption,
+} from "@/lib/research/ranges";
 import { ResearchRangeSelector } from "@/components/charts/ResearchRangeSelector";
 import { useWatchlistMarketQueries } from "./usePortfolioQueries";
 import { formatEditableNumber } from "@/utils/currency";
+
+// RESEARCH_RANGES is a non-empty literal ladder, so the fallback (a copy of its
+// first rung) never applies; it only satisfies noUncheckedIndexedAccess.
+const DEFAULT_RANGE: ChartRangeOption = RANGES[0] ?? {
+    label: "1M",
+    range: "1mo",
+    interval: "1d",
+};
 
 interface WatchlistChartDialogProps {
     item: WatchlistItem | null;
@@ -59,7 +70,7 @@ export function WatchlistChartDialog({
     const { t } = useLanguage();
     const loadingSurfaceProps = useLoadingSurfaceProps();
     const { appSettings } = useAppSettings();
-    const [selectedRange, setSelectedRange] = useState(RANGES[0]);
+    const [selectedRange, setSelectedRange] = useState(DEFAULT_RANGE);
     const [editingPrice, setEditingPrice] = useState(false);
     const [newTargetPrice, setNewTargetPrice] = useState("");
     const queryClient = useQueryClient();
@@ -70,7 +81,7 @@ export function WatchlistChartDialog({
     // Reset the per-item view state when the item changes so range selection,
     // edit mode, and the draft target price don't leak across watchlist items.
     useEffect(() => {
-        setSelectedRange(RANGES[0]);
+        setSelectedRange(DEFAULT_RANGE);
         setEditingPrice(false);
         setNewTargetPrice("");
     }, [item?.id]);

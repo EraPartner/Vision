@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 /**
  * Bundle-size regression guard.
  *
@@ -26,8 +26,8 @@
  * the thing we actually care about guarding.
  *
  * Usage:
- *   bun run build && node scripts/check-bundle-size.mjs
- *   VISION_DIST_DIR=/tmp/vision-dist node scripts/check-bundle-size.mjs
+ *   bun run build && bun scripts/check-bundle-size.ts
+ *   VISION_DIST_DIR=/tmp/vision-dist bun scripts/check-bundle-size.ts
  *   (wired up as the `size:check` package.json script; CI runs it right
  *   after `bun run build`)
  */
@@ -36,10 +36,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
-
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const FRONTEND_ROOT = path.resolve(SCRIPT_DIR, '..');
+const FRONTEND_ROOT = path.resolve(import.meta.dirname, '..');
 // vite.config.ts sets build.outDir to "../../dist" (relative to apps/frontend).
 const DIST_DIR = process.env.VISION_DIST_DIR
     ? path.resolve(process.env.VISION_DIST_DIR)
@@ -85,7 +82,7 @@ const BUDGETS_KB = {
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */
-function getBootPreloadFiles(html) {
+function getBootPreloadFiles(html: string): string[] {
     const entryMatch = html.match(
         /<script[^>]+type="module"[^>]+src="([^"]+)"/,
     );
@@ -96,18 +93,21 @@ function getBootPreloadFiles(html) {
     }
 
     const preloadRe = /<link rel="modulepreload"[^>]+href="([^"]+)"/g;
-    const preloads = [];
-    let match;
-    while ((match = preloadRe.exec(html))) {
-        preloads.push(match[1]);
+    const preloads: string[] = [];
+    for (const match of html.matchAll(preloadRe)) {
+        if (match[1] !== undefined) preloads.push(match[1]);
     }
 
     // De-duplicate defensively; each entry is a root-relative URL (e.g. "/assets/foo.js").
-    return [...new Set([entryMatch[1], ...preloads])];
+    const entry = entryMatch[1];
+    if (entry === undefined) {
+        throw new Error('The entry <script type="module"> tag in dist/index.html has no src.');
+    }
+    return [...new Set([entry, ...preloads])];
 }
 
 /** Map a public asset URL back to its path inside the Vite output directory. */
-export function bundleOutputPathFromHref(href) {
+export function bundleOutputPathFromHref(href: string): string {
     const pathname = new URL(href, 'https://vision.invalid/').pathname;
     const assetsMarker = '/assets/';
     const markerIndex = pathname.lastIndexOf(assetsMarker);
@@ -118,8 +118,8 @@ export function bundleOutputPathFromHref(href) {
 }
 
 /** Recursively lists every .js/.css file under dist/, relative to dist/. */
-function listAllBundleFiles(dir, base = dir) {
-    const out = [];
+function listAllBundleFiles(dir: string, base: string = dir): string[] {
+    const out: string[] = [];
     for (const entry of readdirSync(dir)) {
         const full = path.join(dir, entry);
         if (statSync(full).isDirectory()) {
@@ -131,19 +131,19 @@ function listAllBundleFiles(dir, base = dir) {
     return out;
 }
 
-function gzipSizeOf(distRelativePath) {
+function gzipSizeOf(distRelativePath: string): number {
     const absPath = path.join(DIST_DIR, bundleOutputPathFromHref(distRelativePath));
     const buf = readFileSync(absPath);
     return gzipSync(buf, { level: 9 }).length;
 }
 
-function formatKB(bytes) {
+function formatKB(bytes: number): string {
     return (bytes / 1024).toFixed(2);
 }
 
-function main() {
+function main(): void {
     const indexHtmlPath = path.join(DIST_DIR, 'index.html');
-    let html;
+    let html: string;
     try {
         html = readFileSync(indexHtmlPath, 'utf8');
     } catch {
@@ -177,7 +177,7 @@ function main() {
     );
     console.log('');
 
-    const failures = [];
+    const failures: string[] = [];
     const preloadKB = preloadTotalBytes / 1024;
     if (preloadKB > BUDGETS_KB.preload) {
         failures.push(
@@ -185,7 +185,7 @@ function main() {
                 `  Something is now reachable from the entry chunk (or one of its eager imports) that wasn't before.\n` +
                 `  Check whether a lazy-route-only dependency (e.g. a chart library) got imported from non-lazy code —\n` +
                 `  see the manualChunks comment in vite.config.ts for the recharts precedent.\n` +
-                `  If this growth is legitimate, bump BUDGETS_KB.preload in scripts/check-bundle-size.mjs with a one-line\n` +
+                `  If this growth is legitimate, bump BUDGETS_KB.preload in scripts/check-bundle-size.ts with a one-line\n` +
                 `  comment explaining why, after re-measuring.`,
         );
     }
@@ -193,7 +193,7 @@ function main() {
     if (totalKB > BUDGETS_KB.total) {
         failures.push(
             `Total bundle size is ${totalKB.toFixed(2)} KB gz, over budget of ${BUDGETS_KB.total} KB gz (+${(totalKB - BUDGETS_KB.total).toFixed(2)} KB).\n` +
-                `  If this growth is legitimate, bump BUDGETS_KB.total in scripts/check-bundle-size.mjs with a one-line\n` +
+                `  If this growth is legitimate, bump BUDGETS_KB.total in scripts/check-bundle-size.ts with a one-line\n` +
                 `  comment explaining why, after re-measuring.`,
         );
     }
@@ -207,6 +207,6 @@ function main() {
     console.log('size:check passed — bundle within budget.');
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
     main();
 }

@@ -61,16 +61,14 @@ function Inner({
     const cy = height / 2;
 
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-    const safeHoverIndex =
-        hoverIndex != null && hoverIndex < data.length ? hoverIndex : null;
+    const hoverSlice = hoverIndex == null ? undefined : data[hoverIndex];
+    const safeHoverIndex = hoverSlice === undefined ? null : hoverIndex;
     const hover =
-        safeHoverIndex == null
+        hoverSlice === undefined || safeHoverIndex == null
             ? null
             : {
-                  ...data[safeHoverIndex],
-                  color:
-                      data[safeHoverIndex].color ??
-                      getChartColor(safeHoverIndex),
+                  ...hoverSlice,
+                  color: hoverSlice.color ?? getChartColor(safeHoverIndex),
               };
     const handleLeave = useCallback(() => setHoverIndex(null), []);
     const keyboardNav = useChartKeyboardNav({

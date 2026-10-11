@@ -74,7 +74,7 @@ describe("useInvestmentsQuery", () => {
         });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data?.items).toHaveLength(1);
-        expect(result.current.data?.items[0].id).toBe(1);
+        expect(result.current.data?.items[0]?.id).toBe(1);
     });
 
     it("passes limit:500 and active:false to the API", async () => {

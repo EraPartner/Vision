@@ -121,6 +121,12 @@ function makeResponse(
     };
 }
 
+function nthButton(name: string, index: number): HTMLElement {
+    const button = screen.getAllByRole("button", { name })[index];
+    if (!button) throw new Error(`expected a "${name}" button at ${index}`);
+    return button;
+}
+
 function renderCard() {
     return render(
         <AppSettingsProvider>
@@ -172,7 +178,7 @@ test("confirm writes amount field and eligibility flag for lifeInsurance", () =>
     renderCard();
 
     // Groups render in response order: lifeInsurance first.
-    fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[0]);
+    fireEvent.click(nthButton("Confirm", 0));
 
     expect(updateProfile).toHaveBeenCalledTimes(1);
     expect(updateProfile).toHaveBeenCalledWith({
@@ -187,7 +193,7 @@ test("confirm writes only the amount field for alimony", () => {
     renderCard();
 
     // alimony is the second rendered group.
-    fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[1]);
+    fireEvent.click(nthButton("Confirm", 1));
 
     expect(updateProfile).toHaveBeenCalledTimes(1);
     expect(updateProfile).toHaveBeenCalledWith({ alimonyPaid: 3600 });
@@ -201,7 +207,7 @@ test("current-year candidate requires acknowledgement before replacing the annua
     });
     renderCard();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[0]);
+    fireEvent.click(nthButton("Confirm", 0));
 
     const dialog = await screen.findByRole("alertdialog");
     expect(
@@ -233,7 +239,7 @@ test("cancelling the current-year acknowledgement leaves the profile unchanged",
     });
     renderCard();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Confirm" })[1]);
+    fireEvent.click(nthButton("Confirm", 1));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
@@ -248,7 +254,7 @@ test("cancelling the current-year acknowledgement leaves the profile unchanged",
 test("dismiss removes the group and persists the dismissal", () => {
     renderCard();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Dismiss" })[0]);
+    fireEvent.click(nthButton("Dismiss", 0));
 
     expect(
         screen.queryByText("Life insurance premiums"),

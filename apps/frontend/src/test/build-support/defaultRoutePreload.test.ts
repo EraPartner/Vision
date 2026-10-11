@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-// The production guard is an executable ESM script, so it has no TypeScript declaration file.
-// @ts-expect-error -- importing its exported pure URL resolver is intentional for this contract test.
-import { bundleOutputPathFromHref } from '../../../scripts/check-bundle-size.mjs';
+// The production guard is an executable script; its pure URL resolver is imported on purpose.
+import { bundleOutputPathFromHref } from '../../../scripts/check-bundle-size.ts';
 import {
     type BuildBundle,
     type BuildAsset,

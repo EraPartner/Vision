@@ -203,10 +203,11 @@ export function AnalysisPivotPanel({
         direction: number,
     ) => {
         const ids = [...config[axis]];
-        [ids[index], ids[index + direction]] = [
-            ids[index + direction],
-            ids[index],
-        ];
+        const current = ids[index];
+        const target = ids[index + direction];
+        if (current === undefined || target === undefined) return;
+        ids[index] = target;
+        ids[index + direction] = current;
         onChange({ ...config, [axis]: ids });
     };
     const displayCell = (

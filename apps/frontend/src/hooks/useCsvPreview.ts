@@ -59,11 +59,11 @@ function parseRecords(text: string, sep: string, skipRows: number): string[][] {
  */
 function parseCsvText(text: string, sep: string, skipRows: number): CsvPreview {
     const records = parseRecords(text.replace(/^\uFEFF/, ""), sep, skipRows);
-    if (records.length === 0) {
+    const [headerRecord, ...rest] = records;
+    if (headerRecord === undefined) {
         return { headers: [], rows: [] };
     }
 
-    const [headerRecord, ...rest] = records;
     const headers = headerRecord.map((field) => field.trim());
 
     const rows: string[][] = [];

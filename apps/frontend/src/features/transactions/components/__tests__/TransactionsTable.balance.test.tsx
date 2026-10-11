@@ -115,8 +115,8 @@ describe("TransactionsTable currency balances", () => {
             name: /^Select transaction: .*Broker/,
         });
         expect(selectBoxes).toHaveLength(2);
-        expect(selectBoxes[0].getAttribute("aria-label")).not.toEqual(
-            selectBoxes[1].getAttribute("aria-label"),
+        expect(selectBoxes[0]?.getAttribute("aria-label")).not.toEqual(
+            selectBoxes[1]?.getAttribute("aria-label"),
         );
         await user.tab();
         expect(

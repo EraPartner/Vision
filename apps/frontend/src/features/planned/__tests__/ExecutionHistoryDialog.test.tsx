@@ -153,7 +153,7 @@ describe("ExecutionHistoryDialog", () => {
         const closeBtns = await screen.findAllByRole("button", {
             name: /^close$/i,
         });
-        const footerCloseBtn = closeBtns[closeBtns.length - 1];
+        const footerCloseBtn = closeBtns[closeBtns.length - 1]!;
         await user.click(footerCloseBtn);
 
         // Assert

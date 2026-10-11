@@ -106,7 +106,7 @@ describe("configured server pivot UI", () => {
         fireEvent.click(
             screen.getAllByRole("button", {
                 name: "analysis.ext.pivot.addField",
-            })[0],
+            })[0]!,
         );
         fireEvent.change(
             screen.getByRole("textbox", {
@@ -123,7 +123,7 @@ describe("configured server pivot UI", () => {
         fireEvent.click(
             screen.getAllByRole("button", {
                 name: "analysis.ext.pivot.addField",
-            })[0],
+            })[0]!,
         );
         fireEvent.keyDown(
             screen.getByRole("textbox", {
@@ -298,7 +298,7 @@ describe("configured server pivot UI", () => {
             screen.getByRole("button", { name: "analysis.ext.pivot.expand" }),
         );
         expect(screen.getByText("Checking")).toBeVisible();
-        fireEvent.click(screen.getAllByRole("button", { name: "20" })[1]);
+        fireEvent.click(screen.getAllByRole("button", { name: "20" })[1]!);
         expect(drill).toHaveBeenCalledWith(
             ["category_general", "account", "month", "currency"],
             { ...base, account: "Checking", month: "2026-01-01" },

@@ -43,7 +43,7 @@ export function SeparatorSelect({ id, value, onChange }: FormatSelectProps) {
                 <SelectContent>
                     {CANDIDATE_SEPARATORS.map((sep) => (
                         <SelectItem key={sep} value={sep}>
-                            {t(SEPARATOR_LABEL_KEYS[sep])}
+                            {t(SEPARATOR_LABEL_KEYS[sep] ?? sep)}
                         </SelectItem>
                     ))}
                 </SelectContent>

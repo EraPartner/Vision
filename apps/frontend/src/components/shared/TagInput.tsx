@@ -11,7 +11,7 @@ import { slugify } from '@/lib/slugify';
 import type { Tag } from '@/types/api';
 
 // Jewel-tone palette spanning the hue wheel (matches the app's jewel accent).
-const PALETTE: string[] = [
+const PALETTE = [
     'hsl(355, 60%, 52%)', // crimson
     'hsl(20, 68%, 52%)',  // coral
     'hsl(40, 64%, 50%)',  // amber
@@ -24,7 +24,7 @@ const PALETTE: string[] = [
     'hsl(244, 46%, 58%)', // indigo
     'hsl(280, 46%, 56%)', // violet
     'hsl(322, 54%, 54%)', // magenta
-];
+] as const;
 
 // Translation keys for each palette swatch's name, keyed by its hsl() string,
 // so swatch buttons get a meaningful aria-label instead of raw CSS colour syntax.
@@ -45,7 +45,7 @@ const PALETTE_NAME_KEYS: Record<string, string> = {
 
 // Pick a random palette colour so new tags aren't all the first (green) swatch.
 function randomPaletteColor(): string {
-    return PALETTE[Math.floor(Math.random() * PALETTE.length)];
+    return PALETTE[Math.floor(Math.random() * PALETTE.length)] ?? PALETTE[0];
 }
 
 // A translucent fill of the tag colour. color-mix works for any colour syntax
@@ -169,8 +169,9 @@ export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, d
                 handleCreate();
             }
         }
-        if (e.key === 'Backspace' && inputValue === '' && value.length > 0) {
-            removeSlug(value[value.length - 1]);
+        const lastSlug = value.at(-1);
+        if (e.key === 'Backspace' && inputValue === '' && lastSlug !== undefined) {
+            removeSlug(lastSlug);
         }
     }
 

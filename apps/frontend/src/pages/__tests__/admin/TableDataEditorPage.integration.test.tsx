@@ -313,8 +313,10 @@ describe("TableDataEditorPage (integration)", () => {
                 },
             ],
         });
-        expect(mutationBodies[1].dryRun ?? false).toBe(false);
-        expect(mutationBodies[1].changes).toEqual(mutationBodies[0].changes);
+        const commitBody = mutationBodies[1];
+        if (!commitBody) throw new Error("expected a commit request body");
+        expect(commitBody.dryRun ?? false).toBe(false);
+        expect(commitBody.changes).toEqual(mutationBodies[0]?.changes);
         await waitFor(() => expect(rowGets).toBeGreaterThan(1));
         expect(await screen.findByText("20.00")).toBeInTheDocument();
         expect(screen.queryByText(/pending change/i)).not.toBeInTheDocument();
@@ -404,7 +406,7 @@ describe("TableDataEditorPage (integration)", () => {
 
         // The new row is the first body row; its ••• menu holds "Discard new row".
         const newRow = screen
-            .getAllByRole("button", { name: /actions for this row/i })[0]
+            .getAllByRole("button", { name: /actions for this row/i })[0]!
             .closest("tr");
         expect(newRow).not.toBeNull();
         await user.click(
@@ -419,6 +421,7 @@ describe("TableDataEditorPage (integration)", () => {
         const currencyCell = within(newRow as HTMLElement).getAllByRole(
             "cell",
         )[3];
+        if (!currencyCell) throw new Error("expected a currency cell");
         await user.click(currencyCell);
         await user.type(
             within(newRow as HTMLElement).getByRole("textbox"),
