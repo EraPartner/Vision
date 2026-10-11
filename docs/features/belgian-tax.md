@@ -402,7 +402,12 @@ stored values with `loadHouseholdSettings`:
 - A v2 value that passes `parseHouseholdV2` / `parseHouseholdSnapshotsV2` is used as stored and
   never rewritten on load.
 - An absent v2 key is upgraded from the matching v1 key (or built from the v1 defaults when the
-  v1 key is absent too). When the v1 key exists, the upgraded v2 value is written immediately.
+  v1 key is absent too). The v1 settings schema accepts `null` fields, so the upgrade treats
+  `null` as absent and fills the v1 defaults into the live profile and into each v1 snapshot
+  (a v1 snapshot without `region` takes the default region). When the v1 key exists, the
+  upgraded v2 value is written immediately, but only if it passes `parseHouseholdV2` /
+  `parseHouseholdSnapshotsV2`; otherwise it stays in memory unsaved and a console warning is
+  logged, because the settings API would reject that write and every later save of the key.
 - An invalid v2 value logs a console warning and falls back to the v1 upgrade or the defaults;
   it is not overwritten until the user edits.
 

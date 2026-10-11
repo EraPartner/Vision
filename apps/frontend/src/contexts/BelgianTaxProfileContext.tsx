@@ -130,6 +130,7 @@ export function BelgianTaxProfileProvider({
                     ...(preloadedProfile ?? {}),
                 };
                 const loaded = runtime.loadHouseholdSettings({
+                    defaultsV1: DEFAULT_BELGIAN_TAX_PROFILE,
                     profileV1: {
                         ...mergedProfile,
                         profileConfigured:
@@ -142,7 +143,9 @@ export function BelgianTaxProfileProvider({
                 });
                 for (const warning of loaded.warnings) {
                     logger.warn(
-                        "Invalid Belgian tax household setting; using the v1 upgrade instead",
+                        warning.kind === "invalid_stored"
+                            ? "Invalid Belgian tax household setting; using the v1 upgrade instead"
+                            : "Upgraded Belgian tax household setting is invalid; keeping it unsaved",
                         warning,
                     );
                 }
