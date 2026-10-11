@@ -175,6 +175,17 @@ describe("parseHouseholdV2", () => {
         if (!result.ok) expect(result.issues.some((i) => i.startsWith("version"))).toBe(true);
     });
 
+    test("accepts home.firstQualifyingYear, which the upgrade leaves undefined and v1 patches keep", () => {
+        const h = upgradeProfileV1ToHousehold(employee);
+        expect(h.home.firstQualifyingYear).toBeUndefined();
+        const withYear = { ...h, home: { ...h.home, firstQualifyingYear: 2019 } };
+        expect(parseHouseholdV2(withYear).ok).toBe(true);
+        expect(parseHouseholdV2({ ...h, home: { ...h.home, firstQualifyingYear: 1800 } }).ok).toBe(false);
+        expect(
+            applyProfileV1PatchToHousehold(withYear, { mortgageStartYear: 2017 }).home.firstQualifyingYear,
+        ).toBe(2019);
+    });
+
     test("rejects dangling partner references", () => {
         const h = upgradeProfileV1ToHousehold(employee);
         const bad = { ...h, home: { ...h.home, mortgageCreditPartnerId: "B" } };

@@ -361,7 +361,14 @@ export type OwnHomeCreditInputs = Pick<
     | "region"
     | "dependentChildren"
     | "dependentChildrenDisabled"
->;
+> & {
+    /**
+     * Income year of the first taxable period in which the Walloon chèque habitat was claimed
+     * (art. 145/46quinquies). The twenty-period window and the halving from the eleventh period
+     * count from it; without it the loan year (`mortgageStartYear`) stands in.
+     */
+    firstQualifyingYear?: number;
+};
 
 /** Figures of the taxpayer who claims the own-home credit. */
 export interface OwnHomeCreditTaxpayer {
@@ -423,6 +430,9 @@ export function resolveMortgageRegime(
  *   - §4: never more than the interest, capital and premiums actually paid.
  *   - Art. 145/46quinquies: granted for twenty assessment years from the first, so nothing from
  *     the twenty-first period.
+ *   The periods of §3 and art. 145/46quinquies count from `firstQualifyingYear` when set, else
+ *   from the loan year (a proxy that differs when the home qualifies later, e.g. after
+ *   construction); an income year before `firstQualifyingYear` gets no chèque habitat.
  *
  * All other cases (Brussels, post-2020 Flemish, post-2024 Walloon, secondary residences): 0.
  */
@@ -479,9 +489,14 @@ export function computeOwnHomeCredit(
         );
         const childSupplement =
             (children + disabled) * table.walloonChequeHabitatChildSupplement;
-        if (loanAge >= 20) return 0;
+        // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
+        // Before the first qualifying year the conditions are not met yet.
+        const first = inputs.firstQualifyingYear;
+        if (first !== undefined && taxpayer.incomeYear < first) return 0;
+        const period = first !== undefined ? taxpayer.incomeYear - first : loanAge;
+        if (period >= 20) return 0;
         let credit = Math.max(base, 0) + childSupplement;
-        if (loanAge >= 10) credit /= 2;
+        if (period >= 10) credit /= 2;
         return Math.min(credit, interest + capital);
     }
 

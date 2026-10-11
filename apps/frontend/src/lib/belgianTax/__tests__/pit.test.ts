@@ -3,6 +3,7 @@ import { getTaxTable, isApproximatedTaxYear } from "..";
 import { computeWithParity } from "./householdParity";
 import { computeSpecialSocialSecurityContribution } from "../socialSecurity";
 import { computePropertyTaxEstimate } from "../propertyTax";
+import { computeOwnHomeCredit, type OwnHomeCreditInputs } from "../personPit";
 import type { BelgianTaxProfile } from "../types";
 
 const baseProfile: BelgianTaxProfile = {
@@ -791,6 +792,48 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         const twentyFirst = walloon({ taxYear: 2036, grossAnnualIncome: 20_000, mortgageStartYear: 2016 });
         expect(twentyFirst.ownHomeCreditRegime).toBe("walloon_cheque_habitat");
         expect(twentyFirst.ownHomeCredit).toBe(0);
+    });
+
+    test("Walloon chèque habitat: periods count from the first qualifying year when set (art. 145/46quinquies)", () => {
+        const table = getTaxTable(2026);
+        const inputs: OwnHomeCreditInputs = {
+            region: "wallonia",
+            mortgageIsPrimaryResidence: true,
+            mortgageStartYear: 2016,
+            mortgageRegion: "wallonia",
+            mortgageInterestPaid: 4_000,
+            dependentChildren: 0,
+        };
+        const taxpayer = (incomeYear: number) => ({
+            taxableIncome: 20_000,
+            marginalRatePercent: 25,
+            incomeYear,
+        });
+        const credit = (incomeYear: number, firstQualifyingYear?: number) =>
+            computeOwnHomeCredit(
+                firstQualifyingYear === undefined
+                    ? inputs
+                    : { ...inputs, firstQualifyingYear },
+                table,
+                "walloon_cheque_habitat",
+                taxpayer(incomeYear),
+            );
+        // Without the input the 2016 loan year is the proxy: IY 2026 is the eleventh period.
+        expect(credit(2026)).toBeCloseTo(1_520 / 2, 2);
+        // A home that first qualified in 2019 (after construction) is in its eighth period: full.
+        expect(credit(2026, 2019)).toBeCloseTo(1_520, 2);
+        // Halved from the eleventh period counted from 2019 (IY 2029), nothing from the 21st (IY 2039).
+        expect(credit(2028, 2019)).toBeCloseTo(1_520, 2);
+        expect(credit(2029, 2019)).toBeCloseTo(1_520 / 2, 2);
+        expect(credit(2038, 2019)).toBeCloseTo(1_520 / 2, 2);
+        expect(credit(2039, 2019)).toBe(0);
+        // Before the first qualifying year the conditions are not met yet.
+        expect(credit(2018, 2019)).toBe(0);
+    });
+
+    test("Walloon chèque habitat: computeBelgianPIT keeps the loan-year proxy (no v1 input)", () => {
+        const result = walloon({ taxYear: 2026, grossAnnualIncome: 20_000, mortgageStartYear: 2016 });
+        expect(result.ownHomeCredit).toBeCloseTo(1_520 / 2, 2);
     });
 
     test("Walloon chèque habitat: loans signed from 1 Jan 2025 do not qualify", () => {
