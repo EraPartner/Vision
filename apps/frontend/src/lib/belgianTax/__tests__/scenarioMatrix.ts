@@ -13,6 +13,8 @@
  *    asserts only the sourced parts (and the issue the engine raises) and names what is missing.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { computeHouseholdTax } from "../household";
 import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "../householdTypes";
@@ -39,10 +41,17 @@ export function eur(actual: number | undefined, expected: number): void {
     expect(actual as number).toBeCloseTo(expected, 6);
 }
 
+/** The page that lists every scenario (vitest runs from apps/frontend). */
+const SCENARIO_PAGE = join(process.cwd(), "../../docs/reference/belgian-tax-scenario-matrix.md");
+
 export function runScenarios(title: string, scenarios: readonly Scenario[]): void {
     describe(title, () => {
+        const page = readFileSync(SCENARIO_PAGE, "utf8");
         for (const s of scenarios) {
             test(`${s.id} [${s.status}] ${s.description}`, () => {
+                const row = page.split("\n").find((line) => line.startsWith(`| ${s.id} |`));
+                expect(row, "scenario listed on the scenario matrix page").toBeDefined();
+                expect(row?.endsWith(`| ${s.status} |`), "status on the page").toBe(true);
                 if (s.status === "needs_source") expect(s.missing).toBeTruthy();
                 s.verify(computeHouseholdTax(s.household));
             });

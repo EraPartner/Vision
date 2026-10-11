@@ -135,6 +135,10 @@ decided in [[docs/adr/199-belgian-tax-source-verification|ADR-199]]. The primary
 
 Rows the matrix marks `unverified` (the communal property-tax centimes) keep their earlier values until their primary page is reached.
 
+[[docs/reference/belgian-tax-scenario-matrix]] lists the end-to-end scenarios that check both
+engines against figures worked out by hand from the cited articles and the matrix amounts, each
+marked `verified` or `needs_source`.
+
 `SUPPORTED_TAX_YEARS` (sorted numerically) lists the years with a complete table; `LATEST_TAX_YEAR` is the default.
 
 **Exemption-bracket table (May 2026 audit):** IY 2025 boundaries confirmed as 25% (€0–€11,460), 30% (€11,460–€16,320), 40% (€16,320–€27,190), 45% (€27,190–€49,840), 50% (€49,840+). IY 2024 indexed back from IY 2025 by 3.15%; IY 2026 inherits IY 2025 (no forward guidance published).
@@ -374,6 +378,11 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
 8. **CSSS**: under a joint assessment the joint scale applies to both partners' net professional
    income (pensions excluded); otherwise the single scale per partner who is an employee.
 9. Property tax for the home and the investment side calculation per partner.
+
+The own-home credit goes to `mortgageCreditPartnerId`. Its child increases (the chèque habitat
+€125 per child, the woonbonus €80 with three or more children) count the household's children
+under a joint assessment; otherwise only when that partner is also the dependants' claimant
+(corrected 2026-10-11, scenarios RG-12 and RG-13).
 
 The result lists per-partner and per-activity figures, the assessment decision with its legal
 basis, totals and `issues`. An issue with severity `needs_source` marks a stated default that has
@@ -724,6 +733,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
+- [[docs/reference/belgian-tax-scenario-matrix|Belgian tax scenario matrix]] — law-derived household scenarios per rule-matrix row
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow
 - [[docs/features/pdf-report-export|PDF Report Export]] — Tax report generation with Phase 8 completion
