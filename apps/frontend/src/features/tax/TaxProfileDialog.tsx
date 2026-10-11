@@ -45,8 +45,8 @@ import {
     ChevronLeft,
     Check,
     Briefcase,
-    House,
-    BadgePercent,
+    Building2,
+    Receipt,
     MapPin,
     Users,
     ListChecks,
@@ -84,9 +84,9 @@ export type Step = (typeof STEPS)[number];
 const STEP_ICONS: Record<Step, ElementType> = {
     household: Users,
     income: Briefcase,
-    home: House,
+    home: Building2,
     incomeSources: ListChecks,
-    exemptions: BadgePercent,
+    exemptions: Receipt,
     region: MapPin,
 };
 

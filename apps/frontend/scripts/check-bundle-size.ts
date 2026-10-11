@@ -87,7 +87,9 @@ const BUDGETS_KB = {
     // review fixes (household engine in the trend strip and yearly chart,
     // upgrade validation, unreadable-household and engine-load-failure
     // states with their EN/NL strings): 1348.16 -> 1349.02 measured.
-    total: 1351,
+    // Raised from 1351 for the household editor steps, the per-partner breakdown card and
+    // their EN/NL strings (ADR-200, phase C1, tax route chunks): 1349.02 -> 1357.48 measured.
+    total: 1359,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */
