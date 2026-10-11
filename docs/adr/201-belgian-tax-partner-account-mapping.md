@@ -44,13 +44,26 @@ owner values already name the two people and their shared accounts.
    household gets exactly the figures, actions and exports it had before.
 5. **Rounding.** Partner B's share is rounded to cents; partner A receives the total minus that
    share, so the two shares always add up to the total.
+6. **When recorded income is attributed.** A what-if estimate from recorded income (the yearly
+   chart and the monthly reserve) attributes it to the partners only when some of the estimated
+   period's recorded income is on a `partner` or `joint` account. Then each partner is taxed on
+   their recorded share, including a share of 0. Without such income the estimate keeps the
+   pre-attribution behaviour: partner A receives the whole recorded total and partner B keeps
+   the entered gross. The gate is the presence of partner or joint income, not B's share alone,
+   so the estimate does not jump between B's entered gross and the recorded share, and users
+   who never set account owners keep their figures.
+7. **Deduction candidates write every share.** Confirming a candidate sets each partner's field
+   to their share, including 0 (SET semantics), so an amount confirmed earlier for one partner
+   and now recorded on the other partner's account is not counted twice. An eligibility flag is
+   set only for a positive share.
 
 ## Consequences
 
 - A couple whose accounts are owned differently from how they file (for example a `me` account
   that holds the partner's salary) must change the account owner; there is no per-household
   override.
-- Changing an account owner clears the statistics response cache so the split follows at once.
+- Changing an account owner clears the statistics response cache, and the frontend refetches
+  the aggregations and deduction candidates, so the split follows at once.
 - A stored mapping can still be added later with a new ADR; the owner-level API fields would stay.
 
 ## Alternatives considered

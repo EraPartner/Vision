@@ -17,9 +17,8 @@ import {
 } from "@/lib/belgianTax/household";
 import {
     attributeToPartners,
+    householdForRecordedIncome,
     householdHasPartnerB,
-    householdWithRecordedIncome,
-    partnerBShare,
     type OwnerAmounts,
     type PartnerAmounts,
 } from "@/lib/belgianTax/partnerAttribution";
@@ -232,8 +231,10 @@ export function useTaxOverviewData() {
      * falls back to the live household applied to that year's tax tables. The bar's gross
      * replaces partner A's primary activity income and the household engine computes the year,
      * like the overview; `computeBelgianPIT` on the v1 projection serves only before hydration.
-     * With partner B in that year's household, `owners` attributes part of the gross to B's
-     * gross activity (ADR-201) and each partner is taxed on their own share.
+     * With partner B in that year's household and any of `owners` recorded on a partner or joint
+     * account, the gross is attributed between the partners (ADR-201) and each partner is taxed
+     * on their own share, including a share of 0; without such income partner A receives the
+     * whole gross and partner B keeps the entered gross.
      */
     const pitForGross = useCallback(
         (gross: number, year: number, owners?: OwnerAmounts): number => {
@@ -250,14 +251,11 @@ export function useTaxOverviewData() {
                 { household, householdSnapshots },
                 year,
             );
-            const partnerB = partnerBShare(
+            const attributed = householdForRecordedIncome(
+                yearHousehold,
+                gross,
                 owners,
-                householdHasPartnerB(yearHousehold),
             );
-            const attributed =
-                yearHousehold && partnerB > 0
-                    ? householdWithRecordedIncome(yearHousehold, gross, partnerB)
-                    : undefined;
             if (attributed) {
                 const next = { ...attributed, taxYear: year };
                 return toBelgianTaxCalculation(computeHouseholdTax(next), next)

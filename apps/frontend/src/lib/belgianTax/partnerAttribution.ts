@@ -86,6 +86,29 @@ export function householdWithRecordedIncome(
     return next;
 }
 
+/** True when any of the owner amounts was booked on a `partner` or `joint` account. */
+export function hasPartnerOrJointAmounts(byOwner: OwnerAmounts | undefined): boolean {
+    return (byOwner?.partner ?? 0) !== 0 || (byOwner?.joint ?? 0) !== 0;
+}
+
+/**
+ * Household to estimate the recorded income `total` with (ADR-201), or `undefined` to keep the
+ * pre-attribution behaviour (the whole total on partner A, partner B's entered gross unchanged).
+ * The gate is whether any of the income was recorded on a `partner` or `joint` account, not B's
+ * share alone: once such income exists, B is taxed on their recorded share even when it rounds
+ * to 0, so the estimate does not jump between B's entered gross and the recorded share. Users
+ * who never set account owners have no such income and keep their figures.
+ */
+export function householdForRecordedIncome(
+    household: BelgianTaxHouseholdV2 | null | undefined,
+    total: number,
+    byOwner: OwnerAmounts | undefined,
+): BelgianTaxHouseholdV2 | undefined {
+    if (!household || !hasPartnerOrJointAmounts(byOwner)) return undefined;
+    if (!householdHasPartnerB(household)) return undefined;
+    return householdWithRecordedIncome(household, total, partnerBShare(byOwner, true));
+}
+
 /** Profile fields of a deduction candidate that live on the partner, not in `reductions`. */
 const PARTNER_FIELDS = new Set<string>(["alimonyPaid", "unionDues"]);
 /** Profile fields that live on the household's home and are never split. */
@@ -115,9 +138,10 @@ export function deductionFieldValue(
 }
 
 /**
- * Apply a confirmed deduction candidate to a household (SET semantics, never added). Each
- * partner with a positive share gets that share and, where the field has one, its eligibility
- * flag; a partner whose share is 0 keeps their value. A home field receives `total`.
+ * Apply a confirmed deduction candidate to a household (SET semantics, never added). Every
+ * partner receives their share, including 0, so an amount that moved from one partner's account
+ * to the other's is not counted twice. The eligibility flag, where the field has one, is set only
+ * for a positive share and otherwise left as it was. A home field receives `total`.
  */
 export function applyDeductionCandidate(
     household: BelgianTaxHouseholdV2,
@@ -132,14 +156,14 @@ export function applyDeductionCandidate(
     return {
         ...household,
         partners: household.partners.map((partner) => {
-            const share = shares[partner.id];
-            if (!(share > 0)) return partner;
+            const raw = shares[partner.id];
+            const share = Number.isFinite(raw) && raw > 0 ? raw : 0;
             if (PARTNER_FIELDS.has(field)) return { ...partner, [field]: share };
             const reductions: Record<string, unknown> = {
                 ...partner.reductions,
                 [field]: share,
             };
-            if (mapping.eligibilityField) reductions[mapping.eligibilityField] = true;
+            if (mapping.eligibilityField && share > 0) reductions[mapping.eligibilityField] = true;
             return {
                 ...partner,
                 reductions: reductions as HouseholdPartner["reductions"],

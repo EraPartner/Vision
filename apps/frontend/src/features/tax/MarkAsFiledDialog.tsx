@@ -8,7 +8,9 @@
  *
  * Filing also records the household: a past year without its own household snapshot is computed
  * from the live household, so the dialog pins that household as the year's snapshot first. Later
- * edits to the live household then no longer change the filed year's inputs.
+ * edits to the live household then no longer change the filed year's inputs. A year that already
+ * has a frozen calculation is filed as it is: pinning today's live household there would record
+ * inputs that disagree with the frozen figures.
  */
 import { useState, type ReactNode } from "react";
 import {
@@ -40,7 +42,8 @@ export function MarkAsFiledDialog({ trigger, year }: MarkAsFiledDialogProps) {
             needsSnapshot:
                 state.household != null &&
                 year !== state.household.taxYear &&
-                !Object.hasOwn(state.householdSnapshots, year),
+                !Object.hasOwn(state.householdSnapshots, year) &&
+                !state.snapshotMetas[year]?.frozenCalculation,
         }));
     const [open, setOpen] = useState(false);
     const [reference, setReference] = useState("");

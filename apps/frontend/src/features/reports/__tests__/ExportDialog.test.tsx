@@ -313,7 +313,10 @@ describe("ExportDialog", () => {
                 },
             );
 
-        async function downloadTax(settings: Record<string, unknown>) {
+        async function downloadTax(
+            settings: Record<string, unknown>,
+            { year = LATEST_TAX_YEAR, partners = 2 }: { year?: number | "rolling"; partners?: number } = {},
+        ) {
             server.use(
                 http.get("http://localhost:3002/api/settings", () =>
                     ok(settingsWithBaselines(settings)),
@@ -322,9 +325,17 @@ describe("ExportDialog", () => {
             const user = userEvent.setup();
             renderWithApp(<ExportDialog defaultType="tax" />);
             await waitFor(() =>
-                expect(useSettingsStore.getState().household?.partners).toHaveLength(2),
+                expect(useSettingsStore.getState().household?.partners).toHaveLength(partners),
             );
             await user.click(await screen.findByRole("button", { name: /export pdf/i }));
+            if (year !== "rolling") {
+                await user.click(
+                    screen.getByRole("radio", { name: /full year|specific year/i }),
+                );
+                fireEvent.change(screen.getByLabelText(/^year$/i), {
+                    target: { value: String(year) },
+                });
+            }
             await user.click(await screen.findByRole("button", { name: /download pdf/i }));
             await waitFor(() => expect(reportsApi.downloadTaxReport).toHaveBeenCalled());
             return vi.mocked(reportsApi.downloadTaxReport).mock.calls[0]![0]!;
@@ -345,6 +356,53 @@ describe("ExportDialog", () => {
                 })),
             );
             expect(options.precomputedPIT?.totalTax).toBeCloseTo(expected.totals.totalPIT, 6);
+        });
+
+        it("sends no household for a one-partner household", async () => {
+            const single = household(
+                [partner("A", [{ ...activity("employee", 60_000), id: "act_A_1" }])],
+                { taxYear: LATEST_TAX_YEAR },
+            );
+            const options = await downloadTax(
+                { belgian_tax_household_v2: single },
+                { partners: 1 },
+            );
+            expect(options).not.toHaveProperty("household");
+            expect(options).not.toHaveProperty("precomputedHousehold");
+            expect(options.precomputedPIT?.totalTax).toBeGreaterThan(0);
+        });
+
+        it("exports the year the period covers, not the live tax year", async () => {
+            const live = married(20_000);
+            const previous = { ...married(35_000), taxYear: LATEST_TAX_YEAR - 1 };
+            const options = await downloadTax(
+                {
+                    belgian_tax_household_v2: live,
+                    belgian_tax_household_snapshots_v2: {
+                        [LATEST_TAX_YEAR - 1]: previous,
+                    },
+                },
+                { year: LATEST_TAX_YEAR - 1 },
+            );
+            expect(options.period).toEqual({ kind: "year", year: LATEST_TAX_YEAR - 1 });
+            expect(options.taxProfile?.taxYear).toBe(LATEST_TAX_YEAR - 1);
+            expect(options.household).toEqual(previous);
+            expect(options.precomputedHousehold?.partners[1]?.grossIncome).toBe(35_000);
+            expect(options.precomputedPIT?.totalTax).toBeCloseTo(
+                computeHouseholdTax(previous).totals.totalPIT,
+                6,
+            );
+        });
+
+        it("omits the PIT and household blocks for a period that is not one year", async () => {
+            const options = await downloadTax(
+                { belgian_tax_household_v2: married(20_000) },
+                { year: "rolling" },
+            );
+            expect(options.period).toEqual({ kind: "rolling", months: 12 });
+            expect(options.precomputedPIT).toBeUndefined();
+            expect(options).not.toHaveProperty("household");
+            expect(options).not.toHaveProperty("precomputedHousehold");
         });
 
         it("exports a frozen year's frozen figures, not a live recompute", async () => {

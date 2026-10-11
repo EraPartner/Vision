@@ -11,6 +11,7 @@ import { renderWithApp } from "@/test/renderWithApp";
 import { MarkAsFiledDialog } from "@/features/tax/MarkAsFiledDialog";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
 
 const YEAR = 2025;
 
@@ -111,6 +112,37 @@ describe("MarkAsFiledDialog — Enter submits the form", () => {
             "created",
             "filed",
         ]);
+    });
+
+    it("does not pin the live household over a year with a frozen calculation", async () => {
+        const user = userEvent.setup();
+        renderWithApp(
+            <MarkAsFiledDialog trigger={<button type="button">open filing</button>} year={YEAR} />,
+        );
+        await waitFor(() => {
+            const state = useSettingsStore.getState();
+            expect(state.isLoading).toBe(false);
+            expect(state.household).not.toBeNull();
+        });
+        const before = useSettingsStore.getState();
+        const frozenCalculation = {
+            ...resolveBelgianTaxCalculation(before, YEAR),
+            totalPIT: 12_345,
+        };
+        useSettingsStore.setState({
+            snapshotMetas: {
+                ...before.snapshotMetas,
+                [YEAR]: { frozenCalculation, history: [] },
+            },
+        });
+
+        await user.click(screen.getByRole("button", { name: /open filing/i }));
+        await user.click(await screen.findByRole("button", { name: /mark as filed/i }));
+
+        await waitFor(() => expect(useSettingsStore.getState().isYearFiled(YEAR)).toBe(true));
+        const state = useSettingsStore.getState();
+        expect(state.householdSnapshots[YEAR]).toBeUndefined();
+        expect(state.snapshotMetas[YEAR]?.frozenCalculation?.totalPIT).toBe(12_345);
     });
 
     it("cancel discards a typed reference — reopening shows a blank field", async () => {

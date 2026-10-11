@@ -139,9 +139,11 @@ export function SnapshotHistoryDialog({
                                                 </span>
                                             )}
                                         </div>
-                                        {lines.map((line) => (
+                                        {lines.map((line, lineIdx) => (
                                             <p
-                                                key={line}
+                                                // Lines are fixed per entry and their text can
+                                                // repeat, so the position keeps the key unique.
+                                                key={`${lineIdx}-${line}`}
                                                 className="break-words type-footnote text-label-secondary"
                                             >
                                                 {line}

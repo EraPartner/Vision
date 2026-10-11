@@ -3,6 +3,7 @@ import {
     applyDeductionCandidate,
     attributeToPartners,
     deductionFieldValue,
+    householdForRecordedIncome,
     householdHasPartnerB,
     householdWithRecordedIncome,
     partnerBShare,
@@ -71,6 +72,37 @@ describe("householdWithRecordedIncome", () => {
     });
 });
 
+describe("householdForRecordedIncome", () => {
+    const two = () =>
+        household([
+            partner("A", [activity("employee", 50_000)]),
+            partner("B", [activity("employee", 30_000)]),
+        ]);
+
+    it("keeps the entered gross when no income is on partner or joint accounts", () => {
+        expect(householdForRecordedIncome(two(), 60_000, undefined)).toBeUndefined();
+        expect(householdForRecordedIncome(two(), 60_000, {})).toBeUndefined();
+        expect(householdForRecordedIncome(two(), 60_000, { me: 60_000 })).toBeUndefined();
+        expect(
+            householdForRecordedIncome(household([partner("A", [])]), 60_000, { joint: 10 }),
+        ).toBeUndefined();
+        expect(householdForRecordedIncome(undefined, 60_000, { joint: 10 })).toBeUndefined();
+    });
+
+    it("taxes partner B on a recorded share of exactly 0 once joint income exists", () => {
+        // Half of 0.004 rounds to a share of 0 cents for B.
+        const next = householdForRecordedIncome(two(), 60_000, { joint: 0.004 })!;
+        expect(next.partners[0]!.activities[0]!.grossIncome).toBe(60_000);
+        expect(next.partners[1]!.activities[0]!.grossIncome).toBe(0);
+    });
+
+    it("splits the recorded income when partner income exists", () => {
+        const next = householdForRecordedIncome(two(), 60_000, { partner: 10_000, joint: 2 })!;
+        expect(next.partners[0]!.activities[0]!.grossIncome).toBe(49_999);
+        expect(next.partners[1]!.activities[0]!.grossIncome).toBe(10_001);
+    });
+});
+
 describe("applyDeductionCandidate", () => {
     const two = () =>
         household([
@@ -94,10 +126,16 @@ describe("applyDeductionCandidate", () => {
         expect(deductionFieldValue(next, "B", pension)).toBe(420);
     });
 
-    it("leaves a partner with a zero share untouched", () => {
+    it("writes a zero share so a moved amount is not counted twice", () => {
         const next = applyDeductionCandidate(two(), pension, { A: 900, B: 0 }, 900);
-        expect(next.partners[1]!.reductions.personalPensionContributions).toBe(500);
+        expect(next.partners[1]!.reductions.personalPensionContributions).toBe(0);
+        // The eligibility flag is only set for a positive share.
         expect(next.partners[1]!.reductions.pensionEligible).toBeUndefined();
+        // Confirmed for A first, then recorded on B's account: A is reset to 0.
+        const moved = applyDeductionCandidate(next, pension, { A: 0, B: 1000 }, 1000);
+        expect(moved.partners[0]!.reductions.personalPensionContributions).toBe(0);
+        expect(moved.partners[1]!.reductions.personalPensionContributions).toBe(1000);
+        expect(moved.partners[1]!.reductions.pensionEligible).toBe(true);
     });
 
     it("writes partner-level fields on the partner and home fields once", () => {

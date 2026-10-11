@@ -1,5 +1,5 @@
 import type { HouseholdTaxResult } from "@/lib/belgianTax/householdTypes";
-import type { TaxReportHousehold } from "@/lib/api/reports";
+import type { ReportPeriod, TaxReportHousehold } from "@/lib/api/reports";
 
 /**
  * Compact per-partner household result for the PDF tax report (ADR-200/201): the assessment,
@@ -28,4 +28,26 @@ export function toTaxReportHousehold(
             totalPIT: p.totalPIT,
         })),
     };
+}
+
+/**
+ * The calendar year a tax report period covers, which is the tax year its PIT and household
+ * blocks must describe; `undefined` when the period is not a single calendar year (a rolling
+ * window, or a custom range across years), and the report then carries no such blocks. A year
+ * to date is the current calendar year (`today`, YYYY-MM-DD), and a custom range counts when
+ * it starts and ends in the same calendar year, matching the backend's tax year for the period.
+ */
+export function reportTaxYear(period: ReportPeriod, today: string): number | undefined {
+    switch (period.kind) {
+        case "year":
+            return period.year;
+        case "ytd":
+            return Number(today.slice(0, 4));
+        case "custom": {
+            const from = Number(period.from.slice(0, 4));
+            return from === Number(period.to.slice(0, 4)) ? from : undefined;
+        }
+        case "rolling":
+            return undefined;
+    }
 }
