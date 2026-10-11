@@ -165,7 +165,11 @@ are stored. A write is rejected with `400` when:
 - a money field is negative or not a finite number.
 
 `belgian_tax_household_snapshots_v2` is a record whose keys are four-digit income years and whose
-values follow the same schema. These keys are additive and not breaking: no existing key changes.
+values follow the same schema. Since 2026-10-11 each key must equal its household's `taxYear`
+(`{ "2025": { ..., "taxYear": 2026 } }` is rejected with 400), because the engine computes with the
+nested `taxYear` and a mismatched key would silently run on the wrong year's table. The two keys
+were additive when introduced; this later tightening rejects a payload the endpoint accepted
+before, so a client that wrote mismatched keys must correct them. No stored value is rewritten.
 
 ### `brokerage_cash_category_ids` shape (2026-09-04)
 

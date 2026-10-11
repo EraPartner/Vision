@@ -41,6 +41,7 @@ import {
     computeProfessionalExpenseClaim,
     computeProgressiveTax,
     computeTaxReductions,
+    type TaxReductionBreakdown,
     isChildcareDeducted,
     resolveMortgageRegime,
     type ForfaitCategory,
@@ -436,6 +437,61 @@ export function computeHouseholdTax(
     );
     const incomes = partners.map((p) => computePartnerIncome(p, table, issues));
 
+    // Own-home credit to the partner who claims it (default A, else the first assessed partner).
+    const homeInputs = {
+        ...household.home,
+        region: household.region,
+        dependentChildren: household.dependents.children,
+        dependentChildrenDisabled: household.dependents.childrenDisabled ?? 0,
+    };
+    const ownHomeCreditRegime = resolveMortgageRegime(homeInputs);
+    const mortgagePartnerId: PartnerId | undefined = partners.some(
+        (p) => p.id === (household.home.mortgageCreditPartnerId ?? "A"),
+    )
+        ? (household.home.mortgageCreditPartnerId ?? "A")
+        : partners[0]?.id;
+    // The claimant's taxable income before the quotient sets the woonbonus marginal rate and the
+    // chèque habitat income limits, as in `computeBelgianPIT`.
+    const mortgageIncome = incomes.find((inc) => inc.partner.id === mortgagePartnerId);
+    const ownHomeCreditTotal = mortgageIncome
+        ? computeOwnHomeCredit(homeInputs, table, ownHomeCreditRegime, {
+              taxableIncome: mortgageIncome.taxableIncomeBeforeQuotient,
+              marginalRatePercent: computeMarginalRate(
+                  mortgageIncome.taxableIncomeBeforeQuotient,
+                  table.brackets,
+              ),
+              incomeYear,
+          })
+        : 0;
+
+    const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
+    const surchargePct = household.communalSurchargePercent;
+
+    // Reductions and the own-home credit depend on the pre-quotient income only, so they are
+    // fixed before the quotient is decided and feed the art. 88 comparison below.
+    const partnerReductions = incomes.map((inc) =>
+        computeTaxReductions(
+            inc.partner.reductions,
+            household.region,
+            inc.taxableIncomeBeforeQuotient,
+            table,
+        ),
+    );
+    const partnerCredits = incomes.map(
+        (inc, i) =>
+            (partnerReductions[i] as TaxReductionBreakdown).total +
+            (inc.partner.id === mortgagePartnerId ? ownHomeCreditTotal : 0),
+    );
+    // Art. 88 withholds the quotient when "the assessment" would be higher: the comparison is
+    // made on the tax after reductions, the state/regional factor and the communal surcharge,
+    // not on the tax after the tax-free sum alone (a partner's reductions cannot offset the tax
+    // the transfer creates for the other partner).
+    const finalTaxOf = (step: TaxStep): number =>
+        step.pitAfterExemption.reduce((acc, pitAfter, i) => {
+            const applied = Math.min(partnerCredits[i] as number, pitAfter);
+            return acc + (pitAfter - applied) * autonomyFactor * (1 + surchargePct / 100);
+        }, 0);
+
     // Marital quotient (joint assessment of two partners only).
     let quotient: MaritalQuotientResult = {
         applied: false,
@@ -461,7 +517,7 @@ export function computeHouseholdTax(
             rate: table.maritalQuotientRate,
             cap: cap.cap,
             evaluate: (transfer) =>
-                computeTaxStep(household, incomes, mode, transfer, table).combined,
+                finalTaxOf(computeTaxStep(household, incomes, mode, transfer, table)),
         });
     }
     const appliedTransfer: QuotientTransfer | undefined =
@@ -474,43 +530,9 @@ export function computeHouseholdTax(
         issues.push({ code: "refundable_child_credit_not_modelled", severity: "needs_source" });
     }
 
-    // Own-home credit to the partner who claims it (default A, else the first assessed partner).
-    const homeInputs = {
-        ...household.home,
-        region: household.region,
-        dependentChildren: household.dependents.children,
-        dependentChildrenDisabled: household.dependents.childrenDisabled ?? 0,
-    };
-    const ownHomeCreditRegime = resolveMortgageRegime(homeInputs);
-    const mortgagePartnerId: PartnerId | undefined = partners.some(
-        (p) => p.id === (household.home.mortgageCreditPartnerId ?? "A"),
-    )
-        ? (household.home.mortgageCreditPartnerId ?? "A")
-        : partners[0]?.id;
-    // The claimant's taxable income before the quotient sets the woonbonus marginal rate and the
-    // chèque habitat income limits, as in `computeBelgianPIT`.
-    const mortgageIncome = incomes.find((inc) => inc.partner.id === mortgagePartnerId);
-    const ownHomeCreditTotal = mortgageIncome
-        ? computeOwnHomeCredit(homeInputs, table, ownHomeCreditRegime, {
-              taxableIncome: mortgageIncome.taxableIncomeBeforeQuotient,
-              marginalRatePercent: computeMarginalRate(
-                  mortgageIncome.taxableIncomeBeforeQuotient,
-                  table.brackets,
-              ),
-          })
-        : 0;
-
-    const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
-    const surchargePct = household.communalSurchargePercent;
-
     const partnerResults: PartnerTaxResult[] = incomes.map((inc, i) => {
         const id = inc.partner.id;
-        const reductions = computeTaxReductions(
-            inc.partner.reductions,
-            household.region,
-            inc.taxableIncomeBeforeQuotient,
-            table,
-        );
+        const reductions = partnerReductions[i] as TaxReductionBreakdown;
         const ownHomeCredit = id === mortgagePartnerId ? ownHomeCreditTotal : 0;
         const pitAfter = step.pitAfterExemption[i] as number;
         const reductionsApplied = Math.min(reductions.total + ownHomeCredit, pitAfter);
@@ -556,7 +578,7 @@ export function computeHouseholdTax(
             csssSubject: inc.csssSubject,
             dividendWhtReclaim: investment.dividendWhtReclaim,
             savingsInterestTax: investment.savingsInterestTax,
-            marginalRate: computeMarginalRate(inc.taxableIncomeBeforeQuotient, table.brackets),
+            marginalRate: computeMarginalRate(taxable, table.brackets),
         };
     });
 
@@ -612,7 +634,14 @@ export function computeHouseholdTax(
     let dividendWhtReclaim = 0;
     let savingsInterestTax = 0;
     for (const p of partnerResults) {
-        grossIncome += p.grossIncome + p.otherTaxableIncome;
+        // Already-net activities carry no gross; their net amount is the cash the household has.
+        grossIncome +=
+            p.grossIncome +
+            p.otherTaxableIncome +
+            sum(
+                p.activities.filter((a) => a.kind === "net_professional_amount"),
+                (a) => a.netProfessionalIncome,
+            );
         employeeSocialSecurity += p.employeeSocialSecurity;
         professionalExpenses += p.professionalExpenses;
         netProfessionalIncome += p.netProfessionalIncome;

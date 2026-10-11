@@ -257,7 +257,20 @@ export const belgianTaxHouseholdV2Schema = z
     }
   });
 
-export const belgianTaxHouseholdSnapshotsV2Schema = z.record(
-  z.string().regex(/^\d{4}$/, "keys must be four-digit income years"),
-  belgianTaxHouseholdV2Schema,
-);
+export const belgianTaxHouseholdSnapshotsV2Schema = z
+  .record(
+    z.string().regex(/^\d{4}$/, "keys must be four-digit income years"),
+    belgianTaxHouseholdV2Schema,
+  )
+  .superRefine((snapshots, ctx) => {
+    // Mirrors the frontend schema: each key must equal its household's `taxYear`.
+    for (const [key, household] of Object.entries(snapshots)) {
+      if (Number(key) !== household.taxYear) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key, "taxYear"],
+          message: `must equal the snapshot key ${key}`,
+        });
+      }
+    }
+  });

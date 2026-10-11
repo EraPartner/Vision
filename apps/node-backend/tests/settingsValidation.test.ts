@@ -271,6 +271,11 @@ describe("Belgian tax household v2 settings validation", () => {
         2025: { ...validHousehold(), version: 1 },
       }),
     ).toThrow(/Invalid belgian_tax_household_snapshots_v2/);
+    expect(() =>
+      __validateSettingValue("belgian_tax_household_snapshots_v2", {
+        2025: { ...validHousehold(), taxYear: 2026 },
+      }),
+    ).toThrow(/Invalid belgian_tax_household_snapshots_v2/);
   });
 
   it("accepts a frozen household result in the snapshot meta and still refuses federalPITTotal", () => {

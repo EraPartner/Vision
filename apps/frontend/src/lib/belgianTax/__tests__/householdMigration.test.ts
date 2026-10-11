@@ -104,6 +104,13 @@ describe("upgradeSnapshotsV1ToV2", () => {
         expect(parseHouseholdSnapshotsV2(result).ok).toBe(true);
         expect(upgradeSnapshotsV1ToV2(result)).toEqual(result);
     });
+
+    test("a snapshot key must equal its household's taxYear", () => {
+        const v2 = upgradeProfileV1ToHousehold(joint);
+        const parsed = parseHouseholdSnapshotsV2({ 2024: { ...v2, taxYear: 2025 } });
+        expect(parsed.ok).toBe(false);
+        if (!parsed.ok) expect(parsed.issues[0]).toMatch(/^2024\.taxYear: must equal the snapshot key 2024$/);
+    });
 });
 
 describe("projectHouseholdToProfileV1", () => {

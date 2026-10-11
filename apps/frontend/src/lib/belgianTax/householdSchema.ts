@@ -215,10 +215,21 @@ export const belgianTaxHouseholdV2Schema = z
         }
     });
 
-export const belgianTaxHouseholdSnapshotsV2Schema = z.record(
-    z.string().regex(/^\d{4}$/),
-    belgianTaxHouseholdV2Schema,
-);
+export const belgianTaxHouseholdSnapshotsV2Schema = z
+    .record(z.string().regex(/^\d{4}$/), belgianTaxHouseholdV2Schema)
+    .superRefine((snapshots, ctx) => {
+        // The engine computes with the nested `taxYear`, so a snapshot filed under another year
+        // would silently run on the wrong table.
+        for (const [key, household] of Object.entries(snapshots)) {
+            if (Number(key) !== household.taxYear) {
+                ctx.addIssue({
+                    code: "custom",
+                    path: [key, "taxYear"],
+                    message: `must equal the snapshot key ${key}`,
+                });
+            }
+        }
+    });
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; issues: string[] };
 
