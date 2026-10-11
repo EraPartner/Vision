@@ -109,6 +109,9 @@ export default function TaxOverviewPage() {
     const storedHouseholdUnreadable = useBelgianTaxProfile(
         (state) => state.storedHouseholdUnreadable,
     );
+    const householdLoadFailed = useBelgianTaxProfile(
+        (state) => state.householdLoadFailed,
+    );
     // An unreadable stored household is shown first: the next edit overwrites it.
     const householdNotes = [
         ...(storedHouseholdUnreadable
@@ -237,7 +240,9 @@ export default function TaxOverviewPage() {
                     notes={householdNotes}
                 />
 
-                {isProfileLoading ? (
+                {householdLoadFailed ? (
+                    <PageError message={t("tax.household.loadFailed")} />
+                ) : isProfileLoading ? (
                     <SectionLoader />
                 ) : isEmpty ? (
                     <TaxNoProfileCard />

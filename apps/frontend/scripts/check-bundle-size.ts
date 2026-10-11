@@ -83,8 +83,11 @@ const BUDGETS_KB = {
     // IBKR funding import (2026-10-08); raised from 1180 (was 1100 before that).
     // Raised from 1340 for the lazily loaded Belgian-tax household engine, its
     // settings schemas and the household issue locale strings (ADR-200, phase
-    // B2): 1334.97 -> 1348.31 measured.
-    total: 1349,
+    // B2): 1334.97 -> 1348.31 measured. Raised from 1349 for the phase B2
+    // review fixes (household engine in the trend strip and yearly chart,
+    // upgrade validation, unreadable-household and engine-load-failure
+    // states with their EN/NL strings): 1348.16 -> 1349.02 measured.
+    total: 1351,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

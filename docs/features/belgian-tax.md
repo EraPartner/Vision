@@ -413,6 +413,11 @@ stored values with `loadHouseholdSettings`:
   edits. The store sets `storedHouseholdUnreadable`, and the tax overview's disclaimer banner
   then says that the saved household could not be read and that the next change replaces it.
 
+`loadHouseholdRuntime` retries the dynamic import once. When the retry fails too, the store sets
+`householdLoadFailed` and clears `isLoading`: the tax overview shows an error instead of its
+content, no Belgian-tax setting is written for the rest of the session, and the deduction
+candidates card disables its confirm action (edits are no-ops while `household` is `null`).
+
 The v1 keys are kept but no longer written: no backend code reads `belgian_tax_profile` or
 `belgian_tax_profile_snapshots_v1` (reports receive the projected profile in the request body).
 

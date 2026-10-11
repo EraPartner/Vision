@@ -26,6 +26,7 @@ import {
 import { useSettingsStore, type SettingsStore } from "@/stores/settingsStore";
 import { apiClient } from "@/lib/api";
 import logger from "@/lib/logger";
+import { loadHouseholdRuntime } from "@/lib/belgianTax/loadHouseholdRuntime";
 import type {
     BelgianTaxProfile,
     BelgianTaxProfileSnapshotMetas,
@@ -43,7 +44,7 @@ const BelgianTaxProfileScope = createContext(false);
 
 type PublicBelgianTaxProfileState = Omit<
     BelgianTaxSlice,
-    "_hydrate" | "_beginHydration" | "_markSaveError"
+    "_hydrate" | "_beginHydration" | "_markHydrationFailed" | "_markSaveError"
 >;
 
 const selectPublicState = (
@@ -60,6 +61,7 @@ const selectPublicState = (
     isViewingHistorical: state.isViewingHistorical,
     isLoading: state.isLoading,
     storedHouseholdUnreadable: state.storedHouseholdUnreadable,
+    householdLoadFailed: state.householdLoadFailed,
     saveErrorNonce: state.saveErrorNonce,
     updateProfile: state.updateProfile,
     resetProfile: state.resetProfile,
@@ -102,12 +104,18 @@ export function BelgianTaxProfileProvider({
     const hydrate = useSettingsStore((state) => state._hydrate);
     const beginHydration = useSettingsStore((state) => state._beginHydration);
     const markSaveError = useSettingsStore((state) => state._markSaveError);
+    const markHydrationFailed = useSettingsStore(
+        (state) => state._markHydrationFailed,
+    );
     const household = useSettingsStore((state) => state.household);
     const householdSnapshots = useSettingsStore(
         (state) => state.householdSnapshots,
     );
     const snapshotMetas = useSettingsStore((state) => state.snapshotMetas);
-    const isLoading = useSettingsStore((state) => state.isLoading);
+    // After a failed engine load nothing was hydrated, so nothing may be written back.
+    const persistBlocked = useSettingsStore(
+        (state) => state.isLoading || state.householdLoadFailed,
+    );
 
     useEffect(() => beginHydration(), [beginHydration]);
 
@@ -122,8 +130,8 @@ export function BelgianTaxProfileProvider({
             return;
         let cancelled = false;
         // The household engine and its zod schemas load on demand to keep them out of the
-        // boot bundle (ADR-200).
-        void import("@/lib/belgianTax/householdRuntime")
+        // boot bundle (ADR-200); the import is retried once.
+        void loadHouseholdRuntime()
             .then((runtime) => {
                 if (cancelled) return;
                 const mergedProfile = {
@@ -193,12 +201,14 @@ export function BelgianTaxProfileProvider({
                     "Failed to load the Belgian tax household engine:",
                     err,
                 );
+                if (!cancelled) markHydrationFailed();
             });
         return () => {
             cancelled = true;
         };
     }, [
         hydrate,
+        markHydrationFailed,
         markSaveError,
         preloadedHousehold,
         preloadHouseholdLoading,
@@ -215,21 +225,21 @@ export function BelgianTaxProfileProvider({
     useDebouncedSetting(
         HOUSEHOLD_SETTINGS_KEY,
         household,
-        isLoading,
+        persistBlocked,
         markSaveError,
         "Failed to save Belgian tax household:",
     );
     useDebouncedSetting(
         HOUSEHOLD_SNAPSHOTS_SETTINGS_KEY,
         householdSnapshots,
-        isLoading,
+        persistBlocked,
         markSaveError,
         "Failed to save Belgian tax household snapshots:",
     );
     useDebouncedSetting(
         SNAPSHOT_METAS_SETTINGS_KEY,
         snapshotMetas,
-        isLoading,
+        persistBlocked,
         markSaveError,
         "Failed to save Belgian tax profile snapshot meta:",
     );
