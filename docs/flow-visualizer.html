@@ -3714,7 +3714,7 @@
                 "from": "build.release",
                 "to": "build.native",
                 "payload": "isolated VISION_FRONTEND_DIST \u00b7 bun build.ts \u00b7 node out/scripts/build-native-package.js --demo",
-                "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; install-demo.sh compiles the TypeScript shell into packaging/electron/out/ (ADR-196), then the compiled build-native-package.ts prepares the normal native payload from it and invokes build-demo-seed.ts before Electron Builder."
+                "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; install-demo.sh compiles the TypeScript shell in packaging/electron into its git-ignored out folder (ADR-196), then the compiled build-native-package.ts prepares the normal native payload from it and invokes build-demo-seed.ts before Electron Builder."
               },
               {
                 "from": "build.native",
