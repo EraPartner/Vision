@@ -13974,6 +13974,7 @@ export interface operations {
                             toPartnerId?: "A" | "B";
                             benefit: number;
                         };
+                        /** @description One entry per partner; partner ids must be unique. */
                         partners: {
                             /** @enum {string} */
                             partnerId: "A" | "B";

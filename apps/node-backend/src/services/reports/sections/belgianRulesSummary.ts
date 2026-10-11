@@ -47,8 +47,8 @@ export function renderBelgianRulesSummary(
 
   const pitHtml = precomputedPIT ? renderPITBlock(precomputedPIT, taxProfile, currency) : '';
   const householdHtml = renderHouseholdBlock(
-    data?.precomputedHousehold ?? null,
-    data?.household ?? null,
+    data?.precomputedHousehold,
+    data?.household,
     currency,
   );
 
@@ -86,7 +86,7 @@ const ASSESSMENT_LABELS: Record<PrecomputedHousehold['assessmentMode'], string> 
 };
 
 /** "You" / "Partner", with the partner's display name when the household has one. */
-function partnerName(id: 'A' | 'B', household: ReportHousehold | null): string {
+function partnerName(id: 'A' | 'B', household: ReportHousehold | undefined): string {
   const name = household?.partners.find((p) => p.id === id)?.displayName?.trim();
   return name ? `${PARTNER_LABELS[id]} (${name})` : PARTNER_LABELS[id];
 }
@@ -97,8 +97,8 @@ function partnerName(id: 'A' | 'B', household: ReportHousehold | null): string {
  * assessed, so a one-partner household keeps exactly the rows it had before.
  */
 export function renderHouseholdBlock(
-  result: PrecomputedHousehold | null,
-  household: ReportHousehold | null,
+  result: PrecomputedHousehold | undefined,
+  household: ReportHousehold | undefined,
   currency: string,
 ): string {
   if (!result || result.partners.length < 2) return '';

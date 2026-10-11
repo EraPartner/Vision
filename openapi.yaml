@@ -11337,6 +11337,7 @@ paths:
                         benefit: { type: number }
                     partners:
                       type: array
+                      description: One entry per partner; partner ids must be unique.
                       minItems: 1
                       maxItems: 2
                       items:

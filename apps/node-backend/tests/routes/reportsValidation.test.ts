@@ -64,6 +64,12 @@ describe('Report exclusion id validation', () => {
         precomputedHousehold: { ...precomputedHousehold, assessmentMode: 'shared' },
       }),
     ).toThrow(/precomputedHousehold\.assessmentMode/);
+    const partner = precomputedHousehold.partners[0];
+    expect(() =>
+      __parseReportBody({
+        precomputedHousehold: { ...precomputedHousehold, partners: [partner, partner] },
+      }),
+    ).toThrow(/precomputedHousehold\.partners: partner ids must be unique/);
   });
 
   it('reports a root-level issue without an empty path prefix', () => {

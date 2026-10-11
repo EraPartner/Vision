@@ -129,7 +129,12 @@ const precomputedHouseholdSchema = z
         }),
       )
       .min(1)
-      .max(2),
+      .max(2)
+      .refine(
+        (partners) =>
+          new Set(partners.map((p) => p.partnerId)).size === partners.length,
+        { message: "partner ids must be unique" },
+      ),
   })
   .optional();
 
