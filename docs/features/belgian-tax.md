@@ -20,6 +20,7 @@ related_code:
   - apps/frontend/src/stores/belgianTaxStore.ts
   - apps/frontend/src/lib/belgianTax/householdRuntime.ts
   - apps/frontend/src/lib/belgianTax/pit.ts
+  - apps/frontend/src/lib/belgianTax/householdOwnHome.ts
   - apps/frontend/src/lib/belgianTax/constants.ts
   - apps/frontend/src/lib/belgianTax/socialSecurity.ts
   - apps/frontend/src/lib/belgianTax/propertyTax.ts
@@ -80,6 +81,7 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | `exemptions.ts`       | Dependent supplements and tax-free sum allocation between partners          |
 | `maritalQuotient.ts`  | Arts 87-88 quotient on professional income, IY 2026 senior cap              |
 | `household.ts`        | `computeHouseholdTax`, `toBelgianTaxCalculation`                            |
+| `householdOwnHome.ts` | Own-home credit of the household: one borrower, or a basket per borrower (ADR-202) |
 | `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                |
 | `householdSchema.ts`  | zod schemas for the v2 setting values                                       |
 | `householdRuntime.ts` | Lazily loaded engine entry for the store: settings load/upgrade, projections, household diff |
@@ -386,7 +388,16 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    income (pensions excluded); otherwise the single scale per partner who is an employee.
 9. Property tax for the home and the investment side calculation per partner.
 
-The own-home credit goes to `mortgageCreditPartnerId`. The chèque habitat €125 per child counts
+The own-home credit goes to `mortgageCreditPartnerId`, unless both partners borrowed:
+`home.mortgageSharePartnerB` (0-100, partner B's share of the payments, in Wallonia B's
+ownership share) strictly between 0 and 100 gives each partner a basket of their own
+(`householdOwnHome.ts`, [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]];
+scenarios RG-16 to RG-18). Under a joint assessment the woonbonus payments are divided freely
+within the two caps (higher rate first; at equal rates each keeps their own payments and only the
+excess moves), and the chèque habitat €125 per child goes to the borrower with the most room
+under their payments cap. Outside a joint assessment each borrower claims their own share. The
+regime follows `household.region`; a different stored `home.mortgageRegion` raises
+`mortgage_region_not_used` (info, scenario RG-19). The chèque habitat €125 per child counts
 this year's children under a joint assessment; otherwise only when that partner is also the
 dependants' claimant (corrected 2026-10-11, scenario RG-12). The woonbonus €80 follows
 `home.woonbonusChildrenAtLoanStart` (scenarios RG-05, RG-13); when it is absent, this year's
@@ -488,7 +499,8 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   (kind and date, the deceased partner for a death; a new event is a marriage on 1 January of
   the year before the income year, so a migrated joint household stays joint until the user
   enters the actual date); the death-year election when the year is
-  electable; who claims the dependants and the own-home credit.
+  electable; who claims the dependants and the own-home credit; with partner B, B's share of
+  the home loan (`home.mortgageSharePartnerB`, empty for one borrower).
 - **Income** step, per partner: activities (kind, gross amount or the net amount of a
   `net_professional_amount`, optional start and end dates), the expense method per forfait
   category with the actual amount, other taxable income, alimony, union dues, birth year and
@@ -754,6 +766,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — As-filed frozen calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, single-year CSV export (May 2026)
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
 - [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
+- [[docs/adr/202-belgian-tax-region-and-own-home-baskets|ADR-202]] — The household region decides the own-home regime (`mortgageRegion` deprecated); an own-home basket per borrower (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/reference/belgian-tax-scenario-matrix|Belgian tax scenario matrix]] — law-derived household scenarios per rule-matrix row
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio

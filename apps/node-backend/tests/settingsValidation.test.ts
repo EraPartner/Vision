@@ -125,6 +125,14 @@ describe("Belgian tax household v2 settings validation", () => {
     expect(validate(value)).toEqual(value);
   });
 
+  it("accepts partner B's share of the own-home payments", () => {
+    const value = {
+      ...validHousehold(),
+      home: { cadastralIncome: 0, mortgageInterestPaid: 0, mortgageSharePartnerB: 40 },
+    };
+    expect(validate(value)).toEqual(value);
+  });
+
   it.each<[string, (h: Household) => unknown]>([
     ["version 1", (h) => ({ ...h, version: 1 })],
     ["a missing taxYear", ({ taxYear: _taxYear, ...rest }) => rest],
@@ -230,6 +238,10 @@ describe("Belgian tax household v2 settings validation", () => {
     [
       "fractional woonbonus children at the loan start",
       (h) => ({ ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: 2.5 } }),
+    ],
+    [
+      "an own-home share above 100%",
+      (h) => ({ ...h, home: { ...h.home, mortgageSharePartnerB: 120 } }),
     ],
     [
       "negative woonbonus children at the loan start",

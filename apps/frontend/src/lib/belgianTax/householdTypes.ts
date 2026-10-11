@@ -202,6 +202,14 @@ export type HouseholdHomeInputs = Pick<
     /** Partner who claims the own-home credit; defaults to A. */
     mortgageCreditPartnerId?: PartnerId;
     /**
+     * Both partners borrowed for the own home: partner B's share (0-100 %) of the payments, in
+     * Wallonia partner B's share of the ownership (art. 145/46ter: interest and capital "au
+     * prorata de la part de propriété"). Each borrower then has an own-home basket of their own
+     * ("per belastingplichtige", arts 145/37 §2 and 145/38/2 §2). Undefined, 0 or 100 keeps the
+     * one-borrower path of `mortgageCreditPartnerId` (0 and 100 name the single borrower).
+     */
+    mortgageSharePartnerB?: number;
+    /**
      * Walloon chèque habitat: income year of the first taxable period in which the credit was
      * claimed (art. 145/46quinquies). The twenty-period window and the halving from the eleventh
      * period count from it; when absent, the loan year (`mortgageStartYear`) is the proxy. No v1

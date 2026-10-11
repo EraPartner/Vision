@@ -53,6 +53,7 @@ import {
     resolveMortgageRegime,
     type ForfaitCategory,
 } from "./personPit";
+import { allocateOwnHomeCredit } from "./householdOwnHome";
 import { computePropertyTaxEstimate } from "./propertyTax";
 import {
     computeActivitySocialSecurity,
@@ -522,55 +523,27 @@ export function computeHouseholdTax(
     );
     const incomes = partners.map((p) => computePartnerIncome(p, table, issues));
 
-    // Own-home credit to the partner who claims it (default A, else the first assessed partner).
-    const mortgagePartnerId: PartnerId | undefined = partners.some(
-        (p) => p.id === (household.home.mortgageCreditPartnerId ?? "A"),
-    )
-        ? (household.home.mortgageCreditPartnerId ?? "A")
-        : partners[0]?.id;
-    // Outside a joint assessment a child is the dependant of the partner who claims it (the
-    // art. 132 supplements follow the same claimant), so this year's children count for the
-    // own-home credit (Walloon art. 145/46ter §2; the Flemish woonbonus +80 proxy when
-    // `woonbonusChildrenAtLoanStart` is absent) only when the mortgage partner is the claimant.
+    // Own-home credit: one borrower (`mortgageCreditPartnerId`, default A) or, with
+    // `mortgageSharePartnerB`, a basket per borrower. Incomes before the quotient set the
+    // woonbonus marginal rate and the chèque habitat income limits, as in `computeBelgianPIT`.
     const childrenClaimantId = resolveDependentsClaimant(
         partners,
         household.dependents.claimantPartnerId,
     );
-    const homeHasChildren = mode === "joint" || childrenClaimantId === mortgagePartnerId;
-    const homeInputs = {
-        ...household.home,
-        region: household.region,
-        dependentChildren: homeHasChildren ? household.dependents.children : 0,
-        dependentChildrenDisabled: homeHasChildren ? (household.dependents.childrenDisabled ?? 0) : 0,
-    };
-    const ownHomeCreditRegime = resolveMortgageRegime(homeInputs);
-    // Without the borrower's children on 1 January after the loan year, the woonbonus +80 rests
-    // on this year's children of the claimant (a proxy), so say so while the +760 period runs.
-    if (
-        ownHomeCreditRegime === "flemish_woonbonus" &&
-        mortgagePartnerId !== undefined &&
-        household.home.woonbonusChildrenAtLoanStart === undefined &&
-        incomeYear - (household.home.mortgageStartYear ?? 0) < 10
-    ) {
-        issues.push({
-            code: "woonbonus_children_at_loan_start_missing",
-            severity: "info",
-            partnerId: mortgagePartnerId,
-        });
-    }
-    // The claimant's taxable income before the quotient sets the woonbonus marginal rate and the
-    // chèque habitat income limits, as in `computeBelgianPIT`.
-    const mortgageIncome = incomes.find((inc) => inc.partner.id === mortgagePartnerId);
-    const ownHomeCreditTotal = mortgageIncome
-        ? computeOwnHomeCredit(homeInputs, table, ownHomeCreditRegime, {
-              taxableIncome: mortgageIncome.taxableIncomeBeforeQuotient,
-              marginalRatePercent: computeMarginalRate(
-                  mortgageIncome.taxableIncomeBeforeQuotient,
-                  table.brackets,
-              ),
-              incomeYear,
-          })
-        : 0;
+    const ownHome = allocateOwnHomeCredit({
+        household,
+        partners: incomes.map((inc) => ({
+            id: inc.partner.id,
+            taxableIncomeBeforeQuotient: inc.taxableIncomeBeforeQuotient,
+        })),
+        mode,
+        childrenClaimantId,
+        table,
+        incomeYear,
+    });
+    issues.push(...ownHome.issues);
+    const ownHomeCreditRegime = ownHome.regime;
+    const ownHomeCreditOf = (id: PartnerId): number => ownHome.credits[id] ?? 0;
 
     const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
     const surchargePct = household.communalSurchargePercent;
@@ -589,8 +562,9 @@ export function computeHouseholdTax(
     );
     const fixedCredits = incomes.map(
         (inc, i) =>
-            (partnerReductions[i] as TaxReductionBreakdown).total +
-            (inc.partner.id === mortgagePartnerId ? ownHomeCreditTotal : 0),
+            (partnerReductions[i] as TaxReductionBreakdown).total -
+            (partnerReductions[i] as TaxReductionBreakdown).donations +
+            ownHomeCreditOf(inc.partner.id),
     );
     const creditsOf = (step: TaxStep, i: number): number =>
         (fixedCredits[i] as number) +
@@ -708,7 +682,7 @@ export function computeHouseholdTax(
             exemptionBenefit: step.exemptionBenefits[i] as number,
             pitAfterExemption: pitAfter,
             reductions,
-            ownHomeCreditRegime: id === mortgagePartnerId ? ownHomeCreditRegime : "none",
+            ownHomeCreditRegime: ownHome.borrowers.includes(id) ? ownHomeCreditRegime : "none",
             ownHomeCredit,
             pensionReduction,
             reductionsApplied,

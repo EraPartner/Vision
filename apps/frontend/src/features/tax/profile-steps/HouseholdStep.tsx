@@ -22,6 +22,7 @@ import {
     type RelationshipEventKind,
 } from "@/lib/belgianTax/householdTypes";
 import type { HouseholdStepProps } from "./types";
+import { ProfileNumberInput } from "./ProfileNumberInput";
 import {
     addPartnerB,
     addRelationshipEvent,
@@ -345,6 +346,40 @@ export function HouseholdStep({
                                     }
                                 />
                             </div>
+                            {partnerIds.includes("B") && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="household-home-share-b">
+                                        {t("tax.household.field.mortgageSharePartnerB")}
+                                    </Label>
+                                    <ProfileNumberInput
+                                        id="household-home-share-b"
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={household.home.mortgageSharePartnerB}
+                                        allowEmpty
+                                        onValueChange={(mortgageSharePartnerB) =>
+                                            updateHousehold((h) => {
+                                                const { mortgageSharePartnerB: _old, ...home } =
+                                                    h.home;
+                                                return {
+                                                    ...h,
+                                                    home:
+                                                        mortgageSharePartnerB === undefined
+                                                            ? home
+                                                            : { ...home, mortgageSharePartnerB },
+                                                };
+                                            })
+                                        }
+                                        placeholder={t(
+                                            "tax.household.placeholder.mortgageSharePartnerB",
+                                        )}
+                                    />
+                                    <FieldHint>
+                                        {t("tax.household.field.mortgageSharePartnerB.desc")}
+                                    </FieldHint>
+                                </div>
+                            )}
                         </div>
                         <FieldHint>{t("tax.household.claims.note")}</FieldHint>
                     </div>

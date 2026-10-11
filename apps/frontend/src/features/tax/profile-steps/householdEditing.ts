@@ -184,6 +184,7 @@ export function removePartnerB(household: BelgianTaxHouseholdV2): BelgianTaxHous
     if (dependents.claimantPartnerId === "B") dependents.claimantPartnerId = "A";
     const home = { ...household.home };
     if (home.mortgageCreditPartnerId === "B") home.mortgageCreditPartnerId = "A";
+    delete home.mortgageSharePartnerB;
     const next: BelgianTaxHouseholdV2 = {
         ...household,
         partners: household.partners.filter((p) => p.id !== "B"),

@@ -563,64 +563,103 @@ export function computeOwnHomeCredit(
     regime: MortgageCreditRegime,
     taxpayer: OwnHomeCreditTaxpayer,
 ): number {
-    if (regime === "none") return 0;
-    const interest = Math.max(inputs.mortgageInterestPaid || 0, 0);
-    const capital = Math.max(inputs.mortgageCapitalRepaid || 0, 0);
+    const payments = mortgagePayments(inputs);
+    if (regime === "flemish_woonbonus") {
+        const basket = woonbonusBasket(inputs, table, taxpayer);
+        return Math.min(payments, basket.cap) * basket.rate;
+    }
+    if (regime === "walloon_cheque_habitat") {
+        const parts = chequeHabitatParts(inputs, table, taxpayer);
+        if (!parts) return 0;
+        return Math.min((parts.base + parts.childSupplement) * parts.factor, payments);
+    }
+    return 0;
+}
+
+/** Interest plus capital paid on the loan in the period (each clamped at 0). */
+export function mortgagePayments(
+    inputs: Pick<OwnHomeCreditInputs, "mortgageInterestPaid" | "mortgageCapitalRepaid">,
+): number {
+    return (
+        Math.max(inputs.mortgageInterestPaid || 0, 0) +
+        Math.max(inputs.mortgageCapitalRepaid || 0, 0)
+    );
+}
+
+/** Woonbonus of one taxpayer: the expense cap of the period ("per belastingplichtige") and rate. */
+export interface WoonbonusBasket {
+    cap: number;
+    rate: number;
+}
+
+/** Flemish woonbonus cap and rate of one taxpayer (arts 145/37 §§2-3, 145/38/2 §§2-3). */
+export function woonbonusBasket(
+    inputs: OwnHomeCreditInputs,
+    table: BelgianTaxYearTable,
+    taxpayer: OwnHomeCreditTaxpayer,
+): WoonbonusBasket {
     const startYear = inputs.mortgageStartYear ?? 0;
     // Taxable periods since the loan year: 0 is the first period, 10 the eleventh.
     const loanAge = Math.max(0, taxpayer.incomeYear - startYear);
-
-    if (regime === "flemish_woonbonus") {
-        let cap: number;
-        let rate: number;
-        if (startYear < 2015) {
-            cap = table.flemishWoonbonusBaseCap;
-            rate = Math.max(
-                taxpayer.marginalRatePercent / 100,
-                table.flemishWoonbonusPre2015MinimumRate,
-            );
-        } else if (startYear === 2015) {
-            cap = table.flemishWoonbonus2015BaseCap;
-            rate = table.flemishWoonbonusRate;
-        } else {
-            cap = table.flemishIntegratedWoonbonusBaseCap;
-            rate = table.flemishWoonbonusRate;
-        }
-        if (loanAge < 10) {
-            cap += table.flemishWoonbonusExtraFirst10y;
-            if (woonbonusChildCount(inputs) >= 3) cap += table.flemishWoonbonusExtraChildren;
-        }
-        return Math.min(interest + capital, cap) * rate;
-    }
-
-    if (regime === "walloon_cheque_habitat") {
-        const income = Math.max(taxpayer.taxableIncome, 0);
-        const { lower, upper } = table.walloonChequeHabitatIncomeThresholds;
-        if (income > upper) return 0;
-        const base =
-            income <= lower
-                ? table.walloonChequeHabitatBase
-                : table.walloonChequeHabitatBase -
-                  (income - lower) * table.walloonChequeHabitatPhaseOutRate;
-        const children = Math.max(inputs.dependentChildren || 0, 0);
-        const disabled = Math.min(
-            Math.max(inputs.dependentChildrenDisabled || 0, 0),
-            children,
+    let cap: number;
+    let rate: number;
+    if (startYear < 2015) {
+        cap = table.flemishWoonbonusBaseCap;
+        rate = Math.max(
+            taxpayer.marginalRatePercent / 100,
+            table.flemishWoonbonusPre2015MinimumRate,
         );
-        const childSupplement =
-            (children + disabled) * table.walloonChequeHabitatChildSupplement;
-        // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
-        // Before the first qualifying year the conditions are not met yet.
-        const first = inputs.firstQualifyingYear;
-        if (first !== undefined && taxpayer.incomeYear < first) return 0;
-        const period = first !== undefined ? taxpayer.incomeYear - first : loanAge;
-        if (period >= 20) return 0;
-        let credit = Math.max(base, 0) + childSupplement;
-        if (period >= 10) credit /= 2;
-        return Math.min(credit, interest + capital);
+    } else if (startYear === 2015) {
+        cap = table.flemishWoonbonus2015BaseCap;
+        rate = table.flemishWoonbonusRate;
+    } else {
+        cap = table.flemishIntegratedWoonbonusBaseCap;
+        rate = table.flemishWoonbonusRate;
     }
+    if (loanAge < 10) {
+        cap += table.flemishWoonbonusExtraFirst10y;
+        if (woonbonusChildCount(inputs) >= 3) cap += table.flemishWoonbonusExtraChildren;
+    }
+    return { cap, rate };
+}
 
-    return 0;
+/**
+ * Chèque habitat of one taxpayer before the payments cap of art. 145/46ter §4: the income-based
+ * amount (`base`, never negative), the €125 per dependent child (`childSupplement`) and the
+ * halving `factor` (0.5 from the eleventh period). Undefined when nothing is due: income above
+ * the upper limit, before the first qualifying year or from the twenty-first period.
+ */
+export interface ChequeHabitatParts {
+    base: number;
+    childSupplement: number;
+    factor: number;
+}
+
+export function chequeHabitatParts(
+    inputs: OwnHomeCreditInputs,
+    table: BelgianTaxYearTable,
+    taxpayer: OwnHomeCreditTaxpayer,
+): ChequeHabitatParts | undefined {
+    const income = Math.max(taxpayer.taxableIncome, 0);
+    const { lower, upper } = table.walloonChequeHabitatIncomeThresholds;
+    if (income > upper) return undefined;
+    const base =
+        income <= lower
+            ? table.walloonChequeHabitatBase
+            : table.walloonChequeHabitatBase -
+              (income - lower) * table.walloonChequeHabitatPhaseOutRate;
+    const children = Math.max(inputs.dependentChildren || 0, 0);
+    const disabled = Math.min(Math.max(inputs.dependentChildrenDisabled || 0, 0), children);
+    const childSupplement = (children + disabled) * table.walloonChequeHabitatChildSupplement;
+    // Periods since the first claimed one: 0 is the first, 10 the eleventh, 20 the 21st.
+    // Before the first qualifying year the conditions are not met yet.
+    const startYear = inputs.mortgageStartYear ?? 0;
+    const loanAge = Math.max(0, taxpayer.incomeYear - startYear);
+    const first = inputs.firstQualifyingYear;
+    if (first !== undefined && taxpayer.incomeYear < first) return undefined;
+    const period = first !== undefined ? taxpayer.incomeYear - first : loanAge;
+    if (period >= 20) return undefined;
+    return { base: Math.max(base, 0), childSupplement, factor: period >= 10 ? 0.5 : 1 };
 }
 
 export interface InvestmentSideCalc {

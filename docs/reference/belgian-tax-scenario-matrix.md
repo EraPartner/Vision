@@ -123,7 +123,7 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 
 ### Regions
 
-`scenarioMatrix.regions.test.ts`. State/regional factor, communal surcharge, Flemish woonbonus, Walloon chèque habitat (formula, halving from the eleventh period, twenty-period window, loan dates), service vouchers per region and income year.
+`scenarioMatrix.regions.test.ts`. State/regional factor, communal surcharge, Flemish woonbonus, Walloon chèque habitat (formula, halving from the eleventh period, twenty-period window, loan dates), a basket per borrower, the region that decides the regime, service vouchers per region and income year.
 
 | Id | What it verifies | Articles | Matrix rows | Status |
 | -- | ---------------- | -------- | ----------- | ------ |
@@ -142,6 +142,10 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | RG-13 | separate assessment: the woonbonus +80 follows the borrower's children on 1 January after the loan year, not this year's claimant | WIB 92 Flemish art. 145/38/2 §2 al. 3 ("op 1 januari van het jaar na dat waarin de leningsovereenkomst wordt afgesloten"); WIB 92 arts 126 §1, 136 | `woonbonus-extra`, `hh-supplements-allocation` | verified |
 | RG-14 | Flemish woonbonus, loan signed in 2015, eleventh period (IY 2025): base 1,520 at 40% | WIB 92 Flemish art. 145/37 §3 | `woonbonus-2015`, `woonbonus-extra` | verified |
 | RG-15 | woonbonus +80 without the children at the loan start: this year's children of the claimant stand in, with an info issue | WIB 92 Flemish art. 145/38/2 §2 al. 3; WIB 92 arts 126 §1, 136 | `woonbonus-extra`, `hh-supplements-allocation` | needs_source |
+| RG-16 | joint assessment, both spouses borrowers (B pays 25%): woonbonus basket per spouse, payments divided freely | WIB 92 Flemish art. 145/38/2 §2 ("per belastingplichtige"), §3 ("vrij verdelen binnen de begrenzingen"); C63 | `hh-own-home-borrowers`, `woonbonus-integrated`, `woonbonus-extra` | verified |
+| RG-17 | separate assessment, both partners borrowers (B pays 25%): each claims their own payments | WIB 92 Flemish art. 145/38/2 §§2-3; art. 126 §1 | `hh-own-home-borrowers`, `woonbonus-integrated`, `woonbonus-extra` | verified |
+| RG-18 | joint assessment, chèque habitat for two owners (50% each): own income per borrower, child increase where it fits | WIB 92 Walloon art. 145/46ter §§2-4 ("forfaitaire et individuelle", "au prorata de la part de propriété"); C18 | `hh-own-home-borrowers`, `cheque-habitat-formula`, `cheque-habitat-periods` | verified |
+| RG-19 | the household region decides the own-home regime: a Flemish resident's home recorded as Walloon | Special finance law of 16 January 1989 arts 5/1 §2 (fiscal domicile on 1 January of the assessment year), 5/5 §4 | `region-competence`, `woonbonus-integrated` | verified |
 | SV-2024-brussels | service vouchers, Brussels, IY 2024, spend 2,000: 15% × 1,790 = 268.50 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-brussels` | verified |
 | SV-2024-flanders | service vouchers, Flanders, IY 2024, spend 2,000: 20% × 1,790 = 358 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-flanders` | verified |
 | SV-2024-wallonia | service vouchers, Wallonia, IY 2024, spend 2,000: 30% × 1,790 = 537 | WIB 92 art. 145/21 (regional versions); FPS circulars 2025/C/20, 2026/C/34 | `service-voucher-rule`, `service-voucher-wallonia` | verified |
@@ -264,11 +268,11 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `property-centimes` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Property tax centimes… | — |
 | `woonbonus-pre2015` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Flemish woonbonus, loans before 2015… | RG-04 |
 | `woonbonus-2015` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Flemish woonbonus, loans signed in 2015… | RG-14 |
-| `woonbonus-integrated` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Integrated woonbonus… | RG-05 |
-| `woonbonus-extra` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Woonbonus +760… | RG-04, RG-05, RG-13, RG-14, RG-15 |
+| `woonbonus-integrated` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Integrated woonbonus… | RG-05, RG-16, RG-17, RG-19 |
+| `woonbonus-extra` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Woonbonus +760… | RG-04, RG-05, RG-13, RG-14, RG-15, RG-16, RG-17 |
 | `woonbonus-post2020` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | No woonbonus for loans… | RG-06 |
-| `cheque-habitat-formula` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat: 1,520… | RG-07, RG-08, RG-12 |
-| `cheque-habitat-periods` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat halved… | RG-07, RG-08, RG-09, RG-10 |
+| `cheque-habitat-formula` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat: 1,520… | RG-07, RG-08, RG-12, RG-18 |
+| `cheque-habitat-periods` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat halved… | RG-07, RG-08, RG-09, RG-10, RG-18 |
 | `cheque-habitat-loans` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Chèque habitat only for loans… | RG-11 |
 | `own-home-income` | [[docs/reference/belgian-tax-rule-matrix#Regional layer, surcharge, property\|Regional layer, surcharge, property]] | Income for the woonbonus rate… | — |
 | `dividend-exemption` | [[docs/reference/belgian-tax-rule-matrix#Investment income\|Investment income]] | Dividend exemption… | — |
