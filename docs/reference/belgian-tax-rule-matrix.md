@@ -5,7 +5,7 @@ status: active
 date: 2026-10-11
 updated: 2026-10-11
 tags: [reference, belgian-tax, tax-rules, sources, verification]
-description: One row per Belgian personal income tax rule the engine applies, with the legal basis, the primary source opened for each income year (2024-2026), the code location, the regression test and the verification status.
+description: One row per Belgian personal income tax rule the engine applies, including the household (two-partner) rules of ADR-200, with the legal basis, the primary source opened for each income year (2024-2026), the code location, the regression test and the verification status.
 aliases: [belgian tax rule matrix, tax rule coverage, tax sources]
 ---
 
@@ -81,9 +81,9 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Dependent 66+ in a situation of dependence      | art. 132 al. 1, 7°              | 5,770                               | 5,950                               | 5,950                                 | N25, N26, N27, F3 | —                                      | —                                            | not modelled (profile has one "other dependent" count) |
 | Disabled dependent counts twice                 | WIB 92 art. 132bis / 136        | ×2                                  | ×2                                  | ×2                                    | F3 ("twee kinderen ten laste") | `computePersonalExemption`     | "disabled child" tests                       | verified (rule) |
 | Isolated parent supplement                      | art. 133 al. 1, 1°              | 1,920                               | 1,980                               | 1,980                                 | N25, N26, N27, F3 | `isolatedParentSupplement`             | —                                            | verified; the extra low-income supplement of art. 133 al. 2-3 (1,290 max) is not modelled |
-| Refundable child tax credit                     | art. 134 §3 al. 2               | 550 per child                       | 550 (L1 art. 42, no longer indexed) | 550                                   | N25, N26, F3, L1 | —                                      | —                                            | not modelled |
+| Refundable child tax credit                     | art. 134 §3 al. 2               | 550 per child                       | 550 (L1 art. 42, no longer indexed) | 550                                   | N25, N26, F3, L1 | `refundableChildCreditCapPerChild`; the household engine returns 0 | `household.test.ts` "low income with children raises the refundable-credit open item" | not modelled; the household engine raises `refundable_child_credit_not_modelled` (needs_source) when child supplements stay unused |
 | Each spouse's taxable income is set and taxed separately under the joint assessment (décumul) | art. 126 §1 al. 2 ("het belastbare inkomen van elke echtgenoot afzonderlijk wordt vastgesteld"), art. 127 | rule | rule | rule | L4 | `applyMaritalQuotient` (no-quotient baseline now includes the spouse's own tax) | "joint assessment taxes the spouse's own income even when no quotient applies" | verified (previously the spouse's tax was dropped when no quotient applied, and the art. 88 comparison was made against the earner's tax alone) |
-| Supplements go to the spouse with the higher taxable income | art. 134 §4             | rule                                | rule                                | rule (L2 art. 10 l) from AY 2030)     | L4, P1 sample | `applyMaritalQuotient` (spouse keeps basic exemption only) | PwC sample test              | verified for the single-earner case; general allocation is Phase B |
+| Supplements go to the spouse with the higher taxable income | art. 134 §4             | rule                                | rule                                | rule (L2 art. 10 l) from AY 2030)     | L4, P1 sample | `applyMaritalQuotient` (spouse keeps basic exemption only) | PwC sample test              | verified for the single-earner case; the general allocation is in [[#Household taxation]] |
 
 ## Professional expenses (forfait)
 
@@ -93,7 +93,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Forfait base = gross income minus the art. 52, 7° social contributions | art. 51 al. 1 ("vooraf verminderd met voormelde bijdragen") | rule | rule | rule | L4 art. 51 al. 1, F4 ("brutoberoepsinkomen (verminderd met bijdragen)") | `computeProfessionalExpenses` (receives `employeeSS`) | "employee forfait is computed on gross pay after the 13.07% contribution" | verified (previously computed on gross pay before contributions; affects pay below about 22,700 in IY 2025) |
 | Company directors: 3%, capped           | art. 51 al. 2, 2° and al. 3 | cap 3,030                            | cap 3,130                            | cap 3,200                            | N25, N26, N27, F4 | `directorProfessionalExpense*`      | "director forfait"                           | verified |
 | Fees (baten): 28.7% / 10% / 5% / 3%, capped | art. 51 al. 2, 4° and al. 3 | 7,310 / 14,520 / 24,160; cap 5,050 | 7,540 / 14,970 / 24,920; cap 5,210  | 7,720 / 15,340 / 25,530; cap 5,340   | N25, N26, N27 (boundaries, caps); L4 (rates) | `selfEmployedFeesExpense*`     | "self-employed fees (baten)"                 | verified; the rates come from the 2011 consolidation and L2 does not amend them |
-| Helping spouse: 5%, capped              | art. 51 al. 2, 3°           | cap 5,050                            | cap 5,210                            | cap 5,340                            | N25, N26, N27, F4 | —                                   | —                                            | not modelled (Phase B) |
+| Helping spouse: 5%, capped              | art. 51 al. 2, 3°           | cap 5,050                            | cap 5,210                            | cap 5,340                            | N25, N26, N27, F4; L4 (rate) | `helpingSpouseProfessionalExpenseRate`, `personPit.ts` `computeLumpSumForfait` | `household.test.ts` "helping spouse: 5% forfait …" | verified (rule, 2011 text); household engine only, the v1 profile has no helping-spouse type |
 | Pensions and replacement income: no forfait | art. 51 al. 1           | 0                                    | 0                                    | 0                                    | L4            | `computeProfessionalExpenses`          | "pensions and other income carry no forfait" | verified (rule) |
 
 ## Deductions from the taxable base
@@ -121,9 +121,9 @@ fin.belgium.be explain the rules; the laws give the rule text.
 
 | Rule                                        | Legal basis                       | IY 2024 | IY 2025 | IY 2026                                       | Source            | Code                        | Tests                                               | Status   |
 | ------------------------------------------- | --------------------------------- | ------- | ------- | --------------------------------------------- | ----------------- | --------------------------- | --------------------------------------------------- | -------- |
-| Joint assessment from the year after marriage or legal cohabitation; separate in the year itself, on separation and for factual cohabitants | art. 126 §§1-2 | rule | rule | rule | F2, L4 | `filingStatus` (user-chosen) | — | verified (rule); automatic derivation from dates is Phase B |
-| Separate assessment when a spouse has treaty-exempt income above the threshold | art. 126 §2 al. 1, 4° | 13,050 | 13,460 | basic exemption (L2 art. 32) | N25, N26, L2 | — | — | not modelled |
-| Quotient: 30% of the earner's income to a spouse without income, capped | art. 87 | cap 13,050 | cap 13,460 | cap 11,780; 12,790 when both spouses are 66+ (L2 arts 27, 30) | N25, N26, N27, F2, F7 | `maritalQuotientCap`, `applyMaritalQuotient` | "single-earner couple", "IY 2024 … (€13,050)", "IY 2026 … €11,780" | verified (IY 2024 corrected from 13,070); the 66+ cap needs birth years (Phase B) |
+| Joint assessment from the year after marriage or legal cohabitation; separate in the year itself, on separation and for factual cohabitants | art. 126 §§1-2 | rule | rule | rule | F2, L4 | v1: `filingStatus` (user-chosen); household: `assessment.ts` `deriveAssessment` | `assessment.test.ts` | verified (rule); derived from dates in the household engine, see [[#Household taxation]] |
+| Separate assessment when a spouse has treaty-exempt income above the threshold | art. 126 §2 al. 1, 4° | 13,050 | 13,460 | 11,550 (basic exemption, L2 art. 32) | N25, N26, N27, L2 | `treatyExemptSeparateThreshold`, `assessment.ts` | `assessment.test.ts` "IY %i treaty-exempt income …" | verified; household engine only (issue `treaty_exempt_separate_assessment`, info) |
+| Quotient: 30% of the earner's income to a spouse without income, capped | art. 87 | cap 13,050 | cap 13,460 | cap 11,780; 12,790 when both spouses are 66+ (L2 arts 27, 30) | N25, N26, N27, F2, F7 | `maritalQuotientCap`, `maritalQuotientCapBothSenior`, `applyMaritalQuotient`, `maritalQuotient.ts` | "single-earner couple", "IY 2024 … (€13,050)", "IY 2026 … €11,780"; `maritalQuotient.test.ts` "IY 2026: both spouses 66+ …" | verified (IY 2024 corrected from 13,070); the 66+ cap is applied only by the household engine, from birth years |
 | Quotient: spouse below 30% is topped up so that own income + transfer reaches 30%, the SUM capped | art. 88 al. 1 (text restated in L2 art. 29) | rule | rule | rule | L2, L4 | `applyMaritalQuotient` | "art. 88 caps own income PLUS transfer" | verified (previously the transfer alone was capped) |
 | Quotient not applied when it raises the total tax | art. 88 al. 2 / art. 87 (L2 wording) | rule | rule | rule | L2, F2 | `applyMaritalQuotient` | "does not apply when spouse already earns ≥30%" | verified (rule) |
 
@@ -137,7 +137,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | CSSS joint scale: 5%; 123.95 + 1.3% to 60,181.95; 632.39 to 74,688; 632.39 + 1.3629% to 81,944; 731.28 | L3 art. 108 §1 al. 3 | same | same | same | L3, P1 sample (422.93 at 44,070) | `csssTableJoint` | "joint flat €632.39", PwC sample test | verified (upper bound corrected from 81,944.96 to 81,944.00) |
 | CSSS base under joint assessment = household income (sum of both spouses' net income, before the quotient) | L3 art. 107, 2° | rule | rule | rule | L3 | `pit.ts` step 10 | "joint assessment: CSSS is computed on the household income" | verified (previously the earner's income alone) |
 | CSSS only for employees under art. 106 (not self-employed, not pensioners) | L3 art. 106 | rule | rule | rule | L3 | `computeSpecialSocialSecurityContribution` | "returns 0 for self-employed" | verified (rule) |
-| Self-employed contributions: 20.50% to 75,024.54; 14.16% to 110,562.42; minimum income 17,374.08 | RSVZ 2026 | — | — | 2026 rates | R1 | — | — | not modelled (Phase B; 2024 and 2025 tables still to be read) |
+| Self-employed contributions: 20.50% to 75,024.54; 14.16% to 110,562.42; minimum income 17,374.08 | RSVZ 2026 | — | — | 2026 rates | R1 | — | — | not computed; the household engine takes the amount paid as input (`socialContributionsPaid`) and deducts it (see [[#Household taxation]]); the 2024 and 2025 tables are still to be read |
 
 ## Regional layer, surcharge, property
 
@@ -159,6 +159,43 @@ fin.belgium.be explain the rules; the laws give the rule text.
 | Capital gains tax 10%, 10,000 / 20,000 exemption from 2026 | law of 2026 on capital gains | 0 | 0 | 10% | — | `capitalGainsTax*` | CGT tests | unverified (law text not read in this pass) |
 | TOB, TACR, Reynders                    | Code of miscellaneous duties and taxes; art. 19bis | as code | as code | as code | — | `portfolioTax.ts` | `portfolioTax.test.ts` | unverified in this pass |
 
+## Household taxation
+
+Rules of the household engine ([[docs/adr/200-belgian-tax-household-model|ADR-200]]). Code is
+under `apps/frontend/src/lib/belgianTax/`; tests are the named files in `__tests__/`. A rule
+marked `needs_source` is implemented with the stated default and returns an issue with that
+severity; each one is listed in [[#Open items]]. Amounts are those of the tables above.
+
+| Rule | Legal basis | Source | Code | Tests | Status |
+| ---- | ----------- | ------ | ---- | ----- | ------ |
+| Income is determined and taxed per spouse; the joint assessment adds the results | art. 126 §1 al. 2, art. 130 | L4 | `household.ts` `computeHouseholdTax`, `personPit.ts` | `household.test.ts`; parity harness `householdParity.ts` | verified (rule) |
+| One taxpayer, or two partners without marriage or legal cohabitation → assessed alone / separately | art. 126 §1 | L4, F2 | `assessment.ts` `deriveAssessment` | `assessment.test.ts` "one partner …", "two partners without …" | verified (rule) |
+| Year of marriage or legal-cohabitation declaration → separate; legal cohabitants who marry → joint unless the declaration was made in the same year | art. 126 §2 al. 1, 1° and al. 2 | L4, F2 | `assessment.ts` | `assessment.test.ts` (event table) | verified (rule) |
+| Factual separation → joint in that year, separate from the following year | art. 126 §2 al. 1, 2° | L4 | `assessment.ts` | `assessment.test.ts` (event table) | verified (rule, 2011 text; F2 does not cover it) |
+| Year of divorce or end of legal cohabitation → separate | art. 126 §2 al. 1, 2° | L4, F2 | `assessment.ts` | `assessment.test.ts` (event table) | verified (rule) |
+| Year of death → separate by default; the survivor may elect joint; later years → survivor alone | art. 126 §2 al. 1, 3° and §3 | L4 | `assessment.ts` (`deathYearElection`) | `assessment.test.ts` "year of death …", "after the year of death …" | verified (rule, 2011 text); issue `deceased_partner_not_assessed` (info) after the year of death |
+| Treaty-exempt professional income above the threshold → separate | art. 126 §2 al. 1, 4°; L2 art. 32 | N25, N26, N27, L2 | `treatyExemptSeparateThreshold` (13,050 / 13,460 / 11,550) | `assessment.test.ts` "IY %i treaty-exempt income …" | verified |
+| Migrated `married_joint` profile without dates → assumed joint | — (migration default) | — | `assessment.ts`, `householdMigration.ts` | `assessment.test.ts` "a migrated married_joint profile …" | default; issue `relationship_dates_missing` (warning) |
+| One forfait per art. 51 category per spouse, capped on the whole category (two jobs share one cap) | art. 51 al. 3 | L4 | `household.ts`, `personPit.ts` `computeLumpSumForfait` | `household.test.ts` "two part-time jobs share one remuneration forfait …" | verified (rule) |
+| Trading profits (winsten) form a category of their own next to remuneration, each with its own cap | art. 51 al. 2, 1° and al. 3 | L4 (wording only) | `household.ts` `forfaitCategoryOf` | `household.test.ts` "employee 40k + trading profits 15k …" | needs_source (`forfait_category_aggregation_unverified`) |
+| Helping spouse: 5%, capped at the fees cap | art. 51 al. 2, 3° | L4; N25-N27 (cap) | `helpingSpouseProfessionalExpenseRate`, `computeLumpSumForfait` | `household.test.ts` "helping spouse: 5% forfait …" | verified (rule, 2011 text) |
+| Self-employed social contributions paid are deducted from gross before the forfait (profits, fees, helping spouse) | art. 52, 7° ("de persoonlijke bijdragen ter uitvoering van de sociale wetgeving…"); art. 51 al. 1 | L4 | `household.ts` (`socialContributionsPaid`) | `household.test.ts` "self-employed contributions come off the gross …" | verified (rule); the RSVZ amount is an input, not computed |
+| A company director's own social contributions are not deducted | art. 52, 7° (application to directors not read) | — | `household.ts` | — | needs_source (`director_contributions_not_deducted`) |
+| Union dues are deducted only inside an actual remuneration expense claim | art. 51 al. 1 (forfait covers all expenses) | L4 | `household.ts` | `household.test.ts` "union dues deduct only inside …" | derived; issue `union_dues_outside_remuneration_claim` (info) |
+| A category whose actual expenses exceed its income is clamped at 0; no loss offset between categories or spouses | loss-offset rules not read | — | `household.ts` | `household.test.ts` "actual expenses above the income …" | default; issue `loss_offset_not_modelled` (warning) |
+| Alimony is charged on the payer's income first, the balance on the other spouse | art. 105, 3° | L4 | `household.ts` | `household.test.ts` "alimony beyond the payer's income …" | verified (rule, 2011 text) |
+| Quotient on net professional income only; the receiver is the lower earner; applied only if it lowers the tax of both spouses together | arts 87-88; L2 art. 87 ("voor beide echtgenoten samengenomen") | L2, L4 | `maritalQuotient.ts` `computeMaritalQuotient` | `maritalQuotient.test.ts` | verified (rule) |
+| IY 2026 quotient cap 12,790 when both spouses are 66 or older on 1 January of the assessment year | L2 arts 27, 30 A | N27, L2 | `maritalQuotientCapBothSenior`, `resolveMaritalQuotientCap` | `maritalQuotient.test.ts` "IY 2026: both spouses 66+ …", "the senior cap does not exist before IY 2026" | verified; birth year ≤ IY − 66 is exact for an age on 1 January of the next year; issue `senior_quotient_cap_birth_years_missing` (info) when a birth year is missing |
+| Tax-free sum and supplements are allocated after the quotient | art. 127, 1° (income after arts 86-89) | L4 | `household.ts`, `exemptions.ts` | `exemptions.test.ts` | verified (rule, 2011 text) |
+| Each spouse gets the basic amount and their own disability supplement | arts 131, 134 | L4 | `exemptions.ts` `allocateExemptions` | `exemptions.test.ts` "each partner gets the basic amount …" | verified (rule) |
+| Joint: dependent supplements go to the spouse with the higher taxable income; separate: to the claimant | art. 134 §1 al. 2 (2011 text); now §4 al. 1, 3° (L2 art. 10 l)) | L4, L2 | `exemptions.ts` | `exemptions.test.ts` "joint: supplements go …", "separate: supplements go to the claimant" | verified (rule, 2011 text); current wording not read |
+| Joint: the part of a spouse's tax-free sum above their taxable income is added to the other spouse's | art. 134 §1 al. 2 (2011 text) | L4 | `exemptions.ts` | `exemptions.test.ts` "joint: the unused balance …", "no balance transfer outside a joint assessment" | verified (rule, 2011 text) |
+| Isolated-parent supplement when a partner is present | art. 133 al. 1, 1° ("alleen wordt belast"); L2 art. 9 | L4, L2 | `exemptions.ts` | `exemptions.test.ts` "isolated-parent supplement …" | joint: refused (warning `isolated_parent_supplement_not_granted`); separate: refused, needs_source |
+| Tax reductions stay with the spouse who paid them, capped at that spouse's tax; the own-home credit goes to `mortgageCreditPartnerId` (default A) | arts 145/1 ff.; the 2011 text apportions some reductions pro rata under a joint assessment | L4 | `household.ts`, `personPit.ts` `computeTaxReductions` | `household.test.ts` "reductions stay with the partner …" | needs_source (`joint_reduction_allocation_unverified`) |
+| CSSS: joint scale on the household's net professional income, pensions excluded; separate: single scale per subject spouse | L3 arts 106, 107, 2°, 108 | L3 | `household.ts`, `socialSecurity.ts` `computeActivitySocialSecurity` | `household.test.ts` "joint: A employee + B self-employed …", "PwC AY 2026 sample …", "separate: each subject partner …", "pension: no social security …" | verified (rule) |
+| CSSS base for a spouse who combines an employee activity with other professional activities; joint amount split pro rata | L3 art. 107 | — | `household.ts` | — | needs_source (`csss_mixed_activity_base_unverified`) |
+| Dividend and savings side calculation per spouse | art. 21, 5° and 14° (exemption per taxpayer) | F5 | `personPit.ts` `computeInvestmentSideCalc` | — | derived |
+
 ## Open items
 
 1. **Regional sources are unreachable** from the sandbox (vlaanderen.be, wallonie.be; the Brussels
@@ -167,13 +204,35 @@ fin.belgium.be explain the rules; the laws give the rule text.
    are allowed.
 2. **Civil servant contribution rate** (11.07% in code) has no readable primary page yet.
 3. **Rules known but not modelled**: refundable child tax credit (art. 134 §3), low-income
-   isolated-parent supplement (art. 133 al. 2-3), dependent 66+ supplement (art. 132 7°), helping
-   spouse forfait, 66+ marital quotient cap, the federal voucher expense cap, the 75% childcare
-   rate, the L2 surcharge correction factor, self-employed social contributions.
+   isolated-parent supplement (art. 133 al. 2-3), dependent 66+ supplement (art. 132 7°), the
+   federal voucher expense cap, the 75% childcare rate, the L2 surcharge correction factor, the
+   computation of self-employed social contributions. The helping-spouse forfait and the 66+
+   marital quotient cap are modelled in the household engine (2026-10-11), not in
+   `computeBelgianPIT`.
 4. **Employee group insurance** has no cap in the engine; art. 145/1 and 145/3 limit it through
    the 80% rule, which needs a pension-promise input.
 5. **IY 2026 consumer pages** of FPS Finance still show pre-reform values; re-check F1-F3 when
    they are updated and confirm N27 is unchanged.
+6. **Household engine `needs_source` defaults** (ADR-200; each returns an issue with that severity):
+   - `forfait_category_aggregation_unverified`: trading profits are a category of their own next
+     to remuneration, each with its own cap. Confirm whether art. 51 al. 3 caps winsten and
+     bezoldigingen together.
+   - `joint_reduction_allocation_unverified`: reductions stay with the payer. The 2011 text
+     apportions some reductions (for example art. 145/21) pro rata under a joint assessment; the
+     current per-reduction rules have not been read.
+   - `csss_mixed_activity_base_unverified`: which income enters the CSSS base for a spouse who
+     combines employee and other professional activities, and the pro-rata split of the joint
+     amount.
+   - `refundable_child_credit_not_modelled`: the art. 134 §3 formula for unused child
+     supplements; the engine returns 0.
+   - `isolated_parent_supplement_not_granted` under a separate assessment with a partner: L2
+     art. 9 adds a household test that has not been checked against cohabitation.
+   - `director_contributions_not_deducted`: whether a director's own social contributions fall
+     under art. 52, 7° like other self-employed contributions.
+7. **Household rules not modelled or not read**: the current wording of art. 134 §4 after L2 (only
+   the 2011 §1 al. 2 text was read); the art. 127, 4° 50% split of income that cannot be
+   attributed to one spouse; the art. 133 al. 1, 2° supplement in the year of marriage; loss
+   offset between categories and spouses; the RSVZ 2024 and 2025 contribution tables.
 
 ## Related
 

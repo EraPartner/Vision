@@ -4,8 +4,8 @@ type: endpoint
 method: GET, PUT, DELETE
 path: /api/settings
 description: User preferences and application settings
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags: [api, settings, preferences, phase-3, auto-link, planned-match, june-2026]
 status: active
 aliases: [settings-api, preferences-api, user-settings, app-settings]
@@ -109,7 +109,8 @@ Validation behavior:
 - Any key longer than 100 chars returns `400` and includes the offending key in the detail text
 - `dashboard_settings` is normalized/validated during bulk upsert (`excludedCategoryIds` / `excludedRecipientIds` positive-int arrays)
 - `theme_settings` is validated for variant ∈ {default, dracula, solarized, nord, high-contrast}, mode ∈ {light, dark, system, schedule}, and schedule times (if mode is 'schedule') match `HH:MM`
-- `belgian_tax_profile_snapshot_meta_v1` rejects a `frozenCalculation.federalPITTotal` property. Use `federalPITBeforeExemption`; migration 0106 removes proven-equal stored aliases and fails closed on divergent data.
+- `belgian_tax_profile_snapshot_meta_v1` rejects a `frozenCalculation.federalPITTotal` property. Use `federalPITBeforeExemption`; migration 0106 removes proven-equal stored aliases and fails closed on divergent data. An entry may also carry `frozenHouseholdResult` (an object, ADR-200).
+- `belgian_tax_household_v2` and `belgian_tax_household_snapshots_v2` are validated against the household schema (see below).
 
 **Request Body:**
 
@@ -143,6 +144,28 @@ Response semantics:
 | rebalance_plans              | array   | Saved custom portfolio rebalancing plans (max 50 entries)                                    |
 | life_scenarios               | array   | Saved three-month income interruption scenarios (max 50 entries)                             |
 | brokerage_cash_category_ids  | object  | Active category IDs used for instrument-free brokerage dividend, interest, fee, and tax rows |
+| belgian_tax_household_v2     | object  | Belgian tax household (version 2, ADR-200): partners, income activities, relationship events |
+| belgian_tax_household_snapshots_v2 | object | Year-keyed (`"YYYY"`) frozen households for past income years (ADR-200)               |
+
+### `belgian_tax_household_v2` shape (2026-10-11)
+
+Validated by `belgianTaxHouseholdV2Schema` in
+`apps/node-backend/src/routes/belgianTaxSettingsSchemas.ts` (mirrored by
+`apps/frontend/src/lib/belgianTax/householdSchema.ts`). Objects are loose, so additional fields
+are stored. A write is rejected with `400` when:
+
+- `version` is not `2`, `taxYear` is missing, or the communal surcharge is outside 0-9;
+- there are no partners or more than two, partner ids repeat, or partner `A` is missing;
+- a partner has more than 20 activities, an activity id does not match `^act_[A-Za-z0-9_-]{1,64}$`
+  or repeats across the household, or `netProfessionalIncome` appears on an activity other than
+  `net_professional_amount`;
+- there are more than 50 relationship events, a date is not `YYYY-MM-DD`, an event kind or
+  activity kind is unknown, a `death` event has no `partnerId`, or an event, the dependants'
+  `claimantPartnerId` or the home's `mortgageCreditPartnerId` names a partner that does not exist;
+- a money field is negative or not a finite number.
+
+`belgian_tax_household_snapshots_v2` is a record whose keys are four-digit income years and whose
+values follow the same schema. These keys are additive and not breaking: no existing key changes.
 
 ### `brokerage_cash_category_ids` shape (2026-09-04)
 
