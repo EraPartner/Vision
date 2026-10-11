@@ -16,8 +16,9 @@ echo "    Repo: $REPO_PATH"
 
 prepare_native_macos_build
 cd "$REPO_PATH/packaging/electron"
+bun build.ts
 CSC_IDENTITY_AUTO_DISCOVERY=false \
-  node scripts/build-native-package.js
+  node out/scripts/build-native-package.js
 
 APP_SRC="$(find_built_app \
   "$REPO_PATH/packaging/electron/dist/mac-arm64/Vision.app" \

@@ -1,0 +1,21 @@
+{
+  "//": "Shared strict options for the Electron shell (ADR-196). Sources are TypeScript with ESM syntax; tsc emits CommonJS into out/, which Electron, electron-builder and node --test run.",
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "rootDir": ".",
+    "outDir": "out",
+    "skipLibCheck": true,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "erasableSyntaxOnly": true,
+    "isolatedModules": true,
+    "noEmitOnError": true
+  }
+}

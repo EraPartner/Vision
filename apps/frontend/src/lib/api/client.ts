@@ -23,7 +23,7 @@ import { apiEventBus } from "@/lib/devtools/apiEventBus";
 import { getAdminToken } from "@/lib/adminToken";
 
 // In a production build the frontend is served by the backend on the SAME origin
-// (Electron resolves a random host port per app — see packaging/electron/main.js
+// (Electron resolves a random host port per app — see packaging/electron/main.ts
 // resolveAppPort), so API calls must target that origin, not a hardcoded port.
 // A hardcoded localhost:3002 made every app on a non-3002 port read an empty/wrong
 // backend and fall into the onboarding wizard. Dev (Vite proxy) and tests (MSW on

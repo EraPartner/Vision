@@ -249,6 +249,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-11: The Electron shell is strict TypeScript compiled into out/
+
+[[docs/adr/196-electron-shell-typescript|ADR-196]] converts the Electron shell to strict
+TypeScript that `tsc` compiles to CommonJS in `packaging/electron/out/`. Every launch, test and
+packaging path builds first, and `paths.ts` `appRoot` locates the resources that are not compiled.
+
 ### 2026-10-11: Repository scripts are strict TypeScript run on Bun
 
 [[docs/adr/195-repository-scripts-typescript|ADR-195]] converts every JavaScript script under

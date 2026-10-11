@@ -2,7 +2,7 @@
 title: Setup Guide
 type: guide
 status: active
-date: 2026-10-05
+date: 2026-10-11
 tags:
   [
     guide,
@@ -57,8 +57,9 @@ bun run native:prepare
 bun run dev
 ```
 
-`bun run dev` starts Electron, a private PostgreSQL 18 cluster, the backend, and the frontend. The
-cluster is stored under the `Vision Development` application-data directory. Startup creates
+`bun run dev` compiles the TypeScript Electron shell into `packaging/electron/out/`
+([[docs/adr/196-electron-shell-typescript|ADR-196]]), then starts Electron, a private PostgreSQL 18
+cluster, the backend, and the frontend. The cluster is stored under the `Vision Development` application-data directory. Startup creates
 separate administrator, migration-owner, and application roles, installs required extensions, runs the
 guarded migration runner, and waits for detailed readiness.
 
@@ -93,7 +94,8 @@ The Demo uses deterministic synthetic data and a separate native cluster below
 | `bun run typecheck`                      | Type-check the frontend                                                              |
 | `bun run test` / `bun run test:frontend` | Run backend tests or the full frontend suite with a disposable PostgreSQL 18 backend |
 | `bun run test:watch`                     | Watch all backend tests with a disposable PostgreSQL 18 database                     |
-| `bun run test:electron`                  | Run Electron and native-runtime contract tests                                       |
+| `bun run test:electron`                  | Build the Electron shell, then run its Electron and native-runtime tests             |
+| `bun run typecheck:electron`             | Type-check the Electron shell and its preload                                        |
 | `bun run test:db`                        | Run backend tests against disposable native PostgreSQL 18                            |
 | `bun run native:prepare`                 | Prepare the pinned development/package payload                                       |
 | `bun run native:db-smoke`                | Check migrations, dump/restore, and attachments                                      |

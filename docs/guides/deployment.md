@@ -2,7 +2,7 @@
 title: Deployment Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-11
 tags:
   [
     guide,
@@ -48,6 +48,12 @@ bun run dist
 For a local install use `./install.sh`. For the isolated synthetic app use `./install-demo.sh`.
 Both scripts stage build inputs in a private temporary directory and preserve existing application
 data. Release publication is handled by `.github/workflows/release.yml`.
+
+The Electron shell is TypeScript compiled into `packaging/electron/out/`. The Electron package's
+`dist*` scripts, both install scripts and the release job run `bun build.ts` before
+`node out/scripts/build-native-package.js`. The electron-builder `files` list places the compiled
+`out/` tree (without tests and packaging scripts) and `assets/` into `app.asar`
+([[docs/adr/196-electron-shell-typescript|ADR-196]]).
 
 ## Source deployment
 

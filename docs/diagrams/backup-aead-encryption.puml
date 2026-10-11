@@ -9,8 +9,8 @@ actor "User" as User
 
 participant "BackupTab\n(settings)" as UI
 participant "useBackup" as Hook
-participant "Electron main\n(packaging/electron/main.js)" as Main
-participant "backup service\n(backup/coverage.js)" as Backup
+participant "Electron main\n(packaging/electron/main.ts)" as Main
+participant "backup service\n(backup/coverage.ts)" as Backup
 database  "PostgreSQL" as DB
 participant "Attachments\n($ATTACHMENTS_DIR)" as Files
 participant "localStorage\n(frontend-state)" as LS

@@ -1319,11 +1319,11 @@
           {
             "id": "sv.backup",
             "label": "Backup bundle",
-            "sub": "backup/bundle.js",
+            "sub": "backup/bundle.ts",
             "kind": "service",
             "x": 760,
             "y": 448,
-            "path": "packaging/electron/backup/bundle.js",
+            "path": "packaging/electron/backup/bundle.ts",
             "desc": "Native bundle validation and optional authenticated encryption."
           },
           {
@@ -1533,7 +1533,7 @@
           {
             "id": "build.electron",
             "label": "Electron main + IPC",
-            "sub": "packaging/electron/main.js",
+            "sub": "packaging/electron/main.ts",
             "kind": "build",
             "x": 220,
             "y": 852
@@ -1715,7 +1715,7 @@
             "label": "Local audit receipt",
             "sub": "Electron safeStorage \u00b7 HMAC",
             "kind": "build",
-            "path": "packaging/electron/audit-anchor.js",
+            "path": "packaging/electron/audit-anchor.ts",
             "desc": "HMAC receipt and encrypted key outside PostgreSQL and backup bundles. Version 3 is checked against a separate macOS Keychain checkpoint.",
             "x": 760,
             "y": 1060
@@ -2401,7 +2401,7 @@
                 "from": "build.native",
                 "to": "db.postgres",
                 "payload": "startup: provision restricted Analysis login and read-only defaults",
-                "annotation": "packaging/electron/runtime/native.js uses the private cluster administrator to create or reset vision_analysis_executor before starting the backend; the migration owner remains NOCREATEROLE.",
+                "annotation": "packaging/electron/runtime/native.ts uses the private cluster administrator to create or reset vision_analysis_executor before starting the backend; the migration owner remains NOCREATEROLE.",
                 "title": "Provision the restricted analysis role"
               },
               {
@@ -2848,7 +2848,7 @@
                 "title": "Request the local backup",
                 "note": "Validate the renderer and destination.",
                 "payload": "backup:run(destDir, frontendStateJson)",
-                "annotation": "packaging/electron/main.js; packaging/electron/preload.js"
+                "annotation": "packaging/electron/main.ts; packaging/electron/preload.ts"
               },
               {
                 "from": "build.electron",
@@ -2856,7 +2856,7 @@
                 "title": "Export local data",
                 "note": "Use the native backup transport.",
                 "payload": "runBundleBackup",
-                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/native-transport.js"
+                "annotation": "packaging/electron/backup/restore.ts; packaging/electron/backup/native-transport.ts"
               },
               {
                 "from": "build.native",
@@ -2864,7 +2864,7 @@
                 "title": "Dump schema and records",
                 "note": "Include database SQL in the bundle.",
                 "payload": "dumpDatabase; pg_dump",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.native",
@@ -2872,7 +2872,7 @@
                 "title": "Collect attachments",
                 "note": "Receipt files accompany metadata.",
                 "payload": "exportAttachments",
-                "annotation": "packaging/electron/backup/native-transport.js"
+                "annotation": "packaging/electron/backup/native-transport.ts"
               },
               {
                 "from": "build.electron",
@@ -2880,7 +2880,7 @@
                 "title": "Bundle and optionally encrypt",
                 "note": "Include schema/app metadata and optional UI state; encrypt with a configured passphrase.",
                 "payload": "createBundle; encryptBundle",
-                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/bundle.js"
+                "annotation": "packaging/electron/backup/restore.ts; packaging/electron/backup/bundle.ts"
               },
               {
                 "from": "sv.backup",
@@ -2888,7 +2888,7 @@
                 "title": "Write and apply retention",
                 "note": "Use the selected directory and device-scoped old-backup cleanup.",
                 "payload": "success, file, encrypted, warning, cleanupRemoved",
-                "annotation": "packaging/electron/backup/restore.js"
+                "annotation": "packaging/electron/backup/restore.ts"
               },
               {
                 "from": "build.electron",
@@ -2896,7 +2896,7 @@
                 "title": "Show result or warning",
                 "note": "Automated and quit backups omit the frontend-state snapshot.",
                 "payload": "backup result",
-                "annotation": "packaging/electron/main.js; packaging/electron/backup/restore.js"
+                "annotation": "packaging/electron/main.ts; packaging/electron/backup/restore.ts"
               }
             ],
             "takeaway": "Encryption needs a configured passphrase. Without one, the bundle is plaintext with a warning. Mapping keys and audit anchors stay external.",
@@ -2923,7 +2923,7 @@
                 "title": "Choose and confirm the file",
                 "note": "Validate the selected file and ask for restore confirmation.",
                 "payload": "backup:restore",
-                "annotation": "packaging/electron/main.js; packaging/electron/preload.js"
+                "annotation": "packaging/electron/main.ts; packaging/electron/preload.ts"
               },
               {
                 "from": "build.electron",
@@ -2931,7 +2931,7 @@
                 "title": "Open and validate the bundle",
                 "note": "Authenticate encrypted data, reject unsafe entries, and inspect schema and checksums.",
                 "payload": "runBundleRestore; openBundle",
-                "annotation": "packaging/electron/backup/restore.js; packaging/electron/backup/bundle.js"
+                "annotation": "packaging/electron/backup/restore.ts; packaging/electron/backup/bundle.ts"
               },
               {
                 "from": "sv.backup",
@@ -2939,7 +2939,7 @@
                 "title": "Prepare rollback plans",
                 "note": "Coordinate both storage switches.",
                 "payload": "restoreNativeBundle",
-                "annotation": "packaging/electron/backup/native-transport.js"
+                "annotation": "packaging/electron/backup/native-transport.ts"
               },
               {
                 "from": "build.native",
@@ -2947,7 +2947,7 @@
                 "title": "Restore into a fresh staging database",
                 "note": "Validate before stopping the backend and renaming databases.",
                 "payload": "activateRestoredDatabase; persisted rename plan",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.native",
@@ -2955,7 +2955,7 @@
                 "title": "Switch attachments with a rollback copy",
                 "note": "Preserve the previous tree until finalization.",
                 "payload": "replaceAttachments preservePrevious",
-                "annotation": "packaging/electron/backup/native-transport.js"
+                "annotation": "packaging/electron/backup/native-transport.ts"
               },
               {
                 "from": "build.native",
@@ -2963,7 +2963,7 @@
                 "title": "Restart and check readiness",
                 "note": "Wait for backend and database readiness.",
                 "payload": "GET /health/detailed",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.native",
@@ -2971,7 +2971,7 @@
                 "title": "Compare the restored audit chain",
                 "note": "Match the external receipt unless the specific recovery path is explicitly approved.",
                 "payload": "assertRestoredAuditHistory",
-                "annotation": "packaging/electron/backup/native-transport.js; packaging/electron/audit-anchor.js"
+                "annotation": "packaging/electron/backup/native-transport.ts; packaging/electron/audit-anchor.ts"
               },
               {
                 "from": "build.native",
@@ -2979,7 +2979,7 @@
                 "title": "Finalize or roll back",
                 "note": "Finalize the database then clean previous attachments; on failure restore both switches.",
                 "payload": "finalizeDatabaseSwitch; rollback",
-                "annotation": "packaging/electron/backup/native-transport.js; packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/backup/native-transport.ts; packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.electron",
@@ -2987,7 +2987,7 @@
                 "title": "Hydrate restored UI state",
                 "note": "Return available frontend state after activation.",
                 "payload": "frontendState",
-                "annotation": "packaging/electron/backup/restore.js; packaging/electron/preload.js"
+                "annotation": "packaging/electron/backup/restore.ts; packaging/electron/preload.ts"
               }
             ],
             "takeaway": "Failures roll back database and attachment switches. An approved audit-recovery retry requires successful rollback; the external receipt stays unchanged.",
@@ -3434,7 +3434,7 @@
                 "from": "build.githubrelease",
                 "to": "electron",
                 "payload": "GitHub latest release ZIP + required checksum",
-                "annotation": "updater.js trusts GitHub as the publisher and checks the sibling checksum before installation; it does not verify a separate release-signing key."
+                "annotation": "updater.ts trusts GitHub as the publisher and checks the sibling checksum before installation; it does not verify a separate release-signing key."
               }
             ],
             "docs": [
@@ -3713,14 +3713,14 @@
               {
                 "from": "build.release",
                 "to": "build.native",
-                "payload": "isolated VISION_FRONTEND_DIST \u00b7 build-native-package.js --demo",
-                "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; build-native-package.js prepares the normal native payload from it, then invokes build-demo-seed.js before Electron Builder."
+                "payload": "isolated VISION_FRONTEND_DIST \u00b7 bun build.ts \u00b7 node out/scripts/build-native-package.js --demo",
+                "annotation": "scripts/lib/native-mac-build.sh stages the frontend in a private temporary directory; install-demo.sh compiles the TypeScript shell into packaging/electron/out/ (ADR-196), then the compiled build-native-package.ts prepares the normal native payload from it and invokes build-demo-seed.ts before Electron Builder."
               },
               {
                 "from": "build.native",
                 "to": "db.postgres",
                 "payload": "disposable PostgreSQL 18 \u00b7 guarded migration to head \u00b7 data-only seed SQL",
-                "annotation": "build-demo-seed.js uses the packaged PostgreSQL and migration executable; native.js applies generate.mjs output as the owner with ON_ERROR_STOP and one transaction."
+                "annotation": "build-demo-seed.ts uses the packaged PostgreSQL and migration executable; native.ts applies the compiled demo-db/generate.mts output as the owner with ON_ERROR_STOP and one transaction."
               },
               {
                 "from": "db.postgres",
@@ -3732,19 +3732,19 @@
                 "from": "electron",
                 "to": "build.electron",
                 "payload": "Vision Demo marker \u00b7 runtime id vision_demo \u00b7 PostgreSQL port 54330",
-                "annotation": "packaging/electron/main.js always selects the isolated native provider for Demo and never imports real Vision environment values."
+                "annotation": "packaging/electron/main.ts always selects the isolated native provider for Demo and never imports real Vision environment values."
               },
               {
                 "from": "build.electron",
                 "to": "build.native",
                 "payload": "prepareNativeDemo(demo-seed) \u00b7 checksum and dump validation",
-                "annotation": "runtime/native-demo.js retries interrupted switches, detects seed or reset changes, and refuses any application-data path outside Vision Demo."
+                "annotation": "runtime/native-demo.ts retries interrupted switches, detects seed or reset changes, and refuses any application-data path outside Vision Demo."
               },
               {
                 "from": "build.native",
                 "to": "db.postgres",
                 "payload": "admin extension bootstrap \u00b7 restricted transactional restore \u00b7 exact table verification \u00b7 atomic database rename",
-                "annotation": "native.js installs required extensions in the template0-based staging database with the private cluster administrator, then restores application objects as the migration owner. The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
+                "annotation": "native.ts installs required extensions in the template0-based staging database with the private cluster administrator, then restores application objects as the migration owner. The previous Demo database remains available until the native backend passes detailed readiness and stable important-row counts."
               },
               {
                 "from": "build.electron",
@@ -4737,19 +4737,19 @@
                 "from": "build.electron",
                 "to": "build.auditanchor",
                 "payload": "read HMAC-signed receipt and safeStorage-encrypted key",
-                "annotation": "packaging/electron/audit-anchor.js authenticates the installation-local sequence, hash, and migration cutover outside PostgreSQL."
+                "annotation": "packaging/electron/audit-anchor.ts authenticates the installation-local sequence, hash, and migration cutover outside PostgreSQL."
               },
               {
                 "from": "build.auditanchor",
                 "to": "ex.keychain",
                 "payload": "compare version 3 receipt digest and chain head with Keychain checkpoint",
-                "annotation": "packaging/electron/audit-keychain.swift reads the independent checkpoint; packaging/electron/audit-anchor.js fails closed on a missing or mismatched record."
+                "annotation": "packaging/electron/audit-keychain.swift reads the independent checkpoint; packaging/electron/audit-anchor.ts fails closed on a missing or mismatched record."
               },
               {
                 "from": "build.electron",
                 "to": "be.routes",
                 "payload": "POST /api/internal/audit/verify with loopback peer and per-launch token",
-                "annotation": "packaging/electron/runtime/native.js calls apps/node-backend/src/routes/internalAudit.ts; the renderer never receives the token."
+                "annotation": "packaging/electron/runtime/native.ts calls apps/node-backend/src/routes/internalAudit.ts; the renderer never receives the token."
               },
               {
                 "from": "be.routes",
@@ -4767,31 +4767,31 @@
                 "from": "browser",
                 "to": "build.electron",
                 "payload": "explicit Start audit protection action with default-Cancel warning",
-                "annotation": "apps/frontend/src/pages/admin/AuditHistoryCard.tsx calls the native audit:enroll bridge; packaging/electron/main.js rechecks the missing-anchor state and asks for confirmation."
+                "annotation": "apps/frontend/src/pages/admin/AuditHistoryCard.tsx calls the native audit:enroll bridge; packaging/electron/main.ts rechecks the missing-anchor state and asks for confirmation."
               },
               {
                 "from": "build.electron",
                 "to": "build.auditanchor",
                 "payload": "internally checked existing head and immutable enrollment sequence",
-                "annotation": "packaging/electron/runtime/native.js verifies the full unanchored chain; audit-anchor.js signs the enrollment baseline and creates a Keychain witness without claiming earlier authenticity."
+                "annotation": "packaging/electron/runtime/native.ts verifies the full unanchored chain; audit-anchor.ts signs the enrollment baseline and creates a Keychain witness without claiming earlier authenticity."
               },
               {
                 "from": "build.electron",
                 "to": "build.auditanchor",
                 "payload": "trusted live 30-second cycle persists valid new head",
-                "annotation": "packaging/electron/main.js runs the closure timer only after an exact verified startup head; a tail already present at startup is not promoted."
+                "annotation": "packaging/electron/main.ts runs the closure timer only after an exact verified startup head; a tail already present at startup is not promoted."
               },
               {
                 "from": "build.electron",
                 "to": "sv.auditretention",
                 "payload": "daily /retention-plan with externally authenticated checkpoint",
-                "annotation": "packaging/electron/runtime/native.js asks auditRetentionService.js for a verified complete prefix older than one year."
+                "annotation": "packaging/electron/runtime/native.ts asks auditRetentionService.js for a verified complete prefix older than one year."
               },
               {
                 "from": "sv.auditretention",
                 "to": "build.auditanchor",
                 "payload": "last old sequence and hash, linked domain IDs, migration heads",
-                "annotation": "packaging/electron/audit-anchor.js signs the proposed boundary into its receipt and Keychain witness before deletion."
+                "annotation": "packaging/electron/audit-anchor.ts signs the proposed boundary into its receipt and Keychain witness before deletion."
               },
               {
                 "from": "build.electron",
@@ -4809,13 +4809,13 @@
                 "from": "build.electron",
                 "to": "be.routes",
                 "payload": "POST /api/internal/audit/update-decision: bounded checksum or install event",
-                "annotation": "packaging/electron/updater.js records native decisions through the private bridge. A receipt or previously trusted session requires synchronous checkpoint closure; an existing installation without either may continue with audit unavailable."
+                "annotation": "packaging/electron/updater.ts records native decisions through the private bridge. A receipt or previously trusted session requires synchronous checkpoint closure; an existing installation without either may continue with audit unavailable."
               },
               {
                 "from": "build.electron",
                 "to": "db.postgres",
                 "payload": "restore candidate must match local receipt before database switch finalizes",
-                "annotation": "packaging/electron/backup/native-transport.js first rolls back a non-verified candidate. Explicit recovery then retries once only after successful rollback, requires a full internally valid chain, and preserves the external receipt."
+                "annotation": "packaging/electron/backup/native-transport.ts first rolls back a non-verified candidate. Explicit recovery then retries once only after successful rollback, requires a full internally valid chain, and preserves the external receipt."
               }
             ],
             "docs": [
@@ -5080,7 +5080,7 @@
                 "title": "Resolve the local profile",
                 "note": "Select the profile and backend port; show the splash.",
                 "payload": "launch",
-                "annotation": "packaging/electron/main.js"
+                "annotation": "packaging/electron/main.ts"
               },
               {
                 "from": "build.electron",
@@ -5088,7 +5088,7 @@
                 "title": "Verify and start the runtime",
                 "note": "Verify packaged manifest and ensure private layout.",
                 "payload": "discover; ensureLayout; start",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.native",
@@ -5096,7 +5096,7 @@
                 "title": "Open the private database cluster",
                 "note": "Provision separate administrator, owner, app and restricted analysis roles.",
                 "payload": "ensurePostgresReady; bootstrapDatabase",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.native",
@@ -5104,7 +5104,7 @@
                 "title": "Start the backend",
                 "note": "Spawn with allowlisted environment and private audit bridge.",
                 "payload": "backend process",
-                "annotation": "packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/runtime/native.ts"
               },
               {
                 "from": "be.routes",
@@ -5128,7 +5128,7 @@
                 "title": "Wait for detailed readiness",
                 "note": "Poll backend health and database/cache gates.",
                 "payload": "GET /health/detailed; pollAndLoad; pingReady",
-                "annotation": "packaging/electron/main.js; packaging/electron/runtime/native.js"
+                "annotation": "packaging/electron/main.ts; packaging/electron/runtime/native.ts"
               },
               {
                 "from": "build.electron",
@@ -5136,7 +5136,7 @@
                 "title": "Assess audit continuity",
                 "note": "Establish a trusted session where possible; surface failure or unavailability.",
                 "payload": "checkAuditIntegrity({ establishSession: true })",
-                "annotation": "packaging/electron/main.js; packaging/electron/audit-anchor.js"
+                "annotation": "packaging/electron/main.ts; packaging/electron/audit-anchor.ts"
               },
               {
                 "from": "build.electron",
@@ -5144,7 +5144,7 @@
                 "title": "Load and watch the renderer",
                 "note": "Navigate to the app and await its ready signal.",
                 "payload": "loadApplicationPage and watchdog",
-                "annotation": "packaging/electron/main.js; apps/frontend/src/App.tsx"
+                "annotation": "packaging/electron/main.ts; apps/frontend/src/App.tsx"
               }
             ],
             "docs": [

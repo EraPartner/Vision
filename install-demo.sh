@@ -24,8 +24,9 @@ prepare_native_macos_build
 
 echo "==> Building $APP_NAME.app with deterministic synthetic data..."
 cd "$ELECTRON_DIR"
+bun build.ts
 CSC_IDENTITY_AUTO_DISCOVERY=false \
-  node scripts/build-native-package.js --demo
+  node out/scripts/build-native-package.js --demo
 
 APP_SRC="$(find_built_app \
   "$ELECTRON_DIR/dist-demo/mac-arm64/$APP_NAME.app" \

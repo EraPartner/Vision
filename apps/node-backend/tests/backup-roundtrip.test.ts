@@ -4,7 +4,8 @@
  * Tests the full create → open roundtrip of the .visionbak bundle format, plus
  * the encryption/decryption path. No database or network is required.
  *
- * The bundle module lives in packaging/electron/ and uses CommonJS, so we
+ * The bundle module is compiled from packaging/electron/ into CommonJS under
+ * packaging/electron/out/ (the vitest global setup builds it), so we
  * import it via createRequire to stay compatible with this ESM test suite.
  */
 
@@ -27,7 +28,7 @@ const {
   openBundle,
   isBundleEncrypted,
   BUNDLE_VERSION,
-} = require(join(REPO_ROOT, "packaging/electron/backup/bundle.js"));
+} = require(join(REPO_ROOT, "packaging/electron/out/backup/bundle.js"));
 
 const { ZipArchive } = require("archiver");
 
@@ -45,7 +46,7 @@ for (const dependency of dependencies) {
   if (require.cache[dependency]) process.exit(1);
 }`,
         __filename,
-        join(REPO_ROOT, "packaging/electron/backup/bundle.js"),
+        join(REPO_ROOT, "packaging/electron/out/backup/bundle.js"),
       ],
       { encoding: "utf8" },
     );

@@ -3,18 +3,18 @@
   "private": true,
   "version": "1.0.2",
   "description": "Vision desktop wrapper",
-  "main": "main.js",
+  "main": "out/main.js",
   "scripts": {
     "postinstall": "install-electron",
-    "start": "bun ../../scripts/generate-locales.ts && electron .",
-    "prepare:postgres": "node scripts/prepare-postgres-runtime.js",
-    "prepare:alembic": "node scripts/prepare-alembic-runtime.js",
-    "prepare:chromium": "node scripts/prepare-chromium-runtime.js",
-    "prepare:native": "node scripts/prepare-native-runtime.js",
-    "dist": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js",
-    "dist:arm64": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js",
-    "dist:dir": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js --dir",
-    "dist:demo": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js --demo"
+    "start": "bun ../../scripts/generate-locales.ts && bun build.ts && electron .",
+    "prepare:postgres": "bun build.ts && node out/scripts/prepare-postgres-runtime.js",
+    "prepare:alembic": "bun build.ts && node out/scripts/prepare-alembic-runtime.js",
+    "prepare:chromium": "bun build.ts && node out/scripts/prepare-chromium-runtime.js",
+    "prepare:native": "bun build.ts && node out/scripts/prepare-native-runtime.js",
+    "dist": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js",
+    "dist:arm64": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js",
+    "dist:dir": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --dir",
+    "dist:demo": "bun ../../scripts/generate-locales.ts && bun build.ts && node out/scripts/build-native-package.js --demo"
   },
   "dependencies": {
     "archiver": "^8.0.0",

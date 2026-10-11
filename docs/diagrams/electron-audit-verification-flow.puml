@@ -2,12 +2,12 @@
 title Native Electron Audit Receipt and Restore Check
 
 actor User
-participant "Electron main\nmain.js" as Main
-participant "Local receipt\naudit-anchor.js" as Anchor
+participant "Electron main\nmain.ts" as Main
+participant "Local receipt\naudit-anchor.ts" as Anchor
 participant "macOS Keychain\naudit-keychain helper" as Keychain
 participant "Native backend\nprivate audit route" as Route
-participant "Audit verifier\nauditVerificationService.js" as Verifier
-participant "Retention planner\nauditRetentionService.js" as Retention
+participant "Audit verifier\nauditVerificationService.ts" as Verifier
+participant "Retention planner\nauditRetentionService.ts" as Retention
 database "PostgreSQL\naudit chain + domain rows" as DB
 
 Main -> Anchor: Read HMAC-signed receipt and safeStorage key

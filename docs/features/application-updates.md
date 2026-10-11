@@ -2,14 +2,15 @@
 title: Application Updates
 type: feature
 status: active
-date: 2026-10-06
+date: 2026-10-11
 tags: [feature, updates, electron, native-runtime, backup, checksum, release]
 description: Native packaged and source-launcher update paths with backup, checksum verification, and rollback boundaries.
 aliases: [update system, application updater]
 related_code:
   [
-    "packaging/electron/updater.js",
-    "packaging/electron/main.js",
+    "packaging/electron/updater.ts",
+    "packaging/electron/native-update-installer.ts",
+    "packaging/electron/main.ts",
     ".github/workflows/release.yml",
   ]
 ---
@@ -64,6 +65,9 @@ Electron dependency installs succeed and the pinned Electron binary is present. 
 source and dependencies if a copy or install fails. The launcher also requires Bun 1.4.2,
 installs from committed lockfiles with general lifecycle scripts disabled, and runs the known
 Electron binary installer explicitly when needed. It does not run a fetched shell installer.
+The launcher runs `bun run native:prepare` when the native services are missing and then starts
+Vision with `bun run electron:prod`. Both scripts compile the TypeScript shell into
+`packaging/electron/out/` first ([[docs/adr/196-electron-shell-typescript|ADR-196]]).
 
 ## Renderer behavior
 

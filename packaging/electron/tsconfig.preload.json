@@ -1,0 +1,8 @@
+{
+  "//": "Sandboxed preload. It may only require(\"electron\"); every other import must be type-only (asserted by preload-sandbox.contract.test).",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom"]
+  },
+  "include": ["preload.ts", "electron-api.d.ts"]
+}

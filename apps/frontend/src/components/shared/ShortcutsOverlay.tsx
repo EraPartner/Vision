@@ -52,7 +52,7 @@ export function ShortcutsOverlay({ open, onOpenChange }: ShortcutsOverlayProps) 
         { keys: <Key>Esc</Key>, label: t("shortcuts.closeDialog") },
     ];
 
-    // Native menu accelerators — desktop app only. Mirror packaging/electron/main.js's
+    // Native menu accelerators — desktop app only. Mirror packaging/electron/main.ts's
     // application menu; ⇧/⌃ modifiers differ by platform (⇧⌘I/⌃⌘S on macOS, Ctrl+Shift on
     // Windows/Linux), matching the `process.platform === 'darwin'` branches there.
     const shift = IS_MAC ? "⇧" : "Shift";

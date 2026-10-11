@@ -62,6 +62,12 @@ the `Type Check (Backend)` job and in the release workflow; see
 `noImplicitAny` ratchet were retired once the last JavaScript source file converted. The backend
 tests (`tests/**/*.ts`) are checked by the strict `apps/node-backend/tsconfig.tests.json` in a
 second step of the same job ([[docs/adr/192-backend-tests-strict-typescript|ADR-192]]).
+The same job installs the Electron workspace and runs `bun run typecheck:electron`, which checks
+the strict TypeScript Electron shell (`packaging/electron/tsconfig.json`) and its sandboxed preload
+(`packaging/electron/tsconfig.preload.json`) without emitting
+([[docs/adr/196-electron-shell-typescript|ADR-196]]). `bun run test:electron` compiles the shell
+into `packaging/electron/out/` before running its `node:test` suites, and the release job compiles
+it with `bun build.ts` before `node out/scripts/build-native-package.js` packages the app.
 
 ### Dependency and workflow admission
 
@@ -185,6 +191,7 @@ the change:
 bun run lint
 bun run lint:backend
 bun run typecheck
+bun run typecheck:electron
 bun run typecheck:python
 bun run validate-locales
 bun run test:scripts

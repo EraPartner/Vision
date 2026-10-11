@@ -2,8 +2,8 @@
 title: Analysis Workspace
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     feature,
@@ -243,7 +243,7 @@ selected cannot replace the current history or error state.
 URL by replacing the username. The native runtime additionally requires the same host and port.
 
 Native startup provisions the login and its password through the private cluster administrator in
-`packaging/electron/runtime/native.js`. It reapplies the restricted role attributes, read-only
+`packaging/electron/runtime/native.ts`. It reapplies the restricted role attributes, read-only
 default, timeouts, and `vision_analysis, pg_catalog` search path. The migration owner remains
 `NOCREATEROLE`; it does not administer executor credentials.
 

@@ -38,6 +38,8 @@ export interface RestoreResult extends ElectronSuccessResult {
   file?: string;
   frontendState?: FrontendStateSnapshot | null;
   warning?: string;
+  /** "unavailable" when the user confirmed a restore whose audit continuity could not be verified. */
+  auditStatus?: "unavailable";
 }
 
 export interface ElectronMenuAction {

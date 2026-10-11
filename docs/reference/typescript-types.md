@@ -2,8 +2,8 @@
 title: TypeScript Types Reference
 type: reference
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     reference,
@@ -58,11 +58,13 @@ Bun, Vite and the backend's checkJs program read the implementation's own types.
 Electron inter-process communication has a separate shared contract because it is not HTTP or
 OpenAPI. `packaging/electron/electron-api.d.ts`, beside the preload, owns all 29 invoke channels,
 6 event channels, their payloads and results, and the five optional `Window` bridges. The
-`@vision/types/electron` entry point is a thin type re-export used by the frontend. Preload JSDoc
-and main-process channel registration import the canonical declaration directly, while
-`packaging/electron/ipc-contract.test.js` enforces channel-set parity. Types are not checked at
+`@vision/types/electron` entry point is a thin type re-export used by the frontend. The
+TypeScript preload (with type-only imports) and main-process channel registration import the
+canonical declaration directly, `bun run typecheck:electron` checks both against it
+([[docs/adr/196-electron-shell-typescript|ADR-196]]), and
+`packaging/electron/ipc-contract.test.ts` enforces channel-set parity. Types are not checked at
 runtime, so each invoke channel also has an argument validator in
-`packaging/electron/runtime/ipc-schemas.js`; `registerHandler` refuses a channel without one
+`packaging/electron/runtime/ipc-schemas.ts`; `registerHandler` refuses a channel without one
 ([[docs/architecture/electron#Context Isolation & Preload|Electron preload]]).
 
 `@vision/types/contracts` (`packages/types/src/contracts/`) holds zod response schemas

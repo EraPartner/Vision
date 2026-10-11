@@ -35,6 +35,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // Compiles packaging/electron into out/ when stale (ADR-196).
+    globalSetup: ["./tests/setup/electronBuild.ts"],
     include: [
       "src/**/*.test.{js,ts}",
       "tests/**/*.test.{js,ts}",

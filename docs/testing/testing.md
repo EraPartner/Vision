@@ -3,7 +3,7 @@ title: Testing Documentation
 type: testing
 status: active
 date: 2026-10-11
-updated: 2026-10-08
+updated: 2026-10-11
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
 added_portfolio_math_tests: 2026-05-05
@@ -202,6 +202,19 @@ Demo launch. Seed build tests verify data-only SQL, fixed-reference-date
 repeatability, date freshness and future planned rows, invalid reference-date
 rejection, row-count drift rejection, checksum validation,
 interrupted activation recovery, failed-readiness rollback, and Demo path isolation.
+
+### Electron Tests
+
+The Electron shell's tests are TypeScript `node:test` suites beside their sources
+(`packaging/electron/**/*.test.ts`). They run from the compiled output: `bun run test:electron`
+runs `bun packaging/electron/build.ts` and then
+`node --test 'packaging/electron/out/**/*.test.js'`. Tests that read non-compiled files (sources,
+`package.json`, fixtures) locate them from `appRoot` in `packaging/electron/paths.ts`. Contract tests
+assert that the compiled preload requires only `electron` and that the compiled update installer
+needs only Node built-ins. Backend Vitest suites that load Electron modules (backup bundle,
+settings conflicts) require them from `packaging/electron/out/`; the global setup
+`apps/node-backend/tests/setup/electronBuild.ts` rebuilds `out/` when an Electron source is newer
+than the `out/.built` stamp. See [[docs/adr/196-electron-shell-typescript|ADR-196]].
 
 ## Test Structure
 
@@ -962,7 +975,7 @@ Code links: [[apps/node-backend/tests/priceProviderService.test.ts]], [[apps/nod
   - [[apps/node-backend/tests/dataContract.test.ts]] covers the mode switch and value-free logging in [[apps/node-backend/src/lib/dataContract.ts]]. [[apps/node-backend/tests/bankAdapterContract.test.ts]] and [[apps/node-backend/tests/portfolioAdapterContract.test.ts]] cover the adapter output schemas and the single check seam for each pipeline.
   - [[apps/node-backend/tests/rowContracts.test.ts]] covers `checkRows`, `queryRows` and `queryOne` in [[apps/node-backend/src/database/rowContracts.ts]]. Tests run in strict mode, so a mocked `query` row must match its row schema; build such rows with [[apps/node-backend/tests/helpers/pgRows.ts]] (NUMERIC and BIGINT as strings, DATE and TIMESTAMPTZ as `Date`), [[apps/node-backend/tests/helpers/portfolioPgRows.ts]] (investment, portfolio transaction, unit event, watchlist, provider health, price history and performance snapshot rows, plus `pgLocalDate`) or [[apps/node-backend/tests/helpers/aiRows.ts]] (AI conversation, message, investigation, disclosure, saved analysis, monitor, notification and dossier rows). Almost every repository and service read is checked since [[docs/adr/194-runtime-contracts-completion|ADR-194]], so this applies to most backend suites.
   - `apps/frontend/src/lib/api/client.test.ts` covers `checkResponseContract` and `ApiContractError`; the domain client tests under `src/lib/api/__tests__/` cover the reads and save responses that declare a schema. Wire schemas require every field the backend always sends, so screen and hook fixtures must be full responses; [[apps/frontend/src/test/msw/rowFixtures.ts]] builds full transaction, account, category and recipient rows from the fields a test sets.
-  - [[packaging/electron/runtime/ipc-schemas.test.js]] covers the per-channel IPC argument validators, and `packaging/electron/ipc-contract.test.js` checks that every invoke channel has a contract and that `registerHandler` validates after the sender check.
+  - [[packaging/electron/runtime/ipc-schemas.test.ts]] covers the per-channel IPC argument validators, and `packaging/electron/ipc-contract.test.ts` checks that every invoke channel has a contract and that `registerHandler` validates after the sender check.
 - Settings and middleware validation coverage additions for this branch:
   - [[apps/node-backend/tests/routes/settings.test.ts]] covers settings route validation and error semantics: key-length guardrails, missing `value`, `dashboard_settings` `exclusionScope` and `excludedCategoryIds` validation, bulk upsert payload-type rejection, and DELETE not-found behavior.
   - [[apps/node-backend/tests/validation.test.ts]] covers validation-only `validateIdParam` and `validateIntParam` behavior in [[apps/node-backend/src/middleware/validation.ts]]: missing-id handling, strict invalid-id errors, no mutation of valid Express path strings, repeated validation, and explicit numeric return through `assertIdParam`.
