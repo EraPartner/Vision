@@ -1,7 +1,7 @@
 ---
 title: "ADR-196: The Electron shell is strict TypeScript compiled into out/"
 type: adr
-status: proposed
+status: accepted
 date: 2026-10-11
 tags: [adr, type-safety, typescript, electron, packaging, adr-195]
 description: "Phase 5b of the type-safety plan. Every Electron main-process, preload, runtime, backup, updater and packaging-script module is strict TypeScript. tsc compiles it to CommonJS in packaging/electron/out/, which Electron, electron-builder and node --test run; every launch, test and packaging path builds first. Non-compiled resources are located from paths.ts appRoot."
@@ -12,8 +12,8 @@ aliases: [adr-196, electron typescript, type-safety phase 5b]
 
 ## Status
 
-Proposed, pending the owner's confirmation of the build approach and a check of the Demo build
-on macOS. Phase 5b of the type-safety plan; follows
+Accepted. The owner chose compiling into `out/` on 2026-10-11; the Demo build still needs one
+check on macOS before release. Phase 5b of the type-safety plan; follows
 [[docs/adr/195-repository-scripts-typescript|ADR-195]] (repository scripts). The alternatives were
 JavaScript checked through JSDoc types (no build step) and leaving the shell as JavaScript.
 

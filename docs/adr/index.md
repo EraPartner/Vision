@@ -249,7 +249,7 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
-### 2026-10-11: The Electron shell is strict TypeScript compiled into out/ (proposed)
+### 2026-10-11: The Electron shell is strict TypeScript compiled into out/
 
 [[docs/adr/196-electron-shell-typescript|ADR-196]] converts the Electron shell to strict
 TypeScript that `tsc` compiles to CommonJS in `packaging/electron/out/`. Every launch, test and
