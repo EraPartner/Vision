@@ -289,6 +289,30 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("lists household engine issues of the live year in the disclaimer banner", async () => {
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                            filingStatus: "married_joint",
+                            spouseProfessionalIncome: 20000,
+                        },
+                    }),
+                ),
+            ),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        expect(
+            await screen.findByText(
+                /add the date of your marriage or legal cohabitation/i,
+            ),
+        ).toBeInTheDocument();
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("does not crash when settings endpoint returns 404", async () => {
