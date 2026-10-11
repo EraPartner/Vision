@@ -70,8 +70,13 @@ jobs:
           fi
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+
       - name: Enforce private internal package boundaries
-        run: node scripts/check-package-boundaries.js
+        run: bun scripts/check-package-boundaries.ts
 
       - name: Enforce workflow supply-chain policy
         run: python3 scripts/check-workflow-supply-chain.py

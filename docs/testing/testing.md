@@ -2,7 +2,7 @@
 title: Testing Documentation
 type: testing
 status: active
-date: 2026-10-10
+date: 2026-10-11
 updated: 2026-10-08
 last-updated: 2026-10-10
 last_updated_timestamp: 2026-10-06T00:00:00Z
@@ -856,7 +856,7 @@ Backend vitest runs in exactly one CI job, so the service is wired only there. `
 
 **Coverage differs between modes.** Skipped DB suites lower measured coverage, so a no-DB `--coverage` run reports below CI. The thresholds in `vitest.config.js` track the _no-DB_ figure deliberately — see the comment there before bumping them.
 
-**Migrations are required, and a bare `alembic upgrade head` will not do it.** Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, and this chain's revision identifiers are longer, so a fresh database dies on the third revision with `value too long for type character varying(32)`. Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.js`), which runs the same `runMigrations()` path the app runs on boot and preflights that table at `VARCHAR(64)` first. All version-table-writing npm scripts (`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset`, and the backend workspace's `db:migrate*`) now route through that same wrapper — see [[docs/reference/scripts|Scripts Reference]].
+**Migrations are required, and a bare `alembic upgrade head` will not do it.** Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, and this chain's revision identifiers are longer, so a fresh database dies on the third revision with `value too long for type character varying(32)`. Use `bun run db:migrate` (→ `apps/node-backend/scripts/db-migrate.ts`), which runs the same `runMigrations()` path the app runs on boot and preflights that table at `VARCHAR(64)` first. All version-table-writing npm scripts (`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset`, and the backend workspace's `db:migrate*`) now route through that same wrapper — see [[docs/reference/scripts|Scripts Reference]].
 
 Reference: [[docs/reference/code-patterns#Database Fixture]], [[apps/node-backend/tests/setup/db.ts]], [[apps/node-backend/tests/services/transferReconciliation.db.test.ts]]
 

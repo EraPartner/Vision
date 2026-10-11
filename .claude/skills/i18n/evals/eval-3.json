@@ -5,7 +5,7 @@
   "expected_behavior": [
     "Reads docs/i18n/index.md and docs/i18n/translations.md before answering, per the skill's own 'read before non-trivial locale work' instruction, rather than answering from general knowledge",
     "Lists generate-locales, then sync-nl, then validate-locales, in that order, matching the skill's documented sequence",
-    "Correctly attributes sync-nl to scripts/sync-nl-with-en.js and notes it exists specifically to keep Dutch keys aligned with English",
+    "Correctly attributes sync-nl to scripts/sync-nl-with-en.ts and notes it exists specifically to keep Dutch keys aligned with English",
     "Does not omit validate-locales or describe it as optional"
   ]
 }

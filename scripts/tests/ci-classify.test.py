@@ -33,7 +33,7 @@ class ClassificationTests(unittest.TestCase):
         self.assertIn('AGENT_TOOLING_RESULT: ${{ needs.agent-tooling.result }}', quality)
         self.assertIn('case "$AGENT_TOOLING_RESULT" in', quality)
         self.assertIn('success|cancelled)', quality)
-        self.assertIn('node scripts/ci-cancellation-policy.js', quality)
+        self.assertIn('bun scripts/ci-cancellation-policy.ts', quality)
 
     def test_nul_delimiters_modes_and_rename_detection(self) -> None:
         # A renamed executable must still be included through its old path.

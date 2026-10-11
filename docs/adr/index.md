@@ -2,7 +2,7 @@
 title: Architecture Decision Records Index
 type: adr-index
 status: active
-date: 2026-10-10
+date: 2026-10-11
 updated: 2026-10-08
 last_modified: 2026-10-08
 tags: [adr, index, architecture, decisions, phase-1, phase-4, phase-5, phase-6, phase-7, security, dependency-slim-down, container-hardening, docker, backup, encryption, aead, aes-256-gcm, codeql, dependabot, rate-limiting, tailwind-v4, css-architecture, dependencies, ai, streaming, useSyncExternalStore, bug-hunt, recovery-hardening, updated-at-constraints, concurrent-backup, ci-cd, secrets-scanning, supply-chain-security, gitleaks, deps-audit, trivy-scan, docker-compose-sync, named-volumes, data-loss, tags, tagging, transaction-tags, orthogonal-dimension, belgian-tax, exemption-brackets, own-home-credits, taxable-income-sources, audit-2026-05-11, disabled-dependents, regional-autonomy-factor, property-tax-centimes, etf-tob, reynders-routing, as-filed, audit-log, comparison, trend-strip, may-2026-audit, monetary-precision, decimal-enforcement, tx-hash-dedup, race-safe-dedup, portfolio-precision, import-precision, forecast-precision, timezone-consistency, snapshot-valuation-parity, fixed-income-accrual, real-estate-appreciation, net-worth-reconciliation, live-overlay, valuation-freshness, price-history, binance, quote-backfill, gap-fill, daily-granularity, sparsity, densify, saved-custom-parsers, custom-parser-configs, named-parsers, bank-label, generic-adapter-fallback, route-service-boundary, lint-enforcement, mv-recipient-monthly-drop, shared-utils, banker-rounding, global-rate-limiter, trusted-proxies, vision-dev, zip-bomb, response-cap, liquid-glass-v2, glass-materials, atmosphere-layer, command-palette, optimistic-updates, route-preload, premium-v3, rolling-number, money-typography, chart-scrub, chart-sync, shader-aurora, enhanced-effects, visual-effects-tiers, auto-adapt-display, fx-reduced, webgl, electron-native, macos, ipc, hiddeninset, vibrancy, system-accent, native-menu, dock-badge, csv-open-with, electronapi, june-2026, fx-attribution, historical-rates, ecb-full-history, purchase-date-rates, asset-gain, fx-gain, value-fx-neutral, portfolio-import, instrument-matching, type-normalizer, kind-discriminator, migration-0040, migration-0041, adr-078, adr-081, adr-082, monte-carlo, portfolio-projection, fundamentals-scorecard, chart-builder, technical-indicators, pillar-c, macro, macroeconomic, fred, dbnomics, eurostat, provider-pinned, db-data-editor, adr-101, xmin, optimistic-concurrency, audit-trail, skin-v2, dense-fintech, visual-redesign, feature-flag, theming, css-scoping, unlayered-css, inline-token-constraint, apple-refined, jewel-emerald, refined-geometry, glass-differentiation, hairlines, tabular-nums, press-feedback, motion-spring, insight-agent, anomaly-agent, detection-layer, narration-layer, insightsDigest, no-external-calls, ollama, native-runtime, postgresql-18, adr-110, adr-111, adr-112, adr-113, recurrence, adr-130]
@@ -248,6 +248,12 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 > - Recording a decision that affects multiple parts of the system
 
 ## Recent Decisions
+
+### 2026-10-11: Repository scripts are strict TypeScript run on Bun
+
+[[docs/adr/195-repository-scripts-typescript|ADR-195]] converts every JavaScript script under
+`scripts/` and `apps/node-backend/scripts/`, and the script tests, to strict TypeScript that Bun
+runs directly. CI type-checks them and installs a pinned Bun in every job that runs one.
 
 ### 2026-10-10: Runtime contracts cover the backend reads and the frontend client
 

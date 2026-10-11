@@ -575,7 +575,7 @@ describe.skipIf(!hasTestDatabase())(
           spawnSync(
             process.execPath,
             [
-              path.join(root, "apps/node-backend/scripts/db-migrate.js"),
+              path.join(root, "apps/node-backend/scripts/db-migrate.ts"),
               operation,
               target,
             ],

@@ -40,7 +40,7 @@ const REPO_ROOT = path.resolve(
 const MAIN_JS = path.join(REPO_ROOT, "apps/node-backend/src/main.ts");
 const DB_MIGRATE_JS = path.join(
   REPO_ROOT,
-  "apps/node-backend/scripts/db-migrate.js",
+  "apps/node-backend/scripts/db-migrate.ts",
 );
 
 const MANAGED_VIEWS = ["mv_monthly_summary", "mv_category_totals"];

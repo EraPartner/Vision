@@ -16,7 +16,7 @@ const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
 const harnessPath = path.join(repoRoot, "scripts", "with-test-db.sh");
 const harnessSource = readFileSync(harnessPath, "utf8");
 const migrationRunnerSource = readFileSync(
-  path.join(repoRoot, "apps", "node-backend", "scripts", "db-migrate.js"),
+  path.join(repoRoot, "apps", "node-backend", "scripts", "db-migrate.ts"),
   "utf8",
 );
 
@@ -70,7 +70,7 @@ describe("disposable database test harness", () => {
     expect(harnessSource).toContain("--template=template0");
     expect(harnessSource).toContain("VISION_TEST_POSTGRES_BIN");
     expect(harnessSource).toContain(
-      "bun run apps/node-backend/scripts/db-migrate.js",
+      "bun run apps/node-backend/scripts/db-migrate.ts",
     );
   });
 

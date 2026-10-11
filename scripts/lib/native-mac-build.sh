@@ -93,7 +93,7 @@ EOF
   export VISION_FRONTEND_DIST
 
   cd "$REPO_PATH" || return 1
-  node scripts/generate-locales.js
+  bun scripts/generate-locales.ts
   cd "$REPO_PATH/apps/frontend" || return 1
   "$REPO_PATH/apps/frontend/node_modules/.bin/vite" build \
     --outDir "$VISION_FRONTEND_DIST" \

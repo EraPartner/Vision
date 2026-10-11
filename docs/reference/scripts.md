@@ -1,7 +1,7 @@
 ---
 title: Scripts Reference
 type: reference
-date: 2026-10-08
+date: 2026-10-11
 tags:
   [
     reference,
@@ -23,6 +23,10 @@ related_code: [[package.json]]
 
 Run root scripts with `bun run <name>`. Run workspace scripts with
 `bun run --filter '<workspace>' <name>`.
+
+The scripts behind them in `scripts/` and `apps/node-backend/scripts/` are strict TypeScript that
+Bun runs directly, for example `bun scripts/validate-locales.ts`. Run them with Bun, not `node`
+([[docs/adr/195-repository-scripts-typescript|ADR-195]]).
 
 ## Install and development
 
@@ -53,7 +57,8 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `lint`                    | Lint the frontend                                  |
 | `lint:backend`            | Lint the backend                                   |
 | `typecheck`               | Type-check the frontend                            |
-| `typecheck:backend`       | Type-check backend source and TS tests (strict)    |
+| `typecheck:backend`       | Type-check backend source, tests and scripts       |
+| `typecheck:scripts`       | Type-check repository scripts and their tests      |
 | `typecheck:packages`      | Type-check the shared packages (strict)            |
 | `typecheck:python`        | Run `mypy --strict` over Alembic and scripts       |
 | `validate-locales`        | Validate source/generated locale parity            |
@@ -76,7 +81,7 @@ Run root scripts with `bun run <name>`. Run workspace scripts with
 | `test:frontend`                 | Build and run the full frontend Vitest suite against a disposable PostgreSQL 18 backend, including live API contracts          |
 | `test:watch`                    | Watch the backend suite against a disposable PostgreSQL 18 database, including CI performance probes                           |
 | `test:electron`                 | Electron, backup, runtime, and packaging Node tests                                                                            |
-| `test:scripts`                  | Repository script tests                                                                                                        |
+| `test:scripts`                  | Repository script tests (`bun test scripts/tests`)                                                                             |
 | `test:db`                       | Backend suite against a disposable native PostgreSQL 18 cluster                                                                |
 | `native:db-smoke`               | Native migration, dump/restore, and attachment smoke                                                                           |
 | `native:isolated-smoke`         | Full smoke with a disposable native cluster                                                                                    |

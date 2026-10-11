@@ -2,7 +2,7 @@
 title: CI/CD Pipelines
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-11
 tags:
   [
     guide,
@@ -70,7 +70,7 @@ general Bun dependency cache. The Electron install in CI and release jobs is als
 script-disabled. Trusted jobs call the checked-in TypeScript binary instead of
 using `bunx` fallback downloads.
 
-`scripts/check-package-boundaries.js` requires every tracked application/package manifest to be
+`scripts/check-package-boundaries.ts` requires every tracked application/package manifest to be
 reviewed and `private: true`. It rejects an internal `@vision/*` dependency that does not use a
 reviewed workspace and an internal name in either Bun lockfile that resolves from a registry.
 It also checks manifest and lockfile dependency agreement, requires integrity digests for registry

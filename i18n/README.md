@@ -4,7 +4,7 @@ This repository uses a single-source-of-truth approach for translations.
 
 - Masters: edit files in `i18n/source/*.json` only. These JSON files are the canonical translation source.
 - Generation: run the generator to produce frontend and packaging artifacts:
-  - `bun run generate-locales` (or `node scripts/generate-locales.js`)
+  - `bun run generate-locales` (or `bun scripts/generate-locales.ts`)
 - Sanitize: if your translations include curly quotes or other typographic characters, run:
   - `bun run sanitize-locales` (normalizes smart quotes and similar characters)
 - Validate parity and drift:

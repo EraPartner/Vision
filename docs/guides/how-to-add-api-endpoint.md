@@ -2,7 +2,7 @@
 title: How to Add a New API Endpoint
 type: guide
 status: active
-date: 2026-10-10
+date: 2026-10-11
 updated: 2026-10-08
 tags: [guide, api, how-to, backend, tutorial]
 description: Step-by-step guide for adding a new REST API endpoint to the Vision backend
@@ -265,7 +265,7 @@ describe("<resource> API", () => {
 
 The endpoint is not "done" until the API contract and the generated frontend types agree with it:
 
-1. Add the operation(s) to `openapi.yaml` — it is the authoritative spec, and `scripts/check-endpoint-matrix.js` gates the count in CI.
+1. Add the operation(s) to `openapi.yaml` — it is the authoritative spec, and `scripts/check-endpoint-matrix.ts` gates the count in CI.
 2. Run `bun run generate:types` to regenerate `apps/frontend/src/types/generated.ts` from `openapi.yaml` ([[docs/adr/031-openapi-type-generation-frontend|ADR-031]]).
 3. Add the row(s) to [[docs/reference/api-endpoint-matrix|api-endpoint-matrix.md]] (and bump its `api_operation_count`).
 4. Create `docs/api/<resource>.md` following the pattern in [[docs/api/transactions\|Transactions API]], and add it to [[docs/api/index\|API Index]].

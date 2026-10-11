@@ -1,0 +1,392 @@
+#!/usr/bin/env bun
+
+import fs from "node:fs";
+import path from "node:path";
+import ts from "typescript";
+
+type ConsumerKind = "production" | "test";
+
+interface Consumer {
+  consumer: string;
+  kind: ConsumerKind;
+}
+
+interface Violation {
+  file: string;
+  name: string;
+  suggestedName: string;
+  tests: string[];
+}
+
+const repositoryRoot = path.resolve(import.meta.dirname, "..");
+const backendRootArgument = process.argv.indexOf("--backend-root");
+const usesCustomBackendRoot = backendRootArgument >= 0;
+function customBackendRoot(): string {
+  const value = process.argv[backendRootArgument + 1];
+  if (value === undefined)
+    throw new TypeError("--backend-root requires a path");
+  return path.resolve(value);
+}
+const backendRoot = usesCustomBackendRoot
+  ? customBackendRoot()
+  : path.join(repositoryRoot, "apps/node-backend");
+const sourceRoot = path.join(backendRoot, "src");
+const testRoot = path.join(backendRoot, "tests");
+
+// Stable module APIs can be exercised directly by tests even when today's
+// production graph reaches them through a facade, a default object, or an
+// external entry point. They are not test-support seams and keep public names.
+const PUBLIC_NAMED_EXPORTS = new Set([
+  // Public facades, domain helpers, and contract types.
+  "apps/node-backend/src/integrations/ollama/prompts.ts:toOllamaMessage",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:createInspectionFetch",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacy.ts:evaluateCloudPrivacyTrace",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.ts:CLOUD_PRIVACY_EVALUATION_CASES",
+  "apps/node-backend/src/services/aiEvaluation/cloudPrivacyCases.ts:CLOUD_PRIVACY_SYNTHETIC_POLICY",
+  "apps/node-backend/src/services/aiEvaluation/localCases.ts:LOCAL_AI_EVALUATION_CASES",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.ts:runLocalAiCase",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.ts:scoreLocalAiRun",
+  "apps/node-backend/src/services/aiEvaluation/localReliability.ts:summarizeLocalAiEvaluation",
+  "apps/node-backend/src/lib/importBatchIds.ts:coercedIdSchema",
+  // ADR-193 runtime contracts: schemas, error and production switch callers rely on.
+  "apps/node-backend/src/database/rowContracts.ts:RowContractError",
+  "apps/node-backend/src/lib/dataContract.ts:PRODUCTION_DATA_CONTRACT_MODE",
+  "apps/node-backend/src/services/importPipeline/adapters/_shared.ts:parsedBankTransactionSchema",
+  "apps/node-backend/src/services/portfolioImportPipeline/portfolioGenericAdapter.ts:parsedPortfolioRowSchema",
+  // Documented id-param middleware (docs/security/input-validation.md); routes
+  // moved to zod params schemas, but the middleware stays available.
+  "apps/node-backend/src/middleware/validation.ts:validateIntParam",
+  // Imported by the root baseline maintenance scripts, which this scan does not read.
+  "apps/node-backend/src/database/baselineManifest.ts:readBaselineManifest",
+  // Named helpers mirrored by a stable runtime default object.
+  "apps/node-backend/src/lib/calculations/splits.ts:roundToCents",
+  "apps/node-backend/src/lib/calculations/splits.ts:validatePaymentAmount",
+  "apps/node-backend/src/lib/urlSafety.ts:BlockedUrlError",
+  "apps/node-backend/src/repositories/infoRepository.ts:clearMvCache",
+  // Named methods mirrored by stable runtime repository default objects.
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:get",
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:isFresh",
+  "apps/node-backend/src/repositories/cashflowForecastMcRepository.ts:upsert",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:get",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:isFresh",
+  "apps/node-backend/src/repositories/cashflowForecastMcRollingRepository.ts:upsert",
+  "apps/node-backend/src/services/accountService.ts:accountService",
+  "apps/node-backend/src/services/importPipeline/adapters/index.ts:createAdapter",
+  "apps/node-backend/src/services/importPipeline/adapters/index.ts:detectBank",
+  "apps/node-backend/src/services/importPipeline/adapters/index.ts:getSupportedBanks",
+  "apps/node-backend/src/services/calculations/portfolioMath.ts:annualizedReturn",
+  "apps/node-backend/src/services/calculations/portfolioMath.ts:calculateAccruedInterest",
+  "apps/node-backend/src/services/calculations/portfolioMath.ts:sanitizeIsolatedValueSpikes",
+  "apps/node-backend/src/services/deduplication.ts:isDuplicate",
+  "apps/node-backend/src/services/importPipeline/index.ts:createBatch",
+  "apps/node-backend/src/services/importPipeline/index.ts:prepareImport",
+  // Named methods mirrored by stable runtime adapter default objects.
+  "apps/node-backend/src/services/importPipeline/adapters/bnp.ts:parse",
+  "apps/node-backend/src/services/importPipeline/adapters/generic.ts:parse",
+  "apps/node-backend/src/services/importPipeline/adapters/ing.ts:parse",
+  "apps/node-backend/src/services/importPipeline/adapters/vision.ts:detect",
+  "apps/node-backend/src/services/importPipeline/adapters/wise.ts:parse",
+  "apps/node-backend/src/services/portfolioImportPipeline/index.ts:prepareImport",
+  // Literal proof is a runtime domain helper also used inside its exporting module.
+  "apps/node-backend/src/services/portfolioIbkrPrimaryProof.ts:getIbkrPrimaryReconciliationEvidence",
+  "apps/node-backend/src/services/plannedTransactionService.ts:create",
+  "apps/node-backend/src/services/plannedTransactionService.ts:update",
+  "apps/node-backend/src/services/priceProviderService.ts:getHistoricalPriceAt",
+  "apps/node-backend/src/services/prices/priceCache.ts:dateOnlyToTimestampMs",
+  "apps/node-backend/src/services/quoteBackfillService.ts:cleanupStaleQuotes",
+  "apps/node-backend/src/services/research/adapters/macroCatalog.ts:MACRO_CATALOG",
+  "apps/node-backend/src/services/research/capabilityMap.ts:PROVIDERS",
+  "apps/node-backend/src/services/splitService.ts:addPayment",
+  "apps/node-backend/src/services/splitService.ts:createSplitAtomic",
+  "apps/node-backend/src/services/splitService.ts:deleteSplit",
+  "apps/node-backend/src/services/splitService.ts:settleSplit",
+]);
+
+function walkJavaScriptFiles(directory: string): string[] {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return walkJavaScriptFiles(entryPath);
+    return /\.(js|ts)$/.test(entry.name) ? [entryPath] : [];
+  });
+}
+
+const sourceFiles = walkJavaScriptFiles(sourceRoot);
+const testFiles = walkJavaScriptFiles(testRoot);
+const knownFiles = new Set([...sourceFiles, ...testFiles]);
+
+function resolveRelativeModule(
+  importer: string,
+  specifier: string,
+): string | undefined {
+  if (!specifier.startsWith(".")) return undefined;
+  const basePath = path.resolve(path.dirname(importer), specifier);
+  return [
+    basePath,
+    `${basePath}.js`,
+    `${basePath}.ts`,
+    path.join(basePath, "index.js"),
+    path.join(basePath, "index.ts"),
+  ].find((candidate) => knownFiles.has(candidate));
+}
+
+function bindingNames(name: ts.BindingName): string[] {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap((element: ts.ArrayBindingElement) =>
+    ts.isOmittedExpression(element) ? [] : bindingNames(element.name),
+  );
+}
+
+function hasExportModifier(node: ts.Node): boolean {
+  return (
+    ts.canHaveModifiers(node) &&
+    (ts
+      .getModifiers(node)
+      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
+      false)
+  );
+}
+
+function exportedSurface(sourceFile: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (hasExportModifier(statement)) {
+      if (
+        (ts.isFunctionDeclaration(statement) ||
+          ts.isClassDeclaration(statement)) &&
+        statement.name
+      ) {
+        names.add(statement.name.text);
+      } else if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          for (const name of bindingNames(declaration.name)) names.add(name);
+        }
+      }
+    }
+    // Type-only re-exports (`export type { Row }`) have no runtime surface, so
+    // a test importing them for annotations is not a test-only seam.
+    if (
+      ts.isExportDeclaration(statement) &&
+      !statement.isTypeOnly &&
+      statement.exportClause &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      for (const element of statement.exportClause.elements)
+        if (!element.isTypeOnly) names.add(element.name.text);
+    }
+  }
+  return names;
+}
+
+const exportsByFile = new Map(
+  sourceFiles.map((file) => [
+    file,
+    exportedSurface(
+      ts.createSourceFile(
+        file,
+        fs.readFileSync(file, "utf8"),
+        ts.ScriptTarget.Latest,
+        true,
+      ),
+    ),
+  ]),
+);
+const consumers = new Map<string, Consumer[]>();
+
+function recordConsumer(
+  target: string | undefined,
+  exportedName: string | undefined,
+  consumer: string,
+  kind: ConsumerKind,
+): void {
+  if (!target || !exportedName || exportedName === "default") return;
+  const key = `${target}\0${exportedName}`;
+  const entries = consumers.get(key) ?? [];
+  entries.push({ consumer, kind });
+  consumers.set(key, entries);
+}
+
+function scanConsumers(file: string, kind: ConsumerKind): void {
+  const sourceFile = ts.createSourceFile(
+    file,
+    fs.readFileSync(file, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const namespaceImports = new Map<string, string | undefined>();
+  const dynamicModules = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      const target = resolveRelativeModule(
+        file,
+        statement.moduleSpecifier.text,
+      );
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          recordConsumer(
+            target,
+            element.propertyName?.text ?? element.name.text,
+            file,
+            kind,
+          );
+        }
+      } else if (bindings && ts.isNamespaceImport(bindings)) {
+        namespaceImports.set(bindings.name.text, target);
+        if (kind === "production" && target !== undefined) {
+          for (const name of exportsByFile.get(target) ?? []) {
+            recordConsumer(target, name, file, kind);
+          }
+        }
+      }
+    }
+
+    if (
+      ts.isExportDeclaration(statement) &&
+      statement.moduleSpecifier &&
+      ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      const target = resolveRelativeModule(
+        file,
+        statement.moduleSpecifier.text,
+      );
+      if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+        for (const element of statement.exportClause.elements) {
+          recordConsumer(
+            target,
+            element.propertyName?.text ?? element.name.text,
+            file,
+            kind,
+          );
+        }
+      }
+    }
+  }
+
+  function importedTarget(expression: ts.Expression): string | undefined {
+    if (!ts.isAwaitExpression(expression)) return undefined;
+    const call = expression.expression;
+    if (
+      !ts.isCallExpression(call) ||
+      call.expression.kind !== ts.SyntaxKind.ImportKeyword
+    )
+      return undefined;
+    const [argument] = call.arguments;
+    return argument && ts.isStringLiteral(argument)
+      ? resolveRelativeModule(file, argument.text)
+      : undefined;
+  }
+
+  function visit(node: ts.Node): void {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const target = importedTarget(node.initializer);
+      if (target && ts.isObjectBindingPattern(node.name)) {
+        for (const element of node.name.elements) {
+          recordConsumer(
+            target,
+            element.propertyName?.getText(sourceFile) ??
+              element.name.getText(sourceFile),
+            file,
+            kind,
+          );
+        }
+      } else if (target && ts.isIdentifier(node.name)) {
+        dynamicModules.set(node.name.text, target);
+        if (kind === "production") {
+          for (const name of exportsByFile.get(target) ?? []) {
+            recordConsumer(target, name, file, kind);
+          }
+        }
+      }
+    }
+
+    if (ts.isPropertyAccessExpression(node)) {
+      if (ts.isIdentifier(node.expression)) {
+        const target =
+          namespaceImports.get(node.expression.text) ??
+          dynamicModules.get(node.expression.text);
+        recordConsumer(target, node.name.text, file, kind);
+      } else {
+        const target = importedTarget(node.expression);
+        recordConsumer(target, node.name.text, file, kind);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(sourceFile);
+}
+
+for (const file of sourceFiles) scanConsumers(file, "production");
+for (const file of testFiles) scanConsumers(file, "test");
+
+const violations: Violation[] = [];
+const stalePublicExports = usesCustomBackendRoot
+  ? []
+  : [...PUBLIC_NAMED_EXPORTS].filter((entry) => {
+      const separator = entry.lastIndexOf(":");
+      const file = path.join(repositoryRoot, entry.slice(0, separator));
+      const name = entry.slice(separator + 1);
+      return !exportsByFile.get(file)?.has(name);
+    });
+
+for (const [file, names] of exportsByFile) {
+  for (const name of names) {
+    const relativeFile = path.relative(repositoryRoot, file);
+    if (
+      name.startsWith("__") ||
+      PUBLIC_NAMED_EXPORTS.has(`${relativeFile}:${name}`)
+    )
+      continue;
+    const entries = consumers.get(`${file}\0${name}`) ?? [];
+    const productionConsumers = entries.filter(
+      ({ kind }) => kind === "production",
+    );
+    const testConsumers = entries.filter(({ kind }) => kind === "test");
+    if (productionConsumers.length === 0 && testConsumers.length > 0) {
+      violations.push({
+        file: relativeFile,
+        name,
+        suggestedName: `__${name.replace(/^_+/, "")}`,
+        tests: [
+          ...new Set(
+            testConsumers.map(({ consumer }) =>
+              path.relative(repositoryRoot, consumer),
+            ),
+          ),
+        ].sort(),
+      });
+    }
+  }
+}
+
+violations.sort(
+  (left, right) =>
+    left.file.localeCompare(right.file) || left.name.localeCompare(right.name),
+);
+
+if (process.argv.includes("--json")) {
+  console.log(JSON.stringify({ stalePublicExports, violations }, null, 2));
+  process.exit(0);
+}
+
+if (stalePublicExports.length > 0) {
+  console.error("Stale public named-export allowlist entries:");
+  for (const entry of stalePublicExports) console.error(`- ${entry}`);
+  process.exitCode = 1;
+} else if (violations.length > 0) {
+  console.error(
+    `Found ${violations.length} unmarked backend test-only named exports:`,
+  );
+  for (const violation of violations) {
+    console.error(
+      `- ${violation.file}: ${violation.name} -> ${violation.suggestedName}`,
+    );
+    for (const test of violation.tests) console.error(`    ${test}`);
+  }
+  process.exitCode = 1;
+} else {
+  console.log("Backend test-only named exports use the __ prefix.");
+}

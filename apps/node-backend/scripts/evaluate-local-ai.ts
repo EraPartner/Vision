@@ -1,0 +1,95 @@
+#!/usr/bin/env bun
+
+import fs from "node:fs";
+import path from "node:path";
+
+import settings from "../src/config/config.ts";
+import { getOllamaClient } from "../src/integrations/ollama/client.ts";
+import { LOCAL_AI_EVALUATION_CASES } from "../src/services/aiEvaluation/localCases.ts";
+import {
+  runLocalAiCase,
+  scoreLocalAiRun,
+  summarizeLocalAiEvaluation,
+  type LocalAiScore,
+} from "../src/services/aiEvaluation/localReliability.ts";
+
+function option<F extends string | undefined>(
+  name: string,
+  fallback: F,
+): string | F {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return fallback;
+  const value = process.argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${name} requires a value`);
+  }
+  return value;
+}
+
+const model = option("--model", settings.ollama.defaultModel);
+const repeats = Number(option("--repeats", "3"));
+const output = option("--output", undefined);
+if (!Number.isSafeInteger(repeats) || repeats < 1) {
+  throw new Error("--repeats must be a positive integer");
+}
+const ollamaClient = getOllamaClient();
+const models = await ollamaClient.listModels().catch((error: unknown) => {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String(error.message)
+      : undefined;
+  console.error(`Local AI unavailable: ${message}`);
+  process.exitCode = 2;
+  return [];
+});
+
+if (!models.some((candidate) => candidate.name === model)) {
+  console.error(`Local AI model is unavailable: ${model}`);
+  process.exit(2);
+}
+
+const scoredRuns: (LocalAiScore & { repeat: number; error?: string })[] = [];
+for (const testCase of LOCAL_AI_EVALUATION_CASES) {
+  for (let repeat = 1; repeat <= repeats; repeat += 1) {
+    const startedAt = Date.now();
+    try {
+      const run = await runLocalAiCase({
+        testCase,
+        model,
+        ollamaClient,
+        numCtx: settings.ollama.numCtx,
+      });
+      scoredRuns.push({ ...scoreLocalAiRun(testCase, run), repeat });
+    } catch (error) {
+      scoredRuns.push({
+        ...scoreLocalAiRun(testCase, {
+          completed: false,
+          answer: "",
+          toolCalls: [],
+          latencyMs: Date.now() - startedAt,
+          residentMemoryBytes: null,
+        }),
+        repeat,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+}
+
+const report = {
+  schemaVersion: 1,
+  generatedAt: new Date().toISOString(),
+  model,
+  repeats,
+  caseCount: LOCAL_AI_EVALUATION_CASES.length,
+  summary: summarizeLocalAiEvaluation(scoredRuns),
+  runs: scoredRuns,
+};
+const serialized = `${JSON.stringify(report, null, 2)}\n`;
+if (output) {
+  const target = path.resolve(output);
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+  await fs.promises.writeFile(target, serialized);
+}
+console.log(serialized.trimEnd());
+if (!report.summary.accepted) process.exitCode = 1;

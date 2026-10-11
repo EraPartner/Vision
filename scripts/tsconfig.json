@@ -1,0 +1,9 @@
+{
+  "//": "Strict check for repository scripts and their tests (ADR-195). Same options as the backend; scripts run on Bun.",
+  "extends": "../apps/node-backend/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts"]
+}

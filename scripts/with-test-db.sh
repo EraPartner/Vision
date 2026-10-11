@@ -261,7 +261,7 @@ if [ "$TASK" = baseline-restore ]; then
   echo "[test-db] Restoring and verifying the exact supplied logical backup in disposable PostgreSQL 18."
   "$POSTGRES_BIN/pg_restore" --exit-on-error --no-owner --no-acl \
     -d "$URL" "$VISION_BASELINE_BACKUP_PATH"
-  node scripts/verify-baseline-restore.mjs
+  bun scripts/verify-baseline-restore.ts
   exit 0
 fi
 
@@ -271,45 +271,45 @@ case "$TASK" in
   adr090-retirement) MIGRATION_TARGET=0102_retire_adr090_transaction_schema ;;
 esac
 echo "[test-db] Migrating the disposable database to $MIGRATION_TARGET."
-bun run apps/node-backend/scripts/db-migrate.js upgrade "$MIGRATION_TARGET"
+bun run apps/node-backend/scripts/db-migrate.ts upgrade "$MIGRATION_TARGET"
 
 if [ "$TASK" = migration-fidelity ]; then
   echo "[test-db] Verifying latest-revision downgrade and upgrade fidelity."
-  bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
   # A populated legacy category must keep its ID and label across both
   # directions; an empty-database cycle cannot catch backfill regressions.
   "$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -q -v ON_ERROR_STOP=1 -c \
     "INSERT INTO categories (general, detail) VALUES ('VISION_FIDELITY', 'LEGACY')" >/dev/null
   VISION_MIGRATION_CATEGORY_ID=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
     "SELECT id FROM categories WHERE general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
-  bun run apps/node-backend/scripts/db-migrate.js upgrade head
+  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
   VISION_MIGRATION_CATEGORY_PATH=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
     "SELECT path_name FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID AND general = 'VISION_FIDELITY' AND detail = 'LEGACY'")
   if [ "$VISION_MIGRATION_CATEGORY_PATH" != 'VISION_FIDELITY:LEGACY' ]; then
     echo "[test-db] Legacy category ID/path changed on hierarchy upgrade." >&2
     exit 1
   fi
-  bun run apps/node-backend/scripts/db-migrate.js downgrade -1
+  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
   VISION_MIGRATION_CATEGORY_PAIR=$("$POSTGRES_BIN/psql" "$TEST_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c \
     "SELECT general || ':' || detail FROM categories WHERE id = $VISION_MIGRATION_CATEGORY_ID")
   if [ "$VISION_MIGRATION_CATEGORY_PAIR" != 'VISION_FIDELITY:LEGACY' ]; then
     echo "[test-db] Legacy category ID/pair changed on hierarchy downgrade." >&2
     exit 1
   fi
-  bun run apps/node-backend/scripts/db-migrate.js upgrade head
+  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
   echo "[test-db] Migration fidelity check passed."
   exit 0
 fi
 
 if [ "$TASK" = legacy-retirements ]; then
   echo "[test-db] Verifying guarded legacy-retirement lifecycles."
-  bun run scripts/test-legacy-retirements.js
+  bun run scripts/test-legacy-retirements.ts
   exit 0
 fi
 
 if [ "$TASK" = adr090-retirement ]; then
   echo "[test-db] Verifying ADR-090 guarded retirement lifecycle."
-  bun run scripts/test-adr090-retirement.js
+  bun run scripts/test-adr090-retirement.ts
   exit 0
 fi
 

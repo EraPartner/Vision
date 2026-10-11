@@ -2,7 +2,7 @@
 title: AI Assistance Evaluation
 type: security
 status: active
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-09-25
 tags:
   [
@@ -18,8 +18,8 @@ description: Reproducible local-AI reliability and cloud-assistance privacy eval
 aliases: [AI evaluation, local AI reliability, cloud privacy evaluation]
 related_code:
   - apps/node-backend/src/services/aiEvaluation/
-  - apps/node-backend/scripts/evaluate-local-ai.js
-  - apps/node-backend/scripts/evaluate-cloud-privacy.js
+  - apps/node-backend/scripts/evaluate-local-ai.ts
+  - apps/node-backend/scripts/evaluate-cloud-privacy.ts
 ---
 
 # AI Assistance Evaluation

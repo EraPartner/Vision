@@ -3,7 +3,7 @@
 # Vision pre-commit -- fast, staged-only checks. Run broader checks explicitly
 # before publication; CI enforces the required checks after a push.
 #
-# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
+# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.ts)
 # Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
 #
 # Checks (in order):
@@ -137,7 +137,7 @@ lint_workspace apps/node-backend '^apps/node-backend/src/'
 # --- 5. Locale validation (only when locale sources change) ------------------
 if printf '%s\n' "$STAGED" | grep -qE '^(i18n/source/|apps/frontend/src/locales/|packaging/electron/i18n/)'; then
   echo "[pre-commit] locale files changed -- running validate-locales..."
-  node scripts/validate-locales.js || fail=1
+  bun scripts/validate-locales.ts || fail=1
 fi
 
 # --- Result ------------------------------------------------------------------

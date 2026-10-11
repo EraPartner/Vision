@@ -6,15 +6,15 @@
   "main": "main.js",
   "scripts": {
     "postinstall": "install-electron",
-    "start": "node ../../scripts/generate-locales.js && electron .",
+    "start": "bun ../../scripts/generate-locales.ts && electron .",
     "prepare:postgres": "node scripts/prepare-postgres-runtime.js",
     "prepare:alembic": "node scripts/prepare-alembic-runtime.js",
     "prepare:chromium": "node scripts/prepare-chromium-runtime.js",
     "prepare:native": "node scripts/prepare-native-runtime.js",
-    "dist": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
-    "dist:arm64": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js",
-    "dist:dir": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --dir",
-    "dist:demo": "node ../../scripts/generate-locales.js && node scripts/build-native-package.js --demo"
+    "dist": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js",
+    "dist:arm64": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js",
+    "dist:dir": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js --dir",
+    "dist:demo": "bun ../../scripts/generate-locales.ts && node scripts/build-native-package.js --demo"
   },
   "dependencies": {
     "archiver": "^8.0.0",

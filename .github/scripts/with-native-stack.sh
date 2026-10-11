@@ -108,11 +108,11 @@ export PORT=$port
 export VISION_DIST_DIR=${VISION_DIST_DIR:-$repo_root/dist}
 
 cd "$repo_root"
-bun run apps/node-backend/scripts/db-migrate.js
+bun run apps/node-backend/scripts/db-migrate.ts
 if [[ ${VISION_NATIVE_VERIFY_MIGRATIONS:-0} == 1 ]]; then
-  node apps/node-backend/scripts/alembic-command.js current
-  bun run apps/node-backend/scripts/db-migrate.js downgrade -1
-  bun run apps/node-backend/scripts/db-migrate.js upgrade head
+  bun apps/node-backend/scripts/alembic-command.ts current
+  bun run apps/node-backend/scripts/db-migrate.ts downgrade -1
+  bun run apps/node-backend/scripts/db-migrate.ts upgrade head
 fi
 
 (
