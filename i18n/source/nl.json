@@ -4258,7 +4258,6 @@
   "tax.household.issue.loss_offset_not_modelled": "Een verlies uit een activiteit wordt in deze raming niet verrekend met andere inkomsten.",
   "tax.household.issue.mortgage_region_not_used": "Het gewest dat voor de hypotheek is ingevuld, wordt niet gebruikt. De vermindering voor de woninglening volgt het gewest waar het gezin op 1 januari van het aanslagjaar woont.",
   "tax.household.issue.pension_reduction_activity_income_not_excluded": "Deze partner heeft zowel pensioenen als inkomsten uit een activiteit. De vermindering voor pensioenen wordt verdeeld in verhouding tot alle netto-inkomsten, omdat het wettelijk pensioen en de pensioenleeftijd die de activiteitsinkomsten kunnen uitsluiten niet zijn ingevuld.",
-  "tax.household.issue.pension_reduction_quotient_unverified": "Het huwelijksquotiënt geldt voor een partner met pensioenen. Of de grenzen van de vermindering voor pensioenen het inkomen na het quotiënt gebruiken, is nog niet getoetst aan de wet.",
   "tax.household.issue.refundable_child_credit_not_modelled": "Het terugbetaalbaar belastingkrediet voor kinderen ten laste is niet opgenomen in deze raming.",
   "tax.household.issue.relationship_dates_missing": "Voeg de datum van je huwelijk of wettelijke samenwoning toe zodat de aanslag per jaar kan worden bepaald. Tot dan wordt een gemeenschappelijke aanslag verondersteld.",
   "tax.household.issue.senior_quotient_cap_birth_years_missing": "Voeg de geboortejaren van beide partners toe zodat het plafond van het huwelijksquotiënt voor partners van 66 jaar of ouder kan worden gecontroleerd.",

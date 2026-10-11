@@ -53,9 +53,11 @@ listed in [[docs/reference/belgian-tax-rule-matrix|the rule matrix]] (LSF, W1, C
    the payments; in Wallonia, B's ownership share. Strictly between 0 and 100, with both partners
    assessed, each partner has an own-home basket (`householdOwnHome.ts`):
    - Flemish woonbonus: each borrower's cap and rate. Under a joint assessment the payments go
-     first to the higher rate; at equal rates each borrower keeps their own payments and only
-     the part above their cap moves to the other's unused cap. Otherwise each borrower claims
-     their own share.
+     first to the part of each basket whose credit the spouse's tax can absorb (the tax after the
+     tax-free sum and the other reductions), the higher rate first; at equal rates each borrower
+     keeps their own payments and only what they cannot use moves to the other. Payments left
+     over then fill the caps, and credit that still exceeds a spouse's tax raises
+     `joint_reduction_allocation_unverified`. Otherwise each borrower claims their own share.
    - Walloon chèque habitat: each borrower's amount on their own taxable income, capped at
      their share of the payments. Under a joint assessment the €125 per child goes first to the
      borrower with the most room under that cap; otherwise only the borrower who claims the
@@ -70,7 +72,10 @@ listed in [[docs/reference/belgian-tax-rule-matrix|the rule matrix]] (LSF, W1, C
   read the stored field.
 - The v1 engine follows the same region rule; the v1 profile has no two-borrower input.
 - A couple that shares a loan can now claim up to two baskets. The two-borrower path does not
-  model a second home or the per-period history of each borrower.
+  model a second home or the per-period history of each borrower: one
+  `home.firstQualifyingYear` serves both chèque-habitat borrowers.
+- Because the joint woonbonus split reads each spouse's tax, the own-home credit is recomputed
+  for every marital-quotient step that the art. 88 comparison evaluates.
 
 ## Related
 

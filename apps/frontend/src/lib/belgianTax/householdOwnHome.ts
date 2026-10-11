@@ -9,9 +9,11 @@
  *  - Flemish woonbonus: the caps apply "per belastingplichtige" (arts 145/37 §2, 145/38/2 §2).
  *    Under a joint assessment in which both spouses paid, "kunnen de echtgenoten deze uitgaven
  *    vrij verdelen binnen de begrenzingen" (arts 145/37 §3, 145/38/2 §3): the payments go first
- *    to the higher rate; at equal rates each borrower keeps their own payments and only the
- *    part above their cap moves to the other's unused cap. Outside a joint assessment each
- *    borrower claims their own share of the payments.
+ *    where they reduce tax, up to each borrower's cap and tax room (`taxRoom`, the tax left for
+ *    the credit), the higher rate first; at equal rates each borrower keeps their own payments
+ *    and only the part their own basket cannot use moves to the other. Payments that still fit
+ *    under a cap but find no tax room are claimed last (that credit is lost). Outside a joint
+ *    assessment each borrower claims their own share of the payments.
  *  - Walloon chèque habitat: a "réduction d'impôt forfaitaire et individuelle" per taxpayer, on
  *    that taxpayer's own income, capped "par contribuable" at their payments, which are split
  *    "au prorata de la part de propriété" (art. 145/46ter; FPS circular 2026/C/18). Under a
@@ -87,6 +89,53 @@ function singleBorrower(
     return partners.some((p) => p.id === named) ? named : partners[0]?.id;
 }
 
+/**
+ * Joint woonbonus split of `payments` between two baskets (index 0 = A, 1 = B). Phase 1 fills
+ * each basket up to the payments whose credit the borrower's tax can absorb (`useful`), phase 2
+ * up to the cap. Within a phase the higher rate goes first; at equal rates each borrower first
+ * takes their own payments (`own`), then the other's.
+ */
+export function splitJointWoonbonus(
+    payments: number,
+    own: readonly [number, number],
+    caps: readonly [number, number],
+    rates: readonly [number, number],
+    useful: readonly [number, number],
+): [number, number] {
+    const claimed: [number, number] = [0, 0];
+    const phases = [
+        [Math.min(useful[0], caps[0]), Math.min(useful[1], caps[1])],
+        caps,
+    ] as const;
+    if (rates[0] !== rates[1]) {
+        const order: readonly (0 | 1)[] = rates[0] > rates[1] ? [0, 1] : [1, 0];
+        let pool = payments;
+        for (const limits of phases) {
+            for (const i of order) {
+                const add = Math.max(Math.min(pool, limits[i] - claimed[i]), 0);
+                claimed[i] += add;
+                pool -= add;
+            }
+        }
+        return claimed;
+    }
+    const left: [number, number] = [own[0], own[1]];
+    const steps: readonly (readonly [0 | 1, 0 | 1])[] = [
+        [0, 0],
+        [1, 1],
+        [0, 1],
+        [1, 0],
+    ];
+    for (const limits of phases) {
+        for (const [i, from] of steps) {
+            const add = Math.max(Math.min(left[from], limits[i] - claimed[i]), 0);
+            claimed[i] += add;
+            left[from] -= add;
+        }
+    }
+    return claimed;
+}
+
 /** Split the couple's €125-per-child amount between two chèque-habitat borrowers (joint). */
 function splitChildSupplement(
     parts: readonly [ChequeHabitatParts | undefined, ChequeHabitatParts | undefined],
@@ -116,8 +165,13 @@ export function allocateOwnHomeCredit(args: {
     childrenClaimantId: PartnerId | undefined;
     table: BelgianTaxYearTable;
     incomeYear: number;
+    /**
+     * Tax each partner has left for the own-home credit (after the tax-free sum and the other
+     * reductions). Steers the joint woonbonus split; without it the tax is not limiting.
+     */
+    taxRoom?: Partial<Record<PartnerId, number>>;
 }): OwnHomeAllocation {
-    const { household, partners, mode, childrenClaimantId, table, incomeYear } = args;
+    const { household, partners, mode, childrenClaimantId, table, incomeYear, taxRoom } = args;
     const home = household.home;
     const issues: HouseholdTaxIssue[] = [];
     if (home.mortgageRegion !== undefined && home.mortgageRegion !== household.region) {
@@ -191,21 +245,22 @@ export function allocateOwnHomeCredit(args: {
             woonbonusBasket(inputsFor("A"), table, taxpayerOf(pa)),
             woonbonusBasket(inputsFor("B"), table, taxpayerOf(pb)),
         ] as const;
-        const claimed: [number, number] = [
+        let claimed: [number, number] = [
             Math.min(own[0], baskets[0].cap),
             Math.min(own[1], baskets[1].cap),
         ];
-        if (mode === "joint" && baskets[0].rate !== baskets[1].rate) {
-            const hi = baskets[0].rate > baskets[1].rate ? 0 : 1;
-            const lo = hi === 0 ? 1 : 0;
-            claimed[hi] = Math.min(payments, baskets[hi].cap);
-            claimed[lo] = Math.min(payments - claimed[hi], baskets[lo].cap);
-        } else if (mode === "joint") {
-            const spare: [number, number] = [own[0] - claimed[0], own[1] - claimed[1]];
-            const roomA = baskets[0].cap - claimed[0];
-            const roomB = baskets[1].cap - claimed[1];
-            claimed[0] += Math.min(spare[1], roomA);
-            claimed[1] += Math.min(spare[0], roomB);
+        if (mode === "joint") {
+            const usefulOf = (id: PartnerId, rate: number): number => {
+                const room = taxRoom?.[id];
+                return room === undefined ? Infinity : rate > 0 ? Math.max(room, 0) / rate : 0;
+            };
+            claimed = splitJointWoonbonus(
+                payments,
+                own,
+                [baskets[0].cap, baskets[1].cap],
+                [baskets[0].rate, baskets[1].rate],
+                [usefulOf("A", baskets[0].rate), usefulOf("B", baskets[1].rate)],
+            );
         }
         credits.A = claimed[0] * baskets[0].rate;
         credits.B = claimed[1] * baskets[1].rate;

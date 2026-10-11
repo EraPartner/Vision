@@ -453,6 +453,45 @@ export const REGION_SCENARIOS: readonly Scenario[] = [
         },
     },
     {
+        id: "RG-20",
+        description: "joint assessment, both spouses borrowers (50% each), B's tax smaller than B's woonbonus: payments go where the tax can absorb the credit",
+        rows: ["hh-own-home-borrowers", "woonbonus-integrated", "woonbonus-extra", "hh-quotient"],
+        articles: "WIB 92 Flemish art. 145/38/2 §2 (\"per belastingplichtige\"), §3 (\"vrij verdelen binnen de begrenzingen\"); arts 87-88; C63",
+        status: "verified",
+        household: household(
+            [partner("A", [activity("employee", 50_000)]), partner("B", [activity("employee", 8_000)])],
+            {
+                relationship: { events: [event("marriage", "2015-05-02")] },
+                home: home({
+                    mortgageInterestPaid: 1_500,
+                    mortgageCapitalRepaid: 1_500,
+                    mortgageStartYear: 2018,
+                    woonbonusChildrenAtLoanStart: 0,
+                    mortgageSharePartnerB: 50,
+                }),
+            },
+        ),
+        verify: (r) => {
+            // A net 37,535 (SC-01); B: SS 1,045.60, forfait 30% × 6,954.40 = 2,086.32 → 4,868.08
+            // art. 88: 30% × 42,403.08 = 12,720.924 ≤ 13,460 → transfer 7,852.844 to B
+            // A 29,682.156: 9,072 + 882.156 × 45% (396.9702) = 9,468.9702 − 2,727.50 = 6,741.4702
+            // B 12,720.924: 3,180.231 − 2,727.50 = 452.731
+            // basket per spouse 2,280 at 40%; each paid 1,500. B's tax absorbs 452.731 / 40% =
+            // 1,131.8275 of payments; the other 368.1725 of B's payments go to A (1,868.1725).
+            // A 1,868.1725 × 40% = 747.269; B 452.731 → 1,200 granted, nothing lost
+            // (each keeping 1,500 would give B 600 and lose 147.269)
+            // Without the quotient A owes more (8,426.982 − 912), so the quotient applies.
+            // total (6,741.4702 − 747.269) × 1.07 = 6,413.795284
+            expect(r.quotient.applied).toBe(true);
+            eur(r.quotient.transfer, 7_852.844);
+            eur(r.partners[1]?.pitAfterExemption, 452.731);
+            eur(r.partners[0]?.ownHomeCredit, 747.269);
+            eur(r.partners[1]?.ownHomeCredit, 452.731);
+            eur(r.totals.totalPIT, 6_413.795284);
+            expect(r.issues.map((i) => i.code)).not.toContain("joint_reduction_allocation_unverified");
+        },
+    },
+    {
         id: "RG-19",
         description: "the household region decides the own-home regime: a Flemish resident's home recorded as Walloon",
         rows: ["region-competence", "woonbonus-integrated"],

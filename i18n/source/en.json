@@ -4258,7 +4258,6 @@
   "tax.household.issue.loss_offset_not_modelled": "A loss from one activity is not offset against other income in this estimate.",
   "tax.household.issue.mortgage_region_not_used": "The region recorded for the mortgage is not used. The home loan reduction follows the household's region of residence on 1 January of the assessment year.",
   "tax.household.issue.pension_reduction_activity_income_not_excluded": "This partner has both pensions and activity income. The reduction for pensions is split in proportion to all net income, because the statutory pension and the pension age that could leave the activity income out are not entered.",
-  "tax.household.issue.pension_reduction_quotient_unverified": "The marital quotient applies to a partner with pensions. Whether the limits of the reduction for pensions use the income after the quotient is not yet verified against the law.",
   "tax.household.issue.refundable_child_credit_not_modelled": "The refundable tax credit for dependent children is not included in this estimate.",
   "tax.household.issue.relationship_dates_missing": "Add the date of your marriage or legal cohabitation so the assessment can be derived for each year. Until then a joint assessment is assumed.",
   "tax.household.issue.senior_quotient_cap_birth_years_missing": "Add both partners' birth years so the marital quotient cap for partners aged 66 or older can be checked.",

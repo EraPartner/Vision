@@ -429,6 +429,46 @@ function donationReductions(
     return { donations, readingsDiffer: Math.abs(pooled - sum(own, (d) => d)) > 0.005 };
 }
 
+/**
+ * Net pensions and total net income of each partner for arts 147-153 after an optional quotient
+ * transfer. The quotient "wordt beschouwd als een eigen inkomen van de echtgenoot aan wie het
+ * wordt toegerekend" and is "evenredig samengesteld uit dezelfde bestanddelen als die welke bij
+ * de toekennende echtgenoot voorkomen" (Com.IB 87/22-23); since the repeal of art. 149 from
+ * AY 2010 the pension reduction reads each spouse's income after the transfer (FPS circular
+ * AAFisc 40/2011, nos 19 and 36, example 4).
+ */
+function pensionFigures(
+    incomes: readonly PartnerIncome[],
+    transfer: QuotientTransfer | undefined,
+): { pensionIncome: number[]; netIncome: number[] } {
+    const from = transfer && incomes.find((inc) => inc.partner.id === transfer.from);
+    const fraction =
+        transfer && from && from.netProfessionalIncome > 0
+            ? Math.min(transfer.transfer / from.netProfessionalIncome, 1)
+            : 0;
+    const moved = from ? from.pensionIncome * fraction : 0;
+    return {
+        pensionIncome: incomes.map((inc) =>
+            transfer === undefined
+                ? inc.pensionIncome
+                : inc.partner.id === transfer.from
+                  ? inc.pensionIncome - moved
+                  : inc.partner.id === transfer.to
+                    ? inc.pensionIncome + moved
+                    : inc.pensionIncome,
+        ),
+        netIncome: incomes.map((inc) =>
+            transfer === undefined
+                ? inc.netIncome
+                : inc.partner.id === transfer.from
+                  ? clampAtZero(inc.netIncome - transfer.transfer)
+                  : inc.partner.id === transfer.to
+                    ? inc.netIncome + transfer.transfer
+                    : inc.netIncome,
+        ),
+    };
+}
+
 function computeTaxStep(
     household: BelgianTaxHouseholdV2,
     incomes: readonly PartnerIncome[],
@@ -461,6 +501,7 @@ function computeTaxStep(
     const exemptionBenefits: number[] = [];
     const pitAfterExemption: number[] = [];
     const pensionReductions: number[] = [];
+    const pension = pensionFigures(incomes, transfer);
     let combined = 0;
     incomes.forEach((inc, i) => {
         const taxable = taxables[i] as number;
@@ -472,13 +513,13 @@ function computeTaxStep(
         allocations.push(allocation);
         exemptionBenefits.push(benefit);
         pitAfterExemption.push(pit);
-        // The proportion uses the partner's own pensions and net income; the art. 151/1-152
-        // limits the taxable income of this step (after a quotient transfer).
+        // Per spouse (art. 150) on the income after the quotient transfer: the proportion,
+        // the art. 151/1-152 limits (taxable income of this step) and the art. 153 limit.
         pensionReductions.push(
             computePensionReduction(
                 {
-                    pensionIncome: inc.pensionIncome,
-                    netIncome: inc.netIncome,
+                    pensionIncome: pension.pensionIncome[i] as number,
+                    netIncome: pension.netIncome[i] as number,
                     taxableIncome: taxable,
                     taxAfterExemption: pit,
                 },
@@ -532,7 +573,7 @@ export function computeHouseholdTax(
         partners,
         household.dependents.claimantPartnerId,
     );
-    const ownHome = allocateOwnHomeCredit({
+    const ownHomeArgs = {
         household,
         partners: incomes.map((inc) => ({
             id: inc.partner.id,
@@ -542,10 +583,10 @@ export function computeHouseholdTax(
         childrenClaimantId,
         table,
         incomeYear,
-    });
-    issues.push(...ownHome.issues);
-    const ownHomeCreditRegime = ownHome.regime;
-    const ownHomeCreditOf = (id: PartnerId): number => ownHome.credits[id] ?? 0;
+    };
+    const ownHomeBase = allocateOwnHomeCredit(ownHomeArgs);
+    issues.push(...ownHomeBase.issues);
+    const ownHomeCreditRegime = ownHomeBase.regime;
 
     const autonomyFactor = table.regionalAutonomyFactor?.[household.region] ?? 1;
     const surchargePct = household.communalSurchargePercent;
@@ -558,24 +599,42 @@ export function computeHouseholdTax(
         computeTaxReductions(inc.partner.reductions, household.region, inc.netIncome, table),
     );
     const fixedCredits = incomes.map(
-        (inc, i) =>
+        (_inc, i) =>
             (partnerReductions[i] as TaxReductionBreakdown).total -
-            (partnerReductions[i] as TaxReductionBreakdown).donations +
-            ownHomeCreditOf(inc.partner.id),
+            (partnerReductions[i] as TaxReductionBreakdown).donations,
     );
-    const creditsOf = (step: TaxStep, i: number): number =>
+    const otherCreditsOf = (step: TaxStep, i: number): number =>
         (fixedCredits[i] as number) +
         (step.donations[i] as number) +
         (step.pensionReductions[i] as number);
+    // The joint woonbonus split follows each spouse's tax room in the step (arts 145/37 §3,
+    // 145/38/2 §3: "vrij verdelen binnen de begrenzingen"), so the own-home credit is per step.
+    const ownHomeOf = (step: TaxStep): Partial<Record<PartnerId, number>> => {
+        const taxRoom: Partial<Record<PartnerId, number>> = {};
+        incomes.forEach((inc, i) => {
+            taxRoom[inc.partner.id] = clampAtZero(
+                (step.pitAfterExemption[i] as number) - otherCreditsOf(step, i),
+            );
+        });
+        return allocateOwnHomeCredit({ ...ownHomeArgs, taxRoom }).credits;
+    };
+    const creditsOf = (
+        step: TaxStep,
+        ownHome: Partial<Record<PartnerId, number>>,
+        i: number,
+    ): number =>
+        otherCreditsOf(step, i) + (ownHome[(incomes[i] as PartnerIncome).partner.id] ?? 0);
     // Art. 88 withholds the quotient when "the assessment" would be higher: the comparison is
     // made on the tax after reductions, the state/regional factor and the communal surcharge,
     // not on the tax after the tax-free sum alone (a partner's reductions cannot offset the tax
     // the transfer creates for the other partner).
-    const finalTaxOf = (step: TaxStep): number =>
-        step.pitAfterExemption.reduce((acc, pitAfter, i) => {
-            const applied = Math.min(creditsOf(step, i), pitAfter);
+    const finalTaxOf = (step: TaxStep): number => {
+        const ownHome = ownHomeOf(step);
+        return step.pitAfterExemption.reduce((acc, pitAfter, i) => {
+            const applied = Math.min(creditsOf(step, ownHome, i), pitAfter);
             return acc + (pitAfter - applied) * autonomyFactor * (1 + surchargePct / 100);
         }, 0);
+    };
 
     // Marital quotient (joint assessment of two partners only).
     let quotient: MaritalQuotientResult = {
@@ -611,24 +670,38 @@ export function computeHouseholdTax(
             : undefined;
     const step = computeTaxStep(household, incomes, mode, appliedTransfer, table);
     issues.push(...step.issues);
+    const ownHomeCredits = ownHomeOf(step);
+    const ownHomeCreditOf = (id: PartnerId): number => ownHomeCredits[id] ?? 0;
     if (step.unusedExemption > 0 && step.supplementTotalChildren > 0) {
         issues.push({ code: "refundable_child_credit_not_modelled", severity: "needs_source" });
     }
     if (step.donationCeilingReadingsDiffer) {
         issues.push({ code: "donation_joint_ceiling_unverified", severity: "needs_source" });
     }
-    // Arts 151/1-152 compare the taxable income with their limits; whether that is the income
-    // after the quotient transfer (art. 88) is not read in a primary source.
+    // A spouse who receives pensions through the quotient and has other professional income in
+    // their own total net income: the art. 147 al. 1, 2°, b-c exclusion is not modelled for them
+    // either (AAFisc 40/2011 no. 19).
     if (appliedTransfer !== undefined) {
-        incomes.forEach((inc) => {
-            if (inc.pensionIncome > 0) {
-                issues.push({
-                    code: "pension_reduction_quotient_unverified",
-                    severity: "needs_source",
-                    partnerId: inc.partner.id,
-                });
-            }
-        });
+        const from = incomes.find((inc) => inc.partner.id === appliedTransfer.from);
+        const to = incomes.find((inc) => inc.partner.id === appliedTransfer.to);
+        if (
+            from &&
+            to &&
+            from.pensionIncome > 0 &&
+            (to.netProfessionalIncome > to.pensionIncome ||
+                from.netProfessionalIncome > from.pensionIncome) &&
+            !issues.some(
+                (x) =>
+                    x.code === "pension_reduction_activity_income_not_excluded" &&
+                    x.partnerId === to.partner.id,
+            )
+        ) {
+            issues.push({
+                code: "pension_reduction_activity_income_not_excluded",
+                severity: "warning",
+                partnerId: to.partner.id,
+            });
+        }
     }
 
     const partnerResults: PartnerTaxResult[] = incomes.map((inc, i) => {
@@ -641,8 +714,10 @@ export function computeHouseholdTax(
             total: own.total - own.donations + donations,
         };
         const ownHomeCredit = ownHomeCreditOf(id);
-        const pensionReduction = step.pensionReductions[i] as number;
         const pitAfter = step.pitAfterExemption[i] as number;
+        // Charged first (special finance law art. 5/2 §2, 4°, a): the applied part is the
+        // reduction up to the partner's tax; the other credits take what is left.
+        const pensionReduction = Math.min(step.pensionReductions[i] as number, pitAfter);
         const reductionsApplied = Math.min(
             pensionReduction + reductions.total + ownHomeCredit,
             pitAfter,
@@ -679,7 +754,7 @@ export function computeHouseholdTax(
             exemptionBenefit: step.exemptionBenefits[i] as number,
             pitAfterExemption: pitAfter,
             reductions,
-            ownHomeCreditRegime: ownHome.borrowers.includes(id) ? ownHomeCreditRegime : "none",
+            ownHomeCreditRegime: ownHomeBase.borrowers.includes(id) ? ownHomeCreditRegime : "none",
             ownHomeCredit,
             pensionReduction,
             reductionsApplied,
@@ -694,10 +769,19 @@ export function computeHouseholdTax(
         };
     });
 
+    // Reductions that stay with the spouse who paid them, and an own-home credit that still
+    // exceeds a spouse's tax after the free split of arts 145/37 §3 and 145/38/2 §3: how the
+    // law apportions them is not read.
+    const ownHomeCreditLost = partnerResults.some(
+        (p) =>
+            p.ownHomeCredit > 0 &&
+            p.pensionReduction + p.reductions.total + p.ownHomeCredit > p.pitAfterExemption + 0.005,
+    );
     if (
         mode === "joint" &&
         partnerResults.length === 2 &&
-        partnerResults.some((p) => p.reductions.total - p.reductions.donations > 0)
+        (partnerResults.some((p) => p.reductions.total - p.reductions.donations > 0) ||
+            ownHomeCreditLost)
     ) {
         issues.push({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
     }

@@ -1724,3 +1724,57 @@ describe("breakdown reconciliation — property tax row (R7-12)", () => {
         ).toBe(false);
     });
 });
+
+describe("reduction for pensions under married_joint (arts 147-153, per spouse by art. 150)", () => {
+    test("IY 2024: the art. 153 limit is the retired earner's own tax, not the couple's", () => {
+        // 30% × 34,000 = 10,200 ≤ the spouse's 16,000 → no quotient.
+        // Earner 18,000: 3,955 + 2,180 × 40% (872) = 4,827 − 10,570 × 25% (2,642.50) = 2,184.50;
+        //   18,000 ≤ 19,030 → 2,151.72 + 444.78 = 2,596.50, limited to 2,184.50 (art. 153).
+        // Spouse 16,000: 3,955 + 180 × 40% (72) = 4,027 − 2,642.50 = 1,384.50.
+        // Total (0 + 1,384.50) × 1.07 = 1,481.415 (was 2,596.50 / 1,040.58 on the combined tax).
+        const result = computeWithParity(
+            profile({
+                taxYear: 2024,
+                employmentType: "retired",
+                grossAnnualIncome: 18_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 16_000,
+            }),
+        );
+        expect(result.pensionReduction).toBeCloseTo(2_184.5, 9);
+        expect(result.totalPIT).toBeCloseTo(1_481.415, 9);
+    });
+
+    test("IY 2025: the pension part of the quotient is the spouse's pension (Com.IB 87/23)", () => {
+        // Scenario JP-02: earner 2,258.246983606557 on 28,000, spouse 272.50 on 12,000.
+        const result = computeWithParity(
+            profile({
+                employmentType: "retired",
+                grossAnnualIncome: 40_000,
+                filingStatus: "married_joint",
+                spouseProfessionalIncome: 0,
+            }),
+        );
+        expect(result.maritalQuotientTransfer).toBe(12_000);
+        expect(result.pensionReduction).toBeCloseTo(2_258.246983606557 + 272.5, 9);
+        expect(result.totalPIT).toBeCloseTo(4_029.890727540984, 9);
+    });
+
+    test("the breakdown shows the applied reduction for pensions, charged before the other credits", () => {
+        // 12,000 pension: tax 272.50; reduction 2,676.50 limited to 272.50 (art. 153). The gift
+        // reduction (1,000 × 45% = 450) finds no tax left; credits are capped at 272.50.
+        const result = computeWithParity(
+            profile({
+                employmentType: "retired",
+                grossAnnualIncome: 12_000,
+                charitableDonations: 1_000,
+                charitableDonationsEligible: true,
+            }),
+        );
+        const row = result.breakdown.find((r) => r.label === "Pension reduction (arts 147-153)");
+        expect(result.pensionReduction).toBeCloseTo(272.5, 9);
+        expect(row?.amount).toBeCloseTo(-272.5, 9);
+        expect(result.federalTaxCredits).toBeCloseTo(272.5, 9);
+        expect(result.totalPIT).toBe(0);
+    });
+});

@@ -431,25 +431,36 @@ export const JOINT_SCENARIOS: readonly Scenario[] = [
     },
     {
         id: "JP-02",
-        description: "pensioner 40,000 with a quotient towards a spouse without income: which taxable income the pension limits read",
-        rows: ["hh-pension-quotient", "hh-quotient"],
-        articles: "WIB 92 arts 87-88, 147, 151/1, 152 (\"belastbaar inkomen\" after the quotient not read)",
-        status: "needs_source",
-        missing:
-            "Whether arts 151/1 and 152 compare the spouse's taxable income after the art. 87 quotient transfer (pension_reduction_quotient_unverified); the engine uses the income after the transfer",
+        description: "pensioner 40,000 with a quotient towards a spouse without income: the transferred part stays pension income and the limits read the income after the transfer",
+        rows: ["hh-pension-quotient", "hh-quotient", "hh-pension-per-spouse", "pension-reduction", "pension-reduction-taper", "pension-reduction-limit"],
+        articles: "WIB 92 arts 87-88, 147 al. 1, 1°, 150, 151/1, 152, 153; Com.IB 87/22-23; FPS circular AAFisc 40/2011 nos 19, 27, example 4",
+        status: "verified",
         household: {
             ...married([activity("pension", 40_000)], []),
             partners: [partner("A", [activity("pension", 40_000)]), partner("B", [])],
         },
         verify: (r) => {
-            // Sourced part: the quotient 30% × 40,000 = 12,000 (below the 13,460 cap) applies.
+            // art. 87: 30% × 40,000 = 12,000 (below the 13,460 cap) → A 28,000, B 12,000
+            // The quotient keeps the nature of A's income (Com.IB 87/23): B's 12,000 is pension.
+            // A 28,000: 4,080 + 11,680 × 40% (4,672) = 8,752 − 2,727.50 = 6,024.50
+            //   only pensions → full amounts; art. 152: 28,000 ≤ 28,780 → base 2,219.27
+            //   art. 151/1: 457.23 × (28,780 − 28,000) / 9,150 = 38.976983606557…
+            //   2,258.246983606557 < art. 153 limit 6,024.50 → A owes 3,766.253016393443
+            // B 12,000: 3,000 − 2,727.50 = 272.50; 2,219.27 + 457.23 (≤ 19,630) = 2,676.50
+            //   art. 153: limited to 272.50 → B owes 0
+            // Without the quotient: A 40,000, exemption 21,820 with B's balance (art. 134):
+            //   4,080 + 4,992 + 11,200 × 45% (5,040) = 14,112 − 6,523 = 7,589; art. 152:
+            //   2,219.27 × (1/3 + 2/3 × 17,560 / 28,780) = 1,642.475712300…; no additional
+            //   → 5,946.524287700 > 3,766.253016393 → the quotient applies
+            // total 3,766.253016393443 × 1.07 = 4,029.890727540984
             expect(r.quotient.applied).toBe(true);
             eur(r.quotient.transfer, 12_000);
-            expect(r.issues).toContainEqual({
-                code: "pension_reduction_quotient_unverified",
-                severity: "needs_source",
-                partnerId: "A",
-            });
+            eur(r.partners[0]?.pitAfterExemption, 6_024.5);
+            eur(r.partners[0]?.pensionReduction, 2_258.246983606557);
+            eur(r.partners[1]?.pitAfterExemption, 272.5);
+            eur(r.partners[1]?.pensionReduction, 272.5);
+            eur(r.partners[1]?.totalPIT, 0);
+            eur(r.totals.totalPIT, 4_029.890727540984);
         },
     },
     {

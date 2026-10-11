@@ -429,7 +429,6 @@ export type HouseholdTaxIssueCode =
     | "senior_quotient_cap_birth_years_missing"
     | "woonbonus_children_at_loan_start_missing"
     | "pension_reduction_activity_income_not_excluded"
-    | "pension_reduction_quotient_unverified"
     | "donation_joint_ceiling_unverified"
     | "mortgage_region_not_used";
 

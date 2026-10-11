@@ -159,6 +159,10 @@ interface MaritalQuotientOutcome {
     exemptionBenefit: number;
     /** Combined PIT after exemption. */
     pitAfterExemption: number;
+    /** Earner's own PIT after exemption (the art. 153 limit is per spouse, art. 150). */
+    earnerPitAfterExemption: number;
+    /** Spouse's own PIT after exemption (0 outside `married_joint`). */
+    spousePitAfterExemption: number;
     /** Tax saving vs. the single-filer calculation (0 if quotient is not beneficial). */
     benefit: number;
 }
@@ -189,6 +193,8 @@ function applyMaritalQuotient(
         bracketTax: singleBracketTax,
         exemptionBenefit: singleExemptionBenefit,
         pitAfterExemption: singlePitAfterExemption,
+        earnerPitAfterExemption: singlePitAfterExemption,
+        spousePitAfterExemption: 0,
         benefit: 0,
     };
     if (profile.filingStatus !== "married_joint") return single;
@@ -210,6 +216,7 @@ function applyMaritalQuotient(
         bracketTax: addBracketTax(singleBracketTax, spouseOwnBracket),
         exemptionBenefit: singleExemptionBenefit + spouseOwnExBenefit,
         pitAfterExemption: singlePitAfterExemption + spouseOwnPitAfter,
+        spousePitAfterExemption: spouseOwnPitAfter,
     };
 
     const household = earnerTaxableIn + spouseTaxableIn;
@@ -258,6 +265,8 @@ function applyMaritalQuotient(
         bracketTax: addBracketTax(earnerBracket, spouseBracket),
         exemptionBenefit: earnerExBenefit + spouseExBenefit,
         pitAfterExemption: combinedPitAfter,
+        earnerPitAfterExemption: earnerPitAfter,
+        spousePitAfterExemption: spousePitAfter,
         benefit: baseline.pitAfterExemption - combinedPitAfter,
     };
 }
@@ -361,16 +370,36 @@ export function computeBelgianPIT(
 
     // 7a. Reduction for pensions (arts 147-153) on the tax after the tax-free sum. The single
     //     profile's only pension source is a `retired` employment type. Under `married_joint`
-    //     this engine uses the earner's taxable income after the quotient and the couple's tax,
-    //     an approximation of the per-spouse rule of art. 150 that the household engine applies.
+    //     the reduction and its art. 153 limit are computed per spouse (art. 150) on each
+    //     spouse's own tax. The quotient keeps the nature of the income it comes from (Com.IB
+    //     87/23; FPS circular AAFisc 40/2011 nos 19 and 36): the pension part of the transfer
+    //     counts as the spouse's pension and leaves the earner's.
+    const earnerNetProfessional = netTaxableProfessional;
+    const earnerPension =
+        profile.employmentType === "retired" ? clampAtZero(earnerNetProfessional) : 0;
+    const movedPension =
+        quotient.transfer > 0 && earnerNetProfessional > 0
+            ? (earnerPension * Math.min(quotient.transfer, earnerNetProfessional)) /
+              earnerNetProfessional
+            : 0;
     const pensionReduction =
-        profile.employmentType === "retired"
+        earnerPension > 0
             ? computePensionReduction(
                   {
-                      pensionIncome: clampAtZero(grossSalary - employeeSS - profExpenses),
-                      netIncome: totalNetIncome,
+                      pensionIncome: earnerPension - movedPension,
+                      netIncome: clampAtZero(totalNetIncome - quotient.transfer),
                       taxableIncome: quotient.earnerTaxable,
-                      taxAfterExemption: pitAfterExemption,
+                      taxAfterExemption: quotient.earnerPitAfterExemption,
+                  },
+                  table,
+              ).total +
+              computePensionReduction(
+                  {
+                      pensionIncome: movedPension,
+                      netIncome:
+                          Math.max(profile.spouseProfessionalIncome || 0, 0) + quotient.transfer,
+                      taxableIncome: quotient.spouseTaxable,
+                      taxAfterExemption: quotient.spousePitAfterExemption,
                   },
                   table,
               ).total
@@ -396,6 +425,9 @@ export function computeBelgianPIT(
 
     // 8. Federal PIT after credits (cannot go below zero).
     const appliedTaxCredits = Math.min(totalTaxCredits, pitAfterExemption);
+    // The reduction for pensions is charged first (special finance law art. 5/2 §2, 4°, a), so
+    // the applied part is the reduction up to the tax; the other credits take what is left.
+    const appliedPensionReduction = Math.min(pensionReduction, pitAfterExemption);
     const federalPITBeforeAutonomy = pitAfterExemption - appliedTaxCredits;
 
     // 8b. State + regional factor: reduced state tax (75.043%) × (1 + regional opcentiemen);
@@ -471,7 +503,7 @@ export function computeBelgianPIT(
         maritalQuotientTransfer: quotient.transfer,
         maritalQuotientBenefit: quotient.benefit,
         personalExemptionBenefit,
-        pensionReduction,
+        pensionReduction: appliedPensionReduction,
         ownHomeCredit,
         serviceVoucherCredit,
         federalTaxCredits: appliedTaxCredits,
@@ -520,7 +552,7 @@ export function computeBelgianPIT(
         ownHomeCreditRegime,
         ownHomeCredit,
         taxReductions: personalExemptionBenefit + appliedTaxCredits,
-        pensionReduction,
+        pensionReduction: appliedPensionReduction,
         federalPITAfterReductions,
         communalSurcharge,
         totalPIT,
