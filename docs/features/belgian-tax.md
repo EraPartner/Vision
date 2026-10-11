@@ -225,7 +225,7 @@ Investments of type `real_estate` include Belgian-specific fields:
      - _Loans before 2015_ (art. 145/37 §2): base €2,280 at the taxpayer's highest art. 130 rate, minimum 30%.
      - _Loans signed in 2015_ (art. 145/37 §3): base €1,520 at 40%.
      - _2016-2019 "geïntegreerde" woonbonus_ (art. 145/38/2): base €1,520 at 40%.
-     - In the first ten taxable periods the base rises by €760, and by a further €80 with three or more dependent children; after year ten neither applies.
+     - In the first ten taxable periods the base rises by €760, and by a further €80 when the taxpayer had three or more dependent children on 1 January of the year after the loan year, a disabled child counted twice (arts 145/37 §2 al. 3, 145/38/2 §2 al. 3); after year ten neither applies. `computeBelgianPIT` has no input for that date and counts the current dependent children (disabled twice) as a proxy; the household engine uses `home.woonbonusChildrenAtLoanStart` when set (corrected 2026-10-11).
    - **Walloon `chèque habitat` (loans signed 2016-2024)**, art. 145/46ter as coordinated in FPS circular 2026/C/18: €1,520 when the taxable income is at or below the lower limit; €1,520 − 1.275% × (income − lower limit) between the limits; nothing above the upper limit (IY 2024 26,394 / 101,805; IY 2025 27,353 / 105,503; IY 2026 28,024 / 108,093). Plus €125 per dependent child (disabled children count twice) except above the upper limit. Halved from the eleventh taxable period, granted for twenty assessment years at most (art. 145/46quinquies), and never more than the interest and capital paid; the loan age is counted from the income year being computed. Loans signed from 1 January 2025 no longer qualify. The halving for a second home is not modelled.
    - **Brussels & post-2020 Flanders**: Not modeled (regime = 'none', credit = 0).
 7. Tax credits ("réductions d'impôt", IY 2025 amounts): pension savings (€1,050 @30% or €1,350 @25%), life insurance (€2,450 @30%, frozen by the law of 18 December 2025), employee group insurance (30%), donations (30% since 2025, 45% in 2024, ≥€40, capped at 10% of net income and €408,130), childcare (45%, €16.90/day cap). The domestic-personnel reduction (art. 145/34) was abolished from income year 2025; the IY 2024 table keeps it (30%, €8,160 wage cap). All require an explicit eligibility flag in the profile. Tax credits are clamped so the total cannot reduce federal PIT below zero.
@@ -379,10 +379,12 @@ cohabitation and its end, factual cohabitation, factual separation, divorce, dea
    income (pensions excluded); otherwise the single scale per partner who is an employee.
 9. Property tax for the home and the investment side calculation per partner.
 
-The own-home credit goes to `mortgageCreditPartnerId`. Its child increases (the chèque habitat
-€125 per child, the woonbonus €80 with three or more children) count the household's children
-under a joint assessment; otherwise only when that partner is also the dependants' claimant
-(corrected 2026-10-11, scenarios RG-12 and RG-13).
+The own-home credit goes to `mortgageCreditPartnerId`. The chèque habitat €125 per child counts
+this year's children under a joint assessment; otherwise only when that partner is also the
+dependants' claimant (corrected 2026-10-11, scenario RG-12). The woonbonus €80 follows
+`home.woonbonusChildrenAtLoanStart` (scenarios RG-05, RG-13); when it is absent, this year's
+children stand in under the same claimant rule and the engine raises
+`woonbonus_children_at_loan_start_missing` (info) while the €760 period runs (scenario RG-15).
 
 The result lists per-partner and per-activity figures, the assessment decision with its legal
 basis, totals and `issues`. An issue with severity `needs_source` marks a stated default that has
@@ -486,7 +488,8 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   disability. Activity ids follow `act_<partner>_<n>`; an expense choice is dropped when no
   activity uses its category any more. A one-partner household with one activity round-trips
   unchanged, and editing its amount gives the same household as the v1 gross-income patch.
-- **Home** step: the v1 home fields, plus `home.firstQualifyingYear` for a Walloon loan.
+- **Home** step: the v1 home fields, plus `home.firstQualifyingYear` for a Walloon loan and
+  `home.woonbonusChildrenAtLoanStart` for a Flemish loan signed before 2020.
 - **Deductions** step: dependants for the household and, per partner, the reductions of the v1
   sheet plus `serviceVoucherSpend` and the isolated-parent request.
 
@@ -498,6 +501,14 @@ Walloon chèque habitat was claimed. When set, `computeOwnHomeCredit` counts the
 eleventh period and the twenty-period limit (art. 145/46quinquies) from it and grants nothing
 for an earlier year; otherwise the loan year stays the proxy. It has no v1 source and is not
 projected to the v1 profile, so `computeBelgianPIT` keeps the proxy.
+
+`home.woonbonusChildrenAtLoanStart` (optional, a non-negative integer) is the number of dependent
+children of the borrower on 1 January of the year after the loan year, a disabled child counted
+twice (Flemish arts 145/37 §2 al. 3 and 145/38/2 §2 al. 3). Three or more add the woonbonus €80
+during the first ten periods. Without it the engine counts this year's dependent children of the
+claimant (disabled twice) and raises `woonbonus_children_at_loan_start_missing` (info). The v1
+upgrade leaves it undefined and it is not projected to the v1 profile, so a one-partner household
+without it equals `computeBelgianPIT`.
 
 The tax overview shows a **Per-partner breakdown** card (widget `householdBreakdown`) for a
 year with two assessed partners: taxable income, tax-free sum charged (`exemption.applied`,
@@ -545,6 +556,8 @@ frontend refetches the aggregations and deduction candidates.
 - Brussels stamp-duty rebate (one-time, not annual).
 - Flemish post-2020 mortgages (no successor regime — capital owners only).
 - Walloon chèque habitat: the halving when the taxpayer acquires a second home, and the free split of the per-child increase between spouses (the household engine gives the whole credit to `mortgageCreditPartnerId`).
+- Co-parenting (art. 132bis): the household has one claimant for all dependants.
+- The "fiscal widow(er)" treatment in the year after a partner's death (unsourced; the survivor is assessed alone).
 - Foreign tax credit on foreign dividends (DBI-RDT regime).
 - Speculative capital gains (article 90, 1°).
 - Securities account tax (TACR) for accounts ≥ €1M — values exposed in `BelgianTaxYearTable.securitiesAccountTaxRate` for future UI use.

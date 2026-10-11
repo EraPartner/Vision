@@ -280,4 +280,32 @@ describe("TaxProfileDialog household editing", () => {
         );
         expect(screen.queryByLabelText(/first year the chèque habitat/i)).not.toBeInTheDocument();
     });
+
+    it("asks for the woonbonus children at the loan start only for a Flemish loan before 2020", async () => {
+        serveHousehold(
+            singleHousehold({
+                region: "flanders",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2018,
+                mortgageInterestPaid: 3_000,
+            }),
+        );
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog initialStep="home" />);
+        await openSheet(user);
+
+        const field = await screen.findByLabelText(/dependent children on 1 january after the loan year/i);
+        await user.type(field, "3");
+        expect(storedHousehold()?.home.woonbonusChildrenAtLoanStart).toBe(3);
+        await user.clear(field);
+        expect(storedHousehold()?.home).not.toHaveProperty("woonbonusChildrenAtLoanStart");
+
+        // A loan signed in 2020 has no woonbonus, so no such field.
+        const year = screen.getByLabelText(/mortgage start year/i);
+        await user.clear(year);
+        await user.type(year, "2020");
+        expect(
+            screen.queryByLabelText(/dependent children on 1 january after the loan year/i),
+        ).not.toBeInTheDocument();
+    });
 });

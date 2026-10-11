@@ -27,8 +27,8 @@ function OptionalBadge() {
 
 /**
  * Home step: cadastral income, other residences and the regional own-home credit. The v1
- * fields go through `updateProfile`; the chèque habitat first qualifying year only exists on
- * the household (ADR-200).
+ * fields go through `updateProfile`; the chèque habitat first qualifying year and the woonbonus
+ * children at the loan start only exist on the household (ADR-200).
  */
 export function HomeStep({
     profile,
@@ -337,6 +337,62 @@ export function HomeStep({
                                 className="w-32"
                             />
                         )}
+
+                        {(profile.mortgageRegion ?? profile.region) ===
+                            "flanders" &&
+                            profile.mortgageStartYear !== undefined &&
+                            profile.mortgageStartYear < 2020 && (
+                                <ProfileNumberField
+                                    id="woonbonus-children-at-loan-start"
+                                    label={
+                                        <>
+                                            {t(
+                                                "tax.profile.field.woonbonusChildrenAtLoanStart",
+                                            )}
+                                            <OptionalBadge />
+                                        </>
+                                    }
+                                    description={t(
+                                        "tax.profile.field.woonbonusChildrenAtLoanStart.desc",
+                                    )}
+                                    min={0}
+                                    max={1000}
+                                    step={1}
+                                    integer
+                                    allowEmpty
+                                    value={
+                                        household.home
+                                            .woonbonusChildrenAtLoanStart
+                                    }
+                                    onValueChange={(value) =>
+                                        updateHousehold((h) => {
+                                            const {
+                                                woonbonusChildrenAtLoanStart:
+                                                    _old,
+                                                ...home
+                                            } = h.home;
+                                            return {
+                                                ...h,
+                                                home:
+                                                    value !== undefined &&
+                                                    Number.isInteger(value) &&
+                                                    value >= 0 &&
+                                                    value <= 1000
+                                                        ? {
+                                                              ...home,
+                                                              woonbonusChildrenAtLoanStart:
+                                                                  value,
+                                                          }
+                                                        : home,
+                                            };
+                                        })
+                                    }
+                                    placeholder={t(
+                                        "tax.profile.placeholder.woonbonusChildrenAtLoanStart",
+                                    )}
+                                    className="w-32"
+                                />
+                            )}
 
                         <FieldHint>
                             {t("tax.profile.section.ownHome.note")}

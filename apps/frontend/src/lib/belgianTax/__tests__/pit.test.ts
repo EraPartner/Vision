@@ -676,6 +676,55 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(loan(2015).ownHomeCredit).toBeCloseTo(1_520 * 0.4, 2);
     });
 
+    test("Flemish woonbonus €80: a disabled child counts twice in the this-year proxy (art. 145/38/2 §2 al. 3)", () => {
+        const result = computeWithParity(
+            profile({
+                grossAnnualIncome: 50_000,
+                dependentChildren: 2,
+                dependentChildrenDisabled: 1,
+                region: "flanders",
+                mortgageIsPrimaryResidence: true,
+                mortgageStartYear: 2019,
+                mortgageRegion: "flanders",
+                mortgageInterestPaid: 5_000,
+                mortgageCapitalRepaid: 3_000,
+            }),
+        );
+        // 2 children + 1 disabled counted twice = 3 → (1_520 + 760 + 80) × 40%.
+        expect(result.ownHomeCredit).toBeCloseTo((1_520 + 760 + 80) * 0.4, 2);
+    });
+
+    test("Flemish woonbonus €80: woonbonusChildrenAtLoanStart replaces this year's children", () => {
+        const table = getTaxTable(2025);
+        const inputs: OwnHomeCreditInputs = {
+            region: "flanders",
+            mortgageIsPrimaryResidence: true,
+            mortgageStartYear: 2018,
+            mortgageRegion: "flanders",
+            mortgageInterestPaid: 5_000,
+            mortgageCapitalRepaid: 3_000,
+            dependentChildren: 4,
+        };
+        const credit = (atLoanStart?: number) =>
+            computeOwnHomeCredit(
+                atLoanStart === undefined ? inputs : { ...inputs, woonbonusChildrenAtLoanStart: atLoanStart },
+                table,
+                "flemish_woonbonus",
+                { taxableIncome: 40_000, marginalRatePercent: 45, incomeYear: 2025 },
+            );
+        // Proxy: four children this year → +80.
+        expect(credit()).toBeCloseTo((1_520 + 760 + 80) * 0.4, 2);
+        // Two children on 1 January 2019 → no +80, whatever this year's count.
+        expect(credit(2)).toBeCloseTo((1_520 + 760) * 0.4, 2);
+        expect(credit(3)).toBeCloseTo((1_520 + 760 + 80) * 0.4, 2);
+        expect(computeOwnHomeCredit(
+            { ...inputs, dependentChildren: 0, woonbonusChildrenAtLoanStart: 3 },
+            table,
+            "flemish_woonbonus",
+            { taxableIncome: 40_000, marginalRatePercent: 45, incomeYear: 2025 },
+        )).toBeCloseTo((1_520 + 760 + 80) * 0.4, 2);
+    });
+
     test('Flemish "geïntegreerde" woonbonus (2016-2019 loan) uses €1,520 base + first-10y supplement', () => {
         const result = computeWithParity(
             profile({

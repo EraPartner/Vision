@@ -117,6 +117,14 @@ describe("Belgian tax household v2 settings validation", () => {
     expect(validate(value)).toEqual(value);
   });
 
+  it("accepts the woonbonus children at the loan start", () => {
+    const value = {
+      ...validHousehold(),
+      home: { cadastralIncome: 0, mortgageInterestPaid: 0, woonbonusChildrenAtLoanStart: 3 },
+    };
+    expect(validate(value)).toEqual(value);
+  });
+
   it.each<[string, (h: Household) => unknown]>([
     ["version 1", (h) => ({ ...h, version: 1 })],
     ["a missing taxYear", ({ taxYear: _taxYear, ...rest }) => rest],
@@ -218,6 +226,14 @@ describe("Belgian tax household v2 settings validation", () => {
     [
       "a fractional first qualifying year",
       (h) => ({ ...h, home: { ...h.home, firstQualifyingYear: 2019.5 } }),
+    ],
+    [
+      "fractional woonbonus children at the loan start",
+      (h) => ({ ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: 2.5 } }),
+    ],
+    [
+      "negative woonbonus children at the loan start",
+      (h) => ({ ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: -1 } }),
     ],
     [
       "a bad event date",

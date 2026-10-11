@@ -208,6 +208,13 @@ export type HouseholdHomeInputs = Pick<
      * source: the upgrade leaves it undefined.
      */
     firstQualifyingYear?: number;
+    /**
+     * Flemish woonbonus +80: dependent children of the borrower on 1 January of the year after
+     * the loan year, a disabled child counted twice (arts 145/37 §2 al. 3, 145/38/2 §2 al. 3).
+     * When absent, this year's dependent children of the claimant stand in and the engine raises
+     * `woonbonus_children_at_loan_start_missing`. No v1 source: the upgrade leaves it undefined.
+     */
+    woonbonusChildrenAtLoanStart?: number;
 };
 
 /** Why a v1 field could not be mapped onto the household. */
@@ -406,7 +413,8 @@ export type HouseholdTaxIssueCode =
     | "csss_mixed_activity_base_unverified"
     | "refundable_child_credit_not_modelled"
     | "isolated_parent_supplement_not_granted"
-    | "senior_quotient_cap_birth_years_missing";
+    | "senior_quotient_cap_birth_years_missing"
+    | "woonbonus_children_at_loan_start_missing";
 
 export type HouseholdTaxIssueSeverity = "info" | "warning" | "needs_source";
 
