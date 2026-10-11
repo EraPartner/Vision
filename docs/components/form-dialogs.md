@@ -2,8 +2,8 @@
 title: Form Dialogs
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-10-07
+date: 2026-10-11
+updated: 2026-10-11
 tags: [components, forms, dialogs, settings, refactor, phase-3]
 description: Modal dialogs for adding, editing data, and configuring settings throughout the application
 aliases:
@@ -364,7 +364,7 @@ blur normalizes the display, and external profile changes resynchronize fields t
 ```typescript
 interface TaxProfileDialogProps {
   trigger?: ReactNode | null; // null renders no trigger; drive the sheet through open
-  initialStep?: Step; // 'employment' | 'income' | 'incomeSources' | 'exemptions' | 'region'
+  initialStep?: Step; // 'household' | 'income' | 'home' | 'incomeSources' | 'exemptions' | 'region'
   targetYear?: number; // defaults to the live profile year
   open?: boolean; // controlled open state; leave undefined to let the trigger own it
   onOpenChange?: (open: boolean) => void;
@@ -373,13 +373,14 @@ interface TaxProfileDialogProps {
 
 ### Steps
 
-| Step               | Description                                             | Fields                                                                                                                                                                                                             |
-| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Employment**     | Employment type selection                               | employee, civil_servant, self_employed, retired, other                                                                                                                                                             |
-| **Income**         | Income and expense details                              | gross annual income, other taxable income, professional expense method (lump sum vs actual), cadastral income, additional residences                                                                               |
-| **Income Sources** | Select transaction categories treated as taxable income | income category selection                                                                                                                                                                                          |
-| **Deductions**     | Exemptions and dependents                               | dependent children, other dependents, alimony, pension contributions, life insurance, charitable donations, childcare costs, domestic help, mortgage interest, union dues, medical expenses, disability exemptions |
-| **Region**         | Region and surcharge                                    | Flanders/Wallonia/Brussels, communal surcharge percentage                                                                                                                                                          |
+| Step               | Description                                                     | Fields                                                                                                                                                                                  |
+| ------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Household**      | Assessment and partner (household edit)                         | derived assessment for the income year with its reason (read-only), "I have a partner", relationship events (kind, date, deceased partner), death-year election, dependants and home-credit claimant |
+| **Income**         | Activities per partner (household edit)                         | activities (kind, gross or net amount, optional start/end date), expense method and actual amount per forfait category, other taxable income, alimony, union dues, birth year, disability |
+| **Home**           | Home and property                                               | cadastral income, additional residences, own-home loan fields, chèque habitat first qualifying year (Walloon loan only, household edit)                                                 |
+| **Income Sources** | Select transaction categories treated as taxable income         | income category selection                                                                                                                                                               |
+| **Deductions**     | Dependants and reductions per partner                           | dependent children and other dependants, pension savings, group insurance, life insurance, donations, childcare, domestic help, service-voucher spend, isolated parent                    |
+| **Region**         | Region and surcharge                                            | Flanders/Wallonia/Brussels, communal surcharge percentage                                                                                                                               |
 
 ### Usage
 
@@ -394,7 +395,9 @@ import { TaxProfileDialog } from "@/features/tax/TaxProfileDialog";
 
 ### Integration
 
-- Uses `BelgianTaxProfileContext` for profile state management
+- Uses `BelgianTaxProfileContext` for profile state management. Household steps (Household, Income, the Deductions reductions and the chèque habitat year) write through `updateHousehold`, or `updateHouseholdSnapshot` for a past year; the other fields keep writing the v1 projection through `updateProfile` / `updateSnapshot`, which preserves household-only data ([[docs/adr/200-belgian-tax-household-model|ADR-200]])
+- A segmented "You / Partner" switcher picks the partner on the Income and Deductions steps of a two-partner household
+- The Income step is validated with the zod `householdIncomeStepSchema` (partner A has income; an actual-expense claim has an amount; an activity does not end before it starts)
 - Sets `profileConfigured: true` on completion
 - Each step navigates independently via a `SegmentedControl` step picker, with a "Step n of m" progress line (`tax.profile.stepProgress`) and a Back / Next / _Save tax profile_ footer
 - Taxes mounts it with its primary _Set up_ / _Edit tax profile_ trigger button; Portfolio taxes drives it from its ••• menu in controlled mode (`trigger={null}` with `open`/`onOpenChange`). Step bodies are built on the `ProfileRows` helpers in `profile-steps/ProfileRows.tsx` ([[docs/adr/187-completeness-sweep|ADR-187]])
