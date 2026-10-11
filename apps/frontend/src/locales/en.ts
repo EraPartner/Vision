@@ -4265,6 +4265,7 @@ const en: Record<string, string> = {
   'tax.householdBreakdown.row.finalTax': 'Income tax incl. communal surcharge',
   'tax.householdBreakdown.row.pitAfterExemption': 'Tax after the tax-free sum',
   'tax.householdBreakdown.row.reductions': 'Tax reductions',
+  'tax.householdBreakdown.row.regionalAndCommunal': 'Regional factor and communal surcharge',
   'tax.householdBreakdown.row.taxFreeSum': 'Tax-free sum',
   'tax.householdBreakdown.title': 'Per-partner breakdown',
   'tax.inKindIncomeUnclassified': 'Income already included in acquired units remains in the source history. The ordinary dividend estimate does not infer its tax treatment.',

@@ -4263,6 +4263,7 @@
   "tax.householdBreakdown.row.finalTax": "Personenbelasting incl. gemeentebelasting",
   "tax.householdBreakdown.row.pitAfterExemption": "Belasting na belastingvrije som",
   "tax.householdBreakdown.row.reductions": "Belastingverminderingen",
+  "tax.householdBreakdown.row.regionalAndCommunal": "Gewestelijke factor en gemeentebelasting",
   "tax.householdBreakdown.row.taxFreeSum": "Belastingvrije som",
   "tax.householdBreakdown.title": "Opsplitsing per partner",
   "tax.inKindIncomeUnclassified": "Inkomsten die al in verworven eenheden zitten, blijven in de bronhistoriek. De gewone dividendschatting leidt hun fiscale behandeling niet af.",

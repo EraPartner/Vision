@@ -29,7 +29,7 @@ interface HouseholdBreakdownCardProps {
     viewedYear: number;
 }
 
-type RowTone = "base" | "reduction" | "total";
+type RowTone = "base" | "reduction" | "adjustment" | "total";
 
 interface BreakdownRow {
     key: string;
@@ -42,8 +42,10 @@ const sum = (result: HouseholdTaxResult, pick: (p: PartnerTaxResult) => number) 
     result.partners.reduce((total, p) => total + pick(p), 0);
 
 /**
- * Per-partner breakdown of a two-partner household (ADR-200): taxable income, tax-free sum,
- * tax after the tax-free sum, reductions and final tax for each partner and the household,
+ * Per-partner breakdown of a two-partner household (ADR-200): taxable income, tax-free sum
+ * charged (`exemption.applied`), tax after the tax-free sum, reductions, the regional factor
+ * and communal surcharge, and final tax for each partner and the household, so that each
+ * column adds up,
  * with the assessment mode and the marital quotient. Renders nothing for one partner.
  */
 export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardProps) {
@@ -74,7 +76,7 @@ export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardPro
         {
             key: "taxFreeSum",
             label: t("tax.householdBreakdown.row.taxFreeSum"),
-            value: (p) => p.exemption.total,
+            value: (p) => p.exemption.applied,
             tone: "base",
         },
         {
@@ -88,6 +90,12 @@ export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardPro
             label: t("tax.householdBreakdown.row.reductions"),
             value: (p) => p.reductionsApplied,
             tone: "reduction",
+        },
+        {
+            key: "regionalAndCommunal",
+            label: t("tax.householdBreakdown.row.regionalAndCommunal"),
+            value: (p) => p.totalPIT - (p.pitAfterExemption - p.reductionsApplied),
+            tone: "adjustment",
         },
         {
             key: "finalTax",
@@ -163,7 +171,9 @@ export function HouseholdBreakdownCard({ viewedYear }: HouseholdBreakdownCardPro
                             const format = (value: number) =>
                                 row.tone === "reduction"
                                     ? fmt(-value, { signed: true })
-                                    : fmt(value);
+                                    : row.tone === "adjustment"
+                                      ? fmt(value, { signed: true })
+                                      : fmt(value);
                             return (
                                 <TableRow key={row.key}>
                                     <TableCell

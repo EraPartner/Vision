@@ -115,4 +115,48 @@ describe("HouseholdBreakdownCard", () => {
         expect(amount(transfer.textContent)).toBeCloseTo(expected.quotient.transfer, 1);
         expect(screen.getByText("Saving from the quotient")).toBeInTheDocument();
     });
+
+    it("shows the tax-free sum charged and rows that add up to the final tax", async () => {
+        // No marriage: separate assessment, and partner B has no income at all.
+        const household = { ...married(), relationship: { events: [] } };
+        const expected = computeHouseholdTax(household);
+        expect(expected.assessment.mode).toBe("separate");
+        const [a, b] = expected.partners;
+        expect(b!.exemption.total).toBeGreaterThan(0);
+        expect(b!.exemption.applied).toBe(0);
+        serve(household);
+        const user = userEvent.setup();
+        renderWithApp(<HouseholdBreakdownCard viewedYear={household.taxYear} />);
+
+        await user.click(await screen.findByText("Per-partner breakdown"));
+        const table = await screen.findByRole("table");
+        const cellsOf = (name: RegExp) =>
+            within(within(table).getByRole("row", { name })).getAllByRole("cell");
+
+        const taxFree = cellsOf(/^Tax-free sum/);
+        expect(amount(taxFree[1]?.textContent)).toBeCloseTo(a!.exemption.applied, 1);
+        expect(amount(taxFree[2]?.textContent)).toBe(0);
+        expect(amount(taxFree[3]?.textContent)).toBeCloseTo(a!.exemption.applied, 1);
+
+        const adjustment = cellsOf(/Regional factor and communal surcharge/);
+        const adjustmentA = a!.totalPIT - (a!.pitAfterExemption - a!.reductionsApplied);
+        expect(adjustmentA).not.toBe(0);
+        expect(amount(adjustment[1]?.textContent)).toBeCloseTo(Math.abs(adjustmentA), 1);
+
+        // Per column: tax after the tax-free sum − reductions ± adjustment = final tax.
+        const signed = (text: string | null | undefined) =>
+            (text ?? "").trim().startsWith("-") || (text ?? "").includes("−")
+                ? -amount(text)
+                : amount(text);
+        const after = cellsOf(/^Tax after the tax-free sum/);
+        const reductions = cellsOf(/^Tax reductions/);
+        const final = cellsOf(/Income tax incl\. communal surcharge/);
+        for (const column of [1, 2, 3]) {
+            expect(
+                amount(after[column]?.textContent) -
+                    amount(reductions[column]?.textContent) +
+                    signed(adjustment[column]?.textContent),
+            ).toBeCloseTo(amount(final[column]?.textContent), 1);
+        }
+    });
 });

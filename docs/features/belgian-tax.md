@@ -486,9 +486,11 @@ for an earlier year; otherwise the loan year stays the proxy. It has no v1 sourc
 projected to the v1 profile, so `computeBelgianPIT` keeps the proxy.
 
 The tax overview shows a **Per-partner breakdown** card (widget `householdBreakdown`) for a
-year with two assessed partners: taxable income, tax-free sum (after the art. 134 transfer),
-tax after the tax-free sum, reductions charged and final tax (incl. communal surcharge) for each
-partner and the household, then the assessment mode and, under a joint assessment, the marital
+year with two assessed partners: taxable income, tax-free sum charged (`exemption.applied`,
+after the art. 134 transfer and capped at the partner's taxable income), tax after the tax-free
+sum, reductions charged, the regional factor and communal surcharge (final tax − (tax after the
+tax-free sum − reductions)) and final tax for each partner and the household, so each column
+adds up; then the assessment mode and, under a joint assessment, the marital
 quotient transfer and saving. A one-partner household shows no card.
 
 ## Limitations / not modeled
