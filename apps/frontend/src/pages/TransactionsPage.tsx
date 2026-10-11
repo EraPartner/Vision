@@ -115,6 +115,7 @@ export default function TransactionsPage() {
     const [quickLookTransaction, setQuickLookTransaction] =
         useState<TableTransaction | null>(null);
     const selectReturnFocusRef = useRef<HTMLElement | null>(null);
+    const restoringInspectorFocusRef = useRef(false);
     const quickLookReturnFocusRef = useRef<HTMLElement | null>(null);
 
     const rememberFocusedElement = useCallback(() => {
@@ -124,6 +125,7 @@ export default function TransactionsPage() {
     }, []);
     const selectRow = useCallback(
         (transaction: TableTransaction | null) => {
+            if (restoringInspectorFocusRef.current) return;
             if (transaction) {
                 const active = rememberFocusedElement();
                 if (active?.getAttribute("role") === "row")
@@ -135,7 +137,15 @@ export default function TransactionsPage() {
     );
     const closeInspector = useCallback(() => {
         setSelectedId(null);
-        requestAnimationFrame(() => selectReturnFocusRef.current?.focus());
+        requestAnimationFrame(() => {
+            // Restoring row focus must not select it again and reopen the inspector.
+            restoringInspectorFocusRef.current = true;
+            try {
+                selectReturnFocusRef.current?.focus();
+            } finally {
+                restoringInspectorFocusRef.current = false;
+            }
+        });
     }, []);
     const openQuickLook = useCallback(
         (transaction: TableTransaction) => {

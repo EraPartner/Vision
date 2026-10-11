@@ -189,6 +189,6 @@ describe("OpeningBalanceDialog (integration) — anchors in the partition's own 
         } as Account);
 
         expect(balanceInput().value).toBe("135");
-        expect(screen.getByLabelText(/^As of date$/)).toHaveValue("2026-09-10");
+        expect(screen.getByLabelText(/^As of date$/)).toHaveTextContent("10/09/2026");
     });
 });

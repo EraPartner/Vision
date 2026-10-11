@@ -54,6 +54,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
@@ -76,7 +77,11 @@ import {
     invalidateAccountDerived,
     invalidateTransactionData,
 } from "@/lib/queryKeys";
-import { formatDateStringWithAppSettings, toYmd } from "@/lib/dateUtils";
+import {
+    formatDateStringWithAppSettings,
+    parseLocalDateFromYmd,
+    toYmd,
+} from "@/lib/dateUtils";
 import { parseDecimal } from "@/lib/decimal";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -487,14 +492,17 @@ export function ReconcileDialog({
                                 <Label htmlFor="reconcile-reading-date">
                                     {t("accounts.reconcile.readingDateLabel")}
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="reconcile-reading-date"
-                                    type="date"
-                                    value={readingDate}
-                                    required={hasReading}
+                                    value={
+                                        readingDate
+                                            ? parseLocalDateFromYmd(readingDate)
+                                            : undefined
+                                    }
                                     disabled={busy}
-                                    onChange={(e) =>
-                                        setReadingDate(e.target.value)
+                                    allowClear
+                                    onChange={(date) =>
+                                        setReadingDate(date ? toYmd(date) : "")
                                     }
                                 />
                             </div>

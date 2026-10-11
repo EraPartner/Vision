@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { apiClient } from "@/lib/api";
@@ -30,7 +31,7 @@ import {
     invalidateAccountDerived,
     invalidateTransactionData,
 } from "@/lib/queryKeys";
-import { toYmd } from "@/lib/dateUtils";
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { toast } from "sonner";
 import type { Account } from "@/types/api";
 import { formatEditableNumber } from "@/utils/currency";
@@ -186,11 +187,17 @@ export function OpeningBalanceDialog({
                             <Label htmlFor="opening-balance-date">
                                 {t("accounts.openingBalance.dateLabel")}
                             </Label>
-                            <Input
+                            <DatePicker
                                 id="opening-balance-date"
-                                type="date"
-                                value={date}
-                                onChange={(e) => setDate(e.target.value)}
+                                value={
+                                    date
+                                        ? parseLocalDateFromYmd(date)
+                                        : undefined
+                                }
+                                allowClear
+                                onChange={(selected) =>
+                                    setDate(selected ? toYmd(selected) : "")
+                                }
                             />
                         </div>
                     </div>

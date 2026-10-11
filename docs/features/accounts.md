@@ -2,8 +2,8 @@
 title: Accounts
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     feature,
@@ -90,6 +90,8 @@ or currency with only future rows remains visible with a zero current balance.
 - **Add account** stays in the page header (and is the one action of the empty state). It opens a right-hand `Sheet`; the component keeps its `AddAccountDialog` export name. The Advanced switches and opening balance live in that sheet.
 - Account detail links use `/accounts/<id>`. The retired `/accounts?account=<id>` query form opens
   the hub and does not forward.
+
+Account creation, opening balances, and reconciliation use the shared themed date picker. Dates display in the selected app format and save as `YYYY-MM-DD` without timezone conversion. Clearing the date blocks saving an opening balance or a fresh statement reading until a valid date is selected. The Add account calendar stays inside the sheet portal so keyboard focus remains usable.
 
 ## The ledger route (`/accounts/:id`) — WP-B4
 

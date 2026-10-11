@@ -26,17 +26,21 @@ export function useHoldingActions({
     deleteDescriptionKey,
 }: UseHoldingActionsOptions) {
     const { t } = useLanguage();
-    const { deleteInvestment, updateInvestment } = usePortfolio();
+    const { allSummaries, deleteInvestment, updateInvestment } = usePortfolio();
     const { confirm, ConfirmDialog } = useConfirmDialog();
-    const [detailInvestment, setDetailInvestment] =
-        useState<InvestmentSummary | null>(null);
+    const [detailInvestmentId, setDetailInvestmentId] = useState<number | null>(
+        null,
+    );
+    const detailInvestment = allSummaries.find(
+        (holding) => holding.id === detailInvestmentId,
+    );
     const [detailOpen, setDetailOpen] = useState(false);
     const [txnInvestment, setTxnInvestment] =
         useState<InvestmentSummary | null>(null);
     const [txnOpen, setTxnOpen] = useState(false);
 
     const openDetail = (holding: InvestmentSummary) => {
-        setDetailInvestment(holding);
+        setDetailInvestmentId(holding.id);
         setDetailOpen(true);
     };
     const openAddTransaction = (holding: InvestmentSummary) => {

@@ -3,7 +3,7 @@ title: Feature - AI Chat
 type: feature
 status: active
 date: 2026-10-10
-updated: 2026-10-08
+updated: 2026-10-10
 last_modified: 2026-10-06
 tags:
   [
@@ -121,6 +121,8 @@ performs no automatic lookup; it does not describe local or public retrieval as 
 preview and consent remain separate actions before sending the selected payload.
 
 The primary footer groups investigation lifecycle actions. Active grant revocation remains directly available. Disclosure record inspection, deletion and historical grants are grouped under the separate Disclosure history section, which is available before records are loaded.
+
+The optional investigation date range uses the shared themed date picker. Each bound can be cleared independently; selected dates are submitted as date-only `YYYY-MM-DD` values.
 
 ## Investigation resource profile
 

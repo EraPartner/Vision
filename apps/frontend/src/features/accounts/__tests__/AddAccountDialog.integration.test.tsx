@@ -79,7 +79,9 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         await openCreateDialog(user);
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
         await user.type(screen.getByLabelText(/opening balance/i), "123,45");
-        await user.click(screen.getByRole("button", { name: /^add account$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
 
         await waitFor(() => expect(calls.opening).toHaveLength(1));
         expect(calls.opening[0]?.id).toBe("77");
@@ -100,9 +102,58 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
 
         await openCreateDialog(user);
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
-        await user.click(screen.getByRole("button", { name: /^add account$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
+        expect(calls.opening).toHaveLength(0);
+    });
+
+    it("uses the shared picker and saves the selected local calendar date", async () => {
+        const calls = mockCreate();
+        const user = userEvent.setup();
+        renderWithApp(<AddAccountDialog />);
+        await openCreateDialog(user);
+        await user.type(screen.getByLabelText(/^name$/i), "Test account");
+        await user.type(screen.getByLabelText(/opening balance/i), "123,45");
+        await user.click(screen.getByLabelText(/as of date/i));
+        const dateInput = await screen.findByRole("textbox", {
+            name: /enter date/i,
+        });
+        await user.clear(dateInput);
+        await user.type(dateInput, "15/01/2025");
+        await user.keyboard("{Enter}{Escape}");
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
+        await waitFor(() => expect(calls.opening).toHaveLength(1));
+        expect(calls.opening[0].body).toMatchObject({
+            date: "2025-01-15",
+            balance: 123.45,
+        });
+    });
+
+    it("blocks creation when the opening balance date is cleared", async () => {
+        const calls = mockCreate();
+        const user = userEvent.setup();
+        renderWithApp(<AddAccountDialog />);
+        await openCreateDialog(user);
+        await user.type(screen.getByLabelText(/^name$/i), "Test account");
+        await user.type(screen.getByLabelText(/opening balance/i), "123,45");
+        await user.click(screen.getByLabelText(/as of date/i));
+        await user.click(
+            await screen.findByRole("button", { name: /^clear$/i }),
+        );
+        await user.keyboard("{Escape}");
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
+        expect(await screen.findByRole("alert")).toHaveTextContent(
+            "This field is required",
+        );
+        expect(screen.getByLabelText(/as of date/i)).toHaveFocus();
+        expect(calls.create).toHaveLength(0);
         expect(calls.opening).toHaveLength(0);
     });
 
@@ -119,7 +170,9 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(
             screen.queryByLabelText(/opening balance/i),
         ).not.toBeInTheDocument();
-        await user.click(screen.getByRole("button", { name: /^add account$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         expect(calls.opening).toHaveLength(0);
@@ -243,7 +296,9 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
         expect(screen.queryByLabelText(/^as of$/i)).not.toBeInTheDocument();
 
         await user.type(screen.getByLabelText(/^name$/i), "KBC Checking");
-        await user.click(screen.getByRole("button", { name: /^add account$/i }));
+        await user.click(
+            screen.getByRole("button", { name: /^add account$/i }),
+        );
 
         await waitFor(() => expect(calls.create).toHaveLength(1));
         const body = calls.create[0] as Record<string, unknown>;
@@ -341,13 +396,17 @@ describe("AddAccountDialog (integration, WP-B5 §3 F4+F7)", () => {
             await user.type(screen.getByLabelText(/^name$/i), "Checking");
             const input = screen.getByLabelText(/opening balance/i);
             await user.type(input, "abc");
-            await user.click(screen.getByRole("button", { name: /^add account$/i }));
+            await user.click(
+                screen.getByRole("button", { name: /^add account$/i }),
+            );
             expect(input).toHaveFocus();
             expect(calls.create).toHaveLength(0);
             await user.clear(input);
             await user.type(input, value);
             expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-            await user.click(screen.getByRole("button", { name: /^add account$/i }));
+            await user.click(
+                screen.getByRole("button", { name: /^add account$/i }),
+            );
             await waitFor(() => expect(calls.opening).toHaveLength(1));
             expect(calls.opening[0]?.body).toEqual({
                 balance: value === "0" ? 0 : -125.5,

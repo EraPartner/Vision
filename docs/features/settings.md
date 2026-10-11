@@ -2,8 +2,8 @@
 title: Settings Feature
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     feature,
@@ -265,7 +265,7 @@ Settings control which categories and recipients are excluded from statistics:
 - **`excludeHiddenCategories`**: Auto-exclude inactive categories
 - **`exclusionScope`**: Controls where exclusions apply:
   - `'everywhere'`: All pages
-  - `'statistics'`: Statistics and related pages only
+  - `'statistics'`: Insights and related pages only (the stored key remains unchanged)
   - `'nowhere'`: Exclusions disabled
 
 ## Propagation Behavior
@@ -279,8 +279,8 @@ Settings changes propagate throughout the application:
 | `showDecimalPlaces`    | All currency displays                                  |
 | `dateFormat`           | All date displays, chart labels                        |
 | `defaultPageSize`      | VirtualDataTable pagination                            |
-| `excludedCategoryIds`  | Statistics, dashboard, charts                          |
-| `excludedRecipientIds` | Statistics, recipient insights                         |
+| `excludedCategoryIds`  | Insights, Home, charts                                |
+| `excludedRecipientIds` | Insights, recipient insights                          |
 
 ## Performance Optimizations
 
@@ -429,7 +429,7 @@ local mirror does not authorize overwriting database state.
 - [[docs/adr/148-user-default-openai-model|ADR-148: User default OpenAI model]]
 - [[docs/adr/171-packaged-openai-explicit-configuration|ADR-171: Explicitly configured packaged OpenAI API route]]
 - [[docs/features/appearance|Appearance]] — Theme variant, color palette mode, and schedule settings
-- [[docs/features/statistics|Statistics]] — Uses exclusions and currency settings
+- [[docs/features/statistics|Insights]] — Uses exclusions and currency settings
 - [[docs/features/portfolio-tax|Portfolio Tax]] — Uses tax adjustments stored as settings
 - [[docs/features/views|Dashboard]] — Uses widget visibility settings
 

@@ -2,8 +2,8 @@
 title: Transactions
 type: feature
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-10
+updated: 2026-10-10
 tags: [feature, transactions, finance, phase-q, recipient-groups, bulk-actions, optimistic-updates, optimistic-create, june-2026, context-menu, quick-look, keyboard-nav, duplicate, filter-by-recipient, deep-link, electron-native, new-transaction, render-loop-fix, category-ids-filter, multi-value-filter, balance-write-protection, tag-editing-fix, amount-filter, search-suggestions, date-search, tag-search, url-state, inspector, add-transaction-sheet, transactions-toolbar, adr-181]
 aliases: [transactions-feature, income, expenses, financial-records, money-tracking]
 description: Core transaction management - income, expenses, and tracking financial activities. Phase Q adds recipient-group filtering for linked-recipient transaction discovery. Bulk operations enable atomic multi-row delete, recategorize, reassign, activate/deactivate, export, and tag. June 2026 (ADR-070): useUpdateTransaction/useDeleteTransaction are now optimistic. June 2026 Premium v3 (ADR-071): useCreateTransaction is now optimistic (temp negative-id row → server-row swap → onSettled invalidate; virtual list excluded; 6 tests). June 2026 Premium v3 V5-V7: per-row context menu, Quick Look dialog (Space), keyboard row navigation (↑/↓/Enter), Duplicate, and Filter-by-recipient actions. June 2026 V12 (ADR-072): /transactions?new=1 deep link opens AddTransactionDialog (used by native menu and dock menu). 2026-06-25: balance field is now write-protected (import pipeline only); PATCH and manual create can no longer set it; TransactionInfoDialog renders it read-only. 2026-06-26: TransactionInfoDialog tag-editing state bug fixed — last-tag removal chip persisted on screen after PATCH succeeded; dialog now tracks tag slugs in local state seeded from infoTransaction.tags. 2026-06-28: free-text search now also matches the transaction date (ISO text) and active tag slugs; new amount_min/amount_max/amount_exact filter params; TransactionSearchSuggestions dropdown for quick filters; FilterBanner shows amount descriptors. Aug 2026: search and sort (sort_key/sort_dir) are URL-backed; load-more and attachment-delete failures surface a retry-capable toast instead of failing silently. October 2026 (ADR-181): the Transactions page is rebuilt around a filter-chip toolbar, a selection-driven inspector (replaces the details dialog) and an Add Transaction sheet with Expense / Income / Transfer kinds (replaces the add dialog); `N` opens the sheet on the web.
@@ -306,10 +306,16 @@ Right-clicking a transaction row opens a Radix `ContextMenu` (`modal={false}` �
 | Show details              | ↵        | Always (selects the row and shows the inspector)     |
 | Quick Look                | ␣        | Always                                               |
 | Edit in row               | —        | Always                                               |
+| Split transaction         | —        | Opens the existing split dialog for this row          |
 | Duplicate                 | —        | `recipient_id` + `date` + `bank_account` all present |
 | Show all from {recipient} | —        | Recipient known                                      |
 | Mark active / inactive    | —        | Always                                               |
 | Delete…                   | —        | Always (destructive style)                           |
+
+The row menu opens one table-owned `SplitTransactionDialog` for the chosen transaction. It stays
+mounted after the menu closes, so selecting Split works with pointer or keyboard. Cancel and a
+successful save close it; reopening loads existing splits and retains the existing amount limits.
+The inspector footer also keeps its visible Split action. No per-row icon column is added.
 
 #### Keyboard Row Navigation
 
@@ -374,6 +380,7 @@ Code links: [[apps/frontend/src/features/transactions/components/TransactionInsp
 - **View menu**: **Include inactive** (the `showAll` switch), optional columns **Tags**, **Currency**, **Running balance** and **Status**, and **Reset columns**. The wide layout shows select, date, payee, category, account and amount as separate core columns.
 - **Persistence**: optional-column visibility uses `useWidgetVisibility` under the page key `transactionsColumns` in the `widget_visibility` setting ([[docs/features/settings#Widget Visibility System]]). All four optional columns default to hidden.
 - **Narrow layout**: below 960px of table-container width, date, payee, account, category and memo share a wrapping summary beside the amount. Selection and row actions remain available. Enabled optional columns are retained, so these may still require horizontal scrolling. Open the inspector to edit the date in this layout; payee and category keep their inline editors.
+- **Column widths**: the wide layout gives Category the remaining table width with a 240px minimum; users can still resize it. The Edit action column stays compact at 40px instead of being followed by unused table space. The narrow summary layout is unchanged.
 - **Cells**: in the wide layout, category paths wrap to at most two compact lines within the fixed 52px row, with the full path available as a title. The payee cell shows the memo as a subline; the category cell shows a colour dot, or a dashed dot and "Needs category" when the row has no category. Amounts use `amountClass` (money in is `text-gain`, spending uses the text colour).
 - **Header**: the subtitle reads "{n} transactions in {m} accounts" once the account count is known. The header actions are an Import link and the Add Transaction button.
 

@@ -2,8 +2,8 @@
 title: Feature - Splits & Owes
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     feature,
@@ -57,7 +57,7 @@ The Splits & Owes system allows users to track shared expenses and debts between
 
 ### Transaction Split
 
-A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI the **Split** action sits in the footer of the transaction inspector ([[docs/features/transactions#Inspector]]); `SplitTransactionDialog` takes a `trigger` element for it. The dialog's preset choice is a `SegmentedControl` with three options:
+A **split** divides a transaction amount among multiple recipients. For example, a $100 dinner bill split among 3 people creates 3 split records. In the UI **Split transaction** is available in the transaction row context menu and the footer of the transaction inspector ([[docs/features/transactions#Inspector]]). `SplitTransactionDialog` takes a `trigger` element for the inspector; the table controls `open` and `onOpenChange` with `trigger={null}` so closing the menu does not unmount the open dialog. The dialog's preset choice is a `SegmentedControl` with three options:
 
 | Preset             | Each other person owes                                                                              | Reads as |
 | ------------------ | --------------------------------------------------------------------------------------------------- | -------- |

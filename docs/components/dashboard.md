@@ -2,8 +2,8 @@
 title: Dashboard Components
 type: component
 status: active
-date: 2026-10-07
-updated: 2026-10-06
+date: 2026-10-10
+updated: 2026-10-10
 tags:
   [
     components,
@@ -108,10 +108,10 @@ Reads `GET /api/aggregations/average-vs-current` through `useMonthToDate(currenc
 
 ### Lists
 
-- `NeedsAttentionList`: a "needs a category" row (`useNeedsCategoryCount`, links to `/transactions?uncategorised=true`), a "looks paid" row from `usePlannedMatchSuggestions` (links to `/planned`) and up to three accounts whose last transaction is older than 30 days (links to `/import`). With nothing to do it shows a positive empty row.
+- `NeedsAttentionList`: a "needs a category" row (`useNeedsCategoryCount`, links to `/transactions?uncategorised=true`), a "looks paid" row from `usePlannedMatchSuggestions` (links to `/planned`) and up to three accounts whose last transaction is older than 30 days (links to `/import`). With nothing to do it shows a positive empty row. Each account inactivity row has a separately labelled dismissal button beside its Import link. Dismissals map account IDs to last-transaction calendar dates in `vision.home.dismissedAccountInactivity`; they survive navigation and restart in that browser or desktop profile. Renaming the account does not restore the warning. A later last-transaction day can produce a new warning after 30 days. Filtering happens before the three-row limit. Restore dismissed alerts clears the dismissals; category and planned-payment alerts are unaffected. No account or transaction is changed. Storage failures leave a dismissal usable for the mounted session.
 - `NetWorthCard`: net worth, the monthly change and percentage, and assets (liquid plus investments) against debt bars, from `useNetWorthSummary`; links to `/portfolio/net-worth`.
 - `UpcomingPaymentsList`: up to five items from the shared `useUpcomingPlannedPayments` source, labelled Today, Tomorrow or the date; links to `/planned`.
-- `AccountsList`: up to six active accounts with type, balance provenance and `computed_balance`; each row links to `/accounts/:id`.
+- `AccountsList`: the six active accounts with the highest `computed_balance`, compared in the app's display currency using the shared exchange-rate cache before applying the row limit. Ties keep their incoming order; missing/non-finite balances or unavailable conversions sort last. Rows retain their native-currency amounts, type and balance provenance, and each links to `/accounts/:id`. Balance and exchange-rate updates recompute the order without changing cached account rows.
 - `RecentTransactionsList`: the latest five rows (still honouring the per-graph exclusion toggle) with a category colour dot; a row links to `/transactions` with `state.selectTransactionId`.
 
 ---

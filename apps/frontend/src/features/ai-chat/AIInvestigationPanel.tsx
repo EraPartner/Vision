@@ -1,3 +1,4 @@
+import { parseLocalDateFromYmd, toYmd } from "@/lib/dateUtils";
 import { InvestigationPrivacySummary } from "./InvestigationPrivacySummary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -21,6 +22,7 @@ import {
     DisclosureSummary,
 } from "@/components/ui/disclosure";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { Label } from "@/components/ui/label";
 import { List, ListRow } from "@/components/ui/list";
 import {
@@ -659,12 +661,16 @@ export function AIInvestigationPanel() {
                                 <Label htmlFor="ai-date-from">
                                     {t("aiResearch.dateFrom")}
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="ai-date-from"
-                                    type="date"
-                                    value={dateFrom}
-                                    onChange={(event) =>
-                                        setDateFrom(event.target.value)
+                                    value={
+                                        dateFrom
+                                            ? parseLocalDateFromYmd(dateFrom)
+                                            : undefined
+                                    }
+                                    allowClear
+                                    onChange={(date) =>
+                                        setDateFrom(date ? toYmd(date) : "")
                                     }
                                 />
                             </div>
@@ -672,12 +678,16 @@ export function AIInvestigationPanel() {
                                 <Label htmlFor="ai-date-to">
                                     {t("aiResearch.dateTo")}
                                 </Label>
-                                <Input
+                                <DatePicker
                                     id="ai-date-to"
-                                    type="date"
-                                    value={dateTo}
-                                    onChange={(event) =>
-                                        setDateTo(event.target.value)
+                                    value={
+                                        dateTo
+                                            ? parseLocalDateFromYmd(dateTo)
+                                            : undefined
+                                    }
+                                    allowClear
+                                    onChange={(date) =>
+                                        setDateTo(date ? toYmd(date) : "")
                                     }
                                 />
                             </div>

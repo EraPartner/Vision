@@ -26,6 +26,9 @@ export const LOCAL_STORAGE_KEYS = Object.freeze({
     /** JSON array of dismissed upcoming-payment IDs */
     DISMISSED_UPCOMING_PAYMENTS: "dismissed_upcoming_planned_payments",
 
+    /** JSON object mapping account IDs to dismissed inactivity-warning dates. */
+    DISMISSED_ACCOUNT_INACTIVITY: "vision.home.dismissedAccountInactivity",
+
     /** JSON array of dismissed recurring-pattern keys */
     DISMISSED_RECURRING_PATTERNS: "dismissed_recurring_patterns",
 

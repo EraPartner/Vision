@@ -48,8 +48,10 @@ interface SplitEntry {
 
 interface SplitTransactionDialogProps {
     triggerLabel?: string;
-    /** Replaces the default icon button; rendered through DialogTrigger asChild. */
-    trigger?: ReactElement;
+    /** Custom trigger, or null for a dialog opened by its parent. */
+    trigger?: ReactElement | null;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
     transactionId: number;
     transactionAmount: number;
     transactionCurrency: string;
@@ -58,11 +60,18 @@ interface SplitTransactionDialogProps {
 export function SplitTransactionDialog({
     triggerLabel,
     trigger,
+    open: controlledOpen,
+    onOpenChange,
     transactionId,
     transactionAmount,
     transactionCurrency,
 }: SplitTransactionDialogProps) {
-    const [open, setOpen] = useState(false);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const open = controlledOpen ?? internalOpen;
+    const setOpen = (next: boolean) => {
+        setInternalOpen(next);
+        onOpenChange?.(next);
+    };
     const [splitType, setSplitType] = useState<SplitType>("equal");
     const [entries, setEntries] = useState<SplitEntry[]>([
         { uid: crypto.randomUUID(), recipient_id: null, amount: "", note: "" },
@@ -154,11 +163,11 @@ export function SplitTransactionDialog({
           : splitType === "full"
             ? fullShares.some((share) => share <= 0)
             : validEntries.some((entry) => {
-                if (!entry.recipient_id) return false;
-                return (
-                    parseDecimal(entry.amount, appSettings.numberFormat) <= 0
-                );
-            });
+                  if (!entry.recipient_id) return false;
+                  return (
+                      parseDecimal(entry.amount, appSettings.numberFormat) <= 0
+                  );
+              });
     const totalAfterSubmit = roundMoney(
         toDecimal(existingSplitTotal).plus(newSplitTotal),
     );
@@ -214,7 +223,7 @@ export function SplitTransactionDialog({
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            {trigger ? (
+            {trigger === null ? null : trigger ? (
                 <DialogTrigger asChild>{trigger}</DialogTrigger>
             ) : (
                 <Tooltip>
