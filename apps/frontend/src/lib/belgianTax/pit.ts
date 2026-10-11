@@ -101,6 +101,7 @@ function computeExemptionBenefit(
 function computeProfessionalExpenses(
     profile: BelgianTaxProfile,
     table: BelgianTaxYearTable,
+    employeeSocialSecurity: number,
 ): number {
     if (profile.professionalExpenseMethod === "actual") {
         // Union dues are professional expenses (CIR-92 art. 49) — deductible only
@@ -119,7 +120,13 @@ function computeProfessionalExpenses(
     //  - al. 2, 4°: liberal-profession fees (baten) get the degressive 28.7/10/5/3% scale
     //    with the "conjoints aidants et profits" cap.
     // Pensions and other replacement income carry no forfait.
-    const gross = Math.max(profile.grossAnnualIncome || 0, 0);
+    // Art. 51 al. 1: the percentages apply to the gross income "vooraf verminderd met"
+    // the art. 52, 7° social contributions (FPS Finance, Beroepsinkomen: "brutoberoepsinkomen
+    // (verminderd met bijdragen)"), so the employee contribution comes off first.
+    const gross = Math.max(
+        Math.max(profile.grossAnnualIncome || 0, 0) - Math.max(employeeSocialSecurity, 0),
+        0,
+    );
     if (profile.employmentType === "director") {
         return Math.min(
             gross * table.directorProfessionalExpenseRate,
@@ -329,18 +336,36 @@ function applyMaritalQuotient(
     singlePitAfterExemption: number,
     personalExemptionTotal: number,
 ): MaritalQuotientOutcome {
-    const baseline: MaritalQuotientOutcome = {
+    const single: MaritalQuotientOutcome = {
         transfer: 0,
         earnerTaxable: earnerTaxableIn,
-        spouseTaxable: Math.max(profile.spouseProfessionalIncome || 0, 0),
+        spouseTaxable: 0,
         bracketTax: singleBracketTax,
         exemptionBenefit: singleExemptionBenefit,
         pitAfterExemption: singlePitAfterExemption,
         benefit: 0,
     };
-    if (profile.filingStatus !== "married_joint") return baseline;
+    if (profile.filingStatus !== "married_joint") return single;
 
+    // Art. 126 §1 / art. 130: under joint assessment each spouse's income is taxed in their own
+    // name (décumul), so the spouse's own professional income carries its own progressive tax
+    // and basic exemption even when no quotient is transferred. The no-quotient baseline is
+    // therefore the sum of both spouses' taxes, not the earner's tax alone.
     const spouseTaxableIn = Math.max(profile.spouseProfessionalIncome || 0, 0);
+    const spouseOwnBracket = computeProgressiveTax(spouseTaxableIn, table.brackets);
+    const spouseOwnExBenefit = computeExemptionBenefit(
+        Math.min(table.basicPersonalExemption, spouseTaxableIn),
+        table.exemptionBrackets,
+    );
+    const spouseOwnPitAfter = clampAtZero(spouseOwnBracket.total - spouseOwnExBenefit);
+    const baseline: MaritalQuotientOutcome = {
+        ...single,
+        spouseTaxable: spouseTaxableIn,
+        bracketTax: addBracketTax(singleBracketTax, spouseOwnBracket),
+        exemptionBenefit: singleExemptionBenefit + spouseOwnExBenefit,
+        pitAfterExemption: singlePitAfterExemption + spouseOwnPitAfter,
+    };
+
     const household = earnerTaxableIn + spouseTaxableIn;
     if (household <= 0) return baseline;
 
@@ -376,8 +401,9 @@ function applyMaritalQuotient(
     const spousePitAfter = clampAtZero(spouseBracket.total - spouseExBenefit);
 
     const combinedPitAfter = earnerPitAfter + spousePitAfter;
-    // Marital quotient is automatic — applied only when it lowers total tax.
-    if (combinedPitAfter >= singlePitAfterExemption) return baseline;
+    // Marital quotient is automatic — applied only when it lowers the household's total tax
+    // compared with taxing each spouse's own income (art. 88 al. 2).
+    if (combinedPitAfter >= baseline.pitAfterExemption) return baseline;
 
     return {
         transfer,
@@ -386,7 +412,7 @@ function applyMaritalQuotient(
         bracketTax: addBracketTax(earnerBracket, spouseBracket),
         exemptionBenefit: earnerExBenefit + spouseExBenefit,
         pitAfterExemption: combinedPitAfter,
-        benefit: singlePitAfterExemption - combinedPitAfter,
+        benefit: baseline.pitAfterExemption - combinedPitAfter,
     };
 }
 
@@ -435,7 +461,7 @@ export function computeBelgianPIT(
     const netAfterSS = gross - employeeSS;
 
     // 3. Professional expense deduction
-    const profExpenses = computeProfessionalExpenses(profile, table);
+    const profExpenses = computeProfessionalExpenses(profile, table, employeeSS);
 
     // 4. True deductions from taxable basis: alimony (CIR-92 art. 104; 80% up to 2024,
     //    70% in 2025, 60% in 2026 — `table.alimonyDeductibleFraction`).

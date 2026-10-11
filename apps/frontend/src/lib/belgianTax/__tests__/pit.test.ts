@@ -84,6 +84,20 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.professionalExpenses).toBe(5_930);
     });
 
+    test("employee forfait is computed on gross pay after the 13.07% contribution (art. 51 al. 1)", () => {
+        // WIB 92 art. 51 al. 1: percentages of the gross income "vooraf verminderd met" the
+        // art. 52, 7° contributions; FPS Finance › Beroepsinkomen: "brutoberoepsinkomen
+        // (verminderd met bijdragen)". Gross 15_000 → SS 1_960.50 → base 13_039.50 × 30%.
+        const result = computeBelgianPIT(profile({ grossAnnualIncome: 15_000 }));
+        expect(result.employeeSocialSecurity).toBeCloseTo(1_960.5, 5);
+        expect(result.professionalExpenses).toBeCloseTo(3_911.85, 5);
+        // Civil servants: 11.07% comes off first as well.
+        const civil = computeBelgianPIT(
+            profile({ employmentType: "civil_servant", grossAnnualIncome: 15_000 }),
+        );
+        expect(civil.professionalExpenses).toBeCloseTo(15_000 * (1 - 0.1107) * 0.3, 5);
+    });
+
     test("director gets 3% / €3,130 cap forfait", () => {
         const result = computeBelgianPIT(
             profile({ employmentType: "director", grossAnnualIncome: 200_000 }),
@@ -743,6 +757,27 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         );
         expect(result.maritalQuotientTransfer).toBe(0);
         expect(result.maritalQuotientBenefit).toBe(0);
+    });
+
+    test("joint assessment taxes the spouse's own income even when no quotient applies (décumul)", () => {
+        // Art. 126 §1 and art. 130: each spouse's income is taxed in their own name. With the
+        // spouse at 35k (≥ 30% of the household) no transfer happens, but the household tax must
+        // still include the spouse's own progressive tax net of the basic exemption. Until
+        // 2026-10-11 the engine dropped the spouse's tax entirely in this case.
+        // IY 2025: brackets 16,320 / 28,800 / 49,840; basic exemption 10,910 × 25% = 2,727.50.
+        //  earner taxable 50_000 − 6_535 − 5_930 = 37_535 → 4_080 + 4_992 + 3_930.75 − 2_727.50 = 10_275.25
+        //  spouse 35_000                            → 4_080 + 4_992 + 2_790    − 2_727.50 =  9_134.50
+        const earnerOnly = computeBelgianPIT(
+            profile({ grossAnnualIncome: 50_000, filingStatus: "married_joint", spouseProfessionalIncome: 0 }),
+        );
+        const joint = computeBelgianPIT(
+            profile({ grossAnnualIncome: 50_000, filingStatus: "married_joint", spouseProfessionalIncome: 35_000 }),
+        );
+        expect(joint.maritalQuotientTransfer).toBe(0);
+        expect(joint.federalPITBeforeExemption - joint.personalExemptionBenefit).toBeCloseTo(10_275.25 + 9_134.5, 2);
+        expect(joint.federalPITBeforeExemption - joint.personalExemptionBenefit).toBeGreaterThan(
+            earnerOnly.federalPITBeforeExemption - earnerOnly.personalExemptionBenefit,
+        );
     });
 
     test("marital quotient ignored for single filer even if spouse income set", () => {
