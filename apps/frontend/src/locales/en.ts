@@ -4215,7 +4215,7 @@ const en: Record<string, string> = {
   'tax.household.event.kind.marriage': 'Marriage',
   'tax.household.event.kindLabel': 'Event',
   'tax.household.event.remove': 'Remove {event}',
-  'tax.household.events.desc': 'Dates of marriage, legal cohabitation, separation or divorce decide the assessment for each year.',
+  'tax.household.events.desc': 'Dates of marriage, legal cohabitation, separation or divorce decide the assessment for each year. A new event starts on 1 January of the previous year; enter the actual date.',
   'tax.household.events.empty': 'No events yet. Without a marriage or legal cohabitation you are assessed separately.',
   'tax.household.events.title': 'Relationship',
   'tax.household.expenseCategory.director': 'Director remuneration',

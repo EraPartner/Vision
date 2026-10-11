@@ -196,6 +196,31 @@ describe("TaxProfileDialog household editing", () => {
         expect(storedHousehold()?.relationship.events.map((e) => e.id)).toEqual(["evt_1"]);
     });
 
+    it("a first event on a migrated joint household keeps the joint assessment", async () => {
+        const { migratedFrom: _record, ...migrated } = upgradeProfileV1ToHousehold({
+            ...DEFAULT_BELGIAN_TAX_PROFILE,
+            profileConfigured: true,
+            grossAnnualIncome: 50_000,
+            filingStatus: "married_joint",
+            spouseProfessionalIncome: 20_000,
+        });
+        expect(migrated.relationship).toEqual({ events: [], legacyAssumedJoint: true });
+        serveHousehold(migrated);
+        const user = userEvent.setup();
+        renderWithApp(<TaxProfileDialog />);
+        await openSheet(user);
+
+        expect(await screen.findByText("Joint")).toBeInTheDocument();
+        await user.click(screen.getByRole("button", { name: /add event/i }));
+        const stored = storedHousehold();
+        expect(stored?.relationship.legacyAssumedJoint).toBeUndefined();
+        expect(stored?.relationship.events).toEqual([
+            { id: "evt_1", kind: "marriage", date: `${migrated.taxYear - 1}-01-01` },
+        ]);
+        expect(screen.getByText("Joint")).toBeInTheDocument();
+        expect(screen.queryByText("Separate")).not.toBeInTheDocument();
+    });
+
     it("edits dependants claimant and own-home claimant", async () => {
         serveHousehold(coupleHousehold());
         const user = userEvent.setup();

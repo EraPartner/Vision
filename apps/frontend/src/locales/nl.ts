@@ -4215,7 +4215,7 @@ const nl: Record<string, string> = {
   'tax.household.event.kind.marriage': 'Huwelijk',
   'tax.household.event.kindLabel': 'Gebeurtenis',
   'tax.household.event.remove': '{event} verwijderen',
-  'tax.household.events.desc': 'De data van huwelijk, wettelijke samenwoning, scheiding of echtscheiding bepalen de aanslag van elk jaar.',
+  'tax.household.events.desc': 'De data van huwelijk, wettelijke samenwoning, scheiding of echtscheiding bepalen de aanslag van elk jaar. Een nieuwe gebeurtenis start op 1 januari van het vorige jaar; vul de werkelijke datum in.',
   'tax.household.events.empty': 'Nog geen gebeurtenissen. Zonder huwelijk of wettelijke samenwoning word je afzonderlijk belast.',
   'tax.household.events.title': 'Relatie',
   'tax.household.expenseCategory.director': 'Bezoldiging bedrijfsleider',

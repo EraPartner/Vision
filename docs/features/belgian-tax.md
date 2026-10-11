@@ -464,7 +464,9 @@ The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits 
   separate or joint) with its reason and article, read only; an "I have a partner" switch that
   adds partner B (one employee activity) or removes B with every reference to B (events naming
   B, B as claimant, the death-year election, the legacy joint assumption); relationship events
-  (kind and date, the deceased partner for a death); the death-year election when the year is
+  (kind and date, the deceased partner for a death; a new event is a marriage on 1 January of
+  the year before the income year, so a migrated joint household stays joint until the user
+  enters the actual date); the death-year election when the year is
   electable; who claims the dependants and the own-home credit.
 - **Income** step, per partner: activities (kind, gross amount or the net amount of a
   `net_professional_amount`, optional start and end dates), the expense method per forfait

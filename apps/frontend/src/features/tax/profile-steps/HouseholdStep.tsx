@@ -281,8 +281,11 @@ export function HouseholdStep({
                             size="sm"
                             variant="outline"
                             onClick={() =>
+                                // Default to a marriage before the income year: a marriage in
+                                // the year itself is assessed separately (art. 126 §2 1°), which
+                                // would flip a migrated joint household until the date is edited.
                                 updateHousehold((h) =>
-                                    addRelationshipEvent(h, "marriage", `${year}-01-01`),
+                                    addRelationshipEvent(h, "marriage", `${year - 1}-01-01`),
                                 )
                             }
                         >
