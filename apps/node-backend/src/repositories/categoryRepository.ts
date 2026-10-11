@@ -19,12 +19,12 @@ import type { CategoryRow, EnrichedCategoryRow } from "../types/rows.ts";
 export type { EnrichedCategoryRow };
 
 export interface CategoryFilters {
-  limit?: number | null;
-  offset?: number;
-  general?: string | null;
-  detail?: string | null;
-  search?: string | null;
-  active?: boolean;
+  limit?: number | null | undefined;
+  offset?: number | undefined;
+  general?: string | null | undefined;
+  detail?: string | null | undefined;
+  search?: string | null | undefined;
+  active?: boolean | undefined;
 }
 
 export const categoryRepository = {
@@ -142,7 +142,7 @@ export const categoryRepository = {
   }: {
     general: string;
     detail: string;
-    description?: string | null;
+    description?: string | null | undefined;
   }): Promise<{ category: EnrichedCategoryRow | null; created: boolean }> {
     const g = general.toUpperCase().trim();
     const d = detail.toUpperCase().trim();
@@ -190,10 +190,10 @@ export const categoryRepository = {
       description,
       is_active,
     }: {
-      general?: string | null;
-      detail?: string | null;
-      description?: string | null;
-      is_active?: boolean | null;
+      general?: string | null | undefined;
+      detail?: string | null | undefined;
+      description?: string | null | undefined;
+      is_active?: boolean | null | undefined;
     },
   ): Promise<EnrichedCategoryRow | null> {
     // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.

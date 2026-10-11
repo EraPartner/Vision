@@ -71,7 +71,7 @@ export interface ParsedBankTransaction {
   /** the source line/record, kept for dedup + provenance. */
   rawData: string;
   /** immutable source transaction identifier when the export provides one. */
-  sourceId?: string | null;
+  sourceId?: string | null | undefined;
   /** belfius only: (statement no, transaction no); consumed and stripped by its applyRunningBalances. */
   _seq?: [number, number];
 }
@@ -562,6 +562,17 @@ export function stripTerminalRecordDelimiter(raw: unknown): string {
  * tuple/object without changing the public record shape adapters consume.
  * `T` names the record shape `options` asks for, as for parseCsvFile.
  */
+/**
+ * The csv-parse `columns` option for a retained source header list, omitted
+ * when there is none (csv-parse treats an absent and an undefined `columns`
+ * alike, as `false`).
+ */
+export function sourceColumnsOption(columns: string[] | undefined): {
+  columns?: string[];
+} {
+  return columns === undefined ? {} : { columns };
+}
+
 export function parseCsvText<T extends CsvRecord = Record<string, string>>(
   content: string,
   options: CsvParseOptions,

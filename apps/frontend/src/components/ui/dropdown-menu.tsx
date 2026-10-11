@@ -98,7 +98,7 @@ const DropdownMenuCheckboxItem = React.forwardRef<
     <DropdownMenuPrimitive.CheckboxItem
         ref={ref}
         className={cn(itemBase, "py-1.5 pl-8 pr-2", className)}
-        checked={checked}
+        {...(checked === undefined ? {} : { checked })}
         {...props}
     >
         <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">

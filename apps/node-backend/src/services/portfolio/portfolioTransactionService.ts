@@ -97,9 +97,9 @@ async function updateUnlocked(
 
   // The 2-of-3 patch re-derives the third unit-math field from scratch.
   const input: Omit<typeof merged, "amount" | "units" | "price_per_unit"> & {
-    amount?: number;
-    units?: number | null;
-    price_per_unit?: number | null;
+    amount?: number | undefined;
+    units?: number | null | undefined;
+    price_per_unit?: number | null | undefined;
   } = { ...merged };
   if (appliesUnitMath && patchCount === 2) {
     if (!hasAmount) input.amount = undefined;

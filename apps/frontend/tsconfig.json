@@ -31,6 +31,7 @@
         "noFallthroughCasesInSwitch": true,
         "noUncheckedSideEffectImports": true,
         "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
         "noImplicitOverride": true,
         "noImplicitReturns": true,
         "erasableSyntaxOnly": true,

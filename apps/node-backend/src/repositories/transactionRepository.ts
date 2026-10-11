@@ -90,17 +90,17 @@ export interface TransactionCreateInput {
   /** 'YYYY-MM-DD' */
   transaction_date: string;
   /** Canonical account identity. */
-  account_id?: number | null;
-  recipient_id?: number | null;
+  account_id?: number | null | undefined;
+  recipient_id?: number | null | undefined;
   amount: number | string;
   /** Upper-cased before insert. */
-  memo?: string | null;
+  memo?: string | null | undefined;
   /** Defaults to 'EUR' (the column is NOT NULL — migration 0046). */
-  currency?: string | null;
-  category_id?: number | null;
-  comment?: string | null;
+  currency?: string | null | undefined;
+  category_id?: number | null | undefined;
+  comment?: string | null | undefined;
   /** `null` means "do not touch tags". */
-  tags?: string[] | null;
+  tags?: string[] | null | undefined;
 }
 
 /** The `insertImportedRow()` payload. */
@@ -129,30 +129,30 @@ export interface ImportedTransactionInput {
  * Every field is optional; `null` means "not filtered".
  */
 export interface TransactionFilters {
-  transactionId?: number | null;
-  limit?: number;
-  offset?: number;
+  transactionId?: number | null | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
   /** 'YYYY-MM-DD' */
-  startDate?: string | null;
+  startDate?: string | null | undefined;
   /** 'YYYY-MM-DD' */
-  endDate?: string | null;
-  accountId?: number | null;
-  bankAccount?: string | null;
-  categoryId?: number | null;
-  categoryIds?: number[] | null;
-  recipientId?: number | null;
-  recipientGroupId?: number | null;
-  recipientName?: string | null;
-  search?: string | null;
-  active?: boolean;
-  sortBy?: string | null;
-  sortDir?: "asc" | "desc" | null;
-  includeBalance?: boolean;
-  transactionType?: "income" | "expense" | null;
-  amountMin?: number | null;
-  amountMax?: number | null;
-  amountSigned?: boolean;
-  tagSlugs?: string[] | null;
+  endDate?: string | null | undefined;
+  accountId?: number | null | undefined;
+  bankAccount?: string | null | undefined;
+  categoryId?: number | null | undefined;
+  categoryIds?: number[] | null | undefined;
+  recipientId?: number | null | undefined;
+  recipientGroupId?: number | null | undefined;
+  recipientName?: string | null | undefined;
+  search?: string | null | undefined;
+  active?: boolean | undefined;
+  sortBy?: string | null | undefined;
+  sortDir?: "asc" | "desc" | null | undefined;
+  includeBalance?: boolean | undefined;
+  transactionType?: "income" | "expense" | null | undefined;
+  amountMin?: number | null | undefined;
+  amountMax?: number | null | undefined;
+  amountSigned?: boolean | undefined;
+  tagSlugs?: string[] | null | undefined;
 }
 
 // Shared JOIN fragment used by every multi-join query.

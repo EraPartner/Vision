@@ -30,7 +30,7 @@ export function recordKinesisCash(member: {
   row: InsertKinesisCashArgs["row"];
   values: KinesisCashValues;
   proof?: unknown;
-  feeValues?: KinesisCashValues;
+  feeValues?: KinesisCashValues | undefined;
 }) {
   return insertKinesisCash({
     ...member,

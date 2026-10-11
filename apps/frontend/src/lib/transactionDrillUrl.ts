@@ -4,7 +4,7 @@ export type TransactionDrillValueMode =
     "absolute" | "income" | "expense" | "net";
 
 export interface TransactionDrillParams {
-    categoryId?: number;
+    categoryId?: number | undefined;
     categoryIds?: number[];
     period?: string;
     valueMode?: TransactionDrillValueMode;

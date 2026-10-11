@@ -21,18 +21,18 @@ import type { FieldErrorAria } from "@/hooks/useFieldErrors";
 import { enUS, nl } from "date-fns/locale";
 
 type DatePickerProps = FieldErrorAria & {
-    value?: Date;
+    value?: Date | undefined;
     onChange: (date?: Date) => void;
-    placeholder?: string;
-    disabled?: boolean;
-    className?: string;
-    buttonClassName?: string;
-    align?: "start" | "center" | "end";
-    allowClear?: boolean;
-    clearLabel?: string;
-    portalContainer?: HTMLElement | null;
+    placeholder?: string | undefined;
+    disabled?: boolean | undefined;
+    className?: string | undefined;
+    buttonClassName?: string | undefined;
+    align?: "start" | "center" | "end" | undefined;
+    allowClear?: boolean | undefined;
+    clearLabel?: string | undefined;
+    portalContainer?: HTMLElement | null | undefined;
     /** Put on the trigger, so a <Label htmlFor> and a <FieldError> can reach it. */
-    id?: string;
+    id?: string | undefined;
 };
 
 export function DatePicker({

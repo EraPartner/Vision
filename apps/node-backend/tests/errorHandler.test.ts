@@ -7,6 +7,7 @@
  * (body-parser's http-errors) — see THE RULE in src/middleware/errorHandler.ts.
  */
 
+import { bodyAt } from './helpers/responseBody.ts';
 import express from 'express';
 import supertest from 'supertest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -325,9 +326,9 @@ describe('forwarded 4xx over real Express (supertest)', () => {
       .send('{"amount": ');
 
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
-    expect(res.body.error.message).toMatch(/JSON/i);
-    expect(res.body.error.message).not.toBe(PROD_5XX);
+    expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
+    expect(bodyAt(res, 'error', 'message')).toMatch(/JSON/i);
+    expect(bodyAt(res, 'error', 'message')).not.toBe(PROD_5XX);
   });
 
   it.each([['dev', false], ['production', true]])('over-limit body → 413 with its reason visible (%s)', async (_label, production) => {
@@ -336,24 +337,24 @@ describe('forwarded 4xx over real Express (supertest)', () => {
       .send({ memo: 'x'.repeat(1024 * 1024 + 100) });
 
     expect(res.status).toBe(413);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
-    expect(res.body.error.message).toBe('request entity too large');
+    expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
+    expect(bodyAt(res, 'error', 'message')).toBe('request entity too large');
   });
 
   it('a route-thrown non-AppError with status 403 → 403 with the generic reason phrase', async () => {
     const res = await agent(true).get('/api/fixture/fake403');
     expect(res.status).toBe(403);
-    expect(res.body.error).toEqual({ code: 'FORBIDDEN', message: 'Forbidden' });
+    expect(bodyAt(res, 'error')).toEqual({ code: 'FORBIDDEN', message: 'Forbidden' });
     expect(JSON.stringify(res.body)).not.toContain('ldap');
   });
 
   it('a route-thrown non-AppError with no status → 500, sanitized in production', async () => {
     const dev = await agent(false).get('/api/fixture/boom');
     expect(dev.status).toBe(500);
-    expect(dev.body.error).toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: 'DB password wrong' });
+    expect(bodyAt(dev, 'error')).toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: 'DB password wrong' });
 
     const prod = await agent(true).get('/api/fixture/boom');
     expect(prod.status).toBe(500);
-    expect(prod.body.error).toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: PROD_5XX });
+    expect(bodyAt(prod, 'error')).toMatchObject({ code: 'INTERNAL_SERVER_ERROR', message: PROD_5XX });
   });
 });

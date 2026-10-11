@@ -8,6 +8,7 @@
  * become supertest requests and `.rejects.toBeInstanceOf(...)` assertions
  * become status-code + envelope assertions against the real error handler.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, okEnvelope, errEnvelope } from "../helpers/routeApp.ts";
@@ -87,7 +88,7 @@ describe("Saved Charts Routes", () => {
       savedChartsRepository.getAll.mockRejectedValue(new Error("db down"));
 
       const res = await api.get(BASE).expect(500);
-      expect(res.body.error.message).toBe("db down");
+      expect(bodyAt(res, "error", "message")).toBe("db down");
     });
   });
 

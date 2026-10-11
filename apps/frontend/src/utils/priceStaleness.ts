@@ -8,8 +8,8 @@
 const DEFAULT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 interface InvestmentLike {
-    price_provider?: string;
-    price_updated_at?: string | null;
+    price_provider?: string | undefined;
+    price_updated_at?: string | null | undefined;
     is_active?: boolean;
 }
 

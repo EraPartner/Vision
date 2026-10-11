@@ -1,3 +1,4 @@
+import { bodyAt } from "../helpers/responseBody.ts";
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -115,7 +116,7 @@ describe("portfolio workbook multipart boundary", () => {
         { sheet: "Other", headers: ["Name"], records: [{ Name: "Example" }] },
       ]);
       const response = await request(endpoint).expect(400);
-      expect(response.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(response, "error", "code")).toBe("VALIDATION_ERROR");
       expect(response.headers["content-type"]).toContain("application/json");
       expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
     },
@@ -125,7 +126,7 @@ describe("portfolio workbook multipart boundary", () => {
     sheets[2]!.records.shift();
     await writeSyntheticWorkbook(file, sheets);
     const response = await request().expect(400);
-    expect(response.body.error.message).toContain("do not reconcile");
+    expect(bodyAt(response, "error", "message")).toContain("do not reconcile");
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
   });
   it("rejects workbook with an unrelated selected parser and rejects legacy Excel outside IBKR funding", async () => {
@@ -154,7 +155,7 @@ describe("portfolio workbook multipart boundary", () => {
         contentType: "application/vnd.ms-excel",
       })
       .expect(400);
-    expect(rejected.body.error.message).toContain(
+    expect(bodyAt(rejected, "error", "message")).toContain(
       "IBKR XLS/XLSX funding history",
     );
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();

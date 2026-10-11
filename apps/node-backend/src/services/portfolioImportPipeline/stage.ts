@@ -53,13 +53,13 @@ export async function createBatch({
   accountId,
 }: {
   adapterName: string;
-  filename?: string | null;
-  sizeBytes?: number | null;
-  customConfig?: object | null;
-  defaultAssetClass?: string | null;
-  defaultType?: string | null;
-  isBrokerage?: boolean;
-  accountId?: number | string | null;
+  filename?: string | null | undefined;
+  sizeBytes?: number | null | undefined;
+  customConfig?: object | null | undefined;
+  defaultAssetClass?: string | null | undefined;
+  defaultType?: string | null | undefined;
+  isBrokerage?: boolean | undefined;
+  accountId?: number | string | null | undefined;
 }): Promise<number> {
   const inserted = await queryOne(
     bigintIdRowSchema,
@@ -97,7 +97,7 @@ export async function stageBatch({
   batchId: PortfolioImportBatchId;
   filePath: string;
   customConfig: PortfolioParserConfig;
-  onProgress?: PortfolioImportProgressCallback;
+  onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{ rowsTotal: number; rowsSkipped: number }> {
   return runImportStageLifecycle({
     batchId,

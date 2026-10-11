@@ -9,24 +9,24 @@ import { TransactionsExportButtons } from "./TransactionsExportButtons";
 import { useRecipient } from "@/hooks/useRecipients";
 
 interface FilterBannerProps {
-    transactionIdFilter?: number;
-    recipientIdFilter?: number;
-    categoryIdFilter?: number;
-    categoryIdsFilter?: number[];
-    startDateFilter?: string;
-    endDateFilter?: string;
-    transactionTypeFilter?: "income" | "expense";
-    amountMinFilter?: number;
-    amountMaxFilter?: number;
-    amountSignedFilter?: boolean;
-    searchFilter?: string;
-    filterLabel?: string;
+    transactionIdFilter?: number | undefined;
+    recipientIdFilter?: number | undefined;
+    categoryIdFilter?: number | undefined;
+    categoryIdsFilter?: number[] | undefined;
+    startDateFilter?: string | undefined;
+    endDateFilter?: string | undefined;
+    transactionTypeFilter?: "income" | "expense" | undefined;
+    amountMinFilter?: number | undefined;
+    amountMaxFilter?: number | undefined;
+    amountSignedFilter?: boolean | undefined;
+    searchFilter?: string | undefined;
+    filterLabel?: string | undefined;
     /** Preferred account filter (exact FK match, ADR-088); shown via filterLabel. */
-    accountIdFilter?: number;
-    bankAccountFilter?: string;
-    tagsFilter?: string[];
+    accountIdFilter?: number | undefined;
+    bankAccountFilter?: string | undefined;
+    tagsFilter?: string[] | undefined;
     onClear: () => void;
-    onClearTags?: () => void;
+    onClearTags?: (() => void) | undefined;
 }
 
 export function FilterBanner({

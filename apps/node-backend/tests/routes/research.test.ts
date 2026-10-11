@@ -11,6 +11,7 @@
  * before this router — deliberately not reproduced here (module-level counter
  * shared across the whole worker; see routeApp.js's fidelity map).
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -103,7 +104,9 @@ describe("Research route parameter guards", () => {
       "GET %s rejects a missing/empty symbol",
       async (path) => {
         const res1 = await api.get(`${BASE}${path}`).expect(400);
-        expect(res1.body.error.message).toBe("symbol parameter required");
+        expect(bodyAt(res1, "error", "message")).toBe(
+          "symbol parameter required",
+        );
 
         const res2 = await api
           .get(`${BASE}${path}`)
@@ -144,7 +147,7 @@ describe("Research route parameter guards", () => {
         .get(`${BASE}/macro/series`)
         .query({ provider: "nope", series_id: "CPIAUCSL" })
         .expect(400);
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "provider must be one of: fred, eurostat, dbnomics",
       );
     });
@@ -154,7 +157,7 @@ describe("Research route parameter guards", () => {
         .get(`${BASE}/macro/series`)
         .query({ provider: "fred", series_id: "a/b/c" })
         .expect(400);
-      expect(res1.body.error.message).toBe(
+      expect(bodyAt(res1, "error", "message")).toBe(
         "valid series_id required for the given provider",
       );
 
@@ -162,7 +165,7 @@ describe("Research route parameter guards", () => {
         .get(`${BASE}/macro/series`)
         .query({ provider: "fred" })
         .expect(400);
-      expect(res2.body.error.message).toBe(
+      expect(bodyAt(res2, "error", "message")).toBe(
         "valid series_id required for the given provider",
       );
     });
@@ -183,7 +186,7 @@ describe("Research route parameter guards", () => {
   describe("mapping guards", () => {
     it("GET /mappings requires instrument_key and defaults key_type to isin", async () => {
       const res = await api.get(`${BASE}/mappings`).expect(400);
-      expect(res.body.error.message).toBe("instrument_key required");
+      expect(bodyAt(res, "error", "message")).toBe("instrument_key required");
 
       await api
         .get(`${BASE}/mappings`)
@@ -200,7 +203,7 @@ describe("Research route parameter guards", () => {
         .get(`${BASE}/mappings`)
         .query({ instrument_key: "X", key_type: "weird" })
         .expect(400);
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "key_type must be 'isin' or 'internal'",
       );
     });
@@ -217,7 +220,7 @@ describe("Research route parameter guards", () => {
         .post(`${BASE}/mappings/resolve`)
         .send({ instrument_key: "X", query: "" })
         .expect(400);
-      expect(res.body.error.message).toBe("query required");
+      expect(bodyAt(res, "error", "message")).toBe("query required");
 
       await api
         .post(`${BASE}/mappings/resolve`)
@@ -251,7 +254,7 @@ describe("Research route parameter guards", () => {
           .post(`${BASE}/mappings/resolve`)
           .send({ instrument_key: "X", query: "apple", investment_id })
           .expect(400);
-        expect(bad.body.error.message).toBe(
+        expect(bodyAt(bad, "error", "message")).toBe(
           "investment_id must be a positive integer",
         );
       }
@@ -291,7 +294,7 @@ describe("Research route parameter guards", () => {
         })
         .expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         instrument_key: "US0378331005",
         key_type: "isin",
         proposals: [
@@ -299,8 +302,8 @@ describe("Research route parameter guards", () => {
         ],
         existing: [],
       });
-      expect(res.body.data).not.toHaveProperty("instrumentKey");
-      expect(res.body.data).not.toHaveProperty("keyType");
+      expect(bodyAt(res, "data")).not.toHaveProperty("instrumentKey");
+      expect(bodyAt(res, "data")).not.toHaveProperty("keyType");
     });
 
     it("POST /mappings rejects a missing or empty mappings array", async () => {
@@ -309,7 +312,7 @@ describe("Research route parameter guards", () => {
           .post(`${BASE}/mappings`)
           .send({ instrument_key: "X", mappings })
           .expect(400);
-        expect(res.body.error.message).toBe(
+        expect(bodyAt(res, "error", "message")).toBe(
           "mappings must be a non-empty array",
         );
       }
@@ -324,11 +327,15 @@ describe("Research route parameter guards", () => {
     it("DELETE /mappings/:id rejects a trailing-garbage id instead of coercing it", async () => {
       researchMappingService.remove.mockResolvedValue(true);
       const res = await api.delete(`${BASE}/mappings/12abc`).expect(400);
-      expect(res.body.error.message).toBe("id must be a positive integer");
+      expect(bodyAt(res, "error", "message")).toBe(
+        "id must be a positive integer",
+      );
       expect(researchMappingService.remove).not.toHaveBeenCalled();
 
       const res2 = await api.delete(`${BASE}/mappings/abc`).expect(400);
-      expect(res2.body.error.message).toBe("id must be a positive integer");
+      expect(bodyAt(res2, "error", "message")).toBe(
+        "id must be a positive integer",
+      );
 
       const res3 = await api.delete(`${BASE}/mappings/12`).expect(204);
       expect(researchMappingService.remove).toHaveBeenCalledWith(12);
@@ -390,7 +397,7 @@ describe("Research route parameter guards", () => {
           targetValue: 100000,
         }),
       );
-      expect(res.body.data).toEqual({ bands: [] });
+      expect(bodyAt(res, "data")).toEqual({ bands: [] });
     });
 
     it("passes a bounded contribution schedule and dated goal", async () => {
@@ -506,7 +513,7 @@ describe("Research route parameter guards", () => {
         .post(`${BASE}/portfolio-forecast`)
         .send({ horizon_months: 12, goal_month: "3", target_value: 10 })
         .expect(400);
-      expect(res.body.error.message).toBe(
+      expect(bodyAt(res, "error", "message")).toBe(
         "goal_month must be within horizon_months and accompanied by a positive target_value",
       );
     });
@@ -517,7 +524,7 @@ describe("Research route parameter guards", () => {
         .send({ instrument_key: "X", mappings: [{ providerSymbol: "AAPL" }] })
         .expect(400);
       expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-      expect(res.body.error.message).toMatch(/^0\.provider: /);
+      expect(bodyAt(res, "error", "message")).toMatch(/^0\.provider: /);
       expect(researchMappingService.save).not.toHaveBeenCalled();
     });
 
@@ -543,7 +550,9 @@ describe("Research route parameter guards", () => {
         .put(`${BASE}/provider-keys/nope`)
         .send({ api_key: "k" })
         .expect(400);
-      expect(res.body.error.message).toBe("Unknown keyed provider: nope");
+      expect(bodyAt(res, "error", "message")).toBe(
+        "Unknown keyed provider: nope",
+      );
       expect(setKey).not.toHaveBeenCalled();
     });
 
@@ -553,7 +562,7 @@ describe("Research route parameter guards", () => {
           .put(`${BASE}/provider-keys/finnhub`)
           .send(body)
           .expect(400);
-        expect(res.body.error.message).toBe(
+        expect(bodyAt(res, "error", "message")).toBe(
           "api_key must be a non-empty string",
         );
       }
@@ -579,7 +588,7 @@ describe("Research route parameter guards", () => {
     it("returns an empty payload without calling the aggregator", async () => {
       const res = await api.get(`${BASE}/search`).expect(200);
       expect(researchAggregator.fetch).not.toHaveBeenCalled();
-      expect(res.body.data).toEqual({ items: [] });
+      expect(bodyAt(res, "data")).toEqual({ items: [] });
     });
   });
 
@@ -593,8 +602,8 @@ describe("Research route parameter guards", () => {
       .query({ symbol: "XYZ" })
       .expect(200);
 
-    expect(res.body.data).toBeNull();
-    expect(res.body.meta).toMatchObject({
+    expect(bodyAt(res, "data")).toBeNull();
+    expect(bodyAt(res, "meta")).toMatchObject({
       provider: null,
       source: "unavailable",
     });

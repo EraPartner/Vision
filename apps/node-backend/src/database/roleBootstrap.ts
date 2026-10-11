@@ -75,7 +75,7 @@ export interface EnsureAppRoleOptions {
   /** Runtime pool URL (the app role). */
   databaseUrl: string;
   /** Privileged URL (DDL / Alembic role). */
-  migrationsUrl?: string;
+  migrationsUrl?: string | undefined;
   /** Connect attempts while the DB cold-starts. */
   maxAttempts?: number;
   log?: BootstrapLogger;

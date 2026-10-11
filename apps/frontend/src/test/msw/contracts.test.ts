@@ -75,8 +75,12 @@ async function mutateEnvelope(
 ): Promise<unknown> {
     const res = await fetch(`${BASE}${path}`, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
+        ...(body
+            ? {
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(body),
+              }
+            : {}),
     });
     expect(res.status, `expected ${expectedStatus} for ${method} ${path}`).toBe(
         expectedStatus,

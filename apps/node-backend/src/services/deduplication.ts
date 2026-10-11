@@ -35,10 +35,10 @@ function createTransactionHash(transactionData: FieldHashInput): string {
 export interface ManualHashInput {
   date: string | Date;
   amount: number | string;
-  recipientId?: number | string | null;
-  memo?: string | null;
-  bankAccount?: string | null;
-  accountId?: number | string | null;
+  recipientId?: number | string | null | undefined;
+  memo?: string | null | undefined;
+  bankAccount?: string | null | undefined;
+  accountId?: number | string | null | undefined;
 }
 
 /**

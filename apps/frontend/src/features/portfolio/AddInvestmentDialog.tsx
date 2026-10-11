@@ -198,8 +198,8 @@ export function AddInvestmentDialog({ allowedAssetClasses, trigger }: Props) {
         // the investment already committed.
         let initialBuy: {
             amount: number;
-            units?: number;
-            price_per_unit?: number;
+            units?: number | undefined;
+            price_per_unit?: number | undefined;
         } | null = null;
         if (form.addInitialPurchase) {
             if (!form.initialDate) {

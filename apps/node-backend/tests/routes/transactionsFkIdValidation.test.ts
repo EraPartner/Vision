@@ -19,6 +19,7 @@
  * 30-requests-per-minute limiter (routes/transactions.js), which a fresh module
  * registry resets.
  */
+import { bodyAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockTxConnection } from '../helpers/repoMocks.ts';
 import {
@@ -83,7 +84,7 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
     for (const recipient_id of RETARGETING) {
       const res = await patch({ recipient_id });
       expect(res.status, `expected ${JSON.stringify(recipient_id)} to be rejected`).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
     expect(transactionRepository.update).not.toHaveBeenCalled();
   });
@@ -92,7 +93,7 @@ describe('PATCH /:id — FK ids reject instead of retargeting', () => {
     for (const category_id of RETARGETING) {
       const res = await patch({ category_id });
       expect(res.status, `expected ${JSON.stringify(category_id)} to be rejected`).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
     expect(transactionRepository.update).not.toHaveBeenCalled();
   });
@@ -133,7 +134,7 @@ describe('POST / — FK ids reject instead of retargeting', () => {
     for (const category_id of [...RETARGETING, '12abc', 0, -5, '']) {
       const res = await post({ category_id });
       expect(res.status, `expected ${JSON.stringify(category_id)} to be rejected`).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     }
     expect(transactionRepository.create).not.toHaveBeenCalled();
   });

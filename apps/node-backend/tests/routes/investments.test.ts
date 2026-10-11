@@ -13,6 +13,7 @@
  * level (main.ts:291) — a module-scoped per-IP counter deliberately NOT
  * reproduced here per the routeApp.js fidelity map.
  */
+import { bodyAt, valueAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { MockInstance } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -199,8 +200,8 @@ describe("Investment Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.data.items).toHaveLength(1);
-      expect(res.body.data.total).toBe(1);
+      expect(bodyAt(res, "data", "items")).toHaveLength(1);
+      expect(bodyAt(res, "data", "total")).toBe(1);
     });
 
     it("should return empty list", async () => {
@@ -213,7 +214,7 @@ describe("Investment Routes", () => {
 
       const res = await api.get(`${BASE}/`).expect(200);
 
-      expect(res.body.data.items).toEqual([]);
+      expect(bodyAt(res, "data", "items")).toEqual([]);
     });
 
     it("should respect pagination and filters", async () => {
@@ -307,8 +308,8 @@ describe("Investment Routes", () => {
     it("should return supported providers", async () => {
       const res = await api.get(`${BASE}/providers`).expect(200);
 
-      expect(res.body.data.providers).toBeDefined();
-      expect(res.body.data.providers.length).toBeGreaterThan(0);
+      expect(bodyAt(res, "data", "providers")).toBeDefined();
+      expect(bodyAt(res, "data", "providers", "length")).toBeGreaterThan(0);
     });
   });
 
@@ -334,9 +335,9 @@ describe("Investment Routes", () => {
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.body.data;
-      expect(data.updated).toBe(1);
-      expect(data.priceSources).toEqual({ 1: "live" });
+      const data = bodyAt(res, "data");
+      expect(valueAt(data, "updated")).toBe(1);
+      expect(valueAt(data, "priceSources")).toEqual({ 1: "live" });
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([
         expect.objectContaining({ id: 1, current_price: 50000 }),
@@ -363,10 +364,10 @@ describe("Investment Routes", () => {
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.body.data;
-      expect(data.updated).toBe(0);
-      expect(data.prices).toEqual({ 1: 123.45 });
-      expect(data.priceSources).toEqual({ 1: "cached" });
+      const data = bodyAt(res, "data");
+      expect(valueAt(data, "updated")).toBe(0);
+      expect(valueAt(data, "prices")).toEqual({ 1: 123.45 });
+      expect(valueAt(data, "priceSources")).toEqual({ 1: "cached" });
       // Cached fallback rows must not reach the DB write.
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledWith([]);
     });
@@ -391,9 +392,9 @@ describe("Investment Routes", () => {
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.body.data;
-      expect(data.total).toBe(1);
-      expect(data.updated).toBe(1);
+      const data = bodyAt(res, "data");
+      expect(valueAt(data, "total")).toBe(1);
+      expect(valueAt(data, "updated")).toBe(1);
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
     });
 
@@ -417,11 +418,11 @@ describe("Investment Routes", () => {
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      const data = res.body.data;
-      expect(data.total).toBe(1);
-      expect(data.updated).toBe(1);
-      expect(data.prices).toEqual({ 1: 101.25 });
-      expect(data.priceSources).toEqual({ 1: "live" });
+      const data = bodyAt(res, "data");
+      expect(valueAt(data, "total")).toBe(1);
+      expect(valueAt(data, "updated")).toBe(1);
+      expect(valueAt(data, "prices")).toEqual({ 1: 101.25 });
+      expect(valueAt(data, "priceSources")).toEqual({ 1: "live" });
       expect(investmentRepository.updatePricesBulk).toHaveBeenCalledTimes(1);
     });
 
@@ -432,7 +433,7 @@ describe("Investment Routes", () => {
 
       const res = await api.post(`${BASE}/refresh-prices`).send({}).expect(200);
 
-      expect(res.body.data.updated).toBe(0);
+      expect(bodyAt(res, "data", "updated")).toBe(0);
     });
 
     it("should handle errors", async () => {
@@ -489,7 +490,7 @@ describe("Investment Routes", () => {
 
       const res = await api.get(`${BASE}/1`).expect(200);
 
-      expect(res.body.data.name).toBe("Bitcoin");
+      expect(bodyAt(res, "data", "name")).toBe("Bitcoin");
     });
 
     it("should throw NotFoundError for non-existent", async () => {
@@ -521,7 +522,7 @@ describe("Investment Routes", () => {
         .send({ name: "Updated" })
         .expect(200);
 
-      expect(res.body.data.name).toBe("Updated");
+      expect(bodyAt(res, "data", "name")).toBe("Updated");
     });
 
     it("should throw NotFoundError for non-existent", async () => {
@@ -599,8 +600,8 @@ describe("Investment Routes", () => {
 
       const res = await api.get(`${BASE}/1/transactions`).expect(200);
 
-      expect(res.body.data.items).toHaveLength(1);
-      expect(res.body.data.total).toBe(1);
+      expect(bodyAt(res, "data", "items")).toHaveLength(1);
+      expect(bodyAt(res, "data", "total")).toBe(1);
     });
 
     it("should filter by type", async () => {
@@ -1003,9 +1004,9 @@ describe("Investment Routes", () => {
 
       const res = await api.get(`${BASE}/1/summary`).expect(200);
 
-      const data = res.body.data;
-      expect(data.investment_id).toBe(1);
-      expect(data.breakdown).toHaveLength(1);
+      const data = bodyAt(res, "data");
+      expect(valueAt(data, "investment_id")).toBe(1);
+      expect(valueAt(data, "breakdown")).toHaveLength(1);
     });
 
     it("should handle errors", async () => {

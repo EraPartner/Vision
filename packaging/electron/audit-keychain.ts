@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 
 export interface KeychainWitnessOptions {
-  executable?: string;
+  executable?: string | undefined;
   runtimeId?: string;
   keychainPath?: string;
 }

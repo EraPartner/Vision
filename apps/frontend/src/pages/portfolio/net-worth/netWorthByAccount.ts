@@ -8,7 +8,7 @@ export interface NetWorthAccountRow {
     accountId: number | null;
     label: string;
     /** Account type for the row subtitle; undefined for the unassigned row. */
-    type?: AccountType;
+    type?: AccountType | undefined;
     cash: number;
     holdings: number;
     total: number;

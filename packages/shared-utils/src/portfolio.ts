@@ -41,18 +41,18 @@ export type TxnNumeric = number | string | Decimal | null;
 export type FxMultiplierInput = number | string | Decimal;
 
 export interface PortfolioTxnLike {
-  id?: number | string;
+  id?: number | string | undefined;
   type: string;
   date: string;
-  fxMultiplier?: number | string;
+  fxMultiplier?: number | string | undefined;
   /** Transaction currency → investment quote currency at the transaction date. */
-  nativeFxMultiplier?: number | string;
-  nativeCurrency?: string;
-  units?: TxnNumeric;
-  amount?: TxnNumeric;
-  fees?: TxnNumeric;
-  taxes?: TxnNumeric;
-  income_recognition_role?: "standard" | "included_in_units";
+  nativeFxMultiplier?: number | string | undefined;
+  nativeCurrency?: string | undefined;
+  units?: TxnNumeric | undefined;
+  amount?: TxnNumeric | undefined;
+  fees?: TxnNumeric | undefined;
+  taxes?: TxnNumeric | undefined;
+  income_recognition_role?: "standard" | "included_in_units" | undefined;
 }
 
 /**
@@ -71,7 +71,7 @@ export interface CostBasisTxnLike extends PortfolioTxnLike {
 }
 
 export interface CostBasisOptions {
-  defaultFxMultiplier?: FxMultiplierInput;
+  defaultFxMultiplier?: FxMultiplierInput | undefined;
 }
 
 /**
@@ -1006,25 +1006,25 @@ export function buildInvestmentSummaryCore(
 // ── ADR-108: partitioned per-broker positions & P&L ─────────────────────────
 
 export interface PartitionedTxnLike extends PortfolioTxnLike {
-  account_id?: number | string | null;
-  source_account_id?: number | string;
-  destination_account_id?: number | string;
-  fee_units?: number | string;
-  adjustment_kind?: "yield_reversal" | "asset_fee";
-  basis_policy?: "zero_yield_only" | "carried";
-  eligible_source_record_hashes?: string[];
-  source_record_hash?: string;
-  currency?: string;
+  account_id?: number | string | null | undefined;
+  source_account_id?: number | string | undefined;
+  destination_account_id?: number | string | undefined;
+  fee_units?: number | string | undefined;
+  adjustment_kind?: "yield_reversal" | "asset_fee" | undefined;
+  basis_policy?: "zero_yield_only" | "carried" | undefined;
+  eligible_source_record_hashes?: string[] | undefined;
+  source_record_hash?: string | undefined;
+  currency?: string | undefined;
 }
 export interface CustodyLot {
   acquisitionType?: string;
-  sourceRecordHash?: string;
+  sourceRecordHash?: string | undefined;
   units: Decimal;
   costBasis: Decimal;
   costBasisConv: Decimal;
   acquiredDate: string;
   acquisitionId: number | string;
-  currency?: string;
+  currency?: string | undefined;
   fxResolved: boolean;
 }
 export interface ProjectedCustodyTxn

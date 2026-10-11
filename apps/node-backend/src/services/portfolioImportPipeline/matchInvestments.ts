@@ -81,7 +81,7 @@ export async function matchBatch({
   onProgress,
 }: {
   batchId: PortfolioImportBatchId;
-  onProgress?: PortfolioImportProgressCallback;
+  onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{
   matchSourceCounts: Record<string, number>;
   unresolved: number;

@@ -9,10 +9,10 @@ import {
 } from "@/utils/currency";
 
 export interface CurrencyFormatterOptions {
-    currency?: string;
-    decimals?: number;
+    currency?: string | undefined;
+    decimals?: number | undefined;
     /** Render a locale-correct sign for non-zero amounts. */
-    signed?: boolean;
+    signed?: boolean | undefined;
 }
 
 export type CurrencyFormatter = (
@@ -89,7 +89,11 @@ export function useCurrencyFormatter(
 
 export type CurrencyPartsFormatter = (
     val: number,
-    opts?: { currency?: string; decimals?: number; signed?: boolean },
+    opts?: {
+        currency?: string | undefined;
+        decimals?: number | undefined;
+        signed?: boolean | undefined;
+    },
 ) => Intl.NumberFormatPart[];
 
 /**
@@ -112,9 +116,9 @@ export function useCurrencyPartsFormatter(
         (
             val: number,
             opts: {
-                currency?: string;
-                decimals?: number;
-                signed?: boolean;
+                currency?: string | undefined;
+                decimals?: number | undefined;
+                signed?: boolean | undefined;
             } = {},
         ) => {
             const currency = opts.currency ?? fallbackCurrency;

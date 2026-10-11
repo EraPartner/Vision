@@ -676,7 +676,7 @@ export default function PortfolioPage() {
         value: number;
         tone: string;
         signed?: boolean;
-        warning?: string;
+        warning?: string | undefined;
     }> = [
         {
             key: "invested",

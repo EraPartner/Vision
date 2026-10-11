@@ -92,7 +92,7 @@ export interface AnalysisCatalog {
 export interface AnalysisFilter {
     fieldId: string;
     operator: string;
-    value?: AnalysisValue;
+    value?: AnalysisValue | undefined;
 }
 export interface VisualAnalysisPlan {
     datasetId: string;
@@ -112,13 +112,16 @@ export interface VisualAnalysisPlan {
 }
 export interface AnalysisResult {
     complete?: boolean;
-    transformationCoverage?: Array<{
-        complete?: boolean;
-        [key: string]: unknown;
-    }>;
-    transformationErrors?: Array<{ message?: string; [key: string]: unknown }>;
-    preparationLineage?: Array<Record<string, unknown>>;
-    sourceResult?: AnalysisResult;
+    transformationCoverage?:
+        | Array<{
+              complete?: boolean;
+              [key: string]: unknown;
+          }>
+        | undefined;
+    transformationErrors?:
+        Array<{ message?: string; [key: string]: unknown }> | undefined;
+    preparationLineage?: Array<Record<string, unknown>> | undefined;
+    sourceResult?: AnalysisResult | undefined;
     coverage?: {
         complete?: boolean;
         status?: string;
@@ -141,13 +144,15 @@ export interface AnalysisResult {
     }>;
     generatedSql: string;
     byteLength: number;
-    formulaErrors?: Array<{
-        formulaId: string;
-        rowIndex?: number;
-        code: string;
-        message: string;
-    }>;
-    formulaSummaries?: Record<string, AnalysisValue>;
+    formulaErrors?:
+        | Array<{
+              formulaId: string;
+              rowIndex?: number | undefined;
+              code: string;
+              message: string;
+          }>
+        | undefined;
+    formulaSummaries?: Record<string, AnalysisValue> | undefined;
     window:
         | {
               kind: "page";
@@ -190,15 +195,15 @@ export const getAnalysisCatalog = () =>
 export function executeAnalysis(input: {
     requestId: string;
     mode: "visual" | "sql";
-    plan?: VisualAnalysisPlan;
-    sql?: string;
-    values?: AnalysisValue[];
-    datasetIds?: string[];
-    columns?: AnalysisField[];
-    limit?: number;
-    offset?: number;
-    workbench?: Record<string, unknown>;
-    formulaModel?: Record<string, unknown>;
+    plan?: VisualAnalysisPlan | undefined;
+    sql?: string | undefined;
+    values?: AnalysisValue[] | undefined;
+    datasetIds?: string[] | undefined;
+    columns?: AnalysisField[] | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    workbench?: Record<string, unknown> | undefined;
+    formulaModel?: Record<string, unknown> | undefined;
     scenarioModel?: unknown;
 }) {
     return apiRequest<AnalysisResult>("/api/analysis/execute", {

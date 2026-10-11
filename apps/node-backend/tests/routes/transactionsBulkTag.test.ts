@@ -6,6 +6,7 @@
  * per-route rate limiter declared on POST /bulk-tag (routes/transactions.js:433)
  * and the centralized error handler are both on the tested path.
  */
+import { bodyAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockPooledTxConnection } from '../helpers/repoMocks.ts';
 import { mockTransactionRepository, mockDeduplication, mockTransferReconciliation, mockCurrencyConversion } from '../helpers/transactionsRouteMocks.ts';
@@ -75,7 +76,7 @@ describe('POST /bulk-tag — unknown slug rejection', () => {
 
     const res = await bulkTag({ transaction_ids: [1], add_slugs: ['ghost-tag'] }).expect(400);
 
-    expect(res.body.error.message).toContain('ghost-tag');
+    expect(bodyAt(res, 'error', 'message')).toContain('ghost-tag');
     expect(getClient).not.toHaveBeenCalled();
   });
 
@@ -102,9 +103,9 @@ describe('POST /bulk-tag — success paths', () => {
 
     const res = await bulkTag({ transaction_ids: [1, 2], add_slugs: ['rome-2020'] }).expect(200);
 
-    expect(res.body.data.added).toBe(2);
-    expect(res.body.data.removed).toBe(0);
-    expect(res.body.data.transactions_affected).toBe(2);
+    expect(bodyAt(res, 'data', 'added')).toBe(2);
+    expect(bodyAt(res, 'data', 'removed')).toBe(0);
+    expect(bodyAt(res, 'data', 'transactions_affected')).toBe(2);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
@@ -119,8 +120,8 @@ describe('POST /bulk-tag — success paths', () => {
 
     const res = await bulkTag({ transaction_ids: [1], remove_slugs: ['rome-2020'] }).expect(200);
 
-    expect(res.body.data.removed).toBe(1);
-    expect(res.body.data.added).toBe(0);
+    expect(bodyAt(res, 'data', 'removed')).toBe(1);
+    expect(bodyAt(res, 'data', 'added')).toBe(0);
   });
 
   it('adds and removes in a single transaction', async () => {
@@ -139,8 +140,8 @@ describe('POST /bulk-tag — success paths', () => {
       transaction_ids: [1], add_slugs: ['rome-2020'], remove_slugs: ['work-trip'],
     }).expect(200);
 
-    expect(res.body.data.added).toBe(1);
-    expect(res.body.data.removed).toBe(1);
+    expect(bodyAt(res, 'data', 'added')).toBe(1);
+    expect(bodyAt(res, 'data', 'removed')).toBe(1);
   });
 });
 
@@ -159,7 +160,7 @@ describe('POST /bulk-tag — atomicity', () => {
     const res = await bulkTag({ transaction_ids: [1], add_slugs: ['rome-2020'] }).expect(500);
 
     expect(scheduleReconcile).not.toHaveBeenCalled();
-    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(bodyAt(res, 'error', 'code')).toBe('INTERNAL_SERVER_ERROR');
     const rollbackCall = clientQuery.mock.calls.find(([sql]) => sql === 'ROLLBACK');
     expect(rollbackCall).toBeDefined();
     expect(release).toHaveBeenCalledTimes(1);

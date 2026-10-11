@@ -65,7 +65,7 @@ export async function assertPortfolioImportReadiness({
   accountId?: number | null;
   reconciliationPlanned?: boolean;
   provedCompanionRowIds?: number[];
-  selectedRowIds?: number[];
+  selectedRowIds?: number[] | undefined;
 }): Promise<void> {
   if (!isMaintainedPortfolioImport(batch)) return;
 

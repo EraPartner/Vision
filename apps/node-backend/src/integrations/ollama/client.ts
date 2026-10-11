@@ -82,29 +82,29 @@ export interface OllamaClientOptions {
 }
 
 interface OllamaRequestOptions {
-  method?: string;
-  body?: Record<string, unknown>;
-  signal?: AbortSignal;
-  timeoutMs?: number;
-  maxResponseBytes?: number;
+  method?: string | undefined;
+  body?: Record<string, unknown> | undefined;
+  signal?: AbortSignal | undefined;
+  timeoutMs?: number | undefined;
+  maxResponseBytes?: number | undefined;
 }
 
 export interface OllamaChatParams {
-  model?: string;
+  model?: string | undefined;
   messages: unknown[];
-  tools?: unknown[];
+  tools?: unknown[] | undefined;
   options?: unknown;
   format?: unknown;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 export interface OllamaChatStreamParams {
-  model?: string;
-  messages?: unknown[];
-  tools?: unknown[];
+  model?: string | undefined;
+  messages?: unknown[] | undefined;
+  tools?: unknown[] | undefined;
   options?: unknown;
-  signal?: AbortSignal;
-  onToken?: (chunk: string) => void | Promise<void>;
+  signal?: AbortSignal | undefined;
+  onToken?: ((chunk: string) => void | Promise<void>) | undefined;
 }
 
 /** The assembled result of a streamed /api/chat call. */
@@ -298,8 +298,12 @@ function createOllamaClient({
     try {
       const response = await fetchImpl(url(path), {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        body: body ? JSON.stringify(body) : undefined,
+        ...(body
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            }
+          : {}),
         signal: composedSignal,
       });
 
@@ -376,7 +380,7 @@ function createOllamaClient({
   }: {
     model?: string;
     input?: string | string[];
-    signal?: AbortSignal;
+    signal?: AbortSignal | undefined;
   } = {}) {
     if (!model) {
       throw new OllamaError("No local embedding model is configured", {

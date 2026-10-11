@@ -20,6 +20,7 @@
  * only the calc modules are mocked, so the parse, the error handler and the
  * envelope are all real.
  */
+import { bodyAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { routeAgent, errEnvelope } from '../helpers/routeApp.ts';
 
@@ -165,8 +166,8 @@ describe('aggregation id query params — accept set', () => {
   for (const raw of REJECTED) {
     it(`rejects excluded_category_ids=${raw}`, async () => {
       const res = await get('/monthly-summary', `excluded_category_ids=${encodeURIComponent(raw)}`).expect(400);
-      expect(res.body.error.code).toBe('VALIDATION_ERROR');
-      expect(res.body.error.message).toBe(`excluded_category_ids contains invalid value: ${raw}`);
+      expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
+      expect(bodyAt(res, 'error', 'message')).toBe(`excluded_category_ids contains invalid value: ${raw}`);
       expect(monthlySpy).not.toHaveBeenCalled();
     });
   }
@@ -181,7 +182,7 @@ describe('aggregation id query params — accept set', () => {
   it('rejects the whole list when one of several elements is bad — no partial filter set', async () => {
     const res = await get('/monthly-summary', 'excluded_category_ids=5&excluded_category_ids=12abc&excluded_category_ids=9')
       .expect(400);
-    expect(res.body.error.message).toBe('excluded_category_ids contains invalid value: 12abc');
+    expect(bodyAt(res, 'error', 'message')).toBe('excluded_category_ids contains invalid value: 12abc');
     expect(monthlySpy).not.toHaveBeenCalled();
   });
 

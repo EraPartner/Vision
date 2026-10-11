@@ -24,16 +24,16 @@ import { createDbQuotaStore } from '../../repositories/providerQuotaRepository.t
 
 /** A search hit as the adapters normalise it (leaves may be absent). */
 export interface ResearchSearchItem {
-  symbol?: string | null;
-  name?: string | null;
-  type?: string | null;
-  exchange?: string | null;
+  symbol?: string | null | undefined;
+  name?: string | null | undefined;
+  type?: string | null | undefined;
+  exchange?: string | null | undefined;
 }
 
 /** Options the aggregator forwards to symbol-centric adapter methods. */
 export interface AdapterOptions {
-  range?: string;
-  count?: number;
+  range?: string | undefined;
+  count?: number | undefined;
 }
 
 /**
@@ -51,7 +51,10 @@ export interface ResearchAdapter {
   quote?(
     symbol: string | undefined,
     opts?: AdapterOptions,
-  ): Promise<{ currency?: string | null; price?: number | null }>;
+  ): Promise<{
+    currency?: string | null | undefined;
+    price?: number | null | undefined;
+  }>;
   chart?(symbol: string | undefined, opts?: AdapterOptions): Promise<unknown>;
   fundamentals?(
     symbol: string | undefined,
@@ -62,7 +65,7 @@ export interface ResearchAdapter {
   macroSearch?(query: string): Promise<{ items?: unknown }>;
   macroSeries?(
     seriesId: string,
-    opts?: { range?: string },
+    opts?: { range?: string | undefined },
   ): Promise<unknown>;
 }
 

@@ -256,7 +256,7 @@ interface PreparedRow {
   candidates: HistoryImage[];
   baseAction: PlanBaseAction;
   imported?: HistoryImage;
-  fullYield?: HistoryImage[];
+  fullYield?: HistoryImage[] | undefined;
   nativeGift?: boolean;
 }
 /** The pre-read evidence and selection the plan builder is pure over. */
@@ -264,29 +264,31 @@ export interface ReconciliationPlanInput {
   rows: ReconciliationSourceRow[];
   history: HistoryImage[];
   batches: ReconciliationBatchScopeRow[];
-  adoptPolicy?: string;
-  batchPolicies?: BatchPolicy[];
-  priorProAccounts?: number[];
-  referenceOriginalRows?: ReconciliationSourceRow[];
-  saxoAdoptionContext?: ReconciliationReceiptContext;
-  kinesisAdoptionContext?: ReconciliationReceiptContext;
-  historicalFxContext?: HistoricalFxRate[];
-  incomeRecognitionContext?: IncomeContext;
-  cashContext?: CashContext;
-  ibkrCashContext?: IbkrCashCorrectionContext;
-  cashFundingPolicy?: string;
-  networkContext?: ReconciliationContext;
-  nativeGiftContext?: ReconciliationReceiptContext;
-  reconciliationScope?: string;
-  repairContext?: Awaited<ReturnType<typeof readDuplicateRepairContext>>;
+  adoptPolicy?: string | undefined;
+  batchPolicies?: BatchPolicy[] | undefined;
+  priorProAccounts?: number[] | undefined;
+  referenceOriginalRows?: ReconciliationSourceRow[] | undefined;
+  saxoAdoptionContext?: ReconciliationReceiptContext | undefined;
+  kinesisAdoptionContext?: ReconciliationReceiptContext | undefined;
+  historicalFxContext?: HistoricalFxRate[] | undefined;
+  incomeRecognitionContext?: IncomeContext | undefined;
+  cashContext?: CashContext | undefined;
+  ibkrCashContext?: IbkrCashCorrectionContext | undefined;
+  cashFundingPolicy?: string | undefined;
+  networkContext?: ReconciliationContext | undefined;
+  nativeGiftContext?: ReconciliationReceiptContext | undefined;
+  reconciliationScope?: string | undefined;
+  repairContext?:
+    | Awaited<ReturnType<typeof readDuplicateRepairContext>>
+    | undefined;
 }
 export interface PlanAdoption {
   row: ReconciliationSourceRow;
   before: PortfolioTransactionSnapshot;
   after: PortfolioTransactionSnapshot;
   policy: ReconciliationJournalRow["policy"];
-  imported?: HistoryImage;
-  priorSaxoReceipt?: ReconciliationJournalRow;
+  imported?: HistoryImage | undefined;
+  priorSaxoReceipt?: ReconciliationJournalRow | undefined;
 }
 export type BatchPolicy = { batchId: number; adoptPolicy: string };
 export interface ReconciliationPlan {
@@ -332,10 +334,10 @@ export interface ReconciliationPlanResult {
 /** The batch selection and policies every locked plan read takes. */
 export interface ReconciliationScopeOptions {
   batchIds: number[];
-  adoptPolicy?: string;
-  batchPolicies?: BatchPolicy[];
-  reconciliationScope?: string;
-  cashFundingPolicy?: string;
+  adoptPolicy?: string | undefined;
+  batchPolicies?: BatchPolicy[] | undefined;
+  reconciliationScope?: string | undefined;
+  cashFundingPolicy?: string | undefined;
 }
 const isRepair = (
   item: PlanAdoption,
@@ -3641,7 +3643,7 @@ export async function applyPortfolioImportReconciliation({
   reconciliationScope = "full",
   cashFundingPolicy = undefined,
 }: ReconciliationScopeOptions & {
-  expectedPlanFingerprint?: string;
+  expectedPlanFingerprint?: string | undefined;
   lockedBatchIds?: number[];
 }) {
   const {
@@ -3850,7 +3852,7 @@ export async function completePortfolioImportIncome({
 }: {
   batchIds: number[];
   rowIds: number[];
-  adoptPolicy?: string;
+  adoptPolicy?: string | undefined;
   batchPolicies?: BatchPolicy[];
 }): Promise<Map<number, number>> {
   if (!rowIds.length) return new Map<number, number>();

@@ -97,22 +97,22 @@ export interface BuildDefinitionInput {
   name: string;
   workspace: string;
   querySpec: SavedAnalysisQuerySpec;
-  parameters?: SavedAnalysisParameters;
-  formulas?: SavedAnalysisFormula[];
-  assumptions?: SavedAnalysisAssumption[];
+  parameters?: SavedAnalysisParameters | undefined;
+  formulas?: SavedAnalysisFormula[] | undefined;
+  assumptions?: SavedAnalysisAssumption[] | undefined;
 }
 
 export interface SavedAnalysisInput {
   name: string;
   workspace: string;
   querySpec: SavedAnalysisQuerySpec;
-  parameters?: SavedAnalysisParameters;
-  charts?: unknown[];
-  sourceReferences?: unknown[];
-  refreshMode?: string;
-  formulas?: SavedAnalysisFormula[];
-  assumptions?: SavedAnalysisAssumption[];
-  assumptionValues?: Record<string, unknown>;
+  parameters?: SavedAnalysisParameters | undefined;
+  charts?: unknown[] | undefined;
+  sourceReferences?: unknown[] | undefined;
+  refreshMode?: string | undefined;
+  formulas?: SavedAnalysisFormula[] | undefined;
+  assumptions?: SavedAnalysisAssumption[] | undefined;
+  assumptionValues?: Record<string, unknown> | undefined;
 }
 
 export type SavedAnalysisUpdate = Partial<
@@ -413,11 +413,11 @@ function versionState({
   sourceReferences,
   refreshMode,
 }: {
-  parameters?: SavedAnalysisParameters;
+  parameters?: SavedAnalysisParameters | undefined;
   formulaModel: AnalysisFormulaModel;
-  charts?: unknown[];
-  sourceReferences?: unknown[];
-  refreshMode?: string;
+  charts?: unknown[] | undefined;
+  sourceReferences?: unknown[] | undefined;
+  refreshMode?: string | undefined;
 }) {
   return {
     parameters: { ...(parameters || {}), formulaModel },

@@ -67,9 +67,9 @@ export interface AppSettings {
     aiDefaultModel?: string;
     openAiDefaultModel?: string;
     /** Explicit local analysis answer preference; absence uses the product default. */
-    aiAnswerDepth?: "quick" | "detailed";
+    aiAnswerDepth?: "quick" | "detailed" | undefined;
     /** Explicit comparison symbol or catalog identifier; never inferred. */
-    analysisBenchmark?: string;
+    analysisBenchmark?: string | undefined;
     costBasisMethod: CostBasisMethod;
     adminMode: boolean;
     visualEffects: VisualEffectsTier;
@@ -358,10 +358,10 @@ interface SettingsActions {
     toggleTheme: () => void;
     /** Called by ThemeProvider once preloaded data arrives. */
     _hydrateTheme: (data: {
-        mode?: ThemeMode;
-        schedule?: ThemeSchedule;
-        variant?: ThemeVariant;
-        systemAccent?: boolean;
+        mode?: ThemeMode | undefined;
+        schedule?: ThemeSchedule | undefined;
+        variant?: ThemeVariant | undefined;
+        systemAccent?: boolean | undefined;
     }) => void;
     /** Called by ThemeProvider after the resolved theme is computed. */
     _setResolvedTheme: (theme: Theme) => void;

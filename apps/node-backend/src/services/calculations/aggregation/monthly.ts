@@ -22,12 +22,12 @@ export async function computeMonthlySummary({
   startDate = undefined,
   endDate = undefined,
 }: {
-  targetCurrency?: string;
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
-  allTime?: boolean;
-  startDate?: string;
-  endDate?: string;
+  targetCurrency?: string | undefined;
+  excludedCategoryIds?: number[] | undefined;
+  excludedRecipientIds?: number[] | undefined;
+  allTime?: boolean | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
 } = {}) {
   const data = await infoRepository.getMonthlyFinancialSummary(
     excludedCategoryIds,

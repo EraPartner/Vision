@@ -13,6 +13,7 @@
  * `/api/research`) is a module-scoped per-IP counter and is deliberately NOT
  * reproduced here — it would 429 this suite's own many requests.
  */
+import { bodyAt, valueAt } from '../helpers/responseBody.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.ts';
 import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.ts';
@@ -99,8 +100,8 @@ describe('Market Lookup Routes', () => {
       const res = await api.get(`${BASE}/quote`).query({ symbols: 'AAPL' }).expect(200);
 
       const body = res.body;
-      expect(body.data.items).toHaveLength(1);
-      expect(body.data.items[0]).toMatchObject({
+      expect(valueAt(body, 'data', 'items')).toHaveLength(1);
+      expect(valueAt(body, 'data', 'items', 0)).toMatchObject({
         symbol: 'AAPL',
         name: 'Apple Inc.',
         marketCap: 300,
@@ -111,14 +112,14 @@ describe('Market Lookup Routes', () => {
         beta: 1.1,
         priceToBook: 4.4,
       });
-      expect(body.data.items[0].analystConsensus).toEqual({
+      expect(valueAt(body, 'data', 'items', 0, 'analystConsensus')).toEqual({
         strongBuy: 4,
         buy: 10,
         hold: 3,
         sell: 1,
         strongSell: 0,
       });
-      expect(body.data.items[0].recentAnalystActions).toHaveLength(1);
+      expect(valueAt(body, 'data', 'items', 0, 'recentAnalystActions')).toHaveLength(1);
     });
 
     it('detail=basic returns price-only fields and skips the quoteSummary call', async () => {
@@ -135,7 +136,7 @@ describe('Market Lookup Routes', () => {
       const res = await api.get(`${BASE}/quote`).query({ symbols: 'AAPL', detail: 'basic' }).expect(200);
 
       expect(mockYahooQuoteSummary).not.toHaveBeenCalled();
-      const quote = res.body.data.items[0];
+      const quote = bodyAt(res, 'data', 'items', 0);
       expect(quote).toMatchObject({
         symbol: 'AAPL',
         name: 'Apple Inc.',
@@ -266,11 +267,11 @@ describe('Market Lookup Routes', () => {
 
       const res = await api.get(`${BASE}/chart`).query({ symbol: 'AAPL', range: '5y', interval: '1wk' }).expect(200);
 
-      const payload = res.body.data;
-      expect(payload.symbol).toBe('AAPL');
-      expect(payload.currency).toBe('USD');
-      expect(payload.items).toHaveLength(1);
-      expect(payload.items[0]).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
+      const payload = bodyAt(res, 'data');
+      expect(valueAt(payload, 'symbol')).toBe('AAPL');
+      expect(valueAt(payload, 'currency')).toBe('USD');
+      expect(valueAt(payload, 'items')).toHaveLength(1);
+      expect(valueAt(payload, 'items', 0)).toMatchObject({ close: 200, high: 201, low: 199, volume: 10 });
     });
 
     it('throws AppError (502) when chart request crashes', async () => {
@@ -295,7 +296,7 @@ describe('Market Lookup Routes', () => {
         expect.any(Object),
         { validateResult: false },
       );
-      expect(res.body.data.items).toHaveLength(1);
+      expect(bodyAt(res, 'data', 'items')).toHaveLength(1);
     });
   });
 
@@ -334,12 +335,12 @@ describe('Market Lookup Routes', () => {
 
       const res = await api.get(`${BASE}/news`).query({ symbols: 'AAPL,MSFT', count: '5' }).expect(200);
 
-      const body = res.body.data;
-      expect(body.items).toHaveLength(2);
-      expect(body.items[0].title).toBe('Unique headline');
-      expect(body.items[0].thumbnail).toBe('https://img.example.com/c.jpg');
-      expect(body.items[1].title).toBe('Shared headline');
-      expect(body.items[1].thumbnail).toBe('https://img.example.com/a.jpg');
+      const body = bodyAt(res, 'data');
+      expect(valueAt(body, 'items')).toHaveLength(2);
+      expect(valueAt(body, 'items', 0, 'title')).toBe('Unique headline');
+      expect(valueAt(body, 'items', 0, 'thumbnail')).toBe('https://img.example.com/c.jpg');
+      expect(valueAt(body, 'items', 1, 'title')).toBe('Shared headline');
+      expect(valueAt(body, 'items', 1, 'thumbnail')).toBe('https://img.example.com/a.jpg');
     });
 
     it('should tolerate yahoo search failures and return empty results', async () => {
@@ -394,11 +395,11 @@ describe('Market Lookup Routes', () => {
 
       const res = await api.get(`${BASE}/quote`).query({ symbols: 'MSFT' }).expect(200);
 
-      const quote = res.body.data.items[0];
-      expect(quote.name).toBe('MSFT');
-      expect(quote.currency).toBe('USD');
-      expect(quote.analystConsensus).toEqual({ strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 });
-      expect(quote.recentAnalystActions).toHaveLength(10);
+      const quote = bodyAt(res, 'data', 'items', 0);
+      expect(valueAt(quote, 'name')).toBe('MSFT');
+      expect(valueAt(quote, 'currency')).toBe('USD');
+      expect(valueAt(quote, 'analystConsensus')).toEqual({ strongBuy: 1, buy: 2, hold: 3, sell: 4, strongSell: 5 });
+      expect(valueAt(quote, 'recentAnalystActions')).toHaveLength(10);
     });
 
     it('still returns quote when quoteSummary fails', async () => {
@@ -412,11 +413,11 @@ describe('Market Lookup Routes', () => {
 
       const res = await api.get(`${BASE}/quote`).query({ symbols: 'NVDA' }).expect(200);
 
-      const quote = res.body.data.items[0];
-      expect(quote.symbol).toBe('NVDA');
-      expect(quote.price).toBe(900);
-      expect(quote.analystConsensus).toBeNull();
-      expect(quote.recentAnalystActions).toEqual([]);
+      const quote = bodyAt(res, 'data', 'items', 0);
+      expect(valueAt(quote, 'symbol')).toBe('NVDA');
+      expect(valueAt(quote, 'price')).toBe(900);
+      expect(valueAt(quote, 'analystConsensus')).toBeNull();
+      expect(valueAt(quote, 'recentAnalystActions')).toEqual([]);
     });
   });
 
@@ -432,13 +433,13 @@ describe('Market Lookup Routes', () => {
 
     it('rejects repeated single-value parameters', async () => {
       const range = await api.get(`${BASE}/chart`).query('symbol=AAPL&range=1d&range=5d').expect(400);
-      expect(range.body.error.message).toMatch(/^range: /);
+      expect(bodyAt(range, 'error', 'message')).toMatch(/^range: /);
       const search = await api.get(`${BASE}/search`).query('q=apple&q=msft').expect(400);
-      expect(search.body.error.message).toMatch(/^q: /);
+      expect(bodyAt(search, 'error', 'message')).toMatch(/^q: /);
       const detail = await api.get(`${BASE}/quote`).query('symbols=AAPL&detail=basic&detail=basic').expect(400);
-      expect(detail.body.error.message).toMatch(/^detail: /);
+      expect(bodyAt(detail, 'error', 'message')).toMatch(/^detail: /);
       const count = await api.get(`${BASE}/news`).query('count=5&count=6').expect(400);
-      expect(count.body.error.message).toMatch(/^count: /);
+      expect(bodyAt(count, 'error', 'message')).toMatch(/^count: /);
       expect(mockYahooChart).not.toHaveBeenCalled();
       expect(mockYahooSearch).not.toHaveBeenCalled();
       expect(mockYahooQuote).not.toHaveBeenCalled();
@@ -474,8 +475,8 @@ describe('Market Lookup Routes', () => {
 
       const res = await api.get(`${BASE}/news`).query({ symbols: 'AAPL', count: '1' }).expect(200);
 
-      const article = res.body.data.items[0];
-      expect(article.thumbnail).toBeNull();
+      const article = bodyAt(res, 'data', 'items', 0);
+      expect(valueAt(article, 'thumbnail')).toBeNull();
     });
   });
 });

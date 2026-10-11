@@ -18,17 +18,18 @@ import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 export interface PieDatum {
     readonly name: string;
     readonly value: number;
-    readonly color?: string;
+    readonly color?: string | undefined;
 }
 
 export interface PieChartProps {
     readonly data: ReadonlyArray<PieDatum>;
-    readonly height?: number;
-    readonly padAngle?: number;
-    readonly showLabels?: boolean;
-    readonly labelFormat?: (datum: PieDatum, percent: number) => string;
-    readonly tooltipValueFormat?: (value: number) => string;
-    readonly ariaLabel?: string;
+    readonly height?: number | undefined;
+    readonly padAngle?: number | undefined;
+    readonly showLabels?: boolean | undefined;
+    readonly labelFormat?:
+        ((datum: PieDatum, percent: number) => string) | undefined;
+    readonly tooltipValueFormat?: ((value: number) => string) | undefined;
+    readonly ariaLabel?: string | undefined;
 }
 
 export function PieChart(props: PieChartProps) {

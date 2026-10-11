@@ -276,9 +276,15 @@ export function EditPortfolioTxnDialog({
             // unassigned (the PATCH endpoint maps null → SQL NULL, undefined → unchanged).
             await updateTransaction(transaction.id, {
                 date: parsed.data.date,
-                amount: parsed.data.amount,
-                units: parsed.data.units,
-                price_per_unit: parsed.data.pricePerUnit,
+                ...(parsed.data.amount === undefined
+                    ? {}
+                    : { amount: parsed.data.amount }),
+                ...(parsed.data.units === undefined
+                    ? {}
+                    : { units: parsed.data.units }),
+                ...(parsed.data.pricePerUnit === undefined
+                    ? {}
+                    : { price_per_unit: parsed.data.pricePerUnit }),
                 // Cleared fields must be SENT, not dropped: undefined keys vanish from
                 // the JSON body and the backend merge keeps the old value — "delete the
                 // €7.50 fee → Save → success" left the fee in the DB (and the FX/note
@@ -294,9 +300,9 @@ export function EditPortfolioTxnDialog({
                 note: form.note.trim() || null,
                 account_id: form.accountId ? Number(form.accountId) : null,
                 is_recurring: form.isRecurring,
-                recurrence_interval: form.isRecurring
-                    ? form.recurrenceInterval
-                    : undefined,
+                ...(form.isRecurring
+                    ? { recurrence_interval: form.recurrenceInterval }
+                    : {}),
                 recurrence_end_date: form.isRecurring
                     ? form.recurrenceEndDate || null
                     : null,

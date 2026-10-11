@@ -76,7 +76,7 @@ describe("Codex CONNECT egress proxy", () => {
       upstream.listen(0, "127.0.0.1", resolve),
     );
     cleanup.push(() => new Promise((resolve) => upstream.close(resolve)));
-    const destinations: Array<{ host?: string; port: number }> = [];
+    const destinations: Array<{ host?: string | undefined; port: number }> = [];
     const traces: CodexConnectTrace[] = [];
     const proxy = await startCodexConnectProxy({
       allowedHosts: new Set(["chatgpt.com"]),

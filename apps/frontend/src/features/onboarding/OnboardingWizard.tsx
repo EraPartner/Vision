@@ -212,7 +212,7 @@ function StepSuccess({
     subtitle,
 }: {
     title: string;
-    subtitle?: string;
+    subtitle?: string | undefined;
 }) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">

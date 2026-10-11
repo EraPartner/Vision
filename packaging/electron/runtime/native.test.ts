@@ -1295,7 +1295,11 @@ test("native first start persists and unreferences an argument-array backend chi
       });
     }
     let spawned:
-      | { bin: string; args: string[]; options: { env?: NodeJS.ProcessEnv } }
+      | {
+          bin: string;
+          args: string[];
+          options: { env?: NodeJS.ProcessEnv | undefined };
+        }
       | undefined;
     const runtime = createNativeRuntime({
       userDataDir: temp,

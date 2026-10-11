@@ -24,8 +24,7 @@ declare module "supertest" {
     clientError: boolean;
     serverError: boolean;
     // superagent types the parsed body as `any`; tests narrow it per assertion.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body: any;
+    body: unknown;
     text: string;
     type: string;
     charset: string;
@@ -34,8 +33,7 @@ declare module "supertest" {
   }
 
   // superagent passes `any` as the callback error.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type CallbackHandler = (err: any, res: Response) => void;
+  export type CallbackHandler = (err: unknown, res: Response) => void;
 
   export interface AttachOptions {
     filename?: string;

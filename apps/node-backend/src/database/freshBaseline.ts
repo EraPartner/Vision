@@ -12,7 +12,7 @@ const RESTORED_SCHEMA_FINGERPRINT =
 export interface InstallFreshBaselineOptions {
   repoRoot: string;
   /** Owner/migration role URL; a missing value is rejected at runtime. */
-  connectionString?: string;
+  connectionString?: string | undefined;
 }
 
 /**

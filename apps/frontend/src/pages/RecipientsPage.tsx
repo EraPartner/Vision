@@ -72,13 +72,13 @@ type TableRecipient = {
     id: number;
     name: string;
     primary_bank_account: string;
-    default_category_name?: string;
-    default_category_id?: number | null;
-    primary_recipient_id?: number | null;
-    primary_recipient_name?: string | null;
-    alias_count?: number;
+    default_category_name?: string | undefined;
+    default_category_id?: number | null | undefined;
+    primary_recipient_id?: number | null | undefined;
+    primary_recipient_name?: string | null | undefined;
+    alias_count?: number | undefined;
     is_active: boolean;
-    notes?: string;
+    notes?: string | undefined;
 };
 
 export default function RecipientsPage() {

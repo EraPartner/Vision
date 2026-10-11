@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/database/connection.ts", () =>
-  mockConnection({ withTransaction: (fn) => fn() }),
+  mockConnection({ withTransaction: (fn: () => unknown) => fn() }),
 );
 
 vi.mock("../src/repositories/portfolioBrokerRetagRepository.ts", () => ({

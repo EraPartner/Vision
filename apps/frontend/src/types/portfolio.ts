@@ -71,7 +71,7 @@ export type { RecurrenceInterval };
 export interface InvestmentSummary {
     id: number;
     name: string;
-    symbol?: string;
+    symbol?: string | undefined;
     assetClass: AssetClass;
     asset_class: AssetClass;
     /** Display currency of every monetary field below (the app's target currency). */
@@ -79,25 +79,25 @@ export interface InvestmentSummary {
     /** The investment's native currency, preserved for labelling (mirrors backend). */
     originalCurrency?: string;
     currentPrice?: number;
-    current_price?: number;
+    current_price?: number | undefined;
     interestRate?: number;
     interest_rate?: number;
-    maturityDate?: string;
-    maturity_date?: string;
+    maturityDate?: string | undefined;
+    maturity_date?: string | undefined;
     location?: string;
     municipality?: string;
-    cadastral_income?: number;
-    municipality_tax_rate?: number;
+    cadastral_income?: number | undefined;
+    municipality_tax_rate?: number | undefined;
     notes?: string;
     price_provider?: "manual" | "binance" | "yahoo" | "custom" | "kinesis";
-    price_provider_id?: string;
-    price_provider_url?: string;
-    price_provider_latest_url?: string;
-    price_provider_latest_path?: string;
-    price_provider_history_url?: string;
-    price_provider_history_path?: string;
-    price_provider_history_ts_path?: string;
-    price_provider_history_price_path?: string;
+    price_provider_id?: string | undefined;
+    price_provider_url?: string | undefined;
+    price_provider_latest_url?: string | undefined;
+    price_provider_latest_path?: string | undefined;
+    price_provider_history_url?: string | undefined;
+    price_provider_history_path?: string | undefined;
+    price_provider_history_ts_path?: string | undefined;
+    price_provider_history_price_path?: string | undefined;
     price_updated_at?: string;
     is_active: boolean;
     /** Whether this holding appears in the portfolio price ticker (default true). */
@@ -119,7 +119,7 @@ export interface InvestmentSummary {
     totalDividends: number;
     totalIncome: number; // Ordinary income: dividends + interest + rent
     /** Literal income already represented by acquired units; excluded from gains. */
-    totalInKindIncome?: number;
+    totalInKindIncome?: number | undefined;
     currentValue: number;
 
     // Computed - Advanced

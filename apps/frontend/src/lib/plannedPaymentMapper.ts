@@ -21,37 +21,37 @@ export interface PlannedPayment {
     // The planned-transaction recurrence vocabulary (canonical list in
     // @vision/types/recurrence — note 'biweekly', no hyphen), plus the
     // view-model-only "custom" bucket that stands in for `every N days`.
-    frequency?: PlannedRecurrencePattern | "custom";
-    is_loan?: boolean;
-    loan_type?: PlannedLoanType;
-    loan_principal?: number;
-    loan_annual_interest_rate?: number;
-    loan_term_months?: number;
-    loan_start_date?: string;
-    loan_payment_day?: number;
-    loan_regular_payment_amount?: number;
-    loan_first_payment_date?: string;
-    loan_schedule?: PlannedLoanScheduleEntry[];
-    custom_interval_days?: number;
+    frequency?: PlannedRecurrencePattern | "custom" | undefined;
+    is_loan?: boolean | undefined;
+    loan_type?: PlannedLoanType | undefined;
+    loan_principal?: number | undefined;
+    loan_annual_interest_rate?: number | undefined;
+    loan_term_months?: number | undefined;
+    loan_start_date?: string | undefined;
+    loan_payment_day?: number | undefined;
+    loan_regular_payment_amount?: number | undefined;
+    loan_first_payment_date?: string | undefined;
+    loan_schedule?: PlannedLoanScheduleEntry[] | undefined;
+    custom_interval_days?: number | undefined;
     // `null` is an explicit "clear the bound" signal from the editor; `undefined`
     // means "leave unchanged". Both must be representable so a cleared end date /
     // max count reaches mapToUpdateAPI as null instead of being dropped.
-    end_date?: string | null;
-    max_occurrences?: number | null;
-    recipient?: string;
-    recipient_id?: number;
-    category?: string;
-    category_id?: number;
-    bank_account?: string;
-    account_id?: number;
-    notes?: string;
-    url?: string;
-    is_executed?: boolean;
-    last_executed_date?: string;
-    executed_transaction_id?: number;
-    execution_count?: number;
-    executions?: PlannedTransactionExecution[];
-    tags?: string[];
+    end_date?: string | null | undefined;
+    max_occurrences?: number | null | undefined;
+    recipient?: string | undefined;
+    recipient_id?: number | undefined;
+    category?: string | undefined;
+    category_id?: number | undefined;
+    bank_account?: string | undefined;
+    account_id?: number | undefined;
+    notes?: string | undefined;
+    url?: string | undefined;
+    is_executed?: boolean | undefined;
+    last_executed_date?: string | undefined;
+    executed_transaction_id?: number | undefined;
+    execution_count?: number | undefined;
+    executions?: PlannedTransactionExecution[] | undefined;
+    tags?: string[] | undefined;
     is_active: boolean;
     created_at: string;
 }

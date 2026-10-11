@@ -17,8 +17,8 @@ interface ChatMessageListProps {
     /** Whether the mounted transcript is currently displayed and can be measured. */
     isVisible?: boolean;
     streamStatus?: StreamState["status"];
-    onRetry?: () => void;
-    emptyState?: React.ReactNode;
+    onRetry?: (() => void) | undefined;
+    emptyState?: React.ReactNode | undefined;
     /**
      * Id of the conversation being displayed. Only used to re-pin the
      * auto-scroll when the transcript is swapped wholesale — see

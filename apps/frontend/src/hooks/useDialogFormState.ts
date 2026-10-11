@@ -51,14 +51,14 @@ export function useDialogFormState<T>(makeSeed: () => T): {
  * the control that opens it now lives in the parent.
  */
 export interface ControlledDialogProps {
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
+    open?: boolean | undefined;
+    onOpenChange?: ((open: boolean) => void) | undefined;
     /**
      * Where focus goes when the dialog closes. Without a `DialogTrigger` Radix
      * has nothing to return focus to and would drop it on the body, so the
      * parent passes the control that opened the dialog.
      */
-    returnFocusRef?: RefObject<HTMLElement | null>;
+    returnFocusRef?: RefObject<HTMLElement | null> | undefined;
 }
 
 /**

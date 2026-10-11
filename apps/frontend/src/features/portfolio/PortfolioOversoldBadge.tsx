@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface PortfolioOversoldBadgeProps {
-    oversold?: boolean;
+    oversold?: boolean | undefined;
 }
 
 export function PortfolioOversoldBadge({

@@ -22,8 +22,8 @@ type Row = Record<string, unknown>;
 export interface ToolResultChartProps {
     kind: "line" | "bar" | "pie";
     rows: Row[];
-    xKey?: string;
-    yKeys?: string[];
+    xKey?: string | undefined;
+    yKeys?: string[] | undefined;
 }
 
 function pickNumericKeys(rows: Row[], exclude: string): string[] {

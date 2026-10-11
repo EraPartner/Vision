@@ -72,8 +72,8 @@ function useAutoSeparator(file: File | null, enabled: boolean): string {
 interface FileHeadersPanelProps {
     file: File | null;
     /** Pin the delimiter; omit to auto-detect from the file. */
-    separator?: string;
-    encoding?: string;
+    separator?: string | undefined;
+    encoding?: string | undefined;
     skipRows?: number;
     /** Header names to emphasise (e.g. the currently-mapped columns). */
     highlightedHeaders?: string[];

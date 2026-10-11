@@ -4,12 +4,12 @@ import { verifyAuditHistory } from "./auditVerificationService.ts";
 import type { TrustedAuditCheckpoint } from "./auditVerificationService.ts";
 
 export interface ReadVerifiedAuditPageOptions {
-  trustedCheckpoint?: TrustedAuditCheckpoint;
-  afterSequence?: number;
-  limit?: number;
-  transact?: typeof withTransaction;
-  verify?: typeof verifyAuditHistory;
-  readSegment?: typeof readAuditSegment;
+  trustedCheckpoint?: TrustedAuditCheckpoint | undefined;
+  afterSequence?: number | undefined;
+  limit?: number | undefined;
+  transact?: typeof withTransaction | undefined;
+  verify?: typeof verifyAuditHistory | undefined;
+  readSegment?: typeof readAuditSegment | undefined;
 }
 
 /**

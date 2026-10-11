@@ -32,8 +32,8 @@ interface ImportCommitReceipt {
     duplicates: number;
     errors: number;
     /** Date span of the imported rows (YYYY-MM-DD), when the review page knew it. */
-    dateFrom?: string;
-    dateTo?: string;
+    dateFrom?: string | undefined;
+    dateTo?: string | undefined;
 }
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;

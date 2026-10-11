@@ -24,11 +24,11 @@ type ExecutionHistoryItem = {
     executionDate: string;
     transactionId: number;
     transactionDate: string;
-    recipientName?: string;
-    categoryName?: string;
+    recipientName?: string | undefined;
+    categoryName?: string | undefined;
     amount: number;
-    currency?: string;
-    memo?: string;
+    currency?: string | undefined;
+    memo?: string | undefined;
 };
 
 interface ExecutionHistoryDialogProps {

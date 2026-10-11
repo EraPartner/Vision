@@ -7,10 +7,10 @@ interface ResearchRangeSelectorProps {
     readonly options: ReadonlyArray<ChartRangeOption>;
     readonly value: ResearchRange;
     readonly onChange: (option: ChartRangeOption) => void;
-    readonly className?: string;
-    readonly size?: "sm" | "md";
-    readonly "aria-label"?: string;
-    readonly "aria-labelledby"?: string;
+    readonly className?: string | undefined;
+    readonly size?: "sm" | "md" | undefined;
+    readonly "aria-label"?: string | undefined;
+    readonly "aria-labelledby"?: string | undefined;
 }
 
 export function ResearchRangeSelector({

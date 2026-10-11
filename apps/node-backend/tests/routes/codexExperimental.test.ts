@@ -31,7 +31,8 @@ const ENV_KEYS = [
   "VISION_EXPERIMENTAL_CODEX",
   "VISION_EXPERIMENTAL_CODEX_BINARY",
 ] as const;
-const savedEnv: Partial<Record<(typeof ENV_KEYS)[number], string>> = {};
+const savedEnv: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> =
+  {};
 
 describe("experimental Codex payload-free routes", () => {
   beforeEach(() => {

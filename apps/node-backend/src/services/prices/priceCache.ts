@@ -34,8 +34,8 @@ export type RawPricePoint = { timestampMs?: unknown; price?: unknown };
 
 /** Optional epoch-millis bounds; non-finite values are ignored. */
 export interface PointRange {
-  fromMs?: number;
-  toMs?: number;
+  fromMs?: number | undefined;
+  toMs?: number | undefined;
 }
 
 /** True when a thrown value carries the given pg/Node error `code`. */

@@ -5,6 +5,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -62,8 +63,10 @@ describe("Recipient Bank Account Routes", () => {
 
       const res = await api.get(`${BASE}/1/bank-accounts`).expect(200);
 
-      expect(res.body.data.items).toHaveLength(1);
-      expect(res.body.data.items[0].account_number).toBe("BE61734041478017");
+      expect(bodyAt(res, "data", "items")).toHaveLength(1);
+      expect(bodyAt(res, "data", "items", 0, "account_number")).toBe(
+        "BE61734041478017",
+      );
     });
 
     it("should return empty list", async () => {
@@ -71,7 +74,7 @@ describe("Recipient Bank Account Routes", () => {
 
       const res = await api.get(`${BASE}/999/bank-accounts`).expect(200);
 
-      expect(res.body.data.items).toEqual([]);
+      expect(bodyAt(res, "data", "items")).toEqual([]);
     });
   });
 
@@ -90,7 +93,7 @@ describe("Recipient Bank Account Routes", () => {
         .post(`${BASE}/1/bank-accounts`)
         .send({ account_number: "BE61734041478017", bank_name: "Belfius" })
         .expect(201);
-      expect(res.body.data.created).toBe(true);
+      expect(bodyAt(res, "data", "created")).toBe(true);
     });
 
     it("should return 200 for existing account", async () => {
@@ -103,7 +106,7 @@ describe("Recipient Bank Account Routes", () => {
         .post(`${BASE}/1/bank-accounts`)
         .send({ account_number: "BE61734041478017" })
         .expect(200);
-      expect(res.body.data.created).toBe(false);
+      expect(bodyAt(res, "data", "created")).toBe(false);
     });
 
     it("should return a 400 VALIDATION_ERROR envelope for missing account_number", async () => {
@@ -200,7 +203,7 @@ describe("Recipient Bank Account Routes", () => {
         address: "Main Street 1",
         accountLabel: "Primary",
       });
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         id: 5,
         bank_name: "Updated Bank",
         links: [],
@@ -214,7 +217,7 @@ describe("Recipient Bank Account Routes", () => {
         .patch(`${BASE}/1/bank-accounts/5`)
         .send({ bank_name: "Updated Bank" })
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 
@@ -246,7 +249,7 @@ describe("Recipient Bank Account Routes", () => {
 
       const res = await api.delete(`${BASE}/1/bank-accounts/15`).expect(200);
 
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         id: 15,
         account_number: "BE01",
         is_active: false,
@@ -258,7 +261,7 @@ describe("Recipient Bank Account Routes", () => {
       bankAccountRepo.softDelete.mockRejectedValue(new Error("boom"));
 
       const res = await api.delete(`${BASE}/1/bank-accounts/15`).expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 
@@ -297,7 +300,7 @@ describe("Recipient Bank Account Routes", () => {
 
       expect(bankAccountRepo.setPrimary).toHaveBeenCalledWith(2, 1);
       expect(bankAccountRepo.getById).toHaveBeenCalledWith(2);
-      expect(res.body.data).toEqual({
+      expect(bodyAt(res, "data")).toEqual({
         id: 2,
         recipient_id: 1,
         is_primary: true,
@@ -311,7 +314,7 @@ describe("Recipient Bank Account Routes", () => {
       const res = await api
         .post(`${BASE}/1/bank-accounts/2/set-primary`)
         .expect(500);
-      expect(res.body.error.message).toBe("boom");
+      expect(bodyAt(res, "error", "message")).toBe("boom");
     });
   });
 });
@@ -334,8 +337,8 @@ describe("Recipient Bank Account Routes — request schemas (zod)", () => {
       .post(`${BASE}/1/bank-accounts`)
       .send(body)
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error.message).toContain(message);
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "message")).toContain(message);
     expect(bankAccountRepo.createOrGet).not.toHaveBeenCalled();
   });
 

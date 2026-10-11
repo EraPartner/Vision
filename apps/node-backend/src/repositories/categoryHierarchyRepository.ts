@@ -28,15 +28,15 @@ export interface CategoryNode {
 
 export interface CategoryNodeInput {
   name: string;
-  parentId?: number | null;
-  description?: string | null;
+  parentId?: number | null | undefined;
+  description?: string | null | undefined;
 }
 
 export interface CategoryNodePatch {
-  name?: string;
-  parentId?: number | null;
-  description?: string | null;
-  is_active?: boolean;
+  name?: string | undefined;
+  parentId?: number | null | undefined;
+  description?: string | null | undefined;
+  is_active?: boolean | undefined;
 }
 
 /** SQLSTATE of a pg error (`undefined` for anything else). */

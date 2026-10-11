@@ -115,13 +115,15 @@ function localInKindIncome(
 interface UsePortfolioSummariesInput {
     investments: Investment[];
     transactions: PortfolioTransaction[];
-    canonicalSummaries?: PortfolioSummaryItem[];
-    canonicalArchivedInKindIncome?: Array<{
-        id: number;
-        totalInKindIncome: number;
-    }>;
+    canonicalSummaries?: PortfolioSummaryItem[] | undefined;
+    canonicalArchivedInKindIncome?:
+        | Array<{
+              id: number;
+              totalInKindIncome: number;
+          }>
+        | undefined;
     /** Hide active ordinary-only calculations while canonical data is unavailable. */
-    requireCanonical?: boolean;
+    requireCanonical?: boolean | undefined;
 }
 
 // Stable empty result so a single-class lookup with no matches keeps its

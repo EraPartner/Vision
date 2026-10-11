@@ -7,7 +7,7 @@ import { StateBlock } from "@/components/shared/StateBlock";
 
 interface Props {
   children: ReactNode;
-  fallback?: ReactNode;
+  fallback?: ReactNode | undefined;
 }
 
 interface State {

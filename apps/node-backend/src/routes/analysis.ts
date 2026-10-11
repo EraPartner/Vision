@@ -278,8 +278,8 @@ const aiProposalBodySchema = z.object({
  */
 interface AnalysisFailure {
   message: string;
-  status?: number;
-  code?: string;
+  status?: number | undefined;
+  code?: string | undefined;
   position?: unknown;
 }
 

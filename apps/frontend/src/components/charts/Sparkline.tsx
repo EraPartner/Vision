@@ -15,13 +15,13 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface SparklineProps {
     readonly data: ReadonlyArray<number>;
-    readonly height?: number;
-    readonly color?: string;
-    readonly strokeWidth?: number;
-    readonly fillArea?: boolean;
-    readonly ariaLabel?: string;
+    readonly height?: number | undefined;
+    readonly color?: string | undefined;
+    readonly strokeWidth?: number | undefined;
+    readonly fillArea?: boolean | undefined;
+    readonly ariaLabel?: string | undefined;
     /** Highlight the point at this index (scrub indicator: hairline + dot). */
-    readonly activeIndex?: number;
+    readonly activeIndex?: number | undefined;
 }
 
 export function Sparkline(props: SparklineProps) {

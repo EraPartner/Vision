@@ -15,24 +15,24 @@ export type FundHoldingIdentifierType =
 export interface FundHoldingIdentifier {
   type: FundHoldingIdentifierType;
   value: string;
-  exchange?: string;
+  exchange?: string | undefined;
 }
 export interface FundHoldingsIdentity {
   name: string;
   identifiers: FundHoldingIdentifier[];
 }
 export interface FundHoldingRow {
-  provenance: { rowNumber: number; sheetName?: string };
+  provenance: { rowNumber: number; sheetName?: string | undefined };
   name: string;
   identifiers: FundHoldingIdentifier[];
   instrumentType: "equity" | "bond" | "cash" | "fund" | "derivative" | "other";
   exposureKind:
     "direct" | "cash" | "nested-fund" | "derivative" | "synthetic" | "unknown";
   exposureStatus: "supported" | "unsupported";
-  unsupportedReason?: string;
+  unsupportedReason?: string | undefined;
   weightPercent: string;
-  currency?: string;
-  countryCode?: string;
+  currency?: string | undefined;
+  countryCode?: string | undefined;
 }
 export interface FundHoldingsDocument {
   contractVersion: 1;
@@ -40,17 +40,17 @@ export interface FundHoldingsDocument {
   shareClass: FundHoldingsIdentity & { currency: string };
   source: {
     kind: "user-supplied-file";
-    providerName?: string;
+    providerName?: string | undefined;
     fileName: string;
-    sourceUrl?: string;
+    sourceUrl?: string | undefined;
     asOfDate: string;
     retrievedAt: string;
     license: {
       status:
         "user-provided" | "permission-confirmed" | "unknown" | "restricted";
       redistribution: "allowed" | "forbidden" | "unknown";
-      termsUrl?: string;
-      note?: string;
+      termsUrl?: string | undefined;
+      note?: string | undefined;
     };
   };
   holdings: FundHoldingRow[];
@@ -89,14 +89,14 @@ export interface FundHoldingsImportResult {
   fileName: string;
   parsedAt: string;
   rowCounts: { input: number; accepted: number; rejected: number };
-  document?: FundHoldingsDocument;
+  document?: FundHoldingsDocument | undefined;
   issues: Array<{
     code: FundHoldingsImportIssueCode;
     severity: "warning" | "error";
     message: string;
-    rowNumber?: number;
-    field?: string;
-    rawValue?: string;
+    rowNumber?: number | undefined;
+    field?: string | undefined;
+    rawValue?: string | undefined;
   }>;
 }
 

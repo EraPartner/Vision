@@ -14,7 +14,12 @@ import {
   mockPooledTxConnection,
   mockTxConnection,
 } from "./repoMocks.ts";
-import type { MockProcedure } from "./repoMocks.ts";
+
+/** The transaction client `query` these tests drive: SQL text plus optional params. */
+type ClientQuery = (
+  sql: string,
+  params?: readonly unknown[],
+) => Promise<unknown>;
 
 const productionSurface = [
   "default",
@@ -109,7 +114,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("models nested withTransaction calls on one client with unique savepoints", async () => {
-    const client = { query: vi.fn<MockProcedure>(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<ClientQuery>(async () => ({ rows: [] })) };
     const conn = mockTxConnection(client);
     const callbackClients: unknown[] = [];
 
@@ -139,7 +144,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
   });
 
   it("rejects concurrent sibling nested transactions like production", async () => {
-    const client = { query: vi.fn<MockProcedure>(async () => ({ rows: [] })) };
+    const client = { query: vi.fn<ClientQuery>(async () => ({ rows: [] })) };
     const conn = mockTxConnection(client);
 
     await expect(
@@ -225,7 +230,7 @@ describe("mockTxConnection — ambient transaction routing", () => {
     // client, repointing statements issued by a repository through module
     // query(), all observable in issue order on a single spy.
     const client = {
-      query: vi.fn<MockProcedure>(async () => ({
+      query: vi.fn<ClientQuery>(async () => ({
         rows: [{ id: 2 }],
         rowCount: 1,
       })),

@@ -96,9 +96,9 @@ export interface BelgianTaxProfile {
     /** Annual capital repayment on the same mortgage (EUR). Used by Flemish woonbonus alongside interest. */
     mortgageCapitalRepaid?: number;
     /** Year the mortgage contract was signed. Determines applicable regime. */
-    mortgageStartYear?: number;
+    mortgageStartYear?: number | undefined;
     /** Region where the mortgage was signed. Defaults to profile region when not set. */
-    mortgageRegion?: BelgianRegion;
+    mortgageRegion?: BelgianRegion | undefined;
     /** True if the financed property is the taxpayer's primary residence. */
     mortgageIsPrimaryResidence?: boolean;
     charitableDonations: number;

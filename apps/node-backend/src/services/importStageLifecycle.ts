@@ -13,16 +13,14 @@ export function normalizeCreatedBatchId(id: string | number): number {
 
 export interface ImportStageLifecycleOptions<T> {
   batchId: string | number;
-  parseRows: () => Promise<T[] & { skipped?: number }>;
+  parseRows: () => Promise<T[] & { skipped?: number | undefined }>;
   markStaging: () => Promise<unknown>;
   persistTotal: (total: number) => Promise<unknown>;
   insertChunk: (rows: T[], startIndex: number) => Promise<void>;
   onParsed?: (summary: { total: number; skipped: number }) => void;
-  onProgress?: (progress: {
-    phase: "staging";
-    current: number;
-    total: number;
-  }) => void;
+  onProgress?:
+    | ((progress: { phase: "staging"; current: number; total: number }) => void)
+    | undefined;
 }
 
 export async function runImportStageLifecycle<T>({

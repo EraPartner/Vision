@@ -6,8 +6,8 @@ import { StateBlock } from "@/components/shared/StateBlock";
 interface PageErrorProps {
     message: string;
     /** Per-surface heading (e.g. "Couldn't load your portfolio"). Defaults to the generic common.error copy. */
-    title?: string;
-    onRetry?: () => void;
+    title?: string | undefined;
+    onRetry?: (() => void) | undefined;
 }
 
 export function PageError({ message, title, onRetry }: PageErrorProps) {

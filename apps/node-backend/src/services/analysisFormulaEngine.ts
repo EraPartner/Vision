@@ -7,13 +7,13 @@ export type FormulaRow = Record<string, unknown>;
 
 export interface FormulaUnit {
   kind: string;
-  currency?: unknown;
-  currencyParameterId?: string;
-  currencyColumn?: string;
-  instrumentColumn?: string;
-  instrumentId?: string;
-  percentageBasis?: string;
-  scale?: number;
+  currency?: unknown | undefined;
+  currencyParameterId?: string | undefined;
+  currencyColumn?: string | undefined;
+  instrumentColumn?: string | undefined;
+  instrumentId?: string | undefined;
+  percentageBasis?: string | undefined;
+  scale?: number | undefined;
 }
 
 /** A declared unit: a shorthand string (ISO currency, "percent", ...) or an object. */
@@ -21,16 +21,16 @@ export type FormulaUnitInput = string | FormulaUnit | null | undefined;
 
 export interface FormulaColumn {
   id: string;
-  unit?: FormulaUnit | null;
+  unit?: FormulaUnit | null | undefined;
 }
 
 export interface AnalysisFormulaInput {
   id: string;
   scope: string;
   expression: string;
-  unit?: FormulaUnit;
-  label?: string;
-  resultType?: string;
+  unit?: FormulaUnit | undefined;
+  label?: string | undefined;
+  resultType?: string | undefined;
 }
 
 export interface FormulaEvaluationError {
@@ -42,11 +42,11 @@ export interface FormulaEvaluationError {
 
 export interface EvaluateAnalysisFormulasInput {
   rows: FormulaRow[];
-  formulas?: AnalysisFormulaInput[];
-  assumptions?: Record<string, unknown>;
-  inputComplete?: boolean;
-  columns?: FormulaColumn[];
-  assumptionUnits?: Record<string, FormulaUnitInput>;
+  formulas?: AnalysisFormulaInput[] | undefined;
+  assumptions?: Record<string, unknown> | undefined;
+  inputComplete?: boolean | undefined;
+  columns?: FormulaColumn[] | undefined;
+  assumptionUnits?: Record<string, FormulaUnitInput> | undefined;
 }
 
 export interface AnalysisFormulaEvaluation {

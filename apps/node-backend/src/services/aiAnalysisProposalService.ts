@@ -166,7 +166,7 @@ export async function generateAnalysisProposal({
 }: {
   savedAnalysisId: string;
   instruction: unknown;
-  model?: string | null;
+  model?: string | null | undefined;
 }) {
   const text = String(instruction || "").trim();
   if (!text || text.length > 2000)

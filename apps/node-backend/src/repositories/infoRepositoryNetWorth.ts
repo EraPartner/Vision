@@ -169,7 +169,7 @@ export const netWorthRepository = {
    */
   async getNetWorthFromSnapshots(
     targetCurrency = "EUR",
-    { liveInvestments }: { liveInvestments?: number } = {},
+    { liveInvestments }: { liveInvestments?: number | undefined } = {},
   ) {
     // App-timezone today (ADR-009), threaded into the SQL bounds as well so
     // the generated day series and the JS walk below agree on the last day —

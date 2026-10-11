@@ -17,7 +17,7 @@ const UNASSIGNED = "__unassigned__";
 interface Props {
     id: string;
     accounts: readonly Account[];
-    value?: string;
+    value?: string | undefined;
     onChange: (value: string) => void;
     compactDefault?: boolean;
     t: (key: string) => string;

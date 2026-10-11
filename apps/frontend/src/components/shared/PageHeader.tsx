@@ -9,19 +9,19 @@ export interface PageHeaderBack {
     /** Accessible and visible label, for example "Back to accounts". */
     label: string;
     /** Route to go back to; rendered as a link. */
-    to?: string;
+    to?: string | undefined;
     /** Handler used instead of `to`, for in-page back navigation. */
-    onClick?: () => void;
+    onClick?: (() => void) | undefined;
 }
 
 interface PageHeaderProps {
     title: string;
-    subtitle?: string;
-    icon?: LucideIcon;
-    iconColor?: string;
-    actions?: React.ReactNode;
+    subtitle?: string | undefined;
+    icon?: LucideIcon | undefined;
+    iconColor?: string | undefined;
+    actions?: React.ReactNode | undefined;
     /** Back control rendered above the title, for detail pages. */
-    back?: PageHeaderBack;
+    back?: PageHeaderBack | undefined;
 }
 
 export function PageHeader({

@@ -11,21 +11,21 @@ import { toast } from "sonner";
 type ExportFormat = 'csv' | 'json';
 
 interface TransactionsExportButtonsProps {
-    transactionIdFilter?: number;
-    recipientIdFilter?: number;
-    categoryIdFilter?: number;
-    categoryIdsFilter?: number[];
-    startDateFilter?: string;
-    endDateFilter?: string;
-    transactionTypeFilter?: 'income' | 'expense';
-    amountMinFilter?: number;
-    amountMaxFilter?: number;
-    amountSignedFilter?: boolean;
-    searchFilter?: string;
-    filterLabel?: string;
+    transactionIdFilter?: number | undefined;
+    recipientIdFilter?: number | undefined;
+    categoryIdFilter?: number | undefined;
+    categoryIdsFilter?: number[] | undefined;
+    startDateFilter?: string | undefined;
+    endDateFilter?: string | undefined;
+    transactionTypeFilter?: 'income' | 'expense' | undefined;
+    amountMinFilter?: number | undefined;
+    amountMaxFilter?: number | undefined;
+    amountSignedFilter?: boolean | undefined;
+    searchFilter?: string | undefined;
+    filterLabel?: string | undefined;
     /** Preferred account filter (exact FK match, ADR-088). */
-    accountIdFilter?: number;
-    bankAccountFilter?: string;
+    accountIdFilter?: number | undefined;
+    bankAccountFilter?: string | undefined;
 }
 
 function buildQueryString(props: TransactionsExportButtonsProps): string {

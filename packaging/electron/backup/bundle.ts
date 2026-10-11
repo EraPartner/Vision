@@ -92,7 +92,7 @@ export interface CreateBundleOptions {
   /** short device identifier */
   deviceId: string;
   /** alembic_version value at dump time */
-  schemaHead?: string | null;
+  schemaHead?: string | null | undefined;
   /** Electron app.getVersion() */
   appVersion?: string | null;
   /** path to the pg_dump SQL file */

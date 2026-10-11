@@ -44,24 +44,24 @@ const errMessage = (err: unknown) =>
 export interface MappingProposal {
   provider: string;
   status: string;
-  providerSymbol?: string | null;
-  resolvedName?: string | null;
-  exchange?: string | null;
-  currency?: string | null;
-  candidates?: ResearchSearchItem[];
-  reason?: string;
-  error?: string;
-  fromHolding?: boolean;
-  fromStore?: boolean;
+  providerSymbol?: string | null | undefined;
+  resolvedName?: string | null | undefined;
+  exchange?: string | null | undefined;
+  currency?: string | null | undefined;
+  candidates?: ResearchSearchItem[] | undefined;
+  reason?: string | undefined;
+  error?: string | undefined;
+  fromHolding?: boolean | undefined;
+  fromStore?: boolean | undefined;
 }
 
 /** One provider's entry in an audit() result. */
 export interface AuditQuote {
   provider: string;
-  currency?: string | null;
-  price?: number | null;
-  error?: string;
-  skipped?: string;
+  currency?: string | null | undefined;
+  price?: number | null | undefined;
+  error?: string | undefined;
+  skipped?: string | undefined;
 }
 
 export type AuditDiscrepancy =
@@ -71,13 +71,13 @@ export type AuditDiscrepancy =
 /** A user-confirmed mapping as save() reads it (camelCase or snake_case). */
 export interface MappingInput {
   provider: string;
-  providerSymbol?: string;
-  provider_symbol?: string;
-  resolvedName?: string;
-  resolved_name?: string;
-  exchange?: string;
-  currency?: string;
-  status?: string;
+  providerSymbol?: string | undefined;
+  provider_symbol?: string | undefined;
+  resolvedName?: string | undefined;
+  resolved_name?: string | undefined;
+  exchange?: string | undefined;
+  currency?: string | undefined;
+  status?: string | undefined;
 }
 
 /**
@@ -134,9 +134,9 @@ function createResearchMappingService({
   }: {
     instrumentKey: string;
     keyType: string;
-    assetClass?: string;
+    assetClass?: string | undefined;
     query: string;
-    investmentId?: number;
+    investmentId?: number | undefined;
   }) {
     const existing = await repo.listByInstrument(instrumentKey, keyType);
     const existingByProvider = new Map(existing.map((r) => [r.provider, r]));

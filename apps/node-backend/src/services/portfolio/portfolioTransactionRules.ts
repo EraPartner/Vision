@@ -47,29 +47,29 @@ export interface PortfolioTransactionInput {
   /** 'YYYY-MM-DD' */
   date: string;
   /** `null` reaches here from a JSON body that sends `"amount": null`. */
-  amount?: number | string | null;
-  units?: number | string | null;
-  price_per_unit?: number | string | null;
-  fees?: number | string | null;
-  taxes?: number | string | null;
-  dividend_amount_convention?: "gross" | "net" | "unknown";
-  currency?: string;
-  note?: string | null;
-  is_recurring?: boolean;
-  recurrence_interval?: string | null;
-  recurrence_end_date?: string | null;
-  fx_rate_to_eur?: number | string | null;
-  account_id?: number | null;
+  amount?: number | string | null | undefined;
+  units?: number | string | null | undefined;
+  price_per_unit?: number | string | null | undefined;
+  fees?: number | string | null | undefined;
+  taxes?: number | string | null | undefined;
+  dividend_amount_convention?: "gross" | "net" | "unknown" | undefined;
+  currency?: string | undefined;
+  note?: string | null | undefined;
+  is_recurring?: boolean | undefined;
+  recurrence_interval?: string | null | undefined;
+  recurrence_end_date?: string | null | undefined;
+  fx_rate_to_eur?: number | string | null | undefined;
+  account_id?: number | null | undefined;
   /**
    * The portfolio import batch that
    *           created this lot (migration 0086) — set only by the import commit path,
    *           NULL for manual entry. Rollback bulk-deletes on it.
    */
-  import_batch_id?: number | string | null;
-  preloaded_asset_class?: string;
-  source_record_hash?: string | null;
-  dedup_fingerprint?: string | null;
-  dedup_fingerprint_version?: number | null;
+  import_batch_id?: number | string | null | undefined;
+  preloaded_asset_class?: string | undefined;
+  source_record_hash?: string | null | undefined;
+  dedup_fingerprint?: string | null | undefined;
+  dedup_fingerprint_version?: number | null | undefined;
 }
 
 // The canonical recurrence vocabulary is shared with planned transactions.
@@ -100,9 +100,9 @@ function isDividendAmountConvention(
  * with a patch); every other field is passed through unchanged.
  */
 export interface NormalizableTransactionPayload {
-  type?: string | null;
-  recurrence_interval?: string | null;
-  dividend_amount_convention?: string | null;
+  type?: string | null | undefined;
+  recurrence_interval?: string | null | undefined;
+  dividend_amount_convention?: string | null | undefined;
   amount?: unknown;
   units?: unknown;
   price_per_unit?: unknown;
@@ -139,7 +139,7 @@ type ProjectedUnitEvent = Record<string, unknown> & {
  * field may be absent or SQL NULL.
  */
 export type NullablePartitionedTxn = {
-  [K in keyof PartitionedTxnLike]?: PartitionedTxnLike[K] | null;
+  [K in keyof PartitionedTxnLike]?: PartitionedTxnLike[K] | null | undefined;
 };
 
 /**
@@ -171,9 +171,9 @@ function normalizeBuySellMath({
   units,
   pricePerUnit,
 }: {
-  amount?: number;
-  units?: number;
-  pricePerUnit?: number;
+  amount?: number | undefined;
+  units?: number | undefined;
+  pricePerUnit?: number | undefined;
 }): { amount: number; units: number; price_per_unit: number } {
   const hasAmount = amount !== undefined;
   const hasUnits = units !== undefined;
@@ -231,7 +231,7 @@ export function normalizeTransactionPayload<
   P extends NormalizableTransactionPayload,
 >(
   payload: P,
-  { assetClass }: { assetClass?: string } = {},
+  { assetClass }: { assetClass?: string | undefined } = {},
 ): Omit<P, keyof NormalizedTransactionFields> & NormalizedTransactionFields {
   const type = payload.type;
   const recurrenceInterval = payload.recurrence_interval;
@@ -528,17 +528,17 @@ export async function validatePortfolioUnitMutation({
 export interface UnitMutationParams {
   investmentId: number;
   assetClass: string | undefined;
-  type?: string;
+  type?: string | undefined;
   /** 'YYYY-MM-DD' */
-  date?: string;
-  units?: number | string | null;
-  accountId?: number | string | null;
+  date?: string | undefined;
+  units?: number | string | null | undefined;
+  accountId?: number | string | null | undefined;
   /** The would-be row merged into the projected history. */
-  candidate?: Record<string, unknown>;
-  excludeTransactionId?: number | string;
-  excludeTransactionIds?: readonly (number | string)[];
-  omitCandidate?: boolean;
-  checkProjectedHistory?: boolean;
+  candidate?: Record<string, unknown> | undefined;
+  excludeTransactionId?: number | string | undefined;
+  excludeTransactionIds?: readonly (number | string)[] | undefined;
+  omitCandidate?: boolean | undefined;
+  checkProjectedHistory?: boolean | undefined;
 }
 
 export const __validateSellUnitsAvailability = validatePortfolioUnitMutation;

@@ -42,7 +42,7 @@ function normalizeAccount(a: Account): Account {
 }
 
 export async function getAccounts(params?: {
-    active?: "true" | "false" | "all";
+    active?: "true" | "false" | "all" | undefined;
 }): Promise<AccountsListResponse> {
     const res = await requestWithQuery<AccountsListResponse>(
         "/api/accounts",

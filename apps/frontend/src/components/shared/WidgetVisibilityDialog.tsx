@@ -18,8 +18,8 @@ interface WidgetVisibilityDialogProps {
      * Controlled mode: the page owns the open state and offers its own entry
      * point (e.g. a menu item), so no trigger button is rendered.
      */
-    open?: boolean;
-    onOpenChange?: (open: boolean) => void;
+    open?: boolean | undefined;
+    onOpenChange?: ((open: boolean) => void) | undefined;
 }
 export function WidgetVisibilityDialog({
                                            widgets,
@@ -34,7 +34,10 @@ export function WidgetVisibilityDialog({
     const visibleCount = widgets.filter((w) => isVisible(w.id)).length;
     const controlled = open !== undefined;
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog
+            {...(open === undefined ? {} : { open })}
+            {...(onOpenChange === undefined ? {} : { onOpenChange })}
+        >
             {!controlled && (
                 <DialogTrigger asChild>
                     <Button variant="outline" size="sm">

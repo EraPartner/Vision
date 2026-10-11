@@ -13,7 +13,10 @@ import { assertCategoryInvariants } from "./_invariants.ts";
 export async function computeCategoryBreakdown({
   targetCurrency = "EUR",
   ancestorCategoryId = undefined,
-}: { targetCurrency?: string; ancestorCategoryId?: number } = {}) {
+}: {
+  targetCurrency?: string | undefined;
+  ancestorCategoryId?: number | undefined;
+} = {}) {
   const categories =
     ancestorCategoryId === undefined
       ? await infoRepository.getCategoryBreakdown(targetCurrency)

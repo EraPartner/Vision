@@ -31,47 +31,50 @@ import { usePercentFormatter } from "@/hooks/useCurrencyFormatter";
 
 export interface LineSeries<Datum> {
     readonly key: string;
-    readonly label?: string;
+    readonly label?: string | undefined;
     readonly accessor: (datum: Datum) => number | null | undefined;
-    readonly color?: string;
-    readonly dashed?: boolean;
-    readonly strokeWidth?: number;
-    readonly connectNulls?: boolean;
+    readonly color?: string | undefined;
+    readonly dashed?: boolean | undefined;
+    readonly strokeWidth?: number | undefined;
+    readonly connectNulls?: boolean | undefined;
 }
 
 export interface LineReferenceLine {
-    readonly y?: number;
-    readonly x?: Date | number;
-    readonly label?: string;
-    readonly color?: string;
-    readonly dashed?: boolean;
+    readonly y?: number | undefined;
+    readonly x?: Date | number | undefined;
+    readonly label?: string | undefined;
+    readonly color?: string | undefined;
+    readonly dashed?: boolean | undefined;
 }
 
 export interface LineChartProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
     readonly xAccessor: (datum: Datum) => Date | number;
     readonly series: ReadonlyArray<LineSeries<Datum>>;
-    readonly height?: number;
-    readonly xIsDate?: boolean;
-    readonly xTickFormat?: (value: Date | number) => string;
-    readonly yTickFormat?: (value: number) => string;
-    readonly yAxisSide?: "left" | "right";
-    readonly numYTicks?: number;
-    readonly referenceLines?: ReadonlyArray<LineReferenceLine>;
-    readonly tooltipTitle?: (datum: Datum) => string;
-    readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly margin?: {
-        top: number;
-        right: number;
-        bottom: number;
-        left: number;
-    };
-    readonly yDomain?: readonly [number, number];
-    readonly ariaLabel?: string;
+    readonly height?: number | undefined;
+    readonly xIsDate?: boolean | undefined;
+    readonly xTickFormat?: ((value: Date | number) => string) | undefined;
+    readonly yTickFormat?: ((value: number) => string) | undefined;
+    readonly yAxisSide?: "left" | "right" | undefined;
+    readonly numYTicks?: number | undefined;
+    readonly referenceLines?: ReadonlyArray<LineReferenceLine> | undefined;
+    readonly tooltipTitle?: ((datum: Datum) => string) | undefined;
+    readonly tooltipValueFormat?:
+        ((value: number, seriesKey: string) => string) | undefined;
+    readonly margin?:
+        | {
+              top: number;
+              right: number;
+              bottom: number;
+              left: number;
+          }
+        | undefined;
+    readonly yDomain?: readonly [number, number] | undefined;
+    readonly ariaLabel?: string | undefined;
     /** Opt into synced crosshairs with sibling charts sharing this id (needs ChartSyncProvider). */
-    readonly syncId?: string;
+    readonly syncId?: string | undefined;
     /** Enable pointer-drag range compare (Δ + %) on the primary series. */
-    readonly scrubbable?: boolean;
+    readonly scrubbable?: boolean | undefined;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 24, bottom: 28, left: 90 };

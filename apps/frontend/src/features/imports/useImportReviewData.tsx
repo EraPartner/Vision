@@ -27,8 +27,8 @@ export function useImportPreview(batchId: number) {
  * the Transactions page; the span is the closest filter it reads).
  */
 export interface ImportDateRange {
-    dateFrom?: string;
-    dateTo?: string;
+    dateFrom?: string | undefined;
+    dateTo?: string | undefined;
 }
 
 export function useImportReviewMutations(

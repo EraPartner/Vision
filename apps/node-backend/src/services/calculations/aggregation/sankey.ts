@@ -38,10 +38,10 @@ export async function computeSankeyFlow({
   excludedCategoryIds = [],
   excludedRecipientIds = [],
 }: {
-  targetCurrency?: string;
-  year?: number;
-  excludedCategoryIds?: number[];
-  excludedRecipientIds?: number[];
+  targetCurrency?: string | undefined;
+  year?: number | undefined;
+  excludedCategoryIds?: number[] | undefined;
+  excludedRecipientIds?: number[] | undefined;
 } = {}) {
   const targetYear = year ?? toAppTz(new Date()).year;
   const yearStart = `${targetYear}-01-01`;

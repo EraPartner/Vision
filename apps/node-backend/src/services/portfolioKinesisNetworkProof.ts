@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { toDecimal } from "../lib/money.ts";
 import {
   parseCsvText,
+  sourceColumnsOption,
   parseDateWithFormat,
   parseCustomAmount,
 } from "./importPipeline/adapters/_shared.ts";
@@ -749,7 +750,7 @@ function verifiedNativeGiftRow(row: KinesisSourceRow) {
     const records = parseCsvText(
       portfolioPrimaryRawData(requiredStagedValue(row.raw_data)),
       {
-        columns: config.source_columns,
+        ...sourceColumnsOption(config.source_columns),
         skip_empty_lines: true,
       },
     );

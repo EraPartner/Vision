@@ -15,8 +15,8 @@ export interface CreateTransferInput {
     /** Magnitude; the hook signs each leg. */
     amount: number;
     currency: string;
-    memo?: string;
-    comment?: string;
+    memo?: string | undefined;
+    comment?: string | undefined;
 }
 
 export interface CreateTransferResult {

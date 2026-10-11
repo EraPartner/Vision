@@ -22,11 +22,11 @@ interface FakeMapRow {
   instrument_key: string;
   key_type: string;
   provider: string;
-  provider_symbol?: string | null;
-  resolved_name?: string | null;
-  exchange?: string | null;
-  currency?: string | null;
-  status?: string | null;
+  provider_symbol?: string | null | undefined;
+  resolved_name?: string | null | undefined;
+  exchange?: string | null | undefined;
+  currency?: string | null | undefined;
+  status?: string | null | undefined;
   verified_at: string | undefined;
 }
 type FakeMapSeed = Omit<FakeMapRow, 'id' | 'verified_at'> & { id?: number };

@@ -232,7 +232,7 @@ function sourceFromSaved(saved: SavedAnalysis): {
     plan?: VisualAnalysisPlan;
     sql?: string;
     datasetIds?: string[];
-    visualOrigin?: VisualAnalysisPlan;
+    visualOrigin?: VisualAnalysisPlan | undefined;
 } {
     const source = saved.definition.source as
         Record<string, unknown> | undefined;
@@ -310,7 +310,7 @@ function ResultTable({
     datasets,
 }: {
     result: AnalysisResult;
-    onDrill?: (row: Record<string, AnalysisValue>) => void;
+    onDrill?: ((row: Record<string, AnalysisValue>) => void) | undefined;
     onSort: (id: string) => void;
     datasets: AnalysisDataset[];
 }) {

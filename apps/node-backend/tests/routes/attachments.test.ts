@@ -8,6 +8,7 @@
  * upload errors through the real middleware chain instead of the test
  * hand-building a `req.file`.
  */
+import { bodyAt } from '../helpers/responseBody.ts';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockLogger } from '../helpers/mockLogger.ts';
 import { routeAgent, okEnvelope, errEnvelope } from '../helpers/routeApp.ts';
@@ -115,7 +116,7 @@ describe('Attachment routes', () => {
 
       const res = await api.post(`${BASE}/transaction/1`).expect(500);
 
-      expect(res.body.error.message).toBe('FK violation');
+      expect(bodyAt(res, 'error', 'message')).toBe('FK violation');
       expect(logger.warn).toHaveBeenCalled();
     });
 
@@ -167,7 +168,7 @@ describe('Attachment routes', () => {
 
       const res = await api.delete(`${BASE}/99`).expect(404);
 
-      expect(res.body.error.code).toBe('NOT_FOUND');
+      expect(bodyAt(res, 'error', 'code')).toBe('NOT_FOUND');
       expect(attachmentRepository.deleteById).not.toHaveBeenCalled();
     });
   });
@@ -206,7 +207,7 @@ describe('Attachment routes — :id params (zod)', () => {
     ['delete', `${BASE}/-1`],
   ] as const)('%s %s rejects a malformed id before touching the store', async (method, path) => {
     const res = await api[method](path).expect(400);
-    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(bodyAt(res, 'error', 'code')).toBe('VALIDATION_ERROR');
     expect(attachmentRepository.listByTransaction).not.toHaveBeenCalled();
     expect(attachmentRepository.findById).not.toHaveBeenCalled();
   });

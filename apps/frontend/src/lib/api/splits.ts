@@ -34,7 +34,7 @@ export interface SplitItem {
 export interface SplitCreateInput {
     recipient_id: number;
     amount: number;
-    note?: string;
+    note?: string | undefined;
 }
 
 /** Preset share for POST /api/splits/bulk: `equal` = 50/50, `full` = 0/100 (the payee owes everything). */
@@ -107,7 +107,11 @@ export function getSplitsByTransaction(transactionId: number): Promise<{ items: 
 
 export function createSplitsBatch(
     transactionId: number,
-    splits: Array<{ recipient_id: number; amount: number; note?: string }>,
+    splits: Array<{
+        recipient_id: number;
+        amount: number;
+        note?: string | undefined;
+    }>,
 ): Promise<{ items: SplitItem[] }> {
     return apiRequest('/api/splits/batch', {
         method: 'POST',

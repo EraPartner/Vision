@@ -244,8 +244,8 @@ export type AccountWithBalanceRow = AccountRow & {
     balance_date: string;
   }>;
   has_transactions: boolean;
-  anchor_date?: string;
-  post_anchor_count?: number;
+  anchor_date?: string | undefined;
+  post_anchor_count?: number | undefined;
 };
 
 // ---------------------------------------------------------------------------

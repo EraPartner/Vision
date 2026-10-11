@@ -46,8 +46,8 @@ export interface RestoreContext {
 }
 
 export interface RestoreRequestOptions {
-  passphrase?: string | null;
-  allowUnverifiedAudit?: boolean;
+  passphrase?: string | null | undefined;
+  allowUnverifiedAudit?: boolean | undefined;
 }
 
 export interface BundleBackupResult {

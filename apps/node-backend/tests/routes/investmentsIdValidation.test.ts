@@ -24,6 +24,7 @@
  * module-scoped, so a fresh module registry keeps the query-param cases from
  * reading each other's cached payloads.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "../helpers/mockLogger.ts";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
@@ -320,7 +321,9 @@ describe("investment_ids query param on GET /transactions", () => {
         .get(`${BASE}/transactions`)
         .query(query)
         .expect(400);
-      expect(res.body.error.message).toContain("investment_ids is required");
+      expect(bodyAt(res, "error", "message")).toContain(
+        "investment_ids is required",
+      );
     }
   });
 
@@ -348,8 +351,8 @@ describe("route-level params/query schemas", () => {
     "/1/transactions?type=buy&type=sell",
   ])("GET %s rejects a repeated single-value filter", async (path) => {
     const res = await api.get(`${BASE}${path}`).expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error.message).toMatch(/must be a single value/);
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "message")).toMatch(/must be a single value/);
     expect(investmentRepository.getAll).not.toHaveBeenCalled();
     expect(
       portfolioTransactionPersistence.getAllByInvestmentIds,
@@ -363,7 +366,9 @@ describe("route-level params/query schemas", () => {
     "GET %s rejects a malformed :id before the service runs",
     async (path) => {
       const res = await api.get(`${BASE}${path}`).expect(400);
-      expect(res.body.error.message).toBe("id: must be a positive integer");
+      expect(bodyAt(res, "error", "message")).toBe(
+        "id: must be a positive integer",
+      );
       expect(investmentRepository.getById).not.toHaveBeenCalled();
     },
   );

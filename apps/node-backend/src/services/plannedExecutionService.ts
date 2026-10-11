@@ -23,7 +23,7 @@ export interface ExecutePlannedArgs {
   id: number;
   executedTransactionId: number;
   /** 'YYYY-MM-DD'; defaults to today in the app timezone. */
-  executionDate?: string;
+  executionDate?: string | undefined;
 }
 
 /**

@@ -59,11 +59,11 @@ export interface ElectronCsvFile {
 }
 
 export interface SplashThemeColors {
-  mode?: "light" | "dark";
+  mode?: "light" | "dark" | undefined;
   background: string;
   foreground: string;
-  surface?: string;
-  text?: string;
+  surface?: string | undefined;
+  text?: string | undefined;
 }
 
 export interface RendererFailurePayload {

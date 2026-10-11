@@ -60,37 +60,37 @@ type StatCardSize = NonNullable<VariantProps<typeof statValueVariants>["size"]>;
 interface StatCardProps {
     title: string;
     /** Optional drill-down destination exposed as a full-surface native link. */
-    to?: string;
+    to?: string | undefined;
     /** Formatted display value. Strings get the odometer treatment; nodes (e.g. <Money/>) render as-is. */
-    value?: ReactNode;
+    value?: ReactNode | undefined;
     /** Raw numeric value for the count-up animation. If omitted, value is shown statically. */
-    numericValue?: number;
-    change?: string;
-    changeType?: "positive" | "negative" | "neutral";
+    numericValue?: number | undefined;
+    change?: string | undefined;
+    changeType?: "positive" | "negative" | "neutral" | undefined;
     /** Hint line under the value (rendered after the change pill when both are set). */
-    subtitle?: ReactNode;
-    icon?: LucideIcon;
-    trend?: "income" | "expense" | "up" | "down" | "neutral";
+    subtitle?: ReactNode | undefined;
+    icon?: LucideIcon | undefined;
+    trend?: "income" | "expense" | "up" | "down" | "neutral" | undefined;
     /** Format function that turns numeric → display string (e.g. currency formatter) */
-    formatValue?: (n: number) => string;
+    formatValue?: ((n: number) => string) | undefined;
     /** Full unabbreviated value shown in a tap/click/keyboard disclosure. */
-    titleValue?: string;
+    titleValue?: string | undefined;
     /**
      * Whether string values get the odometer (digit-reel) treatment. Defaults to
      * true for numeric KPIs. Set false for arbitrary text (e.g. a recipient name)
      * so spaces aren't collapsed and letters aren't run through the digit reels.
      */
-    odometer?: boolean;
+    odometer?: boolean | undefined;
     /** Override the headline value colour (e.g. "text-primary" for a featured total). Defaults to neutral foreground. */
-    valueClassName?: string;
-    size?: StatCardSize;
+    valueClassName?: string | undefined;
+    size?: StatCardSize | undefined;
     /** Deliberate emphasis for one primary total, rather than every metric. */
-    emphasis?: "secondary" | "primary";
+    emphasis?: "secondary" | "primary" | undefined;
     /** Render a skeleton in the value slot while the data is still loading. */
-    loading?: boolean;
-    className?: string;
+    loading?: boolean | undefined;
+    className?: string | undefined;
     /** Extra content below the value block (secondary pill rows etc.). */
-    children?: ReactNode;
+    children?: ReactNode | undefined;
 }
 
 export function StatCard({

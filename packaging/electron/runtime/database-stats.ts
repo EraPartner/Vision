@@ -57,7 +57,9 @@ export const DATABASE_STATS_SQL = [
 ].join(";\n");
 
 /** Row counts of the important tables, keyed by table name. */
-export type ImportantRowCounts = { [Table in ImportantTable]?: number };
+export type ImportantRowCounts = {
+  [Table in ImportantTable]?: number | undefined;
+};
 
 export type DatabaseStats = ImportantRowCounts & {
   schema: string;
@@ -69,10 +71,10 @@ export type DatabaseStats = ImportantRowCounts & {
 
 /** Parsed statistics, or a manifest-derived subset of them, to compare. */
 export type ComparableDatabaseStats = Readonly<ImportantRowCounts> & {
-  readonly schema?: string;
-  readonly tableCount?: number;
-  readonly tableCounts?: Readonly<Record<string, number>>;
-  readonly stableImportantRowCounts?: Readonly<ImportantRowCounts>;
+  readonly schema?: string | undefined;
+  readonly tableCount?: number | undefined;
+  readonly tableCounts?: Readonly<Record<string, number>> | undefined;
+  readonly stableImportantRowCounts?: Readonly<ImportantRowCounts> | undefined;
 };
 
 export interface DatabaseStatsManifest {

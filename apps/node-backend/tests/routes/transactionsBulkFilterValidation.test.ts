@@ -22,6 +22,7 @@
  * behaviour: the status code, and that neither the COUNT(*) precheck nor the
  * pooled write client is ever reached.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -112,7 +113,7 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
   it("rejects a wrong-typed filter field instead of deleting a wider set", async () => {
     for (const filter of WIDENING_FILTERS) {
       const res = await bulkDelete({ filter, expected_count: 1 }).expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     }
     expect(dbQuery).not.toHaveBeenCalled();
     expect(getClient).not.toHaveBeenCalled();
@@ -127,7 +128,7 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
       filter: { account_ids: [7] },
       expected_count: 1,
     }).expect(400);
-    expect(res.body.error.message).toMatch(/unknown field/i);
+    expect(bodyAt(res, "error", "message")).toMatch(/unknown field/i);
     expect(dbQuery).not.toHaveBeenCalled();
     expect(getClient).not.toHaveBeenCalled();
   });
@@ -159,7 +160,7 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
       filter: { active: true },
       expected_count: 1,
     }).expect(200);
-    expect(res.body.data.deleted).toBe(1);
+    expect(bodyAt(res, "data", "deleted")).toBe(1);
   });
 
   it("still accepts a well-formed filter unchanged", async () => {
@@ -183,7 +184,7 @@ describe("POST /bulk-delete — a filter field is rejected, not skipped", () => 
       },
       expected_count: 2,
     }).expect(200);
-    expect(res.body.data.deleted).toBe(2);
+    expect(bodyAt(res, "data", "deleted")).toBe(2);
   });
 });
 

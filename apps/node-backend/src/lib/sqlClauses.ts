@@ -22,13 +22,13 @@ export type AllowedKeys = readonly string[] | Set<string>;
 
 export interface ClauseOptions {
   /** whitelist of writable keys */
-  allowed?: AllowedKeys;
+  allowed?: AllowedKeys | undefined;
   /** first placeholder number (default 1) */
-  startIdx?: number;
+  startIdx?: number | undefined;
   /** wrap column identifiers in "..." (default false) */
-  quote?: boolean;
+  quote?: boolean | undefined;
   /** field → column mapper */
-  mapColumn?: (key: string) => string;
+  mapColumn?: ((key: string) => string) | undefined;
 }
 
 function isAllowed(allowed: AllowedKeys | undefined, key: string): boolean {

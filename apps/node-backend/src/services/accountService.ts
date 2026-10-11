@@ -307,9 +307,9 @@ const accountService = {
     limit = null,
     offset = 0,
   }: {
-    active?: boolean | null;
-    limit?: number | null;
-    offset?: number;
+    active?: boolean | null | undefined;
+    limit?: number | null | undefined;
+    offset?: number | undefined;
   } = {}) {
     const rows = await accountRepository.getAll({ active, limit, offset });
     // Fetch one cached rate table for the entire page. The service owns this

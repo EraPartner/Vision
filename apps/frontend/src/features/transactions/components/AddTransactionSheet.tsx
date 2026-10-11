@@ -62,7 +62,8 @@ export interface AddTransactionSheetProps {
      * Fires once the row (for a transfer: its outflow leg) exists on the
      * server. Screens use it to select the new row or to navigate to it.
      */
-    onCreated?: (transaction: Transaction, kind: TransactionKind) => void;
+    onCreated?:
+        ((transaction: Transaction, kind: TransactionKind) => void) | undefined;
 }
 
 const KINDS: TransactionKind[] = ["expense", "income", "transfer"];

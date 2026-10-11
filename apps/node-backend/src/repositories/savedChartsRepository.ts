@@ -17,20 +17,20 @@ export type { SavedChartRow };
  * optional on update; create requires the NOT NULL ones.
  */
 export interface SavedChartInput {
-  name?: string;
-  chartType?: string;
-  categoryIds?: number[];
-  recipientIds?: number[];
-  tagIds?: number[];
-  allCategories?: boolean;
-  allRecipients?: boolean;
-  allTags?: boolean;
-  chartVariant?: string;
-  timeBucket?: string;
+  name?: string | undefined;
+  chartType?: string | undefined;
+  categoryIds?: number[] | undefined;
+  recipientIds?: number[] | undefined;
+  tagIds?: number[] | undefined;
+  allCategories?: boolean | undefined;
+  allRecipients?: boolean | undefined;
+  allTags?: boolean | undefined;
+  chartVariant?: string | undefined;
+  timeBucket?: string | undefined;
   /** 'YYYY-MM-DD' */
-  dateRangeStart?: string | null;
+  dateRangeStart?: string | null | undefined;
   /** 'YYYY-MM-DD' */
-  dateRangeEnd?: string | null;
+  dateRangeEnd?: string | null | undefined;
 }
 
 // date_range_* are DATE columns — emitted via to_char so the wire carries the

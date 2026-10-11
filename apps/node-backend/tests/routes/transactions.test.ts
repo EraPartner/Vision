@@ -8,6 +8,7 @@
  * ADR-026 envelope middleware and the centralized error handler are all on the
  * tested path. Repositories/services are still mocked.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -164,9 +165,9 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/").expect(200);
 
-      expect(res.body.data.total).toBe(1);
-      expect(res.body.data.items[0].transaction_date).toBe("2026-01-15");
-      expect(res.body.data.items[0]).not.toHaveProperty("date");
+      expect(bodyAt(res, "data", "total")).toBe(1);
+      expect(bodyAt(res, "data", "items", 0, "transaction_date")).toBe("2026-01-15");
+      expect(bodyAt(res, "data", "items", 0)).not.toHaveProperty("date");
     });
 
     it("should respect pagination", async () => {
@@ -179,8 +180,8 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/?limit=2&offset=3")
         .expect(200);
 
-      expect(res.body.data.limit).toBe(2);
-      expect(res.body.data.offset).toBe(3);
+      expect(bodyAt(res, "data", "limit")).toBe(2);
+      expect(bodyAt(res, "data", "offset")).toBe(3);
     });
 
     it("should handle uncategorised filter", async () => {
@@ -217,7 +218,7 @@ describe("Transaction Routes", () => {
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ transactionId: 42 }),
       );
-      expect(res.body.data.items).toHaveLength(1);
+      expect(bodyAt(res, "data", "items")).toHaveLength(1);
     });
 
     it("should normalize rows when normalize_to_eur is true", async () => {
@@ -244,7 +245,7 @@ describe("Transaction Routes", () => {
         expect.arrayContaining([expect.objectContaining({ id: 1 })]),
         "GBP",
       );
-      expect(res.body.data.items[0].amount_eur).toBe(9);
+      expect(bodyAt(res, "data", "items", 0, "amount_eur")).toBe(9);
     });
 
     it("should thread include_balance to the repository and expose running_balance on rows (WP-B4)", async () => {
@@ -269,7 +270,7 @@ describe("Transaction Routes", () => {
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: true, accountId: 3 }),
       );
-      expect(res.body.data.items[0].running_balance).toBe(974.5);
+      expect(bodyAt(res, "data", "items", 0, "running_balance")).toBe(974.5);
     });
 
     it("should omit the running_balance key entirely when include_balance is not set", async () => {
@@ -291,7 +292,11 @@ describe("Transaction Routes", () => {
       expect(transactionRepository.getAllWithCount).toHaveBeenCalledWith(
         expect.objectContaining({ includeBalance: false }),
       );
-      expect("running_balance" in res.body.data.items[0]).toBe(false);
+      const firstItem = bodyAt(res, "data", "items", 0);
+      if (typeof firstItem !== "object" || firstItem === null) {
+        throw new TypeError("Expected the first transaction to be an object");
+      }
+      expect("running_balance" in firstItem).toBe(false);
     });
 
     it("rejects a malformed account_id through the real validation guard (400 envelope)", async () => {
@@ -320,10 +325,10 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/1").expect(200);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.id).toBe(1);
-      expect(res.body.data.transaction_date).toBe("2026-01-15");
-      expect(res.body.data).not.toHaveProperty("date");
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "id")).toBe(1);
+      expect(bodyAt(res, "data", "transaction_date")).toBe("2026-01-15");
+      expect(bodyAt(res, "data")).not.toHaveProperty("date");
     });
 
     it("should return 404 for non-existent", async () => {
@@ -345,7 +350,7 @@ describe("Transaction Routes", () => {
       // last handler, so this guard was never on the tested path.
       const res = await api.get("/api/transactions/abc").expect(400);
 
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       expect(transactionRepository.getById).not.toHaveBeenCalled();
     });
   });
@@ -550,7 +555,7 @@ describe("Transaction Routes", () => {
         .get("/api/transactions/export/json?start_date=2099-01-01")
         .expect(404);
 
-      expect(res.body.error.code).toBe("NOT_FOUND");
+      expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     });
 
     it("should return 500 on unexpected error before headers sent", async () => {
@@ -558,7 +563,7 @@ describe("Transaction Routes", () => {
 
       const res = await api.get("/api/transactions/export/json").expect(500);
 
-      expect(res.body.ok).toBe(false);
+      expect(bodyAt(res, "ok")).toBe(false);
     });
 
     it("should include all expected fields in output", async () => {
@@ -609,8 +614,8 @@ describe("Transaction Routes", () => {
         })
         .expect(201);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.id).toBe(1);
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "id")).toBe(1);
     });
 
     it("should return 400 for missing fields", async () => {
@@ -619,7 +624,7 @@ describe("Transaction Routes", () => {
         .send({ bank_account: "Chase", amount: -50.0 })
         .expect(400);
 
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     });
 
     it("should return 400 for a zero amount", async () => {
@@ -688,8 +693,8 @@ describe("Transaction Routes", () => {
         .send('{"amount": ');
 
       expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
-      expect(res.body.error.message).toMatch(/JSON/i);
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "message")).toMatch(/JSON/i);
 
       // Production must not sanitize it away: the 4xx never reaches the 5xx branch.
       const prod = await apiProd
@@ -697,8 +702,8 @@ describe("Transaction Routes", () => {
         .set("Content-Type", "application/json")
         .send('{"amount": ');
       expect(prod.status).toBe(400);
-      expect(prod.body.error.message).toBe(res.body.error.message);
-      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
+      expect(bodyAt(prod, "error", "message")).toBe(bodyAt(res, "error", "message"));
+      expect(bodyAt(prod, "error", "message")).not.toBe(PROD_5XX_MESSAGE);
 
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
@@ -713,13 +718,13 @@ describe("Transaction Routes", () => {
 
       const dev = await api.post("/api/transactions/").send(oversize);
       expect(dev.status).toBe(413);
-      expect(dev.body.error.code).toBe("VALIDATION_ERROR");
-      expect(dev.body.error.message).toBe("request entity too large");
+      expect(bodyAt(dev, "error", "code")).toBe("VALIDATION_ERROR");
+      expect(bodyAt(dev, "error", "message")).toBe("request entity too large");
 
       const prod = await apiProd.post("/api/transactions/").send(oversize);
       expect(prod.status).toBe(413);
-      expect(prod.body.error.message).toBe("request entity too large");
-      expect(prod.body.error.message).not.toBe(PROD_5XX_MESSAGE);
+      expect(bodyAt(prod, "error", "message")).toBe("request entity too large");
+      expect(bodyAt(prod, "error", "message")).not.toBe(PROD_5XX_MESSAGE);
     });
 
     it("the CSRF guard blocks a cross-site POST before the router runs", async () => {
@@ -758,8 +763,8 @@ describe("Transaction Routes", () => {
         .send({ amount: -75.0 })
         .expect(200);
 
-      expect(res.body.ok).toBe(true);
-      expect(res.body.data.amount).toBe(-75);
+      expect(bodyAt(res, "ok")).toBe(true);
+      expect(bodyAt(res, "data", "amount")).toBe(-75);
     });
 
     it("should return 404 for non-existent", async () => {
@@ -902,7 +907,7 @@ describe("Transaction Routes", () => {
     it("falls through to the 404 error envelope", async () => {
       const res = await api.get("/api/transactions/1/nope/nope").expect(404);
 
-      expect(res.body.error.code).toBe("NOT_FOUND");
+      expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     });
   });
   describe("request validation (ADR-193)", () => {

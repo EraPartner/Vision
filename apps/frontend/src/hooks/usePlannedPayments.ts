@@ -137,7 +137,7 @@ export function usePlannedPayments(showInactive: boolean = false) {
         }: {
             id: number;
             transactionId: number;
-            executionDate?: string;
+            executionDate?: string | undefined;
         }) => {
             const executeRequest: PlannedTransactionExecuteRequest = {
                 executed_transaction_id: transactionId,

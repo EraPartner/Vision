@@ -31,7 +31,7 @@ const SEPARATOR = '='.repeat(78);
  */
 export interface SkipCountModule {
   moduleId: string;
-  children?: { allTests(state?: string): Iterable<unknown> };
+  children?: { allTests(state?: string): Iterable<unknown> } | undefined;
 }
 
 export interface DbSkipCounts {

@@ -21,6 +21,7 @@
  * `before`-middleware injection, as importValidationPins.test.ts uses, can
  * only ever inject a successful upload).
  */
+import { bodyAt, valueAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { IRoute } from "express";
 import { mockConnection } from "../helpers/repoMocks.ts";
@@ -44,7 +45,7 @@ vi.mock("multer", () => {
     single:
       () =>
       (
-        req: { file?: UploadedFile },
+        req: { file?: UploadedFile | undefined },
         _res: unknown,
         next: (err?: unknown) => void,
       ) => {
@@ -269,11 +270,11 @@ describe("Import Routes", () => {
         .send({ bank_name: "belfius" })
         .expect(201);
 
-      expect(res.body.data.total).toBe(5);
-      expect(res.body.data.imported).toBe(4);
-      expect(res.body.data.duplicates).toBe(1);
-      expect(res.body.data.errors).toBe(0);
-      expect(res.body.data.status).toBe("completed");
+      expect(bodyAt(res, "data", "total")).toBe(5);
+      expect(bodyAt(res, "data", "imported")).toBe(4);
+      expect(bodyAt(res, "data", "duplicates")).toBe(1);
+      expect(bodyAt(res, "data", "errors")).toBe(0);
+      expect(bodyAt(res, "data", "status")).toBe("completed");
     });
 
     it("should return completed_with_errors status", async () => {
@@ -291,7 +292,7 @@ describe("Import Routes", () => {
         .send({ bank_name: "kbc" })
         .expect(201);
 
-      expect(res.body.data.status).toBe("completed_with_errors");
+      expect(bodyAt(res, "data", "status")).toBe("completed_with_errors");
     });
 
     // The 202 arm — `respondReviewRequired` (importRoutes.js:74-84). Nothing is
@@ -319,9 +320,9 @@ describe("Import Routes", () => {
         }),
       );
       // No counts on this branch — the review page is the outcome, not a commit.
-      expect(res.body.data).not.toHaveProperty("total");
-      expect(res.body.data).not.toHaveProperty("imported");
-      expect(res.body.data).not.toHaveProperty("status");
+      expect(bodyAt(res, "data")).not.toHaveProperty("total");
+      expect(bodyAt(res, "data")).not.toHaveProperty("imported");
+      expect(bodyAt(res, "data")).not.toHaveProperty("status");
     });
 
     it("should return 400 for invalid bank config", async () => {
@@ -387,7 +388,9 @@ describe("Import Routes", () => {
         .post(`${BASE}/csv/custom`)
         .send({ bank_name: "Custom" })
         .expect(400);
-      expect(res.body.error.message).toContain("Missing required parameters");
+      expect(bodyAt(res, "error", "message")).toContain(
+        "Missing required parameters",
+      );
     });
 
     it("should return 400 for invalid separator", async () => {
@@ -402,7 +405,7 @@ describe("Import Routes", () => {
           separator: ";;",
         })
         .expect(400);
-      expect(res.body.error.message).toMatch(/separator/);
+      expect(bodyAt(res, "error", "message")).toMatch(/separator/);
     });
 
     it("should return 400 for negative skip_rows", async () => {
@@ -419,7 +422,7 @@ describe("Import Routes", () => {
         })
         .expect(400);
 
-      expect(res.body.error.message).toMatch(/skip_rows/);
+      expect(bodyAt(res, "error", "message")).toMatch(/skip_rows/);
       expect(runImportPipeline).not.toHaveBeenCalled();
     });
 
@@ -474,8 +477,8 @@ describe("Import Routes", () => {
           match_source_counts: { exact: 0, fuzzy: 0, pattern: 0, new: 2 },
         }),
       );
-      expect(res.body.data).not.toHaveProperty("total");
-      expect(res.body.data).not.toHaveProperty("imported");
+      expect(bodyAt(res, "data")).not.toHaveProperty("total");
+      expect(bodyAt(res, "data")).not.toHaveProperty("imported");
     });
 
     it("should return 500 on error", async () => {
@@ -653,7 +656,7 @@ describe("Import Routes", () => {
         .post(`${BASE}/recipients`)
         .send({ separator: ";;" })
         .expect(400);
-      expect(res.body.error.message).toMatch(
+      expect(bodyAt(res, "error", "message")).toMatch(
         /separator must be a single character/,
       );
     });
@@ -709,7 +712,7 @@ describe("Import Routes", () => {
         .post(`${BASE}/categories`)
         .send({ separator: ";;" })
         .expect(400);
-      expect(res.body.error.message).toMatch(
+      expect(bodyAt(res, "error", "message")).toMatch(
         /separator must be a single character/,
       );
     });
@@ -746,7 +749,7 @@ describe("Import Routes", () => {
       expect(listBatches).toHaveBeenCalledWith({ limit: 50, offset: 0 });
       // Canonical collection shape: { items, total, limit, offset } — the old
       // `batches` key is gone from the wire (the service still uses it).
-      expect(res.body.data.batches).toBeUndefined();
+      expect(bodyAt(res, "data", "batches")).toBeUndefined();
       expect(res.body).toEqual(
         okEnvelope({
           items: [
@@ -805,7 +808,7 @@ describe("Import Routes", () => {
       const res = await api.get(`${BASE}/batches/7`).expect(200);
 
       expect(getBatch).toHaveBeenCalledWith(7);
-      expect(res.body.data.id).toBe(7);
+      expect(bodyAt(res, "data", "id")).toBe(7);
     });
 
     it("throws ValidationError for non-numeric id", async () => {
@@ -839,7 +842,10 @@ describe("Import Routes", () => {
       const res = await api.delete(`${BASE}/batches/3`).expect(200);
 
       expect(rollbackBatch).toHaveBeenCalledWith(3);
-      expect(res.body.data).toEqual({ deleted: 15, recipientsRemoved: 2 });
+      expect(bodyAt(res, "data")).toEqual({
+        deleted: 15,
+        recipientsRemoved: 2,
+      });
     });
 
     it("throws ValidationError for non-numeric id", async () => {
@@ -881,7 +887,7 @@ describe("Import Routes", () => {
 
       const res = await api.delete(`${BASE}/batches/8`).expect(200);
 
-      expect(res.body.data.deleted).toBe(0);
+      expect(bodyAt(res, "data", "deleted")).toBe(0);
     });
   });
 
@@ -1030,7 +1036,10 @@ describe("Import Routes", () => {
         rowId: 5,
         categoryId: null,
       });
-      expect(res.body.data).toEqual({ row_id: 5, override_category_id: null });
+      expect(bodyAt(res, "data")).toEqual({
+        row_id: 5,
+        override_category_id: null,
+      });
     });
 
     it("sets the override after verifying category exists", async () => {
@@ -1048,7 +1057,10 @@ describe("Import Routes", () => {
         rowId: 42,
         categoryId: 12,
       });
-      expect(res.body.data).toEqual({ row_id: 42, override_category_id: 12 });
+      expect(bodyAt(res, "data")).toEqual({
+        row_id: 42,
+        override_category_id: 12,
+      });
     });
 
     it("rejects unknown category_id with ValidationError", async () => {
@@ -1111,13 +1123,15 @@ describe("Import Routes", () => {
 
       const res = await api.get(`${BASE}/batches/1/preview`).expect(200);
 
-      expect(res.body.data.groups).toHaveLength(1);
-      const g = res.body.data.groups[0];
-      expect(g.recipient_default_category_id).toBe(12);
-      expect(g.recipient_default_category_label).toBe("Groceries: Food");
-      expect(g.current_category_id).toBe(12);
-      expect(g.current_category_label).toBe("Groceries: Food");
-      expect(g.override_category_id).toBeNull();
+      expect(bodyAt(res, "data", "groups")).toHaveLength(1);
+      const g = bodyAt(res, "data", "groups", 0);
+      expect(valueAt(g, "recipient_default_category_id")).toBe(12);
+      expect(valueAt(g, "recipient_default_category_label")).toBe(
+        "Groceries: Food",
+      );
+      expect(valueAt(g, "current_category_id")).toBe(12);
+      expect(valueAt(g, "current_category_label")).toBe("Groceries: Food");
+      expect(valueAt(g, "override_category_id")).toBeNull();
     });
 
     it("per-row override beats recipient default in current_category fields", async () => {
@@ -1154,11 +1168,11 @@ describe("Import Routes", () => {
 
       const res = await api.get(`${BASE}/batches/1/preview`).expect(200);
 
-      const g = res.body.data.groups[0];
-      expect(g.override_category_id).toBe(22);
-      expect(g.current_category_id).toBe(22);
-      expect(g.current_category_label).toBe("Hardware: Tools");
-      expect(g.recipient_default_category_id).toBe(12);
+      const g = bodyAt(res, "data", "groups", 0);
+      expect(valueAt(g, "override_category_id")).toBe(22);
+      expect(valueAt(g, "current_category_id")).toBe(22);
+      expect(valueAt(g, "current_category_label")).toBe("Hardware: Tools");
+      expect(valueAt(g, "recipient_default_category_id")).toBe(12);
     });
   });
 
@@ -1182,7 +1196,7 @@ describe("Saved custom parser routes", () => {
 
       const res = await api.get(`${BASE}/parsers`).expect(200);
       // Canonical collection shape: { items, total } (total = row count here).
-      expect(res.body.data).toEqual({ items, total: 1 });
+      expect(bodyAt(res, "data")).toEqual({ items, total: 1 });
     });
   });
 
@@ -1201,7 +1215,7 @@ describe("Saved custom parser routes", () => {
         .send({ name: "My Bank", config: validConfig })
         .expect(201);
 
-      expect(res.body.data.id).toBe(7);
+      expect(bodyAt(res, "data", "id")).toBe(7);
       expect(customParserConfigRepository.create).toHaveBeenCalledWith({
         name: "My Bank",
         config: expect.objectContaining({

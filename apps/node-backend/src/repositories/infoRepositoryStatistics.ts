@@ -38,11 +38,11 @@ export interface CategoryPivotCell {
 }
 
 export interface CategoryPivotOptions {
-  excludedCategoryIds?: number[];
-  targetCurrency?: string;
-  excludedRecipientIds?: number[];
-  startDate?: string;
-  endDate?: string;
+  excludedCategoryIds?: number[] | undefined;
+  targetCurrency?: string | undefined;
+  excludedRecipientIds?: number[] | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
 }
 
 /** An ungrouped `count(*)` always returns exactly one row. */
@@ -198,7 +198,7 @@ export const statisticsRepository = {
   },
 
   async getTransactionCount(
-    opts: { accountId?: number | null } = {},
+    opts: { accountId?: number | null | undefined } = {},
   ): Promise<number> {
     const { accountId } = opts;
     // Optional exact-FK account filter (ADR-088). Absent → unchanged unconditional

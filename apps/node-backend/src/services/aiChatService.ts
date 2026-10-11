@@ -55,8 +55,8 @@ export type { AiConversationRow, AiMessageRow };
 export type OllamaMessage = {
   role: string;
   content: string;
-  tool_calls?: OllamaToolCall[];
-  name?: string;
+  tool_calls?: OllamaToolCall[] | undefined;
+  name?: string | undefined;
 };
 
 type OllamaClient = ReturnType<typeof getOllamaClient>;
@@ -748,8 +748,8 @@ export async function createEmptyConversation({
   title,
   model,
 }: {
-  title?: string | null;
-  model?: string | null;
+  title?: string | null | undefined;
+  model?: string | null | undefined;
 }): Promise<{ conversation: AiConversationRow; messages: AiMessageRow[] }> {
   const conversation = await aiChatRepository.createConversation({
     title: truncateTitle(title) || DEFAULT_CONVERSATION_TITLE,

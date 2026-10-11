@@ -67,7 +67,7 @@ function DrillCellLink({
     ariaLabel: string;
     to: string;
     children: React.ReactNode;
-    exactValue?: string;
+    exactValue?: string | undefined;
 }) {
     return (
         <span className="-mx-3 -my-2 flex items-center justify-end">

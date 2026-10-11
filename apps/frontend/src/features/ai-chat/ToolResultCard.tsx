@@ -35,7 +35,7 @@ function toolErrorTranslationKey(error: ToolResultPayload["error"]): string {
 }
 
 interface ToolResultCardProps {
-    toolName?: string | null;
+    toolName?: string | null | undefined;
     result: ToolResultPayload;
 }
 
@@ -131,7 +131,13 @@ function ToolResultCardInner({ toolName, result }: ToolResultCardProps) {
     );
 }
 
-function TableView({ rows, columns }: { rows: Row[]; columns?: string[] }) {
+function TableView({
+    rows,
+    columns,
+}: {
+    rows: Row[];
+    columns?: string[] | undefined;
+}) {
     const { t } = useLanguage();
     const { appSettings } = useAppSettings();
     const locale = numberFormatToLocale(appSettings.numberFormat);

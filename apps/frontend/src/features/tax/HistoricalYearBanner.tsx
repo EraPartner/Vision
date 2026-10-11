@@ -31,9 +31,9 @@ interface HistoricalYearBannerProps {
     viewedYear: number;
     currentYear: number;
     onReturnToCurrent: () => void;
-    onCreateSnapshot?: () => void;
+    onCreateSnapshot?: (() => void) | undefined;
     /** Used by `filed` mode to show the user-supplied reference (e.g. Tax-on-Web id). */
-    filingReference?: string;
+    filingReference?: string | undefined;
 }
 
 const MODE_ICON: Record<HistoricalYearBannerMode, typeof History> = {

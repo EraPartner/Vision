@@ -4,6 +4,7 @@
  * The service functions are mocked: these tests pin what the router accepts
  * and forwards, not ingestion or retrieval.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -75,7 +76,7 @@ describe("AI research document request validation", () => {
       })
       .expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(res.body.error.message).toMatch(/^title: /);
+    expect(bodyAt(res, "error", "message")).toMatch(/^title: /);
     expect(ingestResearchDocument).not.toHaveBeenCalled();
   });
 
@@ -90,8 +91,8 @@ describe("AI research document request validation", () => {
       .post(`${BASE}/search/passages`)
       .send(body)
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error.message).toMatch(message);
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "message")).toMatch(message);
     expect(searchResearchDocuments).not.toHaveBeenCalled();
   });
 
@@ -118,6 +119,6 @@ describe("AI research document request validation", () => {
       .post(`${BASE}/search/passages`)
       .send({ query: "risk" })
       .expect(500);
-    expect(res.body.error.code).toBe("INTERNAL_SERVER_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("INTERNAL_SERVER_ERROR");
   });
 });

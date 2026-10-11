@@ -90,9 +90,9 @@ export function CategoryMergeDialog({
                             {t("categoriesPage.mergeTarget")}
                         </Label>
                         <Select
-                            value={
-                                targetId == null ? undefined : String(targetId)
-                            }
+                            {...(targetId == null
+                                ? {}
+                                : { value: String(targetId) })}
                             onValueChange={(value) =>
                                 setTargetId(Number(value))
                             }

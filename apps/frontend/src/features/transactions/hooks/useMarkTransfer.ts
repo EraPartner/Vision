@@ -7,13 +7,13 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 export interface ExistingTransferLeg {
     id: number;
-    accountId?: number;
+    accountId?: number | undefined;
     bank: string;
     date: string;
     amount: number;
     currency: string;
     is_active: boolean;
-    transferPeerId?: number | null;
+    transferPeerId?: number | null | undefined;
 }
 
 export function eligibleExistingTransferPair(

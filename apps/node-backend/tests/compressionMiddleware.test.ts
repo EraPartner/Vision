@@ -70,7 +70,7 @@ function createResponse({
 
 function runMiddleware(
   options: {
-    acceptEncoding?: string | string[];
+    acceptEncoding?: string | string[] | undefined;
     response?: ResponseDouble;
   } = {},
 ) {

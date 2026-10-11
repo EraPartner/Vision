@@ -42,15 +42,15 @@ export type { RecipientRow, EnrichedRecipientRow };
 
 /** Filters shared by getAll / getCount. */
 export interface RecipientFilters {
-  limit?: number;
-  offset?: number;
-  name?: string | null;
-  defaultCategoryId?: number | null;
-  search?: string | null;
-  active?: boolean;
-  uncategorized?: boolean;
-  sortBy?: string | null;
-  sortDir?: "asc" | "desc" | null;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  name?: string | null | undefined;
+  defaultCategoryId?: number | null | undefined;
+  search?: string | null | undefined;
+  active?: boolean | undefined;
+  uncategorized?: boolean | undefined;
+  sortBy?: string | null | undefined;
+  sortDir?: "asc" | "desc" | null | undefined;
 }
 
 // Allowed sort columns for recipients (maps frontend key -> SQL expression)
@@ -358,10 +358,10 @@ export const recipientRepository = {
       notes,
       is_active,
     }: {
-      name?: string | null;
-      default_category_id?: number | null;
-      notes?: string | null;
-      is_active?: boolean | null;
+      name?: string | null | undefined;
+      default_category_id?: number | null | undefined;
+      notes?: string | null | undefined;
+      is_active?: boolean | null | undefined;
     },
   ): Promise<EnrichedRecipientRow | null> {
     // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.

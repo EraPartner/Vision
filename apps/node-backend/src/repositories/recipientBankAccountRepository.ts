@@ -154,9 +154,9 @@ export const recipientBankAccountRepository = {
       address,
       accountLabel,
     }: {
-      bankName?: string | null;
-      address?: string | null;
-      accountLabel?: string | null;
+      bankName?: string | null | undefined;
+      address?: string | null | undefined;
+      accountLabel?: string | null | undefined;
     },
   ): Promise<RecipientBankAccountRow | null> {
     // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped.

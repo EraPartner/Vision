@@ -15,10 +15,21 @@ import type { LoanScheduleEntryInput } from "../repositories/plannedTransactionR
 import { stampAccountIdForUpdate } from "../repositories/transactionRepository.ts";
 
 /**
- * @param input route-validated body; the create schema is a loose passthrough,
- *   so field types are not known here.
+ * The create payload. `createPlannedSchema` is a loose passthrough: apart from
+ * the fields named here, every column value (planned_date, amount, recurrence
+ * and loan fields, ...) is forwarded raw and only bound as a query parameter,
+ * so it stays `unknown`.
  */
-export async function create(input: Record<string, any>) {
+export type PlannedTransactionCreateInput = Record<string, unknown> & {
+  memo?: string | null | undefined;
+  currency?: string | null | undefined;
+  tags?: string[] | undefined;
+  /** Set by the route from the generated schedule when `is_loan`. */
+  loan_schedule?: LoanScheduleEntryInput[] | undefined;
+};
+
+/** @param input route-validated body (see {@link PlannedTransactionCreateInput}). */
+export async function create(input: PlannedTransactionCreateInput) {
   const normalized = {
     ...input,
     memo: input.memo ? input.memo.toUpperCase() : null,

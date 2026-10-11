@@ -13,12 +13,12 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 import { useBackgroundQueryCue } from "@/components/shared/BackgroundQueryIndicator";
 
 export function useRecipients(params?: {
-    limit?: number;
-    offset?: number;
-    name?: string;
-    default_category_id?: number;
-    active?: boolean;
-    search?: string;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    name?: string | undefined;
+    default_category_id?: number | undefined;
+    active?: boolean | undefined;
+    search?: string | undefined;
 }) {
     const query = useQuery({
         queryKey: recipientKeys.list(params),
@@ -81,7 +81,7 @@ export function useAllRecipientsForMerge(enabled: boolean) {
 
 export function useVirtualRecipients(params: {
     active: boolean;
-    search?: string;
+    search?: string | undefined;
     uncategorized: boolean;
     sortKey: string | null;
     sortDir: "asc" | "desc" | null;

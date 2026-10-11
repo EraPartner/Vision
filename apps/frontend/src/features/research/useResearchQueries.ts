@@ -76,7 +76,9 @@ export interface ChartBuilderFetchKey {
     key: string;
     symbol: string;
     provider: string;
-    macro?: { provider: MacroProvider; seriesId: string; title: string };
+    macro?:
+        | { provider: MacroProvider; seriesId: string; title: string }
+        | undefined;
 }
 
 export function useChartBuilderSeriesQueries(

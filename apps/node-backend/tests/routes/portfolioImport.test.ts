@@ -14,6 +14,7 @@
  * `req.file` injection is needed (see portfolioImportValidationPins.test.ts
  * for that, mirroring importValidationPins.test.ts's pattern).
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { IRoute } from "express";
 import { mockConnection } from "../helpers/repoMocks.ts";
@@ -214,7 +215,7 @@ describe("Portfolio import reconciliation HTTP contract", () => {
         .post(`${BASE}/reconciliation/preview`)
         .send(body)
         .expect(200);
-      expect(preview.body.data).toMatchObject(progress);
+      expect(bodyAt(preview, "data")).toMatchObject(progress);
       expect(previewPortfolioImportReconciliation).toHaveBeenCalledWith({
         batchIds: [7],
         adoptPolicy: policy,
@@ -235,7 +236,7 @@ describe("Portfolio import reconciliation HTTP contract", () => {
         .post(`${BASE}/reconciliation/commit`)
         .send({ ...body, expected_plan_fingerprint: expected })
         .expect(200);
-      expect(committed.body.data).toMatchObject(progress);
+      expect(bodyAt(committed, "data")).toMatchObject(progress);
       expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
         batchIds: [7],
         adoptPolicy: policy,
@@ -403,7 +404,7 @@ describe("Portfolio import reconciliation HTTP contract", () => {
         expected_plan_fingerprint: hash,
       })
       .expect(409);
-    expect(response.body.error.code).toBe("CONFLICT");
+    expect(bodyAt(response, "error", "code")).toBe("CONFLICT");
     expect(commitReviewedPortfolioImports).toHaveBeenCalledWith({
       batchIds: [4, 7],
       adoptPolicy: "prefer_source",
@@ -479,7 +480,7 @@ describe("Portfolio Import Routes — collection response shape", () => {
     const res = await api.get(`${BASE}/batches`).expect(200);
 
     // The old `batches` wire key is gone; the service still speaks `batches`.
-    expect(res.body.data.batches).toBeUndefined();
+    expect(bodyAt(res, "data", "batches")).toBeUndefined();
     expect(res.body).toEqual(
       okEnvelope({
         items: [{ id: 1, status: "complete" }],

@@ -61,8 +61,8 @@ function tagChipStyle(color: string | null): React.CSSProperties {
 
 export interface TagChipProps {
     tag: Tag;
-    onRemove?: (slug: string) => void;
-    inactive?: boolean;
+    onRemove?: ((slug: string) => void) | undefined;
+    inactive?: boolean | undefined;
 }
 
 export function TagChip({ tag, onRemove, inactive }: TagChipProps) {
@@ -103,9 +103,9 @@ interface TagInputProps {
     'aria-labelledby'?: string;
     value: string[];
     onChange: (slugs: string[]) => void;
-    disabled?: boolean;
-    className?: string;
-    maxTags?: number;
+    disabled?: boolean | undefined;
+    className?: string | undefined;
+    maxTags?: number | undefined;
 }
 
 export function TagInput({ 'aria-labelledby': ariaLabelledBy, value, onChange, disabled, className, maxTags = 20 }: TagInputProps) {

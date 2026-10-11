@@ -12,7 +12,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 export function useMarketQuotesQuery<Q = MarketQuote>(
     queryKey: QueryKey,
     symbols: string,
-    options?: { staleTime?: number },
+    options?: { staleTime?: number | undefined },
 ) {
     const isOnline = useOnlineStatus();
     return useQuery({
@@ -22,7 +22,9 @@ export function useMarketQuotesQuery<Q = MarketQuote>(
                 ? apiClient.getMarketQuotes<Q>(symbols, { detail: 'basic' })
                 : Promise.resolve([] as Q[]),
         enabled: !!symbols && isOnline,
-        staleTime: options?.staleTime,
+        // An explicit staleTime always overrode the QueryClient default; 0 is
+        // what TanStack applies for the former explicit `undefined`.
+        staleTime: options?.staleTime ?? 0,
         refetchInterval: isOnline ? 60_000 : false,
         refetchOnWindowFocus: false,
         retry: isOnline ? 1 : false,

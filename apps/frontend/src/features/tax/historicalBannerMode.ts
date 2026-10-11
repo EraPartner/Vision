@@ -12,12 +12,12 @@ interface ResolveBannerInput {
     isFiled: boolean;
     hasFrozenCalculation: boolean;
     hasSnapshot: boolean;
-    filingReference?: string;
+    filingReference?: string | undefined;
 }
 
 interface ResolveBannerResult {
     mode: HistoricalYearBannerMode;
-    filingReference?: string;
+    filingReference?: string | undefined;
 }
 
 export function resolveHistoricalBannerMode(input: ResolveBannerInput): ResolveBannerResult {

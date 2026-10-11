@@ -46,7 +46,11 @@ export type PendingPortfolioStagingRow = Omit<
 >;
 
 /** One row's type/route resolution; exactly one of `type`/`error` is meaningful. */
-type RowResolution = { type?: string; route?: string; error?: string };
+type RowResolution = {
+  type?: string | undefined;
+  route?: string | undefined;
+  error?: string | undefined;
+};
 
 const VALIDATE_CHUNK = 500;
 
@@ -59,7 +63,7 @@ export async function validateBatch({
   onProgress,
 }: {
   batchId: PortfolioImportBatchId;
-  onProgress?: PortfolioImportProgressCallback;
+  onProgress?: PortfolioImportProgressCallback | undefined;
 }): Promise<{ validated: number; duplicates: number; errors: number }> {
   await query(
     `UPDATE portfolio_import_batches SET status = 'validating' WHERE id = $1`,

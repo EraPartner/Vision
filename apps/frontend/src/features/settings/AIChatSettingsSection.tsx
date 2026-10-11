@@ -63,7 +63,7 @@ export function AIChatSettingsSection({ value, onChange }: AIChatSettingsSection
             >
                 <div className="space-y-1.5">
                     <Select
-                        value={selectValue || undefined}
+                        {...(selectValue ? { value: selectValue } : {})}
                         onValueChange={onChange}
                         disabled={!status?.ok || modelsLoading || !hasModels}
                     >

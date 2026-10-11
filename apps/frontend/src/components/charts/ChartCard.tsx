@@ -24,17 +24,17 @@ import { cn } from "@/lib/utils";
 
 export interface ChartCardProps {
     readonly title: React.ReactNode;
-    readonly description?: React.ReactNode;
+    readonly description?: React.ReactNode | undefined;
     /** Right-aligned controls (period selector, toggles). */
-    readonly actions?: React.ReactNode;
+    readonly actions?: React.ReactNode | undefined;
     /** Legend items rendered with the shared ChartLegend, below the chart. */
-    readonly legend?: ReadonlyArray<ChartLegendItem>;
-    readonly legendAlign?: "start" | "center" | "end";
+    readonly legend?: ReadonlyArray<ChartLegendItem> | undefined;
+    readonly legendAlign?: "start" | "center" | "end" | undefined;
     readonly children: React.ReactNode;
-    readonly className?: string;
-    readonly headerClassName?: string;
-    readonly contentClassName?: string;
-    readonly titleClassName?: string;
+    readonly className?: string | undefined;
+    readonly headerClassName?: string | undefined;
+    readonly contentClassName?: string | undefined;
+    readonly titleClassName?: string | undefined;
 }
 
 export function ChartCard({

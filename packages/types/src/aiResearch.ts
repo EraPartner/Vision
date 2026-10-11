@@ -87,7 +87,7 @@ export interface AiCloudAnalysisPlan {
       | "starts-with"
       | "is-null"
       | "is-not-null";
-    value?: string | number | boolean;
+    value?: string | number | boolean | undefined;
   }>;
   groups: string[];
   measures: string[];
@@ -111,7 +111,7 @@ export interface AiAnalysisEditProposal {
   operations: Array<{
     op: "add" | "replace" | "remove";
     path: string;
-    value?: unknown;
+    value?: unknown | undefined;
   }>;
 }
 export interface AiDisclosureGrant {

@@ -96,11 +96,11 @@ function fail(ctx: IssueCtx, message: string): typeof z.NEVER {
 export interface AddPortfolioTxnParsed {
     date: string;
     amount: number;
-    units?: number;
-    pricePerUnit?: number;
-    fees?: number;
-    taxes?: number;
-    fxRateToEur?: number;
+    units?: number | undefined;
+    pricePerUnit?: number | undefined;
+    fees?: number | undefined;
+    taxes?: number | undefined;
+    fxRateToEur?: number | undefined;
 }
 
 export function addPortfolioTxnSchema(
@@ -165,9 +165,9 @@ export function addPortfolioTxnSchema(
 export interface EditPortfolioTxnParsed {
     date: string;
     /** May be undefined for a gift (amount is editable but not required there). */
-    amount?: number;
-    units?: number;
-    pricePerUnit?: number;
+    amount?: number | undefined;
+    units?: number | undefined;
+    pricePerUnit?: number | undefined;
     fees: number;
     taxes: number;
     fxRateToEur: number | null;

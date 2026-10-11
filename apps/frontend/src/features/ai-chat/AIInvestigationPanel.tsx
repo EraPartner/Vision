@@ -702,7 +702,7 @@ export function AIInvestigationPanel() {
                             {t("aiResearch.openAiModel")}
                         </Label>
                         <Select
-                            value={openAiModel || undefined}
+                            {...(openAiModel ? { value: openAiModel } : {})}
                             disabled={
                                 !openAiEnabled || openAiModels.length === 0
                             }

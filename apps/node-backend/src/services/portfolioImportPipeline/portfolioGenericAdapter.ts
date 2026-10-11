@@ -59,22 +59,26 @@ export interface ParsedPortfolioRow {
   note: string;
   /** source record, kept for dedup + provenance. */
   rawData: string;
-  sourceAccountIdentity?: string | null;
-  sourceId?: string | null;
-  assetTransfer?: {
-    direction: "in" | "out" | "internal";
-    basisStatus: "carried" | "unresolved" | "not_applicable";
-    feeUnits?: string;
-    receivedUnits?: string;
-    networkReceipt?: unknown;
-  };
-  assetAdjustment?: {
-    kind: "yield_acquisition" | "yield_reversal" | "asset_fee";
-    basisPolicy: "zero" | "zero_yield_only" | "carried";
-    accountId?: number;
-    eligibleSourceRecordHashes?: string[];
-    networkReceipt?: unknown;
-  };
+  sourceAccountIdentity?: string | null | undefined;
+  sourceId?: string | null | undefined;
+  assetTransfer?:
+    | {
+        direction: "in" | "out" | "internal";
+        basisStatus: "carried" | "unresolved" | "not_applicable";
+        feeUnits?: string | undefined;
+        receivedUnits?: string | undefined;
+        networkReceipt?: unknown;
+      }
+    | undefined;
+  assetAdjustment?:
+    | {
+        kind: "yield_acquisition" | "yield_reversal" | "asset_fee";
+        basisPolicy: "zero" | "zero_yield_only" | "carried";
+        accountId?: number | undefined;
+        eligibleSourceRecordHashes?: string[] | undefined;
+        networkReceipt?: unknown;
+      }
+    | undefined;
 }
 
 const nullableNumber = z.number().nullable();
@@ -137,8 +141,8 @@ export const parsedPortfolioRowsSchema = z.object({
  * adapters' contract).
  */
 export type ParsedPortfolioRows = ParsedPortfolioRow[] & {
-  skipped?: number;
-  sourceColumns?: string[];
+  skipped?: number | undefined;
+  sourceColumns?: string[] | undefined;
   /** literal statement context the IBKR adapter attaches for primary proof */
   ibkrSourceContext?: IbkrSourceContext;
   /** retained workbook context the IBKR funding adapter attaches */

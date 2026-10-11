@@ -197,7 +197,8 @@ export function RecipientPatternsDialog({
             pattern_kind: form.pattern_kind,
             case_sensitive: form.case_sensitive,
             priority: form.priority,
-            notes: form.notes || undefined,
+            // null clears an existing note on PATCH and stores none on create.
+            notes: form.notes || null,
         };
         if (editingId != null) {
             updateMutation.mutate({ patternId: editingId, data: payload });

@@ -8,7 +8,7 @@ export type PortfolioImportSource =
 export interface DetectedPortfolioImport {
     source: PortfolioImportSource;
     sourceAccountIdentities: string[];
-    presetKey?: "ibkr_funding_history";
+    presetKey?: "ibkr_funding_history" | undefined;
 }
 
 // Match the upload endpoint's limit before reading a complete statement.

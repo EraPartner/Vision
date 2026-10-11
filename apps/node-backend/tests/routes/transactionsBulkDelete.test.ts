@@ -5,6 +5,7 @@
  * route's rate limiter, JSON body parsing and the centralized error handler are
  * all on the tested path.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -105,7 +106,9 @@ describe("POST /bulk-delete — input validation", () => {
   // the rest, so the caller could not tell a full delete from a partial one.
   it("rejects a partly-valid id list rather than deleting a subset", async () => {
     const res = await bulkDelete({ ids: [1, "abc", 2] }).expect(400);
-    expect(res.body.error.message).toBe("ids contains invalid value: abc");
+    expect(bodyAt(res, "error", "message")).toBe(
+      "ids contains invalid value: abc",
+    );
     expect(getClient).not.toHaveBeenCalled();
   });
 });
@@ -124,9 +127,9 @@ describe("POST /bulk-delete — id-mode success", () => {
 
     const res = await bulkDelete({ ids: [1, 2, 3] }).expect(200);
 
-    expect(res.body.data.deleted).toBe(3);
-    expect(res.body.data.requested).toBe(3);
-    expect(res.body.data.matched).toBe(3);
+    expect(bodyAt(res, "data", "deleted")).toBe(3);
+    expect(bodyAt(res, "data", "requested")).toBe(3);
+    expect(bodyAt(res, "data", "matched")).toBe(3);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
 
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
@@ -147,9 +150,9 @@ describe("POST /bulk-delete — id-mode success", () => {
 
     const res = await bulkDelete({ ids: [9999] }).expect(200);
 
-    expect(res.body.data.deleted).toBe(0);
-    expect(res.body.data.requested).toBe(1);
-    expect(res.body.data.matched).toBe(1);
+    expect(bodyAt(res, "data", "deleted")).toBe(0);
+    expect(bodyAt(res, "data", "requested")).toBe(1);
+    expect(bodyAt(res, "data", "matched")).toBe(1);
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
@@ -188,9 +191,9 @@ describe("POST /bulk-delete — filter-mode", () => {
       expected_count: 3,
     }).expect(200);
 
-    expect(res.body.data.deleted).toBe(2);
-    expect(res.body.data.requested).toBe(3);
-    expect(res.body.data.matched).toBe(2);
+    expect(bodyAt(res, "data", "deleted")).toBe(2);
+    expect(bodyAt(res, "data", "requested")).toBe(3);
+    expect(bodyAt(res, "data", "matched")).toBe(2);
     const deleteCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("DELETE"),
     );
@@ -213,7 +216,11 @@ describe("POST /bulk-delete — filter-mode", () => {
       expected_count: 2,
     }).expect(200);
 
-    expect(res.body.data).toEqual({ deleted: 0, requested: 2, matched: 0 });
+    expect(bodyAt(res, "data")).toEqual({
+      deleted: 0,
+      requested: 2,
+      matched: 0,
+    });
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });
@@ -233,7 +240,7 @@ describe("POST /bulk-delete — atomicity", () => {
     const res = await bulkDelete({ ids: [1] }).expect(500);
 
     expect(scheduleReconcile).not.toHaveBeenCalled();
-    expect(res.body.error.code).toBe("INTERNAL_SERVER_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("INTERNAL_SERVER_ERROR");
     const rollback = clientQuery.mock.calls.find(([sql]) => sql === "ROLLBACK");
     expect(rollback).toBeDefined();
     expect(release).toHaveBeenCalledTimes(1);

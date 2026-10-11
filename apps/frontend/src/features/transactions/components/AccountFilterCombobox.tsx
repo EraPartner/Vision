@@ -20,7 +20,7 @@ import { useLanguage } from "@/stores/hydration/LanguageHydration";
 
 interface AccountFilterComboboxProps {
     /** The active account_id filter, if any. */
-    value?: number;
+    value?: number | undefined;
     /** Called with the picked account (id + display label), or null to clear. */
     onChange: (selection: { id: number; label: string } | null) => void;
     /** Toolbar chip styling (ADR-181) instead of the plain outline button. */

@@ -1,7 +1,7 @@
 import { createContext } from "react";
 
 interface SymbolSearchListState {
-  activeOptionId?: string;
+  activeOptionId?: string | undefined;
   setActiveOptionId: (id: string) => void;
 }
 

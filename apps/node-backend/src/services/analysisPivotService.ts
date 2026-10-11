@@ -21,13 +21,15 @@ import type { FormulaRow } from "./analysisFormulaEngine.ts";
 
 export interface AnalysisPivotRequest {
   plan: VisualAnalysisPlan;
-  config?: {
-    rows?: string[];
-    columns?: string[];
-    values?: string[];
-    filters?: VisualAnalysisFilter[];
-  };
-  requestId?: string;
+  config?:
+    | {
+        rows?: string[] | undefined;
+        columns?: string[] | undefined;
+        values?: string[] | undefined;
+        filters?: VisualAnalysisFilter[] | undefined;
+      }
+    | undefined;
+  requestId?: string | undefined;
 }
 
 export interface AnalysisPivotDependencies {

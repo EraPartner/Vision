@@ -76,7 +76,7 @@ const patternCache = makeLruCache(512);
 function buildPatternRegExp(row: {
   pattern: string;
   pattern_kind: string;
-  case_sensitive?: boolean;
+  case_sensitive?: boolean | undefined;
 }): RegExp {
   const flags = row.case_sensitive ? '' : 'i';
   switch (row.pattern_kind) {
@@ -151,7 +151,7 @@ function hasRedosRisk(pattern: string): boolean {
 function validatePattern(row: {
   pattern: string;
   pattern_kind: string;
-  case_sensitive?: boolean;
+  case_sensitive?: boolean | undefined;
 }): { valid: true; error?: undefined } | { valid: false; error: string } {
   if (!row.pattern || !row.pattern.trim()) {
     return { valid: false, error: 'Pattern must not be empty' };
@@ -361,11 +361,11 @@ export async function previewPatternMatches(patternRow: {
 export async function createPattern(opts: {
   recipientId: number;
   pattern: string;
-  pattern_kind?: string;
-  case_sensitive?: boolean;
-  priority?: number;
-  source?: string;
-  notes?: string | null;
+  pattern_kind?: string | undefined;
+  case_sensitive?: boolean | undefined;
+  priority?: number | undefined;
+  source?: string | undefined;
+  notes?: string | null | undefined;
 }): Promise<{ id: number }> {
   // Validate the kind that is stored: an omitted kind used to be compiled as a
   // regex here while the row was saved as literal_prefix.
@@ -398,12 +398,12 @@ export async function createPattern(opts: {
 export async function updatePattern(
   patternId: number,
   updates: {
-    pattern?: string;
-    pattern_kind?: string;
-    case_sensitive?: boolean;
-    priority?: number;
-    is_active?: boolean;
-    notes?: string | null;
+    pattern?: string | undefined;
+    pattern_kind?: string | undefined;
+    case_sensitive?: boolean | undefined;
+    priority?: number | undefined;
+    is_active?: boolean | undefined;
+    notes?: string | null | undefined;
   },
 ): Promise<void> {
   if (updates.pattern !== undefined || updates.pattern_kind !== undefined || updates.case_sensitive !== undefined) {

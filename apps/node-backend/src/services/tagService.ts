@@ -23,9 +23,9 @@ export const tagService = {
     limit = null,
     offset = 0,
   }: {
-    active?: boolean | null;
-    limit?: number | null;
-    offset?: number;
+    active?: boolean | null | undefined;
+    limit?: number | null | undefined;
+    offset?: number | undefined;
   } = {}) {
     const items = await tagRepository.getAll({ active, limit, offset });
     const total =
@@ -40,7 +40,7 @@ export const tagService = {
   async createOrReactivate({
     slug: rawSlug,
     color = null,
-  }: { slug?: string; color?: string | null } = {}) {
+  }: { slug?: string | undefined; color?: string | null | undefined } = {}) {
     if (!rawSlug) throw new ValidationError("Missing required field: slug");
 
     const slug = slugify(rawSlug);
@@ -77,7 +77,10 @@ export const tagService = {
     {
       color,
       is_active,
-    }: { color?: string | null; is_active?: boolean | null } = {},
+    }: {
+      color?: string | null | undefined;
+      is_active?: boolean | null | undefined;
+    } = {},
   ) {
     if (color !== undefined && color !== null && typeof color !== "string") {
       throw new ValidationError("color must be a string or null");

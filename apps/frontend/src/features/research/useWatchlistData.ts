@@ -9,7 +9,9 @@ export function useWatchlist(staleTime?: number) {
     return useQuery({
         queryKey: watchlistKeys.all,
         queryFn: () => apiClient.getWatchlist(),
-        staleTime,
+        // Omitting staleTime has always meant 0 here, not the client default:
+        // the explicit `undefined` used to override the default when merged.
+        staleTime: staleTime ?? 0,
     });
 }
 

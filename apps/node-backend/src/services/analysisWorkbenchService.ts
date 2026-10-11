@@ -50,31 +50,32 @@ export interface AnalysisResultCoverage {
 export interface AnalysisResultLike {
   rows: FormulaRow[];
   columns: AnalysisColumn[];
-  declaredColumns?: AnalysisColumn[];
-  window?: AnalysisResultWindow;
-  coverage?: AnalysisResultCoverage;
-  complete?: boolean;
-  transformationErrors?: AnalysisExtensionError[];
-  transformationCoverage?: Array<{ complete?: boolean }>;
-  preparationLineage?: AnalysisLineageEntry[];
-  sourceResult?: AnalysisResultLike;
-  generatedSql?: string;
+  declaredColumns?: AnalysisColumn[] | undefined;
+  window?: AnalysisResultWindow | undefined;
+  coverage?: AnalysisResultCoverage | undefined;
+  complete?: boolean | undefined;
+  transformationErrors?: AnalysisExtensionError[] | undefined;
+  transformationCoverage?: Array<{ complete?: boolean }> | undefined;
+  preparationLineage?: AnalysisLineageEntry[] | undefined;
+  sourceResult?: AnalysisResultLike | undefined;
+  generatedSql?: string | undefined;
 }
 
 export interface AnalysisWorkbench {
   steps?: PreparationStep[];
-  time?: Omit<CompareAnalysisTimeInput, "rows" | "columns" | "complete">;
+  time?:
+    Omit<CompareAnalysisTimeInput, "rows" | "columns" | "complete"> | undefined;
 }
 
 export interface AnalysisFormulaModel {
-  formulas?: AnalysisFormulaInput[];
-  assumptions?: AnalysisAssumption[];
-  assumptionValues?: Record<string, unknown>;
+  formulas?: AnalysisFormulaInput[] | undefined;
+  assumptions?: AnalysisAssumption[] | undefined;
+  assumptionValues?: Record<string, unknown> | undefined;
 }
 
 export interface AnalysisScenarioModelInput {
-  attachments?: unknown[];
-  joins?: unknown[];
+  attachments?: unknown[] | undefined;
+  joins?: unknown[] | undefined;
 }
 
 export type AnalysisExtensionRequest = PrepareAnalysisDataInput &
@@ -84,11 +85,11 @@ export type AnalysisExtensionRequest = PrepareAnalysisDataInput &
   SeekAnalysisGoalInput &
   EvaluateAnalysisFormulasInput & {
     operation: string;
-    columns?: AnalysisColumn[];
-    window?: AnalysisResultWindow;
-    coverage?: AnalysisResultCoverage;
-    workbench?: AnalysisWorkbench;
-    inputComplete?: boolean;
+    columns?: AnalysisColumn[] | undefined;
+    window?: AnalysisResultWindow | undefined;
+    coverage?: AnalysisResultCoverage | undefined;
+    workbench?: AnalysisWorkbench | undefined;
+    inputComplete?: boolean | undefined;
   };
 
 /** Population completeness includes value coverage, not merely pagination. */

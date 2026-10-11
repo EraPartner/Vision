@@ -5,12 +5,12 @@ import { useCurrencyPartsFormatter } from "@/hooks/useCurrencyFormatter";
 interface MoneyProps {
     amount: number;
     /** ISO currency code; falls back to the app's default currency. */
-    currency?: string;
+    currency?: string | undefined;
     /** Override fraction digits; falls back to the app's showDecimalPlaces. */
-    fractionDigits?: number;
+    fractionDigits?: number | undefined;
     /** Render an explicit leading + for positive amounts. */
-    signed?: boolean;
-    className?: string;
+    signed?: boolean | undefined;
+    className?: string | undefined;
 }
 
 /**

@@ -128,7 +128,10 @@ export const tagRepository = {
     {
       color,
       is_active,
-    }: { color?: string | null; is_active?: boolean | null },
+    }: {
+      color?: string | null | undefined;
+      is_active?: boolean | null | undefined;
+    },
   ): Promise<TagRow | null> {
     // Shared clause builder (lib/sqlClauses.ts): undefined fields are skipped;
     // null is_active means "leave unchanged" (pre-mapped to undefined).

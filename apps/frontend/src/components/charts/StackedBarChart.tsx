@@ -19,29 +19,32 @@ import { useChartKeyboardNav } from "./keyboardNav";
 
 export interface StackedBarSeries<Datum> {
     readonly key: string;
-    readonly label?: string;
+    readonly label?: string | undefined;
     readonly accessor: (datum: Datum) => number;
-    readonly color?: string;
+    readonly color?: string | undefined;
 }
 
 export interface StackedBarChartProps<Datum> {
     readonly data: ReadonlyArray<Datum>;
     readonly categoryAccessor: (datum: Datum) => string;
     readonly series: ReadonlyArray<StackedBarSeries<Datum>>;
-    readonly height?: number;
-    readonly barRadius?: number;
-    readonly maxBarSize?: number;
-    readonly categoryTickFormat?: (label: string) => string;
-    readonly valueTickFormat?: (value: number) => string;
-    readonly tooltipTitle?: (datum: Datum) => string;
-    readonly tooltipValueFormat?: (value: number, seriesKey: string) => string;
-    readonly margin?: {
-        top: number;
-        right: number;
-        bottom: number;
-        left: number;
-    };
-    readonly ariaLabel?: string;
+    readonly height?: number | undefined;
+    readonly barRadius?: number | undefined;
+    readonly maxBarSize?: number | undefined;
+    readonly categoryTickFormat?: ((label: string) => string) | undefined;
+    readonly valueTickFormat?: ((value: number) => string) | undefined;
+    readonly tooltipTitle?: ((datum: Datum) => string) | undefined;
+    readonly tooltipValueFormat?:
+        ((value: number, seriesKey: string) => string) | undefined;
+    readonly margin?:
+        | {
+              top: number;
+              right: number;
+              bottom: number;
+              left: number;
+          }
+        | undefined;
+    readonly ariaLabel?: string | undefined;
 }
 
 const DEFAULT_MARGIN = { top: 16, right: 16, bottom: 36, left: 48 };

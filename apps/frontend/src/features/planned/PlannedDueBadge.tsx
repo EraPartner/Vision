@@ -5,7 +5,7 @@ import { parsePlannedDueDate, toLocalMidnight } from "@/features/planned/planned
 
 interface PlannedDueBadgeProps {
   dateFormat: string;
-  dueDate?: string | null;
+  dueDate?: string | null | undefined;
   today?: Date;
 }
 

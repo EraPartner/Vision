@@ -77,7 +77,10 @@ export async function rollbackNativeRestore(
   {
     databaseSwitch,
     attachmentSwitch,
-  }: { databaseSwitch?: DatabaseSwitch; attachmentSwitch?: unknown },
+  }: {
+    databaseSwitch?: DatabaseSwitch | undefined;
+    attachmentSwitch?: unknown;
+  },
   { restart = true }: { restart?: boolean } = {},
 ): Promise<unknown[]> {
   const rollbackErrors: unknown[] = [];

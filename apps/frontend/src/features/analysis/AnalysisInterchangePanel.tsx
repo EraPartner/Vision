@@ -59,8 +59,8 @@ export function AnalysisInterchangePanel({
     name: string;
     timezone: string;
     workspace: string;
-    definitionId?: string;
-    definitionVersion?: number;
+    definitionId?: string | undefined;
+    definitionVersion?: number | undefined;
     datasetIds: string[];
     sourceReferences: string[];
     scenarioModel: AnalysisScenarioModel;

@@ -500,9 +500,13 @@ export default function AnalysisMonitorsPage() {
         setEdit({
             title: selected.title,
             enabled: selected.enabled,
-            fieldId: selected.fieldId ?? undefined,
-            operator: selected.operator ?? undefined,
-            threshold: selected.threshold ?? undefined,
+            ...(selected.fieldId == null ? {} : { fieldId: selected.fieldId }),
+            ...(selected.operator == null
+                ? {}
+                : { operator: selected.operator }),
+            ...(selected.threshold == null
+                ? {}
+                : { threshold: selected.threshold }),
             intervalMinutes: selected.intervalMinutes,
             cooldownMinutes: selected.cooldownMinutes,
         });

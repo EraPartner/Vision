@@ -122,43 +122,43 @@ export interface VirtualTableServerMode {
     };
     pagination?: {
         /** Total items available on server */
-        totalItems?: number;
+        totalItems?: number | undefined;
         /** Whether more data is currently being fetched */
-        isFetchingMore?: boolean;
+        isFetchingMore?: boolean | undefined;
         /** Called when the user scrolls near the bottom and more data should be loaded */
-        onLoadMore?: () => void;
+        onLoadMore?: (() => void) | undefined;
         /** Whether there are more items to load */
-        hasMore?: boolean;
+        hasMore?: boolean | undefined;
         /** Number of rows from the end before triggering onLoadMore. Defaults to 15 */
         loadMoreOffset?: number;
     };
 }
 
 interface VirtualDataTableProps<T> {
-    title?: string;
-    subtitle?: string;
+    title?: string | undefined;
+    subtitle?: string | undefined;
     columns: Column<T>[];
     data: T[];
-    emptyMessage?: React.ReactNode;
-    emptyIcon?: LucideIcon;
-    actions?: React.ReactNode;
+    emptyMessage?: React.ReactNode | undefined;
+    emptyIcon?: LucideIcon | undefined;
+    actions?: React.ReactNode | undefined;
     /** Context for row action accessible names. */
-    getRowLabel?: (row: T) => string;
-    onRowUpdate?: (index: number, updatedRow: T) => void;
+    getRowLabel?: ((row: T) => string) | undefined;
+    onRowUpdate?: ((index: number, updatedRow: T) => void) | undefined;
     /** Called when a row is double-clicked */
-    onRowDoubleClick?: (row: T, index: number) => void;
+    onRowDoubleClick?: ((row: T, index: number) => void) | undefined;
     /** Called on Enter on a focused row. Falls back to onRowDoubleClick. */
-    onRowOpen?: (row: T, index: number) => void;
+    onRowOpen?: ((row: T, index: number) => void) | undefined;
     /** Called on Space on a focused row (Quick Look). Falls back to onRowDoubleClick. */
-    onRowQuickLook?: (row: T, index: number) => void;
+    onRowQuickLook?: ((row: T, index: number) => void) | undefined;
     /**
      * Selection (ADR-181): a plain click on a row (outside its controls)
      * selects it, and so does moving row focus with the arrow keys, the way
      * Finder and Mail drive their inspector. `selectedRowKey` is the selected
      * row's `id`; the row carries `aria-selected` and the selected surface.
      */
-    onRowSelect?: (row: T, index: number) => void;
-    selectedRowKey?: string | number | null;
+    onRowSelect?: ((row: T, index: number) => void) | undefined;
+    selectedRowKey?: string | number | null | undefined;
     /**
      * Right-click menu for rows: return a <ContextMenuContent> (it is rendered
      * inside a per-row Radix ContextMenu root). `helpers.startEditing` begins
@@ -175,17 +175,17 @@ interface VirtualDataTableProps<T> {
         helpers: { startEditing: () => void },
     ) => React.ReactNode;
     /** Server-side sort / search / pagination. Omit for a fully local table. */
-    serverMode?: VirtualTableServerMode;
+    serverMode?: VirtualTableServerMode | undefined;
     /** Height of the virtual scroll container. Defaults to 600 */
-    maxHeight?: number;
+    maxHeight?: number | undefined;
     /** Estimated row height for virtualizer */
-    rowHeight?: number;
+    rowHeight?: number | undefined;
     /** Optional ref callback to get the cancelEditing function for external use */
-    cancelEditingRef?: React.MutableRefObject<(() => void) | null>;
+    cancelEditingRef?: React.MutableRefObject<(() => void) | null> | undefined;
     /** Optional callback to notify when editing state changes (true = editing started, false = editing ended) */
-    onEditingChange?: (editing: boolean) => void;
+    onEditingChange?: ((editing: boolean) => void) | undefined;
     /** Stable identity within the current history entry for Back/Forward scroll restoration. */
-    scrollRestorationKey?: string;
+    scrollRestorationKey?: string | undefined;
 }
 
 interface IndexedRow<T> {
@@ -220,27 +220,27 @@ interface VirtualizedTableRowProps<T extends Record<string, unknown>> {
     isCoarsePointer: boolean;
     columns: Column<T>[];
     columnWidths: Record<string, number>;
-    editValues?: Record<string, unknown>;
+    editValues?: Record<string, unknown> | undefined;
     hasEditableColumns: boolean;
     measureElement: React.Ref<HTMLDivElement>;
-    onRowDoubleClick?: (row: T, index: number) => void;
-    onRowOpen?: (row: T, index: number) => void;
-    onRowQuickLook?: (row: T, index: number) => void;
-    onRowSelect?: (row: T, index: number) => void;
+    onRowDoubleClick?: ((row: T, index: number) => void) | undefined;
+    onRowOpen?: ((row: T, index: number) => void) | undefined;
+    onRowQuickLook?: ((row: T, index: number) => void) | undefined;
+    onRowSelect?: ((row: T, index: number) => void) | undefined;
     isSelected: boolean;
-    rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"];
-    renderRowActions?: VirtualDataTableProps<T>["renderRowActions"];
+    rowContextMenu?: VirtualDataTableProps<T>["rowContextMenu"] | undefined;
+    renderRowActions?: VirtualDataTableProps<T>["renderRowActions"] | undefined;
     startEditing: (sourceIndex: number, row: T) => void;
-    saveEditing?: (sourceIndex: number, row: T) => void;
+    saveEditing?: ((sourceIndex: number, row: T) => void) | undefined;
     cancelEditing: () => void;
     setEditValues: React.Dispatch<
         React.SetStateAction<Record<string, unknown>>
     >;
-    focusRowByIndex?: (index: number) => void;
+    focusRowByIndex?: ((index: number) => void) | undefined;
     saveLabel: string;
     cancelLabel: string;
     editLabel: string;
-    rowLabel?: string;
+    rowLabel?: string | undefined;
     numberFormat: NumberFormat;
 }
 

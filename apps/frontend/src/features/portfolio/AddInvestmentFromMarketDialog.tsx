@@ -58,7 +58,7 @@ interface Quote {
 
 interface Props {
     quote: Quote;
-    existingInvestment?: InvestmentSummary;
+    existingInvestment?: InvestmentSummary | undefined;
 }
 
 export function AddInvestmentFromMarketDialog({

@@ -1,3 +1,4 @@
+import { bodyAt } from "./helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockLogger } from "./helpers/mockLogger.ts";
 import { mockConnection } from "./helpers/repoMocks.ts";
@@ -280,7 +281,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
       .put(`${BASE}/rebalance_plans`)
       .send(singleBody({ value: { not: "an array" } }))
       .expect(400);
-    expect(res.body.error.message).toMatch(/expected array/);
+    expect(bodyAt(res, "error", "message")).toMatch(/expected array/);
   });
 
   it("rejects a plan with a blank name", async () => {
@@ -288,7 +289,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
       .put(`${BASE}/rebalance_plans`)
       .send(singleBody({ value: [{ ...validPlan, name: "   " }] }))
       .expect(400);
-    expect(res.body.error.message).toMatch(/name must not be blank/);
+    expect(bodyAt(res, "error", "message")).toMatch(/name must not be blank/);
   });
 
   it("rejects a plan with empty targetWeights", async () => {
@@ -296,7 +297,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
       .put(`${BASE}/rebalance_plans`)
       .send(singleBody({ value: [{ ...validPlan, targetWeights: {} }] }))
       .expect(400);
-    expect(res.body.error.message).toMatch(/at least one sleeve/);
+    expect(bodyAt(res, "error", "message")).toMatch(/at least one sleeve/);
   });
 
   it("rejects a negative target weight", async () => {
@@ -308,7 +309,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
         }),
       )
       .expect(400);
-    expect(res.body.error.message).toMatch(/non-negative number/);
+    expect(bodyAt(res, "error", "message")).toMatch(/non-negative number/);
   });
 
   it("rejects a negative cashCap", async () => {
@@ -316,7 +317,7 @@ describe("rebalance_plans setting (ADR-098 custom rebalancing plans)", () => {
       .put(`${BASE}/rebalance_plans`)
       .send(singleBody({ value: [{ ...validPlan, cashCap: -1 }] }))
       .expect(400);
-    expect(res.body.error.message).toMatch(
+    expect(bodyAt(res, "error", "message")).toMatch(
       /cashCap must be a non-negative number/,
     );
   });
@@ -359,7 +360,7 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
   it("accepts a well-formed profile", async () => {
     const res = await put("belgian_tax_profile", validProfile);
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(bodyAt(res, "ok")).toBe(true);
   });
 
   it("rejects a negative communal surcharge (would become a tax credit)", async () => {
@@ -368,7 +369,7 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       communalSurchargePercent: -7,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("rejects a fat-fingered 70% surcharge (10x the real 7.0)", async () => {
@@ -377,7 +378,7 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       communalSurchargePercent: 70,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("rejects negative and absurd money fields", async () => {
@@ -386,21 +387,21 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       grossAnnualIncome: -50000,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
 
     res = await put("belgian_tax_profile", {
       ...validProfile,
       medicalExpenses: 1e15,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
 
     res = await put("belgian_tax_profile", {
       ...validProfile,
       unionDues: "lots",
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("rejects negative childcareEligibleDays and non-integer counts", async () => {
@@ -409,14 +410,14 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       childcareEligibleDays: -5,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
 
     res = await put("belgian_tax_profile", {
       ...validProfile,
       dependentChildren: 1.5,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("rejects bad additional residences and non-object profiles", async () => {
@@ -425,11 +426,11 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       additionalResidences: [{ cadastralIncome: -1 }],
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
 
     res = await put("belgian_tax_profile", [validProfile]);
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("validates each snapshot in the year-keyed snapshots map", async () => {
@@ -437,13 +438,13 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       2025: validProfile,
     });
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(bodyAt(res, "ok")).toBe(true);
 
     res = await put("belgian_tax_profile_snapshots_v1", {
       2025: { ...validProfile, communalSurchargePercent: -3 },
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("requires snapshot meta to be a year-keyed object map", async () => {
@@ -451,15 +452,15 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       2025: { history: [] },
     });
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(bodyAt(res, "ok")).toBe(true);
 
     res = await put("belgian_tax_profile_snapshot_meta_v1", { 2025: "filed" });
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
 
     res = await put("belgian_tax_profile_snapshot_meta_v1", "nope");
     expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 
   it("rejects the retired federalPITTotal field in frozen calculations", async () => {
@@ -483,7 +484,7 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
       },
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.message).toMatch(
+    expect(bodyAt(res, "error", "message")).toMatch(
       /federalPITTotal.*no longer accepted/,
     );
   });
@@ -501,7 +502,7 @@ describe("belgian_tax_profile setting validation (TODO E6)", () => {
         }),
       )
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   });
 });
 

@@ -13,6 +13,7 @@
  * middleware, the same per-mount slot main.ts uses (main.ts:285 mounts
  * importRateLimiter there for this router).
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -206,7 +207,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
     for (const id of ["12.0", " 12 ", "0x10", "1e3", "+12"]) {
       const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -227,7 +228,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
 
     getBatch.mockClear();
     const res = await api.get(`${BASE}/batches/9007199254740993`).expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(getBatch).not.toHaveBeenCalled();
   });
 
@@ -236,13 +237,13 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
       .post(`${BASE}/batches/${seg("2.5")}/commit`)
       .send({})
       .expect(400);
-    expect(res1.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res1, "error", "code")).toBe("VALIDATION_ERROR");
 
     const res2 = await api
       .post(`${BASE}/batches/${seg("3.5")}/rows/1/investment-override`)
       .send({})
       .expect(400);
-    expect(res2.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res2, "error", "code")).toBe("VALIDATION_ERROR");
 
     expect(getBatch).not.toHaveBeenCalled();
   });
@@ -275,7 +276,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
         )
         .send({})
         .expect(400);
-      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     }
   });
 });
@@ -313,7 +314,7 @@ describe("override/commit body id shape", () => {
         .send({ investment_id })
         .expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(investment_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -345,7 +346,7 @@ describe("override/commit body id shape", () => {
         rowId: 6,
         investmentId: null,
       });
-      expect(res.body.data.user_override_investment_id).toBeNull();
+      expect(bodyAt(res, "data", "user_override_investment_id")).toBeNull();
     }
 
     // No JSON body at all leaves req.body undefined under Express 5; it clears
@@ -367,7 +368,7 @@ describe("override/commit body id shape", () => {
         .send({ account_id })
         .expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -461,14 +462,14 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
     ]) {
       const res = await runCustom({ ...minimalBody, account_id }).expect(400);
       expect(
-        res.body.error.message,
+        bodyAt(res, "error", "message"),
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toContain("account_id must be a positive integer");
     }
     for (const account_id of [true, [7], {}]) {
       const res = await runCustom({ ...minimalBody, account_id }).expect(400);
       expect(
-        res.body.error.message,
+        bodyAt(res, "error", "message"),
         `expected ${JSON.stringify(account_id)} to be rejected`,
       ).toContain("account_id must be a positive integer");
     }
@@ -476,7 +477,7 @@ describe("parseBrokerageParams pins (POST /csv/custom)", () => {
       ...minimalBody,
       is_brokerage: "true",
     }).expect(400);
-    expect(res.body.error.message).toMatch(
+    expect(bodyAt(res, "error", "message")).toMatch(
       /brokerage import requires account_id/,
     );
     expect(runPortfolioImportPipeline).not.toHaveBeenCalled();
@@ -571,18 +572,20 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
       name_column: "N",
       default_asset_class: "etf",
     }).expect(400);
-    expect(res.body.error.message).toContain("date_column is required");
+    expect(bodyAt(res, "error", "message")).toContain(
+      "date_column is required",
+    );
 
     res = await runCustom({
       date_column: "D",
       default_asset_class: "etf",
     }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "map at least one of symbol_column or name_column",
     );
 
     res = await runCustom({ date_column: "D", name_column: "N" }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "default_asset_class is required and must be a valid asset class",
     );
 
@@ -590,22 +593,22 @@ describe("buildPortfolioConfig pins (POST /csv/custom)", () => {
       ...minimalBody,
       default_asset_class: "house",
     }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "default_asset_class is required and must be a valid asset class",
     );
 
     res = await runCustom({ ...minimalBody, default_type: "yolo" }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       'default_type "yolo" is not a valid transaction type',
     );
 
     res = await runCustom({ ...minimalBody, separator: ";;" }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "separator must be a single character",
     );
 
     res = await runCustom({ ...minimalBody, skip_rows: "-1" }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "skip_rows must be zero or a positive integer",
     );
 
@@ -640,12 +643,14 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
       symbolColumn: "S",
       defaultAssetClass: "stock",
     }).expect(400);
-    expect(res.body.error.message).toContain("config.dateColumn is required");
+    expect(bodyAt(res, "error", "message")).toContain(
+      "config.dateColumn is required",
+    );
 
     res = await create({ dateColumn: "D", defaultAssetClass: "stock" }).expect(
       400,
     );
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "config requires symbolColumn or nameColumn",
     );
 
@@ -654,7 +659,7 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
       nameColumn: "N",
       defaultAssetClass: "house",
     }).expect(400);
-    expect(res.body.error.message).toContain(
+    expect(bodyAt(res, "error", "message")).toContain(
       "config.defaultAssetClass must be a valid asset class",
     );
   });
@@ -662,7 +667,9 @@ describe("normalizePortfolioParserConfig pins (POST /parsers)", () => {
   it("rejects a non-object or array config", async () => {
     for (const config of [null, "str", [1]]) {
       const res = await create(config).expect(400);
-      expect(res.body.error.message).toContain('Missing or invalid "config"');
+      expect(bodyAt(res, "error", "message")).toContain(
+        'Missing or invalid "config"',
+      );
     }
   });
 });
@@ -732,8 +739,8 @@ describe("batch_id wire type", () => {
       errors: 0,
     }));
     const committed = await runCustom(minimalBody).expect(201);
-    expect(typeof committed.body.data.batch_id).toBe("number");
-    expect(committed.body.data.batch_id).toBe(BATCH_ID);
+    expect(typeof bodyAt(committed, "data", "batch_id")).toBe("number");
+    expect(bodyAt(committed, "data", "batch_id")).toBe(BATCH_ID);
 
     runPortfolioImportPipeline.mockImplementation(async () =>
       loose({
@@ -743,9 +750,9 @@ describe("batch_id wire type", () => {
       }),
     );
     const review = await runCustom(minimalBody).expect(202);
-    expect(typeof review.body.data.batch_id).toBe("number");
-    expect(review.body.data.batch_id).toStrictEqual(
-      committed.body.data.batch_id,
+    expect(typeof bodyAt(review, "data", "batch_id")).toBe("number");
+    expect(bodyAt(review, "data", "batch_id")).toStrictEqual(
+      bodyAt(committed, "data", "batch_id"),
     );
   });
 
@@ -772,10 +779,10 @@ describe("batch_id wire type", () => {
       .send({})
       .expect(200);
 
-    expect(typeof committed.body.data.batch_id).toBe("number");
+    expect(typeof bodyAt(committed, "data", "batch_id")).toBe("number");
     // The whole point of the finding: strict equality across the two responses.
-    expect(committed.body.data.batch_id).toStrictEqual(
-      started.body.data.batch_id,
+    expect(bodyAt(committed, "data", "batch_id")).toStrictEqual(
+      bodyAt(started, "data", "batch_id"),
     );
   });
 });
@@ -867,7 +874,7 @@ describe("review body schemas", () => {
     ],
   ])("bulk override %j → %s", async (body, message) => {
     const res = await bulk(body).expect(400);
-    expect(res.body.error.message).toBe(message);
+    expect(bodyAt(res, "error", "message")).toBe(message);
     expect(resolveInvestmentRows).not.toHaveBeenCalled();
   });
 
@@ -900,7 +907,10 @@ describe("review body schemas", () => {
       .post(`${BASE}/batches/5/rows/6/investment-override`)
       .send({ create_new: true, investment_id: "not-an-id" })
       .expect(200);
-    expect(res.body.data).toMatchObject({ investment_id: 11, created: true });
+    expect(bodyAt(res, "data")).toMatchObject({
+      investment_id: 11,
+      created: true,
+    });
     expect(overrideInvestment).not.toHaveBeenCalled();
   });
 
@@ -909,7 +919,7 @@ describe("review body schemas", () => {
       .post(`${BASE}/batches/5/rows/6/investment-override`)
       .send({ create_new: "true", investment_id: "1e3" })
       .expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "investment_id must be a positive integer or null",
     );
   });
@@ -932,7 +942,7 @@ describe("review body schemas", () => {
       .post(`${BASE}/batches/5/commit`)
       .send({ account_id: "" })
       .expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "account_id must be a positive integer",
     );
   });
@@ -942,8 +952,8 @@ describe("review body schemas", () => {
       .post(`${BASE}/reconciliation/preview`)
       .send({ batch_ids: [] })
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
-    expect(res.body.error.message).not.toMatch(/^batch_ids/);
-    expect(res.body.error.message).toMatch(/>=1/);
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "message")).not.toMatch(/^batch_ids/);
+    expect(bodyAt(res, "error", "message")).toMatch(/>=1/);
   });
 });

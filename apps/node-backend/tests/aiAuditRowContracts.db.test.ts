@@ -5,6 +5,7 @@
  * goes through its row schema, so a schema that is wrong for what pg really
  * returns fails here with a RowContractError.
  */
+import { bodyAt } from "./helpers/responseBody.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type {
   AiDisclosureGrant,
@@ -680,8 +681,8 @@ describe.skipIf(!hasTestDatabase())(
       const agent = routeAgent(adminRouter);
       const stats = await agent.get("/database/stats");
       expect(stats.status).toBe(200);
-      expect(typeof stats.body.data.db_size).toBe("string");
-      expect(stats.body.data.tables.length).toBeGreaterThan(0);
+      expect(typeof bodyAt(stats, "data", "db_size")).toBe("string");
+      expect(bodyAt(stats, "data", "tables", "length")).toBeGreaterThan(0);
       const rejected = await agent
         .post("/database/vacuum")
         .send({ table: "no_such_table_row_contracts" });

@@ -149,23 +149,23 @@ const defaultDeps = {
 
 export interface PortfolioForecastInput {
   /** default 120 */
-  horizonMonths?: number;
+  horizonMonths?: number | undefined;
   /** default 0 */
-  monthlyContribution?: number;
+  monthlyContribution?: number | undefined;
   /** Month 1 first; trailing months use monthlyContribution */
-  monthlyContributionSchedule?: number[];
+  monthlyContributionSchedule?: number[] | undefined;
   /** default 1000 */
-  paths?: number;
+  paths?: number | undefined;
   /** 0 = pure historical drift (default), 1 = pure forward */
-  forwardBlend?: number;
+  forwardBlend?: number | undefined;
   /** default 'parametric' */
-  method?: 'parametric' | 'block_bootstrap';
-  targetValue?: number;
+  method?: 'parametric' | 'block_bootstrap' | undefined;
+  targetValue?: number | undefined;
   /** Month at which targetValue is evaluated */
-  goalMonth?: number;
+  goalMonth?: number | undefined;
   /** default 'EUR' */
-  currency?: string;
-  seed?: string;
+  currency?: string | undefined;
+  seed?: string | undefined;
 }
 
 /** Run a portfolio value projection. */

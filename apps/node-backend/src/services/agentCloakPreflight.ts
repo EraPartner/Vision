@@ -27,14 +27,14 @@ interface AgentCloakDetectConfig {
 }
 
 interface AgentCloakPreflightConfig extends AgentCloakDetectConfig {
-  url?: string;
-  apiKey?: string;
+  url?: string | undefined;
+  apiKey?: string | undefined;
 }
 
 interface AgentCloakRequestOptions<C> {
   config?: C;
   fetchImpl?: typeof fetch;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -12,6 +12,11 @@ import type { ExistingTransferLeg } from "@/features/transactions/hooks/useMarkT
 import { recipientCreated, transactionCreated } from "@/test/msw/rowFixtures";
 
 const labels = en as Record<string, string>;
+function label(key: string): string {
+    const value = labels[key];
+    if (value === undefined) throw new Error(`Missing locale key: ${key}`);
+    return value;
+}
 const API_BASE = "http://localhost:3002";
 const outflow: ExistingTransferLeg = {
     id: 1,
@@ -54,7 +59,7 @@ function bar(
 async function openActions(user: ReturnType<typeof userEvent.setup>) {
     await user.click(
         await screen.findByRole("button", {
-            name: labels["txPage.bulk.actions"],
+            name: label("txPage.bulk.actions"),
         }),
     );
 }
@@ -92,7 +97,7 @@ describe("pairing existing transfer records", () => {
             await openActions(user);
             await user.click(
                 screen.getByRole("menuitem", {
-                    name: labels["txPage.bulk.markTransfer"],
+                    name: label("txPage.bulk.markTransfer"),
                 }),
             );
             const dialog = await screen.findByRole("alertdialog");
@@ -113,12 +118,12 @@ describe("pairing existing transfer records", () => {
             await openActions(user);
             await user.click(
                 screen.getByRole("menuitem", {
-                    name: labels["txPage.bulk.markTransfer"],
+                    name: label("txPage.bulk.markTransfer"),
                 }),
             );
             await user.click(
                 await screen.findByRole("button", {
-                    name: labels["txPage.bulk.markTransfer"],
+                    name: label("txPage.bulk.markTransfer"),
                 }),
             );
             await waitFor(() => expect(requests).toEqual([{ aId: 1, bId: 2 }]));
@@ -159,7 +164,7 @@ describe("pairing existing transfer records", () => {
         await openActions(user);
         expect(
             screen.queryByRole("menuitem", {
-                name: labels["txPage.bulk.markTransfer"],
+                name: label("txPage.bulk.markTransfer"),
             }),
         ).not.toBeInTheDocument();
     });
@@ -180,14 +185,14 @@ describe("pairing existing transfer records", () => {
         await openActions(user);
         await user.click(
             screen.getByRole("menuitem", {
-                name: labels["txPage.bulk.markTransfer"],
+                name: label("txPage.bulk.markTransfer"),
             }),
         );
         await screen.findByRole("alertdialog");
         rerender(bar([outflow, { ...inflow, amount: 5 }]));
         await user.click(
             screen.getByRole("button", {
-                name: labels["txPage.bulk.markTransfer"],
+                name: label("txPage.bulk.markTransfer"),
             }),
         );
         await waitFor(() =>

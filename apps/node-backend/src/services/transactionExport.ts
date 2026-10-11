@@ -221,7 +221,7 @@ async function streamExport(
     writeHeader?: (res: ExpressResponse) => void;
     formatRow: (row: ExportTransactionRow, rowIndex: number) => string;
     label: string;
-    query?: ExportQuery;
+    query?: ExportQuery | undefined;
   },
 ): Promise<{ rowCount: number }> {
   const probe = await query(buildExportProbeSql(whereSql), params);
@@ -307,7 +307,10 @@ function resolveExportWhere(args: ExportWhereArgs): ExportWhere {
 
 export async function streamCsvExport(
   res: ExpressResponse,
-  args: ExportWhereArgs & { includeBalance?: boolean; query?: ExportQuery },
+  args: ExportWhereArgs & {
+    includeBalance?: boolean | undefined;
+    query?: ExportQuery | undefined;
+  },
 ): Promise<{ rowCount: number }> {
   const { includeBalance = false, query } = args;
   const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
@@ -347,7 +350,7 @@ export async function streamCsvExport(
 
 export async function streamNdjsonExport(
   res: ExpressResponse,
-  args: ExportWhereArgs & { query?: ExportQuery },
+  args: ExportWhereArgs & { query?: ExportQuery | undefined },
 ): Promise<{ rowCount: number }> {
   const { query } = args;
   const { whereSql, params, nextParamIdx } = resolveExportWhere(args);
@@ -395,10 +398,10 @@ export async function streamBulkTransactionExport(
     format,
     includeBalance = false,
   }: {
-    ids?: number[];
-    filter?: BulkFilterInput | null;
+    ids?: number[] | undefined;
+    filter?: BulkFilterInput | null | undefined;
     format: "csv" | "json";
-    includeBalance?: boolean;
+    includeBalance?: boolean | undefined;
   },
 ): Promise<void> {
   // Reject malformed selectors before reserving a pool connection. The same

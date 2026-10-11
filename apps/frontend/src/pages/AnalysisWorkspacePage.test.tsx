@@ -200,14 +200,19 @@ describe("AnalysisWorkspacePage", () => {
             screen.getAllByRole("checkbox", { name: "Maand" }).length,
         ).toBeGreaterThan(0);
         const { default: nl } = await import("@/locales/nl");
+        const nlText = (key: string): string => {
+            const value = nl[key];
+            if (value === undefined) throw new Error(`Missing nl key ${key}`);
+            return value;
+        };
         await user.click(
-            screen.getByRole("button", { name: nl["analysis.run"] }),
+            screen.getByRole("button", { name: nlText("analysis.run") }),
         );
         expect(
             await screen.findByRole("button", { name: "Uitgaven" }),
         ).toBeInTheDocument();
         await user.click(
-            screen.getByRole("tab", { name: nl["analysis.chart"] }),
+            screen.getByRole("tab", { name: nlText("analysis.chart") }),
         );
         await user.click(screen.getByLabelText(nl["analysis.ext.chart.x"]!));
         expect(
@@ -220,10 +225,12 @@ describe("AnalysisWorkspacePage", () => {
             }),
         ).toBeChecked();
         await user.click(
-            screen.getByRole("tab", { name: nl["analysis.pivot"] }),
+            screen.getByRole("tab", { name: nlText("analysis.pivot") }),
         );
         expect(
-            screen.getByRole("button", { name: nl["analysis.ext.pivot.run"] }),
+            screen.getByRole("button", {
+                name: nlText("analysis.ext.pivot.run"),
+            }),
         ).toBeInTheDocument();
     });
 

@@ -11,15 +11,15 @@ import { apiRequest, checkResponseContract } from '@/lib/api/client';
 import { requestWithQuery, createWithStatus } from '@/lib/api/helpers';
 
 export function getRecipients(params?: {
-    limit?: number;
-    offset?: number;
-    name?: string;
-    default_category_id?: number;
-    active?: boolean;
-    search?: string;
-    uncategorized?: boolean;
-    sort_by?: string;
-    sort_dir?: 'asc' | 'desc';
+    limit?: number | undefined;
+    offset?: number | undefined;
+    name?: string | undefined;
+    default_category_id?: number | undefined;
+    active?: boolean | undefined;
+    search?: string | undefined;
+    uncategorized?: boolean | undefined;
+    sort_by?: string | undefined;
+    sort_dir?: 'asc' | 'desc' | undefined;
 }): Promise<RecipientsListResponse> {
     return requestWithQuery<RecipientsListResponse>('/api/recipients', params, {
         schema: RecipientListSchema,
@@ -93,7 +93,7 @@ export interface RecipientPatternCreate {
     pattern_kind?: 'literal_prefix' | 'glob' | 'regex';
     case_sensitive?: boolean;
     priority?: number;
-    notes?: string;
+    notes?: string | null | undefined;
 }
 
 export interface RecipientPatternUpdate {
@@ -102,7 +102,7 @@ export interface RecipientPatternUpdate {
     case_sensitive?: boolean;
     priority?: number;
     is_active?: boolean;
-    notes?: string;
+    notes?: string | null | undefined;
 }
 
 export function listRecipientPatterns(recipientId: number): Promise<{ items: RecipientPattern[]; total: number }> {

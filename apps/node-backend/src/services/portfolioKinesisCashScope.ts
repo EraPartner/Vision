@@ -1,7 +1,10 @@
 /** Complete-source native cash chains and immutable owned ledger after-images. */
 import { createHash } from "node:crypto";
 import { toDecimal } from "../lib/money.ts";
-import { parseCsvText } from "./importPipeline/adapters/_shared.ts";
+import {
+  parseCsvText,
+  sourceColumnsOption,
+} from "./importPipeline/adapters/_shared.ts";
 import {
   portfolioPrimaryRawData,
   requiredStagedValue,
@@ -193,7 +196,9 @@ export function proveKinesisCashSources(
           portfolioPrimaryRawData(requiredStagedValue(row.raw_data)),
           {
             // Every proved Kinesis batch carries its config (see configOf).
-            columns: batchConfigFields(batch.custom_config)!.source_columns,
+            ...sourceColumnsOption(
+              batchConfigFields(batch.custom_config)!.source_columns,
+            ),
             skip_empty_lines: true,
           },
         );
@@ -266,9 +271,9 @@ export function proveKinesisCashSources(
             if (!item || !["Buy", "Sell"].includes(item.typeRaw)) return false;
             const other = parseCsvText(
               portfolioPrimaryRawData(requiredStagedValue(candidate.raw_data)),
-              {
-                columns: batchConfigFields(batch.custom_config)!.source_columns,
-              },
+              sourceColumnsOption(
+                batchConfigFields(batch.custom_config)!.source_columns,
+              ),
             )[0]!;
             return (
               other.Order_ID === record.Order_ID &&

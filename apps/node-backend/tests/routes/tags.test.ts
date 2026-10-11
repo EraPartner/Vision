@@ -4,6 +4,7 @@
  * Runs against the REAL router mounted on a throwaway Express app (see
  * tests/helpers/routeApp.ts) — validateIdParam is no longer stubbed.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -42,8 +43,8 @@ describe("GET /api/tags", () => {
     expect(tagRepository.getAll).toHaveBeenCalledWith(
       expect.objectContaining({ active: true }),
     );
-    expect(res.body.data.total).toBe(1);
-    expect(res.body.data.items[0].slug).toBe("rome-2020");
+    expect(bodyAt(res, "data", "total")).toBe(1);
+    expect(bodyAt(res, "data", "items", 0, "slug")).toBe("rome-2020");
   });
 
   it("passes active=false when ?active=false", async () => {
@@ -88,10 +89,10 @@ describe("GET /api/tags — pagination is opt-in", () => {
       offset: 0,
     });
     expect(tagRepository.getCount).not.toHaveBeenCalled();
-    expect(res.body.data.items).toHaveLength(60);
-    expect(res.body.data.total).toBe(60);
-    expect(res.body.data.limit).toBeUndefined();
-    expect(res.body.data.offset).toBeUndefined();
+    expect(bodyAt(res, "data", "items")).toHaveLength(60);
+    expect(bodyAt(res, "data", "total")).toBe(60);
+    expect(bodyAt(res, "data", "limit")).toBeUndefined();
+    expect(bodyAt(res, "data", "offset")).toBeUndefined();
   });
 
   it("treats an empty limit param as absent", async () => {
@@ -103,7 +104,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
       limit: null,
       offset: 0,
     });
-    expect(res.body.data.limit).toBeUndefined();
+    expect(bodyAt(res, "data", "limit")).toBeUndefined();
   });
 
   it("pages and reports the full total when limit/offset are supplied", async () => {
@@ -116,7 +117,7 @@ describe("GET /api/tags — pagination is opt-in", () => {
       limit: 1,
       offset: 2,
     });
-    expect(res.body.data).toEqual({
+    expect(bodyAt(res, "data")).toEqual({
       items: [{ id: 3, slug: "c", is_active: true }],
       total: 12,
       limit: 1,
@@ -152,9 +153,9 @@ describe("POST /api/tags", () => {
       "rome-2020",
       null,
     );
-    expect(res.body.data.slug).toBe("rome-2020");
-    expect(res.body.data.created).toBe(true);
-    expect(res.body.data.reactivated).toBe(false);
+    expect(bodyAt(res, "data", "slug")).toBe("rome-2020");
+    expect(bodyAt(res, "data", "created")).toBe(true);
+    expect(bodyAt(res, "data", "reactivated")).toBe(false);
   });
 
   it("reactivates inactive tag, returns 201 with junction count", async () => {
@@ -171,9 +172,9 @@ describe("POST /api/tags", () => {
       reactivated: true,
     });
     const res = await api.post(BASE).send({ slug: "old" }).expect(201);
-    expect(res.body.data.created).toBe(false);
-    expect(res.body.data.reactivated).toBe(true);
-    expect(res.body.data.reactivated_junction_count).toBe(3);
+    expect(bodyAt(res, "data", "created")).toBe(false);
+    expect(bodyAt(res, "data", "reactivated")).toBe(true);
+    expect(bodyAt(res, "data", "reactivated_junction_count")).toBe(3);
   });
 
   it("returns 200 when slug matches an active tag (conflict update path)", async () => {
@@ -189,7 +190,7 @@ describe("POST /api/tags", () => {
       reactivated: true,
     });
     const res = await api.post(BASE).send({ slug: "active" }).expect(200);
-    expect(res.body.data.created).toBe(false);
+    expect(bodyAt(res, "data", "created")).toBe(false);
   });
 
   it("returns a 400 VALIDATION_ERROR envelope when slug is missing", async () => {
@@ -238,7 +239,7 @@ describe("PATCH /api/tags/:id", () => {
       .patch(`${BASE}/1`)
       .send({ color: "#f00" })
       .expect(200);
-    expect(res.body.data.color).toBe("#f00");
+    expect(bodyAt(res, "data", "color")).toBe("#f00");
   });
 
   it("returns a 404 NOT_FOUND envelope when tag not found", async () => {
@@ -289,7 +290,7 @@ describe("DELETE /api/tags/:id", () => {
       }),
     );
     const res = await api.delete(`${BASE}/1`).expect(200);
-    expect(res.body.data).toMatchObject({
+    expect(bodyAt(res, "data")).toMatchObject({
       id: 1,
       slug: "rome",
       is_active: false,
@@ -311,7 +312,7 @@ describe("tag request schemas (zod)", () => {
     "POST rejects a non-string slug %j before the service slugifies it",
     async (body) => {
       const res = await api.post(BASE).send(body).expect(400);
-      expect(res.body.error.message).toContain("slug");
+      expect(bodyAt(res, "error", "message")).toContain("slug");
       expect(repo.findOrCreateBySlug).not.toHaveBeenCalled();
     },
   );

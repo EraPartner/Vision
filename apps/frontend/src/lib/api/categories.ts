@@ -15,12 +15,12 @@ import { apiRequest } from "@/lib/api/client";
 import { requestWithQuery, createWithStatus } from "@/lib/api/helpers";
 
 export function getCategories(params?: {
-    limit?: number;
-    offset?: number;
-    general?: string;
-    detail?: string;
-    active?: boolean;
-    search?: string;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    general?: string | undefined;
+    detail?: string | undefined;
+    active?: boolean | undefined;
+    search?: string | undefined;
 }): Promise<CategoriesListResponse> {
     return requestWithQuery<CategoriesListResponse>("/api/categories", params, {
         schema: CategoryListSchema,

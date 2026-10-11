@@ -90,7 +90,7 @@ export const accountRepository = {
    */
   async findActiveId(
     id: unknown,
-    { client }: { client?: QueryRunner } = {},
+    { client }: { client?: QueryRunner | undefined } = {},
   ): Promise<number | undefined> {
     const row = await queryOne(
       idRowSchema,

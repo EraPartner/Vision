@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 
 interface StalePriceIndicatorProps {
-    priceProvider?: string;
-    priceUpdatedAt?: string | null;
+    priceProvider?: string | undefined;
+    priceUpdatedAt?: string | null | undefined;
     className?: string;
 }
 

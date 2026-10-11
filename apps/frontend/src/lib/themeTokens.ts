@@ -7,22 +7,22 @@
  */
 
 export interface ReportThemeTokens {
-  primary?: string;
-  accent?: string;
-  success?: string;
-  expense?: string;
-  surface?: string;
-  text?: string;
-  muted?: string;
-  border?: string;
-  chart1?: string;
-  chart2?: string;
-  chart3?: string;
-  chart4?: string;
-  chart5?: string;
-  chart6?: string;
-  chart7?: string;
-  chart8?: string;
+  primary?: string | undefined;
+  accent?: string | undefined;
+  success?: string | undefined;
+  expense?: string | undefined;
+  surface?: string | undefined;
+  text?: string | undefined;
+  muted?: string | undefined;
+  border?: string | undefined;
+  chart1?: string | undefined;
+  chart2?: string | undefined;
+  chart3?: string | undefined;
+  chart4?: string | undefined;
+  chart5?: string | undefined;
+  chart6?: string | undefined;
+  chart7?: string | undefined;
+  chart8?: string | undefined;
   mode: 'light' | 'dark';
 }
 

@@ -253,7 +253,7 @@ export async function commitPortfolioAssetTransfer({
   batch,
 }: {
   row: Parameters<typeof previewPortfolioAssetTransfer>[0];
-  batch?: CustodyBatch;
+  batch?: CustodyBatch | undefined;
 }): Promise<{ id: number; duplicate: boolean }> {
   const prepared = previewPortfolioAssetTransfer(row, batch);
   if (prepared.error)

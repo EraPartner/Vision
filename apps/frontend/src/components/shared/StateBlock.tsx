@@ -5,13 +5,13 @@ import { cn } from "@/lib/utils";
 interface StateBlockProps {
     icon: LucideIcon;
     title: ReactNode;
-    description?: ReactNode;
-    action?: ReactNode;
-    details?: ReactNode;
-    tone?: "neutral" | "destructive";
-    size?: "default" | "compact";
-    headingLevel?: 2 | 3 | 4;
-    className?: string;
+    description?: ReactNode | undefined;
+    action?: ReactNode | undefined;
+    details?: ReactNode | undefined;
+    tone?: "neutral" | "destructive" | undefined;
+    size?: "default" | "compact" | undefined;
+    headingLevel?: 2 | 3 | 4 | undefined;
+    className?: string | undefined;
 }
 
 export function StateBlock({

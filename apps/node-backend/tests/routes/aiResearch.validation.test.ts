@@ -3,6 +3,7 @@
  * parsed with parseInput, so failures are 400 VALIDATION_ERROR envelopes whose
  * issues carry their field path. Services are mocked.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { routeAgent, errEnvelope } from "../helpers/routeApp.ts";
 
@@ -54,7 +55,7 @@ describe("AI research request validation", () => {
       .send({ enabled: "yes" })
       .expect(400);
     expect(res.body).toEqual(errEnvelope({ code: "VALIDATION_ERROR" }));
-    expect(res.body.error.message).toMatch(/^enabled: /);
+    expect(bodyAt(res, "error", "message")).toMatch(/^enabled: /);
     expect(configureAgentCloakDesktop).not.toHaveBeenCalled();
   });
 
@@ -74,7 +75,7 @@ describe("AI research request validation", () => {
       .post(`${BASE}/investigations/${JOB_ID}/resume`)
       .send({ clarification: "more", extra: true })
       .expect(400);
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(resumeInvestigation).not.toHaveBeenCalled();
 
     resumeInvestigation.mockResolvedValue(

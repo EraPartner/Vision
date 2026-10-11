@@ -162,17 +162,24 @@ async function hasDemoResetRequest(
   runtime: NativeDemoRuntime,
 ): Promise<boolean> {
   const requestPath = demoResetRequestPath(runtime);
+  const unsafe = () =>
+    demoError("Native Demo reset request is unsafe", "DEMO_RESET_UNSAFE");
+  let handle: fs.promises.FileHandle;
   try {
-    const stat = await fs.promises.lstat(requestPath);
-    if (!stat.isFile() || stat.isSymbolicLink()) {
-      throw demoError(
-        "Native Demo reset request is unsafe",
-        "DEMO_RESET_UNSAFE",
-      );
-    }
-    const request: unknown = JSON.parse(
-      await fs.promises.readFile(requestPath, "utf8"),
+    // Check and read the same open file, so a swap after the check cannot be read.
+    // O_NONBLOCK keeps a FIFO planted at the path from blocking the open.
+    handle = await fs.promises.open(
+      requestPath,
+      fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
     );
+  } catch (error) {
+    if (errorCode(error) === "ENOENT") return false;
+    if (errorCode(error) === "ELOOP") throw unsafe();
+    throw error;
+  }
+  try {
+    if (!(await handle.stat()).isFile()) throw unsafe();
+    const request: unknown = JSON.parse(await handle.readFile("utf8"));
     if (fieldsOf(request)?.version !== 1) {
       throw demoError(
         "Native Demo reset request is invalid",
@@ -180,9 +187,8 @@ async function hasDemoResetRequest(
       );
     }
     return true;
-  } catch (error) {
-    if (errorCode(error) === "ENOENT") return false;
-    throw error;
+  } finally {
+    await handle.close();
   }
 }
 
@@ -311,7 +317,11 @@ export async function prepareNativeDemo(
 export async function finalizeNativeDemo(
   runtime: NativeDemoRuntime,
   prepared: PreparedNativeDemo | null | undefined,
-): Promise<{ status: "ready"; seed: string; resetCleanupWarning?: string }> {
+): Promise<{
+  status: "ready";
+  seed: string;
+  resetCleanupWarning?: string | undefined;
+}> {
   if (!prepared || !prepared.manifest) {
     throw new Error("Native Demo preparation result is missing");
   }

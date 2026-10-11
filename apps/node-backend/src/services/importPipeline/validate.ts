@@ -36,7 +36,7 @@ export async function validateBatch({
   onProgress,
 }: {
   batchId: ImportBatchId;
-  onProgress?: ImportProgressCallback;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{ validated: number; duplicates: number; errors: number }> {
   await query(`UPDATE import_batches SET status = 'validating' WHERE id = $1`, [
     batchId,

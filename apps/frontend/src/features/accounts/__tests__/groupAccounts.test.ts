@@ -189,11 +189,10 @@ describe("groupAccounts", () => {
 
 describe("sumConvertedBalances", () => {
     it("sums converted computed balances, treating missing balances as 0", () => {
-        const accounts = [
-            makeAccount({ computed_balance: 100, currency: "EUR" }),
-            makeAccount({ computed_balance: 50, currency: "USD" }),
-            makeAccount({ computed_balance: undefined }),
-        ];
+        const eur = makeAccount({ computed_balance: 100, currency: "EUR" });
+        const usd = makeAccount({ computed_balance: 50, currency: "USD" });
+        const { computed_balance: _missing, ...withoutBalance } = makeAccount();
+        const accounts: Account[] = [eur, usd, withoutBalance];
         const double = (amount: number, from?: string) =>
             from === "USD" ? amount * 2 : amount;
         expect(sumConvertedBalances(accounts, double)).toBe(200);

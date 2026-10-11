@@ -117,9 +117,9 @@ export interface InsertKinesisCashArgs {
   >;
   values: KinesisCashValues;
   proof: unknown;
-  feeValues?: KinesisCashValues;
+  feeValues?: KinesisCashValues | undefined;
   primaryRawData: string | null;
-  feeFingerprint?: string;
+  feeFingerprint?: string | undefined;
 }
 
 export async function insertKinesisCash({

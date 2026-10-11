@@ -41,7 +41,7 @@ export interface BankAccountBalance {
   transaction_count: number;
   first_transaction: string | null;
   last_transaction: string | null;
-  drift?: number;
+  drift?: number | undefined;
 }
 
 export const banksRepository = {

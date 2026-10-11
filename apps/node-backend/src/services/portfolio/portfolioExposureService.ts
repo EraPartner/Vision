@@ -67,7 +67,7 @@ export const portfolioExposureBundleSchema = z.strictObject({
 type IdentifierLike = {
   type: string | null;
   value: string | null;
-  exchange?: string | null;
+  exchange?: string | null | undefined;
 };
 
 /** One holding's (or fund constituent's) share of the portfolio value. */

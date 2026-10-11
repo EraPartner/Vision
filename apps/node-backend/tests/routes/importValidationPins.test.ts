@@ -15,6 +15,7 @@
  * uploaded file is injected by a `before` middleware, which is the same slot
  * `main.ts` uses for per-mount middleware.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockConnection } from "../helpers/repoMocks.ts";
 import { mockLogger } from "../helpers/mockLogger.ts";
@@ -244,14 +245,14 @@ describe("multipart body parameters", () => {
 
   it("keeps each endpoint's exact bank_name message (parseInput, no path prefix)", async () => {
     const csv = await api.post(`${BASE}/csv`).send({}).expect(400);
-    expect(csv.body.error.message).toBe(
+    expect(bodyAt(csv, "error", "message")).toBe(
       "Missing required multipart field: bank_name",
     );
     const stream = await api
       .post(`${BASE}/csv/stream`)
       .send({ bank_name: "" })
       .expect(400);
-    expect(stream.body.error.message).toBe(
+    expect(bodyAt(stream, "error", "message")).toBe(
       "Missing required parameter: bank_name",
     );
   });
@@ -312,7 +313,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
     for (const id of ["12.0", " 12 ", "0x10", "0o17", "0b11", "1e3", "+12"]) {
       const res = await api.get(`${BASE}/batches/${seg(id)}`).expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -332,13 +333,13 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
     getBatch.mockResolvedValue(undefined as unknown as null);
 
     const res = await api.get(`${BASE}/batches/2147483648`).expect(404);
-    expect(res.body.error.code).toBe("NOT_FOUND");
+    expect(bodyAt(res, "error", "code")).toBe("NOT_FOUND");
     expect(getBatch).toHaveBeenCalledWith(2147483648);
 
     getBatch.mockClear();
     for (const id of ["9007199254740993", "99999999999999999999"]) {
       const tooBig = await api.get(`${BASE}/batches/${id}`).expect(400);
-      expect(tooBig.body.error.code).toBe("VALIDATION_ERROR");
+      expect(bodyAt(tooBig, "error", "code")).toBe("VALIDATION_ERROR");
     }
     expect(getBatch).not.toHaveBeenCalled();
   });
@@ -354,7 +355,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
 
     const res = await api.get(`${BASE}/batches/1e300`).expect(400);
 
-    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
     expect(getBatch).not.toHaveBeenCalled();
   });
 
@@ -369,7 +370,7 @@ describe("batch-id shape pins (validateId, bounded to MAX_SAFE_ID)", () => {
     for (const site of sites) {
       for (const id of badIds) {
         const res = await site(id).expect(400);
-        expect(res.body.error.code).toBe("VALIDATION_ERROR");
+        expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
       }
     }
     expect(getBatch).not.toHaveBeenCalled();
@@ -451,7 +452,7 @@ describe("override-body id shape (parseOverrideId)", () => {
         .send({ recipient_id })
         .expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(recipient_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -463,14 +464,14 @@ describe("override-body id shape (parseOverrideId)", () => {
       .post(`${BASE}/batches/5/rows/6/override`)
       .send({ recipient_id: "1e3" })
       .expect(400);
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "recipient_id must be a positive integer or null",
     );
     const category = await api
       .post(`${BASE}/batches/5/rows/6/category-override`)
       .send({ category_id: 0 })
       .expect(400);
-    expect(category.body.error.message).toBe(
+    expect(bodyAt(category, "error", "message")).toBe(
       "category_id must be a positive integer or null",
     );
 
@@ -479,7 +480,7 @@ describe("override-body id shape (parseOverrideId)", () => {
       .post(`${BASE}/batches/5/rows/6/override`)
       .send([7])
       .expect(400);
-    expect(array.body.error.code).toBe("VALIDATION_ERROR");
+    expect(bodyAt(array, "error", "code")).toBe("VALIDATION_ERROR");
     expect(overrideRecipient).not.toHaveBeenCalled();
   });
 
@@ -490,7 +491,7 @@ describe("override-body id shape (parseOverrideId)", () => {
         .send({ category_id })
         .expect(400);
       expect(
-        res.body.error.code,
+        bodyAt(res, "error", "code"),
         `expected ${JSON.stringify(category_id)} to be rejected`,
       ).toBe("VALIDATION_ERROR");
     }
@@ -545,7 +546,7 @@ describe("override-body id shape (parseOverrideId)", () => {
         rowId: 6,
         recipientId: null,
       });
-      expect(res.body.data.user_override_recipient_id).toBeNull();
+      expect(bodyAt(res, "data", "user_override_recipient_id")).toBeNull();
     }
 
     await api
@@ -619,7 +620,7 @@ describe("parseCsvImportOptions pins (POST /recipients)", () => {
 
   it("rejects a multi-character separator", async () => {
     const res = await run({ separator: ";;" }).expect(400);
-    expect(res.body.error.message).toMatch(/separator/);
+    expect(bodyAt(res, "error", "message")).toMatch(/separator/);
     expect(importRecipientsCSV).not.toHaveBeenCalled();
   });
 });
@@ -778,18 +779,22 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
     const res1 = await create({ dateColumn: "Date", amountColumn: "A" }).expect(
       400,
     );
-    expect(res1.body.error.message).toContain(
+    expect(bodyAt(res1, "error", "message")).toContain(
       "config.recipientColumn is required",
     );
 
     const res2 = await create({ ...base, dateColumn: "  " }).expect(400);
-    expect(res2.body.error.message).toContain("config.dateColumn is required");
+    expect(bodyAt(res2, "error", "message")).toContain(
+      "config.dateColumn is required",
+    );
   });
 
   it("rejects a non-object or array config", async () => {
     for (const config of [null, "str", [1]]) {
       const res = await create(config).expect(400);
-      expect(res.body.error.message).toBe('Missing or invalid "config"');
+      expect(bodyAt(res, "error", "message")).toBe(
+        'Missing or invalid "config"',
+      );
     }
   });
 
@@ -797,21 +802,21 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
     const res = await create({ dateColumn: "Date", encoding: "bogus" }).expect(
       400,
     );
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       'config.recipientColumn is required; config.amountColumn is required; Unsupported CSV encoding "bogus"',
     );
   });
 
   it("validates the POST/PATCH body through one schema per verb", async () => {
     const both = await api.post(`${BASE}/parsers`).send({}).expect(400);
-    expect(both.body.error.message).toBe(
+    expect(bodyAt(both, "error", "message")).toBe(
       'Missing or invalid "name"; Missing or invalid "config"',
     );
     const name = await api
       .post(`${BASE}/parsers`)
       .send({ name: "  ", config: base })
       .expect(400);
-    expect(name.body.error.message).toBe('Missing or invalid "name"');
+    expect(bodyAt(name, "error", "message")).toBe('Missing or invalid "name"');
 
     // PATCH leaves absent fields alone and normalizes the present ones.
     customParserConfigRepository.update.mockResolvedValue(
@@ -829,7 +834,9 @@ describe("normalizeParserConfig pins (POST /parsers)", () => {
       .patch(`${BASE}/parsers/3`)
       .send({ config: [] })
       .expect(400);
-    expect(patchConfig.body.error.message).toBe('Missing or invalid "config"');
+    expect(bodyAt(patchConfig, "error", "message")).toBe(
+      'Missing or invalid "config"',
+    );
   });
 });
 
@@ -876,8 +883,8 @@ describe("batch_id wire type", () => {
       .send({ bank_name: "vision" })
       .expect(201);
 
-    expect(typeof res.body.data.batch_id).toBe("number");
-    expect(res.body.data.batch_id).toBe(BATCH_ID);
+    expect(typeof bodyAt(res, "data", "batch_id")).toBe("number");
+    expect(bodyAt(res, "data", "batch_id")).toBe(BATCH_ID);
   });
 
   it("POST /csv (202, review required) emits a numeric batch_id", async () => {
@@ -894,8 +901,8 @@ describe("batch_id wire type", () => {
       .send({ bank_name: "vision" })
       .expect(202);
 
-    expect(typeof res.body.data.batch_id).toBe("number");
-    expect(res.body.data.batch_id).toBe(BATCH_ID);
+    expect(typeof bodyAt(res, "data", "batch_id")).toBe("number");
+    expect(bodyAt(res, "data", "batch_id")).toBe(BATCH_ID);
   });
 
   it("POST /batches/:id/commit emits the SAME type and value for the same batch", async () => {
@@ -927,10 +934,10 @@ describe("batch_id wire type", () => {
       .send({})
       .expect(200);
 
-    expect(typeof committed.body.data.batch_id).toBe("number");
+    expect(typeof bodyAt(committed, "data", "batch_id")).toBe("number");
     // The whole point of the finding: strict equality across the two responses.
-    expect(committed.body.data.batch_id).toStrictEqual(
-      started.body.data.batch_id,
+    expect(bodyAt(committed, "data", "batch_id")).toStrictEqual(
+      bodyAt(started, "data", "batch_id"),
     );
   });
 
@@ -941,6 +948,6 @@ describe("batch_id wire type", () => {
       .get(`${BASE}/batches/${BATCH_ID}/preview`)
       .expect(200);
 
-    expect(typeof res.body.data.batch_id).toBe("number");
+    expect(typeof bodyAt(res, "data", "batch_id")).toBe("number");
   });
 });

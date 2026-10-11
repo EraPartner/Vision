@@ -240,8 +240,8 @@ export function getDeductionCandidates(
 }
 
 export function getPortfolioPerformance(params?: {
-    currency?: string;
-    period?: string;
+    currency?: string | undefined;
+    period?: string | undefined;
 }): Promise<{
     currency: string;
     start_date: string;
@@ -314,9 +314,9 @@ export interface BrokerPerformanceRow {
 }
 
 export function getBrokerPortfolioPerformance(params?: {
-    currency?: string;
-    from?: string;
-    to?: string;
+    currency?: string | undefined;
+    from?: string | undefined;
+    to?: string | undefined;
 }): Promise<{
     currency: string;
     startDate: string;
@@ -452,7 +452,7 @@ export interface PortfolioSummaryResponse {
 }
 
 export function getPortfolioSummary(params?: {
-    currency?: string;
+    currency?: string | undefined;
 }): Promise<PortfolioSummaryResponse> {
     return requestWithQuery("/api/info/portfolio-summary", params, {
         schema: PortfolioSummarySchema,
@@ -460,9 +460,9 @@ export function getPortfolioSummary(params?: {
 }
 
 export function getNetWorth(params?: {
-    currency?: string;
-    limit?: number;
-    offset?: number;
+    currency?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
 }): Promise<NetWorthResponse> {
     return requestWithQuery("/api/info/net-worth", params, {
         schema: NetWorthSchema,

@@ -48,9 +48,9 @@ export async function createBatch({
   customConfig,
 }: {
   adapterName: string;
-  filename?: string | null;
-  sizeBytes?: number | null;
-  customConfig?: object | null;
+  filename?: string | null | undefined;
+  sizeBytes?: number | null | undefined;
+  customConfig?: object | null | undefined;
 }): Promise<number> {
   const [row] = await queryRows(
     importBatchIdRowSchema,
@@ -86,8 +86,8 @@ export async function stageBatch({
   batchId: ImportBatchId;
   filePath: string;
   adapterName: string;
-  customConfig?: CustomTransactionParserConfig | null;
-  onProgress?: ImportProgressCallback;
+  customConfig?: CustomTransactionParserConfig | null | undefined;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{ rowsTotal: number; rowsSkipped: number }> {
   // When a customConfig is supplied the import is column-mapping driven, not
   // tied to a built-in bank. The adapterName is then a free-form label (e.g. a

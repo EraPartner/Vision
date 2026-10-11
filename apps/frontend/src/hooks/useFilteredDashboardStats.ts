@@ -18,7 +18,7 @@ interface FilteredDashboardStats {
     monthlySpending: number;
     netBalance: number;
     netHistory: NetHistoryPoint[];
-    latestPeriod?: string;
+    latestPeriod?: string | undefined;
 }
 
 const NET_HISTORY_MONTHS = 12;

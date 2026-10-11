@@ -11,6 +11,7 @@
  * status/envelope assertions are the ones the error handler actually emits
  * rather than a hand-replayed approximation.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -89,8 +90,8 @@ const bulkUpdate = (body: object) =>
 async function expectValidationError(pending: Promise<Response>) {
   const res = await pending;
   expect(res.status).toBe(400);
-  expect(res.body.ok).toBe(false);
-  expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  expect(bodyAt(res, "ok")).toBe(false);
+  expect(bodyAt(res, "error", "code")).toBe("VALIDATION_ERROR");
   return res;
 }
 
@@ -114,10 +115,12 @@ beforeEach(() => {
 describe("POST / — validation pins", () => {
   it("emits the 400 VALIDATION_ERROR envelope for a missing-fields body", async () => {
     const res = await expectValidationError(post({}));
-    expect(res.body.error.message).toContain("Missing required fields");
+    expect(bodyAt(res, "error", "message")).toContain(
+      "Missing required fields",
+    );
     // The failure envelope carries the request id injected by requestId middleware.
-    expect(res.body.meta.requestId).toEqual(expect.any(String));
-    expect(res.headers["x-request-id"]).toBe(res.body.meta.requestId);
+    expect(bodyAt(res, "meta", "requestId")).toEqual(expect.any(String));
+    expect(res.headers["x-request-id"]).toBe(bodyAt(res, "meta", "requestId"));
   });
 
   it("rejects when any required field is absent", async () => {
@@ -235,7 +238,7 @@ describe("POST / — validation pins", () => {
     const res = await expectValidationError(
       post({ ...validPostBody(), bank_account: "Chase" }),
     );
-    expect(res.body.error.message).toMatch(/bank_account/);
+    expect(bodyAt(res, "error", "message")).toMatch(/bank_account/);
   });
 
   it("still records the raw-transaction mirror with the accepted values", async () => {
@@ -363,7 +366,7 @@ describe("POST /bulk-tag — validation pins", () => {
         remove_slugs: [],
       }),
     );
-    expect(res.body.error.message).toMatch(/at least one/i);
+    expect(bodyAt(res, "error", "message")).toMatch(/at least one/i);
   });
 
   // Was: expected the generic 'no valid IDs' this route reached only after
@@ -376,7 +379,7 @@ describe("POST /bulk-tag — validation pins", () => {
         add_slugs: ["x"],
       }),
     );
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "transaction_ids contains invalid value: abc",
     );
   });
@@ -391,7 +394,7 @@ describe("POST /bulk-tag — validation pins", () => {
         add_slugs: ["x"],
       }),
     );
-    expect(res.body.error.message).toBe(
+    expect(bodyAt(res, "error", "message")).toBe(
       "transaction_ids contains invalid value: 2.5",
     );
   });

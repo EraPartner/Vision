@@ -61,8 +61,8 @@ export async function createSplitAtomic(input: {
   transaction_id: number;
   recipient_id: number;
   amount: number | string;
-  note?: string | null;
-  actor?: string | null;
+  note?: string | null | undefined;
+  actor?: string | null | undefined;
 }) {
   const { transaction_id, recipient_id, amount, note, actor = null } = input;
   return withTransaction(async (client) => {
@@ -171,8 +171,8 @@ export async function createBulkSplitsAtomic({
   transaction_ids: number[];
   recipient_id: number;
   mode: BulkSplitMode;
-  note?: string | null;
-  actor?: string | null;
+  note?: string | null | undefined;
+  actor?: string | null | undefined;
 }) {
   const ids = Array.from(new Set(transaction_ids)).sort((a, b) => a - b);
   const requested = transaction_ids.length;
@@ -267,9 +267,9 @@ export async function getOwedByRecipient(
 export async function addPayment(input: {
   split_id: number;
   amount: number | string;
-  note?: string | null;
-  paid_at?: string | null;
-  actor?: string | null;
+  note?: string | null | undefined;
+  paid_at?: string | null | undefined;
+  actor?: string | null | undefined;
 }) {
   const { split_id, amount, note, paid_at, actor = null } = input;
   return withTransaction(async (client) => {

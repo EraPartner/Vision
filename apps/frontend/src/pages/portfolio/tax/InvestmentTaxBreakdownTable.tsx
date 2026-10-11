@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 export interface InvestmentTaxRow {
     id: string | number;
     name: string;
-    symbol?: string;
+    symbol?: string | undefined;
     assetClass: string;
     recordedTaxes: number;
     recordedFees: number;

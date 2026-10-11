@@ -38,23 +38,23 @@ export type AnalysisCoverageStatus =
 
 export interface AnalysisUnit {
   kind: "money" | "percentage" | "quantity" | "count" | "duration";
-  currency?: string;
-  currencyParameterId?: string;
-  currencyColumn?: string;
-  instrumentColumn?: string;
-  instrumentId?: string;
-  percentageBasis?: "ratio" | "percent";
-  scale?: number;
+  currency?: string | undefined;
+  currencyParameterId?: string | undefined;
+  currencyColumn?: string | undefined;
+  instrumentColumn?: string | undefined;
+  instrumentId?: string | undefined;
+  percentageBasis?: "ratio" | "percent" | undefined;
+  scale?: number | undefined;
 }
 export interface AnalysisTypedValue {
   id: string;
   label: string;
   type: AnalysisValueType;
-  unit?: AnalysisUnit;
+  unit?: AnalysisUnit | undefined;
 }
 export interface AnalysisParameter extends AnalysisTypedValue {
   required: boolean;
-  defaultValue?: AnalysisScalar;
+  defaultValue?: AnalysisScalar | undefined;
   sensitive: boolean;
 }
 export interface AnalysisAssumption extends AnalysisTypedValue {
@@ -69,20 +69,20 @@ export interface AnalysisCalculation {
   expression: string;
   resultType: AnalysisValueType;
   languageVersion: string;
-  metricVersion?: string;
+  metricVersion?: string | undefined;
   dependencies: string[];
-  unit?: AnalysisUnit;
-  rounding?: { mode: "half-even"; scale: number };
+  unit?: AnalysisUnit | undefined;
+  rounding?: { mode: "half-even"; scale: number } | undefined;
 }
 export interface AnalysisResultColumn {
   id: string;
   label: string;
   type: AnalysisValueType;
   nullable: boolean;
-  semanticType?: string;
-  unit?: AnalysisUnit;
-  calculationId?: string;
-  calculationVersion?: string;
+  semanticType?: string | undefined;
+  unit?: AnalysisUnit | undefined;
+  calculationId?: string | undefined;
+  calculationVersion?: string | undefined;
 }
 export interface AnalysisFieldReference {
   kind: "field";
@@ -113,12 +113,13 @@ export interface AnalysisVisualPlanSource {
       | "is-not-null";
     right?:
       | { kind: "parameter" | "assumption"; id: string }
-      | { kind: "literal"; value: AnalysisScalar };
+      | { kind: "literal"; value: AnalysisScalar }
+      | undefined;
   }>;
   groupBy: string[];
   orderBy: Array<{ outputId: string; direction: "asc" | "desc" }>;
-  limit?: number;
-  generatedSql?: string;
+  limit?: number | undefined;
+  generatedSql?: string | undefined;
 }
 export interface AnalysisCustomSqlSource {
   kind: "custom-sql";
@@ -132,9 +133,9 @@ export interface AnalysisCustomSqlSource {
   }>;
   visualConversion: {
     status: "convertible" | "unsupported";
-    reasonCode?: string;
+    reasonCode?: string | undefined;
   };
-  visualOrigin?: AnalysisVisualPlanSource;
+  visualOrigin?: AnalysisVisualPlanSource | undefined;
 }
 export interface AnalysisPresentationRequirement {
   columns: AnalysisResultColumn[];
@@ -197,9 +198,9 @@ export interface AnalysisSourceIdentity {
   sourceId: string;
   sourceVersion: string;
   asOf: string;
-  contentHash?: string;
-  uri?: string;
-  passageId?: string;
+  contentHash?: string | undefined;
+  uri?: string | undefined;
+  passageId?: string | undefined;
 }
 export type AnalysisLineage =
   | {
@@ -208,7 +209,7 @@ export type AnalysisLineage =
       records: Array<{
         entity: string;
         id: string;
-        source?: AnalysisSourceIdentity;
+        source?: AnalysisSourceIdentity | undefined;
       }>;
     }
   | {
@@ -229,22 +230,22 @@ export type AnalysisResultWindow =
       kind: "page";
       offset: number;
       limit: number;
-      totalRows?: number;
+      totalRows?: number | undefined;
       hasMore: boolean;
     }
   | {
       kind: "truncated";
       returnedRows: number;
       rowLimit: number;
-      totalRows?: number;
+      totalRows?: number | undefined;
       reason: string;
     };
 export interface AnalysisCoverageItem {
   id: string;
   status: AnalysisCoverageStatus;
-  reasonCode?: string;
-  detail?: string;
-  missingRatio?: string;
+  reasonCode?: string | undefined;
+  detail?: string | undefined;
+  missingRatio?: string | undefined;
   sources: AnalysisSourceIdentity[];
 }
 export type AnalysisCalculationResult =
@@ -254,7 +255,7 @@ export type AnalysisCalculationResult =
       kind: "metric" | "formula";
       version: string;
       type: AnalysisValueType;
-      unit?: AnalysisUnit;
+      unit?: AnalysisUnit | undefined;
       value: AnalysisScalar;
     }
   | {
@@ -263,7 +264,7 @@ export type AnalysisCalculationResult =
       kind: "metric" | "formula";
       version: string;
       type: AnalysisValueType;
-      unit?: AnalysisUnit;
+      unit?: AnalysisUnit | undefined;
       error: { code: string; message: string };
     };
 export interface AnalysisResultData {
@@ -282,7 +283,7 @@ interface AnalysisExecutionCommon {
     executorId: string;
     executorVersion: string;
     queryMode: "visual-plan" | "custom-sql";
-    durationMs?: number;
+    durationMs?: number | undefined;
     snapshot: {
       consistency: "repeatable-read" | "frozen-inputs" | "best-effort";
       id: string;
@@ -310,7 +311,7 @@ interface AnalysisExecutionCommon {
     warnings: Array<{
       code: string;
       message: string;
-      affectedColumns?: string[];
+      affectedColumns?: string[] | undefined;
     }>;
   };
 }

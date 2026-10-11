@@ -5,6 +5,7 @@
  * route's rate limiter, JSON body parsing and the centralized error handler are
  * all on the tested path.
  */
+import { bodyAt } from "../helpers/responseBody.ts";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockPooledTxConnection } from "../helpers/repoMocks.ts";
 import {
@@ -61,7 +62,7 @@ describe("POST /bulk-update — field validation", () => {
 
   it("rejects when no recognized field is set", async () => {
     const res = await bulkUpdate({ ids: [1], fields: { foo: 1 } }).expect(400);
-    expect(res.body.error.message).toMatch(/at least one/i);
+    expect(bodyAt(res, "error", "message")).toMatch(/at least one/i);
   });
 
   it("rejects non-integer category_id", async () => {
@@ -82,9 +83,9 @@ describe("POST /bulk-update — field validation", () => {
       fields: { category_id: null },
     }).expect(200);
 
-    expect(res.body.data.updated).toBe(1);
-    expect(res.body.data.requested).toBe(1);
-    expect(res.body.data.matched).toBe(1);
+    expect(bodyAt(res, "data", "updated")).toBe(1);
+    expect(bodyAt(res, "data", "requested")).toBe(1);
+    expect(bodyAt(res, "data", "matched")).toBe(1);
     const updateCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
@@ -139,9 +140,9 @@ describe("POST /bulk-update — success paths", () => {
       fields: { category_id: 7 },
     }).expect(200);
 
-    expect(res.body.data.updated).toBe(2);
-    expect(res.body.data.requested).toBe(2);
-    expect(res.body.data.matched).toBe(2);
+    expect(bodyAt(res, "data", "updated")).toBe(2);
+    expect(bodyAt(res, "data", "requested")).toBe(2);
+    expect(bodyAt(res, "data", "matched")).toBe(2);
     expect(scheduleReconcile).toHaveBeenCalledTimes(1);
   });
 
@@ -162,9 +163,9 @@ describe("POST /bulk-update — success paths", () => {
       fields: { category_id: 7, recipient_id: 99, is_active: false },
     }).expect(200);
 
-    expect(res.body.data.updated).toBe(1);
-    expect(res.body.data.requested).toBe(1);
-    expect(res.body.data.matched).toBe(1);
+    expect(bodyAt(res, "data", "updated")).toBe(1);
+    expect(bodyAt(res, "data", "requested")).toBe(1);
+    expect(bodyAt(res, "data", "matched")).toBe(1);
     const updateCall = clientQuery.mock.calls.find(([sql]) =>
       sql.includes("UPDATE transactions"),
     );
@@ -188,9 +189,9 @@ describe("POST /bulk-update — success paths", () => {
       fields: { is_active: true },
     }).expect(200);
 
-    expect(res.body.data.updated).toBe(0);
-    expect(res.body.data.requested).toBe(1);
-    expect(res.body.data.matched).toBe(1);
+    expect(bodyAt(res, "data", "updated")).toBe(0);
+    expect(bodyAt(res, "data", "requested")).toBe(1);
+    expect(bodyAt(res, "data", "matched")).toBe(1);
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 
@@ -211,7 +212,11 @@ describe("POST /bulk-update — success paths", () => {
       fields: { is_active: false },
     }).expect(200);
 
-    expect(res.body.data).toEqual({ updated: 0, requested: 2, matched: 0 });
+    expect(bodyAt(res, "data")).toEqual({
+      updated: 0,
+      requested: 2,
+      matched: 0,
+    });
     expect(scheduleReconcile).not.toHaveBeenCalled();
   });
 });

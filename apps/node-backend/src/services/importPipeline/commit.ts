@@ -68,7 +68,7 @@ export type ChunkResult = {
  * commits.
  */
 type CommitStagingRow = CommitStagingDbRow & {
-  resolved_account_id?: number | null;
+  resolved_account_id?: number | null | undefined;
 };
 
 /** The values the commit path derives from one staging row. */
@@ -366,7 +366,7 @@ export async function commitBatch({
   onProgress,
 }: {
   batchId: ImportBatchId;
-  onProgress?: ImportProgressCallback;
+  onProgress?: ImportProgressCallback | undefined;
 }): Promise<{
   imported: number;
   duplicates: number;

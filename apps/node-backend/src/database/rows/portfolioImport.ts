@@ -98,7 +98,7 @@ export type PortfolioPerformanceReferenceConfig = {
  */
 export type PortfolioImportBatchConfig = PortfolioParserConfig & {
   /** stage: the statement's literal column names. */
-  source_columns?: string[];
+  source_columns?: string[] | undefined;
   /** stage: records left outside an `included_symbols` scope. */
   scope_excluded_rows?: number;
   kinesis_source_context?: KinesisSourceContext;

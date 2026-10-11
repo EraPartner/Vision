@@ -14,7 +14,7 @@ import { TouchDisclosure } from "@/components/shared/TouchDisclosure";
 interface FxPnlCellProps {
     holding: { originalCurrency?: string; currency?: string };
     /** Backend per-investment summary entry (has the historical-rate FX split). */
-    fxInfo?: { fxGain?: number; usedFallbackRate?: boolean };
+    fxInfo?: { fxGain?: number; usedFallbackRate?: boolean } | undefined;
     targetCurrency: string;
     t: (key: string) => string;
 }
