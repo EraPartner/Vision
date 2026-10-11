@@ -112,6 +112,11 @@ describe("Belgian tax household v2 settings validation", () => {
     expect(validate(value)).toEqual(value);
   });
 
+  it("accepts a chèque habitat first qualifying year", () => {
+    const value = { ...validHousehold(), home: { cadastralIncome: 0, mortgageInterestPaid: 0, firstQualifyingYear: 2019 } };
+    expect(validate(value)).toEqual(value);
+  });
+
   it.each<[string, (h: Household) => unknown]>([
     ["version 1", (h) => ({ ...h, version: 1 })],
     ["a missing taxYear", ({ taxYear: _taxYear, ...rest }) => rest],
@@ -209,6 +214,10 @@ describe("Belgian tax household v2 settings validation", () => {
         partners: [h.partners[0]],
         home: { ...h.home, mortgageCreditPartnerId: "B" },
       }),
+    ],
+    [
+      "a fractional first qualifying year",
+      (h) => ({ ...h, home: { ...h.home, firstQualifyingYear: 2019.5 } }),
     ],
     [
       "a bad event date",

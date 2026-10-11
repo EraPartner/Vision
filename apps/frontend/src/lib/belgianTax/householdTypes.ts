@@ -201,6 +201,13 @@ export type HouseholdHomeInputs = Pick<
 > & {
     /** Partner who claims the own-home credit; defaults to A. */
     mortgageCreditPartnerId?: PartnerId;
+    /**
+     * Walloon chèque habitat: income year of the first taxable period in which the credit was
+     * claimed (art. 145/46quinquies). The twenty-period window and the halving from the eleventh
+     * period count from it; when absent, the loan year (`mortgageStartYear`) is the proxy. No v1
+     * source: the upgrade leaves it undefined.
+     */
+    firstQualifyingYear?: number;
 };
 
 /** Why a v1 field could not be mapped onto the household. */

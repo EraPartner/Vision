@@ -7,6 +7,9 @@ import {
 } from "../householdMigration";
 import { parseHouseholdSnapshotsV2, parseHouseholdV2 } from "../householdSchema";
 import type { BelgianTaxProfile } from "../types";
+import { computeHouseholdTax, toBelgianTaxCalculation } from "../household";
+import { computeBelgianPIT } from "../pit";
+import { firstDifference } from "./householdParity";
 import { makeTaxProfile } from "./testProfile";
 
 const employee = makeTaxProfile({ filingStatus: "single", dependentChildren: 2, unionDues: 120 });
@@ -131,6 +134,21 @@ describe("projectHouseholdToProfileV1", () => {
     ])("round-trips a %s profile", (_label, profile) => {
         expect(projectHouseholdToProfileV1(upgradeProfileV1ToHousehold(profile))).toEqual(profile);
     });
+
+    test("a single profile's spouse disability is not projected without partner B", () => {
+        const profile = makeTaxProfile({ filingStatus: "single", isSpouseDisabled: true });
+        const h = upgradeProfileV1ToHousehold(profile);
+        expect(h.migratedFrom?.unmappedFields.map((f) => f.field)).toContain("isSpouseDisabled");
+        const projected = projectHouseholdToProfileV1(h);
+        expect(projected.isSpouseDisabled).toBe(false);
+        // The projection agrees with the household engine, which has no partner B to disable.
+        expect(
+            firstDifference(
+                computeBelgianPIT(projected),
+                toBelgianTaxCalculation(computeHouseholdTax(h), h),
+            ),
+        ).toBeUndefined();
+    });
 });
 
 describe("applyProfileV1PatchToHousehold", () => {
@@ -173,6 +191,17 @@ describe("parseHouseholdV2", () => {
         const result = parseHouseholdV2(employee);
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.issues.some((i) => i.startsWith("version"))).toBe(true);
+    });
+
+    test("accepts home.firstQualifyingYear, which the upgrade leaves undefined and v1 patches keep", () => {
+        const h = upgradeProfileV1ToHousehold(employee);
+        expect(h.home.firstQualifyingYear).toBeUndefined();
+        const withYear = { ...h, home: { ...h.home, firstQualifyingYear: 2019 } };
+        expect(parseHouseholdV2(withYear).ok).toBe(true);
+        expect(parseHouseholdV2({ ...h, home: { ...h.home, firstQualifyingYear: 1800 } }).ok).toBe(false);
+        expect(
+            applyProfileV1PatchToHousehold(withYear, { mortgageStartYear: 2017 }).home.firstQualifyingYear,
+        ).toBe(2019);
     });
 
     test("rejects dangling partner references", () => {

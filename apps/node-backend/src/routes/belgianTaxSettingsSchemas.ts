@@ -138,6 +138,7 @@ const homeSchema = z.looseObject({
   mortgageRegion: region.optional(),
   mortgageIsPrimaryResidence: z.boolean().optional(),
   mortgageCreditPartnerId: partnerId.optional(),
+  firstQualifyingYear: year.optional(),
 });
 
 export const belgianTaxHouseholdV2Schema = z

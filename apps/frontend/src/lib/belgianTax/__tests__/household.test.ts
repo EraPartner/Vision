@@ -173,6 +173,28 @@ describe("household assembly", () => {
         expect(r.partners[0]!.ownHomeCredit).toBe(0);
     });
 
+    test("chèque habitat counts its periods from home.firstQualifyingYear, else from the loan year", () => {
+        const h = household([partner("A", [activity("employee", 20_000)])]);
+        h.taxYear = 2026;
+        h.region = "wallonia";
+        h.home = {
+            ...h.home,
+            mortgageIsPrimaryResidence: true,
+            mortgageStartYear: 2016,
+            mortgageInterestPaid: 4_000,
+        };
+        // Loan-year proxy: IY 2026 is the eleventh period of a 2016 loan, halved.
+        const proxy = computeHouseholdTax(h).partners[0]!;
+        expect(proxy.ownHomeCreditRegime).toBe("walloon_cheque_habitat");
+        expect(proxy.ownHomeCredit).toBeCloseTo(1_520 / 2, 9);
+        // First claimed for IY 2019: eighth period, full credit.
+        h.home.firstQualifyingYear = 2019;
+        expect(computeHouseholdTax(h).partners[0]!.ownHomeCredit).toBeCloseTo(1_520, 9);
+        // Twenty-first period counted from 2019: nothing.
+        h.taxYear = 2039;
+        expect(computeHouseholdTax(h).partners[0]!.ownHomeCredit).toBe(0);
+    });
+
     test("alimony beyond the payer's income is charged on the other spouse (art. 105, 3°)", () => {
         const h = married([activity("employee", 0)], [activity("net_professional_amount", 40_000)]);
         h.partners[0]!.alimonyPaid = 10_000;

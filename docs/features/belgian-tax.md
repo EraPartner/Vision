@@ -10,6 +10,9 @@ aliases: [belgian-tax, tax-feature, cadastral, deductions, belgium]
 related_code:
   - apps/frontend/src/pages/TaxOverviewPage.tsx
   - apps/frontend/src/features/tax/TaxProfileDialog.tsx
+  - apps/frontend/src/features/tax/profile-steps/HouseholdStep.tsx
+  - apps/frontend/src/features/tax/profile-steps/IncomeStep.tsx
+  - apps/frontend/src/features/tax/HouseholdBreakdownCard.tsx
   - apps/frontend/src/features/tax/SuggestedDeductionsCard.tsx
   - apps/frontend/src/features/tax/DeductionCandidatesCard.tsx
   - apps/frontend/src/features/tax/TaxYearStatusIcon.tsx
@@ -184,7 +187,7 @@ The Tax Profile now includes a step to select which transaction categories are s
 4. Display an **empty-state CTA** when no income sources are configured, prompting the user to select categories.
 5. Show an **"approximated year" note** for years before the earliest supported tax year (EARLIEST_TAX_YEAR).
 
-The selector is presented as a new step in `TaxProfileDialog` (step 3 of 5: `Income → Income sources → Exemptions → Deductions → Submit`).
+The selector is a step of `TaxProfileDialog` (step 4 of 6: `Household → Income → Home → Income sources → Deductions → Region`).
 
 ---
 
@@ -326,10 +329,10 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 
 ## Household taxation
 
-> [!info] Phase B2 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
-> The store computes the live tax from the household. Editors still use the v1 profile shape
-> through the compatibility helpers; household screens and the partner-to-account-owner link
-> follow in phase C.
+> [!info] Phase C1 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
+> The store computes the live tax from the household, and the tax profile sheet edits the
+> household directly (see [[#Household editor and breakdown]]). The partner-to-account-owner
+> link and exports follow in phase C2.
 
 A household (`BelgianTaxHouseholdV2`) has one or two partners. Each partner has income
 activities (employee, civil servant, director, self-employed profits or fees, helping spouse,
@@ -392,7 +395,10 @@ to partner A and activity `act_A_1`; a `married_joint` profile adds partner B wi
 `net_professional_amount` activity `act_B_1` and is assumed joint until relationship dates are
 entered. Spouse fields on a single profile and unknown keys are kept under
 `migratedFrom.unmappedFields`. `projectHouseholdToProfileV1` and
-`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. Frozen
+`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. The projection
+reports `isSpouseDisabled: false` when there is no partner B (the household engine grants no
+spouse supplement then, and no step could clear the flag); removing partner B also drops a
+migrated `isSpouseDisabled` entry. Frozen
 snapshot meta may carry `frozenHouseholdResult`.
 
 **Load (phase B2).** `BelgianTaxProfileProvider` loads `lib/belgianTax/householdRuntime.ts` with a
@@ -432,6 +438,16 @@ as `computeBelgianPIT` on its projection. Freezing and filing store `frozenHouse
 to `frozenCalculation`; unfreezing clears both. A `'patched'` audit entry records the v1
 `changes` and the top-level `householdChanges`.
 
+`updateHousehold(update)` and `updateHouseholdSnapshot(year, update)` take a shallow patch or an
+updater returning the next household. The lazily loaded runtime applies it
+(`applyHouseholdUpdate`) and rejects a result that fails `parseHouseholdV2`, so an invalid edit
+never reaches the store or the settings API. A live edit recomputes the result, calculation and
+projection and archives the previous year when the income year advances, like `updateProfile`;
+live edits add no audit entry. A snapshot edit stays on its year and appends a `'patched'`
+entry with only `householdChanges`, which the history dialog summarises.
+`resolveBelgianTaxHouseholdResult(state, year)` returns the result shown for a year: the frozen
+one, the live one, or a fresh computation.
+
 **Issues.** Each `HouseholdTaxIssueCode` and severity has an EN/NL string under
 `tax.household.issue.*`. The tax overview lists the live year's issues, one line per code, in its
 disclaimer banner.
@@ -439,6 +455,45 @@ disclaimer banner.
 **Demo.** The native Demo seeds `belgian_tax_household_v2` (partner A with the v1 figures, partner
 B with an employee job of 22,000 gross, a marriage before the income year) next to the v1 row,
 whose figures equal the household's v1 projection.
+
+### Household editor and breakdown
+
+The tax profile sheet ([[docs/components/form-dialogs#TaxProfileDialog]]) edits the household:
+
+- **Household** step: the assessment `deriveAssessment` gives for the income year (single,
+  separate or joint) with its reason and article, read only; an "I have a partner" switch that
+  adds partner B (one employee activity) or removes B with every reference to B (events naming
+  B, B as claimant, the death-year election, the legacy joint assumption); relationship events
+  (kind and date, the deceased partner for a death; a new event is a marriage on 1 January of
+  the year before the income year, so a migrated joint household stays joint until the user
+  enters the actual date); the death-year election when the year is
+  electable; who claims the dependants and the own-home credit.
+- **Income** step, per partner: activities (kind, gross amount or the net amount of a
+  `net_professional_amount`, optional start and end dates), the expense method per forfait
+  category with the actual amount, other taxable income, alimony, union dues, birth year and
+  disability. Activity ids follow `act_<partner>_<n>`; an expense choice is dropped when no
+  activity uses its category any more. A one-partner household with one activity round-trips
+  unchanged, and editing its amount gives the same household as the v1 gross-income patch.
+- **Home** step: the v1 home fields, plus `home.firstQualifyingYear` for a Walloon loan.
+- **Deductions** step: dependants for the household and, per partner, the reductions of the v1
+  sheet plus `serviceVoucherSpend` and the isolated-parent request.
+
+The v1 employment-type step is replaced by the activity kind; the spouse disability switch of
+the v1 sheet becomes partner B's disability switch.
+
+`home.firstQualifyingYear` (optional, an income year) is the first taxable period in which the
+Walloon chèque habitat was claimed. When set, `computeOwnHomeCredit` counts the halving from the
+eleventh period and the twenty-period limit (art. 145/46quinquies) from it and grants nothing
+for an earlier year; otherwise the loan year stays the proxy. It has no v1 source and is not
+projected to the v1 profile, so `computeBelgianPIT` keeps the proxy.
+
+The tax overview shows a **Per-partner breakdown** card (widget `householdBreakdown`) for a
+year with two assessed partners: taxable income, tax-free sum charged (`exemption.applied`,
+after the art. 134 transfer and capped at the partner's taxable income), tax after the tax-free
+sum, reductions charged, the regional factor and communal surcharge (final tax − (tax after the
+tax-free sum − reductions)) and final tax for each partner and the household, so each column
+adds up; then the assessment mode and, under a joint assessment, the marital
+quotient transfer and saving. A one-partner household shows no card.
 
 ## Limitations / not modeled
 

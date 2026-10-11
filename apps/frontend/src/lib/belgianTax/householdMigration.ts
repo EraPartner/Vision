@@ -420,7 +420,9 @@ export function projectHouseholdToProfileV1(
         communalSurchargePercent: household.communalSurchargePercent,
         region: household.region,
         isDisabled: a?.isDisabled ?? false,
-        isSpouseDisabled: b ? b.isDisabled : !!restored.isSpouseDisabled,
+        // Without partner B no step can clear a migrated spouse flag, and the household engine
+        // grants no spouse supplement, so the projection reports none.
+        isSpouseDisabled: b ? b.isDisabled : false,
         unionDues: a?.unionDues ?? 0,
         otherTaxableIncome: a?.otherTaxableIncome ?? 0,
         alimonyPaid: a?.alimonyPaid ?? 0,

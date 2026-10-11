@@ -801,7 +801,7 @@ describe("Portfolio pages (integration)", () => {
             }),
         );
         expect(await screen.findByRole("dialog")).toBeInTheDocument();
-        expect(await screen.findByText("Employment type")).toBeInTheDocument();
+        expect(await screen.findByText("Your household")).toBeInTheDocument();
     });
 
     it("PortfolioTaxPage offers Customize… from the ••• menu", async () => {

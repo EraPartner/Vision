@@ -20,8 +20,10 @@ import type {
     HouseholdTaxResult,
 } from "./householdTypes";
 import type { BelgianTaxCalculation, BelgianTaxProfile, BelgianTaxProfileSnapshots } from "./types";
+import logger from "@/lib/logger";
 
 export { computeHouseholdTax, toBelgianTaxCalculation } from "./household";
+export { deriveAssessment } from "./assessment";
 export {
     applyProfileV1PatchToHousehold,
     projectHouseholdToProfileV1,
@@ -236,4 +238,32 @@ export function diffHousehold(
         if (JSON.stringify(a[key]) !== JSON.stringify(b[key])) diff[key] = b[key];
     }
     return diff as Partial<BelgianTaxHouseholdV2>;
+}
+
+/**
+ * Household edit: a shallow patch of top-level household fields, or an updater that returns
+ * the next household from a private copy of the current one.
+ */
+export type HouseholdUpdate =
+    | Partial<Omit<BelgianTaxHouseholdV2, "version">>
+    | ((household: BelgianTaxHouseholdV2) => BelgianTaxHouseholdV2);
+
+/**
+ * Apply a `HouseholdUpdate`. Returns `undefined`, and logs the issues, when the result fails
+ * the settings schema, so an invalid edit never reaches the store or the settings API.
+ */
+export function applyHouseholdUpdate(
+    current: BelgianTaxHouseholdV2,
+    update: HouseholdUpdate,
+): BelgianTaxHouseholdV2 | undefined {
+    const next: BelgianTaxHouseholdV2 =
+        typeof update === "function"
+            ? update(structuredClone(current))
+            : { ...current, ...update, version: 2 };
+    const parsed = parseHouseholdV2(next);
+    if (!parsed.ok) {
+        logger.warn("Rejected an invalid Belgian tax household edit", parsed.issues);
+        return undefined;
+    }
+    return next;
 }

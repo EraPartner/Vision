@@ -3,6 +3,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import {
     DEFAULT_BELGIAN_TAX_PROFILE,
     resolveBelgianTaxCalculation,
+    resolveBelgianTaxHouseholdResult,
     resolveBelgianTaxProfile,
 } from "@/stores/belgianTaxStore";
 import * as runtime from "@/lib/belgianTax/householdRuntime";
@@ -169,5 +170,162 @@ describe("Belgian tax settings slice", () => {
             "partners",
             "region",
         ]);
+    });
+
+    it("updateHousehold edits the live household and recomputes result, calculation and projection", () => {
+        useSettingsStore.getState().updateHousehold((h) => {
+            h.partners[0]!.activities.push({
+                id: "act_A_2",
+                kind: "self_employed_profits",
+                grossIncome: 10_000,
+            });
+            h.partners[0]!.birthYear = 1980;
+            return h;
+        });
+        let state = useSettingsStore.getState();
+        expect(state.household?.partners[0]?.activities).toHaveLength(2);
+        expect(state.household?.partners[0]?.birthYear).toBe(1980);
+        expect(state.householdResult).toEqual(
+            runtime.computeHouseholdTax(state.household!),
+        );
+        expect(state.calculation).toEqual(
+            runtime.toBelgianTaxCalculation(
+                state.householdResult!,
+                state.household!,
+            ),
+        );
+        expect(state.profile.grossAnnualIncome).toBe(10_000);
+
+        useSettingsStore.getState().updateHousehold({ region: "wallonia" });
+        state = useSettingsStore.getState();
+        expect(state.household?.region).toBe("wallonia");
+        expect(state.profile.region).toBe("wallonia");
+    });
+
+    it("updateHousehold adds and removes partner B and derives the assessment from events", () => {
+        const before = useSettingsStore.getState().household!;
+        useSettingsStore.getState().updateHousehold((h) => ({
+            ...h,
+            partners: [
+                ...h.partners,
+                {
+                    id: "B",
+                    isDisabled: false,
+                    activities: [
+                        { id: "act_B_1", kind: "employee", grossIncome: 20_000 },
+                    ],
+                    professionalExpenses: {},
+                    unionDues: 0,
+                    otherTaxableIncome: 0,
+                    alimonyPaid: 0,
+                    reductions: before.partners[0]!.reductions,
+                },
+            ],
+            relationship: {
+                events: [{ id: "evt_1", kind: "marriage", date: "2015-06-01" }],
+            },
+        }));
+        let state = useSettingsStore.getState();
+        expect(state.householdResult?.assessment.mode).toBe("joint");
+        expect(state.profile.filingStatus).toBe("married_joint");
+
+        useSettingsStore.getState().updateHousehold((h) => ({
+            ...h,
+            partners: h.partners.filter((p) => p.id === "A"),
+            relationship: { events: [] },
+        }));
+        state = useSettingsStore.getState();
+        expect(state.householdResult?.assessment.mode).toBe("single");
+        expect(state.household).toEqual(before);
+    });
+
+    it("updateHousehold rejects a household that fails the settings schema", () => {
+        const before = useSettingsStore.getState().household;
+        useSettingsStore.getState().updateHousehold((h) => {
+            h.relationship.events.push({
+                id: "evt_1",
+                kind: "marriage",
+                date: "2015-13-40",
+            });
+            return h;
+        });
+        expect(useSettingsStore.getState().household).toBe(before);
+    });
+
+    it("updateHousehold does not mutate the previous household", () => {
+        const before = useSettingsStore.getState().household!;
+        const copy = structuredClone(before);
+        useSettingsStore.getState().updateHousehold((h) => {
+            h.partners[0]!.unionDues = 120;
+            return h;
+        });
+        expect(before).toEqual(copy);
+        expect(
+            useSettingsStore.getState().household?.partners[0]?.unionDues,
+        ).toBe(120);
+    });
+
+    it("updateHousehold archives the previous year when the income year advances", () => {
+        const year = useSettingsStore.getState().household!.taxYear;
+        useSettingsStore.getState().updateHousehold({ taxYear: year + 1 });
+        const state = useSettingsStore.getState();
+        expect(state.householdSnapshots[year]?.taxYear).toBe(year);
+        expect(state.snapshots[year]?.taxYear).toBe(year);
+        expect(
+            state.snapshotMetas[year]?.history?.map((entry) => entry.kind),
+        ).toEqual(["created"]);
+    });
+
+    it("updateHouseholdSnapshot keeps the year, recomputes the projection and audits the household diff", () => {
+        const year = DEFAULT_BELGIAN_TAX_PROFILE.taxYear - 1;
+        useSettingsStore.getState().createSnapshotFromLive(year);
+        useSettingsStore.getState().updateHouseholdSnapshot(year, (h) => {
+            h.partners[0]!.activities[0]!.grossIncome = 42_000;
+            h.taxYear = year + 5;
+            return h;
+        });
+        const state = useSettingsStore.getState();
+        expect(state.householdSnapshots[year]?.taxYear).toBe(year);
+        expect(state.snapshots[year]?.grossAnnualIncome).toBe(42_000);
+        expect(state.calculationForYear(year).grossIncome).toBe(42_000);
+        const entry = state.getSnapshotHistory(year).at(-1)!;
+        expect(entry.kind).toBe("patched");
+        expect(entry.changes).toBeUndefined();
+        expect(Object.keys(entry.householdChanges ?? {})).toEqual(["partners"]);
+
+        // A no-op edit leaves the history alone.
+        const length = state.getSnapshotHistory(year).length;
+        useSettingsStore.getState().updateHouseholdSnapshot(year, (h) => h);
+        expect(
+            useSettingsStore.getState().getSnapshotHistory(year),
+        ).toHaveLength(length);
+    });
+
+    it("updateHouseholdSnapshot ignores years without a snapshot", () => {
+        const before = useSettingsStore.getState();
+        useSettingsStore
+            .getState()
+            .updateHouseholdSnapshot(1999, { region: "brussels" });
+        expect(useSettingsStore.getState().householdSnapshots).toBe(
+            before.householdSnapshots,
+        );
+    });
+
+    it("resolves the household result shown for a year: live, frozen or computed", () => {
+        const liveYear = DEFAULT_BELGIAN_TAX_PROFILE.taxYear;
+        const year = liveYear - 1;
+        useSettingsStore.getState().createSnapshotFromLive(year);
+        let state = useSettingsStore.getState();
+        expect(resolveBelgianTaxHouseholdResult(state, liveYear)).toBe(
+            state.householdResult,
+        );
+        expect(resolveBelgianTaxHouseholdResult(state, year)).toEqual(
+            runtime.computeHouseholdTax(state.householdSnapshots[year]!),
+        );
+        useSettingsStore.getState().freezeCalculation(year);
+        state = useSettingsStore.getState();
+        expect(resolveBelgianTaxHouseholdResult(state, year)).toBe(
+            state.snapshotMetas[year]!.frozenHouseholdResult,
+        );
     });
 });
