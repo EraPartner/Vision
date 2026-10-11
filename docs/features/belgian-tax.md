@@ -377,7 +377,8 @@ transfer, the quotient on professional income only); the list is in
 ### Storage and upgrade
 
 The household is stored under `belgian_tax_household_v2`, snapshots under
-`belgian_tax_household_snapshots_v2` (see [[docs/api/settings|Settings API]]). The frontend
+`belgian_tax_household_snapshots_v2`, whose year keys must equal the stored household's
+`taxYear` (see [[docs/api/settings|Settings API]]). The frontend
 upgrades v1 data automatically on first load with `upgradeProfileV1ToHousehold` and
 `upgradeSnapshotsV1ToV2` (deterministic and idempotent; no confirmation step). The v1 fields map
 to partner A and activity `act_A_1`; a `married_joint` profile adds partner B with a
