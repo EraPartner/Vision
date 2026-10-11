@@ -204,6 +204,18 @@ describe("parseHouseholdV2", () => {
         ).toBe(2019);
     });
 
+    test("accepts home.woonbonusChildrenAtLoanStart, which the upgrade leaves undefined and v1 patches keep", () => {
+        const h = upgradeProfileV1ToHousehold(employee);
+        expect(h.home.woonbonusChildrenAtLoanStart).toBeUndefined();
+        const withChildren = { ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: 3 } };
+        expect(parseHouseholdV2(withChildren).ok).toBe(true);
+        expect(parseHouseholdV2({ ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: 1.5 } }).ok).toBe(false);
+        expect(parseHouseholdV2({ ...h, home: { ...h.home, woonbonusChildrenAtLoanStart: -1 } }).ok).toBe(false);
+        expect(
+            applyProfileV1PatchToHousehold(withChildren, { dependentChildren: 0 }).home.woonbonusChildrenAtLoanStart,
+        ).toBe(3);
+    });
+
     test("rejects dangling partner references", () => {
         const h = upgradeProfileV1ToHousehold(employee);
         const bad = { ...h, home: { ...h.home, mortgageCreditPartnerId: "B" } };

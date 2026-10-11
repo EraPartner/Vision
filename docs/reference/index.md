@@ -57,6 +57,7 @@ SORT title ASC
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [[docs/reference/algorithms\|Algorithms & Data Structures]] | LTTB, SHA-256 dedup, recurring detection, currency conversion, Modified Dietz |
 | [[docs/reference/belgian-tax-rule-matrix\|Belgian Tax Rule Coverage Matrix]] | Per-rule legal basis, primary source, code and test location for the Belgian PIT engine (IY 2024-2026) |
+| [[docs/reference/belgian-tax-scenario-matrix\|Belgian Tax Scenario Matrix]] | Law-derived household scenarios with hand-worked expected figures, per rule-matrix row, verified or needs_source |
 
 ## Database
 

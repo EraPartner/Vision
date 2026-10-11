@@ -368,7 +368,33 @@ export type OwnHomeCreditInputs = Pick<
      * count from it; without it the loan year (`mortgageStartYear`) stands in.
      */
     firstQualifyingYear?: number;
+    /**
+     * Flemish woonbonus: dependent children of the borrower on 1 January of the year after the
+     * loan year, a disabled child counted twice (arts 145/37 §2 al. 3, 145/38/2 §2 al. 3). When
+     * absent, this year's dependent children stand in (see `woonbonusChildCount`).
+     */
+    woonbonusChildrenAtLoanStart?: number;
 };
+
+/**
+ * Child count for the woonbonus +80 (Flemish arts 145/37 §2 al. 3 and 145/38/2 §2 al. 3: "drie of
+ * meer dan drie kinderen ten laste ... op 1 januari van het jaar [na dat] waarin de
+ * leningsovereenkomst wordt afgesloten"; disabled children "voor twee gerekend").
+ * `woonbonusChildrenAtLoanStart` when set; otherwise the proxy of this year's dependent children
+ * with the disabled ones counted twice.
+ */
+export function woonbonusChildCount(
+    inputs: Pick<
+        OwnHomeCreditInputs,
+        "woonbonusChildrenAtLoanStart" | "dependentChildren" | "dependentChildrenDisabled"
+    >,
+): number {
+    if (inputs.woonbonusChildrenAtLoanStart !== undefined)
+        return Math.max(inputs.woonbonusChildrenAtLoanStart, 0);
+    const children = Math.max(inputs.dependentChildren || 0, 0);
+    const disabled = Math.min(Math.max(inputs.dependentChildrenDisabled || 0, 0), children);
+    return children + disabled;
+}
 
 /** Figures of the taxpayer who claims the own-home credit. */
 export interface OwnHomeCreditTaxpayer {
@@ -416,9 +442,11 @@ export function resolveMortgageRegime(
  *     rate with a 30% minimum;
  *   - 2015 (art. 145/37 §3): base €1,520, 40%;
  *   - 2016-2019 "geïntegreerde woonbonus" (art. 145/38/2): base €1,520, 40%.
- *   During the first ten taxable periods the base rises by €760, and by a further €80 with three
- *   or more dependent children ("De verhoging, vermeld in het tweede lid, wordt bijkomend
- *   verhoogd met 80 euro"). Expenses = interest + capital, capped at the base.
+ *   During the first ten taxable periods the base rises by €760, and by a further €80 when the
+ *   taxpayer had three or more dependent children on 1 January of the year after the loan year,
+ *   a disabled child counted twice ("De verhoging, vermeld in het tweede lid, wordt bijkomend
+ *   verhoogd met 80 euro"; `woonbonusChildCount`). Expenses = interest + capital, capped at the
+ *   base.
  *
  * Walloon chèque habitat (loans signed 2016-2024; art. 145/46ter as coordinated in FPS circular
  * 2026/C/18):
@@ -467,8 +495,7 @@ export function computeOwnHomeCredit(
         }
         if (loanAge < 10) {
             cap += table.flemishWoonbonusExtraFirst10y;
-            if ((inputs.dependentChildren || 0) >= 3)
-                cap += table.flemishWoonbonusExtraChildren;
+            if (woonbonusChildCount(inputs) >= 3) cap += table.flemishWoonbonusExtraChildren;
         }
         return Math.min(interest + capital, cap) * rate;
     }
