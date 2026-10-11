@@ -3479,6 +3479,15 @@ components:
                 income: { type: number }
                 expense: { type: number }
                 transactionCount: { type: integer }
+                incomeByOwner:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Part of `income` booked on accounts whose owner is
+                    `partner` or `joint`; present only when one of them is non-zero. The rest of
+                    `income` is on `me` accounts or on transactions without an account.
+                  properties:
+                    partner: { type: number }
+                    joint: { type: number }
 
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
@@ -9096,6 +9105,75 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InsightsDigestEnvelope"
+
+  /api/info/deduction-candidates:
+    get:
+      summary: Transaction-derived Belgian deduction candidates for one year
+      operationId: getDeductionCandidates
+      tags: [Info]
+      parameters:
+        - in: query
+          name: year
+          required: false
+          description: Calendar year (1970-3000); defaults to the current year.
+          schema:
+            type: integer
+            minimum: 1970
+            maximum: 3000
+      responses:
+        "200":
+          description: >-
+            Outflows of the year classified per Belgian deduction type, with the contributing
+            categories and, per type, the total split by account owner (`byOwner`, additive,
+            ADR-201; a transaction without an account counts as `me`). An internal failure
+            answers an empty `byDeductionType` instead of a 500.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [year, from, to, currency, byDeductionType]
+                        properties:
+                          year: { type: integer }
+                          from: { type: string, format: date }
+                          to: { type: string, format: date }
+                          currency: { type: string }
+                          byDeductionType:
+                            type: array
+                            items:
+                              type: object
+                              required: [deductionType, total, categoryCount, categories]
+                              properties:
+                                deductionType: { type: string }
+                                total: { type: number }
+                                byOwner:
+                                  type: object
+                                  required: [me, partner, joint]
+                                  description: The total split by account owner; the three values add up to `total`.
+                                  properties:
+                                    me: { type: number }
+                                    partner: { type: number }
+                                    joint: { type: number }
+                                categoryCount: { type: integer }
+                                categories:
+                                  type: array
+                                  items:
+                                    type: object
+                                    required: [category, total, count]
+                                    properties:
+                                      category: { type: string }
+                                      total: { type: number }
+                                      count: { type: integer }
+        "400":
+          description: Malformed `year`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
 
   /api/info/insights-count:
     get:

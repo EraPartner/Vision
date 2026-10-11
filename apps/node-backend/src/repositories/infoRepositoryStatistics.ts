@@ -35,6 +35,12 @@ export interface CategoryPivotCell {
   income: number;
   expense: number;
   transactionCount: number;
+  /**
+   * Part of `income` booked on `partner` and `joint` accounts (ADR-201). Present
+   * only when one of them is non-zero; the rest of `income` is on `me` accounts
+   * or on transactions without an account.
+   */
+  incomeByOwner?: { partner?: number; joint?: number };
 }
 
 export interface CategoryPivotOptions {
@@ -278,8 +284,11 @@ export const statisticsRepository = {
         t.date, t.currency,
         SUM(t.amount) FILTER (WHERE t.amount >= 0) AS income,
         SUM(t.amount) FILTER (WHERE t.amount < 0) AS expense,
+        SUM(t.amount) FILTER (WHERE t.amount >= 0 AND acct.owner = 'partner') AS income_partner,
+        SUM(t.amount) FILTER (WHERE t.amount >= 0 AND acct.owner = 'joint') AS income_joint,
         COUNT(*) AS cnt
       FROM transactions t
+      LEFT JOIN accounts acct ON acct.id = t.account_id
       LEFT JOIN recipients r ON t.recipient_id = r.id
       LEFT JOIN recipients pr ON r.primary_recipient_id = pr.id
       LEFT JOIN categories c ON COALESCE(t.category_id, r.default_category_id, pr.default_category_id) = c.id
@@ -316,6 +325,16 @@ export const statisticsRepository = {
         _leg: "expense",
         amount: Number(r.expense) || 0,
       });
+      // Owner legs (ADR-201) only when non-zero, so a household without
+      // partner or joint accounts converts exactly the rows it did before.
+      const incomePartner = Number(r.income_partner) || 0;
+      if (incomePartner !== 0) {
+        convRows.push({ ...base, _leg: "income_partner", amount: incomePartner });
+      }
+      const incomeJoint = Number(r.income_joint) || 0;
+      if (incomeJoint !== 0) {
+        convRows.push({ ...base, _leg: "income_joint", amount: incomeJoint });
+      }
     }
 
     const converted = await convertRowsToEur(
@@ -348,6 +367,12 @@ export const statisticsRepository = {
         };
       }
       const cell = periodCatMap[period][catKey];
+      if (row._leg === "income_partner" || row._leg === "income_joint") {
+        const owner = row._leg === "income_partner" ? "partner" : "joint";
+        cell.incomeByOwner ??= {};
+        cell.incomeByOwner[owner] = (cell.incomeByOwner[owner] ?? 0) + eur;
+        continue;
+      }
       cell.total += eur;
       if (row._leg === "income") {
         cell.income += eur;
@@ -365,6 +390,16 @@ export const statisticsRepository = {
           total: roundToCents(c.total),
           income: roundToCents(c.income),
           expense: roundToCents(c.expense),
+          ...(c.incomeByOwner
+            ? {
+                incomeByOwner: Object.fromEntries(
+                  Object.entries(c.incomeByOwner).map(([owner, value]) => [
+                    owner,
+                    roundToCents(value),
+                  ]),
+                ),
+              }
+            : {}),
         }))
         .sort((a, b) => a.total - b.total);
     }

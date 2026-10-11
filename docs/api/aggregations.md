@@ -2,8 +2,8 @@
 title: Aggregations API
 type: endpoint
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 last_modified: 2026-09-19
 recipient_pivot_added: 2026-04-28
 tag_pivot_added: 2026-06-26
@@ -638,6 +638,12 @@ Aggregated spending data pivoted by category with support for exclusion filters.
 **Notes:**
 
 - Serves as an alternative category-level pivot, supporting exclusion filters for filtered dashboard views
+- `incomeByOwner` (additive, 2026-10-11,
+  [[docs/adr/201-belgian-tax-partner-account-mapping|ADR-201]]) is present only on a cell with
+  income booked on `partner` or `joint` accounts: `{ "partner": 1200, "joint": 300 }`. The rest
+  of `income` is on `me` accounts or on transactions without an account. It never changes
+  `total`, `income`, `expense` or `transactionCount`. Changing an account's owner clears the
+  statistics response cache.
 - `categoryPathIds` and `categoryPathSegments` are ordered from root to the
   exact assigned category. Pivot amounts retain exact-category grain. The UI
   uses the arrays for ancestor grouping; it never splits `categoryName`.

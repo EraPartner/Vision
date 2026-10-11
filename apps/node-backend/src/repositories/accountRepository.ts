@@ -19,7 +19,10 @@ import {
   idRowSchema,
   statementBalanceRowSchema,
 } from "../database/rowSchemas.ts";
-import { accountNameRowSchema } from "../database/rows/ledger.ts";
+import {
+  accountNameRowSchema,
+  accountOwnerRowSchema,
+} from "../database/rows/ledger.ts";
 import {
   balanceProvenanceLateral,
   computedBalanceByCurrencyAggLateral,
@@ -214,6 +217,11 @@ export const accountRepository = {
       `SELECT ${COLUMNS} FROM accounts WHERE id = $1`,
       [id],
     );
+  },
+
+  /** Every account's id and owner (me | partner | joint), closed accounts included. */
+  async listOwners(): Promise<Array<{ id: number; owner: string }>> {
+    return queryRows(accountOwnerRowSchema, "SELECT id, owner FROM accounts");
   },
 
   /** @param name Matched case/whitespace-insensitively (D1). */

@@ -1897,6 +1897,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/deduction-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transaction-derived Belgian deduction candidates for one year */
+        get: operations["getDeductionCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/info/insights-count": {
         parameters: {
             query?: never;
@@ -6163,6 +6180,11 @@ export interface components {
                     income: number;
                     expense: number;
                     transactionCount: number;
+                    /** @description Additive (ADR-201). Part of `income` booked on accounts whose owner is `partner` or `joint`; present only when one of them is non-zero. The rest of `income` is on `me` accounts or on transactions without an account. */
+                    incomeByOwner?: {
+                        partner?: number;
+                        joint?: number;
+                    };
                 }[];
             };
         };
@@ -11859,6 +11881,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InsightsDigestEnvelope"];
+                };
+            };
+        };
+    };
+    getDeductionCandidates: {
+        parameters: {
+            query?: {
+                /** @description Calendar year (1970-3000); defaults to the current year. */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outflows of the year classified per Belgian deduction type, with the contributing categories and, per type, the total split by account owner (`byOwner`, additive, ADR-201; a transaction without an account counts as `me`). An internal failure answers an empty `byDeductionType` instead of a 500. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            year: number;
+                            /** Format: date */
+                            from: string;
+                            /** Format: date */
+                            to: string;
+                            currency: string;
+                            byDeductionType: {
+                                deductionType: string;
+                                total: number;
+                                /** @description The total split by account owner; the three values add up to `total`. */
+                                byOwner?: {
+                                    me: number;
+                                    partner: number;
+                                    joint: number;
+                                };
+                                categoryCount: number;
+                                categories: {
+                                    category: string;
+                                    total: number;
+                                    count: number;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Malformed `year` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
                 };
             };
         };
