@@ -22,6 +22,8 @@ import type {
 import type { BelgianTaxCalculation, BelgianTaxProfile, BelgianTaxProfileSnapshots } from "./types";
 
 export { computeHouseholdTax, toBelgianTaxCalculation } from "./household";
+export { deriveAssessment } from "./assessment";
+export { parseHouseholdV2 } from "./householdSchema";
 export {
     applyProfileV1PatchToHousehold,
     projectHouseholdToProfileV1,

@@ -5,6 +5,7 @@ import type { SettingsStore } from "@/stores/settingsStore";
 // once the lazily loaded householdRuntime uses it (see scripts/check-bundle-size.ts).
 import { computeBelgianPIT } from "@/lib/belgianTax/pit";
 import { LATEST_TAX_YEAR } from "@/lib/belgianTax/constants";
+import logger from "@/lib/logger";
 import type {
     BelgianTaxCalculation,
     BelgianTaxHouseholdSnapshotsV2,
@@ -21,6 +22,14 @@ import type {
 import type * as HouseholdRuntimeModule from "@/lib/belgianTax/householdRuntime";
 
 export type HouseholdRuntime = typeof HouseholdRuntimeModule;
+
+/**
+ * Household edit: a shallow patch of top-level household fields, or an updater that returns
+ * the next household from the current one (it must not mutate its argument).
+ */
+export type HouseholdUpdate =
+    | Partial<Omit<BelgianTaxHouseholdV2, "version">>
+    | ((household: BelgianTaxHouseholdV2) => BelgianTaxHouseholdV2);
 
 const MAX_HISTORY_ENTRIES_PER_YEAR = 200;
 
@@ -116,6 +125,24 @@ function appendHistoryEntry(
     };
 }
 
+/** Apply a `HouseholdUpdate`; `undefined` when the result fails the settings schema. */
+function applyHouseholdUpdate(
+    runtime: HouseholdRuntime,
+    current: BelgianTaxHouseholdV2,
+    update: HouseholdUpdate,
+): BelgianTaxHouseholdV2 | undefined {
+    const next: BelgianTaxHouseholdV2 =
+        typeof update === "function"
+            ? update(structuredClone(current))
+            : { ...current, ...update, version: 2 };
+    const parsed = runtime.parseHouseholdV2(next);
+    if (!parsed.ok) {
+        logger.warn("Rejected an invalid Belgian tax household edit", parsed.issues);
+        return undefined;
+    }
+    return next;
+}
+
 export interface BelgianTaxSlice {
     /** Source of truth (ADR-200): the live household; `null` until hydrated. */
     household: BelgianTaxHouseholdV2 | null;
@@ -139,6 +166,8 @@ export interface BelgianTaxSlice {
     householdLoadFailed: boolean;
     saveErrorNonce: number;
     updateProfile: (updates: Partial<BelgianTaxProfile>) => void;
+    /** Edit the live household; invalid results (zod) are rejected and logged. */
+    updateHousehold: (update: HouseholdUpdate) => void;
     resetProfile: () => void;
     setViewedYear: (year: number) => void;
     snapshotExistsForYear: (year: number) => boolean;
@@ -147,6 +176,8 @@ export interface BelgianTaxSlice {
     displayCalculationForYear: (year: number) => BelgianTaxCalculation;
     createSnapshotFromLive: (year: number) => void;
     updateSnapshot: (year: number, updates: Partial<BelgianTaxProfile>) => void;
+    /** Edit the household snapshot of `year` (kept on that year); audited as `patched`. */
+    updateHouseholdSnapshot: (year: number, update: HouseholdUpdate) => void;
     metaForYear: (year: number) => BelgianTaxProfileSnapshotMeta | null;
     isYearFiled: (year: number) => boolean;
     getFrozenCalculation: (year: number) => BelgianTaxCalculation | null;
@@ -308,6 +339,42 @@ export const createBelgianTaxSlice: StateCreator<
                 ),
             };
         }),
+    updateHousehold: (update) =>
+        set((state) => {
+            const runtime = householdRuntime;
+            const current = state.household;
+            if (!runtime || !current) return state;
+            const next = applyHouseholdUpdate(runtime, current, update);
+            if (!next) return state;
+            const live = runtime.liveHouseholdState(
+                next,
+                DEFAULT_BELGIAN_TAX_PROFILE,
+            );
+            const isViewingHistorical = state.viewedYear !== next.taxYear;
+            const shouldArchive =
+                next.taxYear > current.taxYear &&
+                !state.householdSnapshots[current.taxYear];
+            if (!shouldArchive) return { ...live, isViewingHistorical };
+            const year = current.taxYear;
+            const householdSnapshots = {
+                ...state.householdSnapshots,
+                [year]: current,
+            };
+            return {
+                ...live,
+                isViewingHistorical,
+                householdSnapshots,
+                snapshots: runtime.projectSnapshotsToV1(
+                    householdSnapshots,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
+                snapshotMetas: appendHistoryEntry(
+                    state.snapshotMetas,
+                    year,
+                    "created",
+                ),
+            };
+        }),
     resetProfile: () =>
         set((state) => {
             const runtime = householdRuntime;
@@ -390,6 +457,35 @@ export const createBelgianTaxSlice: StateCreator<
                                   : { changes },
                           )
                         : state.snapshotMetas,
+            };
+        }),
+    updateHouseholdSnapshot: (year, update) =>
+        set((state) => {
+            const runtime = householdRuntime;
+            const existing = state.householdSnapshots[year];
+            if (!runtime || !existing) return state;
+            const updated = applyHouseholdUpdate(runtime, existing, update);
+            if (!updated) return state;
+            // The snapshot stays pinned to its key year.
+            const next: BelgianTaxHouseholdV2 = { ...updated, taxYear: year };
+            const householdChanges = runtime.diffHousehold(existing, next);
+            if (Object.keys(householdChanges).length === 0) return state;
+            const householdSnapshots = {
+                ...state.householdSnapshots,
+                [year]: next,
+            };
+            return {
+                householdSnapshots,
+                snapshots: runtime.projectSnapshotsToV1(
+                    householdSnapshots,
+                    DEFAULT_BELGIAN_TAX_PROFILE,
+                ),
+                snapshotMetas: appendHistoryEntry(
+                    state.snapshotMetas,
+                    year,
+                    "patched",
+                    { householdChanges },
+                ),
             };
         }),
     metaForYear: (year) => get().snapshotMetas[year] ?? null,

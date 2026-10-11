@@ -64,7 +64,11 @@ function formatTimestamp(iso: string, locale: string): string {
  * pass through. Long arrays and objects collapse to `[N items]` / `{N keys}` to keep the
  * timeline scannable.
  */
-function summarizePatch(changes: SnapshotAuditEntry["changes"]): string {
+function summarizePatch(
+    changes:
+        | SnapshotAuditEntry["changes"]
+        | SnapshotAuditEntry["householdChanges"],
+): string {
     if (!changes) return "";
     const parts: string[] = [];
     for (const [k, v] of Object.entries(changes)) {
@@ -117,9 +121,10 @@ export function SnapshotHistoryDialog({
                         <List>
                             {ordered.map((entry, idx) => {
                                 const badge = KIND_BADGE[entry.kind];
-                                const summary = entry.changes
-                                    ? summarizePatch(entry.changes)
-                                    : "";
+                                // Household editor patches carry only the household diff.
+                                const summary = summarizePatch(
+                                    entry.changes ?? entry.householdChanges,
+                                );
                                 return (
                                     <li
                                         key={`${entry.at}-${idx}`}
