@@ -81,6 +81,13 @@ replace these rules.
 - For every agent, `bun run typecheck` and the relevant build/test commands are authoritative.
   Do not skip them because editor or Language Server Protocol diagnostics appear clean.
 
+## Auto-mode context
+
+- Vision is a personal-finance app that holds sensitive financial data. Never read or print `.env`
+  files such as `.env` or `.env.local`. The committed `.env.example` template is safe to read.
+- `alembic downgrade` can destroy data. Ask before running it.
+- Ask before running `rm` in `packaging/` or `dist/`.
+
 ## Conventions
 
 - Backend: ES2022+ ESM and `async`/`await`. Use `undefined`, not `null`, for optional values.
