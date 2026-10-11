@@ -74,6 +74,20 @@ export function computeDependentSupplements(
     };
 }
 
+/**
+ * Partner who claims the dependants outside a joint assessment: `claimantPartnerId` when that
+ * partner is assessed, else the first assessed partner (A when present). Undefined only when no
+ * partner is assessed.
+ */
+export function resolveDependentsClaimant(
+    partners: readonly { id: PartnerId }[],
+    claimantPartnerId: PartnerId | undefined,
+): PartnerId | undefined {
+    return claimantPartnerId !== undefined && partners.some((p) => p.id === claimantPartnerId)
+        ? claimantPartnerId
+        : partners[0]?.id;
+}
+
 export interface ExemptionPartnerInput {
     id: PartnerId;
     isDisabled: boolean;
@@ -126,11 +140,8 @@ export function allocateExemptions(
         childcareDeducted,
         table,
     );
-    const claimant: PartnerId = partners.some(
-        (p) => p.id === dependents.claimantPartnerId,
-    )
-        ? (dependents.claimantPartnerId ?? "A")
-        : (partners[0]?.id ?? "A");
+    const claimant: PartnerId =
+        resolveDependentsClaimant(partners, dependents.claimantPartnerId) ?? "A";
 
     let supplementPartnerId: PartnerId = claimant;
     if (mode === "joint" && partners.length === 2) {

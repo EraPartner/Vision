@@ -24,7 +24,11 @@
 
 import { getTaxTable, type BelgianTaxYearTable } from "./constants";
 import { deriveAssessment } from "./assessment";
-import { allocateExemptions, type ExemptionPartnerInput } from "./exemptions";
+import {
+    allocateExemptions,
+    resolveDependentsClaimant,
+    type ExemptionPartnerInput,
+} from "./exemptions";
 import {
     computeMaritalQuotient,
     resolveMaritalQuotientCap,
@@ -447,9 +451,10 @@ export function computeHouseholdTax(
     // art. 132 supplements follow the same claimant), so the own-home child increases (Walloon
     // art. 145/46ter §2, Flemish arts 145/37 and 145/38/2) go to the mortgage partner only when
     // that partner is the claimant.
-    const childrenClaimantId = partners.some((p) => p.id === household.dependents.claimantPartnerId)
-        ? household.dependents.claimantPartnerId
-        : partners[0]?.id;
+    const childrenClaimantId = resolveDependentsClaimant(
+        partners,
+        household.dependents.claimantPartnerId,
+    );
     const homeHasChildren = mode === "joint" || childrenClaimantId === mortgagePartnerId;
     const homeInputs = {
         ...household.home,
