@@ -32,6 +32,18 @@ describe("Belgian tax frozen-calculation settings validation", () => {
   });
 });
 
+describe("Belgian tax profile settings validation", () => {
+  it("accepts a nullish serviceVoucherSpend and rejects a negative one", () => {
+    for (const spend of [1_200, 0, null, undefined]) {
+      const value = { taxYear: 2025, serviceVoucherSpend: spend };
+      expect(__validateSettingValue("belgian_tax_profile", value)).toEqual(value);
+    }
+    expect(() =>
+      __validateSettingValue("belgian_tax_profile", { serviceVoucherSpend: -1 }),
+    ).toThrow();
+  });
+});
+
 const validHousehold = () => ({
   version: 2,
   taxYear: 2025,

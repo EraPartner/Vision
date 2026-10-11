@@ -354,10 +354,16 @@ export function computeBelgianPIT(
 
     // Regional own-home credit (Flemish woonbonus / Walloon chèque habitat).
     const ownHomeCreditRegime = resolveMortgageRegime(profile);
+    // The taxpayer's taxable income before the marital quotient feeds both the woonbonus marginal
+    // rate and the chèque habitat income limits (the household engine uses the same figure).
     const ownHomeCredit = computeOwnHomeCredit(
         profile,
         table,
         ownHomeCreditRegime,
+        {
+            taxableIncome,
+            marginalRatePercent: computeMarginalRate(taxableIncome, table.brackets),
+        },
     );
 
     const totalTaxCredits = reductions.total + ownHomeCredit;
@@ -366,9 +372,9 @@ export function computeBelgianPIT(
     const appliedTaxCredits = Math.min(totalTaxCredits, pitAfterExemption);
     const federalPITBeforeAutonomy = pitAfterExemption - appliedTaxCredits;
 
-    // 8b. Regional autonomy adjustment (federal 24.95% release with regional add-back).
-    // Net effect ≈ 0.49% saving — calibrated from PwC AY 2026 sample. Defaults to 1.0
-    // when the region's factor is missing.
+    // 8b. State + regional factor: reduced state tax (75.043%) × (1 + regional opcentiemen);
+    // 1.0000 for Flanders and Wallonia, 0.9950 for Brussels (sources in constants.ts).
+    // Defaults to 1.0 when the region's factor is missing.
     const autonomyFactor = table.regionalAutonomyFactor?.[profile.region] ?? 1;
     const federalPITAfterReductions = federalPITBeforeAutonomy * autonomyFactor;
 

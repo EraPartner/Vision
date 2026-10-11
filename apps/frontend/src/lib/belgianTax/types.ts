@@ -44,10 +44,11 @@ export type FilingStatus = "single" | "married_joint";
 
 /**
  * Regional own-home credit regime. Determined by the mortgage's region and origination year.
- *  - `flemish_woonbonus`: Flemish "geïntegreerde woonbonus", available for primary-residence
- *    mortgages signed before 2020-01-01 in the Flemish Region.
+ *  - `flemish_woonbonus`: Flemish woonbonus (before 2015, 2015, and the 2016-2019
+ *    "geïntegreerde woonbonus"), available for primary-residence mortgages signed before
+ *    2020-01-01 in the Flemish Region.
  *  - `walloon_cheque_habitat`: Walloon "chèque habitat", available for primary-residence
- *    mortgages signed on/after 2016-01-01 in the Walloon Region. Simplified flat estimate.
+ *    mortgages signed from 2016-01-01 to 2024-12-31 in the Walloon Region.
  *  - `none`: No annual credit modeled (Brussels post-2017 has only one-time stamp-duty rebate;
  *    pre-existing Brussels and post-2020 Flemish regimes are not modeled).
  */
@@ -131,12 +132,19 @@ export interface BelgianTaxProfile {
     domesticHelpCosts?: number;
     domesticHelpEligible?: boolean;
     /**
-     * Service vouchers (dienstencheques / titres-services) purchased in the year. Regional schemes:
-     *  - Flanders: tax reduction abolished from 1 Jan 2025 (rate = 0).
-     *  - Wallonia: fixed €0.90 per voucher on the first 150 vouchers.
-     *  - Brussels: 15% reduction per voucher on the first 172 vouchers — still in force.
+     * Service vouchers (dienstencheques / titres-services) bought in the year. Kept for
+     * compatibility: when `serviceVoucherSpend` is not set, the engine converts the count into an
+     * expense amount with the year table's `voucherPrice`.
      */
     serviceVoucherCount?: number;
+    /**
+     * Amount paid for service vouchers in the year (EUR). Takes precedence over
+     * `serviceVoucherCount`. The regional reduction (WIB 92 art. 145/21) is rate × min(spend, cap):
+     *  - Flanders: 20% up to €1,790 (IY 2024); abolished from IY 2025.
+     *  - Wallonia: 30% up to €1,790 / €1,850 / €1,890 (IY 2024 / 2025 / 2026).
+     *  - Brussels: 15% up to €1,790 / €1,850 (IY 2024 / 2025); abolished from IY 2026.
+     */
+    serviceVoucherSpend?: number;
     serviceVoucherEligible?: boolean;
     /** Filing status — determines whether marital quotient modeling activates. */
     filingStatus?: FilingStatus;

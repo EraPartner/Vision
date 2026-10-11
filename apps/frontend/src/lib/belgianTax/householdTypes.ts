@@ -28,7 +28,7 @@ export const PARTNER_IDS: readonly PartnerId[] = ["A", "B"];
 
 /**
  * Kind of professional activity (WIB 92 art. 23 §1 categories, plus two technical kinds).
- *  - `employee` / `civil_servant`: remuneration of employees (art. 30, 1°), 13.07% / 11.07%
+ *  - `employee` / `civil_servant`: remuneration of employees (art. 30, 1°), 13.07% / 11.05%
  *    personal social security, forfait category `remuneration`.
  *  - `director`: company director remuneration (art. 30, 2°), forfait `director`.
  *  - `self_employed_profits`: trading profits (winsten, art. 24), forfait `profits`.

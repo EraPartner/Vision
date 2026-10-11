@@ -56,6 +56,7 @@ const REDUCTION_KEYS = [
     "domesticHelpCosts",
     "domesticHelpEligible",
     "serviceVoucherCount",
+    "serviceVoucherSpend",
     "serviceVoucherEligible",
     "medicalExpenses",
 ] as const satisfies readonly (keyof PartnerReductionInputs)[];
