@@ -36,7 +36,13 @@ function estimateForResidence(
     return regionalTax * (1 + centimes / 100);
 }
 
-export function computePropertyTaxEstimate(profile: BelgianTaxProfile, table: BelgianTaxYearTable): number {
+/** Residence fields the property-tax estimate reads. */
+export type PropertyTaxInputs = Pick<
+    BelgianTaxProfile,
+    'cadastralIncome' | 'region' | 'cadastralCentimesOverride' | 'additionalResidences'
+>;
+
+export function computePropertyTaxEstimate(profile: PropertyTaxInputs, table: BelgianTaxYearTable): number {
     const main = estimateForResidence(
         profile.cadastralIncome || 0,
         profile.region,

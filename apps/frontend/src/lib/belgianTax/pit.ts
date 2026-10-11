@@ -42,8 +42,10 @@ import {
     computeSpecialSocialSecurityContribution,
 } from "./socialSecurity";
 import { computePropertyTaxEstimate } from "./propertyTax";
+import { computeDependentSupplements } from "./exemptions";
 import {
     addBracketTax,
+    buildCalculationBreakdown,
     clampAtZero,
     computeExemptionBenefit,
     computeInvestmentSideCalc,
@@ -106,38 +108,23 @@ function computePersonalExemption(
     profile: BelgianTaxProfile,
     table: BelgianTaxYearTable,
 ): number {
-    // Handicapped dependents count for TWO on the supplement scale (PwC; CIR-92 arts.
-    // 132 4° / 136). We bump the EFFECTIVE child / other-dependent count by the
-    // disabled-subset count so the scale lookup lands one tier higher per disabled person.
-    const rawChildren = Math.max(profile.dependentChildren || 0, 0);
-    const disabledChildren = Math.min(
-        Math.max(profile.dependentChildrenDisabled || 0, 0),
-        rawChildren,
+    // Art. 132 supplements (disabled dependants count twice; the child-under-3 supplement is
+    // forfeited when the childcare reduction is claimed). See exemptions.ts.
+    const supplements = computeDependentSupplements(
+        {
+            children: profile.dependentChildren,
+            childrenUnder3: profile.dependentChildrenUnder3 ?? 0,
+            childrenDisabled: profile.dependentChildrenDisabled ?? 0,
+            otherPersons: profile.dependentOtherPersons,
+            otherPersonsDisabled: profile.dependentOtherPersonsDisabled ?? 0,
+        },
+        isChildcareDeducted(profile),
+        table,
     );
-    const childCount = rawChildren + disabledChildren;
-
-    const baseChild =
-        childCount <= 4
-            ? (table.dependentChildExemptionIncreases[childCount] ?? 0)
-            : (table.dependentChildExemptionIncreases[4] ?? 0) +
-              (childCount - 4) * table.extraChildExemptionFromFifth;
-
-    // CIR-92 art. 132bis (PwC: "if no childcare expenses deducted"): the child-under-3
-    // supplement is forfeited when the taxpayer also claims the childcare reduction.
-    // The two are mutually exclusive — taxpayer picks whichever is more beneficial.
-    const childcareDeducted = isChildcareDeducted(profile);
-    const childUnder3 = childcareDeducted
-        ? 0
-        : Math.max(profile.dependentChildrenUnder3 || 0, 0) *
-          table.childUnder3Supplement;
-
-    const rawOtherDep = Math.max(profile.dependentOtherPersons || 0, 0);
-    const disabledOther = Math.min(
-        Math.max(profile.dependentOtherPersonsDisabled || 0, 0),
-        rawOtherDep,
-    );
-    const otherDep =
-        (rawOtherDep + disabledOther) * table.otherDependentExemption;
+    const { childCount } = supplements;
+    const baseChild = supplements.children;
+    const childUnder3 = supplements.childUnder3;
+    const otherDep = supplements.otherDependents;
 
     const disabilitySupplement =
         (profile.isDisabled ? table.disabledSupplement : 0) +
@@ -437,136 +424,32 @@ export function computeBelgianPIT(
 
     const federalPITBeforeExemption = pitBeforeExemption.total;
 
-    const breakdown = [
-        { label: "Gross Income", amount: gross },
-        ...(spouseIncome > 0
-            ? [{ label: "Spouse professional income", amount: spouseIncome }]
-            : []),
-        {
-            label: "Employee Social Security",
-            amount: -employeeSS,
-            rate: table.employeeSSRate * 100,
-        },
-        { label: "Net after Social Security", amount: netAfterSS },
-        { label: "Professional Expenses Deduction", amount: -profExpenses },
-        ...(profile.alimonyPaid
-            ? [
-                  {
-                      label: `Alimony paid (${Math.round(table.alimonyDeductibleFraction * 100)}% deductible)`,
-                      amount: -cappedAlimony,
-                  },
-              ]
-            : []),
-        ...(appliedUnionDues > 0
-            ? [
-                  {
-                      label: "Union dues (within actual professional expenses)",
-                      amount: -appliedUnionDues,
-                  },
-              ]
-            : []),
-        { label: "Taxable Income", amount: taxableIncome },
-        // One breakdown row per non-empty bracket; the top bracket is open-ended.
-        ...table.brackets.flatMap((br, i) => {
-            const amount =
-                pitBeforeExemption[`b${i + 1}` as "b1" | "b2" | "b3" | "b4"];
-            if (amount <= 0) return [];
-            const isTop = i === table.brackets.length - 1;
-            return [
-                {
-                    // `label` stays English: this array is a calculation result, not
-                    // a view model, and pit.ts has no access to `t`. Consumers that
-                    // render a bracket row translate via `bracketNumber` (see
-                    // ExportDialog) — the ordinal is carried explicitly because
-                    // empty brackets are skipped, so a consumer's array index is not
-                    // the bracket number.
-                    label: `Bracket ${i + 1} (${br.rate * 100}%)`,
-                    bracketNumber: i + 1,
-                    amount: -amount,
-                    rate: br.rate * 100,
-                    bracket: isTop ? `€${br.from}+` : `€${br.from} – €${br.to}`,
-                },
-            ];
-        }),
-        ...(quotient.transfer > 0
-            ? [
-                  {
-                      label: `Marital quotient transferred to spouse`,
-                      amount: -quotient.transfer,
-                  },
-              ]
-            : []),
-        ...(quotient.benefit > 0
-            ? [
-                  {
-                      label: "Marital quotient tax saving",
-                      amount: -quotient.benefit,
-                  },
-              ]
-            : []),
-        ...(personalExemptionBenefit > 0
-            ? [
-                  {
-                      label: "Personal exemption benefit",
-                      amount: -personalExemptionBenefit,
-                  },
-              ]
-            : []),
-        ...(ownHomeCredit > 0
-            ? [{ label: "Own-home credit", amount: -ownHomeCredit }]
-            : []),
-        ...(serviceVoucherCredit > 0
-            ? [
-                  {
-                      label: "Service-voucher credit (dienstencheques)",
-                      amount: -serviceVoucherCredit,
-                  },
-              ]
-            : []),
-        ...(appliedTaxCredits > 0
-            ? [
-                  {
-                      label: "Tax Credits (reductions)",
-                      amount: -appliedTaxCredits,
-                  },
-              ]
-            : []),
-        // Position total, not a deduction step: gross PIT before the exemption
-        // benefit and credits listed above. (Was mislabeled "before credits".)
-        {
-            label: "Federal PIT (before exemption)",
-            amount: -federalPITBeforeExemption,
-        },
-        {
-            label: "Federal PIT (after credits)",
-            amount: -federalPITAfterReductions,
-        },
-        {
-            label: `Communal Surcharge (${profile.communalSurchargePercent}%)`,
-            amount: -communalSurcharge,
-            rate: profile.communalSurchargePercent,
-        },
-        ...(specialSS > 0
-            ? [
-                  {
-                      label: "Special Social Security Contribution",
-                      amount: -specialSS,
-                  },
-              ]
-            : []),
-        // Property tax is informational for PIT but part of totalTaxBurden, so it
-        // must appear as a row — without it the visible rows missed Net Take-Home
-        // by exactly this amount.
-        ...(propertyTaxEstimate > 0
-            ? [
-                  {
-                      label: "Property Tax (estimate)",
-                      amount: -propertyTaxEstimate,
-                  },
-              ]
-            : []),
-        { label: "Net Take-Home", amount: netTakeHome },
-    ];
+    const breakdown = buildCalculationBreakdown({
+        table,
+        grossIncome: gross,
+        spouseProfessionalIncome: spouseIncome,
+        employeeSocialSecurity: employeeSS,
+        netIncomeAfterSS: netAfterSS,
+        professionalExpenses: profExpenses,
+        showAlimonyRow: !!profile.alimonyPaid,
+        alimonyDeduction: cappedAlimony,
+        unionDuesApplied: appliedUnionDues,
+        taxableIncome,
+        bracketTax: pitBeforeExemption,
+        maritalQuotientTransfer: quotient.transfer,
+        maritalQuotientBenefit: quotient.benefit,
+        personalExemptionBenefit,
+        ownHomeCredit,
+        serviceVoucherCredit,
+        federalTaxCredits: appliedTaxCredits,
+        federalPITBeforeExemption,
+        federalPITAfterReductions,
+        communalSurchargePercent: profile.communalSurchargePercent,
+        communalSurcharge,
+        specialSocialSecurityContribution: specialSS,
+        propertyTaxEstimate,
+        netTakeHome,
+    });
 
     return {
         grossIncome: gross,

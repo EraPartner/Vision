@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { computeBelgianPIT, getTaxTable, isApproximatedTaxYear } from "..";
+import { getTaxTable, isApproximatedTaxYear } from "..";
+import { computeWithParity } from "./householdParity";
 import { computeSpecialSocialSecurityContribution } from "../socialSecurity";
 import { computePropertyTaxEstimate } from "../propertyTax";
 import type { BelgianTaxProfile } from "../types";
@@ -50,13 +51,13 @@ function profile(overrides: Partial<BelgianTaxProfile>): BelgianTaxProfile {
 
 describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("returns zero tax for zero income", () => {
-        const result = computeBelgianPIT(profile({ grossAnnualIncome: 0 }));
+        const result = computeWithParity(profile({ grossAnnualIncome: 0 }));
         expect(result.totalPIT).toBe(0);
         expect(result.totalTaxBurden).toBe(0);
     });
 
     test("employee SS = 13.07% of gross salary", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 40_000 }),
         );
         expect(result.employeeSocialSecurity).toBeCloseTo(40_000 * 0.1307, 2);
@@ -65,7 +66,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("totalTaxBurden does NOT double-count communal surcharge", () => {
         // Regression test for the IY-2025 bug where surcharge was added once inside totalPIT
         // and again in totalTaxBurden.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 50_000 }),
         );
         const expected =
@@ -77,7 +78,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("professional expense forfait caps at €5,930 for employees IY 2025", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 100_000 }),
         );
         // 30% of 100k = 30k > cap, so capped at 5_930
@@ -88,18 +89,18 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // WIB 92 art. 51 al. 1: percentages of the gross income "vooraf verminderd met" the
         // art. 52, 7° contributions; FPS Finance › Beroepsinkomen: "brutoberoepsinkomen
         // (verminderd met bijdragen)". Gross 15_000 → SS 1_960.50 → base 13_039.50 × 30%.
-        const result = computeBelgianPIT(profile({ grossAnnualIncome: 15_000 }));
+        const result = computeWithParity(profile({ grossAnnualIncome: 15_000 }));
         expect(result.employeeSocialSecurity).toBeCloseTo(1_960.5, 5);
         expect(result.professionalExpenses).toBeCloseTo(3_911.85, 5);
         // Civil servants: 11.07% comes off first as well.
-        const civil = computeBelgianPIT(
+        const civil = computeWithParity(
             profile({ employmentType: "civil_servant", grossAnnualIncome: 15_000 }),
         );
         expect(civil.professionalExpenses).toBeCloseTo(15_000 * (1 - 0.1107) * 0.3, 5);
     });
 
     test("director gets 3% / €3,130 cap forfait", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ employmentType: "director", grossAnnualIncome: 200_000 }),
         );
         expect(result.professionalExpenses).toBe(3_130);
@@ -109,14 +110,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // WIB 92 art. 51 al. 2, 1° and al. 3 — FPS indexation notice AY 2026, table I:
         // "Rémunérations des travailleurs et bénéfices: 5.930". `selfEmployedIncomeKind`
         // defaults to "profits".
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 employmentType: "self_employed",
                 grossAnnualIncome: 80_000,
             }),
         );
         expect(result.professionalExpenses).toBe(5_930);
-        const small = computeBelgianPIT(
+        const small = computeWithParity(
             profile({
                 employmentType: "self_employed",
                 selfEmployedIncomeKind: "profits",
@@ -129,7 +130,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("self-employed fees (baten) use the degressive art. 51 al. 2, 4° scale, capped at €5,210", () => {
         // FPS indexation notice AY 2026: 28.7% to 7,540 / 10% to 14,970 / 5% to 24,920 / 3% above;
         // cap "conjoints aidants et profits" 5,210.
-        const fees = computeBelgianPIT(
+        const fees = computeWithParity(
             profile({
                 employmentType: "self_employed",
                 selfEmployedIncomeKind: "fees",
@@ -142,7 +143,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
             (24_920 - 14_970) * 0.05 +
             (30_000 - 24_920) * 0.03;
         expect(fees.professionalExpenses).toBeCloseTo(expected, 2); // 3,556.88
-        const capped = computeBelgianPIT(
+        const capped = computeWithParity(
             profile({
                 employmentType: "self_employed",
                 selfEmployedIncomeKind: "fees",
@@ -151,7 +152,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         );
         expect(capped.professionalExpenses).toBe(5_210);
         // IY 2024 scale (notice AY 2025): 7,310 / 14,520 / 24,160, cap 5,050.
-        const y24 = computeBelgianPIT(
+        const y24 = computeWithParity(
             profile({
                 taxYear: 2024,
                 employmentType: "self_employed",
@@ -163,14 +164,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("pensions and other income carry no forfait", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ employmentType: "retired", grossAnnualIncome: 30_000 }),
         );
         expect(result.professionalExpenses).toBe(0);
     });
 
     test("self-employed actual expenses are deductible", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 employmentType: "self_employed",
                 grossAnnualIncome: 80_000,
@@ -185,7 +186,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Single, no dependents, employee, lump-sum forfait, 7% surcharge.
         // Gross 60_000 → SS 60_000×0.1307 = 7_842 → net 52_158
         // forfait min(60_000×0.30, 5_930) = 5_930 → taxable 46_228
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 60_000 }),
         );
         expect(result.taxableIncome).toBeCloseTo(46_228, 0);
@@ -204,7 +205,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // CIR-92 art. 134 §3 + PwC sample: the exemption is taxed from the lowest
         // exemption-bracket up. Basic IY2025 exemption €10,910 < first-bracket
         // ceiling €11,460, so it all sits in bracket 1: benefit = 10_910 × 0.25 = 2_727.50.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 40_000 }),
         );
         expect(result.personalExemptionBenefit).toBeCloseTo(2_727.5, 1);
@@ -214,7 +215,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Real-world reproduction of the user's PIT breakdown screenshot. Before the F1 fix
         // the value was €3,145.38 (exemption applied at the top). PwC-correct value is €2,727.50.
         // Use "other" so all of the gross flows straight to taxable income (no SS, no forfait).
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 employmentType: "other",
                 grossAnnualIncome: 19_105.84,
@@ -232,7 +233,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Two children at IY2025 → exemption = 10_910 + 5_110 = 16_020.
         // PwC AY2026 sample: 25% × 11_460 + 30% × (16_020 - 11_460)
         //                  = 2_865 + 1_368 = 4_233.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 80_000, dependentChildren: 2 }),
         );
         expect(result.personalExemptionAmount).toBe(16_020);
@@ -246,7 +247,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         //   30% × (16_320 - 11_460=4_860) = 1_458
         //   40% × (24_330 - 16_320=8_010) = 3_204
         // total benefit = 7_527
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 80_000,
                 dependentChildren: 3,
@@ -258,10 +259,10 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("dependent children increase the personal exemption", () => {
-        const noKids = computeBelgianPIT(
+        const noKids = computeWithParity(
             profile({ grossAnnualIncome: 60_000 }),
         );
-        const twoKids = computeBelgianPIT(
+        const twoKids = computeWithParity(
             profile({ grossAnnualIncome: 60_000, dependentChildren: 2 }),
         );
         expect(twoKids.personalExemptionAmount).toBe(
@@ -271,14 +272,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("isolated parent adds the single-parent supplement when at least one child", () => {
-        const single = computeBelgianPIT(
+        const single = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
                 isIsolatedParent: true,
             }),
         );
-        const couple = computeBelgianPIT(
+        const couple = computeWithParity(
             profile({ grossAnnualIncome: 60_000, dependentChildren: 1 }),
         );
         expect(single.personalExemptionAmount).toBe(
@@ -287,10 +288,10 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("disability supplement adds €1,980 for self", () => {
-        const disabled = computeBelgianPIT(
+        const disabled = computeWithParity(
             profile({ grossAnnualIncome: 60_000, isDisabled: true }),
         );
-        const normal = computeBelgianPIT(
+        const normal = computeWithParity(
             profile({ grossAnnualIncome: 60_000 }),
         );
         expect(disabled.personalExemptionAmount).toBe(
@@ -301,14 +302,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("disabled child counts as TWO children on the supplement scale", () => {
         // 1 dependent child of which 1 is disabled → effective count 2 → IY2025 €5,110
         // supplement (vs €1,980 for an able-bodied single child).
-        const disabled = computeBelgianPIT(
+        const disabled = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
                 dependentChildrenDisabled: 1,
             }),
         );
-        const able = computeBelgianPIT(
+        const able = computeWithParity(
             profile({ grossAnnualIncome: 60_000, dependentChildren: 1 }),
         );
         expect(disabled.personalExemptionAmount).toBe(
@@ -319,14 +320,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("disabled-child count is capped at the dependent-children head count", () => {
         // disabledChildren > dependentChildren is clamped — taxpayer can't claim more
         // disabled children than they have dependents.
-        const r = computeBelgianPIT(
+        const r = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
                 dependentChildrenDisabled: 5,
             }),
         );
-        const sane = computeBelgianPIT(
+        const sane = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
@@ -338,7 +339,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
 
     test("child-under-3 supplement is skipped when childcare credit is claimed", () => {
         // CIR-92 art. 132bis: the two are mutually exclusive.
-        const withChildcare = computeBelgianPIT(
+        const withChildcare = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
@@ -348,7 +349,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 childcareEligibleDays: 100,
             }),
         );
-        const noChildcare = computeBelgianPIT(
+        const noChildcare = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 dependentChildren: 1,
@@ -365,7 +366,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("regional autonomy factor reduces federal PIT after credits by ~0.49% (PwC calibration)", () => {
         // The factor multiplies federalPITAfterReductions and propagates into communal
         // surcharge & totalPIT. Cross-check by re-deriving via the documented multiplier.
-        const r = computeBelgianPIT(profile({ grossAnnualIncome: 60_000 }));
+        const r = computeWithParity(profile({ grossAnnualIncome: 60_000 }));
         const tbl = getTaxTable(2025);
         expect(tbl.regionalAutonomyFactor.flanders).toBeCloseTo(0.9951, 4);
         // Sanity: federalPITAfterReductions reflects the multiplier — it cannot equal
@@ -376,13 +377,13 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("pension savings credit only applies when eligible flag set", () => {
-        const noFlag = computeBelgianPIT(
+        const noFlag = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 personalPensionContributions: 1_050,
             }),
         );
-        const withFlag = computeBelgianPIT(
+        const withFlag = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 personalPensionContributions: 1_050,
@@ -394,7 +395,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("alternative pension scheme uses €1,350 cap × 25%", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 personalPensionContributions: 1_500,
@@ -406,14 +407,14 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("charitable donations require eligibility flag and minimum €40 (IY 2025 = 30%)", () => {
-        const tiny = computeBelgianPIT(
+        const tiny = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 charitableDonations: 30,
                 charitableDonationsEligible: true,
             }),
         );
-        const valid = computeBelgianPIT(
+        const valid = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 charitableDonations: 200,
@@ -426,7 +427,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("donation rate is 45% for IY 2024 but 30% for IY 2025", () => {
-        const y24 = computeBelgianPIT(
+        const y24 = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 60_000,
@@ -434,7 +435,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 charitableDonationsEligible: true,
             }),
         );
-        const y25 = computeBelgianPIT(
+        const y25 = computeWithParity(
             profile({
                 taxYear: 2025,
                 grossAnnualIncome: 60_000,
@@ -450,7 +451,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Gross 60_000 → SS 7_842, forfait 5_930 → taxable 46_228.
         // 10% × 46_228 = 4_622.80 → caps the €8_000 gift.
         // Credit (IY 2025) = 4_622.80 × 0.30 = 1_386.84.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 60_000,
                 charitableDonations: 8_000,
@@ -464,7 +465,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Income high enough that 10% × taxable > €408,130 → absolute cap binds.
         // Gross 5_000_000 employee → forfait capped €5_930 → taxable ≈ 4_341_565 →
         // 10% = 434_156.50, exceeds absolute cap.
-        const y24 = computeBelgianPIT(
+        const y24 = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 5_000_000,
@@ -475,7 +476,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // PIT before exemption is far above any credit, so federalTaxCredits ≈ raw credit.
         expect(y24.federalTaxCredits).toBeCloseTo(408_130 * 0.45, 0);
 
-        const y25 = computeBelgianPIT(
+        const y25 = computeWithParity(
             profile({
                 taxYear: 2025,
                 grossAnnualIncome: 5_000_000,
@@ -489,7 +490,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("domestic help credit: €8,160 wage cap for IY 2024, abolished from IY 2025", () => {
         // Art. 145/34 al. 5 — FPS indexation notice AY 2025: 8,160. Abolished by the law of
         // 18 Dec 2025 art. 68, applicable from AY 2026 (art. 90).
-        const y24 = computeBelgianPIT(
+        const y24 = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 100_000,
@@ -498,7 +499,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
             }),
         );
         expect(y24.federalTaxCredits).toBeCloseTo(8_160 * 0.3, 2);
-        const y25 = computeBelgianPIT(
+        const y25 = computeWithParity(
             profile({
                 grossAnnualIncome: 100_000,
                 domesticHelpCosts: 50_000,
@@ -511,20 +512,20 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("alimony deductible at 80% (2024), 70% (2025) and 60% (2026) — art. 104", () => {
         // Law of 18 Dec 2025 art. 35; fin.belgium.be "Betaald onderhoudsgeld".
         const deducted = (taxYear: number) => {
-            const result = computeBelgianPIT(
+            const result = computeWithParity(
                 profile({ taxYear, grossAnnualIncome: 60_000, alimonyPaid: 10_000 }),
             );
-            const noAlimony = computeBelgianPIT(
+            const noAlimony = computeWithParity(
                 profile({ taxYear, grossAnnualIncome: 60_000 }),
             );
             return noAlimony.taxableIncome - result.taxableIncome;
         };
         expect(deducted(2024)).toBe(8_000);
         expect(deducted(2026)).toBe(6_000);
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 60_000, alimonyPaid: 10_000 }),
         );
-        const noAlimony = computeBelgianPIT(
+        const noAlimony = computeWithParity(
             profile({ grossAnnualIncome: 60_000 }),
         );
         // 70% × 10_000 = 7_000 less taxable income
@@ -532,7 +533,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("communal surcharge applied to federal PIT after credits", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 60_000, communalSurchargePercent: 8 }),
         );
         expect(result.communalSurcharge).toBeCloseTo(
@@ -542,7 +543,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("dividend WHT reclaim modeled as tax-return credit", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ annualDividendIncome: 2_000 }),
         );
         // Art. 21, 14°: €833 for IY 2024, 2025 and 2026 (frozen by the law of 18 Dec 2025;
@@ -551,7 +552,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         expect(result.dividendWhtReclaim).toBeCloseTo(833 * 0.3, 2);
         for (const taxYear of [2024, 2026]) {
             expect(
-                computeBelgianPIT(profile({ taxYear, annualDividendIncome: 2_000 }))
+                computeWithParity(profile({ taxYear, annualDividendIncome: 2_000 }))
                     .dividendWhtReclaim,
             ).toBeCloseTo(833 * 0.3, 2);
         }
@@ -560,20 +561,20 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     test("savings interest tax = 15% above the €1,020 exemption (IY 2024-2026)", () => {
         // Art. 21, 5°: 1,020 after the freeze (FPS indexation notice AY 2026 prints
         // "1.050 — après gel: 1.020"; fin.belgium.be "Spaargeld en beleggingen").
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ annualSavingsInterest: 2_000 }),
         );
         // (2_000 - 1_020) × 0.15 = 147
         expect(result.savingsInterestTax).toBeCloseTo(147, 2);
         expect(
-            computeBelgianPIT(profile({ taxYear: 2026, annualSavingsInterest: 2_000 }))
+            computeWithParity(profile({ taxYear: 2026, annualSavingsInterest: 2_000 }))
                 .savingsInterestTax,
         ).toBeCloseTo(147, 2);
     });
 
     test("life insurance reduction cap is €2,450 for IY 2024-2026 (art. 145/6, frozen)", () => {
         for (const taxYear of [2024, 2025, 2026]) {
-            const result = computeBelgianPIT(
+            const result = computeWithParity(
                 profile({
                     taxYear,
                     grossAnnualIncome: 60_000,
@@ -586,7 +587,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("IY 2024 tables apply when taxYear = 2024", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ taxYear: 2024, grossAnnualIncome: 60_000 }),
         );
         // IY 2024 employee forfait cap = 5_750
@@ -597,7 +598,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Modest income + many children pushes exemption benefit ≈ federal PIT, so even
         // a small donation credit forces the cap to bite. Without the clamp, the model
         // would emit a negative federal PIT.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 30_000,
                 dependentChildren: 4,
@@ -613,7 +614,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test('Flemish "ordinary" woonbonus (pre-2016 loan) uses €2,280 base cap', () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "flanders",
@@ -631,7 +632,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test('Flemish "geïntegreerde" woonbonus (2016-2019 loan) uses €1,520 base + first-10y supplement', () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "flanders",
@@ -651,7 +652,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // IY 2024 lets us put a pre-2016 loan inside its first 10 years and compare regimes.
         //   2015 loan (pre-2016 "ordinary"): cap = 2_280 + 760 = 3_040 → credit 1_216.
         //   2019 loan (2016+ "integrated"):  cap = 1_520 + 760 = 2_280 → credit   912.
-        const ordinary = computeBelgianPIT(
+        const ordinary = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 50_000,
@@ -663,7 +664,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
                 mortgageCapitalRepaid: 3_000,
             }),
         );
-        const integrated = computeBelgianPIT(
+        const integrated = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 50_000,
@@ -680,7 +681,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("Walloon chèque habitat applied for post-2016 primary residence in Wallonia", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "wallonia",
@@ -697,7 +698,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("Brussels primary residence: no own-home credit modeled", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "brussels",
@@ -712,7 +713,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("Post-2020 Flemish mortgage: no woonbonus successor modeled", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "flanders",
@@ -727,10 +728,10 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("marital quotient: single-earner couple shifts income to spouse and lowers PIT", () => {
-        const single = computeBelgianPIT(
+        const single = computeWithParity(
             profile({ grossAnnualIncome: 80_000, filingStatus: "single" }),
         );
-        const married = computeBelgianPIT(
+        const married = computeWithParity(
             profile({
                 grossAnnualIncome: 80_000,
                 filingStatus: "married_joint",
@@ -748,7 +749,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("marital quotient: does not apply when spouse already earns ≥30% of household", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 filingStatus: "married_joint",
@@ -767,10 +768,10 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // IY 2025: brackets 16,320 / 28,800 / 49,840; basic exemption 10,910 × 25% = 2,727.50.
         //  earner taxable 50_000 − 6_535 − 5_930 = 37_535 → 4_080 + 4_992 + 3_930.75 − 2_727.50 = 10_275.25
         //  spouse 35_000                            → 4_080 + 4_992 + 2_790    − 2_727.50 =  9_134.50
-        const earnerOnly = computeBelgianPIT(
+        const earnerOnly = computeWithParity(
             profile({ grossAnnualIncome: 50_000, filingStatus: "married_joint", spouseProfessionalIncome: 0 }),
         );
-        const joint = computeBelgianPIT(
+        const joint = computeWithParity(
             profile({ grossAnnualIncome: 50_000, filingStatus: "married_joint", spouseProfessionalIncome: 35_000 }),
         );
         expect(joint.maritalQuotientTransfer).toBe(0);
@@ -789,7 +790,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("marital quotient ignored for single filer even if spouse income set", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 80_000,
                 filingStatus: "single",
@@ -802,7 +803,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
 
     test("IY 2024 marital quotient uses the lower cap (€13,050)", () => {
         // Arts 87-88 — FPS indexation notice AY 2025 and fin.belgium.be previous-years page.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 taxYear: 2024,
                 grossAnnualIncome: 80_000,
@@ -815,7 +816,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
 
     test("IY 2026 marital quotient cap is €11,780 after the law of 15 July 2026", () => {
         // Art. 88 base 5,860 indexed — FPS indexation notice AY 2027.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 taxYear: 2026,
                 grossAnnualIncome: 80_000,
@@ -830,7 +831,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
         // Art. 88 al. 1: the spouse is topped up so that own income + transferred part reaches
         // 30% of the household total "doch niet hoger dan" the cap. With €5,000 own income and
         // 30% of the household above the cap, the transfer is 13,460 − 5,000, not 13,460.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 80_000,
                 filingStatus: "married_joint",
@@ -841,7 +842,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("service vouchers: Brussels 15% rate applies to first 172 vouchers", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 region: "brussels",
                 serviceVoucherCount: 100,
@@ -853,7 +854,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("service vouchers: Wallonia fixed €0.90 per voucher, capped at 150", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 region: "wallonia",
                 serviceVoucherCount: 200, // over cap
@@ -865,7 +866,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("service vouchers: Flanders rate is 0 for IY 2025+", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 region: "flanders",
                 taxYear: 2025,
@@ -877,7 +878,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("service vouchers: nothing when eligibility flag is off", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 region: "brussels",
                 serviceVoucherCount: 100,
@@ -914,7 +915,7 @@ describe("computeBelgianPIT — IY 2025 brackets", () => {
     });
 
     test("Mortgage not flagged as primary residence → no credit", () => {
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 region: "flanders",
@@ -957,7 +958,7 @@ describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
         });
 
     test("reproduces PwC AY 2026 sample within €2 of €7,171.55 final tax due", () => {
-        const r = computeBelgianPIT(pwcSample());
+        const r = computeWithParity(pwcSample());
         // Sanity: feeder values match PwC's worked sample.
         expect(r.professionalExpenses).toBe(5_930);
         expect(r.taxableIncome).toBeCloseTo(44_070, 0);
@@ -976,7 +977,7 @@ describe("PwC AY 2026 worked sample — end-to-end pipeline", () => {
     });
 
     test("regional autonomy factor 0.9951 is visible in the pipeline output", () => {
-        const r = computeBelgianPIT(pwcSample());
+        const r = computeWithParity(pwcSample());
         // Federal PIT before autonomy = brackets − exemption benefit (both spouses combined).
         // After autonomy it must be smaller by exactly the documented factor.
         const expectedAfter =
@@ -989,14 +990,14 @@ describe("special SS basis", () => {
     test("joint assessment: CSSS is computed on the household income, not the earner alone", () => {
         // Law of 30 March 1994 art. 107, 2° ("gezinsinkomen" = sum of each spouse's net income).
         // Earner alone: €50,000 gross → net professional ≈ 37,535 → joint scale €123.95 + 1.3% × …
-        const alone = computeBelgianPIT(
+        const alone = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 filingStatus: "married_joint",
                 spouseProfessionalIncome: 0,
             }),
         );
-        const withSpouse = computeBelgianPIT(
+        const withSpouse = computeWithParity(
             profile({
                 grossAnnualIncome: 50_000,
                 filingStatus: "married_joint",
@@ -1018,7 +1019,7 @@ describe("special SS basis", () => {
     test("uses professional income only, not other taxable income", () => {
         // Tiny salary + large rental income. Professional net (after SS + forfait) is well below
         // the €18,592 CSSS floor, so the contribution must be 0 even though `taxableIncome` is huge.
-        const result = computeBelgianPIT(
+        const result = computeWithParity(
             profile({ grossAnnualIncome: 10_000, otherTaxableIncome: 80_000 }),
         );
         expect(result.taxableIncome).toBeGreaterThan(18_592);
@@ -1026,10 +1027,10 @@ describe("special SS basis", () => {
     });
 
     test("uses professional income only — CSSS reached on salary alone is unchanged by rental", () => {
-        const noRental = computeBelgianPIT(
+        const noRental = computeWithParity(
             profile({ grossAnnualIncome: 100_000 }),
         );
-        const withRental = computeBelgianPIT(
+        const withRental = computeWithParity(
             profile({ grossAnnualIncome: 100_000, otherTaxableIncome: 50_000 }),
         );
         expect(noRental.specialSocialSecurityContribution).toBeCloseTo(
@@ -1420,8 +1421,8 @@ describe("getTaxTable — nearest-year fallback (F2)", () => {
 
 describe("union dues / medical expenses — base-deduction fix (R7-10)", () => {
     test("medical expenses never reduce taxable income", () => {
-        const without = computeBelgianPIT({ ...baseProfile });
-        const withMedical = computeBelgianPIT({
+        const without = computeWithParity({ ...baseProfile });
+        const withMedical = computeWithParity({
             ...baseProfile,
             medicalExpenses: 2000,
         });
@@ -1431,11 +1432,11 @@ describe("union dues / medical expenses — base-deduction fix (R7-10)", () => {
     });
 
     test("union dues do NOT deduct under the lump-sum forfait", () => {
-        const without = computeBelgianPIT({
+        const without = computeWithParity({
             ...baseProfile,
             professionalExpenseMethod: "lump_sum",
         });
-        const withDues = computeBelgianPIT({
+        const withDues = computeWithParity({
             ...baseProfile,
             professionalExpenseMethod: "lump_sum",
             unionDues: 300,
@@ -1445,12 +1446,12 @@ describe("union dues / medical expenses — base-deduction fix (R7-10)", () => {
     });
 
     test("union dues deduct as actual professional expenses under the actual method", () => {
-        const without = computeBelgianPIT({
+        const without = computeWithParity({
             ...baseProfile,
             professionalExpenseMethod: "actual",
             actualProfessionalExpenses: 1000,
         });
-        const withDues = computeBelgianPIT({
+        const withDues = computeWithParity({
             ...baseProfile,
             professionalExpenseMethod: "actual",
             actualProfessionalExpenses: 1000,
@@ -1466,7 +1467,7 @@ describe("union dues / medical expenses — base-deduction fix (R7-10)", () => {
 
 describe("breakdown reconciliation — property tax row (R7-12)", () => {
     test("property tax appears as a breakdown row when estimated", () => {
-        const result = computeBelgianPIT({
+        const result = computeWithParity({
             ...baseProfile,
             cadastralIncome: 1200,
         });
@@ -1480,7 +1481,7 @@ describe("breakdown reconciliation — property tax row (R7-12)", () => {
     });
 
     test('gross PIT position row is labeled "before exemption", not "before credits"', () => {
-        const result = computeBelgianPIT({ ...baseProfile });
+        const result = computeWithParity({ ...baseProfile });
         expect(
             result.breakdown.some(
                 (r) => r.label === "Federal PIT (before exemption)",

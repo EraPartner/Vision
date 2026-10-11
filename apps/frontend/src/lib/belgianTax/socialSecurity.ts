@@ -1,5 +1,6 @@
 import type { BelgianTaxProfile } from './types';
-import type { BelgianTaxYearTable } from './constants';
+import type { BelgianTaxYearTable, CSSSTier } from './constants';
+import type { ActivityKind } from './householdTypes';
 
 /**
  * Employee social security contribution (RSZ / ONSS).
@@ -42,7 +43,18 @@ export function computeSpecialSocialSecurityContribution(
 
     const tiers =
         profile.filingStatus === 'married_joint' ? table.csssTableJoint : table.csssTable;
+    return evaluateCsssScale(netTaxableIncome, tiers);
+}
 
+/**
+ * Evaluate one CSSS scale (law of 30 March 1994 art. 108 §1) on a household income.
+ * Returns 0 for a non-positive base.
+ */
+export function evaluateCsssScale(
+    netTaxableIncome: number,
+    tiers: ReadonlyArray<CSSSTier>,
+): number {
+    if (netTaxableIncome <= 0) return 0;
     for (const tier of tiers) {
         // Tier bounds are [from, to] with the upper bound inclusive; consecutive tiers
         // share their boundary, and the first matching tier wins. Each tier is continuous
@@ -58,5 +70,22 @@ export function computeSpecialSocialSecurityContribution(
         }
         return flat;
     }
+    return 0;
+}
+
+/**
+ * Personal social security on one activity's gross income: 13.07% for employees, the reduced
+ * civil-servant rate for statutory civil servants, 0 for every other activity kind (the
+ * self-employed pay their own contributions, which the household engine stores but does not
+ * deduct).
+ */
+export function computeActivitySocialSecurity(
+    kind: ActivityKind,
+    grossIncome: number,
+    table: BelgianTaxYearTable,
+): number {
+    const gross = Math.max(grossIncome || 0, 0);
+    if (kind === 'employee') return gross * table.employeeSSRate;
+    if (kind === 'civil_servant') return gross * table.civilServantSSRate;
     return 0;
 }

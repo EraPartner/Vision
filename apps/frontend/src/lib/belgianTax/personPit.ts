@@ -7,6 +7,7 @@
 
 import type {
     BelgianRegion,
+    BelgianTaxCalculation,
     BelgianTaxProfile,
     BracketTax,
     MortgageCreditRegime,
@@ -139,6 +140,12 @@ export function computeLumpSumForfait(
         return Math.min(
             gross * table.employeeProfessionalExpenseRate,
             table.employeeProfessionalExpenseCap,
+        );
+    }
+    if (category === "helping_spouse") {
+        return Math.min(
+            gross * table.helpingSpouseProfessionalExpenseRate,
+            table.selfEmployedFeesExpenseCap,
         );
     }
     if (category === "fees") {
@@ -452,4 +459,172 @@ export function computeInvestmentSideCalc(
         Math.max(savingsInterest - table.savingsInterestExemption, 0) *
         table.savingsInterestExcessRate;
     return { dividendWhtReclaim, savingsInterestTax };
+}
+
+export interface CalculationBreakdownValues {
+    table: BelgianTaxYearTable;
+    grossIncome: number;
+    /** Spouse's professional income counted under a joint assessment; adds a row when > 0. */
+    spouseProfessionalIncome?: number;
+    employeeSocialSecurity: number;
+    netIncomeAfterSS: number;
+    professionalExpenses: number;
+    /** Show the alimony row (the single-profile engine shows it whenever alimony is entered). */
+    showAlimonyRow: boolean;
+    alimonyDeduction: number;
+    unionDuesApplied: number;
+    taxableIncome: number;
+    bracketTax: BracketTax;
+    maritalQuotientTransfer: number;
+    maritalQuotientBenefit: number;
+    personalExemptionBenefit: number;
+    ownHomeCredit: number;
+    serviceVoucherCredit: number;
+    federalTaxCredits: number;
+    federalPITBeforeExemption: number;
+    federalPITAfterReductions: number;
+    communalSurchargePercent: number;
+    communalSurcharge: number;
+    specialSocialSecurityContribution: number;
+    propertyTaxEstimate: number;
+    netTakeHome: number;
+}
+
+/**
+ * Calculation breakdown rows of `BelgianTaxCalculation`, shared by `computeBelgianPIT` and the
+ * household projection so both produce the same labels in the same order.
+ */
+export function buildCalculationBreakdown(
+    v: CalculationBreakdownValues,
+): BelgianTaxCalculation["breakdown"] {
+    return [
+        { label: "Gross Income", amount: v.grossIncome },
+        ...((v.spouseProfessionalIncome ?? 0) > 0
+            ? [{ label: "Spouse professional income", amount: v.spouseProfessionalIncome ?? 0 }]
+            : []),
+        {
+            label: "Employee Social Security",
+            amount: -v.employeeSocialSecurity,
+            rate: v.table.employeeSSRate * 100,
+        },
+        { label: "Net after Social Security", amount: v.netIncomeAfterSS },
+        { label: "Professional Expenses Deduction", amount: -v.professionalExpenses },
+        ...(v.showAlimonyRow
+            ? [
+                  {
+                      label: `Alimony paid (${Math.round(v.table.alimonyDeductibleFraction * 100)}% deductible)`,
+                      amount: -v.alimonyDeduction,
+                  },
+              ]
+            : []),
+        ...(v.unionDuesApplied > 0
+            ? [
+                  {
+                      label: "Union dues (within actual professional expenses)",
+                      amount: -v.unionDuesApplied,
+                  },
+              ]
+            : []),
+        { label: "Taxable Income", amount: v.taxableIncome },
+        // One breakdown row per non-empty bracket; the top bracket is open-ended.
+        ...v.table.brackets.flatMap((br, i) => {
+            const amount =
+                v.bracketTax[`b${i + 1}` as "b1" | "b2" | "b3" | "b4"];
+            if (amount <= 0) return [];
+            const isTop = i === v.table.brackets.length - 1;
+            return [
+                {
+                    // `label` stays English: this array is a calculation result, not
+                    // a view model, and pit.ts has no access to `t`. Consumers that
+                    // render a bracket row translate via `bracketNumber` (see
+                    // ExportDialog) — the ordinal is carried explicitly because
+                    // empty brackets are skipped, so a consumer's array index is not
+                    // the bracket number.
+                    label: `Bracket ${i + 1} (${br.rate * 100}%)`,
+                    bracketNumber: i + 1,
+                    amount: -amount,
+                    rate: br.rate * 100,
+                    bracket: isTop ? `€${br.from}+` : `€${br.from} – €${br.to}`,
+                },
+            ];
+        }),
+        ...(v.maritalQuotientTransfer > 0
+            ? [
+                  {
+                      label: `Marital quotient transferred to spouse`,
+                      amount: -v.maritalQuotientTransfer,
+                  },
+              ]
+            : []),
+        ...(v.maritalQuotientBenefit > 0
+            ? [
+                  {
+                      label: "Marital quotient tax saving",
+                      amount: -v.maritalQuotientBenefit,
+                  },
+              ]
+            : []),
+        ...(v.personalExemptionBenefit > 0
+            ? [
+                  {
+                      label: "Personal exemption benefit",
+                      amount: -v.personalExemptionBenefit,
+                  },
+              ]
+            : []),
+        ...(v.ownHomeCredit > 0
+            ? [{ label: "Own-home credit", amount: -v.ownHomeCredit }]
+            : []),
+        ...(v.serviceVoucherCredit > 0
+            ? [
+                  {
+                      label: "Service-voucher credit (dienstencheques)",
+                      amount: -v.serviceVoucherCredit,
+                  },
+              ]
+            : []),
+        ...(v.federalTaxCredits > 0
+            ? [
+                  {
+                      label: "Tax Credits (reductions)",
+                      amount: -v.federalTaxCredits,
+                  },
+              ]
+            : []),
+        // Position total, not a deduction step: gross PIT before the exemption
+        // benefit and credits listed above. (Was mislabeled "before credits".)
+        {
+            label: "Federal PIT (before exemption)",
+            amount: -v.federalPITBeforeExemption,
+        },
+        {
+            label: "Federal PIT (after credits)",
+            amount: -v.federalPITAfterReductions,
+        },
+        {
+            label: `Communal Surcharge (${v.communalSurchargePercent}%)`,
+            amount: -v.communalSurcharge,
+            rate: v.communalSurchargePercent,
+        },
+        ...(v.specialSocialSecurityContribution > 0
+            ? [
+                  {
+                      label: "Special Social Security Contribution",
+                      amount: -v.specialSocialSecurityContribution,
+                  },
+              ]
+            : []),
+        // Property tax is informational for PIT but part of totalTaxBurden, so it
+        // must appear as a row — without it the visible rows missed Net Take-Home
+        // by exactly this amount.
+        ...(v.propertyTaxEstimate > 0
+            ? [
+                  {
+                      label: "Property Tax (estimate)",
+                      amount: -v.propertyTaxEstimate,
+                  },
+              ]
+            : []),
+        { label: "Net Take-Home", amount: v.netTakeHome },
+    ];
 }
