@@ -113,3 +113,27 @@ describe("loadHouseholdSettings: v1 values the v2 schema rejects", () => {
         ]);
     });
 });
+
+describe("loadHouseholdSettings: invalid stored v2 values", () => {
+    test("reports the stored raw value and flags the fallback", () => {
+        const raw = { version: 2, taxYear: "nope" };
+        const loaded = loadHouseholdSettings(
+            stored({ grossAnnualIncome: 41_000 }, { householdV2: raw }),
+        );
+        expect(loaded.writeHousehold).toBe(false);
+        expect(loaded.storedValueInvalid).toBe(true);
+        expect(loaded.warnings).toEqual([
+            expect.objectContaining({
+                key: "belgian_tax_household_v2",
+                kind: "invalid_stored",
+                stored: raw,
+            }),
+        ]);
+    });
+
+    test("does not flag valid stored values", () => {
+        const loaded = loadHouseholdSettings(stored(undefined));
+        expect(loaded.storedValueInvalid).toBe(false);
+        expect(loaded.warnings).toEqual([]);
+    });
+});

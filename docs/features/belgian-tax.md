@@ -408,8 +408,10 @@ stored values with `loadHouseholdSettings`:
   upgraded v2 value is written immediately, but only if it passes `parseHouseholdV2` /
   `parseHouseholdSnapshotsV2`; otherwise it stays in memory unsaved and a console warning is
   logged, because the settings API would reject that write and every later save of the key.
-- An invalid v2 value logs a console warning and falls back to the v1 upgrade or the defaults;
-  it is not overwritten until the user edits.
+- An invalid v2 value logs a console warning with the validation issues and the stored raw
+  value, and falls back to the v1 upgrade or the defaults; it is not overwritten until the user
+  edits. The store sets `storedHouseholdUnreadable`, and the tax overview's disclaimer banner
+  then says that the saved household could not be read and that the next change replaces it.
 
 The v1 keys are kept but no longer written: no backend code reads `belgian_tax_profile` or
 `belgian_tax_profile_snapshots_v1` (reports receive the projected profile in the request body).

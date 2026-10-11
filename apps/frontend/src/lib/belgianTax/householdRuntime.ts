@@ -49,6 +49,11 @@ export interface LoadedHouseholdSettings {
     /** True when the snapshots were upgraded from stored v1 snapshots and must be written now. */
     writeSnapshots: boolean;
     /**
+     * True when a stored v2 value failed validation and was replaced in memory by the fallback;
+     * the user's next edit overwrites the stored value, so the tax overview says so.
+     */
+    storedValueInvalid: boolean;
+    /**
      * Validation problems: stored v2 values replaced by the fallback (`invalid_stored`), and
      * upgraded values that are kept in memory but not written (`invalid_upgrade`).
      */
@@ -59,6 +64,8 @@ export interface HouseholdSettingsWarning {
     key: "belgian_tax_household_v2" | "belgian_tax_household_snapshots_v2";
     kind: "invalid_stored" | "invalid_upgrade";
     issues: string[];
+    /** The stored raw value (`invalid_stored` only), logged so it can be recovered by hand. */
+    stored?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -121,6 +128,7 @@ export function loadHouseholdSettings(stored: StoredBelgianTaxSettings): LoadedH
                 key: "belgian_tax_household_v2",
                 kind: "invalid_stored",
                 issues: parsed.issues,
+                stored: stored.householdV2,
             });
             household = upgradeProfile();
         }
@@ -152,6 +160,7 @@ export function loadHouseholdSettings(stored: StoredBelgianTaxSettings): LoadedH
                 key: "belgian_tax_household_snapshots_v2",
                 kind: "invalid_stored",
                 issues: parsed.issues,
+                stored: stored.snapshotsV2,
             });
             snapshots = upgradeSnapshots();
         }
@@ -169,7 +178,8 @@ export function loadHouseholdSettings(stored: StoredBelgianTaxSettings): LoadedH
         }
     }
 
-    return { household, snapshots, writeHousehold, writeSnapshots, warnings };
+    const storedValueInvalid = warnings.some((w) => w.kind === "invalid_stored");
+    return { household, snapshots, writeHousehold, writeSnapshots, storedValueInvalid, warnings };
 }
 
 /** v1 projection of a household, completed with the v1 defaults for fields it does not set. */

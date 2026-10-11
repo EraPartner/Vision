@@ -133,6 +133,8 @@ export interface BelgianTaxSlice {
     viewedYear: number;
     isViewingHistorical: boolean;
     isLoading: boolean;
+    /** A stored household value was unreadable and replaced in memory; the next edit overwrites it. */
+    storedHouseholdUnreadable: boolean;
     saveErrorNonce: number;
     updateProfile: (updates: Partial<BelgianTaxProfile>) => void;
     resetProfile: () => void;
@@ -156,6 +158,7 @@ export interface BelgianTaxSlice {
         household: BelgianTaxHouseholdV2,
         householdSnapshots: BelgianTaxHouseholdSnapshotsV2,
         metas: BelgianTaxProfileSnapshotMetas,
+        storedHouseholdUnreadable?: boolean,
     ) => void;
     _beginHydration: () => void;
     _markSaveError: () => void;
@@ -260,6 +263,7 @@ export const createBelgianTaxSlice: StateCreator<
     viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
     isViewingHistorical: false,
     isLoading: true,
+    storedHouseholdUnreadable: false,
     saveErrorNonce: 0,
 
     updateProfile: (updates) =>
@@ -462,7 +466,13 @@ export const createBelgianTaxSlice: StateCreator<
                 ),
             };
         }),
-    _hydrate: (runtime, household, householdSnapshots, snapshotMetas) => {
+    _hydrate: (
+        runtime,
+        household,
+        householdSnapshots,
+        snapshotMetas,
+        storedHouseholdUnreadable = false,
+    ) => {
         householdRuntime = runtime;
         set({
             ...runtime.liveHouseholdState(
@@ -478,6 +488,7 @@ export const createBelgianTaxSlice: StateCreator<
             viewedYear: household.taxYear,
             isViewingHistorical: false,
             isLoading: false,
+            storedHouseholdUnreadable,
         });
     },
     _beginHydration: () =>
@@ -492,6 +503,7 @@ export const createBelgianTaxSlice: StateCreator<
             viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
             isViewingHistorical: false,
             isLoading: true,
+            storedHouseholdUnreadable: false,
             saveErrorNonce: 0,
         }),
     _markSaveError: () =>

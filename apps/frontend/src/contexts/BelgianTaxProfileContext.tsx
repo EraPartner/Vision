@@ -59,6 +59,7 @@ const selectPublicState = (
     viewedYear: state.viewedYear,
     isViewingHistorical: state.isViewingHistorical,
     isLoading: state.isLoading,
+    storedHouseholdUnreadable: state.storedHouseholdUnreadable,
     saveErrorNonce: state.saveErrorNonce,
     updateProfile: state.updateProfile,
     resetProfile: state.resetProfile,
@@ -166,6 +167,7 @@ export function BelgianTaxProfileProvider({
                     liveHousehold,
                     loaded.snapshots,
                     preloadedMetas ?? {},
+                    loaded.storedValueInvalid,
                 );
                 // First load after the upgrade: persist the v2 keys now (no confirmation, v1 kept).
                 const save = (key: string, value: unknown, message: string) =>

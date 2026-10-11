@@ -313,6 +313,40 @@ describe("TaxOverviewPage (integration)", () => {
         ).toBeInTheDocument();
     });
 
+    it("notes an unreadable stored household in the disclaimer banner", async () => {
+        const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+        server.use(
+            http.get(`${API_BASE}/api/settings`, () =>
+                ok(
+                    settingsWithBaselines({
+                        belgian_tax_profile: {
+                            taxYear: 2026,
+                            grossAnnualIncome: 50000,
+                            profileConfigured: true,
+                        },
+                        belgian_tax_household_v2: { version: 2, taxYear: "x" },
+                    }),
+                ),
+            ),
+        );
+        renderWithApp(<TaxOverviewPage />);
+        expect(
+            await screen.findByText(
+                /saved household tax data could not be read/i,
+            ),
+        ).toBeInTheDocument();
+        warnSpy.mockRestore();
+    });
+
+    it("does not show the unreadable-household note for a readable household", async () => {
+        renderWithApp(<TaxOverviewPage />);
+        await screen.findByText(/tax year \d{4}/i);
+        await screen.findByText(/no tax profile yet/i);
+        expect(
+            screen.queryByText(/saved household tax data could not be read/i),
+        ).not.toBeInTheDocument();
+    });
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     it("does not crash when settings endpoint returns 404", async () => {

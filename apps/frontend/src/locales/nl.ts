@@ -4170,6 +4170,7 @@ const nl: Record<string, string> = {
   'tax.household.issue.severity.warning': 'Waarschuwing',
   'tax.household.issue.treaty_exempt_separate_assessment': 'Een partner heeft bij verdrag vrijgestelde beroepsinkomsten, dus de partners worden dit jaar afzonderlijk belast.',
   'tax.household.issue.union_dues_outside_remuneration_claim': 'Vakbondsbijdragen worden alleen afgetrokken binnen werkelijke beroepskosten voor bezoldigingen en worden hier dus genegeerd.',
+  'tax.household.storedUnreadable': 'Je opgeslagen belastinggegevens van het gezin konden niet worden gelezen, dus deze bedragen komen uit je vroegere belastingprofiel. Je volgende wijziging aan het belastingprofiel vervangt de opgeslagen gegevens.',
   'tax.inKindIncomeUnclassified': 'Inkomsten die al in verworven eenheden zitten, blijven in de bronhistoriek. De gewone dividendschatting leidt hun fiscale behandeling niet af.',
   'tax.incomeBreakdown.description': 'Maandelijkse weergave van je belastbare inkomenscategorieën, met de personenbelasting pro rata uit de laatste 12 maanden.',
   'tax.incomeBreakdown.emptyCta': 'Inkomensbronnen instellen',
