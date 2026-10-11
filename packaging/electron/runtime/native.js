@@ -1854,7 +1854,7 @@ function createNativeRuntime(options) {
     );
     await runFile(
       tools.bun,
-      ["run", "apps/node-backend/scripts/db-migrate.js", "upgrade", "head"],
+      ["run", "apps/node-backend/scripts/db-migrate.ts", "upgrade", "head"],
       {
         cwd: repoRoot,
         timeout: 15 * 60_000,

@@ -2,7 +2,7 @@
 title: Database Migration Guide
 type: guide
 status: active
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-08
 tags:
   [
@@ -51,7 +51,7 @@ Vision uses [Alembic](https://alembic.sqlalchemy.org/) to manage PostgreSQL sche
 | Disposable rollback test only     | `bun run db:downgrade -- <target>`                                                                                                                              |
 
 > [!warning] Don't invoke bare `alembic` for anything that writes the version table
-> Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.js`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
+> Alembic auto-creates `alembic_version.version_num` as `VARCHAR(32)`, which is too narrow for this chain's revision ids — a fresh database dies on revision 3 with `value too long for type character varying(32)`. The `db:migrate`/`db:upgrade`/`db:downgrade`/`db:stamp`/`db:reset` scripts route through `apps/node-backend/scripts/db-migrate.ts`, which runs the boot-path `VARCHAR(64)` preflight first. See [[docs/reference/scripts|Scripts Reference]].
 
 ## Portfolio history recovery (0120–0123)
 
@@ -231,7 +231,7 @@ repository's `db-migrations` skill for schema work.
 ## Destructive DDL and the `destructive-ok` marker
 
 > [!danger] Migrations in `alembic/versions/` auto-apply on boot
-> Native startup runs `apps/node-backend/scripts/db-migrate.js`, which performs the
+> Native startup runs `apps/node-backend/scripts/db-migrate.ts`, which performs the
 > `VARCHAR(64)` preflight and then follows the guarded target policy above. Ordinary migrations
 > can reach eligible installations on their next start; the deferred maintenance bridge and the
 > pinned successor registration are explicit exceptions. There is no separate soak window.

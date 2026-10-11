@@ -1,0 +1,5 @@
+{
+  "//": "Strict check for the backend's command-line scripts (scripts/**/*.ts, ADR-195), with the source options.",
+  "extends": "./tsconfig.json",
+  "include": ["scripts/**/*.ts"]
+}

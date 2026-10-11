@@ -4,7 +4,7 @@
 # policy ("type(scope): subject"); this hook makes it real. Runs commitlint with
 # @commitlint/config-conventional (config: config/commitlint.config.mjs).
 #
-# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.js)
+# Wiring:   git config core.hooksPath .githooks   (done by scripts/setup-git-hooks.ts)
 # Bypass:   git commit --no-verify        or       SKIP_HOOKS=1 git commit ...
 #
 # Output is ASCII-only on purpose (see the note in pre-commit).

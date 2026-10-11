@@ -96,7 +96,7 @@ describe("legacy cleanup contracts", () => {
     const migration = read(
       "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
     );
-    const lifecycle = read("scripts/test-legacy-retirements.js");
+    const lifecycle = read("scripts/test-legacy-retirements.ts");
     expect(migration).toContain("WHERE resolved_bank_account_id IS NOT NULL");
     expect(migration).not.toContain("batch.status NOT IN");
     expect(migration).not.toContain("active_batches");
@@ -107,7 +107,7 @@ describe("legacy cleanup contracts", () => {
 
   it("keeps the live retirement status command read-only and secret-free", () => {
     const script = read(
-      "apps/node-backend/scripts/legacy-retirement-status.js",
+      "apps/node-backend/scripts/legacy-retirement-status.ts",
     );
     expect(script).toContain('client.query("BEGIN READ ONLY")');
     expect(script).toContain('client.query("ROLLBACK")');

@@ -64,14 +64,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4
         with:
           persist-credentials: false
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
       - name: Check agent instructions and CI classification
         run: |
           python3 scripts/check-agent-instructions.py
           python3 scripts/tests/ci-classify.test.py
       - name: Enforce private internal package boundaries
         run: |
-          node scripts/check-package-boundaries.js
-          node --test scripts/tests/package-boundaries.test.js
+          bun scripts/check-package-boundaries.ts
+          bun test scripts/tests/package-boundaries.test.ts
       - name: Enforce workflow supply-chain policy
         run: |
           python3 scripts/check-workflow-supply-chain.py
@@ -316,6 +320,11 @@ jobs:
 
       - name: Type-check backend tests (strict TypeScript)
         run: apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.tests.json
+
+      - name: Type-check backend and repository scripts (strict TypeScript, ADR-195)
+        run: |
+          apps/node-backend/node_modules/.bin/tsc -p apps/node-backend/tsconfig.scripts.json
+          apps/node-backend/node_modules/.bin/tsc -p scripts/tsconfig.json
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Python type check — mypy --strict over Alembic env and migrations, repo
@@ -685,6 +694,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+
       - name: Check all gates passed
         # Values reach the script through env, never via ${{ }} interpolation
         # into `run:` — same convention as the rest of this workflow.
@@ -722,7 +736,7 @@ jobs:
           # moved away from this run's event SHA. Equal SHA, push events, missing
           # event identity, dependency failure, and GitHub API failure all fail
           # closed. Both aggregation jobs call the same tested policy script.
-          node scripts/ci-cancellation-policy.js
+          bun scripts/ci-cancellation-policy.ts
           echo "All quality gates passed."
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -882,6 +896,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.2"
+
       - name: Check all CI stages passed
         # Values reach the script through env, never via ${{ }} interpolation
         # into `run:` — same convention as the rest of this workflow.
@@ -911,7 +930,7 @@ jobs:
 
           tolerate_cancelled=false
           if echo "$ALL_RESULTS" | grep -q '"cancelled"'; then
-            node scripts/ci-cancellation-policy.js
+            bun scripts/ci-cancellation-policy.ts
             tolerate_cancelled=true
           fi
 

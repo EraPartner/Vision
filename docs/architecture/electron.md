@@ -2,7 +2,7 @@
 title: Electron Desktop Architecture
 type: architecture-doc
 status: active
-date: 2026-10-08
+date: 2026-10-11
 updated: 2026-10-08
 tags:
   [
@@ -265,7 +265,7 @@ startup sets the canonical identity but does not inspect, rename, archive, or im
      those application-owned views so their ownership cannot invalidate the ordinary-table grant
      set;
    - create the database from `template0`, enable required extensions, and run the repository
-     migration path (`db-migrate.js` in a source checkout; its underlying `runMigrations()`
+     migration path (`db-migrate.ts` in a source checkout; its underlying `runMigrations()`
      preflight from the packaged backend); and
    - spawn the backend with an allowlisted child environment and argument arrays.
    - launch managed PostgreSQL initialization and the server with an explicit portable `C` locale,

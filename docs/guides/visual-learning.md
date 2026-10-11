@@ -2,7 +2,7 @@
 title: Understand Vision Visually
 type: guide
 status: active
-date: 2026-10-03
+date: 2026-10-11
 tags: [guide, architecture, diagrams, visual-learning, flows]
 description: A visual reading path through request handling, financial records, portfolio history, AI boundaries, and backup recovery.
 aliases: [visual learning, visual documentation, understand Vision]
@@ -184,7 +184,7 @@ audit retry after safe rollback; it preserves the external receipt. See
 The interactive data lives in the HTML's `flow-data` JSON block. Keep component IDs stable,
 learning-path references valid, and source annotations tied to real code. Stable flow IDs allow
 notes to link directly with `flow-visualizer.html#flow-id`. The repository check
-`node --test scripts/tests/flow-visualizer.test.js` validates data references and interactions in
+`bun test scripts/tests/flow-visualizer.test.ts` validates data references and interactions in
 a Document Object Model (DOM) test environment. It does not establish browser layout or Obsidian
 diagram rendering.
 

@@ -96,7 +96,7 @@
         "alembic/versions/0104_drop_dormant_import_bank_resolution.py",
         "apps/node-backend/src/types/rows.ts",
         "apps/node-backend/tests/importStagingResolvedForeignKeys.db.test.ts",
-        "scripts/test-legacy-retirements.js"
+        "scripts/test-legacy-retirements.ts"
       ],
       "readers": "No production readers.",
       "writers": "No production writers.",
@@ -118,7 +118,7 @@
         "alembic/versions/0105_retire_legacy_exchange_rate_cache.py",
         "apps/node-backend/src/backup/coverage.ts",
         "apps/node-backend/src/services/currency/currencyConversionService.ts",
-        "scripts/test-legacy-retirements.js"
+        "scripts/test-legacy-retirements.ts"
       ],
       "readers": "No current application readers.",
       "writers": "No current application writers.",
@@ -299,7 +299,7 @@
       "disposition": "Removed after tests moved to the canonical adapter registry and its test-only export allowlist entries were repointed.",
       "paths": [
         "apps/node-backend/src/services/importPipeline/adapters/index.ts",
-        "scripts/check-test-only-exports.js"
+        "scripts/check-test-only-exports.ts"
       ],
       "readers": "Backend adapter tests only.",
       "writers": "None.",

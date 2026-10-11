@@ -7,7 +7,7 @@
  *
  * To add a new locale:
  *  1. Edit i18n/source/<code>.json (the canonical source of translations).
- *  2. Run `node scripts/generate-locales.js` (or add it to your build) to emit
+ *  2. Run `bun scripts/generate-locales.ts` (or add it to your build) to emit
  *     generated frontend TS modules and packaging JSON files.
  *  3. Add the code to the `Language` union type and the `loaders` map below.
  */

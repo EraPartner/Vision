@@ -54,7 +54,7 @@ async function disposable(fn: (db: ScratchDatabase) => Promise<void>) {
     const boot = () =>
       run(
         process.execPath,
-        [path.join(root, "apps/node-backend/scripts/db-migrate.js"), "upgrade"],
+        [path.join(root, "apps/node-backend/scripts/db-migrate.ts"), "upgrade"],
         { cwd: root, env, timeout: 120000 },
       );
     const alembic = (...args: string[]) =>

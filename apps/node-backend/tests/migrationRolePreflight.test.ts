@@ -72,7 +72,7 @@ describe("migration role preflight", () => {
     expect(ci).toContain(".github/scripts/with-native-stack.sh");
     expect(release).toContain(".github/scripts/with-native-stack.sh");
     for (const wrapper of [testDb, nativeStack, demo]) {
-      expect(wrapper).toContain("apps/node-backend/scripts/db-migrate.js");
+      expect(wrapper).toContain("apps/node-backend/scripts/db-migrate.ts");
     }
     for (const contents of [ci, release, testDb, nativeStack, demo]) {
       expect(contents).not.toMatch(
