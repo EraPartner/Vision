@@ -15,11 +15,12 @@ describe("reportTaxYear", () => {
         ).toBe(2025);
     });
 
-    it("returns undefined for a period across calendar years", () => {
-        expect(reportTaxYear({ kind: "rolling", months: 12 }, today)).toBeUndefined();
-        expect(reportTaxYear({ kind: "rolling", months: 3 }, today)).toBeUndefined();
+    it("mirrors the backend for a period across calendar years", () => {
+        // periodToTaxContext: a rolling window uses the current year, a custom range its start year.
+        expect(reportTaxYear({ kind: "rolling", months: 12 }, today)).toBe(2026);
+        expect(reportTaxYear({ kind: "rolling", months: 3 }, today)).toBe(2026);
         expect(
             reportTaxYear({ kind: "custom", from: "2024-07-01", to: "2025-06-30" }, today),
-        ).toBeUndefined();
+        ).toBe(2024);
     });
 });

@@ -602,8 +602,9 @@ schema) and `precomputedHousehold` (assessment, marital quotient and each partne
 income, taxable income and tax). With two assessed partners, `belgianRulesSummary` adds a Per
 Partner table with the household total, the assessment mode and the quotient line; a
 one-partner household renders the same section as before. The dialog sends the household
-fields only for a two-partner household, describes the calendar year the period covers, and
-sends no PIT or household block for a period that is not a single calendar year. It sends the
+fields only for a two-partner household, describes the tax year the backend derives for the
+period (a full year, else the current year for the year to date and rolling windows, else the
+start year of a custom range). It sends the
 frozen calculation and household result of a frozen year. See
 [[docs/features/belgian-tax#PDF Report Export|Belgian Tax, PDF Report Export]].
 

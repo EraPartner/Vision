@@ -394,15 +394,15 @@ describe("ExportDialog", () => {
             );
         });
 
-        it("omits the PIT and household blocks for a period that is not one year", async () => {
+        it("uses the current year for a rolling period, like the backend heading", async () => {
+            const live = married(20_000);
             const options = await downloadTax(
-                { belgian_tax_household_v2: married(20_000) },
+                { belgian_tax_household_v2: live },
                 { year: "rolling" },
             );
             expect(options.period).toEqual({ kind: "rolling", months: 12 });
-            expect(options.precomputedPIT).toBeUndefined();
-            expect(options).not.toHaveProperty("household");
-            expect(options).not.toHaveProperty("precomputedHousehold");
+            expect(options.taxProfile?.taxYear).toBe(new Date().getFullYear());
+            expect(options.precomputedPIT?.totalTax).toBeGreaterThan(0);
         });
 
         it("exports a frozen year's frozen figures, not a live recompute", async () => {

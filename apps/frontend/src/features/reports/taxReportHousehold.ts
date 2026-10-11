@@ -31,23 +31,20 @@ export function toTaxReportHousehold(
 }
 
 /**
- * The calendar year a tax report period covers, which is the tax year its PIT and household
- * blocks must describe; `undefined` when the period is not a single calendar year (a rolling
- * window, or a custom range across years), and the report then carries no such blocks. A year
- * to date is the current calendar year (`today`, YYYY-MM-DD), and a custom range counts when
- * it starts and ends in the same calendar year, matching the backend's tax year for the period.
+ * The tax year a report period describes, which its PIT and household blocks must use. Mirrors
+ * the backend's `periodToTaxContext` so the blocks carry the same year as the section heading:
+ * a full year is that year; the year to date and a rolling window use the current year (`today`,
+ * YYYY-MM-DD); a custom range uses the year it starts in. The backend adds a note to the report
+ * when a rolling or custom period spans two calendar years.
  */
-export function reportTaxYear(period: ReportPeriod, today: string): number | undefined {
+export function reportTaxYear(period: ReportPeriod, today: string): number {
     switch (period.kind) {
         case "year":
             return period.year;
+        case "custom":
+            return Number(period.from.slice(0, 4));
         case "ytd":
-            return Number(today.slice(0, 4));
-        case "custom": {
-            const from = Number(period.from.slice(0, 4));
-            return from === Number(period.to.slice(0, 4)) ? from : undefined;
-        }
         case "rolling":
-            return undefined;
+            return Number(today.slice(0, 4));
     }
 }

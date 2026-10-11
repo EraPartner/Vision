@@ -679,11 +679,12 @@ Tax data including Belgian tax profile and Personal Income Tax calculations can 
 - **Fee Breakdown** — Fee aggregation by asset class
 - **Belgian Tax Rules Summary** — Static bracket/exemption tables + PIT summary when Belgian tax profile is active
 
-The export describes the calendar year the report period covers: a full year, the year to date,
-or a custom range that starts and ends in the same year. For that year it sends the figures
-through the frozen-aware resolvers, so a frozen or filed year exports its frozen calculation. A
-period that is not a single calendar year (a rolling window, or a custom range across years)
-sends no PIT or household block. With two partners in that year's household it also sends the
+The export describes the tax year the report period covers, the same year the backend puts in
+the section heading: a full year is that year, the year to date and a rolling window use the
+current year, and a custom range uses the year it starts in (the report notes a period that spans
+two calendar years). For that year it sends the figures through the frozen-aware resolvers, so a
+frozen or filed year exports its frozen calculation. With two partners in that year's household
+it also sends the
 `household` (validated by the backend's household settings schema) and `precomputedHousehold`
 (assessment, quotient and each partner's gross income, taxable income and tax), and the Belgian
 rules section adds a **Per Partner** table (You, Partner, Household total), the assessment mode

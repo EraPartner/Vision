@@ -250,17 +250,13 @@ export function ExportDialog({
             } else if (reportType === "portfolio") {
                 await downloadPortfolioReport(baseOpts);
             } else {
-                // The figures of the calendar year the period covers, so the PIT and household
-                // blocks describe the same year as the report's tables; a period that is not a
-                // single year carries neither. A frozen (or filed) year exports its frozen
-                // calculation and household result, never a live recompute (ADR-059).
+                // The figures of the tax year the period describes (the same year the backend
+                // puts in the section heading), so the PIT and household blocks match the
+                // report's tables. A frozen (or filed) year exports its frozen calculation and
+                // household result, never a live recompute (ADR-059).
                 const taxYear = reportTaxYear(period, todayYmd());
-                const configured =
-                    taxProfile.profileConfigured && taxYear !== undefined;
-                const yearProfile =
-                    taxYear === undefined
-                        ? taxProfile
-                        : resolveBelgianTaxProfile(taxState, taxYear);
+                const configured = taxProfile.profileConfigured;
+                const yearProfile = resolveBelgianTaxProfile(taxState, taxYear);
                 const resolvedTaxProfile = taxProfile.profileConfigured
                     ? {
                           filingStatus: yearProfile.employmentType,
