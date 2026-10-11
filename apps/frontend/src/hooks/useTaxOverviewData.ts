@@ -1,8 +1,11 @@
 import { useCallback, useMemo } from "react";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
 import { useBelgianTaxProfile } from "@/contexts/BelgianTaxProfileContext";
-import { computeBelgianPIT, isApproximatedTaxYear } from "@/lib/belgianTax";
+// By file path, not through the `@/lib/belgianTax` barrel, which re-exports the household engine.
+import { computeBelgianPIT } from "@/lib/belgianTax/pit";
+import { isApproximatedTaxYear } from "@/lib/belgianTax/constants";
 import {
+    calculateBelgianTaxHouseholdWithPatch,
     resolveBelgianTaxCalculation,
     resolveBelgianTaxProfile,
 } from "@/stores/belgianTaxStore";
@@ -164,10 +167,11 @@ export function useTaxOverviewData() {
         totalTaxIncludingPortfolio + calculation.propertyTaxEstimate;
 
     /**
-     * Run PIT for a given gross + tax year. Picks each year's snapshot profile when one exists
+     * Run PIT for a given gross + tax year. Picks each year's snapshot household when one exists
      * (so the historical bars reflect the inputs the user actually had at the time); otherwise
-     * falls back to the live profile applied to that year's tax tables. Each year's own bracket
-     * table is used via the year-aware `getTaxTable` fallback inside `computeBelgianPIT`.
+     * falls back to the live household applied to that year's tax tables. The bar's gross
+     * replaces partner A's primary activity income and the household engine computes the year,
+     * like the overview; `computeBelgianPIT` on the v1 projection serves only before hydration.
      */
     const pitForGross = useCallback(
         (gross: number, year: number): number => {
@@ -180,6 +184,12 @@ export function useTaxOverviewData() {
                 const ratio = gross / frozen.grossIncome;
                 return frozen.totalPIT * ratio;
             }
+            const householdCalculation = calculateBelgianTaxHouseholdWithPatch(
+                { household, householdSnapshots },
+                year,
+                { grossAnnualIncome: gross },
+            );
+            if (householdCalculation) return householdCalculation.totalPIT;
             const baseProfile = resolveBelgianTaxProfile(
                 { profile: liveProfile, snapshots },
                 year,
@@ -190,7 +200,7 @@ export function useTaxOverviewData() {
                 taxYear: year,
             }).totalPIT;
         },
-        [liveProfile, snapshots, snapshotMetas],
+        [liveProfile, snapshots, household, householdSnapshots, snapshotMetas],
     );
 
     /**

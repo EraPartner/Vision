@@ -32,7 +32,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { TaxYearStatusIcon } from "./TaxYearStatusIcon";
-import { computeBelgianPIT } from "@/lib/belgianTax";
+import { resolveBelgianTaxCalculation } from "@/stores/belgianTaxStore";
 
 interface MultiYearTrendStripProps {
     className?: string;
@@ -52,17 +52,27 @@ export function MultiYearTrendStrip({
 }: MultiYearTrendStripProps) {
     const formatPercent = usePercentFormatter();
     const { t } = useLanguage();
-    const { viewedYear, setViewedYear, profile, snapshots, snapshotMetas } =
-        useBelgianTaxProfile((state) => ({
-            viewedYear: state.viewedYear,
-            setViewedYear: state.setViewedYear,
-            profile: state.profile,
-            snapshots: state.snapshots,
-            snapshotMetas: state.snapshotMetas,
-        }));
+    const {
+        viewedYear,
+        setViewedYear,
+        profile,
+        snapshots,
+        household,
+        householdSnapshots,
+        snapshotMetas,
+    } = useBelgianTaxProfile((state) => ({
+        viewedYear: state.viewedYear,
+        setViewedYear: state.setViewedYear,
+        profile: state.profile,
+        snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
+        snapshotMetas: state.snapshotMetas,
+    }));
     // Keep the active-year preview instant elsewhere, but coalesce wizard keystrokes
-    // before running the full PIT engine for every historical comparison tile.
+    // before running the full household engine for every historical comparison tile.
     const trendProfile = useDebounce(profile);
+    const trendHousehold = useDebounce(household);
     const years = useAvailableTaxYears();
     // Shared cached currency formatter; whole-euro tiles (decimals pinned to 0,
     // same rendering as the old maximumFractionDigits: 0 formatter).
@@ -72,15 +82,18 @@ export function MultiYearTrendStrip({
     const tiles = useMemo(() => {
         const limited = years.slice(0, maxYears);
         const rows = limited.map((entry) => {
-            const frozen = snapshotMetas[entry.year]?.frozenCalculation;
-            const yearProfile =
-                entry.year === trendProfile.taxYear
-                    ? trendProfile
-                    : (snapshots[entry.year] ?? {
-                          ...trendProfile,
-                          taxYear: entry.year,
-                      });
-            const calc = frozen ?? computeBelgianPIT(yearProfile);
+            // Same resolution as the overview: frozen calculation, else the household of
+            // that year (the v1 projection only before hydration).
+            const calc = resolveBelgianTaxCalculation(
+                {
+                    profile: trendProfile,
+                    snapshots,
+                    household: trendHousehold,
+                    householdSnapshots,
+                    snapshotMetas,
+                },
+                entry.year,
+            );
             return {
                 ...entry,
                 totalPIT: calc.totalPIT,
@@ -93,7 +106,15 @@ export function MultiYearTrendStrip({
             ...r,
             barRatio: maxPIT > 0 ? Math.max(0.04, r.totalPIT / maxPIT) : 0,
         }));
-    }, [years, maxYears, snapshotMetas, snapshots, trendProfile]);
+    }, [
+        years,
+        maxYears,
+        snapshotMetas,
+        snapshots,
+        trendProfile,
+        trendHousehold,
+        householdSnapshots,
+    ]);
 
     if (tiles.length <= 1) return null;
 

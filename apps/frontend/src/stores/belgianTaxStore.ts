@@ -133,6 +133,10 @@ export interface BelgianTaxSlice {
     viewedYear: number;
     isViewingHistorical: boolean;
     isLoading: boolean;
+    /** A stored household value was unreadable and replaced in memory; the next edit overwrites it. */
+    storedHouseholdUnreadable: boolean;
+    /** The household engine chunk failed to load; editing is disabled and nothing is saved. */
+    householdLoadFailed: boolean;
     saveErrorNonce: number;
     updateProfile: (updates: Partial<BelgianTaxProfile>) => void;
     resetProfile: () => void;
@@ -156,8 +160,10 @@ export interface BelgianTaxSlice {
         household: BelgianTaxHouseholdV2,
         householdSnapshots: BelgianTaxHouseholdSnapshotsV2,
         metas: BelgianTaxProfileSnapshotMetas,
+        storedHouseholdUnreadable?: boolean,
     ) => void;
     _beginHydration: () => void;
+    _markHydrationFailed: () => void;
     _markSaveError: () => void;
 }
 
@@ -212,6 +218,28 @@ function computeYearResults(state: YearState, year: number): YearResults {
     };
 }
 
+/**
+ * Calculation of `year`'s household with a v1 patch applied (e.g. a chart bar's gross income on
+ * partner A's primary activity), through the loaded engine; `undefined` before hydration.
+ */
+export function calculateBelgianTaxHouseholdWithPatch(
+    state: Pick<BelgianTaxSlice, "household" | "householdSnapshots">,
+    year: number,
+    patch: Partial<BelgianTaxProfile>,
+): BelgianTaxCalculation | undefined {
+    const runtime = householdRuntime;
+    const household = resolveBelgianTaxHousehold(state, year);
+    if (!runtime || !household) return undefined;
+    const next: BelgianTaxHouseholdV2 = {
+        ...runtime.applyProfileV1PatchToHousehold(household, patch),
+        taxYear: year,
+    };
+    return runtime.toBelgianTaxCalculation(
+        runtime.computeHouseholdTax(next),
+        next,
+    );
+}
+
 export function resolveBelgianTaxCalculation(
     state: YearState & Pick<BelgianTaxSlice, "snapshotMetas">,
     year: number,
@@ -238,6 +266,8 @@ export const createBelgianTaxSlice: StateCreator<
     viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
     isViewingHistorical: false,
     isLoading: true,
+    storedHouseholdUnreadable: false,
+    householdLoadFailed: false,
     saveErrorNonce: 0,
 
     updateProfile: (updates) =>
@@ -440,7 +470,13 @@ export const createBelgianTaxSlice: StateCreator<
                 ),
             };
         }),
-    _hydrate: (runtime, household, householdSnapshots, snapshotMetas) => {
+    _hydrate: (
+        runtime,
+        household,
+        householdSnapshots,
+        snapshotMetas,
+        storedHouseholdUnreadable = false,
+    ) => {
         householdRuntime = runtime;
         set({
             ...runtime.liveHouseholdState(
@@ -456,6 +492,8 @@ export const createBelgianTaxSlice: StateCreator<
             viewedYear: household.taxYear,
             isViewingHistorical: false,
             isLoading: false,
+            storedHouseholdUnreadable,
+            householdLoadFailed: false,
         });
     },
     _beginHydration: () =>
@@ -470,8 +508,12 @@ export const createBelgianTaxSlice: StateCreator<
             viewedYear: DEFAULT_BELGIAN_TAX_PROFILE.taxYear,
             isViewingHistorical: false,
             isLoading: true,
+            storedHouseholdUnreadable: false,
+            householdLoadFailed: false,
             saveErrorNonce: 0,
         }),
+    _markHydrationFailed: () =>
+        set({ isLoading: false, householdLoadFailed: true }),
     _markSaveError: () =>
         set((state) => ({ saveErrorNonce: state.saveErrorNonce + 1 })),
 });

@@ -252,12 +252,26 @@ function isHouseholdV2(value: unknown): value is BelgianTaxHouseholdV2 {
     );
 }
 
-/** Upgrade a v1 profile to a v2 household. A v2 value is returned unchanged. */
+/**
+ * The v1 profile without its `null` fields. The v1 settings schema accepts `null` for any field,
+ * but the household stores absent values as `undefined` (backend convention), so a stored `null`
+ * means "not set".
+ */
+export function withoutNullFields<T extends object>(profile: T): T {
+    return Object.fromEntries(
+        Object.entries(profile).filter(([, value]) => value !== null),
+    ) as T;
+}
+
+/**
+ * Upgrade a v1 profile to a v2 household. A v2 value is returned unchanged; `null` v1 fields are
+ * treated as absent.
+ */
 export function upgradeProfileV1ToHousehold(
     profile: BelgianTaxProfile | BelgianTaxHouseholdV2,
 ): BelgianTaxHouseholdV2 {
     if (isHouseholdV2(profile)) return profile;
-    const p = profile;
+    const p = withoutNullFields(profile);
     const unmappedFields: UnmappedField[] = [];
 
     const kind = activityKindFor(p.employmentType, p.selfEmployedIncomeKind);

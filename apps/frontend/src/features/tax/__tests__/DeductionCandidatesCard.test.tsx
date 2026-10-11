@@ -67,8 +67,11 @@ const profile = {
     alimonyPaid: 0,
 } as unknown as BelgianTaxProfile;
 
+const taxState = { household: {} as object | null };
+
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
-    useBelgianTaxProfile: () => ({ profile, updateProfile }),
+    useBelgianTaxProfile: (selector: (state: object) => unknown) =>
+        selector({ profile, updateProfile, household: taxState.household }),
 }));
 
 const mockUseDeductionCandidates = vi.fn();
@@ -138,6 +141,7 @@ function renderCard() {
 beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+    taxState.household = {};
     mockUseDeductionCandidates.mockReturnValue({
         data: makeResponse(),
         isLoading: false,
@@ -186,6 +190,20 @@ test("confirm writes amount field and eligibility flag for lifeInsurance", () =>
         lifeInsuranceEligible: true,
     });
     expect(screen.getByText("Applied")).toBeInTheDocument();
+});
+
+// Before the household is hydrated (or when its engine failed to load) `updateProfile` is a
+// no-op, so Confirm must not mark a candidate applied.
+test("confirm is disabled and applies nothing without a hydrated household", () => {
+    taxState.household = null;
+    renderCard();
+
+    const confirm = nthButton("Confirm", 0);
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+
+    expect(updateProfile).not.toHaveBeenCalled();
+    expect(screen.queryByText("Applied")).not.toBeInTheDocument();
 });
 
 // Confirm on a type WITHOUT an eligibility flag writes only the amount field.

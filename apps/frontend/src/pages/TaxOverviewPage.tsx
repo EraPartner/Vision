@@ -106,14 +106,26 @@ export default function TaxOverviewPage() {
             ? NO_HOUSEHOLD_ISSUES
             : (state.householdResult?.issues ?? NO_HOUSEHOLD_ISSUES),
     );
-    const householdNotes = [
-        ...new Map(
-            householdIssues.map((issue) => [issue.code, issue]),
-        ).values(),
-    ].map(
-        (issue) =>
-            `${t(`tax.household.issue.severity.${issue.severity}`)}: ${t(`tax.household.issue.${issue.code}`)}`,
+    const storedHouseholdUnreadable = useBelgianTaxProfile(
+        (state) => state.storedHouseholdUnreadable,
     );
+    const householdLoadFailed = useBelgianTaxProfile(
+        (state) => state.householdLoadFailed,
+    );
+    // An unreadable stored household is shown first: the next edit overwrites it.
+    const householdNotes = [
+        ...(storedHouseholdUnreadable
+            ? [t("tax.household.storedUnreadable")]
+            : []),
+        ...[
+            ...new Map(
+                householdIssues.map((issue) => [issue.code, issue]),
+            ).values(),
+        ].map(
+            (issue) =>
+                `${t(`tax.household.issue.severity.${issue.severity}`)}: ${t(`tax.household.issue.${issue.code}`)}`,
+        ),
+    ];
     const WIDGETS = getBudgetTaxWidgets(t);
     const {
         isVisible,
@@ -228,7 +240,9 @@ export default function TaxOverviewPage() {
                     notes={householdNotes}
                 />
 
-                {isProfileLoading ? (
+                {householdLoadFailed ? (
+                    <PageError message={t("tax.household.loadFailed")} />
+                ) : isProfileLoading ? (
                     <SectionLoader />
                 ) : isEmpty ? (
                     <TaxNoProfileCard />

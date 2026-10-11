@@ -8,6 +8,10 @@ import { ok, settingsWithBaselines } from "@/test/msw/handlers";
 import { apiClient } from "@/lib/api";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { DEFAULT_BELGIAN_TAX_PROFILE } from "@/stores/belgianTaxStore";
+import {
+    parseHouseholdSnapshotsV2,
+    parseHouseholdV2,
+} from "@/lib/belgianTax/householdSchema";
 import { SettingsPreloadProvider } from "@/contexts/SettingsPreloadContext";
 import {
     BelgianTaxProfileProvider,
@@ -182,6 +186,39 @@ describe("BelgianTaxProfileContext", () => {
                 ),
             );
         }
+
+        it("writes schema-valid v2 keys for v1 values with null fields and a snapshot without region", async () => {
+            serve({
+                belgian_tax_profile: {
+                    taxYear: 2026,
+                    grossAnnualIncome: 52_000,
+                    mortgageStartYear: null,
+                    annualDividendIncome: null,
+                    dependentChildrenUnder3: null,
+                },
+                belgian_tax_profile_snapshots_v1: {
+                    2024: { taxYear: 2024, grossAnnualIncome: 47_000 },
+                },
+            });
+            const { result } = renderHook(() => useBelgianTaxProfile(), {
+                wrapper: makeWrapper(),
+            });
+            await waitFor(() => expect(result.current.isLoading).toBe(false));
+            await waitFor(() =>
+                expect(apiClient.saveSetting).toHaveBeenCalledTimes(2),
+            );
+            const calls = Object.fromEntries(
+                vi.mocked(apiClient.saveSetting).mock.calls,
+            ) as Record<string, unknown>;
+            expect(parseHouseholdV2(calls.belgian_tax_household_v2).ok).toBe(
+                true,
+            );
+            expect(
+                parseHouseholdSnapshotsV2(
+                    calls.belgian_tax_household_snapshots_v2,
+                ).ok,
+            ).toBe(true);
+        });
 
         it("upgrades v1 keys and writes the v2 keys immediately", async () => {
             serve(v1Settings);

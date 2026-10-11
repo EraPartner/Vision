@@ -37,10 +37,14 @@ import { todayYmd } from "@/lib/timezone";
  * applicable groups remain.
  */
 export function DeductionCandidatesCard() {
-    const { profile, updateProfile } = useBelgianTaxProfile((state) => ({
-        profile: state.profile,
-        updateProfile: state.updateProfile,
-    }));
+    const { profile, updateProfile, canApply } = useBelgianTaxProfile(
+        (state) => ({
+            profile: state.profile,
+            updateProfile: state.updateProfile,
+            // `updateProfile` is a no-op until the household is hydrated.
+            canApply: state.household != null,
+        }),
+    );
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const { data, isLoading, isError, isFetching, refetch } =
@@ -91,7 +95,7 @@ export function DeductionCandidatesCard() {
 
     const applyCandidate = (group: DeductionTypeGroup) => {
         const mapping = DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
-        if (!mapping) return;
+        if (!mapping || !canApply) return;
         // SET semantics: the total replaces the field's current value (shown to
         // the user below), it is never added to it.
         const updates: Record<string, number | boolean> = {
@@ -109,7 +113,7 @@ export function DeductionCandidatesCard() {
 
     const handleConfirm = async (group: DeductionTypeGroup) => {
         const mapping = DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
-        if (!mapping) return;
+        if (!mapping || !canApply) return;
         const currentYear = Number(todayYmd().slice(0, 4));
         if (year === currentYear) {
             const acknowledged = await confirm({
@@ -222,6 +226,7 @@ export function DeductionCandidatesCard() {
                                             <div className="flex items-center gap-1">
                                                 <Button
                                                     size="sm"
+                                                    disabled={!canApply}
                                                     onClick={() =>
                                                         void handleConfirm(
                                                             group,

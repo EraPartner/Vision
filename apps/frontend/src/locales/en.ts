@@ -4170,6 +4170,8 @@ const en: Record<string, string> = {
   'tax.household.issue.severity.warning': 'Warning',
   'tax.household.issue.treaty_exempt_separate_assessment': 'A partner has treaty-exempt professional income, so the partners are assessed separately for this year.',
   'tax.household.issue.union_dues_outside_remuneration_claim': 'Union dues are only deducted inside an actual-expense claim for remuneration, so they are ignored here.',
+  'tax.household.loadFailed': 'The tax calculator could not be loaded, so your tax profile cannot be shown or changed. Check your connection and reload the page.',
+  'tax.household.storedUnreadable': 'Your saved household tax data could not be read, so these figures come from your earlier tax profile. Your next change to the tax profile will replace the saved data.',
   'tax.inKindIncomeUnclassified': 'Income already included in acquired units remains in the source history. The ordinary dividend estimate does not infer its tax treatment.',
   'tax.incomeBreakdown.description': 'Monthly view of your taxable-income categories, with income tax prorated from the last 12 months.',
   'tax.incomeBreakdown.emptyCta': 'Configure income sources',
