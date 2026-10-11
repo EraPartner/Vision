@@ -43,11 +43,13 @@ import {
     clampAtZero,
     computeExemptionBenefit,
     computeInvestmentSideCalc,
+    computeDonationReduction,
     computeMarginalRate,
     computePensionReduction,
     computeProfessionalExpenseClaim,
     computeProgressiveTax,
     computeTaxReductions,
+    qualifyingDonations,
     type TaxReductionBreakdown,
     isChildcareDeducted,
     resolveMortgageRegime,
@@ -486,6 +488,7 @@ function computeTaxStep(
         );
         combined += pit;
     });
+    const gifts = donationReductions(incomes, mode === "joint", taxables, table);
     return {
         taxables,
         brackets,
@@ -553,12 +556,7 @@ export function computeHouseholdTax(
     // under a joint assessment, the gift apportionment depend on the step; all feed the art. 88
     // comparison below.
     const partnerReductions = incomes.map((inc) =>
-        computeTaxReductions(
-            inc.partner.reductions,
-            household.region,
-            inc.taxableIncomeBeforeQuotient,
-            table,
-        ),
+        computeTaxReductions(inc.partner.reductions, household.region, inc.netIncome, table),
     );
     const fixedCredits = incomes.map(
         (inc, i) =>
@@ -700,7 +698,7 @@ export function computeHouseholdTax(
     if (
         mode === "joint" &&
         partnerResults.length === 2 &&
-        partnerResults.some((p) => p.reductions.total + p.ownHomeCredit > 0)
+        partnerResults.some((p) => p.reductions.total - p.reductions.donations > 0)
     ) {
         issues.push({ code: "joint_reduction_allocation_unverified", severity: "needs_source" });
     }

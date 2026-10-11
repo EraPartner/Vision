@@ -130,7 +130,7 @@ fin.belgium.be explain the rules; the laws give the rule text.
 
 | Rule                      | Legal basis    | IY 2024 | IY 2025 | IY 2026 | Source  | Code                         | Tests                                  | Status   | Scenarios |
 | ------------------------- | -------------- | ------- | ------- | ------- | ------- | ---------------------------- | -------------------------------------- | -------- | --------- |
-| Alimony paid, deductible share | art. 104, 1°-2° | 80%  | 70%     | 60% (50% from 2027) | L1 art. 35, F6 | `alimonyDeductibleFraction` | "alimony deductible at 80% (2024), 70% (2025) and 60% (2026)" | verified (IY 2025 corrected from 80%) | `alimony`: JA-01 |
+| Alimony paid, deductible share | art. 104, 1°-2° | 80%  | 70%     | 60% (50% from 2027) | L1 art. 35, F6 | `alimonyDeductibleFraction` | "alimony deductible at 80% (2024), 70% (2025) and 60% (2026)" | verified (IY 2025 corrected from 80%) | `alimony`: JA-01, SC-23 |
 
 ## Tax reductions
 

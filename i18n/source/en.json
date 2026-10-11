@@ -4251,6 +4251,7 @@
   "tax.household.issue.csss_mixed_activity_base_unverified": "The special social security contribution base for mixed activities is not yet verified against the law.",
   "tax.household.issue.deceased_partner_not_assessed": "The partner who died in an earlier year is not assessed for this year.",
   "tax.household.issue.director_contributions_not_deducted": "Social contributions entered for a company director activity are not deducted in this estimate.",
+  "tax.household.issue.donation_joint_ceiling_unverified": "The gifts exceed 10% of the giver's own net income. Whether the 10% limit applies to the couple's combined income under a joint assessment is not yet verified against the law; this estimate uses the combined income.",
   "tax.household.issue.forfait_category_aggregation_unverified": "Combining several activities in one professional-expense category is not yet verified against the law.",
   "tax.household.issue.isolated_parent_supplement_not_granted": "The isolated-parent supplement is not granted while a partner is assessed in the same household.",
   "tax.household.issue.joint_reduction_allocation_unverified": "How tax reductions are split between partners under a joint assessment is not yet verified against the law.",

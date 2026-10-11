@@ -4253,6 +4253,7 @@ const nl: Record<string, string> = {
   'tax.household.issue.csss_mixed_activity_base_unverified': 'De grondslag van de bijzondere bijdrage voor de sociale zekerheid bij gemengde activiteiten is nog niet getoetst aan de wet.',
   'tax.household.issue.deceased_partner_not_assessed': 'De partner die in een eerder jaar overleden is, wordt voor dit jaar niet belast.',
   'tax.household.issue.director_contributions_not_deducted': 'Sociale bijdragen ingevuld voor een activiteit als bedrijfsleider worden in deze raming niet afgetrokken.',
+  'tax.household.issue.donation_joint_ceiling_unverified': 'De giften zijn hoger dan 10% van het eigen netto-inkomen van de schenker. Of de grens van 10% bij een gemeenschappelijke aanslag op het samengetelde inkomen slaat, is nog niet getoetst aan de wet; deze raming gebruikt het samengetelde inkomen.',
   'tax.household.issue.forfait_category_aggregation_unverified': 'Het samenvoegen van meerdere activiteiten in één categorie beroepskosten is nog niet getoetst aan de wet.',
   'tax.household.issue.isolated_parent_supplement_not_granted': 'De toeslag voor een alleenstaande ouder wordt niet toegekend zolang een partner in hetzelfde gezin wordt belast.',
   'tax.household.issue.joint_reduction_allocation_unverified': 'Hoe belastingverminderingen bij een gemeenschappelijke aanslag over de partners worden verdeeld, is nog niet getoetst aan de wet.',

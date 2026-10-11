@@ -259,9 +259,40 @@ export interface TaxReductionBreakdown {
 }
 
 /**
+ * Gifts that qualify for the art. 145/33 reduction: the entered amount when the eligibility flag
+ * is set and the gifts reach the minimum ("ten minste 40 euro"), else 0.
+ */
+export function qualifyingDonations(
+    inputs: Pick<ReductionInputs, "charitableDonations" | "charitableDonationsEligible">,
+    table: BelgianTaxYearTable,
+): number {
+    const amount = Math.max(inputs.charitableDonations || 0, 0);
+    return inputs.charitableDonationsEligible && amount >= table.charitableDonationMin ? amount : 0;
+}
+
+/**
+ * Art. 145/33 §1 al. 3-4: rate × the gifts, the gifts limited to 10% of the "totale netto-inkomen"
+ * (without separately taxed income; before the deductible spending of arts 104-116) and to the
+ * absolute cap. `netIncome` is that total net income of the assessment.
+ */
+export function computeDonationReduction(
+    gifts: number,
+    netIncome: number,
+    table: BelgianTaxYearTable,
+): number {
+    const eligible = Math.min(
+        Math.max(gifts, 0),
+        Math.max(netIncome * 0.1, 0),
+        table.charitableDonationAbsoluteCap,
+    );
+    return eligible * table.charitableDonationRate;
+}
+
+/**
  * Federal tax reductions (réductions d'impôt) and the regional service-voucher reduction of one
- * taxpayer. `donationBaseIncome` is the taxable income the 10% donation ceiling refers to
- * (art. 145/33 §1 al. 4).
+ * taxpayer. `donationBaseIncome` is the total net income the 10% donation ceiling refers to
+ * (art. 145/33 §1 al. 4: "10 % van het totale netto-inkomen"), before the deductible spending
+ * (alimony) of arts 104-116.
  */
 export function computeTaxReductions(
     inputs: ReductionInputs,
@@ -292,20 +323,11 @@ export function computeTaxReductions(
           table.groupInsuranceRate
         : 0;
 
-    // Charitable donations: eligible donation = min(gift, 10% × net taxable income, absolute cap).
-    // The €40 minimum applies to the gift itself, not to the eligible (capped) portion.
-    const donationAmount = Math.max(inputs.charitableDonations || 0, 0);
-    const donationNetIncomeCap = Math.max(donationBaseIncome * 0.1, 0);
-    const eligibleDonation = Math.min(
-        donationAmount,
-        donationNetIncomeCap,
-        table.charitableDonationAbsoluteCap,
+    const donations = computeDonationReduction(
+        qualifyingDonations(inputs, table),
+        donationBaseIncome,
+        table,
     );
-    const donations =
-        inputs.charitableDonationsEligible &&
-        donationAmount >= table.charitableDonationMin
-            ? eligibleDonation * table.charitableDonationRate
-            : 0;
 
     const childcareDayCap =
         Math.max(inputs.childcareEligibleDays || 0, 0) *

@@ -234,11 +234,11 @@ aliases: [belgian tax scenarios, tax scenario matrix]
 | `forfait-fees` | [[docs/reference/belgian-tax-rule-matrix#Professional expenses (forfait)\|Professional expenses (forfait)]] | Fees (baten)… | SC-05, SC-09 |
 | `forfait-helping-spouse` | [[docs/reference/belgian-tax-rule-matrix#Professional expenses (forfait)\|Professional expenses (forfait)]] | Helping spouse… | SC-06 |
 | `forfait-none-pensions` | [[docs/reference/belgian-tax-rule-matrix#Professional expenses (forfait)\|Professional expenses (forfait)]] | Pensions and replacement income… | SC-07 |
-| `alimony` | [[docs/reference/belgian-tax-rule-matrix#Deductions from the taxable base\|Deductions from the taxable base]] | Alimony paid… | JA-01 |
+| `alimony` | [[docs/reference/belgian-tax-rule-matrix#Deductions from the taxable base\|Deductions from the taxable base]] | Alimony paid… | JA-01, SC-23 |
 | `pension-savings` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Pension savings… | JR-01 |
 | `life-insurance` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Long-term savings… | — |
-| `donations` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Donations: rate… | SC-17 |
-| `donations-cap` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Donations capped… | — |
+| `donations` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Donations: rate… | SC-17, JG-01, SC-23 |
+| `donations-cap` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Donations capped… | JG-01, SC-23 |
 | `childcare` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Childcare 45%… | — |
 | `domestic-help` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Domestic personnel… | — |
 | `service-voucher-rule` | [[docs/reference/belgian-tax-rule-matrix#Tax reductions\|Tax reductions]] | Service vouchers: reduction… | SV-2024-flanders, SV-2024-wallonia, SV-2024-brussels, SV-2025-flanders, SV-2025-wallonia, SV-2025-brussels, SV-2026-flanders, SV-2026-wallonia, SV-2026-brussels |

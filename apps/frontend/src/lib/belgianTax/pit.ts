@@ -344,11 +344,18 @@ export function computeBelgianPIT(
     const pitAfterExemption = quotient.pitAfterExemption;
 
     // 7. Federal tax credits (réductions d'impôt) and the regional service-voucher credit.
-    //    Donations are capped at 10% of the (pre-quotient) taxable income.
+    //    Donations are capped at 10% of the total net income, before the alimony deduction
+    //    (art. 145/33 §1 al. 4: "het totale netto-inkomen"). Under `married_joint` the gifts
+    //    are capped once on the spouses' combined net income, as in the household engine.
+    const totalNetIncome = clampAtZero(netAfterSS - profExpenses);
+    const donationBaseIncome =
+        profile.filingStatus === "married_joint"
+            ? totalNetIncome + Math.max(profile.spouseProfessionalIncome || 0, 0)
+            : totalNetIncome;
     const reductions = computeTaxReductions(
         profile,
         profile.region,
-        taxableIncome,
+        donationBaseIncome,
         table,
     );
 
