@@ -2,8 +2,8 @@
 title: Reports API
 type: endpoint
 status: active
-date: 2026-10-10
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   - api
   - reports
@@ -309,7 +309,7 @@ Generate a portfolio PDF report with 6 data-backed sections (Phase 8).
 
 Generate a tax PDF report with 7 data-backed sections (Phase 8).
 
-**Request body:** Extends the base schema with two optional fields:
+**Request body:** Extends the base schema with four optional fields (`taxProfile`, `precomputedPIT`, and since 2026-10-11 `household` and `precomputedHousehold`):
 
 ```json
 {
@@ -340,6 +340,8 @@ Generate a tax PDF report with 7 data-backed sections (Phase 8).
 | Field            | Type              | Description                                                                                                                                                                                                                                                                                                                                                                   |
 | ---------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `taxProfile`     | object (optional) | `{ filingStatus?, region?, taxYear? }` — Belgian filing context; echoed into `belgianRulesSummary`                                                                                                                                                                                                                                                                            |
+| `household`      | object (optional) | The year's Belgian tax household (2026-10-11, additive), validated by `belgianTaxHouseholdV2Schema` (`routes/belgianTaxSettingsSchemas.ts`); only partner display names are rendered                                                                                                                                                                                         |
+| `precomputedHousehold` | object (optional) | `{ assessmentMode, legalBasis?, quotient?, partners[] }` (2026-10-11, additive) — per-partner `grossIncome`, `taxableIncome`, `totalPIT` from the frontend household engine; partner ids must be unique (400 otherwise). With two partners, `belgianRulesSummary` adds a Per Partner table with the household total, the assessment and the marital quotient; with one partner nothing changes                         |
 | `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets? }` — PIT calculation from the frontend Belgian tax engine; rendered as a bracket table in `belgianRulesSummary`. If omitted, the section renders only the static bracket/rate tables. **`brackets[].rate` is in PERCENT units** (`25` = 25%), unlike the server-side `belgianTaxTables.js` rates, which are fractions (`0.30` = 30%). |
 
 **Available Sections:**

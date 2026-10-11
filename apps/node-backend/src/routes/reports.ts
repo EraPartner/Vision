@@ -18,6 +18,7 @@ import { z } from "zod";
 import { generateReport } from "../services/reports/index.ts";
 import { HSL_COMPONENT_RE } from "../services/reports/themeCss.ts";
 import { parseInput } from "../lib/zodInput.ts";
+import { belgianTaxHouseholdV2Schema } from "./belgianTaxSettingsSchemas.ts";
 
 const router = Router();
 
@@ -101,6 +102,42 @@ const precomputedPITSchema = z
   })
   .optional();
 
+// Per-partner household result from the frontend engine (ADR-200/201): the tax
+// section renders a row per partner plus the household total when two partners
+// are assessed. Amounts only; the backend computes no tax.
+const reportPartnerId = z.enum(["A", "B"]);
+const precomputedHouseholdSchema = z
+  .object({
+    assessmentMode: z.enum(["single", "separate", "joint"]),
+    legalBasis: z.string().max(200).optional(),
+    quotient: z
+      .object({
+        applied: z.boolean(),
+        transfer: z.number(),
+        fromPartnerId: reportPartnerId.optional(),
+        toPartnerId: reportPartnerId.optional(),
+        benefit: z.number(),
+      })
+      .optional(),
+    partners: z
+      .array(
+        z.object({
+          partnerId: reportPartnerId,
+          grossIncome: z.number(),
+          taxableIncome: z.number(),
+          totalPIT: z.number(),
+        }),
+      )
+      .min(1)
+      .max(2)
+      .refine(
+        (partners) =>
+          new Set(partners.map((p) => p.partnerId)).size === partners.length,
+        { message: "partner ids must be unique" },
+      ),
+  })
+  .optional();
+
 const int4Id = z.number().int().positive().max(2147483647);
 
 const reportBodySchema = z.object({
@@ -115,6 +152,9 @@ const reportBodySchema = z.object({
   excludedRecipientIds: z.array(int4Id).default([]),
   taxProfile: taxProfileSchema,
   precomputedPIT: precomputedPITSchema,
+  // The year's household (same schema as the belgian_tax_household_v2 setting).
+  household: belgianTaxHouseholdV2Schema.optional(),
+  precomputedHousehold: precomputedHouseholdSchema,
 });
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -194,6 +234,8 @@ router.post("/tax", async (req, res) => {
     excludedRecipientIds,
     taxProfile,
     precomputedPIT,
+    household,
+    precomputedHousehold,
   } = parseReportBody(req.body);
   await sendReport(res, {
     type: "tax",
@@ -205,6 +247,8 @@ router.post("/tax", async (req, res) => {
     excludedRecipientIds,
     taxProfile,
     precomputedPIT,
+    household,
+    precomputedHousehold,
   });
 });
 

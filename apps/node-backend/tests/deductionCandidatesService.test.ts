@@ -8,16 +8,22 @@ vi.mock("../src/repositories/transactionRepository.ts", () => ({
 vi.mock("../src/services/categoryService.ts", () => ({
   listCategoryNodes: vi.fn(),
 }));
+vi.mock("../src/repositories/accountRepository.ts", () => ({
+  default: { listOwners: vi.fn() },
+}));
 
 import { transactionRepository as rawTransactionRepository } from "../src/repositories/transactionRepository.ts";
 import type { EnrichedTransactionRow } from "../src/repositories/transactionRepository.ts";
 import type { CategoryNode } from "../src/repositories/categoryHierarchyRepository.ts";
 import { listCategoryNodes as rawListCategoryNodes } from "../src/services/categoryService.ts";
+import rawAccountRepository from "../src/repositories/accountRepository.ts";
 import { computeDeductionCandidates } from "../src/services/tax/deductionCandidatesService.ts";
 import { partial } from "./helpers/partial.ts";
 
 const transactionRepository = vi.mocked(rawTransactionRepository);
 const listCategoryNodes = vi.mocked(rawListCategoryNodes);
+const accountRepository = vi.mocked(rawAccountRepository);
+const mine = (total: number) => ({ me: total, partner: 0, joint: 0 });
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -82,12 +88,14 @@ describe("computeDeductionCandidates", () => {
         {
           deductionType: "charitableDonations",
           total: 200,
+          byOwner: mine(200),
           categoryCount: 1,
           categories: [{ category: "GIVING:DONATION", total: 200, count: 1 }],
         },
         {
           deductionType: "pensionSavings",
           total: 145,
+          byOwner: mine(145),
           categoryCount: 2,
           // Nested contributors sorted by total desc.
           categories: [
@@ -98,6 +106,7 @@ describe("computeDeductionCandidates", () => {
         {
           deductionType: "lifeInsurance",
           total: 75,
+          byOwner: mine(75),
           categoryCount: 1,
           categories: [{ category: "INSURANCE:LIFE", total: 75, count: 1 }],
         },
@@ -123,6 +132,7 @@ describe("computeDeductionCandidates", () => {
       {
         deductionType: "charitableDonations",
         total: 40,
+        byOwner: mine(40),
         categoryCount: 1,
         categories: [{ category: "GIVING:DONATION", total: 40, count: 1 }],
       },
@@ -151,10 +161,51 @@ describe("computeDeductionCandidates", () => {
       {
         deductionType: "lifeInsurance",
         total: 75,
+        byOwner: mine(75),
         categoryCount: 1,
         categories: [{ category: "OLD:ALIAS", total: 75, count: 1 }],
       },
     ]);
+  });
+
+  it("splits each total by the owner of the transaction's account", async () => {
+    transactionRepository.getAll.mockResolvedValueOnce(
+      partial<EnrichedTransactionRow[]>([
+        { amount: "-100", category_name: "PENSION:SAVINGS", account_id: 1 },
+        { amount: "-80.10", category_name: "PENSION:SAVINGS", account_id: 2 },
+        { amount: "-40.05", category_name: "PENSIOENSPAREN", account_id: 3 },
+        { amount: "-10", category_name: "PENSION:SAVINGS", account_id: null },
+        { amount: "-5", category_name: "PENSION:SAVINGS", account_id: 99 },
+      ]),
+    );
+    accountRepository.listOwners.mockResolvedValueOnce([
+      { id: 1, owner: "me" },
+      { id: 2, owner: "partner" },
+      { id: 3, owner: "joint" },
+    ]);
+
+    const result = await computeDeductionCandidates({ year: 2025 });
+
+    // No account and an unknown account both count as `me`.
+    expect(result.byDeductionType).toEqual([
+      expect.objectContaining({
+        deductionType: "pensionSavings",
+        total: 235.15,
+        byOwner: { me: 115, partner: 80.1, joint: 40.05 },
+      }),
+    ]);
+  });
+
+  it("skips the account lookup when no row has an account", async () => {
+    transactionRepository.getAll.mockResolvedValueOnce(
+      partial<EnrichedTransactionRow[]>([
+        { amount: "-40", category_name: "GIVING:DONATION" },
+      ]),
+    );
+
+    await computeDeductionCandidates({ year: 2025 });
+
+    expect(accountRepository.listOwners).not.toHaveBeenCalled();
   });
 
   it("returns an empty byDeductionType when nothing classifies", async () => {

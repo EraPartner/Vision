@@ -97,6 +97,48 @@ describe("useUpdateAccount", () => {
         expect(toast.success).toHaveBeenCalledWith("Account updated");
     });
 
+    it("refreshes statistics and deduction candidates only when the owner changes", async () => {
+        const invalidateSpy = vi.spyOn(
+            QueryClient.prototype,
+            "invalidateQueries",
+        );
+        vi.spyOn(apiClient, "updateAccount").mockResolvedValue({
+            id: 3,
+        } as never);
+        const { result } = renderHook(() => useUpdateAccount(), {
+            wrapper: makeFullWrapper(),
+        });
+        const invalidatedKeys = () =>
+            invalidateSpy.mock.calls.map((c) => c[0]?.queryKey);
+
+        await act(async () => {
+            await result.current.mutateAsync({
+                id: 3,
+                data: { name: "Y" } as never,
+            });
+        });
+        expect(invalidatedKeys()).toContainEqual(["accounts"]);
+        expect(invalidatedKeys()).not.toContainEqual(["aggregations"]);
+        expect(invalidatedKeys()).not.toContainEqual([
+            "tax",
+            "deduction-candidates",
+        ]);
+
+        invalidateSpy.mockClear();
+        await act(async () => {
+            await result.current.mutateAsync({
+                id: 3,
+                data: { owner: "partner" },
+            });
+        });
+        expect(invalidatedKeys()).toContainEqual(["aggregations"]);
+        expect(invalidatedKeys()).toContainEqual([
+            "tax",
+            "deduction-candidates",
+        ]);
+        invalidateSpy.mockRestore();
+    });
+
     it("toasts an error on failure", async () => {
         vi.spyOn(apiClient, "updateAccount").mockRejectedValue(
             new Error("boom"),

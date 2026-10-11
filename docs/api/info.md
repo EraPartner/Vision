@@ -2,12 +2,12 @@
 title: Info & Analytics API
 type: endpoint
 status: active
-date: 2026-10-09
-updated: 2026-10-09
+date: 2026-10-11
+updated: 2026-10-11
 tags: [api, analytics, statistics, dashboard, phase-g-deprecation, ing, bnp, supported-adapters]
 description: API endpoints for statistics, analytics, and dashboard data. Phase G removed 6 overlapping endpoints; see aggregations API for their replacements. May 2026: Added ING and BNP Paribas Fortis adapters (8 total banks supported).
 aliases: [info-api, analytics-api, statistics-api, dashboard-api]
-related_code: ["apps/node-backend/src/routes/info.ts", "apps/node-backend/src/repositories/infoRepository.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/repositories/infoRepositoryStatistics.ts", "apps/node-backend/src/repositories/infoRepositoryMonthly.ts", "apps/node-backend/src/repositories/infoRepositoryBanks.ts", "apps/node-backend/src/repositories/infoRepositoryNetWorth.ts", "apps/node-backend/src/repositories/infoRepositoryPlanned.ts", "apps/node-backend/src/repositories/infoRepositoryRecipients.ts", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts", "apps/node-backend/src/services/info/performanceHelpers.ts"]
+related_code: ["apps/node-backend/src/routes/info.ts", "apps/node-backend/src/repositories/infoRepository.ts", "apps/node-backend/src/repositories/infoRepositoryHelpers.ts", "apps/node-backend/src/repositories/infoRepositoryStatistics.ts", "apps/node-backend/src/repositories/infoRepositoryMonthly.ts", "apps/node-backend/src/repositories/infoRepositoryBanks.ts", "apps/node-backend/src/repositories/infoRepositoryNetWorth.ts", "apps/node-backend/src/repositories/infoRepositoryPlanned.ts", "apps/node-backend/src/repositories/infoRepositoryRecipients.ts", "apps/node-backend/src/lib/dateKeys.ts", "apps/node-backend/src/lib/calculations/netWorthSanitizer.ts", "apps/node-backend/src/services/currency/currencyConversionService.ts", "apps/node-backend/src/services/portfolioPerformanceSnapshotService.ts", "apps/node-backend/src/services/info/performanceHelpers.ts", "apps/node-backend/src/services/tax/deductionCandidatesService.ts"]
 ---
 
 # Info & Analytics API
@@ -380,6 +380,35 @@ filtered before this response is shared with the Statistics panel or AI narratio
 Read the persisted undismissed count without running the detectors inline. `status: "ready"`
 includes the authoritative count. A dirty, expired, or missing projection returns `count: null`
 with `pending` or `unavailable` and starts one coalesced background refresh.
+
+### GET /api/info/deduction-candidates
+
+Transaction-derived Belgian deduction candidates for the tax overview card and the
+`getDeductibles` AI tool. `year` (1970-3000) defaults to the current calendar year; a malformed
+`year` is `400`, an internal failure answers an empty `byDeductionType`.
+
+```json
+{
+  "year": 2025,
+  "from": "2025-01-01",
+  "to": "2025-12-31",
+  "currency": "EUR",
+  "byDeductionType": [
+    {
+      "deductionType": "pensionSavings",
+      "total": 1020,
+      "byOwner": { "me": 510, "partner": 0, "joint": 510 },
+      "categoryCount": 1,
+      "categories": [{ "category": "SAVINGS:PENSION", "total": 1020, "count": 12 }]
+    }
+  ]
+}
+```
+
+`byOwner` (additive, 2026-10-11, [[docs/adr/201-belgian-tax-partner-account-mapping|ADR-201]])
+splits each total by the owner of the transaction's account; a transaction without an account
+counts as `me`. The three values add up to `total`. The frontend maps `me` to partner A,
+`partner` to partner B and halves `joint`.
 
 ### PUT /api/info/insight-dismissals
 

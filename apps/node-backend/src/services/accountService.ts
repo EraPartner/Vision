@@ -25,6 +25,7 @@ import { hasConversionRate } from "../lib/exchangeRates.ts";
 import { toDecimal, toNumber, roundToCents } from "../lib/money.ts";
 import { statementPartition } from "../repositories/accountBalanceSql.ts";
 import { withTransaction } from "../database/connection.ts";
+import { invalidateStatisticsCaches } from "./info/cache.ts";
 import type { AccountRow, AccountWithBalanceRow } from "../types/rows.ts";
 
 // Enum value sets — mirror migration 0050. Their semantics are activated in ADR-089.
@@ -471,7 +472,12 @@ const accountService = {
       if (!updated) throw new NotFoundError(`Account ${id} not found`);
       return updated;
     };
-    return "funding_account_id" in fields ? withTransaction(mutate) : mutate();
+    const updated = await ("funding_account_id" in fields
+      ? withTransaction(mutate)
+      : mutate());
+    // The category pivot splits income by account owner (ADR-201).
+    if ("owner" in fields) invalidateStatisticsCaches();
+    return updated;
   },
 
   /** Replace one currency's authoritative statement reading. */

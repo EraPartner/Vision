@@ -89,7 +89,11 @@ const BUDGETS_KB = {
     // states with their EN/NL strings): 1348.16 -> 1349.02 measured.
     // Raised from 1351 for the household editor steps, the per-partner breakdown card and
     // their EN/NL strings (ADR-200, phase C1, tax route chunks): 1349.02 -> 1357.48 measured.
-    total: 1359,
+    // Raised from 1359 for the partner attribution of recorded figures, the per-partner
+    // export rows and the readable household history with their EN/NL strings (ADR-201,
+    // phase C2, tax and export route chunks; boot preload unchanged): 1357.48 -> 1360.47
+    // measured.
+    total: 1362,
 };
 
 /** Parses dist/index.html for the entry module script and its modulepreload set. */

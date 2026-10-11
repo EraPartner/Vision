@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { AppSettingsProvider } from "@/stores/hydration/AppSettingsHydration";
 import type { BelgianTaxProfile } from "@/lib/belgianTax";
+import type { BelgianTaxHouseholdV2 } from "@/lib/belgianTax/householdTypes";
 import type { DeductionCandidatesResponse } from "@/lib/api/info";
 import { DISMISSED_DEDUCTION_CANDIDATES_STORAGE_KEY } from "@/lib/deductionCandidatesDismiss";
 import DeductionCandidatesCard from "../DeductionCandidatesCard";
@@ -44,6 +45,10 @@ vi.mock("@/stores/hydration/LanguageHydration", () => ({
                 "tax.deductionCandidates.type.alimony": "Alimony paid",
                 "tax.deductionCandidates.type.unionDues": "Union dues",
                 "common.cancel": "Cancel",
+                "tax.deductionCandidates.partnerShare":
+                    "{partner}: {value} (now {current})",
+                "tax.household.partner.A": "You",
+                "tax.household.partner.B": "Partner",
             };
             let text = translations[key] ?? key;
             for (const [k, v] of Object.entries(vars ?? {})) {
@@ -67,11 +72,18 @@ const profile = {
     alimonyPaid: 0,
 } as unknown as BelgianTaxProfile;
 
-const taxState = { household: {} as object | null };
+const ONE_PARTNER = { partners: [{ id: "A" }] };
+const taxState = { household: ONE_PARTNER as object | null };
+const updateHousehold = vi.fn();
 
 vi.mock("@/contexts/BelgianTaxProfileContext", () => ({
     useBelgianTaxProfile: (selector: (state: object) => unknown) =>
-        selector({ profile, updateProfile, household: taxState.household }),
+        selector({
+            profile,
+            updateProfile,
+            updateHousehold,
+            household: taxState.household,
+        }),
 }));
 
 const mockUseDeductionCandidates = vi.fn();
@@ -141,7 +153,7 @@ function renderCard() {
 beforeEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
-    taxState.household = {};
+    taxState.household = ONE_PARTNER;
     mockUseDeductionCandidates.mockReturnValue({
         data: makeResponse(),
         isLoading: false,
@@ -355,4 +367,101 @@ test("disables retry while deduction suggestions are being fetched again", () =>
     });
     renderCard();
     expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+});
+
+function twoPartnerHousehold(): BelgianTaxHouseholdV2 {
+    const reductions = {
+        personalPensionContributions: 0,
+        lifeInsurancePremiums: 100,
+        charitableDonations: 0,
+        childcareCosts: 0,
+        medicalExpenses: 0,
+    };
+    const partner = (id: "A" | "B") => ({
+        id,
+        isDisabled: false,
+        activities: [],
+        professionalExpenses: {},
+        unionDues: 0,
+        otherTaxableIncome: 0,
+        alimonyPaid: 0,
+        reductions: { ...reductions },
+    });
+    return {
+        version: 2,
+        taxYear: 2025,
+        profileConfigured: true,
+        region: "flanders",
+        communalSurchargePercent: 7,
+        partners: [partner("A"), partner("B")],
+        relationship: { events: [] },
+        dependents: { children: 0, otherPersons: 0 },
+        home: { cadastralIncome: 0, mortgageInterestPaid: 0 },
+    };
+}
+
+test("with two partners, shows each share and confirm writes it to that partner", () => {
+    const household = twoPartnerHousehold();
+    taxState.household = household;
+    mockUseDeductionCandidates.mockReturnValue({
+        data: makeResponse({
+            byDeductionType: [
+                {
+                    deductionType: "lifeInsurance",
+                    total: 1200,
+                    byOwner: { me: 200, partner: 600, joint: 400 },
+                    categoryCount: 1,
+                    categories: [
+                        { category: "Insurance: Life", total: 1200, count: 12 },
+                    ],
+                },
+            ],
+        }),
+        isLoading: false,
+    });
+    renderCard();
+
+    // me → you, partner → partner, joint split 50/50.
+    expect(screen.getByText(/^You: .*400.*now.*100/)).toBeInTheDocument();
+    expect(screen.getByText(/^Partner: .*800.*now.*100/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(updateProfile).not.toHaveBeenCalled();
+    expect(updateHousehold).toHaveBeenCalledTimes(1);
+    const updater = updateHousehold.mock.calls[0]![0] as (
+        h: BelgianTaxHouseholdV2,
+    ) => BelgianTaxHouseholdV2;
+    const next = updater(household);
+    expect(next.partners[0]!.reductions).toMatchObject({
+        lifeInsurancePremiums: 400,
+        lifeInsuranceEligible: true,
+    });
+    expect(next.partners[1]!.reductions).toMatchObject({
+        lifeInsurancePremiums: 800,
+        lifeInsuranceEligible: true,
+    });
+});
+
+test("a one-partner household applies the whole total to the profile as before", () => {
+    mockUseDeductionCandidates.mockReturnValue({
+        data: makeResponse({
+            byDeductionType: [
+                {
+                    deductionType: "alimony",
+                    total: 3600,
+                    byOwner: { me: 0, partner: 3600, joint: 0 },
+                    categoryCount: 1,
+                    categories: [
+                        { category: "Family: Alimony", total: 3600, count: 1 },
+                    ],
+                },
+            ],
+        }),
+        isLoading: false,
+    });
+    renderCard();
+    expect(screen.queryByText(/^Partner:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    expect(updateProfile).toHaveBeenCalledWith({ alimonyPaid: 3600 });
+    expect(updateHousehold).not.toHaveBeenCalled();
 });

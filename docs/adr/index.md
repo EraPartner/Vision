@@ -249,6 +249,13 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-11: Tax partners map to account owners by a fixed rule
+
+[[docs/adr/201-belgian-tax-partner-account-mapping|ADR-201]] supersedes ADR-200 §7 for the
+mapping only: account owner `me` is partner A, `partner` is partner B, and `joint` accounts are
+split 50/50. The mapping is fixed in the frontend, not stored; the backend reports amounts per
+account owner.
+
 ### 2026-10-11: Belgian tax is computed for a household of one or two partners
 
 [[docs/adr/200-belgian-tax-household-model|ADR-200]] replaces the single-person tax profile with a

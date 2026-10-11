@@ -22,6 +22,10 @@ import { MarkAsFiledDialog } from "./MarkAsFiledDialog";
 import { SnapshotHistoryDialog } from "./SnapshotHistoryDialog";
 import { exportTaxYearCsv } from "@/lib/belgianTax/exportTaxYearCsv";
 import { useAppSettings } from "@/stores/hydration/AppSettingsHydration";
+import {
+    resolveBelgianTaxHousehold,
+    resolveBelgianTaxHouseholdResult,
+} from "@/stores/belgianTaxStore";
 
 interface YearActionsMenuProps {
     /** The year the menu operates on. Typically the page's `viewedYear`. */
@@ -45,6 +49,7 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
         freezeCalculation,
         unfreezeCalculation,
         unmarkYearAsFiled,
+        ...yearState
     } = useBelgianTaxProfile((state) => ({
         liveYear: state.profile.taxYear,
         snapshotExists: Object.prototype.hasOwnProperty.call(
@@ -58,6 +63,12 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
         freezeCalculation: state.freezeCalculation,
         unfreezeCalculation: state.unfreezeCalculation,
         unmarkYearAsFiled: state.unmarkYearAsFiled,
+        profile: state.profile,
+        snapshots: state.snapshots,
+        household: state.household,
+        householdSnapshots: state.householdSnapshots,
+        householdResult: state.householdResult,
+        snapshotMetas: state.snapshotMetas,
     }));
 
     function handleExport() {
@@ -70,6 +81,12 @@ export function YearActionsMenu({ year, pageItems }: YearActionsMenuProps) {
             hasFrozenCalculation: hasFrozen,
             // Friendly stamp for the file header.
             generatedAt: new Date().toISOString(),
+            household: resolveBelgianTaxHousehold(yearState, year),
+            // A year frozen before the household result was stored has none to export.
+            householdResult:
+                hasFrozen && !yearState.snapshotMetas[year]?.frozenHouseholdResult
+                    ? null
+                    : resolveBelgianTaxHouseholdResult(yearState, year),
         });
     }
 

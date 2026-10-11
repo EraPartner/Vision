@@ -1897,6 +1897,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/info/deduction-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transaction-derived Belgian deduction candidates for one year */
+        get: operations["getDeductionCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/info/insights-count": {
         parameters: {
             query?: never;
@@ -6163,6 +6180,11 @@ export interface components {
                     income: number;
                     expense: number;
                     transactionCount: number;
+                    /** @description Additive (ADR-201). Part of `income` booked on accounts whose owner is `partner` or `joint`; present only when one of them is non-zero. The rest of `income` is on `me` accounts or on transactions without an account. */
+                    incomeByOwner?: {
+                        partner?: number;
+                        joint?: number;
+                    };
                 }[];
             };
         };
@@ -11863,6 +11885,63 @@ export interface operations {
             };
         };
     };
+    getDeductionCandidates: {
+        parameters: {
+            query?: {
+                /** @description Calendar year (1970-3000); defaults to the current year. */
+                year?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Outflows of the year classified per Belgian deduction type, with the contributing categories and, per type, the total split by account owner (`byOwner`, additive, ADR-201; a transaction without an account counts as `me`). An internal failure answers an empty `byDeductionType` instead of a 500. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"] & {
+                        data?: {
+                            year: number;
+                            /** Format: date */
+                            from: string;
+                            /** Format: date */
+                            to: string;
+                            currency: string;
+                            byDeductionType: {
+                                deductionType: string;
+                                total: number;
+                                /** @description The total split by account owner; the three values add up to `total`. */
+                                byOwner?: {
+                                    me: number;
+                                    partner: number;
+                                    joint: number;
+                                };
+                                categoryCount: number;
+                                categories: {
+                                    category: string;
+                                    total: number;
+                                    count: number;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+            /** @description Malformed `year` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Envelope"];
+                };
+            };
+        };
+    };
     getInsightsCount: {
         parameters: {
             query?: never;
@@ -13860,6 +13939,50 @@ export interface operations {
                 "application/json": {
                     year?: number;
                     currency?: string;
+                    /** @description Belgian filing context echoed into the Belgian rules section. */
+                    taxProfile?: {
+                        filingStatus?: string;
+                        region?: string;
+                        taxYear?: number;
+                    };
+                    /** @description PIT figures from the frontend engine; bracket `rate` is in percent units. */
+                    precomputedPIT?: {
+                        taxableIncome?: number;
+                        totalTax?: number;
+                        brackets?: {
+                            label?: string;
+                            rate?: number;
+                            taxableIncome?: number;
+                            taxAmount?: number;
+                        }[];
+                    };
+                    /** @description Additive (ADR-201). The year's Belgian tax household, validated like the `belgian_tax_household_v2` setting; only partner display names are rendered. */
+                    household?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description Additive (ADR-201). Per-partner result from the frontend household engine. With two partners the Belgian rules section adds a row per partner, the household total, the assessment mode and the marital quotient. */
+                    precomputedHousehold?: {
+                        /** @enum {string} */
+                        assessmentMode: "single" | "separate" | "joint";
+                        legalBasis?: string;
+                        quotient?: {
+                            applied: boolean;
+                            transfer: number;
+                            /** @enum {string} */
+                            fromPartnerId?: "A" | "B";
+                            /** @enum {string} */
+                            toPartnerId?: "A" | "B";
+                            benefit: number;
+                        };
+                        /** @description One entry per partner; partner ids must be unique. */
+                        partners: {
+                            /** @enum {string} */
+                            partnerId: "A" | "B";
+                            grossIncome: number;
+                            taxableIncome: number;
+                            totalPIT: number;
+                        }[];
+                    };
                     excludedCategoryIds?: number[];
                     excludedRecipientIds?: number[];
                 };

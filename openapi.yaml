@@ -3479,6 +3479,15 @@ components:
                 income: { type: number }
                 expense: { type: number }
                 transactionCount: { type: integer }
+                incomeByOwner:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Part of `income` booked on accounts whose owner is
+                    `partner` or `joint`; present only when one of them is non-zero. The rest of
+                    `income` is on `me` accounts or on transactions without an account.
+                  properties:
+                    partner: { type: number }
+                    joint: { type: number }
 
     # ─── Net Worth ───────────────────────────────────────────────────────────
     NetWorthSnapshot:
@@ -9097,6 +9106,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/InsightsDigestEnvelope"
 
+  /api/info/deduction-candidates:
+    get:
+      summary: Transaction-derived Belgian deduction candidates for one year
+      operationId: getDeductionCandidates
+      tags: [Info]
+      parameters:
+        - in: query
+          name: year
+          required: false
+          description: Calendar year (1970-3000); defaults to the current year.
+          schema:
+            type: integer
+            minimum: 1970
+            maximum: 3000
+      responses:
+        "200":
+          description: >-
+            Outflows of the year classified per Belgian deduction type, with the contributing
+            categories and, per type, the total split by account owner (`byOwner`, additive,
+            ADR-201; a transaction without an account counts as `me`). An internal failure
+            answers an empty `byDeductionType` instead of a 500.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Envelope"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [year, from, to, currency, byDeductionType]
+                        properties:
+                          year: { type: integer }
+                          from: { type: string, format: date }
+                          to: { type: string, format: date }
+                          currency: { type: string }
+                          byDeductionType:
+                            type: array
+                            items:
+                              type: object
+                              required: [deductionType, total, categoryCount, categories]
+                              properties:
+                                deductionType: { type: string }
+                                total: { type: number }
+                                byOwner:
+                                  type: object
+                                  required: [me, partner, joint]
+                                  description: The total split by account owner; the three values add up to `total`.
+                                  properties:
+                                    me: { type: number }
+                                    partner: { type: number }
+                                    joint: { type: number }
+                                categoryCount: { type: integer }
+                                categories:
+                                  type: array
+                                  items:
+                                    type: object
+                                    required: [category, total, count]
+                                    properties:
+                                      category: { type: string }
+                                      total: { type: number }
+                                      count: { type: integer }
+        "400":
+          description: Malformed `year`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Envelope"
+
   /api/info/insights-count:
     get:
       summary: Read the persisted undismissed insight count
@@ -11210,6 +11288,66 @@ paths:
                   type: integer
                 currency:
                   type: string
+                taxProfile:
+                  type: object
+                  description: Belgian filing context echoed into the Belgian rules section.
+                  properties:
+                    filingStatus: { type: string }
+                    region: { type: string }
+                    taxYear: { type: integer }
+                precomputedPIT:
+                  type: object
+                  description: PIT figures from the frontend engine; bracket `rate` is in percent units.
+                  properties:
+                    taxableIncome: { type: number }
+                    totalTax: { type: number }
+                    brackets:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          label: { type: string }
+                          rate: { type: number }
+                          taxableIncome: { type: number }
+                          taxAmount: { type: number }
+                household:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Additive (ADR-201). The year's Belgian tax household, validated like the
+                    `belgian_tax_household_v2` setting; only partner display names are rendered.
+                precomputedHousehold:
+                  type: object
+                  description: >-
+                    Additive (ADR-201). Per-partner result from the frontend household engine.
+                    With two partners the Belgian rules section adds a row per partner, the
+                    household total, the assessment mode and the marital quotient.
+                  required: [assessmentMode, partners]
+                  properties:
+                    assessmentMode: { type: string, enum: [single, separate, joint] }
+                    legalBasis: { type: string, maxLength: 200 }
+                    quotient:
+                      type: object
+                      required: [applied, transfer, benefit]
+                      properties:
+                        applied: { type: boolean }
+                        transfer: { type: number }
+                        fromPartnerId: { type: string, enum: [A, B] }
+                        toPartnerId: { type: string, enum: [A, B] }
+                        benefit: { type: number }
+                    partners:
+                      type: array
+                      description: One entry per partner; partner ids must be unique.
+                      minItems: 1
+                      maxItems: 2
+                      items:
+                        type: object
+                        required: [partnerId, grossIncome, taxableIncome, totalPIT]
+                        properties:
+                          partnerId: { type: string, enum: [A, B] }
+                          grossIncome: { type: number }
+                          taxableIncome: { type: number }
+                          totalPIT: { type: number }
                 excludedCategoryIds:
                   type: array
                   items:

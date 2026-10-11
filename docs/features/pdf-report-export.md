@@ -2,8 +2,8 @@
 title: PDF Report Export
 type: feature
 status: active
-date: 2026-10-08
-updated: 2026-10-08
+date: 2026-10-11
+updated: 2026-10-11
 tags:
   [
     feature,
@@ -596,6 +596,17 @@ Generate a tax PDF report with 7 data-backed sections. Extends the base schema w
 | `precomputedPIT` | object (optional) | `{ taxableIncome?, totalTax?, brackets?: { label?, rate?, taxableIncome?, taxAmount? }[] }` — PIT calculation from frontend; rendered as bracket table in `belgianRulesSummary` |
 
 When `taxProfile` is omitted, the `belgianRulesSummary` section renders only the static bracket tables without a PIT block.
+
+Since 2026-10-11 the body may also carry `household` (validated by the household settings
+schema) and `precomputedHousehold` (assessment, marital quotient and each partner's gross
+income, taxable income and tax). With two assessed partners, `belgianRulesSummary` adds a Per
+Partner table with the household total, the assessment mode and the quotient line; a
+one-partner household renders the same section as before. The dialog sends the household
+fields only for a two-partner household, describes the tax year the backend derives for the
+period (a full year, else the current year for the year to date and rolling windows, else the
+start year of a custom range). It sends the
+frozen calculation and household result of a frozen year. See
+[[docs/features/belgian-tax#PDF Report Export|Belgian Tax, PDF Report Export]].
 
 ### GET /api/reports/financial (Legacy)
 

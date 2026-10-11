@@ -20,6 +20,15 @@ import {
 } from "@/lib/belgianTax";
 import type { DeductionTypeGroup } from "@/lib/api/info";
 import {
+    applyDeductionCandidate,
+    attributeToPartners,
+    deductionFieldValue,
+    householdHasPartnerB,
+    isHouseholdLevelDeduction,
+} from "@/lib/belgianTax/partnerAttribution";
+import { PARTNER_IDS } from "@/lib/belgianTax/householdTypes";
+import { partnerLabel } from "./profile-steps/householdEditing";
+import {
     dismissCandidate,
     isCandidateDismissed,
     loadDismissedCandidates,
@@ -35,16 +44,23 @@ import { todayYmd } from "@/lib/timezone";
  * calculation picks it up; dismissing hides the group persistently for that
  * {year, deductionType} pair. Renders nothing while loading or when no
  * applicable groups remain.
+ *
+ * With partner B in the household (ADR-201), each group is split by account
+ * owner (me → you, partner → partner, joint 50/50) and Confirm writes each
+ * partner's share to that partner's field; a home field (mortgage interest)
+ * keeps the whole total. A one-partner household behaves exactly as before.
  */
 export function DeductionCandidatesCard() {
-    const { profile, updateProfile, canApply } = useBelgianTaxProfile(
-        (state) => ({
+    const { profile, household, updateProfile, updateHousehold, canApply } =
+        useBelgianTaxProfile((state) => ({
             profile: state.profile,
+            household: state.household,
             updateProfile: state.updateProfile,
+            updateHousehold: state.updateHousehold,
             // `updateProfile` is a no-op until the household is hydrated.
             canApply: state.household != null,
-        }),
-    );
+        }));
+    const twoPartners = householdHasPartnerB(household);
     const { t } = useLanguage();
     const fmt = useCurrencyFormatter();
     const { data, isLoading, isError, isFetching, refetch } =
@@ -98,11 +114,19 @@ export function DeductionCandidatesCard() {
         if (!mapping || !canApply) return;
         // SET semantics: the total replaces the field's current value (shown to
         // the user below), it is never added to it.
-        const updates: Record<string, number | boolean> = {
-            [mapping.amountField]: group.total,
-        };
-        if (mapping.eligibilityField) updates[mapping.eligibilityField] = true;
-        updateProfile(updates as Partial<BelgianTaxProfile>);
+        if (twoPartners) {
+            const shares = attributeToPartners(group.total, group.byOwner, true);
+            updateHousehold((current) =>
+                applyDeductionCandidate(current, mapping, shares, group.total),
+            );
+        } else {
+            const updates: Record<string, number | boolean> = {
+                [mapping.amountField]: group.total,
+            };
+            if (mapping.eligibilityField)
+                updates[mapping.eligibilityField] = true;
+            updateProfile(updates as Partial<BelgianTaxProfile>);
+        }
         setAppliedTypes((prev) => new Set(prev).add(group.deductionType));
         toast.success(
             t("tax.deductionCandidates.toastConfirmed", {
@@ -123,9 +147,24 @@ export function DeductionCandidatesCard() {
                 description: t(
                     "tax.deductionCandidates.incompleteYearDescription",
                     {
-                        currentValue: fmt(profile[mapping.amountField] ?? 0, {
-                            currency,
-                        }),
+                        // With two partners, the household's combined value.
+                        currentValue: fmt(
+                            twoPartners &&
+                                household &&
+                                !isHouseholdLevelDeduction(mapping)
+                                ? PARTNER_IDS.reduce(
+                                      (total, id) =>
+                                          total +
+                                          deductionFieldValue(
+                                              household,
+                                              id,
+                                              mapping,
+                                          ),
+                                      0,
+                                  )
+                                : (profile[mapping.amountField] ?? 0),
+                            { currency },
+                        ),
                         candidateValue: fmt(group.total, { currency }),
                     },
                 ),
@@ -160,6 +199,16 @@ export function DeductionCandidatesCard() {
                             DEDUCTION_TYPE_PROFILE_FIELDS[group.deductionType];
                         if (!mapping) return null;
                         const currentValue = profile[mapping.amountField] ?? 0;
+                        const shares =
+                            twoPartners &&
+                            household &&
+                            !isHouseholdLevelDeduction(mapping)
+                                ? attributeToPartners(
+                                      group.total,
+                                      group.byOwner,
+                                      true,
+                                  )
+                                : undefined;
                         return (
                             <section
                                 key={group.deductionType}
@@ -195,16 +244,66 @@ export function DeductionCandidatesCard() {
                                                 </li>
                                             ))}
                                         </ul>
-                                        <p className="mt-1.5 type-footnote text-label-secondary">
-                                            {t(
-                                                "tax.deductionCandidates.currentValue",
-                                                {
-                                                    value: fmt(currentValue, {
-                                                        currency,
-                                                    }),
-                                                },
-                                            )}
-                                        </p>
+                                        {shares && household ? (
+                                            <ul
+                                                className="mt-1.5 space-y-0.5"
+                                                aria-label={t(
+                                                    "tax.deductionCandidates.byPartner",
+                                                )}
+                                            >
+                                                {PARTNER_IDS.map((id) => (
+                                                    <li
+                                                        key={id}
+                                                        className="type-footnote text-label-secondary"
+                                                    >
+                                                        {t(
+                                                            "tax.deductionCandidates.partnerShare",
+                                                            {
+                                                                partner:
+                                                                    partnerLabel(
+                                                                        t,
+                                                                        household.partners.find(
+                                                                            (p) =>
+                                                                                p.id ===
+                                                                                id,
+                                                                        ) ?? id,
+                                                                    ),
+                                                                value: fmt(
+                                                                    shares[id],
+                                                                    {
+                                                                        currency,
+                                                                    },
+                                                                ),
+                                                                current: fmt(
+                                                                    deductionFieldValue(
+                                                                        household,
+                                                                        id,
+                                                                        mapping,
+                                                                    ),
+                                                                    {
+                                                                        currency,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="mt-1.5 type-footnote text-label-secondary">
+                                                {t(
+                                                    "tax.deductionCandidates.currentValue",
+                                                    {
+                                                        value: fmt(
+                                                            currentValue,
+                                                            {
+                                                                currency,
+                                                            },
+                                                        ),
+                                                    },
+                                                )}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-2 text-right">
                                         <span className="type-headline tabular-nums text-foreground">
