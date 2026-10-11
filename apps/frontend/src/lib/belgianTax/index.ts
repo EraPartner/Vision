@@ -32,3 +32,59 @@ export {
     computeEmployeeSocialSecurity,
     computeSpecialSocialSecurityContribution,
 } from "./socialSecurity";
+export type {
+    PartnerId,
+    ActivityKind,
+    ForfaitCategory,
+    IncomeActivity,
+    PartnerReductionInputs,
+    ProfessionalExpenseChoice,
+    HouseholdPartner,
+    RelationshipEventKind,
+    RelationshipEvent,
+    HouseholdRelationship,
+    HouseholdDependents,
+    HouseholdHomeInputs,
+    MigrationNoteCode,
+    UnmappedField,
+    HouseholdMigrationRecord,
+    BelgianTaxHouseholdV2,
+    BelgianTaxHouseholdSnapshotsV2,
+    AssessmentMode,
+    AssessmentReason,
+    AssessmentDecision,
+    ActivityTaxResult,
+    CategoryTaxResult,
+    ExemptionAllocation,
+    PartnerTaxResult,
+    MaritalQuotientResult,
+    HouseholdCsssResult,
+    HouseholdTotals,
+    HouseholdTaxIssueCode,
+    HouseholdTaxIssueSeverity,
+    HouseholdTaxIssue,
+    HouseholdTaxResult,
+} from "./householdTypes";
+export {
+    ACTIVITY_KINDS,
+    FORFAIT_CATEGORIES,
+    PARTNER_IDS,
+    RELATIONSHIP_EVENT_KINDS,
+} from "./householdTypes";
+export { deriveAssessment } from "./assessment";
+export { allocateExemptions, computeDependentSupplements } from "./exemptions";
+export { computeMaritalQuotient, resolveMaritalQuotientCap } from "./maritalQuotient";
+export {
+    computeHouseholdTax,
+    forfaitCategoryOf,
+    toBelgianTaxCalculation,
+} from "./household";
+export {
+    upgradeProfileV1ToHousehold,
+    upgradeSnapshotsV1ToV2,
+    projectHouseholdToProfileV1,
+    applyProfileV1PatchToHousehold,
+} from "./householdMigration";
+// `householdSchema.ts` is imported by path, not re-exported here: its module-level zod
+// schemas are not tree-shakeable, so a barrel export would pull them into the boot
+// bundle of every eager importer of this library (see scripts/check-bundle-size.ts).

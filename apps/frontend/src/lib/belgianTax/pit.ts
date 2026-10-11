@@ -35,67 +35,45 @@ import type {
     BelgianTaxProfile,
     BelgianTaxCalculation,
     BracketTax,
-    MortgageCreditRegime,
 } from "./types";
-import {
-    getTaxTable,
-    type BelgianTaxYearTable,
-    type ExemptionBracket,
-} from "./constants";
+import { getTaxTable, type BelgianTaxYearTable } from "./constants";
 import {
     computeEmployeeSocialSecurity,
     computeSpecialSocialSecurityContribution,
 } from "./socialSecurity";
 import { computePropertyTaxEstimate } from "./propertyTax";
+import { computeDependentSupplements } from "./exemptions";
+import {
+    addBracketTax,
+    buildCalculationBreakdown,
+    clampAtZero,
+    computeExemptionBenefit,
+    computeInvestmentSideCalc,
+    computeMarginalRate,
+    computeOwnHomeCredit,
+    computeProfessionalExpenseClaim,
+    computeProgressiveTax,
+    computeTaxReductions,
+    isChildcareDeducted,
+    resolveMortgageRegime,
+    type ForfaitCategory,
+} from "./personPit";
 
-function computeProgressiveTax(
-    value: number,
-    brackets: BelgianTaxYearTable["brackets"],
-): BracketTax {
-    const result: BracketTax = { b1: 0, b2: 0, b3: 0, b4: 0, total: 0 };
-    if (value <= 0) return result;
-
-    if (value > brackets[0].from) {
-        result.b1 =
-            (Math.min(value, brackets[0].to) - brackets[0].from) *
-            brackets[0].rate;
+/** Art. 51 forfait category of the single-profile employment type. */
+function forfaitCategoryForProfile(profile: BelgianTaxProfile): ForfaitCategory {
+    switch (profile.employmentType) {
+        case "employee":
+        case "civil_servant":
+            return "remuneration";
+        case "director":
+            return "director";
+        case "self_employed":
+            return (profile.selfEmployedIncomeKind ?? "profits") === "profits"
+                ? "profits"
+                : "fees";
+        default:
+            return "none";
     }
-    if (value > brackets[1].from) {
-        result.b2 =
-            (Math.min(value, brackets[1].to) - brackets[1].from) *
-            brackets[1].rate;
-    }
-    if (value > brackets[2].from) {
-        result.b3 =
-            (Math.min(value, brackets[2].to) - brackets[2].from) *
-            brackets[2].rate;
-    }
-    if (value > brackets[3].from) {
-        result.b4 = (value - brackets[3].from) * brackets[3].rate;
-    }
-    result.total = result.b1 + result.b2 + result.b3 + result.b4;
-    return result;
-}
-
-/**
- * Tax on the personal exemption itself, computed from the lowest bracket upward
- * using the exemption-bracket rate table. This figure is subtracted from gross PIT.
- *
- * Per PwC's IY2025 sample calculation: 25% on the bracket-1 portion, 30% on the
- * bracket-2 overflow, then main rates above. See CIR-92 art. 134 §3.
- */
-function computeExemptionBenefit(
-    exemptionAmount: number,
-    brackets: ReadonlyArray<ExemptionBracket>,
-): number {
-    if (exemptionAmount <= 0) return 0;
-    let total = 0;
-    for (const b of brackets) {
-        if (exemptionAmount <= b.from) break;
-        const upper = Math.min(exemptionAmount, b.to);
-        total += (upper - b.from) * b.rate;
-    }
-    return total;
 }
 
 function computeProfessionalExpenses(
@@ -103,97 +81,50 @@ function computeProfessionalExpenses(
     table: BelgianTaxYearTable,
     employeeSocialSecurity: number,
 ): number {
-    if (profile.professionalExpenseMethod === "actual") {
-        // Union dues are professional expenses (CIR-92 art. 49) — deductible only
-        // when itemizing actual expenses, never on top of the lump-sum forfait.
-        // Users who already counted them inside actualProfessionalExpenses should
-        // leave the dedicated field at 0 (see the profile-step hint).
-        return (
-            Math.max(profile.actualProfessionalExpenses || 0, 0) +
-            Math.max(profile.unionDues || 0, 0)
-        );
-    }
-    // WIB 92 art. 51 (amounts: FPS indexation notice per assessment year, table I):
-    //  - al. 2, 1° + al. 3: employees, civil servants and self-employed trading profits
-    //    (winsten) get 30% with the "rémunérations des travailleurs et bénéfices" cap;
-    //  - al. 2, 2°: company directors get 3% with their own cap;
-    //  - al. 2, 4°: liberal-profession fees (baten) get the degressive 28.7/10/5/3% scale
-    //    with the "conjoints aidants et profits" cap.
-    // Pensions and other replacement income carry no forfait.
-    // Art. 51 al. 1: the percentages apply to the gross income "vooraf verminderd met"
-    // the art. 52, 7° social contributions (FPS Finance, Beroepsinkomen: "brutoberoepsinkomen
-    // (verminderd met bijdragen)"), so the employee contribution comes off first.
-    const gross = Math.max(
-        Math.max(profile.grossAnnualIncome || 0, 0) - Math.max(employeeSocialSecurity, 0),
-        0,
+    // Union dues are professional expenses (CIR-92 art. 49) — deductible only when itemizing
+    // actual expenses, never on top of the lump-sum forfait. Users who already counted them
+    // inside actualProfessionalExpenses should leave the dedicated field at 0 (see the
+    // profile-step hint). The forfait base is the gross income "vooraf verminderd met" the
+    // art. 52, 7° social contributions (art. 51 al. 1; FPS Finance, Beroepsinkomen:
+    // "brutoberoepsinkomen (verminderd met bijdragen)"), so the employee contribution comes off
+    // first.
+    return computeProfessionalExpenseClaim(
+        {
+            category: forfaitCategoryForProfile(profile),
+            grossAfterContributions: Math.max(
+                Math.max(profile.grossAnnualIncome || 0, 0) -
+                    Math.max(employeeSocialSecurity, 0),
+                0,
+            ),
+            method: profile.professionalExpenseMethod,
+            actualAmount: profile.actualProfessionalExpenses,
+            unionDues: profile.unionDues,
+        },
+        table,
     );
-    if (profile.employmentType === "director") {
-        return Math.min(
-            gross * table.directorProfessionalExpenseRate,
-            table.directorProfessionalExpenseCap,
-        );
-    }
-    if (
-        profile.employmentType === "employee" ||
-        profile.employmentType === "civil_servant" ||
-        (profile.employmentType === "self_employed" &&
-            (profile.selfEmployedIncomeKind ?? "profits") === "profits")
-    ) {
-        return Math.min(
-            gross * table.employeeProfessionalExpenseRate,
-            table.employeeProfessionalExpenseCap,
-        );
-    }
-    if (profile.employmentType === "self_employed") {
-        let forfait = 0;
-        for (const b of table.selfEmployedFeesExpenseBrackets) {
-            if (gross <= b.from) break;
-            forfait += (Math.min(gross, b.to) - b.from) * b.rate;
-        }
-        return Math.min(forfait, table.selfEmployedFeesExpenseCap);
-    }
-    return 0;
 }
 
 function computePersonalExemption(
     profile: BelgianTaxProfile,
     table: BelgianTaxYearTable,
 ): number {
-    // Handicapped dependents count for TWO on the supplement scale (PwC; CIR-92 arts.
-    // 132 4° / 136). We bump the EFFECTIVE child / other-dependent count by the
-    // disabled-subset count so the scale lookup lands one tier higher per disabled person.
-    const rawChildren = Math.max(profile.dependentChildren || 0, 0);
-    const disabledChildren = Math.min(
-        Math.max(profile.dependentChildrenDisabled || 0, 0),
-        rawChildren,
+    // Art. 132 supplements (disabled dependants count twice; the child-under-3 supplement is
+    // forfeited when the childcare reduction is claimed). See exemptions.ts.
+    const supplements = computeDependentSupplements(
+        {
+            children: profile.dependentChildren,
+            childrenUnder3: profile.dependentChildrenUnder3 ?? 0,
+            childrenDisabled: profile.dependentChildrenDisabled ?? 0,
+            otherPersons: profile.dependentOtherPersons,
+            otherPersonsDisabled: profile.dependentOtherPersonsDisabled ?? 0,
+        },
+        isChildcareDeducted(profile),
+        table,
     );
-    const childCount = rawChildren + disabledChildren;
-
-    const baseChild =
-        childCount <= 4
-            ? (table.dependentChildExemptionIncreases[childCount] ?? 0)
-            : (table.dependentChildExemptionIncreases[4] ?? 0) +
-              (childCount - 4) * table.extraChildExemptionFromFifth;
-
-    // CIR-92 art. 132bis (PwC: "if no childcare expenses deducted"): the child-under-3
-    // supplement is forfeited when the taxpayer also claims the childcare reduction.
-    // The two are mutually exclusive — taxpayer picks whichever is more beneficial.
-    const childcareDeducted =
-        !!profile.childcareEligible &&
-        (profile.childcareCosts || 0) > 0 &&
-        (profile.childcareEligibleDays || 0) > 0;
-    const childUnder3 = childcareDeducted
-        ? 0
-        : Math.max(profile.dependentChildrenUnder3 || 0, 0) *
-          table.childUnder3Supplement;
-
-    const rawOtherDep = Math.max(profile.dependentOtherPersons || 0, 0);
-    const disabledOther = Math.min(
-        Math.max(profile.dependentOtherPersonsDisabled || 0, 0),
-        rawOtherDep,
-    );
-    const otherDep =
-        (rawOtherDep + disabledOther) * table.otherDependentExemption;
+    const { childCount } = supplements;
+    const baseChild = supplements.children;
+    const childUnder3 = supplements.childUnder3;
+    const otherDep = supplements.otherDependents;
 
     const disabilitySupplement =
         (profile.isDisabled ? table.disabledSupplement : 0) +
@@ -212,92 +143,6 @@ function computePersonalExemption(
         disabilitySupplement +
         isolatedParentSupplement
     );
-}
-
-/**
- * Resolve the regional own-home credit regime applicable to the user's mortgage.
- * Returns 'none' when the mortgage doesn't fit a modeled regime.
- */
-function resolveMortgageRegime(
-    profile: BelgianTaxProfile,
-): MortgageCreditRegime {
-    if (!profile.mortgageIsPrimaryResidence) return "none";
-    if (!profile.mortgageInterestPaid && !profile.mortgageCapitalRepaid)
-        return "none";
-    const region = profile.mortgageRegion ?? profile.region;
-    const startYear = profile.mortgageStartYear ?? 0;
-    if (region === "flanders" && startYear > 0 && startYear < 2020)
-        return "flemish_woonbonus";
-    if (region === "wallonia" && startYear >= 2016)
-        return "walloon_cheque_habitat";
-    return "none";
-}
-
-/**
- * Compute the regional own-home tax credit.
- *
- * Flemish woonbonus (pre-2020, primary residence) — two sub-regimes by origination year:
- *   - Pre-2016 ("ordinary" woonbonus): base €2,280 (IY 2025)
- *   - 2016-2019 ("geïntegreerde" woonbonus): base €1,520 (IY 2025; merged housing & ordinary
- *     credits into a single, reduced-cap scheme)
- *   credit = min(interest + capital, base_cap [+ first-10y supplement] [+ 3+ children supplement]) × 40%
- *
- * Walloon chèque habitat (post-2016, primary residence, first 10 loan years):
- *   credit = base [+ €125 × dependent children]
- *   (Simplified — actual scheme has income-based phaseout and decreasing tail in years 11–20.)
- *
- * All other cases (Brussels, post-2020 Flemish, secondary residences): 0.
- */
-function computeOwnHomeCredit(
-    profile: BelgianTaxProfile,
-    table: BelgianTaxYearTable,
-    regime: MortgageCreditRegime,
-): number {
-    if (regime === "none") return 0;
-    const interest = Math.max(profile.mortgageInterestPaid || 0, 0);
-    const capital = Math.max(profile.mortgageCapitalRepaid || 0, 0);
-
-    if (regime === "flemish_woonbonus") {
-        const startYear = profile.mortgageStartYear ?? 0;
-        const loanAge = Math.max(0, table.year - startYear);
-        // 2016 reform: loans signed 2016+ use the lower "geïntegreerde" base cap.
-        const isIntegrated = startYear >= 2016;
-        let cap = isIntegrated
-            ? table.flemishIntegratedWoonbonusBaseCap
-            : table.flemishWoonbonusBaseCap;
-        if (loanAge < 10) cap += table.flemishWoonbonusExtraFirst10y;
-        if ((profile.dependentChildren || 0) >= 3)
-            cap += table.flemishWoonbonusExtraChildren;
-        const eligibleExpenses = Math.min(interest + capital, cap);
-        return eligibleExpenses * table.flemishWoonbonusRate;
-    }
-
-    if (regime === "walloon_cheque_habitat") {
-        const startYear = profile.mortgageStartYear ?? 0;
-        const loanAge = Math.max(0, table.year - startYear);
-        // First 10 years only in our simplified model.
-        if (loanAge >= 10) return 0;
-        const childSupplement =
-            Math.max(profile.dependentChildren || 0, 0) *
-            table.walloonChequeHabitatChildSupplement;
-        return table.walloonChequeHabitatBase + childSupplement;
-    }
-
-    return 0;
-}
-
-function clampAtZero(n: number): number {
-    return n > 0 ? n : 0;
-}
-
-function addBracketTax(a: BracketTax, b: BracketTax): BracketTax {
-    return {
-        b1: a.b1 + b.b1,
-        b2: a.b2 + b.b2,
-        b3: a.b3 + b.b3,
-        b4: a.b4 + b.b4,
-        total: a.total + b.total,
-    };
 }
 
 interface MaritalQuotientOutcome {
@@ -416,36 +261,6 @@ function applyMaritalQuotient(
     };
 }
 
-/**
- * Regional service-voucher (dienstencheques / titres-services) tax reduction.
- *
- * Three different scheme shapes:
- *  - Brussels: 15% of voucher cost on the first 172 vouchers.
- *  - Wallonia: fixed €0.90 per voucher on the first 150 vouchers.
- *  - Flanders: abolished from 1 Jan 2025 (rate/amount = 0).
- *
- * Returns 0 when the eligibility flag is false or count is 0.
- */
-function computeServiceVoucherCredit(
-    profile: BelgianTaxProfile,
-    table: BelgianTaxYearTable,
-): number {
-    if (!profile.serviceVoucherEligible) return 0;
-    const count = Math.max(profile.serviceVoucherCount || 0, 0);
-    if (count <= 0) return 0;
-    const params = table.serviceVoucherRegional[profile.region];
-    if (!params) return 0;
-    const eligibleCount = Math.min(count, params.maxCount);
-    if (eligibleCount <= 0) return 0;
-    if (params.amountPerVoucher > 0) {
-        return eligibleCount * params.amountPerVoucher;
-    }
-    if (params.rate > 0) {
-        return eligibleCount * params.voucherPrice * params.rate;
-    }
-    return 0;
-}
-
 export function computeBelgianPIT(
     profile: BelgianTaxProfile,
 ): BelgianTaxCalculation {
@@ -527,61 +342,15 @@ export function computeBelgianPIT(
     const personalExemptionBenefit = quotient.exemptionBenefit;
     const pitAfterExemption = quotient.pitAfterExemption;
 
-    // 7. Federal tax credits (réductions d'impôt). PwC rates and caps.
-    const pensionCap =
-        profile.pensionScheme === "1350"
-            ? table.pensionSavingsCapAlternative
-            : table.pensionSavingsCapStandard;
-    const pensionRate =
-        profile.pensionScheme === "1350"
-            ? table.pensionSavingsRateAlternative
-            : table.pensionSavingsRateStandard;
-    const pensionCredit = profile.pensionEligible
-        ? Math.min(profile.personalPensionContributions || 0, pensionCap) *
-          pensionRate
-        : 0;
-
-    const lifeInsuranceCredit = profile.lifeInsuranceEligible
-        ? Math.min(profile.lifeInsurancePremiums || 0, table.lifeInsuranceCap) *
-          table.lifeInsuranceRate
-        : 0;
-
-    const groupInsuranceCredit = profile.employeeGroupInsuranceEligible
-        ? Math.max(profile.employeeGroupInsuranceContributions || 0, 0) *
-          table.groupInsuranceRate
-        : 0;
-
-    // Charitable donations: eligible donation = min(gift, 10% × net taxable income, absolute cap).
-    // The €40 minimum applies to the gift itself, not to the eligible (capped) portion.
-    const donationAmount = Math.max(profile.charitableDonations || 0, 0);
-    const donationNetIncomeCap = Math.max(taxableIncome * 0.1, 0);
-    const eligibleDonation = Math.min(
-        donationAmount,
-        donationNetIncomeCap,
-        table.charitableDonationAbsoluteCap,
+    // 7. Federal tax credits (réductions d'impôt) and the regional service-voucher credit.
+    //    Donations are capped at 10% of the (pre-quotient) taxable income.
+    const reductions = computeTaxReductions(
+        profile,
+        profile.region,
+        taxableIncome,
+        table,
     );
-    const donationCredit =
-        profile.charitableDonationsEligible &&
-        donationAmount >= table.charitableDonationMin
-            ? eligibleDonation * table.charitableDonationRate
-            : 0;
-
-    const childcareDayCap =
-        Math.max(profile.childcareEligibleDays || 0, 0) *
-        table.childcareDailyCap;
-    const childcareCredit = profile.childcareEligible
-        ? Math.min(profile.childcareCosts || 0, childcareDayCap) *
-          table.childcareRate
-        : 0;
-
-    const domesticHelpCredit = profile.domesticHelpEligible
-        ? Math.min(profile.domesticHelpCosts || 0, table.domesticHelpCap) *
-          table.domesticHelpRate
-        : 0;
-
-    // Service vouchers (dienstencheques / titres-services) — regional credit. Distinct from the
-    // federal "domestic personnel" wage-based reduction above.
-    const serviceVoucherCredit = computeServiceVoucherCredit(profile, table);
+    const serviceVoucherCredit = reductions.serviceVouchers;
 
     // Regional own-home credit (Flemish woonbonus / Walloon chèque habitat).
     const ownHomeCreditRegime = resolveMortgageRegime(profile);
@@ -591,15 +360,7 @@ export function computeBelgianPIT(
         ownHomeCreditRegime,
     );
 
-    const totalTaxCredits =
-        pensionCredit +
-        lifeInsuranceCredit +
-        groupInsuranceCredit +
-        donationCredit +
-        childcareCredit +
-        domesticHelpCredit +
-        serviceVoucherCredit +
-        ownHomeCredit;
+    const totalTaxCredits = reductions.total + ownHomeCredit;
 
     // 8. Federal PIT after credits (cannot go below zero).
     const appliedTaxCredits = Math.min(totalTaxCredits, pitAfterExemption);
@@ -635,15 +396,11 @@ export function computeBelgianPIT(
     const propertyTaxEstimate = computePropertyTaxEstimate(profile, table);
 
     // 12. Investment income side calc.
-    const dividendIncome = Math.max(profile.annualDividendIncome || 0, 0);
-    const dividendWhtReclaim =
-        Math.min(dividendIncome, table.dividendExemption) *
-        table.dividendWHTRate;
-
-    const savingsInterest = Math.max(profile.annualSavingsInterest || 0, 0);
-    const savingsInterestTax =
-        Math.max(savingsInterest - table.savingsInterestExemption, 0) *
-        table.savingsInterestExcessRate;
+    const { dividendWhtReclaim, savingsInterestTax } = computeInvestmentSideCalc(
+        profile.annualDividendIncome,
+        profile.annualSavingsInterest,
+        table,
+    );
 
     // 13. Aggregate totals — distinct meanings, no double-counting.
     //     Under a joint assessment `totalPIT` and the CSSS cover both spouses, so the
@@ -660,146 +417,39 @@ export function computeBelgianPIT(
     const effectiveRate =
         householdGross > 0 ? (totalTaxBurden / householdGross) * 100 : 0;
 
-    let marginalRate = table.brackets[0].rate * 100;
-    for (const b of table.brackets) {
-        if (taxableIncome > b.from) marginalRate = b.rate * 100;
-    }
+    const marginalRate = computeMarginalRate(taxableIncome, table.brackets);
 
     const netTakeHome = householdGross - totalTaxBurden;
     const monthlyTaxReserve = totalPIT / 12;
 
     const federalPITBeforeExemption = pitBeforeExemption.total;
 
-    const breakdown = [
-        { label: "Gross Income", amount: gross },
-        ...(spouseIncome > 0
-            ? [{ label: "Spouse professional income", amount: spouseIncome }]
-            : []),
-        {
-            label: "Employee Social Security",
-            amount: -employeeSS,
-            rate: table.employeeSSRate * 100,
-        },
-        { label: "Net after Social Security", amount: netAfterSS },
-        { label: "Professional Expenses Deduction", amount: -profExpenses },
-        ...(profile.alimonyPaid
-            ? [
-                  {
-                      label: `Alimony paid (${Math.round(table.alimonyDeductibleFraction * 100)}% deductible)`,
-                      amount: -cappedAlimony,
-                  },
-              ]
-            : []),
-        ...(appliedUnionDues > 0
-            ? [
-                  {
-                      label: "Union dues (within actual professional expenses)",
-                      amount: -appliedUnionDues,
-                  },
-              ]
-            : []),
-        { label: "Taxable Income", amount: taxableIncome },
-        // One breakdown row per non-empty bracket; the top bracket is open-ended.
-        ...table.brackets.flatMap((br, i) => {
-            const amount =
-                pitBeforeExemption[`b${i + 1}` as "b1" | "b2" | "b3" | "b4"];
-            if (amount <= 0) return [];
-            const isTop = i === table.brackets.length - 1;
-            return [
-                {
-                    // `label` stays English: this array is a calculation result, not
-                    // a view model, and pit.ts has no access to `t`. Consumers that
-                    // render a bracket row translate via `bracketNumber` (see
-                    // ExportDialog) — the ordinal is carried explicitly because
-                    // empty brackets are skipped, so a consumer's array index is not
-                    // the bracket number.
-                    label: `Bracket ${i + 1} (${br.rate * 100}%)`,
-                    bracketNumber: i + 1,
-                    amount: -amount,
-                    rate: br.rate * 100,
-                    bracket: isTop ? `€${br.from}+` : `€${br.from} – €${br.to}`,
-                },
-            ];
-        }),
-        ...(quotient.transfer > 0
-            ? [
-                  {
-                      label: `Marital quotient transferred to spouse`,
-                      amount: -quotient.transfer,
-                  },
-              ]
-            : []),
-        ...(quotient.benefit > 0
-            ? [
-                  {
-                      label: "Marital quotient tax saving",
-                      amount: -quotient.benefit,
-                  },
-              ]
-            : []),
-        ...(personalExemptionBenefit > 0
-            ? [
-                  {
-                      label: "Personal exemption benefit",
-                      amount: -personalExemptionBenefit,
-                  },
-              ]
-            : []),
-        ...(ownHomeCredit > 0
-            ? [{ label: "Own-home credit", amount: -ownHomeCredit }]
-            : []),
-        ...(serviceVoucherCredit > 0
-            ? [
-                  {
-                      label: "Service-voucher credit (dienstencheques)",
-                      amount: -serviceVoucherCredit,
-                  },
-              ]
-            : []),
-        ...(appliedTaxCredits > 0
-            ? [
-                  {
-                      label: "Tax Credits (reductions)",
-                      amount: -appliedTaxCredits,
-                  },
-              ]
-            : []),
-        // Position total, not a deduction step: gross PIT before the exemption
-        // benefit and credits listed above. (Was mislabeled "before credits".)
-        {
-            label: "Federal PIT (before exemption)",
-            amount: -federalPITBeforeExemption,
-        },
-        {
-            label: "Federal PIT (after credits)",
-            amount: -federalPITAfterReductions,
-        },
-        {
-            label: `Communal Surcharge (${profile.communalSurchargePercent}%)`,
-            amount: -communalSurcharge,
-            rate: profile.communalSurchargePercent,
-        },
-        ...(specialSS > 0
-            ? [
-                  {
-                      label: "Special Social Security Contribution",
-                      amount: -specialSS,
-                  },
-              ]
-            : []),
-        // Property tax is informational for PIT but part of totalTaxBurden, so it
-        // must appear as a row — without it the visible rows missed Net Take-Home
-        // by exactly this amount.
-        ...(propertyTaxEstimate > 0
-            ? [
-                  {
-                      label: "Property Tax (estimate)",
-                      amount: -propertyTaxEstimate,
-                  },
-              ]
-            : []),
-        { label: "Net Take-Home", amount: netTakeHome },
-    ];
+    const breakdown = buildCalculationBreakdown({
+        table,
+        grossIncome: gross,
+        spouseProfessionalIncome: spouseIncome,
+        employeeSocialSecurity: employeeSS,
+        netIncomeAfterSS: netAfterSS,
+        professionalExpenses: profExpenses,
+        showAlimonyRow: !!profile.alimonyPaid,
+        alimonyDeduction: cappedAlimony,
+        unionDuesApplied: appliedUnionDues,
+        taxableIncome,
+        bracketTax: pitBeforeExemption,
+        maritalQuotientTransfer: quotient.transfer,
+        maritalQuotientBenefit: quotient.benefit,
+        personalExemptionBenefit,
+        ownHomeCredit,
+        serviceVoucherCredit,
+        federalTaxCredits: appliedTaxCredits,
+        federalPITBeforeExemption,
+        federalPITAfterReductions,
+        communalSurchargePercent: profile.communalSurchargePercent,
+        communalSurcharge,
+        specialSocialSecurityContribution: specialSS,
+        propertyTaxEstimate,
+        netTakeHome,
+    });
 
     return {
         grossIncome: gross,

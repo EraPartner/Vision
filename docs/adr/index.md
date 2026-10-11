@@ -249,6 +249,15 @@ See [[docs/adr/template\|the ADR template]] for the format to use when creating 
 
 ## Recent Decisions
 
+### 2026-10-11: Belgian tax is computed for a household of one or two partners
+
+[[docs/adr/200-belgian-tax-household-model|ADR-200]] replaces the single-person tax profile with a
+version-2 household (one or two partners, several income activities each, dated relationship
+events) under the `belgian_tax_household_v2` and `belgian_tax_household_snapshots_v2` setting
+keys. The assessment mode follows WIB 92 art. 126 per income year, tax is computed per partner,
+and the frontend upgrades v1 data automatically on first load. Partner ids `A` / `B` are the
+contract for the later mapping to account owners.
+
 ### 2026-10-11: Every TypeScript project uses exactOptionalPropertyTypes and no explicit any
 
 [[docs/adr/198-exact-optional-property-types|ADR-198]] turns on `exactOptionalPropertyTypes` in

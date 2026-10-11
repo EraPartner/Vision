@@ -8,6 +8,8 @@
  * All `taxYear` fields in this module refer to the **income year**.
  */
 
+import type { BelgianTaxHouseholdV2, HouseholdTaxResult } from "./householdTypes";
+
 export type EmploymentType =
     | "employee"
     | "self_employed"
@@ -199,6 +201,11 @@ export interface SnapshotAuditEntry {
      * Stored as the partial diff rather than full state so the log stays compact.
      */
     changes?: Partial<BelgianTaxProfile>;
+    /**
+     * Patch applied to the v2 household (ADR-200), for `'created'` and `'patched'` entries
+     * written after the household upgrade. Same compact partial-diff convention as `changes`.
+     */
+    householdChanges?: Partial<BelgianTaxHouseholdV2>;
     /** Optional free-text reference — currently used for `'filed'` entries. */
     reference?: string;
 }
@@ -219,6 +226,11 @@ export interface BelgianTaxProfileSnapshotMeta {
      * retroactively change "as-filed" numbers.
      */
     frozenCalculation?: BelgianTaxCalculation;
+    /**
+     * Household result (engine version 2, ADR-200) captured at freeze / file time, next to the
+     * v1-shaped `frozenCalculation`.
+     */
+    frozenHouseholdResult?: HouseholdTaxResult;
     /** Filing record. Year is considered filed iff this is set. */
     filing?: FilingRecord;
     /** Append-only audit log of amendments to the snapshot or meta. */

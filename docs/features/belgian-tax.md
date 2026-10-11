@@ -66,6 +66,14 @@ Pure tax logic lives in [[apps/frontend/src/lib/belgianTax]] and is split by con
 | `portfolioTax.ts`     | Pure portfolio-tax estimators (see below)                                   |
 | `costBreakdown.ts`    | Shared transaction tax and fee bucketing for portfolio-tax views            |
 | `exportTaxYearCsv.ts` | Pure filed/frozen tax-year CSV serialization                                |
+| `personPit.ts`        | Per-person building blocks: progressive tax, exemption valuation, forfait per category, reductions, own-home and service-voucher credits, breakdown rows |
+| `householdTypes.ts`   | `BelgianTaxHouseholdV2`, activities, relationship events, result and issue types |
+| `assessment.ts`       | `deriveAssessment` — single / separate / joint per income year (art. 126)   |
+| `exemptions.ts`       | Dependent supplements and tax-free sum allocation between partners          |
+| `maritalQuotient.ts`  | Arts 87-88 quotient on professional income, IY 2026 senior cap              |
+| `household.ts`        | `computeHouseholdTax`, `toBelgianTaxCalculation`                            |
+| `householdMigration.ts` | v1 profile ↔ v2 household upgrade, projection and patching                |
+| `householdSchema.ts`  | zod schemas for the v2 setting values                                       |
 | `index.ts`            | Explicit supported public re-exports; year-table internals stay private     |
 
 ### `portfolioTax.ts` — Pure Portfolio-Tax Estimators (2026-05-29)
@@ -306,6 +314,71 @@ The tax overview page includes a `SuggestedDeductionsCard` component that sugges
 - Service vouchers
 - Donations
 
+## Household taxation
+
+> [!info] Phase B1 (2026-10-11, [[docs/adr/200-belgian-tax-household-model|ADR-200]])
+> The library, the settings schemas and this documentation are in place. The store, context, UI
+> and Demo seed still use `computeBelgianPIT` until phase B2.
+
+A household (`BelgianTaxHouseholdV2`) has one or two partners. Each partner has income
+activities (employee, civil servant, director, self-employed profits or fees, helping spouse,
+pension, other professional income, or an already-net amount), an expense choice per art. 51
+forfait category, personal deductions and reductions. Relationship events (marriage, legal
+cohabitation and its end, factual cohabitation, factual separation, divorce, death) are dated.
+
+`computeHouseholdTax(household)` runs this pipeline; each step has a row in the
+[[docs/reference/belgian-tax-rule-matrix|rule matrix]]:
+
+1. **Assessment** (`deriveAssessment`, art. 126): one partner → single; no marriage or legal
+   cohabitation → separate; the year of the marriage or declaration → separate, unless legal
+   cohabitants marry (joint); the year of divorce or end of legal cohabitation → separate; the
+   year of a factual separation → joint, later years separate; the year of a death → separate
+   unless the survivor elects joint (art. 126 §3), later years → the survivor alone;
+   treaty-exempt professional income above the threshold → separate.
+2. **Activities**: 13.07% employee and civil-servant-rate contributions per activity;
+   self-employed contributions entered for profits, fees and helping-spouse activities are
+   deducted before the forfait (art. 52, 7°).
+3. **Forfait per category and partner** (art. 51 al. 3): two part-time jobs share one capped
+   forfait; trading profits form their own category (open item); helping spouses get 5%.
+   Union dues count only inside an actual remuneration claim. A category never goes below 0.
+4. **Alimony** at the year's deductible share, charged on the payer first and, under a joint
+   assessment, on the other spouse for the balance (art. 105, 3°).
+5. **Marital quotient** (joint only) on net professional income; the lower earner is topped up to
+   30% of the total, capped (12,790 in IY 2026 when both spouses are 66 or older).
+6. **Tax-free sum** per partner: basic amount and own disability supplement; dependent
+   supplements to the higher taxable income under a joint assessment (to the claimant
+   otherwise); the unused balance of one spouse moves to the other (art. 134).
+7. **Tax per partner**, then reductions capped at that partner's tax, regional factor and
+   communal surcharge.
+8. **CSSS**: under a joint assessment the joint scale applies to both partners' net professional
+   income (pensions excluded); otherwise the single scale per partner who is an employee.
+9. Property tax for the home and the investment side calculation per partner.
+
+The result lists per-partner and per-activity figures, the assessment decision with its legal
+basis, totals and `issues`. An issue with severity `needs_source` marks a stated default that has
+no verified source yet; each one is an open item in the matrix.
+
+`toBelgianTaxCalculation(result, household)` returns the v1 `BelgianTaxCalculation` shape with
+the same breakdown rows: income lines cover partners whose income is itemised, tax lines are
+household totals. For one partner with one activity it equals `computeBelgianPIT`. A
+`married_joint` v1 profile can differ after the upgrade where the household engine applies a rule
+the v1 engine omits (the spouse's own exemption, disability and reductions, the art. 134 balance
+transfer, the quotient on professional income only); the list is in
+`__tests__/householdParity.ts`.
+
+### Storage and upgrade
+
+The household is stored under `belgian_tax_household_v2`, snapshots under
+`belgian_tax_household_snapshots_v2` (see [[docs/api/settings|Settings API]]). The frontend
+upgrades v1 data automatically on first load with `upgradeProfileV1ToHousehold` and
+`upgradeSnapshotsV1ToV2` (deterministic and idempotent; no confirmation step). The v1 fields map
+to partner A and activity `act_A_1`; a `married_joint` profile adds partner B with a
+`net_professional_amount` activity `act_B_1` and is assumed joint until relationship dates are
+entered. Spouse fields on a single profile and unknown keys are kept under
+`migratedFrom.unmappedFields`. `projectHouseholdToProfileV1` and
+`applyProfileV1PatchToHousehold` serve v1-shaped editors during the transition. Frozen
+snapshot meta may carry `frozenHouseholdResult`.
+
 ## Limitations / not modeled
 
 - Brussels stamp-duty rebate (one-time, not annual).
@@ -480,6 +553,7 @@ fees remain recorded facts. See [[docs/adr/188-proved-in-kind-income-recognition
 - [[docs/adr/058-belgian-tax-historical-year-snapshots|ADR-058]] — Historical year viewer with frozen per-year profile snapshots, shared switcher across `/tax` and `/portfolio/tax`, soft-lock past-edit mode (May 2026)
 - [[docs/adr/059-belgian-tax-historical-year-extensions|ADR-059]] — As-filed frozen calculations, filed soft-lock, snapshot audit log, year-over-year comparison, multi-year trend strip, single-year CSV export (May 2026)
 - [[docs/adr/199-belgian-tax-source-verification|ADR-199]] — Source-verified rule matrix; self-employed forfait, art. 88 quotient cap, CSSS scale and household base, frozen IY 2025 amounts, post-reform IY 2026 table (October 2026)
+- [[docs/adr/200-belgian-tax-household-model|ADR-200]] — Household of one or two partners with income activities, date-derived assessment, v2 setting keys (October 2026)
 - [[docs/reference/belgian-tax-rule-matrix|Belgian tax rule coverage matrix]] — per-rule sources, code and test locations
 - [[docs/features/portfolio#belgian-tax-features]] — Tax fields in portfolio
 - [[docs/features/portfolio#belgian-inflation-data-flow]] — Inflation data flow

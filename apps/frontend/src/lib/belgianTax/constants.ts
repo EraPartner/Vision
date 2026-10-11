@@ -156,6 +156,11 @@ export interface BelgianTaxYearTable {
     selfEmployedFeesExpenseBrackets: ReadonlyArray<PitBracket>;
     /** Art. 51 al. 3: cap for fees (same cap as helping-spouse remuneration). */
     selfEmployedFeesExpenseCap: number;
+    /**
+     * Art. 51 al. 2, 3°: forfait rate for helping-spouse remuneration (5%), capped with
+     * `selfEmployedFeesExpenseCap` (art. 51 al. 3). Rule matrix row "Helping spouse: 5%, capped".
+     */
+    helpingSpouseProfessionalExpenseRate: number;
 
     // ── Tax credits / reductions ────────────────────────────────────────────
     pensionSavingsCapStandard: number;
@@ -231,6 +236,21 @@ export interface BelgianTaxYearTable {
     maritalQuotientRate: number;
     /** Absolute cap on the transferred amount (EUR). */
     maritalQuotientCap: number;
+    /**
+     * Arts 87-88 cap when both spouses have reached 66 on 1 January of the assessment year
+     * (law of 15 July 2026 arts 27 and 30, A, from AY 2027). Absent before IY 2026.
+     */
+    maritalQuotientCapBothSenior?: number;
+    /**
+     * Art. 126 §2 al. 1, 4°: treaty-exempt professional income above which spouses are assessed
+     * separately ("meer dan"). Equal to the basic exemption from AY 2027 (L2 art. 32).
+     */
+    treatyExemptSeparateThreshold: number;
+    /**
+     * Art. 134 §3: ceiling per dependent child of the refundable child tax credit (550, no longer
+     * indexed per the law of 18 Dec 2025 art. 42). Stored only: the credit formula is an open item.
+     */
+    refundableChildCreditCapPerChild: number;
 
     // ── Stock exchange tax (TOB / beurstaks) ────────────────────────────────
     /** Map: instrument category → rate, cap per transaction */
@@ -332,6 +352,8 @@ const TABLE_2024: BelgianTaxYearTable = {
         { from: 24_160, to: Infinity, rate: 0.03 },
     ],
     selfEmployedFeesExpenseCap: 5_050,
+    // Art. 51 al. 2, 3° (WIB 92, 2011 consolidation): helping spouses 5%; cap of al. 3 as fees.
+    helpingSpouseProfessionalExpenseRate: 0.05,
 
     pensionSavingsCapStandard: 1_020,
     pensionSavingsRateStandard: 0.30,
@@ -369,6 +391,10 @@ const TABLE_2024: BelgianTaxYearTable = {
     maritalQuotientRate: 0.30,
     // Arts 87-88 cap: FPS indexation notice AY 2025 and fin.belgium.be previous-years page.
     maritalQuotientCap: 13_050,
+    // Art. 126 §2 al. 1, 4°: FPS indexation notice AY 2025 (6,700 base → 13,050).
+    treatyExemptSeparateThreshold: 13_050,
+    // Art. 134 §3: 550 per child (FPS indexation notice AY 2025; fin.belgium.be Kinderen ten laste).
+    refundableChildCreditCapPerChild: 550,
 
     // Per-transaction caps (statutory): 0.12% rate capped at €1,300; 0.35% rate capped
     // at €1,600 (NOT €4,000 — that cap belongs to the 1.32% rate only); 1.32% rate
@@ -482,6 +508,8 @@ const TABLE_2025: BelgianTaxYearTable = {
         { from: 24_920, to: Infinity, rate: 0.03 },
     ],
     selfEmployedFeesExpenseCap: 5_210,
+    // Art. 51 al. 2, 3°: helping spouses 5% (rate fixed in the law, not indexed).
+    helpingSpouseProfessionalExpenseRate: 0.05,
 
     pensionSavingsCapStandard: 1_050,
     pensionSavingsRateStandard: 0.30,
@@ -528,6 +556,10 @@ const TABLE_2025: BelgianTaxYearTable = {
     maritalQuotientRate: 0.30,
     // Arts 87-88 cap: FPS indexation notice AY 2026 and fin.belgium.be "Huwelijk en samenwonen".
     maritalQuotientCap: 13_460,
+    // Art. 126 §2 al. 1, 4°: FPS indexation notice AY 2026 (6,700 base → 13,460).
+    treatyExemptSeparateThreshold: 13_460,
+    // Art. 134 §3: 550 per child, no longer indexed (law of 18 Dec 2025 art. 42).
+    refundableChildCreditCapPerChild: 550,
 
     // Per-transaction caps (statutory): see IY 2024 table for rationale. Cap is a
     // function of the rate, not the instrument: 0.12% → €1,300; 0.35% → €1,600;
@@ -632,9 +664,15 @@ const TABLE_2026: BelgianTaxYearTable = {
     // Art. 104: 60% for alimony paid in 2026 (law of 18 Dec 2025 art. 35; FPS page).
     alimonyDeductibleFraction: 0.60,
     // Arts 87-88 after the law of 15 July 2026: base 5,860 → 11,780 (FPS indexation notice
-    // AY 2027). The 12,790 cap for couples where both spouses are 66+ on 1 Jan 2027 needs
-    // birth years, which the profile does not carry yet; the lower cap is used.
+    // AY 2027). The v1 profile carries no birth years, so `computeBelgianPIT` always uses this
+    // cap; the household engine uses `maritalQuotientCapBothSenior` when both spouses are 66+.
     maritalQuotientCap: 11_780,
+    // Arts 87-88 when both spouses are 66+ on 1 Jan 2027: base 6,365 → 12,790 (N27; L2 arts 27
+    // and 30, A). Applied by the household engine when both birth years are known.
+    maritalQuotientCapBothSenior: 12_790,
+    // Art. 126 §2 al. 1, 4° a) after L2 art. 32: "meer dan het in artikel 131, eerste lid,
+    // vermelde bedrag", i.e. the basic exemption (11,550 per N27).
+    treatyExemptSeparateThreshold: 11_550,
     // Cap-gains tax on financial assets — Arizona reform. Realization-based: applies to gains
     // realized on or after 1 January 2026. Step-up basis (FMV at 31 Dec 2025) and 5-year
     // €1k/year carryforward of unused exemption are documented in the BelgianTaxYearTable
